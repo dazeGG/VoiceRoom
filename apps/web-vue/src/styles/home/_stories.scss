@@ -1,0 +1,179 @@
+// "What's new": a card of slides that turn like stories.
+// Svelte: WhatsNewDialog.svelte <style>.
+//
+// Svelte class -> BEM class (block "stories")
+//   .stories-overlay    -> .stories__overlay
+//   .stories-card       -> .stories__card
+//   .stories-progress   -> .stories__progress
+//   .stories-segment    -> .stories__segment
+//   .stories-fill (--full, --run, --paused) -> .stories__fill (same modifiers)
+//   .stories-head       -> .stories__head
+//   .stories-kicker     -> .stories__kicker
+//   .stories-quiet      -> .stories__quiet
+//   .stories-stage      -> .stories__stage
+//   .stories-slide      -> .stories__slide
+//   .stories-image      -> .stories__image
+//   .stories-title      -> .stories__title
+//   .stories-text       -> .stories__text
+//   .stories-actions    -> .stories__actions
+//   .stories-spacer     -> .stories__spacer
+
+.stories__overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: color-mix(in srgb, var(--vr-bg) 62%, transparent);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+.stories__card {
+  width: min(520px, 100%);
+  padding: 14px 16px 16px;
+  border: 1px solid var(--vr-line-strong);
+  border-radius: var(--radius-xl);
+  background: var(--vr-surface-2);
+  box-shadow: var(--vr-shadow-popover);
+  outline: none;
+}
+
+.stories__progress {
+  display: flex;
+  gap: 4px;
+}
+
+.stories__segment {
+  flex: 1;
+  height: 3px;
+  overflow: hidden;
+  border-radius: var(--radius-pill);
+  background: color-mix(in oklch, var(--vr-text), transparent 82%);
+}
+
+.stories__fill {
+  display: block;
+  height: 100%;
+  background: var(--vr-text);
+  transform-origin: left center;
+}
+
+.stories__fill--run {
+  animation-name: stories-fill;
+  animation-timing-function: linear;
+  animation-fill-mode: forwards;
+}
+
+.stories__fill--paused {
+  animation-play-state: paused;
+}
+
+@keyframes stories-fill {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+.stories__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 30px;
+  margin: 8px 0 8px;
+}
+
+.stories__kicker {
+  color: var(--vr-text-2);
+  font-size: 12px;
+}
+
+.stories__quiet {
+  padding: 4px 8px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--vr-text-2);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+
+  &:hover,
+  &:focus-visible {
+    background: var(--vr-surface-3);
+    color: var(--vr-text);
+  }
+}
+
+.stories__stage {
+  outline: none;
+  touch-action: pan-y;
+  cursor: default;
+}
+
+.stories__slide {
+  animation: stories-in 220ms ease-out;
+
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+  }
+}
+
+// A screenshot of the real app, framed like the surfaces around it.
+.stories__image {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 4 / 3;
+  border: 1px solid var(--vr-line);
+  border-radius: var(--radius-lg);
+  background: var(--vr-surface);
+  object-fit: cover;
+  user-select: none;
+}
+
+@keyframes stories-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.stories__title {
+  margin: 16px 0 4px;
+  color: var(--vr-text);
+  font-family: var(--font-ui);
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.stories__text {
+  min-height: calc(2 * 1.45em);
+  margin: 0;
+  color: var(--vr-text-2);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.stories__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.stories__spacer {
+  flex: 1;
+}

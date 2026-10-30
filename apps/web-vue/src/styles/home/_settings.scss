@@ -50,9 +50,49 @@
 //   .settings-unblock-button        -> .settings__unblock-button
 //   .settings-overlay-games         -> .settings__overlay-games
 //
+// The account settings and the room settings sit in the shared Dialog (ui/_ui-dialog.scss), which
+// owns the overlay, the card and the title row. So .settings__overlay/__modal/__head/__title/__close
+// above are not used by the Vue markup any more; .settings__frame below replaces the card padding.
+//
+// Component <style> blocks of the Svelte settings components (SettingsDialog, ProfileSettings,
+// AppearanceSettings, SoundSettings, HotkeySettings, NotificationSettings, AppSettings):
+//   (new)                           -> .settings__frame        (cancels the Dialog body padding)
+//   .settings-profile-head          -> .settings__profile-head
+//   .settings-avatar-control        -> .settings__avatar-control
+//   .settings-profile-avatar        -> .settings__profile-avatar
+//   .settings-avatar-input          -> .settings__avatar-input
+//   .settings-avatar-edit           -> .settings__avatar-edit
+//   .settings-avatar-overlay        -> .settings__avatar-overlay
+//   .settings-avatar-remove         -> .settings__avatar-remove
+//   .settings-profile-name          -> .settings__profile-name
+//   .settings-profile-sub           -> .settings__profile-sub
+//   .settings-fields                -> .settings__fields
+//   .settings-appearance            -> .settings__appearance
+//   .settings-themes                -> .settings__themes
+//   .settings-theme(.is-selected)   -> .settings__theme(--selected)   (the card also carries .theme--<id>)
+//   .settings-theme-preview/-side/-mark/-main/-button/-label -> .settings__theme-preview/-side/-mark/-main/-button/-label
+//   .settings-theme-line(.is-short/.is-wide) -> .settings__theme-line(--short/--wide)
+//   .settings-sound-device-section  -> .settings__sound-device-section
+//   .settings-gate                  -> .settings__gate
+//   .settings-sound-value           -> .settings__sound-value
+//   .settings-sound-actions         -> .settings__sound-actions
+//   .settings-sound-preview         -> .settings__sound-preview
+//   .settings-gate-value            -> .settings__gate-value
+//   .settings-segment               -> .settings__segment
+//   .settings-hotkey-list           -> .settings__hotkey-list
+//   .settings-notification-title    -> .settings__notification-title
+//   .settings-notification-muted    -> .settings__notification-muted
+//   .settings-diagnostics-actions   -> .settings__diagnostics-actions
+//   .settings-overlay-window        -> .settings__overlay-window
+//   .settings-overlay-window-text/-name/-exe/-empty/-status -> .settings__overlay-window-text/-name/-exe/-empty/-status
+//   .settings-overlay-add           -> .settings__overlay-add
+//   .settings-overlay-allowed(-item)-> .settings__overlay-allowed(-item)
+//   .settings-overlay-remove        -> .settings__overlay-remove
+//
 // Other components' classes this file reaches (names the owning component takes):
-//   .home-spinner -> .home-spinner (block)    .select-root -> .ui-select      .select-trigger -> .ui-select__trigger
-//   .popover-root -> .ui-popover              .vr-slider   -> .ui-slider
+//   .home-spinner -> .home-spinner (block, home/_home-spinner.scss)
+//   .select-root -> .select    .select-trigger -> .select__trigger    .vr-slider (unchanged)
+//   .ui-segment-item -> .ui-segment__item
 //
 // [data-*] -> aria / modifier class
 //   .settings-nav-item[data-active='true']          -> .settings__nav-item[aria-current]:not([aria-current='false'])
@@ -116,12 +156,23 @@
   color: var(--vr-text);
 }
 
+// The Dialog body pads and spaces its content; the settings body and its sidebar
+// run edge to edge under the title, as in the Svelte modal.
+.settings__frame {
+  margin: -20px -22px -22px;
+  border-top: 1px solid var(--vr-line);
+}
+
 .settings__body {
   display: flex;
+}
+
+// The room settings set their own height (room/_room-settings.scss).
+.settings__body:not(.settings__body--room) {
   // Fixed height so the modal doesn't jump when switching Профиль / Звук.
   // No flex-grow here — that would let content drive the height and reintroduce
-  // the jump.
-  height: 612px;
+  // the jump. The cap keeps the modal inside the window, as max-height: 90vh did.
+  height: min(612px, calc(90vh - 74px));
 }
 
 .settings__nav {
@@ -134,8 +185,8 @@
   border-right: 1px solid var(--vr-line);
 }
 
-// The account settings sit on a darker sidebar.
-.settings__modal:not(.settings__modal--room) .settings__nav {
+// The account settings sit on a darker sidebar (Svelte: .settings-modal without .room-settings-modal).
+.settings__body:not(.settings__body--room) .settings__nav {
   width: 220px;
   background: var(--vr-bg);
 }
@@ -311,10 +362,9 @@
 }
 
 .settings__sound-device > *,
-.settings__sound-device .ui-select,
-.settings__sound-device .ui-popover,
-.settings__sound-device .ui-select__trigger,
-.settings__sound-device .ui-slider {
+.settings__sound-device .select,
+.settings__sound-device .select__trigger,
+.settings__sound-device .vr-slider {
   width: 100%;
   min-width: 0;
   max-width: 100%;
@@ -625,12 +675,14 @@
     padding: 16px;
   }
 
-  .settings__body {
+  .settings__body,
+  .settings__body:not(.settings__body--room) {
     flex-direction: column;
     height: auto;
   }
 
-  .settings__nav {
+  .settings__nav,
+  .settings__body:not(.settings__body--room) .settings__nav {
     flex-direction: row;
     align-items: stretch;
     width: 100%;
@@ -652,4 +704,467 @@
     flex: none;
     margin-top: 0;
   }
+}
+
+// ---- profile section (ProfileSettings) ----
+
+.settings__profile-head {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 28px;
+}
+
+.settings__avatar-control {
+  position: relative;
+  flex: none;
+  width: 56px;
+  height: 56px;
+}
+
+.settings__profile-avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--vr-text);
+}
+
+.settings__profile-avatar img {
+  border-radius: inherit;
+}
+
+.settings__avatar-input {
+  display: none;
+}
+
+.settings__avatar-edit {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--vr-text);
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.settings__avatar-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: inherit;
+  background: color-mix(in srgb, var(--vr-bg) 58%, transparent);
+  opacity: 0;
+  transition: opacity 0.16s ease;
+  pointer-events: none;
+}
+
+:where(.settings__avatar-edit):not(:disabled):hover .settings__avatar-overlay,
+:where(.settings__avatar-edit):not(:disabled):focus-visible .settings__avatar-overlay {
+  opacity: 1;
+}
+
+:where(.settings__avatar-edit):focus-visible {
+  outline: 2px solid var(--vr-danger);
+  outline-offset: 3px;
+}
+
+.settings__avatar-remove {
+  position: absolute;
+  z-index: 1;
+  top: -5px;
+  right: -5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 2px solid var(--vr-bg);
+  border-radius: 50%;
+  background: var(--vr-danger);
+  color: var(--vr-text);
+  cursor: pointer;
+  box-shadow: 0 2px 7px rgba(0, 0, 0, 0.34);
+  opacity: 0;
+  transition:
+    opacity 0.16s ease,
+    background 0.16s ease;
+}
+
+:where(.settings__avatar-control):hover .settings__avatar-remove,
+:where(.settings__avatar-control):focus-within .settings__avatar-remove {
+  opacity: 1;
+}
+
+:where(.settings__avatar-remove):not(:disabled):hover {
+  background: color-mix(in oklch, var(--vr-danger), var(--vr-bg) 16%);
+}
+
+:where(.settings__avatar-remove):focus-visible {
+  outline: 2px solid var(--vr-text);
+  outline-offset: 2px;
+}
+
+:where(.settings__avatar-edit):disabled,
+:where(.settings__avatar-remove):disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.settings__profile-name {
+  color: var(--vr-text);
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.settings__profile-sub {
+  margin-top: 3px;
+  color: var(--vr-text-3);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+}
+
+.settings__fields {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  width: 100%;
+}
+
+// ---- appearance section (AppearanceSettings) ----
+
+.settings__appearance {
+  display: grid;
+  gap: 14px;
+}
+
+.settings__themes {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 14px;
+}
+
+.settings__theme {
+  display: grid;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid var(--vr-line-strong);
+  border-radius: 14px;
+  background: var(--vr-surface-2);
+  color: var(--vr-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.settings__theme--selected {
+  border-color: transparent;
+  box-shadow: 0 0 0 2px var(--vr-accent);
+}
+
+.settings__theme-preview {
+  display: flex;
+  height: 112px;
+  overflow: hidden;
+  border-radius: 10px;
+  background: var(--vr-bg);
+  box-shadow: inset 0 0 0 1px var(--vr-line);
+}
+
+.settings__theme-side {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: 8px;
+  width: 38%;
+  padding: 12px 10px;
+  background: var(--vr-surface);
+}
+
+.settings__theme-mark {
+  width: 16px;
+  height: 16px;
+  background: var(--vr-accent);
+  mask: url('/voiceroom-mascot.svg') center / contain no-repeat;
+}
+
+.settings__theme-line {
+  display: block;
+  height: 7px;
+  border-radius: 4px;
+  background: var(--vr-surface-3);
+}
+
+.settings__theme-line--short {
+  width: 60%;
+}
+
+.settings__theme-main {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 12px 10px;
+}
+
+.settings__theme-line--wide {
+  width: 70%;
+}
+
+.settings__theme-button {
+  align-self: flex-end;
+  width: 46px;
+  height: 16px;
+  border-radius: 6px;
+  background: var(--vr-accent);
+}
+
+.settings__theme-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 2px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.settings__theme-label svg {
+  color: var(--vr-accent);
+}
+
+// ---- sound and hotkeys (SoundSettings, HotkeySettings) ----
+
+.settings__sound-device-section {
+  padding-top: 20px;
+  border-top: 1px solid var(--vr-line);
+}
+
+.settings__gate {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 58px;
+  align-items: center;
+  gap: 14px;
+}
+
+.settings__sound-value {
+  color: var(--vr-text);
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.settings__sound-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+
+.settings__sound-preview {
+  border: 1px solid var(--vr-line-strong);
+  border-radius: 10px;
+  padding: 8px 12px;
+  background: transparent;
+  color: var(--vr-text);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    background 150ms ease,
+    border-color 150ms ease;
+}
+
+:where(.settings__sound-preview):hover {
+  background: var(--vr-hover);
+}
+
+:where(.settings__sound-preview):disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.settings__gate-value {
+  text-align: right;
+  color: var(--vr-text);
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.settings__segment {
+  display: flex;
+  width: 100%;
+}
+
+.settings__segment .ui-segment__item {
+  flex: 1;
+}
+
+.settings__hotkey-list {
+  display: grid;
+  gap: 14px;
+}
+
+// ---- notifications (NotificationSettings) ----
+
+.settings__notification-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.settings__notification-muted {
+  display: inline-flex;
+  flex: none;
+  color: var(--vr-text-3);
+}
+
+// ---- desktop app section (AppSettings) ----
+
+.settings__diagnostics-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.settings__overlay-window {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 54px;
+  padding: 8px 8px 8px 14px;
+  border: 1px solid color-mix(in oklch, var(--vr-text-3), transparent 84%);
+  border-radius: var(--radius-md);
+  background: color-mix(in oklch, var(--vr-surface-3), transparent 45%);
+}
+
+.settings__overlay-window-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.settings__overlay-window-name,
+.settings__overlay-window-exe {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings__overlay-window-name {
+  color: var(--vr-text);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.settings__overlay-window-exe {
+  color: var(--vr-text-3);
+  font-size: 12px;
+}
+
+.settings__overlay-window-empty {
+  padding: 6px 0;
+  color: var(--vr-text-3);
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+.settings__overlay-window-status {
+  flex: none;
+  margin-right: 6px;
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+  background: color-mix(in oklch, var(--vr-online), transparent 86%);
+  color: var(--vr-online);
+  font: 700 12px var(--font-ui);
+}
+
+.settings__overlay-add {
+  flex: none;
+  min-height: 36px;
+  padding: 0 14px;
+  border: none;
+  border-radius: 11px;
+  background: var(--vr-online);
+  color: var(--vr-accent-ink);
+  font: 700 12.5px var(--font-ui);
+  cursor: pointer;
+  transition: filter 0.15s ease;
+}
+
+:where(.settings__overlay-add):hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+:where(.settings__overlay-add):disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.settings__overlay-allowed {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.settings__overlay-allowed-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  max-width: 100%;
+  min-height: 28px;
+  padding: 0 3px 0 11px;
+  border-radius: var(--radius-pill);
+  background: color-mix(in oklch, var(--vr-surface-3), transparent 25%);
+  color: var(--vr-text);
+  font-size: 12px;
+}
+
+:where(.settings__overlay-allowed-item) > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings__overlay-remove {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--vr-text-3);
+  cursor: pointer;
+}
+
+:where(.settings__overlay-remove):hover:not(:disabled) {
+  background: color-mix(in oklch, var(--vr-danger), transparent 84%);
+  color: var(--vr-danger);
 }

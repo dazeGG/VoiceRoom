@@ -1,0 +1,96 @@
+// LobbyPage (features/home/LobbyPage.vue): the logged-in shell with the sidebar, the main pane
+// and the notification panel.
+// Svelte: the <style> of LobbyPage.svelte, .lv/.lv-main of lobby-v2.css and .lobby-shell of friends.css.
+//
+// Svelte class -> BEM class (block "lobby-shell")
+//   .lobby-shell.lv.dens-cozy   -> .lobby-shell (the --lv-* sizes are set here; dens-cozy styled nothing)
+//   .lobby-main.lv-main         -> .lobby-shell__main
+//   .lobby-embedded-room        -> .lobby-shell__room
+//   .notification-inbox-panel   -> .lobby-shell__inbox
+//   .notification-inbox         -> (NotificationInbox's own block, sized by .lobby-shell__inbox > *)
+//
+// [data-*] -> attribute
+//   .lobby-embedded-room[hidden] stays the hidden attribute.
+// .lobby-shell is also named in _desktop-shell.scss.
+
+// Height comes from this class (100vh): html/body only set min-height, so a height:100% would
+// resolve to auto and collapse the shell, and the embedded room with it. Do not add height elsewhere.
+.lobby-shell {
+  --lv-side-w: 280px;
+  --lv-row-pad: 0 10px;
+  --lv-name: 13.5px;
+  --lv-sub: 11.5px;
+  --lv-gap: 16px;
+
+  height: 100vh;
+  display: flex;
+  overflow: hidden;
+  font-family: var(--font-ui);
+  color: var(--vr-text);
+  background:
+    radial-gradient(55% 60% at 80% 6%, color-mix(in oklch, var(--vr-surface-3), transparent 78%), transparent 55%),
+    radial-gradient(50% 60% at 0% 100%, color-mix(in oklch, var(--vr-surface), transparent 84%), transparent 55%),
+    var(--vr-bg);
+}
+
+.lobby-shell__main {
+  flex: 1;
+  min-width: 0;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.lobby-shell__room {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+
+  &[hidden] {
+    display: none;
+  }
+}
+
+// The panel clips; the list inside it is what scrolls.
+.lobby-shell__inbox {
+  position: fixed;
+  z-index: 71;
+  left: 292px;
+  bottom: 16px;
+  display: flex;
+  width: min(420px, calc(100vw - 316px));
+  max-height: min(620px, calc(100vh - 32px));
+  overflow: hidden;
+  border: 1px solid var(--vr-line-strong);
+  border-radius: 18px;
+  background: var(--vr-surface-2);
+  box-shadow: var(--vr-shadow-popover);
+  animation: lobby-shell-inbox-in 140ms ease-out;
+
+  > * {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  @media (max-width: 900px) {
+    left: 12px;
+    right: 12px;
+    bottom: 76px;
+    width: auto;
+    max-height: min(560px, calc(100vh - 96px));
+  }
+}
+
+@keyframes lobby-shell-inbox-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}

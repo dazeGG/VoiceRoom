@@ -1,0 +1,280 @@
+// PeopleView (features/home/components/lobby/PeopleView.vue): "Друзья и заявки", adding a friend by
+// login and answering requests. Rules were split across PeopleView's own <style>, lobby-v2.css and
+// friends.css; the request card and its buttons are elements of this block.
+//
+// Svelte class -> BEM class
+//   .lv-main-scroll                       -> .people-view
+//   .lr-section-link.people-back          -> .people-view__back
+//   .lr-title.people-title                -> .people-view__title
+//   .lr-eyebrow.people-section-label      -> .people-view__label (+ --add / --requests)
+//   .lr-add-bar                           -> .people-view__add-bar
+//   .lr-add-field                         -> .people-view__add-field
+//   .lr-add-field .at                     -> .people-view__add-at
+//   .lr-add-field input                   -> .people-view__add-input
+//   .lr-add-hint                          -> .people-view__hint
+//   .lr-add-copy                          -> .people-view__copy
+//   .lr-grid-2                            -> .people-view__columns
+//   .lr-eyebrow.people-column-label       -> .people-view__column-label
+//   .people-count                         -> .people-view__count
+//   .lr-empty                             -> .people-view__empty
+//   .lr-req-card                          -> .people-view__request (+ --incoming)
+//   .people-request-copy                  -> .people-view__request-copy
+//   .lr-req-name.people-truncate          -> .people-view__request-name
+//   .lr-req-handle.people-truncate        -> .people-view__request-handle
+//   .lr-req-meta.people-truncate          -> .people-view__request-meta
+//   .lr-req-pending                       -> .people-view__request-pending
+//   .lr-req-pending-dot                   -> .people-view__request-pending-dot
+//   .lr-req-actions                       -> .people-view__request-actions
+//   .lr-req-btn(.accept/.decline)         -> .people-view__request-button (--accept / --decline)
+
+.people-view {
+  flex: 1;
+  overflow: auto;
+  padding: 36px 44px;
+}
+
+.people-view__back {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 18px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--vr-text-2);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+
+  &:hover {
+    color: var(--vr-accent);
+  }
+}
+
+.people-view__title {
+  margin-top: 6px;
+  margin-bottom: 4px;
+  color: var(--vr-text);
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: -0.015em;
+}
+
+.people-view__label,
+.people-view__column-label {
+  color: var(--vr-text-2);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.people-view__label--add {
+  margin: 24px 0 12px;
+}
+
+.people-view__label--requests {
+  margin: 32px 0 14px;
+}
+
+.people-view__column-label {
+  margin-bottom: 14px;
+}
+
+.people-view__count {
+  margin-left: 6px;
+  color: var(--vr-text-3);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  font-weight: 400;
+}
+
+.people-view__add-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  max-width: 520px;
+}
+
+.people-view__add-field {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  gap: 8px;
+  height: 44px;
+  padding: 0 14px;
+  border: 1px solid var(--vr-line-strong);
+  border-radius: 12px;
+  background: var(--vr-surface-2);
+
+  &:focus-within {
+    border-color: var(--vr-accent-line);
+  }
+}
+
+.people-view__add-at {
+  color: var(--vr-text-3);
+  font-family: var(--font-mono);
+  font-weight: 500;
+}
+
+.people-view__add-input {
+  flex: 1;
+  height: 100%;
+  padding: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--vr-text);
+  font-family: var(--font-mono);
+  font-size: 14px;
+}
+
+.people-view__hint {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 12px;
+  color: var(--vr-text-3);
+  font-size: 12.5px;
+
+  code {
+    color: var(--vr-text-2);
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+  }
+}
+
+.people-view__copy {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 4px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--vr-accent);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+
+  &:hover {
+    background: var(--vr-accent-soft);
+  }
+}
+
+.people-view__columns {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 14px;
+}
+
+.people-view__empty {
+  margin: 0;
+  color: var(--vr-text-3);
+  font-size: 13.5px;
+}
+
+.people-view__request {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+  padding: 12px;
+  border: 1px solid var(--vr-line-strong);
+  border-radius: 14px;
+  background: var(--vr-surface-2);
+}
+
+.people-view__request--incoming {
+  border-color: var(--vr-accent-line);
+}
+
+.people-view__request-copy {
+  flex: 1;
+  min-width: 0;
+}
+
+.people-view__request-name,
+.people-view__request-handle,
+.people-view__request-meta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.people-view__request-name {
+  color: var(--vr-text);
+  font-size: 14.5px;
+  font-weight: 600;
+}
+
+.people-view__request-handle {
+  margin-top: 2px;
+  color: var(--vr-text-3);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+}
+
+.people-view__request-meta {
+  margin-top: 2px;
+  color: var(--vr-text-3);
+  font-size: 12px;
+}
+
+.people-view__request-pending {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 2px;
+  color: var(--vr-text-3);
+  font-size: 12px;
+}
+
+.people-view__request-pending-dot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--vr-away);
+}
+
+.people-view__request-actions {
+  display: flex;
+  flex: none;
+  gap: 6px;
+}
+
+.people-view__request-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border: 0;
+  border-radius: 11px;
+  background: var(--vr-surface-3);
+  color: var(--vr-text);
+  cursor: pointer;
+
+  &:hover {
+    background: var(--vr-surface-3-hover);
+  }
+}
+
+.people-view__request-button--accept {
+  background: var(--vr-accent);
+  color: var(--vr-accent-ink);
+
+  &:hover {
+    background: var(--vr-accent-hover);
+  }
+}
+
+.people-view__request-button--decline:hover {
+  background: var(--vr-danger-hover);
+  color: var(--vr-danger);
+}

@@ -1,0 +1,121 @@
+// `/` on a phone: start a temporary room.
+// Svelte: MobileStartScreen.svelte <style>.
+//
+// Svelte class -> BEM class (block "mobile-start")
+//   .mobile-start-card      -> .mobile-start__card
+//   .mobile-start-orb       -> .mobile-start__orb
+//   .mobile-start-kicker    -> .mobile-start__kicker
+//   .mobile-start-card h1   -> .mobile-start__title
+//   .mobile-start-lead      -> .mobile-start__lead
+//   .ui-button (in card)    -> .mobile-start__create
+//   .mobile-start-spinner   -> .mobile-start__spinner
+//   .mobile-start-features  -> .mobile-start__features
+//   ...features li          -> .mobile-start__feature
+//   .mobile-start-note      -> .mobile-start__note
+
+.mobile-start {
+  box-sizing: border-box;
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: 24px 16px calc(24px + env(safe-area-inset-bottom));
+  background: var(--vr-bg);
+  font-family: var(--font-ui);
+}
+
+.mobile-start__card {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 14px;
+  width: min(440px, 100%);
+  padding: clamp(22px, 6vw, 30px);
+  border: 1px solid var(--vr-line-strong);
+  border-radius: var(--radius-xl);
+  background: var(--vr-surface-2);
+  box-shadow: var(--vr-shadow-popover);
+}
+
+.mobile-start__orb {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 20px;
+  background: color-mix(in oklch, var(--vr-accent) 12%, var(--vr-surface-3));
+}
+
+.mobile-start__kicker {
+  margin: 0;
+  color: var(--vr-accent);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.mobile-start__title {
+  margin: 0;
+  color: var(--vr-text);
+  font-size: clamp(24px, 7vw, 30px);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.12;
+}
+
+.mobile-start__lead {
+  margin: 0;
+  color: var(--vr-text-2);
+  font-size: 14.5px;
+  line-height: 1.5;
+}
+
+.mobile-start__create {
+  width: 100%;
+  margin-top: 4px;
+}
+
+.mobile-start__spinner {
+  width: 15px;
+  height: 15px;
+  border: 2px solid color-mix(in srgb, var(--vr-accent-ink) 35%, transparent);
+  border-top-color: var(--vr-accent-ink);
+  border-radius: 50%;
+  animation: mobile-start-spin 0.7s linear infinite;
+}
+
+@keyframes mobile-start-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.mobile-start__features {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.mobile-start__feature {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 11px;
+  border: 1px solid var(--vr-line);
+  border-radius: var(--radius-pill);
+  background: var(--vr-surface-3);
+  color: var(--vr-text);
+  font-size: 12.5px;
+  font-weight: 650;
+}
+
+.mobile-start__note {
+  margin: 0;
+  color: var(--vr-text-2);
+  font-size: 12.5px;
+  line-height: 1.45;
+}

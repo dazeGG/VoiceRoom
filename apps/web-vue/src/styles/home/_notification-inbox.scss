@@ -1,0 +1,335 @@
+// The notifications panel behind the lobby bell.
+// Svelte: NotificationInbox.svelte <style>.
+//
+// Svelte class -> BEM class (block "notification-inbox")
+//   .notification-inbox-head          -> .notification-inbox__head
+//   h2                                -> .notification-inbox__title
+//   .notification-inbox-count         -> .notification-inbox__count
+//   .notification-inbox-tools         -> .notification-inbox__tools
+//   .notification-inbox-read-all      -> .notification-inbox__read-all
+//   .notification-inbox-dismiss       -> .notification-inbox__dismiss
+//   .sr-only                          -> .notification-inbox__live (visually-hidden mixin)
+//   .notification-inbox-body          -> .notification-inbox__body
+//   .notification-inbox-list          -> .notification-inbox__list
+//   li / li.unread                    -> .notification-inbox__item / --unread
+//   li button                         -> .notification-inbox__open
+//   .notification-inbox-dot           -> .notification-inbox__dot (--skeleton)
+//   .notification-inbox-text          -> .notification-inbox__text
+//   strong / strong.is-retracted      -> .notification-inbox__message / --retracted
+//   small                             -> .notification-inbox__meta
+//   .notification-inbox-reason/-room/-time -> .notification-inbox__reason/__room/__time
+//   .notification-inbox-state         -> .notification-inbox__state
+//   .notification-inbox-glyph (--error) -> .notification-inbox__glyph (--error)
+//   .notification-inbox-skeleton      -> .notification-inbox__skeleton
+//   .notification-inbox-skeleton-row  -> .notification-inbox__skeleton-row
+//   .notification-inbox-skeleton-lines -> .notification-inbox__skeleton-lines
+//   ...-lines span / span.is-short    -> .notification-inbox__skeleton-line / --short
+//   .notification-inbox-retry/-more   -> .notification-inbox__retry/__more
+@use '../mixins' as *;
+
+.notification-inbox {
+  display: flex;
+  min-width: 0;
+  max-height: inherit;
+  flex-direction: column;
+}
+
+.notification-inbox__head {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 12px 12px 18px;
+  border-bottom: 1px solid var(--vr-line);
+}
+
+.notification-inbox__title {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.notification-inbox__count {
+  display: flex;
+  min-width: 20px;
+  height: 20px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--vr-accent);
+  color: var(--vr-accent-ink);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+.notification-inbox__tools {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.notification-inbox__read-all {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--vr-text-2);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background 0.14s ease,
+    color 0.14s ease;
+}
+
+.notification-inbox__dismiss {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  flex: none;
+  place-items: center;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--vr-text-2);
+  cursor: pointer;
+  transition:
+    background 0.14s ease,
+    color 0.14s ease;
+}
+
+.notification-inbox__read-all:hover,
+.notification-inbox__read-all:focus-visible,
+.notification-inbox__dismiss:hover,
+.notification-inbox__dismiss:focus-visible {
+  background: var(--vr-hover);
+  color: var(--vr-text);
+  outline: none;
+}
+
+.notification-inbox__live {
+  @include visually-hidden;
+}
+
+// The list scrolls, the panel does not.
+.notification-inbox__body {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.notification-inbox__list {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 6px;
+  list-style: none;
+}
+
+.notification-inbox__open {
+  display: flex;
+  width: 100%;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.14s ease;
+
+  &:hover,
+  &:focus-visible {
+    background: var(--vr-hover);
+    outline: none;
+  }
+}
+
+// The unread marker is a dot in the gutter rather than a filled row.
+.notification-inbox__dot {
+  width: 8px;
+  height: 8px;
+  flex: none;
+  margin-top: 6px;
+  border-radius: 50%;
+  background: transparent;
+}
+
+.notification-inbox__item--unread .notification-inbox__dot {
+  background: var(--vr-accent);
+}
+
+.notification-inbox__dot--skeleton {
+  background: var(--vr-surface-3);
+}
+
+.notification-inbox__text {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.notification-inbox__message {
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  color: var(--vr-text-2);
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+.notification-inbox__item--unread .notification-inbox__message {
+  color: var(--vr-text);
+  font-weight: 600;
+}
+
+.notification-inbox__message--retracted {
+  font-style: italic;
+}
+
+.notification-inbox__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  color: var(--vr-text-3);
+  font-size: 12px;
+}
+
+.notification-inbox__reason {
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--vr-hover);
+  color: var(--vr-text-2);
+  font-weight: 500;
+}
+
+.notification-inbox__item--unread .notification-inbox__reason {
+  background: var(--vr-accent-soft);
+  color: var(--vr-accent);
+}
+
+.notification-inbox__state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 44px 24px;
+  color: var(--vr-text-3);
+  text-align: center;
+
+  p {
+    margin: 0;
+    color: var(--vr-text-2);
+    font-size: 14px;
+  }
+}
+
+.notification-inbox__glyph {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  border-radius: 13px;
+  background: var(--vr-surface-3);
+}
+
+.notification-inbox__glyph--error {
+  background: var(--vr-danger-soft);
+  color: var(--vr-danger);
+}
+
+.notification-inbox__skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+
+  p {
+    margin: 0;
+    color: var(--vr-text-3);
+    font-size: 13px;
+    text-align: center;
+  }
+}
+
+.notification-inbox__skeleton-row {
+  display: flex;
+  gap: 12px;
+  padding: 12px;
+}
+
+.notification-inbox__skeleton-lines {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.notification-inbox__skeleton-line {
+  display: block;
+  height: 12px;
+  border-radius: 6px;
+  background: var(--vr-surface-3);
+}
+
+.notification-inbox__skeleton-line--short {
+  width: 40%;
+  height: 10px;
+  border-radius: 5px;
+  opacity: 0.6;
+}
+
+.notification-inbox__retry,
+.notification-inbox__more {
+  height: 36px;
+  padding: 0 16px;
+  border: 1px solid var(--vr-line-strong);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--vr-text);
+  font-family: var(--font-ui);
+  font-size: 13.5px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.notification-inbox__more {
+  width: calc(100% - 24px);
+  height: 38px;
+  margin: 2px 12px 12px;
+  border-radius: 11px;
+}
+
+.notification-inbox__retry:hover,
+.notification-inbox__more:hover:not(:disabled) {
+  background: var(--vr-hover);
+}
+
+.notification-inbox__more:disabled {
+  cursor: default;
+  opacity: 0.6;
+}

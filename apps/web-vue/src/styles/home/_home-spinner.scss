@@ -1,0 +1,27 @@
+// The small spinner inside a busy button. Shared by the landing, the lobby
+// dialogs, the settings and the room settings dialog.
+// Svelte: home/styles/home.css
+//
+// Svelte class -> BEM class
+//   .home-spinner -> .home-spinner (block)
+
+.home-spinner {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid var(--vr-line-strong);
+  border-top-color: var(--vr-text);
+  animation: home-spin 0.7s linear infinite;
+}
+
+@keyframes home-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .home-spinner {
+    animation: none;
+  }
+}

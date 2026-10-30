@@ -1,0 +1,95 @@
+// DmView (features/home/components/lobby/DmView.vue): the direct-message screen, the friend's header over
+// the open thread, with the profile panel beside it.
+//
+// Svelte class -> BEM class
+//   .lobby-dm                             -> .dm-view
+//   .lobby-dm-col                         -> .dm-view__col
+//   .lobby-dm-head                        -> .dm-view__head
+//   .lobby-dm-head-text                   -> .dm-view__head-text
+//   .lobby-dm-head-name                   -> .dm-view__head-name
+//   .lobby-dm-head-status                 -> .dm-view__head-status
+//   .lobby-dm-head-icon                   -> .dm-view__head-icon
+//
+// [data-*] -> modifier class
+//   .lobby-dm-head-status[data-presence='dnd|away|online|offline']
+//                                         -> .dm-view__head-status--dnd / --away / --online / --offline
+
+.dm-view {
+  --dm-view-head-height: 65px;
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
+.dm-view__col {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.dm-view__head {
+  flex: none;
+  min-height: var(--dm-view-head-height);
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 13px 24px;
+  border: 0;
+  border-bottom: 1px solid var(--vr-line);
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.14s ease;
+
+  &:hover {
+    background: var(--vr-hover);
+  }
+}
+
+.dm-view__head-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.dm-view__head-icon {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--vr-text-3);
+}
+
+.dm-view__head-name {
+  color: var(--vr-text);
+  font-size: 15.5px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.dm-view__head-status {
+  margin-top: 2px;
+  font-size: 12px;
+}
+
+.dm-view__head-status--dnd {
+  color: var(--vr-danger);
+}
+
+.dm-view__head-status--away {
+  color: var(--vr-away);
+}
+
+.dm-view__head-status--online {
+  color: var(--vr-online);
+}
+
+.dm-view__head-status--offline {
+  color: var(--vr-text-3);
+}

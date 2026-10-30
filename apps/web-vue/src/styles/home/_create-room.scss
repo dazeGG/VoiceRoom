@@ -1,0 +1,141 @@
+// The "new room" dialog (inside the shared Dialog).
+// Svelte: CreateRoomDialog.svelte <style> and the .lr-dialog-* rules of lobby-v2.css.
+//
+// Svelte class -> BEM class (block "create-room")
+//   .lr-dialog-tabs                 -> .create-room__tabs
+//   .lr-dialog-tab                  -> .create-room__tab
+//   .lr-dialog-form                 -> .create-room__form
+//   .lr-field                       -> .create-room__field
+//   .lr-field-label                 -> .create-room__label
+//   .lr-field-label-soft            -> .create-room__label-soft
+//   .lr-dialog-input                -> .create-room__input
+//   .lr-dialog-note (--ok, --warn)  -> .create-room__note (--ok, --warn)
+//   .lr-dialog-error                -> .create-room__error
+//   .lr-dialog-actions              -> .home-dialog__actions (_home-dialog.scss)
+//
+// [data-*] -> aria
+//   .lr-dialog-tab[data-active='true'] -> .create-room__tab[aria-selected='true']
+
+.create-room__form {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.create-room__field {
+  margin-bottom: 4px;
+}
+
+.create-room__label {
+  display: block;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--vr-text-2);
+  margin-bottom: 8px;
+}
+
+.create-room__label-soft {
+  color: var(--vr-text-3);
+  font-weight: 500;
+}
+
+.create-room__input {
+  width: 100%;
+  border: 1px solid var(--vr-line-strong);
+  border-radius: var(--radius-md);
+  padding: 13px 15px;
+  background: var(--vr-bg);
+  color: var(--vr-text);
+  font-family: var(--font-ui);
+  font-size: 15px;
+  outline: none;
+  transition: border-color 0.15s ease;
+
+  &::placeholder {
+    color: var(--vr-text-3);
+  }
+
+  &:focus {
+    border-color: var(--vr-accent);
+  }
+}
+
+.create-room__tabs {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--vr-line);
+  border-radius: var(--radius-md);
+  background: var(--vr-bg);
+}
+
+.create-room__tab {
+  flex: 1;
+  border: none;
+  border-radius: 12px;
+  padding: 9px 0;
+  background: transparent;
+  color: var(--vr-text-2);
+  font-family: var(--font-ui);
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+
+  &:focus-visible {
+    outline: 2px solid var(--focus-border);
+    outline-offset: 2px;
+  }
+
+  &[aria-selected='true'] {
+    background: var(--vr-accent);
+    color: var(--vr-accent-ink);
+    font-weight: 700;
+  }
+}
+
+.create-room__note {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  border-radius: var(--radius-md);
+  padding: 11px 13px;
+  font-size: 12.5px;
+  line-height: 1.4;
+
+  svg {
+    flex: none;
+  }
+}
+
+.create-room__note--ok {
+  border: 1px solid color-mix(in oklch, var(--vr-online), transparent 78%);
+  background: color-mix(in oklch, var(--vr-online), transparent 92%);
+  color: var(--vr-text);
+
+  svg {
+    stroke: var(--vr-online);
+  }
+}
+
+.create-room__note--warn {
+  border: 1px solid color-mix(in oklch, var(--vr-away), transparent 72%);
+  background: color-mix(in oklch, var(--vr-away), transparent 90%);
+  color: var(--vr-text);
+
+  svg {
+    stroke: var(--vr-away);
+  }
+}
+
+.create-room__error {
+  margin: 0;
+  border: 1px solid color-mix(in oklch, var(--vr-danger), transparent 60%);
+  border-radius: var(--radius-md);
+  padding: 9px 12px;
+  background: color-mix(in oklch, var(--vr-danger), transparent 88%);
+  color: var(--vr-text);
+  font-size: 12.5px;
+}

@@ -1,0 +1,85 @@
+// "Checking the session" screen of the landing and the device check of the home route.
+// Svelte: home/styles/home.css (.auth-loader*) and the lines in HomePage.svelte.
+//
+// Svelte class -> BEM class (block "auth-loader")
+//   .auth-loader                -> .auth-loader
+//   .auth-loader-card           -> .auth-loader__card
+//   .auth-loader-orb            -> .auth-loader__orb
+//   .auth-loader-kicker         -> .auth-loader__kicker
+//   .auth-loader h1             -> .auth-loader__title
+//   .auth-loader-lines (+ span) -> .auth-loader__lines (+ __line)
+
+.auth-loader {
+  display: grid;
+  min-height: calc(100vh - 96px);
+  place-items: center;
+  padding: 48px 20px;
+}
+
+.auth-loader__card {
+  width: min(100%, 420px);
+  padding: 34px;
+  border: 1px solid var(--vr-line);
+  border-radius: 24px;
+  background:
+    radial-gradient(circle at 50% 0%, color-mix(in oklch, var(--vr-text) 11%, transparent), transparent 58%),
+    var(--vr-surface);
+  text-align: center;
+  box-shadow: 0 24px 70px oklch(0% 0 0 / 0.28);
+}
+
+.auth-loader__orb {
+  display: inline-flex;
+  margin-bottom: 18px;
+}
+
+.auth-loader__kicker {
+  margin: 0 0 8px;
+  color: var(--vr-text-3);
+  font-family: var(--font-ui);
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.auth-loader__title {
+  margin: 0;
+  color: var(--vr-text);
+  font-size: clamp(24px, 4vw, 34px);
+  letter-spacing: -0.04em;
+}
+
+.auth-loader__lines {
+  display: grid;
+  gap: 10px;
+  margin-top: 24px;
+}
+
+.auth-loader__line {
+  height: 10px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--vr-surface-3), var(--vr-surface-3-hover), var(--vr-surface-3));
+  animation: auth-loader-shimmer 1.4s ease-in-out infinite;
+
+  &:nth-child(2) {
+    width: 78%;
+    margin-inline: auto;
+    animation-delay: 0.12s;
+  }
+
+  &:nth-child(3) {
+    width: 58%;
+    margin-inline: auto;
+    animation-delay: 0.24s;
+  }
+}
+
+@keyframes auth-loader-shimmer {
+  0%,
+  100% {
+    opacity: 0.45;
+  }
+  50% {
+    opacity: 1;
+  }
+}

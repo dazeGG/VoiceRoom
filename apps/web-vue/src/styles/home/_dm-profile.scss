@@ -1,0 +1,169 @@
+// DmProfile (features/home/components/lobby/dm/DmProfilePanel.vue): the friend's profile beside an open thread.
+//
+// Svelte class -> BEM class
+//   .lobby-profile-panel.lobby-scroll     -> .dm-profile (the thin scrollbar of .lobby-scroll is written here)
+//   .lobby-profile-cover                  -> .dm-profile__cover
+//   .lobby-profile-close                  -> .dm-profile__close
+//   .lobby-profile-body                   -> .dm-profile__body
+//   .lobby-profile-panel-name             -> .dm-profile__name
+//   .lobby-profile-panel-handle           -> .dm-profile__handle
+//   .lobby-profile-stats                  -> .dm-profile__stats
+//   .lobby-profile-stat                   -> .dm-profile__stat
+//   .lobby-profile-stat-num               -> .dm-profile__stat-num
+//   .lobby-profile-stat-label             -> .dm-profile__stat-label
+//   .lobby-profile-action                 -> .dm-profile__action
+//   .lobby-profile-action--danger         -> .dm-profile__action--danger
+//   .lobby-profile-action.is-muted svg    -> dropped (it set the colour the svg already had)
+//   [data-notification-mute]              -> dropped (nothing read it)
+
+.dm-profile {
+  flex: none;
+  width: 328px;
+  height: 100%;
+  overflow-y: auto;
+  border-left: 1px solid var(--vr-line);
+  background: var(--vr-surface);
+  scrollbar-width: thin;
+  scrollbar-color: var(--vr-line) transparent;
+
+  &::-webkit-scrollbar {
+    width: 8px;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: var(--vr-line-strong);
+    border-radius: 4px;
+  }
+}
+
+.dm-profile__cover {
+  position: relative;
+  height: 88px;
+  background: color-mix(in oklch, var(--profile-cover-accent, var(--vr-surface-3)) 30%, var(--vr-surface-2));
+}
+
+.dm-profile__close {
+  position: absolute;
+  top: 50%;
+  right: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  transform: translateY(-50%);
+  border: none;
+  border-radius: 9px;
+  background: var(--vr-scrim);
+  color: var(--vr-text);
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+
+  &:hover {
+    background: var(--vr-bg);
+    color: var(--vr-text);
+  }
+}
+
+.dm-profile__body {
+  padding: 0 20px 24px;
+  margin-top: -24px;
+}
+
+.dm-profile__name {
+  margin-top: 12px;
+  color: var(--vr-text);
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.dm-profile__handle {
+  margin-top: 2px;
+  color: var(--vr-text-2);
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+}
+
+.dm-profile__stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.dm-profile__stat {
+  padding: 13px 14px;
+  border: 1px solid var(--vr-line);
+  border-radius: 14px;
+  background: var(--vr-surface-2);
+}
+
+.dm-profile__stat-num {
+  color: var(--vr-text);
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.dm-profile__stat-label {
+  margin-top: 2px;
+  color: var(--vr-text-2);
+  font-size: 11px;
+}
+
+.dm-profile__action {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  width: 100%;
+  min-height: 40px;
+  margin-top: 14px;
+  border: 0;
+  border-radius: 11px;
+  padding: 0 14px;
+  background: var(--vr-hover);
+  color: var(--vr-text);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
+
+  svg {
+    flex: none;
+    color: var(--vr-text-2);
+  }
+
+  &:hover {
+    background: var(--vr-surface-3);
+    color: var(--vr-text);
+  }
+
+  &:disabled {
+    cursor: default;
+    opacity: 0.55;
+  }
+}
+
+.dm-profile__action--danger {
+  margin-top: 10px;
+  background: transparent;
+  color: var(--vr-danger);
+
+  svg {
+    color: currentColor;
+  }
+
+  &:hover {
+    background: var(--vr-danger-hover);
+    color: var(--vr-danger);
+  }
+}

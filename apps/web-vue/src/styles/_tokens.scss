@@ -3,9 +3,10 @@
 // colours. graphite-volt is the default (:root).
 //
 // Svelte: [data-theme='graphite-volt'|'graphite-ice'|'graphite-coral'] on <html>
-//   -> html.theme--graphite-volt / html.theme--graphite-ice / html.theme--graphite-coral
+//   -> .theme--graphite-volt / .theme--graphite-ice / .theme--graphite-coral (on <html>; the theme cards
+//      in the appearance settings carry the class too, to preview their own colours)
 :root,
-html.theme--graphite-volt {
+.theme--graphite-volt {
   // One height for the room top bar and the side panel header, so their divider lines meet.
   --vr-room-head-h: 69px;
   color-scheme: dark;
@@ -60,7 +61,7 @@ html.theme--graphite-volt {
   --vr-shadow-toast: 0 16px 44px oklch(0% 0 0 / 0.42);
 }
 
-html.theme--graphite-ice {
+.theme--graphite-ice {
   --vr-accent: oklch(84% 0.12 220);
   --vr-accent-hover: oklch(89% 0.1 220);
   --vr-accent-ink: oklch(20% 0.04 230);
@@ -70,7 +71,7 @@ html.theme--graphite-ice {
   --vr-online: oklch(78% 0.14 155);
 }
 
-html.theme--graphite-coral {
+.theme--graphite-coral {
   --vr-accent: oklch(75% 0.15 35);
   --vr-accent-hover: oklch(80% 0.13 35);
   --vr-accent-ink: oklch(20% 0.05 35);

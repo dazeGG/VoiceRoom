@@ -1,0 +1,17 @@
+// LobbyStreamTile (features/home/components/lobby/LobbyStreamTile.vue): the tile that stands
+// for someone's stream in a room previewed from the lobby. It is a stream tile (room/_stream-tile.scss)
+// with the preview modifier and a note.
+// Svelte: the <style> of LobbyStreamTile.svelte.
+//
+// Svelte class / selector -> BEM class (block "lobby-stream-tile")
+//   .stream-tile.lobby-preview-stream -> .stream-tile.stream-tile--preview.lobby-stream-tile (no rule)
+//   .lobby-stream-note                -> .lobby-stream-tile__note
+//
+// [data-*] -> modifier class
+//   [data-preview='true']             -> .stream-tile--preview
+//   [data-screen='true']              -> (dropped: nothing styled it on this tile)
+
+.lobby-stream-tile__note {
+  color: var(--vr-text-3);
+  font-size: 13px;
+}
