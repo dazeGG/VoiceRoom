@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ArrowRight } from '@lucide/vue';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
+import { RouterLink, useRoute, useRouter } from 'vue-router';
 import { createRoom } from '@/api/rooms';
 import type { AuthUser } from '@/api/auth';
 import AuthDialog from '@/features/auth/AuthDialog.vue';
@@ -211,7 +211,9 @@ function switchAuthMode(mode: AuthMode): void {
     <div class="landing__container">
       <Topbar label="Новая голосовая комната">
         <nav class="landing__auth" aria-label="Аккаунт">
-          <a class="landing__login" href="/?auth=login">Войти <ArrowRight :size="15" aria-hidden="true" /></a>
+          <RouterLink class="landing__login" to="/?auth=login"
+            >Войти <ArrowRight :size="15" aria-hidden="true"
+          /></RouterLink>
         </nav>
       </Topbar>
     </div>

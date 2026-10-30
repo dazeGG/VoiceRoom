@@ -244,6 +244,9 @@ export function useLobbyRouting(lobby: RoutingLobby, rooms: RoutingRooms, router
 
   const onPopState = (): void => {
     const roomId = extractRoomId(window.location.pathname);
+    // The back button out of the lobby (to /login, /privacy, ...): that page
+    // takes over, and rewriting its entry would swallow the move.
+    if (!roomId && window.location.pathname !== '/') return;
     if (roomId) {
       navigation.setViewedRoomFromRoute(roomId);
       lobby.mode = 'rooms';

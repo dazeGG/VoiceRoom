@@ -142,12 +142,18 @@ export function serviceWorkerPlugin(entry = 'src/service-worker.ts'): Plugin {
   let root = process.cwd();
   let outDir = 'dist';
   let isBuild = false;
+  let mode = 'production';
+  let failed = false;
   return {
     name: 'voiceroom-service-worker',
     configResolved(config) {
       root = config.root;
       outDir = resolve(config.root, config.build.outDir);
       isBuild = config.command === 'build';
+      mode = config.mode;
+    },
+    buildEnd(error) {
+      failed = Boolean(error);
     },
     configureServer(server) {
       server.middlewares.use(SERVICE_WORKER_PATH, (_request, response, next) => {
@@ -165,10 +171,12 @@ export function serviceWorkerPlugin(entry = 'src/service-worker.ts'): Plugin {
       });
     },
     async closeBundle() {
-      if (!isBuild) return;
+      // Same mode as the app; nothing to add to a build that failed.
+      if (!isBuild || failed) return;
       await build({
         configFile: false,
         root,
+        mode,
         logLevel: 'warn',
         build: {
           outDir,

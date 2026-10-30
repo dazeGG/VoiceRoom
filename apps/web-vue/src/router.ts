@@ -2,7 +2,14 @@
 // carries the SvelteKit route id as `meta.routeId`, the key the copied
 // platform code (mobile-routes.ts) uses.
 
-import { createRouter, createWebHistory, type RouteRecordRaw, type Router, type RouterHistory } from 'vue-router';
+import {
+  createRouter,
+  createWebHistory,
+  START_LOCATION,
+  type RouteRecordRaw,
+  type Router,
+  type RouterHistory
+} from 'vue-router';
 import { isShallowEntry } from '@/shared/utils/shallow-routing';
 import MainRoute from './pages/MainRoute.vue';
 
@@ -37,5 +44,19 @@ export function createAppRouter(history: RouterHistory = createWebHistory()): Ro
       if (to.path === from.path || isShallowEntry(to.fullPath)) return false;
       return { top: 0 };
     }
+  });
+}
+
+/**
+ * A page that fails to load (a deploy replaced its chunk) opens as a full page
+ * load instead, as SvelteKit fell back to; not the first page, which would loop.
+ * Returns the removal.
+ */
+export function loadFailedPagesInFull(
+  router: Router,
+  load: (href: string) => void = (href) => (window.location.href = href)
+): () => void {
+  return router.onError((_error, to) => {
+    if (router.currentRoute.value !== START_LOCATION) load(router.resolve(to).href);
   });
 }

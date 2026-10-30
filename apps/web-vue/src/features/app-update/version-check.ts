@@ -1,7 +1,7 @@
 // What SvelteKit's `updated` did: poll /_app/version.json and say once the
 // deployed build differs from the one running here. The file is written by
 // versionFilePlugin (scripts/deploy-contract.ts) with the same build id that
-// vite.config.ts compiles in as __APP_VERSION__.
+// vite.config.ts compiles in as import.meta.env.VITE_APP_VERSION.
 
 export interface VersionCheckOptions {
   /** The build id of the running app. */

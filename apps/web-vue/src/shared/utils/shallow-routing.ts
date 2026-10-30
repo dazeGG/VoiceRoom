@@ -7,19 +7,24 @@
 
 import type { RouteLocationNormalized, Router } from 'vue-router';
 
-const SHALLOW_STATE = { shallow: true } as const;
-
-// A push or replace that is still running its guards: history.state does not
-// carry the mark until the router writes the entry.
-let pendingShallowPath: string | null = null;
+// Pushes and replaces still running their guards, by path: history.state does
+// not carry the mark until the router writes the entry. Counted, so an earlier
+// one that finishes does not unmark a later one to the same path.
+const pendingShallowPaths = new Map<string, number>();
 
 function navigate(router: Router, path: string, replace: boolean): Promise<void> {
-  pendingShallowPath = path;
-  const location = { path, state: SHALLOW_STATE };
+  pendingShallowPaths.set(path, (pendingShallowPaths.get(path) ?? 0) + 1);
+  // The path, not a flag: vue-router copies the old state into a later replace
+  // of the same entry, and a flag would mark that real navigation shallow too.
+  // `force`: the address may lag behind the route (the back button inside the
+  // lobby), and a write to the route the router is on must still land.
+  const location = { path, state: { shallowPath: path }, force: true };
   return (replace ? router.replace(location) : router.push(location))
     .then(() => undefined)
     .finally(() => {
-      if (pendingShallowPath === path) pendingShallowPath = null;
+      const left = (pendingShallowPaths.get(path) ?? 1) - 1;
+      if (left > 0) pendingShallowPaths.set(path, left);
+      else pendingShallowPaths.delete(path);
     });
 }
 
@@ -42,10 +47,10 @@ export function isShallowEntry(fullPath: string): boolean {
   // History types `state` as any; read it as what it is, unknown.
   const history: { readonly state: unknown } = window.history;
   const state = history.state;
-  return isRecord(state) && state.shallow === true && state.current === fullPath;
+  return isRecord(state) && state.shallowPath === fullPath && state.current === fullPath;
 }
 
 /** For a router guard: the navigation to `to` is a shallow one, or the back button returning to one. */
 export function isShallowNavigation(to: RouteLocationNormalized): boolean {
-  return to.fullPath === pendingShallowPath || isShallowEntry(to.fullPath);
+  return pendingShallowPaths.has(to.fullPath) || isShallowEntry(to.fullPath);
 }

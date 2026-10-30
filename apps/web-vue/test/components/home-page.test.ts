@@ -2,6 +2,7 @@
 // the lobby's context from above the lobby and took the whole page down.
 
 import { screen } from '@testing-library/vue';
+import userEvent from '@testing-library/user-event';
 import { expect, test, vi } from 'vitest';
 import { useProfileCardUiStore } from '@/entities/profile-card/profile-card-ui.store';
 import HomePage from '@/features/home/HomePage.vue';
@@ -65,4 +66,29 @@ test('a signed-in visit renders the lobby, and a profile card opens there', asyn
   await vi.waitFor(() => expect(errors).toEqual([]));
   window.removeEventListener('unhandledrejection', onError);
   window.removeEventListener('error', onError);
+});
+
+test('a guest on the landing opens the sign-in from the header in place', async () => {
+  // jsdom has no modal dialogs.
+  for (const [name, open] of [
+    ['showModal', true],
+    ['close', false]
+  ] as const) {
+    if (name in HTMLDialogElement.prototype) continue;
+    Object.defineProperty(HTMLDialogElement.prototype, name, {
+      configurable: true,
+      value(this: HTMLDialogElement) {
+        this.open = open;
+      }
+    });
+  }
+  installFakeWebSocket();
+  stubMatchMedia();
+  stubFetch({ 'GET /api/auth/me': { body: { ok: true, user: null } } });
+
+  const { router } = await renderWithApp(HomePage);
+  await userEvent.click(await screen.findByRole('link', { name: 'Войти' }, { timeout: 5000 }));
+
+  expect(await screen.findByRole('dialog', { name: 'Вход' })).toBeTruthy();
+  expect(router.currentRoute.value.fullPath).toBe('/?auth=login');
 });

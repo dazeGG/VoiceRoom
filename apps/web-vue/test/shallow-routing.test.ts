@@ -77,11 +77,10 @@ test('with a new build out, a real navigation loads as a full page; shallow ones
 
   await router.push('/privacy');
   expect(load).toHaveBeenCalledWith('/privacy');
-  expect(window.location.pathname).toBe('/');
 
   inCall = true;
-  await router.push('/privacy');
-  expect(window.location.pathname).toBe('/privacy');
+  await router.push('/r/xyz');
+  expect(window.location.pathname).toBe('/r/xyz');
   expect(load).toHaveBeenCalledTimes(1);
   remove();
 });
@@ -105,4 +104,23 @@ test('without a new build nothing reloads', async () => {
   expect(window.location.pathname).toBe('/privacy');
   expect(load).not.toHaveBeenCalled();
   remove();
+});
+
+test('with a new build out, the back button to a real entry loads it and stays there', async () => {
+  await router.push('/privacy');
+  await shallowPush(router, '/r/abc');
+  const load = vi.fn<(href: string) => void>();
+  const remove = reloadNavigationsOnUpdate(router, { updated: () => true, inCall: () => false, load });
+
+  await back();
+  expect(load).toHaveBeenCalledWith('/privacy');
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  expect(window.location.pathname).toBe('/privacy');
+  remove();
+});
+
+test('a real replace of a shallow entry is a real navigation', async () => {
+  await shallowPush(router, '/r/abc');
+  await router.replace('/privacy');
+  expect(isShallowEntry('/privacy')).toBe(false);
 });

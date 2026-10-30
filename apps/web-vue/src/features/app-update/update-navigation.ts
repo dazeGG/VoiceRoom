@@ -21,6 +21,8 @@ export function reloadNavigationsOnUpdate(
   return router.beforeEach((to) => {
     if (!updated() || inCall() || isShallowNavigation(to)) return true;
     load(router.resolve(to).href);
-    return false;
+    // Not cancelled, as SvelteKit's beforeNavigate did not: a cancelled back
+    // button makes the router step history back again, which can stop the load.
+    return true;
   });
 }
