@@ -26,12 +26,11 @@ public API with third-party clients.
 
 - Everything is strict TypeScript. The API and `packages/shared` run on Node 24
   type stripping with no build step: erasable syntax only, imports with
-  explicit `.ts` extensions, `tsc` in `npm run check`. The web is compiled by
-  Vite/SvelteKit.
+  explicit `.ts` extensions, `tsc` in `npm run check`. The web (Vue 3) is
+  compiled by Vite and checked by `vue-tsc`.
 - JavaScript stays only where it must: the byte-pinned `.cjs` migrations,
-  `scripts/geoip/fetch-dbip-city-lite.mjs` (host crontabs run it by path), the
-  AudioWorklet modules in `apps/web/static` (served unbundled) and
-  `apps/web/svelte.config.js`.
+  `scripts/geoip/fetch-dbip-city-lite.mjs` (host crontabs run it by path) and
+  the AudioWorklet modules in `apps/web/public` (served unbundled).
 - Types are proved, not asserted, and `npm run check` enforces it:
   - No `as` (except `as const`), no non-null `!`, no `any`
     (`consistent-type-assertions: never`, `no-non-null-assertion`,
@@ -143,14 +142,12 @@ above, list it here so nobody copies the old pattern.
 | Advisory lock keys written inline | `account/login-event.repository.ts`, `admission/gate-credential.repository.ts`, `media/attachment.repository.ts`, `messaging/message-idempotency.repository.ts`, `messaging/pin.repository.ts`, `notifications/inbox.repository.ts`, `rooms/room.repository.ts` (all under `domains/`) | Add the key to `lockKeys` and call `lockXact` |
 | A ban delete and the address re-keying take no lock | `domains/moderation/room-ban.repository.ts` (`deleteRoomBan`), `domains/moderation/active-ban.repository.ts` (`keyStoredAddresses`) | A new `room_bans` writer takes the room-bans lock |
 | Without a database, routes answer 503 `internal_error` | `app/service-registry.ts`, `app/domain-services.ts` (no catalogued code; `http-kit.ts` masks status >= 500) | Add a catalogued code before surfacing a new 503 |
-| Device state has two sources of truth | `features/room/room-device-ui.svelte.ts` against `features/room/client/core/types.ts`, copied by hand in `client/ui/devices.ts` and `client/services/microphone-service.ts` | One owner per value; the UI reads it and the action writes it; type `noiseMode` as `NoiseMode` |
+| Device state has two sources of truth | `features/room/room-device-ui.store.ts` against `features/room/client/core/types.ts`, copied by hand in `client/ui/devices.ts` and `client/services/microphone-service.ts` | One owner per value; the UI reads it and the action writes it; type `noiseMode` as `NoiseMode` |
 | Reconnect jitter is written three times | `api/realtime.ts`, `features/room/client/recovery/realtime-recovery.ts`, `features/room/client/services/livekit/reconnect-policy.ts` | Do not add a fourth `Math.random()` backoff; share one jitter helper |
-| Listbox keyboard handling is copied | `features/home/components/lobby/Sidebar.svelte` (own typeahead) against `shared/ui/Select/Select.svelte` | Use `Select`; do not write another typeahead |
+| Listbox keyboard handling is copied | `features/home/components/lobby/Sidebar.vue` (own typeahead) against `shared/ui/Select/Select.vue` | Use `Select`; do not write another typeahead |
 | Screen profile ids are free strings in the room client | `features/room/client/core/types.ts`, `client/media/profiles.ts` | Narrow ids in the client; keep the wire field `PublicPeer.screenProfileId` a plain string |
-| Large components | `features/room/components/RoomOverlays.svelte` (795 lines), `shared/chat/EmojiPickerPanel.svelte` (747) | Split by concern before adding to them |
-| `LobbyStore` is large | `features/home/model/lobby.svelte.ts` (518 lines) | New lobby state goes in its own class, not in `LobbyStore` |
-| Module-level `$state` singletons | `entities/{profile-card/profile-card-ui,room/room-membership,room/room-presence}.svelte.ts`, `features/auth/session.svelte.ts`, `features/call-feedback/call-feedback.svelte.ts`, `features/home/model/{push-notifications,room-navigation,toasts}.svelte.ts`, `features/room/{guest-name-ui,leave-screen,mobile-call-ui,participant-context-ui,participants-ui,pins,room-device-ui,room-settings,room-ui,screen-source-ui,screen-ui,start-ui,toast-ui,voice-session}.svelte.ts`, `features/room/client/core/state.svelte.ts`, `shared/{call-activity,audio/playback-policy,notifications/preferences,theme/theme}.svelte.ts` | State with actions goes in a class handed down through context, not a new module-level `$state` |
-| Two recorded ESLint suppressions | `eslint-suppressions.json`: `features/home/HomePage.svelte` (`/?auth=` links, `svelte/no-navigation-without-resolve`), `shared/chat/EmojiComposer.svelte` (`svelte/no-dom-manipulating`, false positive) | Do not add to the file; fix the code |
+| Large components | `shared/chat/EmojiPickerPanel.vue` (506 lines) | Split by concern before adding to it |
+| The lobby store is large | `features/home/model/lobby.store.ts` (577 lines) | New lobby state goes in its own store or `use-*.ts` composable, not in `lobby.store.ts` |
 | `on(client)` query-shape guard: a value that is not a client falls back to the pool | `domains/media/attachment.repository.ts`, `domains/media/media-job.repository.ts` (`media-job-repository.test.ts` pins the fallback) | Kept on purpose. A new repository takes a typed `QueryClient` and does not guess the shape at run time |
 | Optional authorizers with a deny-all default | `domains/media/media-visibility.service.ts` (`authorizeDirectAttachment`, `authorizeRoomAttachment`; production passes both, `release-metrics.test.ts` builds without) | Kept on purpose. A new dependency is required in the factory's type, not optional with a default |
 | Nullable pool refused at run time | `domains/messaging/reaction.repository.ts`, `domains/messaging/reply.repository.ts` (`requireQuery` refuses a missing client; `reply-repository.test` asserts the refusal message) | Kept on purpose. Do not add another `requireQuery`; take a non-null client |
@@ -158,9 +155,9 @@ above, list it here so nobody copies the old pattern.
 | Internal error classes that are not a `DomainError` | `MediaError` in `domains/media/storage.ts` (storage codes), `FetchError` in `lib/link-preview-fetcher.ts` (no HTTP status), `MessageDeliveryFenceError` in `domains/messaging/` | An error that reaches a route is a `DomainError` with a catalogued code; add the code first. Keep the internal classes internal |
 | Run-time fail-safe on a typed result | `domains/moderation/moderation.service.ts` (`revoked?.status !== 'revoked'` on a typed `PrincipalRevocation` result) | Kept on purpose. Type a new port result as a union |
 | Optional `credentialBoundary` | `realtime/room-runtime.ts` (`RuntimeCredentialBoundary \| null`; null without a 32-byte gate secret, then leases revoke through the room store) | Kept on purpose. Do not add another nullable collaborator to `RoomRuntimeDeps` |
-| Large lobby components | `features/home/components/lobby/Sidebar.svelte` (715 lines), `features/home/LobbyPage.svelte` (427 lines after the routing and staff-access split) | Extract a model class or a child component before adding to either |
+| Large lobby components | `features/home/components/lobby/Sidebar.vue` (405 lines), `features/home/LobbyPage.vue` (374 lines) | Extract a composable or a child component before adding to either |
 
-Paths in the web rows are under `apps/web/src/lib/`, the rest under
+Paths in the web rows are under `apps/web/src/`, the rest under
 `apps/api/src/`.
 
 Every release-2.5 feature is on everywhere; `/api/capabilities` answers all of
@@ -171,44 +168,53 @@ runtime flag; one that must stay dark is an environment variable read in
 ## 5. Web layering
 
 ```
-routes/                 SvelteKit routes (SPA, adapter-static)
-lib/features/<f>/        feature UI and state (home = the lobby, room, auth)
-lib/entities/            models and components both features use (room realtime,
-                         presence, membership, moderation, profile card)
-lib/shared/              UI primitives, chat, notifications, utils — never imports features
-lib/api/                 HTTP and WebSocket clients
-lib/platform/            desktop bridge, device boundary
+main.ts, App.vue, router.ts   app shell: Pinia, vue-router (history mode), route guards
+pages/                  one component per route (lobby, room, sign-in, legal, 404)
+stores/                 app-wide page state (page.store.ts, the <body> classes)
+features/<f>/           feature UI and state (home = the lobby, room, auth, legal,
+                        call-feedback, app-update)
+entities/               models and components both features use (room realtime,
+                        presence, membership, moderation, profile card)
+shared/                 UI primitives (Reka UI behind shared/ui), chat,
+                        notifications, utils — never imports features
+api/                    HTTP and WebSocket clients
+platform/               desktop bridge, device boundary
+styles/                 SCSS: tokens, mixins and one partial per BEM block
 ```
 
 - The lobby (`home`) shows rooms; a room never imports the lobby. What a
-  room needs from the lobby comes through a context
+  room needs from the lobby comes through `provide`/`inject`
   (`features/room/social.ts`); `entities`, `shared`, `platform` and `api`
   never import `features/home` or `features/room`. ESLint enforces both.
-- Svelte 5 runes only (`$state`, `$derived`, `$props`, snippets).
-- `$effect` synchronises with the outside world (DOM, listeners, timers).
-  Values computed from state are `$derived`; reactions to a user action belong
-  in the action function, not in an effect watching the state it changed.
-- State with actions lives in classes in `*.svelte.ts` (`LobbyStore`,
-  `DmThread`, `ProfileDraft`, `LobbyNotifications` in `home/model`; `ChatDraft`
-  and `ChatScroll` in `shared/chat`, shared by room chat and DMs;
-  `RoomChatSession` in `features/room`), handed down through context
-  (`provideLobby`/`useLobby`) or owned by the component, rather than module
-  singletons. Collections that change in place are `SvelteSet`/`SvelteMap`,
-  not revision counters.
+- Vue 3 `<script setup lang="ts">` only; the rules are in
+  `apps/web/CLAUDE.md`.
+- `watch`/`watchEffect` synchronise with the outside world (DOM, listeners,
+  timers). Values computed from state are `computed`; reactions to a user
+  action belong in the action function, not in a watcher on the state it
+  changed.
+- App-wide state (session, lobby, inbox, preferences, theme, room runtime and
+  room UI) is a Pinia setup store in `*.store.ts`. State owned by one
+  component or subject is a `use-*.ts` composable (`useDmThread`,
+  `useProfileDraft`, `useLobbyNotifications` in `home/model`;
+  `useChatDraft` and `useChatScroll` in `shared/chat`, shared by room chat
+  and DMs; `useRoomChatSession` in `features/room`). Context is
+  `provide`/`inject` with a typed `InjectionKey` (`provideLobby`/`useLobby`).
+  LiveKit objects, media streams, audio nodes and sockets go into reactive
+  state only through `markRaw` or `shallowRef`.
 - A view that should start fresh for a new subject is mounted per subject
-  (`{#key}` or `{#if open}`) instead of resetting its state in an effect: the
+  (`:key` or `v-if`) instead of resetting its state in a watcher: the
   settings mount on every opening and per account, a DM conversation per peer.
 - Large surfaces are split by concern: `settings/*` one component per tab,
   `lobby/dm/*` for the direct thread, `RoomChatComposer` and pure layout in
   `room-chat-view.ts` for the room chat, `services/livekit/*` behind
   `livekit-service.ts`.
-- Styles: colours come from the tokens in `lib/shared/styles/app.css` (the
-  warm-neutral scale and status tints), not hex literals. CSS for a class used
-  by one component lives in that component's `<style>`; the global files keep
-  what several components share, page and state selectors (`[data-*]`), and
-  rules whose classes share an element with a global one.
+- Styles: no `<style>` in `.vue` files. Each BEM block has a partial in
+  `styles/<area>/_<block>.scss`; colours come from the `--vr-*` tokens in
+  `styles/_tokens.scss`, not raw values. State is `aria-*` or a BEM modifier
+  class, never a `[data-*]` selector. `scripts/check-web-styles.mts` and
+  `scripts/check-web-palette.mts` enforce this in `npm run check`.
 - Browser, desktop, media and LiveKit fallbacks stay explicit and testable.
-  The room client (`lib/features/room/client`) has its own notes in
+  The room client (`features/room/client`) has its own notes in
   `ARCHITECTURE.md` there.
 
 ## 6. Tests

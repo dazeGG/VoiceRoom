@@ -13,7 +13,7 @@ import /etc/caddy/turn.d/*.site
 
   header {
     Strict-Transport-Security "max-age=31536000; includeSubDomains"
-    # The full policy (script hashes of this exact build, connect-src narrowed
+    # The full policy (the policy of this exact build, connect-src narrowed
     # to LIVEKIT_DOMAIN) is generated when the image is built.
     import /etc/caddy/csp.caddy
     Cross-Origin-Opener-Policy "same-origin"

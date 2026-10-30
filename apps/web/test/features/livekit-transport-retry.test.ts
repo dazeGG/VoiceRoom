@@ -3,11 +3,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'vitest';
 
-import { ApiError } from '../../src/lib/api/client.ts';
-import {
-  isRetryableLiveKitApiFailure,
-  safeLiveKitCode
-} from '../../src/lib/features/room/client/services/livekit/transport.ts';
+import { ApiError } from '@/api/client.ts';
+import { isRetryableLiveKitApiFailure, safeLiveKitCode } from '@/features/room/client/services/livekit/transport.ts';
 
 test('a token request that got no answer is retried and logged as unavailable', () => {
   const unanswered = new ApiError('Сервер недоступен', 0, { code: 'unavailable' });

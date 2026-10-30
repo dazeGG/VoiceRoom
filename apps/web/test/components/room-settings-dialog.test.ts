@@ -1,18 +1,18 @@
 // Saving a room's settings renames the room and tells the page hosting it, so
 // the lobby's room list shows the new name.
 
-import { cleanup, render, screen } from '@testing-library/svelte';
+import { screen, waitFor } from '@testing-library/vue';
 import userEvent from '@testing-library/user-event';
 import { afterEach, expect, test, vi } from 'vitest';
-import RoomSettingsDialog from '../../src/lib/features/room/components/RoomSettingsDialog.svelte';
-import { state as roomClientState } from '../../src/lib/features/room/client/core/state.svelte';
-import { closeRoomSettings, openRoomSettings } from '../../src/lib/features/room/room-settings.svelte';
-import { roomShellContext } from '../../src/lib/features/room/shell';
+import { defineComponent, h, provide } from 'vue';
+import RoomSettingsDialog from '@/features/room/components/RoomSettingsDialog.vue';
+import { state as roomClientState } from '@/features/room/client/core/room-runtime.store';
+import { useRoomSettingsStore } from '@/features/room/room-settings.store';
+import { ROOM_SHELL_KEY } from '@/features/room/shell';
 import { stubFetch } from '../fixtures/fetch.ts';
+import { renderWithApp } from '../helpers/render.ts';
 
 afterEach(() => {
-  cleanup();
-  closeRoomSettings();
   roomClientState.roomId = '';
   roomClientState.roomName = '';
 });
@@ -36,16 +36,20 @@ test('a saved rename tells the host that the room changed', async () => {
   });
   roomClientState.roomId = 'abc123';
   roomClientState.roomName = 'Планёрка';
-  openRoomSettings();
   const shell = { roomLeft: vi.fn<(roomId: string) => void>(), roomsChanged: vi.fn<(roomId: string) => void>() };
-  render(RoomSettingsDialog, { context: roomShellContext(shell) });
+  const Host = defineComponent(() => {
+    provide(ROOM_SHELL_KEY, shell);
+    return () => h(RoomSettingsDialog);
+  });
+  const { pinia } = await renderWithApp(Host);
+  useRoomSettingsStore(pinia).openRoomSettings();
 
-  const name = screen.getByPlaceholderText('Название комнаты');
+  const name = await screen.findByPlaceholderText('Название комнаты');
   await userEvent.clear(name);
   await userEvent.type(name, 'Кухня');
   await userEvent.click(screen.getByRole('button', { name: 'Сохранить' }));
 
-  await vi.waitFor(() => expect(shell.roomsChanged).toHaveBeenCalledWith('abc123'));
+  await waitFor(() => expect(shell.roomsChanged).toHaveBeenCalledWith('abc123'));
   expect(calls).toContainEqual({ method: 'PUT', url: '/api/rooms/abc123', body: { name: 'Кухня' } });
   expect(shell.roomLeft).not.toHaveBeenCalled();
 });

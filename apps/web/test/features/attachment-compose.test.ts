@@ -5,7 +5,7 @@ import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 
 let nextId = 0;
 const uploads = new Map<string, 'ready' | 'fail'>();
-vi.mock('../../src/lib/api/attachments', () => ({
+vi.mock('@/api/attachments', () => ({
   createAttachmentSlot: vi.fn(async ({ context }: { context: string }) => ({
     id: `att-${++nextId}`,
     context,
@@ -20,9 +20,9 @@ vi.mock('../../src/lib/api/attachments', () => ({
   deleteAttachment: vi.fn(async () => {})
 }));
 
-const api = await import('../../src/lib/api/attachments');
+const api = await import('@/api/attachments');
 const { AttachmentComposeStore, dataTransferHasImages, imageFilesFromDataTransfer } =
-  await import('../../src/lib/shared/chat/attachment-compose.svelte.ts');
+  await import('@/shared/chat/attachment-compose');
 
 const image = (name = 'a.png', type = 'image/png', size = 100) => new File([new Uint8Array(size)], name, { type });
 

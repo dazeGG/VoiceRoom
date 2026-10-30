@@ -1,27 +1,29 @@
 // Hotkeys, the microphone mode and the app section exist only in the desktop
 // app; a browser tab gets the sections it can use.
 
-import { cleanup, render, screen, within } from '@testing-library/svelte';
+import { screen, within } from '@testing-library/vue';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
-import SettingsDialog from '../../src/lib/features/home/components/settings/SettingsDialog.svelte';
-import type { SettingsTab } from '../../src/lib/features/home/components/settings/types';
+import SettingsDialog from '@/features/home/components/settings/SettingsDialog.vue';
+import type { SettingsTab } from '@/features/home/components/settings/types';
 import { stubFetch } from '../fixtures/fetch.ts';
 import { authUser } from '../fixtures/users.ts';
 import { stubMatchMedia } from '../helpers/match-media.ts';
+import { stubOverlayDom } from '../helpers/overlay-dom.ts';
+import { renderWithApp } from '../helpers/render.ts';
 
 beforeEach(() => {
+  stubOverlayDom();
   stubMatchMedia();
   stubFetch({});
 });
 afterEach(() => {
-  cleanup();
   delete window.voiceRoomRuntime;
   delete window.voiceRoomDesktopAutostart;
 });
 
-function renderSettings(tab: SettingsTab = 'profile') {
-  render(SettingsDialog, {
+async function renderSettings(tab: SettingsTab = 'profile') {
+  await renderWithApp(SettingsDialog, {
     props: {
       tab,
       user: authUser(),
@@ -38,7 +40,7 @@ function renderSettings(tab: SettingsTab = 'profile') {
 }
 
 test('a browser tab has no hotkeys or microphone mode, and its app section offers the desktop builds', async () => {
-  const nav = renderSettings();
+  const nav = await renderSettings();
   expect(nav.queryByRole('button', { name: 'Горячие клавиши' })).toBeNull();
   await userEvent.click(nav.getByRole('button', { name: 'Приложение' }));
   expect(screen.getByText('macOS · Apple Silicon')).toBeTruthy();
@@ -56,7 +58,7 @@ test('the desktop app adds hotkeys, the app section and the microphone mode', as
     getSettings: vi.fn(async () => ({ enabled: false, openMinimized: false })),
     setSettings: vi.fn(async (settings: unknown) => settings)
   };
-  const nav = renderSettings('sound');
+  const nav = await renderSettings('sound');
 
   expect(nav.getByRole('button', { name: 'Горячие клавиши' })).toBeTruthy();
   expect(nav.getByRole('button', { name: 'Приложение' })).toBeTruthy();

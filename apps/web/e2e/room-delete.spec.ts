@@ -30,11 +30,11 @@ test('owner can delete a room: redirected home, gone from list, direct URL is no
   await expect(page.getByRole('button', { name: 'Создать комнату' })).toBeVisible({ timeout: 15_000 });
 
   // The deleted room is gone from the owned-rooms list.
-  await expect(page.locator('article.room-card', { hasText: roomName })).toHaveCount(0, { timeout: 15_000 });
+  await expect(page.locator('.voice-home__card', { hasText: roomName })).toHaveCount(0, { timeout: 15_000 });
 
   // Navigating directly to the deleted room URL shows the not-found screen.
   await page.goto(`/r/${roomId}`);
-  await expect(page.locator('body')).toHaveAttribute('data-screen', 'not-found', { timeout: 20_000 });
+  await expect(page.locator('body')).toHaveClass(/\bscreen--not-found\b/, { timeout: 20_000 });
   await expect(page.locator('#notFoundScreen')).toBeVisible();
   await expect(page.locator('#missingRoomCode')).toHaveText(roomId);
 });

@@ -1,13 +1,14 @@
-import { cleanup, render, screen, within } from '@testing-library/svelte';
+import { cleanup, render, screen, within } from '@testing-library/vue';
 import userEvent from '@testing-library/user-event';
-import { afterEach, beforeEach, expect, test, vi } from 'vitest';
-import RoomChatPanel from '../../src/lib/features/room/components/RoomChatPanel.svelte';
+import { createPinia, setActivePinia } from 'pinia';
+import { beforeEach, expect, test, vi } from 'vitest';
+import RoomChatPanel from '@/features/room/components/RoomChatPanel.vue';
+import { useSessionStore } from '@/features/auth/session.store';
 import { PostRoomMessageBody, type RoomMessage } from '@voice-room/shared/contracts/messages';
 import { stubFetch, type Reply } from '../fixtures/fetch.ts';
 import { installFakeWebSocket } from '../fixtures/fake-websocket.ts';
 import { authUser } from '../fixtures/users.ts';
 import { defined, instanceOf, parse } from '../helpers/assert.ts';
-import { session } from '../../src/lib/features/auth/session.svelte';
 
 const NOW = Date.now();
 
@@ -49,12 +50,11 @@ beforeEach(() => {
   localStorage.clear();
 });
 
-afterEach(() => {
-  cleanup();
-  session.user = null;
-});
-
-function renderPanel(props: Record<string, unknown> = {}) {
+// The session is set before the panel mounts: it decides which history the panel reads.
+function renderPanel(props: Record<string, unknown> = {}, options: { signedIn?: boolean } = {}) {
+  const pinia = createPinia();
+  setActivePinia(pinia);
+  if (options.signedIn) useSessionStore(pinia).user = authUser();
   const base = {
     roomId: 'room',
     peerId: 'me',
@@ -63,12 +63,13 @@ function renderPanel(props: Record<string, unknown> = {}) {
     onToast: vi.fn(),
     ...props
   };
-  const view = render(RoomChatPanel, { props: base });
+  const view = render(RoomChatPanel, { props: base, global: { plugins: [pinia] } });
   return { ...view, props: base };
 }
 
 const composer = () => screen.getByRole('textbox', { name: 'Написать в комнату…' });
 const editor = () => screen.queryByRole('textbox', { name: 'Текст сообщения' });
+const MESSAGE_TEXT = '.room-chat-group__content *, .room-chat-group__content';
 
 test('ArrowUp in an empty composer edits the latest own message and saves it as the viewing peer', async () => {
   const edited = roomMessage('m2', 'me', 'исправлено', { editedAt: NOW + 1 });
@@ -146,12 +147,12 @@ test('a failed message stays in the chat with its error and goes out again, as t
   expect(composer().textContent).toBe('');
   const failed = await screen.findByRole('alert');
   expect(failed.textContent).toMatch(/Не отправлено/);
-  expect(screen.getByText('привет всем', { selector: '.outgoing-message__text' })).toBeTruthy();
+  expect(screen.getByText('привет всем', { selector: '.outgoing-messages__text' })).toBeTruthy();
 
   fail = false;
   await userEvent.click(within(failed).getByRole('button', { name: 'Повторить' }));
-  expect(await screen.findByText('привет всем', { selector: '.chat-msg-content *, .chat-msg-content' })).toBeTruthy();
-  await vi.waitFor(() => expect(document.querySelector('.outgoing-message')).toBeNull());
+  expect(await screen.findByText('привет всем', { selector: MESSAGE_TEXT })).toBeTruthy();
+  await vi.waitFor(() => expect(document.querySelector('.outgoing-messages__item')).toBeNull());
   const posts = calls.filter((call) => call.method === 'POST' && call.url === '/api/rooms/room/chat');
   expect(posts[1]?.body).toMatchObject({ name: 'Я', peerId: 'me', sessionToken: 'token', text: 'привет всем' });
   expect(parse(PostRoomMessageBody, posts[0]?.body).idempotencyKey).toBe(
@@ -171,14 +172,15 @@ test('a failed message can be dropped from the chat', async () => {
 
 test("a guest's unsent text survives a look at the participants tab", async () => {
   stubRoom();
-  const { rerender, props } = renderPanel();
+  const view = renderPanel();
+  const { props } = view;
   await screen.findByText('от Ады');
   await userEvent.click(composer());
   await userEvent.keyboard('не отправлено');
 
-  await rerender({ ...props, activeTab: 'participants' });
+  await view.rerender({ ...props, activeTab: 'participants' });
   expect(screen.queryByRole('textbox')).toBeNull();
-  await rerender({ ...props, activeTab: 'chat' });
+  await view.rerender({ ...props, activeTab: 'chat' });
   expect(composer().textContent).toBe('не отправлено');
 });
 
@@ -193,7 +195,7 @@ test('messages sent while one is on its way show dimmed and go out in order; a f
     }
   });
   // Each post waits until the test lets it answer.
-  const answer = globalThis.fetch;
+  const answer = globalThis.fetch.bind(globalThis);
   const waiting: Array<() => void> = [];
   vi.stubGlobal('fetch', async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
@@ -214,15 +216,15 @@ test('messages sent while one is on its way show dimmed and go out in order; a f
   expect(composer().textContent).toBe('');
   await userEvent.keyboard('второе{Enter}');
   expect(composer().textContent).toBe('');
-  expect([...document.querySelectorAll('.outgoing-message__text')].map((element) => element.textContent)).toEqual([
+  expect([...document.querySelectorAll('.outgoing-messages__text')].map((element) => element.textContent)).toEqual([
     'первое',
     'второе'
   ]);
   expect(screen.getAllByText('Отправляется…')).toHaveLength(2);
   await releaseNext();
   await releaseNext();
-  expect(await screen.findByText('второе', { selector: '.chat-msg-content *, .chat-msg-content' })).toBeTruthy();
-  await vi.waitFor(() => expect(document.querySelector('.outgoing-message')).toBeNull());
+  expect(await screen.findByText('второе', { selector: MESSAGE_TEXT })).toBeTruthy();
+  await vi.waitFor(() => expect(document.querySelector('.outgoing-messages__item')).toBeNull());
   const texts = () =>
     calls
       .filter((call) => call.method === 'POST' && call.url === '/api/rooms/room/chat')
@@ -236,23 +238,22 @@ test('messages sent while one is on its way show dimmed and go out in order; a f
   expect(await screen.findByRole('alert')).toBeTruthy();
   fail = false;
   await releaseNext();
-  expect(await screen.findByText('четвёртое', { selector: '.chat-msg-content *, .chat-msg-content' })).toBeTruthy();
+  expect(await screen.findByText('четвёртое', { selector: MESSAGE_TEXT })).toBeTruthy();
   expect(texts()).toEqual(['первое', 'второе', 'третье', 'четвёртое']);
-  expect(screen.getByText('третье', { selector: '.outgoing-message__text' })).toBeTruthy();
+  expect(screen.getByText('третье', { selector: '.outgoing-messages__text' })).toBeTruthy();
   expect(composer().textContent).toBe('');
 });
 
 test('an account refused paged history reads the recent window, like a guest, instead of an error', async () => {
   // A room just entered is not kept yet (a temporary one never is), and paged
   // history is for rooms the account keeps.
-  session.user = authUser();
   const { calls } = stubRoom({
     'GET /api/rooms/room/chat/history?mode=latest&limit=50': {
       status: 403,
       body: { ok: false, error: 'Room is not available', code: 'room_forbidden' }
     }
   });
-  renderPanel();
+  renderPanel({}, { signedIn: true });
 
   expect(await screen.findByText('от Ады')).toBeTruthy();
   expect(screen.queryByText('Комната недоступна')).toBeNull();
@@ -268,7 +269,6 @@ test('pins are asked for in a room the account keeps, and never by a guest', asy
   expect(guest.calls.filter((call) => call.url.endsWith('/pins'))).toEqual([]);
   cleanup();
 
-  session.user = authUser();
   const keeper = stubRoom({
     'GET /api/rooms/room/chat/history?mode=latest&limit=50': {
       body: {
@@ -280,21 +280,21 @@ test('pins are asked for in a room the account keeps, and never by a guest', asy
       }
     }
   });
-  renderPanel();
+  renderPanel({}, { signedIn: true });
   await vi.waitFor(() => expect(keeper.calls.some((call) => call.url.endsWith('/pins'))).toBe(true));
 });
 
 test('a reader at the newest message stays on it when loading artwork grows the chat', async () => {
   const observed: Element[] = [];
-  let onResize = () => {};
+  const callbacks = new Map<Element, () => void>();
+  const onResize = () => callbacks.get(body)?.();
   vi.stubGlobal(
     'ResizeObserver',
     class {
-      constructor(callback: () => void) {
-        onResize = callback;
-      }
+      constructor(readonly callback: () => void) {}
       observe(element: Element) {
         observed.push(element);
+        callbacks.set(element, this.callback);
       }
       unobserve() {}
       disconnect() {}
@@ -303,9 +303,9 @@ test('a reader at the newest message stays on it when loading artwork grows the 
   stubRoom();
   renderPanel();
   await screen.findByText('от Ады');
-  const body = instanceOf(document.querySelector('.chat-rail-body'), HTMLElement, 'chat body');
-  expect(observed).toContain(body);
-  expect(observed.some((element) => element.classList.contains('chat-day-section'))).toBe(true);
+  const body = instanceOf(document.querySelector('.room-chat-panel__body'), HTMLElement, 'chat body');
+  await vi.waitFor(() => expect(observed).toContain(body));
+  expect(observed.some((element) => element.classList.contains('room-chat-panel__day'))).toBe(true);
 
   let height = 1000;
   Object.defineProperty(body, 'scrollHeight', { configurable: true, get: () => height });
@@ -321,6 +321,19 @@ test('a reader at the newest message stays on it when loading artwork grows the 
   height = 1600;
   onResize();
   expect(body.scrollTop).toBe(100);
+});
+
+test('a panel open at mount parks on the newest message once the history is in', async () => {
+  Object.defineProperty(HTMLElement.prototype, 'scrollHeight', { configurable: true, get: () => 1000 });
+  try {
+    stubRoom();
+    renderPanel();
+    await screen.findByText('от Ады');
+    const body = instanceOf(document.querySelector('.room-chat-panel__body'), HTMLElement, 'chat body');
+    await vi.waitFor(() => expect(body.scrollTop).toBe(1000));
+  } finally {
+    Reflect.deleteProperty(HTMLElement.prototype, 'scrollHeight');
+  }
 });
 
 test('a right-click on a picture offers to copy and save it; on the text it does not', async () => {

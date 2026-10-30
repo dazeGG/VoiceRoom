@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 
 async function loadInsert() {
   vi.resetModules();
-  return import('../src/lib/shared/chat/composer-insert.ts');
+  return import('@/shared/chat/composer-insert');
 }
 
 test('an emoji lands at the caret, replaces a selection, and leaves the caret after itself', async () => {

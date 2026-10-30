@@ -1,17 +1,20 @@
-import { afterEach, expect, test, vi } from 'vitest';
+import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 
-import * as service from '../src/lib/platform/desktop-app-icon.ts';
-import { initTheme, setTheme, THEME_STORAGE_KEY } from '../src/lib/shared/theme/theme.svelte';
+import * as service from '@/platform/desktop-app-icon';
+import { createPinia, setActivePinia } from 'pinia';
+import { THEME_STORAGE_KEY, useThemeStore } from '@/shared/theme/theme.store';
 
 function installBridge(bridge: unknown) {
   Object.defineProperty(window, 'voiceRoomDesktopAppIcon', { configurable: true, value: bridge, writable: true });
 }
 
+beforeEach(() => setActivePinia(createPinia()));
+
 afterEach(() => {
   Reflect.deleteProperty(window, 'voiceRoomDesktopAppIcon');
-  setTheme('graphite-volt');
+  useThemeStore().setTheme('graphite-volt');
   localStorage.clear();
-  delete document.documentElement.dataset.theme;
+  document.documentElement.className = '';
   vi.restoreAllMocks();
 });
 
@@ -47,7 +50,7 @@ test('starting the app tells the desktop shell the saved theme', () => {
   installBridge({ getTheme: async () => ({}), setTheme: setThemeBridge });
   localStorage.setItem(THEME_STORAGE_KEY, 'graphite-coral');
 
-  initTheme();
+  useThemeStore().initTheme();
 
   expect(setThemeBridge).toHaveBeenCalledExactlyOnceWith('graphite-coral');
 });
@@ -56,7 +59,7 @@ test('starting the app with no saved theme reports the default one', () => {
   const setThemeBridge = vi.fn(async () => ({}));
   installBridge({ getTheme: async () => ({}), setTheme: setThemeBridge });
 
-  initTheme();
+  useThemeStore().initTheme();
 
   expect(setThemeBridge).toHaveBeenCalledExactlyOnceWith('graphite-volt');
 });
@@ -65,15 +68,15 @@ test('picking a theme tells the desktop shell so the app icon follows it', () =>
   const setThemeBridge = vi.fn(async () => ({}));
   installBridge({ getTheme: async () => ({}), setTheme: setThemeBridge });
 
-  setTheme('graphite-ice');
+  useThemeStore().setTheme('graphite-ice');
 
   expect(setThemeBridge).toHaveBeenCalledExactlyOnceWith('graphite-ice');
-  expect(document.documentElement.dataset.theme).toBe('graphite-ice');
+  expect(document.documentElement.classList.contains('theme--graphite-ice')).toBe(true);
 });
 
 test('picking a theme in a plain browser still applies it', () => {
-  setTheme('graphite-coral');
+  useThemeStore().setTheme('graphite-coral');
 
-  expect(document.documentElement.dataset.theme).toBe('graphite-coral');
+  expect(document.documentElement.classList.contains('theme--graphite-coral')).toBe(true);
   expect(localStorage.getItem(THEME_STORAGE_KEY)).toBe('graphite-coral');
 });

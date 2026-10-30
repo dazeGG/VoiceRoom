@@ -2,9 +2,10 @@
 // message still lands, and a guest never asks for account-only history. One
 // render only: the realtime client is one per page.
 
-import { cleanup, render, screen } from '@testing-library/svelte';
-import { afterEach, beforeEach, expect, test, vi } from 'vitest';
-import RoomChatPanel from '../../src/lib/features/room/components/RoomChatPanel.svelte';
+import { render, screen } from '@testing-library/vue';
+import { createPinia, setActivePinia } from 'pinia';
+import { beforeEach, expect, test, vi } from 'vitest';
+import RoomChatPanel from '@/features/room/components/RoomChatPanel.vue';
 import type { RoomMessage } from '@voice-room/shared/contracts/messages';
 import { stubFetch } from '../fixtures/fetch.ts';
 import { FakeWebSocket, installFakeWebSocket } from '../fixtures/fake-websocket.ts';
@@ -34,15 +35,16 @@ beforeEach(() => {
   localStorage.clear();
 });
 
-afterEach(cleanup);
-
 async function renderGuestPanel() {
   const { calls } = stubFetch({
     'GET /api/rooms/room/chat': { body: { ok: true, roomId: 'room', messages: [roomMessage('m1', 'ada', 'привет')] } },
     'GET /api/rooms/room/pins': { body: { ok: true, pins: [], count: 0 } }
   });
+  const pinia = createPinia();
+  setActivePinia(pinia);
   render(RoomChatPanel, {
-    props: { roomId: 'room', peerId: 'me', sessionToken: 'token', resolveDisplayName: () => 'Я', onToast: vi.fn() }
+    props: { roomId: 'room', peerId: 'me', sessionToken: 'token', resolveDisplayName: () => 'Я', onToast: vi.fn() },
+    global: { plugins: [pinia] }
   });
   await screen.findByText('привет');
   await vi.waitFor(() => expect(FakeWebSocket.instances.length).toBeGreaterThan(0));

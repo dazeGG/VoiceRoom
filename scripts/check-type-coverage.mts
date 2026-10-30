@@ -4,9 +4,9 @@
 // 100%), and no file opts out with a type-coverage:ignore comment. Each area
 // is measured from inside its own folder against its own tsconfig:
 // type-coverage counts only the files under the folder it runs in, and the
-// web's `$lib` alias resolves correctly only that way. `.svelte` and `.vue`
-// files are not part of a TypeScript program; ESLint's no-unsafe-* rules,
-// svelte-check and vue-tsc cover them. Exits 1 and lists every untyped spot
+// web's `@/` alias resolves correctly only that way. `.vue` files are not
+// part of a TypeScript program; ESLint's no-unsafe-* rules and vue-tsc cover
+// them. Exits 1 and lists every untyped spot
 // as `file:line:column name`.
 
 import { spawn } from 'node:child_process';
@@ -31,16 +31,7 @@ const AREAS: ReadonlyArray<{ folder: string; project: string; ignore?: readonly 
   {
     folder: 'apps/web',
     project: 'tsconfig.test.json',
-    ignore: ['src/**', 'test/**', 'e2e/**', 'scripts/**', '*.js']
-  },
-  // The Vue web (apps/web-vue) until it replaces apps/web: the same areas.
-  { folder: 'apps/web-vue/src', project: '../tsconfig.test.json' },
-  { folder: 'apps/web-vue/test', project: '../tsconfig.test.json' },
-  { folder: 'apps/web-vue/scripts', project: '../tsconfig.test.json' },
-  {
-    folder: 'apps/web-vue',
-    project: 'tsconfig.test.json',
-    ignore: ['src/**', 'test/**', 'scripts/**', 'public/**']
+    ignore: ['src/**', 'test/**', 'e2e/**', 'scripts/**', 'public/**']
   },
   // The admin app (React): its source, its tests and its vite config.
   { folder: 'apps/admin/src', project: '../tsconfig.json' },
@@ -82,11 +73,7 @@ async function measure({ folder, project, ignore = [] }: Area): Promise<{ ok: bo
 
 // An ignore comment would be a cast nobody reviews, like an inline eslint-disable.
 async function optOuts(): Promise<{ ok: boolean; report: string }> {
-  const { code, output } = await run(
-    'git',
-    ['grep', '-n', OPT_OUT, '--', '*.ts', '*.mts', '*.tsx', '*.svelte', '*.vue'],
-    root
-  );
+  const { code, output } = await run('git', ['grep', '-n', OPT_OUT, '--', '*.ts', '*.mts', '*.tsx', '*.vue'], root);
   const lines = output
     .split('\n')
     .filter((line) => line.trim() && !line.startsWith('scripts/check-type-coverage.mts:'));

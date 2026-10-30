@@ -3,13 +3,13 @@
 
 import { expect, test, vi } from 'vitest';
 
-vi.mock('../../src/lib/features/room/client/ui/toast', () => ({ showToast: vi.fn() }));
+vi.mock('@/features/room/client/ui/toast', () => ({ showToast: vi.fn() }));
 
 test('leaving a room the lobby hosts tells the lobby which room it was', async () => {
   vi.resetModules();
-  const { handleLeaveButtonClick } = await import('../../src/lib/features/room/client/room/room.ts');
-  const { setRoomEmbedded, setRoomShell } = await import('../../src/lib/features/room/client/core/embed.ts');
-  const { state } = await import('../../src/lib/features/room/client/core/state.svelte.ts');
+  const { handleLeaveButtonClick } = await import('@/features/room/client/room/room');
+  const { setRoomEmbedded, setRoomShell } = await import('@/features/room/client/core/embed');
+  const { state } = await import('@/features/room/client/core/room-runtime.store');
   const shell = { roomLeft: vi.fn<(roomId: string) => void>(), roomsChanged: vi.fn<(roomId: string) => void>() };
   setRoomEmbedded(true);
   setRoomShell(shell);

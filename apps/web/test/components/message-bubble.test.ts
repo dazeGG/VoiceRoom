@@ -1,14 +1,13 @@
 // One message renders the same parts in the room and direct chats; the variant
 // only changes its class names and where the pictures sit against the text.
 
-import { cleanup, fireEvent, render, screen } from '@testing-library/svelte';
+import { fireEvent, screen } from '@testing-library/vue';
 import userEvent from '@testing-library/user-event';
-import type { ComponentProps } from 'svelte';
-import { afterEach, expect, test, vi } from 'vitest';
-import { createReactionStore } from '../../src/lib/shared/chat/reaction-store.svelte';
-import MessageBubbleHarness from './harness/MessageBubbleHarness.svelte';
-
-afterEach(cleanup);
+import { cleanup } from '@testing-library/vue';
+import { expect, test, vi } from 'vitest';
+import { createReactionStore } from '@/shared/chat/reaction-store';
+import { renderWithApp } from '../helpers/render.ts';
+import { messageBubbleHarness } from './MessageBubbleHarness.ts';
 
 const picture = {
   id: 'att-1',
@@ -29,14 +28,33 @@ const message = {
   attachments: [picture]
 };
 
-function renderBubble(props: Partial<ComponentProps<typeof MessageBubbleHarness>> = {}) {
+type BubbleOptions = {
+  variant?: 'chat-msg' | 'dm-msg';
+  userId?: string | undefined;
+  editing?: boolean;
+  menuOpen?: boolean;
+  mentionsMe?: boolean;
+  cardText?: string;
+};
+
+async function renderBubble(options: BubbleOptions = {}) {
   const reactions = createReactionStore();
   reactions.setConversation({ type: 'room', id: 'kitchen' });
   reactions.applyServer('m1', { emoji: '👍', count: 1, reactedByMe: false, revision: '1' });
   const handlers = { onMenu: vi.fn(), onReply: vi.fn(), onCopy: vi.fn() };
-  const view = render(MessageBubbleHarness, {
-    props: { message, variant: 'chat-msg', reactions, userId: 'u1', ...handlers, ...props }
-  });
+  const view = await renderWithApp(
+    messageBubbleHarness({
+      message,
+      variant: options.variant ?? 'chat-msg',
+      reactions,
+      userId: 'userId' in options ? options.userId : 'u1',
+      ...(options.editing ? { editing: options.editing } : {}),
+      ...(options.menuOpen ? { menuOpen: options.menuOpen } : {}),
+      ...(options.mentionsMe ? { mentionsMe: options.mentionsMe } : {}),
+      ...(options.cardText ? { cardText: options.cardText } : {}),
+      ...handlers
+    })
+  );
   const row = view.container.querySelector<HTMLElement>('[data-message-id="m1"]');
   if (!row) throw new Error('the bubble rendered no message row');
   return { row, handlers };
@@ -49,33 +67,38 @@ function partOrder(row: HTMLElement): string[] {
 }
 
 test('a room message shows its quote, text, then pictures, and marks the menu and a mention', async () => {
-  const { row, handlers } = renderBubble({ menuOpen: true, mentionsMe: true });
+  const { row, handlers } = await renderBubble({ menuOpen: true, mentionsMe: true });
+  const user = userEvent.setup();
 
-  expect([...row.classList]).toEqual(['chat-msg-text', 'is-context', 'mentions-me']);
-  expect(row.dataset.groupFirst).toBe('true');
-  expect(row.firstElementChild?.className).toBe('chat-msg-body');
+  expect([...row.classList]).toEqual([
+    'message-bubble',
+    'message-bubble--first',
+    'message-bubble--context',
+    'message-bubble--mentions-me'
+  ]);
+  expect(row.firstElementChild?.className).toBe('message-bubble__body');
   expect(partOrder(row)).toEqual(['reply-preview', 'chat-msg-content', 'attachment-mosaic', 'reaction-summary']);
   expect(screen.getByRole('button', { name: 'Добавить реакцию 👍' })).toBeTruthy();
   expect(screen.getByRole('button', { name: 'Открыть выбор эмодзи' })).toBeTruthy();
 
-  await userEvent.click(screen.getByRole('button', { name: 'Ответить' }));
-  await userEvent.click(screen.getByRole('button', { name: 'Копировать текст' }));
+  await user.click(screen.getByRole('button', { name: 'Ответить' }));
+  await user.click(screen.getByRole('button', { name: 'Копировать текст' }));
   await fireEvent.contextMenu(row);
   expect(handlers.onReply).toHaveBeenCalledTimes(1);
   expect(handlers.onCopy).toHaveBeenCalledTimes(1);
   expect(handlers.onMenu).toHaveBeenCalledTimes(1);
 });
 
-test('a direct message shows its pictures above its text in the direct-chat layout', () => {
-  const { row } = renderBubble({ variant: 'dm-msg' });
+test('a direct message shows its pictures above its text in the direct-chat layout', async () => {
+  const { row } = await renderBubble({ variant: 'dm-msg' });
 
-  expect([...row.classList]).toEqual(['chat-msg-text', 'dm-chat-message']);
-  expect(row.firstElementChild?.className).toBe('dm-chat-content');
+  expect([...row.classList]).toEqual(['message-bubble', 'message-bubble--dm', 'message-bubble--first']);
+  expect(row.firstElementChild?.className).toBe('message-bubble__body message-bubble__body--dm');
   expect(partOrder(row)).toEqual(['reply-preview', 'attachment-mosaic', 'chat-msg-content', 'reaction-summary']);
 });
 
-test('a guest sees reactions but gets no reaction picker in the hover actions', () => {
-  renderBubble({ userId: undefined });
+test('a guest sees reactions but gets no reaction picker in the hover actions', async () => {
+  await renderBubble({ userId: undefined });
 
   expect(screen.getByLabelText('Реакции на сообщение').textContent).toContain('1');
   expect(screen.queryByRole('button', { name: 'Добавить реакцию 👍' })).toBeNull();
@@ -83,13 +106,13 @@ test('a guest sees reactions but gets no reaction picker in the hover actions', 
   expect(screen.queryByRole('button', { name: 'Открыть выбор эмодзи' })).toBeNull();
 });
 
-test('the editor replaces the parts while editing, and a card replaces them for good', () => {
-  const editing = renderBubble({ editing: true });
-  expect(editing.row.querySelector('.chat-msg-edit')).toBeTruthy();
+test('the editor replaces the parts while editing, and a card replaces them for good', async () => {
+  const editing = await renderBubble({ editing: true });
+  expect(editing.row.querySelector('.message-editor')).toBeTruthy();
   expect(screen.queryByRole('toolbar', { name: 'Действия с сообщением' })).toBeNull();
   cleanup();
 
-  const card = renderBubble({ variant: 'dm-msg', cardText: 'Приглашение в комнату' });
+  const card = await renderBubble({ variant: 'dm-msg', cardText: 'Приглашение в комнату' });
   expect(card.row.textContent?.trim()).toBe('Приглашение в комнату');
   expect(screen.queryByRole('toolbar', { name: 'Действия с сообщением' })).toBeNull();
 });

@@ -1,0 +1,65 @@
+// The explicit extension is required because desktop-autostart.test.ts imports
+// this module natively under Node, where neither the `@/` alias nor an
+// extensionless specifier resolves.
+import { createLogger, errorContext } from '../shared/log.ts';
+import { isRecord } from '@voice-room/shared/guards';
+
+const log = createLogger('desktop:autostart');
+
+export interface DesktopAutostartSettings {
+  openAtLogin: boolean;
+  startMinimized: boolean;
+  supported: boolean;
+  reason?: string;
+}
+
+export type DesktopAutostartPatch = Partial<Pick<DesktopAutostartSettings, 'openAtLogin' | 'startMinimized'>>;
+
+function getBridge(): Window['voiceRoomDesktopAutostart'] | undefined {
+  if (typeof window === 'undefined') return undefined;
+  return window.voiceRoomDesktopAutostart;
+}
+
+function normalizeSettings(value: unknown): DesktopAutostartSettings | null {
+  if (!isRecord(value)) return null;
+  const source = value;
+  const settings: DesktopAutostartSettings = {
+    openAtLogin: source.openAtLogin === true,
+    startMinimized: source.startMinimized === true,
+    supported: source.supported === true
+  };
+  if (typeof source.reason === 'string' && source.reason) settings.reason = source.reason;
+  return settings;
+}
+
+export function desktopAutostartAvailable(): boolean {
+  const bridge = getBridge();
+  return Boolean(bridge?.getSettings && bridge?.setSettings);
+}
+
+export async function readDesktopAutostartSettings(): Promise<DesktopAutostartSettings | null> {
+  const bridge = getBridge();
+  if (!bridge?.getSettings) return null;
+  try {
+    return normalizeSettings(await bridge.getSettings());
+  } catch (error) {
+    log.warn('desktop autostart settings read failed', errorContext(error));
+    return null;
+  }
+}
+
+export async function updateDesktopAutostartSettings(
+  patch: DesktopAutostartPatch
+): Promise<DesktopAutostartSettings | null> {
+  const bridge = getBridge();
+  if (!bridge?.setSettings) return null;
+  const payload: DesktopAutostartPatch = {};
+  if (typeof patch.openAtLogin === 'boolean') payload.openAtLogin = patch.openAtLogin;
+  if (typeof patch.startMinimized === 'boolean') payload.startMinimized = patch.startMinimized;
+  try {
+    return normalizeSettings(await bridge.setSettings(payload));
+  } catch (error) {
+    log.warn('desktop autostart settings update failed', errorContext(error));
+    return null;
+  }
+}

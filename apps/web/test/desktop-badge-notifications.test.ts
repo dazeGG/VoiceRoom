@@ -9,7 +9,7 @@ async function loadAttention(windowValue = {}) {
     console.warn = originalWarn;
   });
   vi.resetModules();
-  return import('../src/lib/platform/desktop-attention.ts');
+  return import('../src/platform/desktop-attention.ts');
 }
 
 const flush = () => new Promise((resolveFlush) => setImmediate(resolveFlush));

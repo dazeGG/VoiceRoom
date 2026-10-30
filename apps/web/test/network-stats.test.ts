@@ -1,7 +1,7 @@
 import { test, vi } from 'vitest';
 import assert from 'node:assert/strict';
-import { freshImport } from './helpers/fresh-module.ts';
-import type { RtcStatsSource } from '../src/lib/features/room/client/media/rtc-stats.ts';
+import { freshImport } from './helpers/fresh-module';
+import type { RtcStatsSource } from '@/features/room/client/media/rtc-stats';
 
 async function load<Module>(importModule: () => Promise<Module>): Promise<Module> {
   vi.stubGlobal('window', { location: { hash: '', pathname: '/', search: '' } });
@@ -16,7 +16,7 @@ function report(entries: Array<{ id: string } & Record<string, unknown>>) {
 }
 
 test('upstream loss counters and a UDP transport come from the publisher stats, audio only', async () => {
-  const { getOutboundNetworkFromStats } = await load(() => import('../src/lib/features/room/client/room/stats.ts'));
+  const { getOutboundNetworkFromStats } = await load(() => import('@/features/room/client/room/stats'));
   const stats = report([
     // The SFU's fraction of one short interval is not trusted: the counters are.
     { id: 'r1', type: 'remote-inbound-rtp', kind: 'audio', packetsLost: 12, fractionLost: 0.125 },
@@ -43,7 +43,7 @@ test('upstream loss counters and a UDP transport come from the publisher stats, 
 });
 
 test('a relay or TCP candidate is reported as a degraded transport', async () => {
-  const { getOutboundNetworkFromStats } = await load(() => import('../src/lib/features/room/client/room/stats.ts'));
+  const { getOutboundNetworkFromStats } = await load(() => import('@/features/room/client/room/stats'));
   const pair = { id: 'p1', type: 'candidate-pair', state: 'succeeded', selected: true, localCandidateId: 'l1' };
   assert.equal(
     getOutboundNetworkFromStats(report([pair, { id: 'l1', candidateType: 'relay', protocol: 'udp' }])).transport,
@@ -63,9 +63,9 @@ test('a relay or TCP candidate is reported as a degraded transport', async () =>
 });
 
 test('the status pill explains loss, jitter and a TCP fallback and warns on real loss', async () => {
-  const status = await load(() => import('../src/lib/features/room/client/ui/status.ts'));
+  const status = await load(() => import('@/features/room/client/ui/status'));
   // Same module graph as status.ts, so both see one state instance.
-  const { state } = await import('../src/lib/features/room/client/core/state.svelte.ts');
+  const { state } = await import('@/features/room/client/core/room-runtime.store');
   state.voiceConnection = 'connected';
   state.localPingMs = 40;
   state.localNetwork = { inboundLossPct: 1.2, jitterMs: 9, outboundLossPct: 0, transport: 'tcp' };

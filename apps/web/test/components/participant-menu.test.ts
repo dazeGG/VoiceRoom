@@ -1,11 +1,15 @@
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/svelte';
+import { screen, waitFor, within } from '@testing-library/vue';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
+import type { Pinia } from 'pinia';
+import { defineComponent, h, provide } from 'vue';
 import { authUser } from '../fixtures/users.ts';
-import type { Relationship } from '../../src/lib/api/friends.ts';
-import type { RoomSocial } from '../../src/lib/features/room/social.ts';
-import type { PeerInfo } from '../../src/lib/features/room/client/core/types.ts';
+import type { Relationship } from '@/api/friends';
+import { ROOM_SOCIAL_KEY, type RoomSocial } from '@/features/room/social';
+import type { PeerInfo } from '@/features/room/client/core/types';
 import { defined } from '../helpers/assert.ts';
+import { renderWithApp } from '../helpers/render.ts';
+import { settle, stubOverlayDom } from '../helpers/overlay-dom.ts';
 
 const relationships = new Map<string, Relationship>();
 const social = {
@@ -18,68 +22,77 @@ const social = {
   openDm: vi.fn(async () => {}),
   showFriends: vi.fn()
 } satisfies RoomSocial;
-vi.mock('../../src/lib/api/rooms', () => ({
+vi.mock('@/api/rooms', () => ({
   banRoomPeer: vi.fn(async () => 'ban-1'),
   kickRoomPeer: vi.fn(async () => {}),
   setRoomPeerServerMute: vi.fn(async () => {}),
   undoRoomBan: vi.fn(async () => {})
 }));
-vi.mock('../../src/lib/features/room/client/ui/toast', () => ({ showToast: vi.fn() }));
-vi.mock('../../src/lib/features/room/client/services/media-playback-service', () => ({
+vi.mock('@/features/room/client/ui/toast', () => ({ showToast: vi.fn() }));
+vi.mock('@/features/room/client/services/media-playback-service', () => ({
   applyRemoteParticipantAudioPreferences: vi.fn()
 }));
 
-const ParticipantContextMenu = (await import('../../src/lib/features/room/components/ParticipantContextMenu.svelte'))
-  .default;
-const { roomSocialContext } = await import('../../src/lib/features/room/social.ts');
-const roomsApi = await import('../../src/lib/api/rooms');
-const { showToast } = await import('../../src/lib/features/room/client/ui/toast');
+const ParticipantContextMenu = (await import('@/features/room/components/ParticipantContextMenu.vue')).default;
+const roomsApi = await import('@/api/rooms');
+const { showToast } = await import('@/features/room/client/ui/toast');
 const { applyRemoteParticipantAudioPreferences } =
-  await import('../../src/lib/features/room/client/services/media-playback-service');
-const { setUser, clearSession } = await import('../../src/lib/features/auth/session.svelte.ts');
-const { state } = await import('../../src/lib/features/room/client/core/state.svelte.ts');
-const { createInitialRoomState } = await import('../../src/lib/features/room/client/model/room-state.ts');
-const { createParticipant } = await import('../../src/lib/features/room/client/room/participants.ts');
-const { openParticipantContextMenu, participantContextMenu, closeParticipantContextMenu } =
-  await import('../../src/lib/features/room/participant-context-ui.svelte.ts');
-const { roomSettingsUi } = await import('../../src/lib/features/room/room-settings.svelte.ts');
-const { getParticipantAudioPreference } = await import('../../src/lib/features/room/client/core/settings.ts');
+  await import('@/features/room/client/services/media-playback-service');
+const { useSessionStore } = await import('@/features/auth/session.store');
+const { state } = await import('@/features/room/client/core/room-runtime.store');
+const { createInitialRoomState } = await import('@/features/room/client/model/room-state');
+const { createParticipant } = await import('@/features/room/client/room/participants');
+const { useParticipantContextUiStore } = await import('@/features/room/participant-context-ui.store');
+const { useRoomSettingsStore } = await import('@/features/room/room-settings.store');
+const { getParticipantAudioPreference } = await import('@/features/room/client/core/settings');
 
 const ME = authUser({ id: 'me-user' });
 
+// Provides the social graph the way the lobby does, then the menu.
+const Host = defineComponent(() => {
+  provide(ROOM_SOCIAL_KEY, social);
+  return () => h('div', [h(ParticipantContextMenu)]);
+});
+
+let pinia: Pinia;
+
 beforeEach(() => {
+  stubOverlayDom();
   localStorage.clear();
   vi.clearAllMocks();
   relationships.clear();
   Object.assign(state, createInitialRoomState());
   state.peerId = 'me';
   state.roomId = 'room-a';
-  roomSettingsUi.isOwner = false;
-  setUser(ME);
 });
 afterEach(() => {
-  cleanup();
-  closeParticipantContextMenu('', false);
-  clearSession();
+  useParticipantContextUiStore(pinia).closeParticipantContextMenu('', false);
 });
 
-function openFor(peer: PeerInfo, variant: 'tile' | 'list' = 'tile') {
-  createParticipant({ id: 'me', name: 'Я' });
-  createParticipant(peer);
-  openParticipantContextMenu(String(peer.id), 20, 20, variant);
-  render(ParticipantContextMenu, { context: roomSocialContext(social) });
-  return screen.getByRole('dialog', { name: `Действия для ${String(peer.name)}` });
+async function mount() {
+  ({ pinia } = await renderWithApp(Host));
+  useSessionStore(pinia).setUser(ME);
+  useRoomSettingsStore(pinia).isOwner = false;
 }
 
-test('there is no menu for yourself', () => {
+async function openFor(peer: PeerInfo, variant: 'tile' | 'list' = 'tile') {
+  await mount();
   createParticipant({ id: 'me', name: 'Я' });
-  openParticipantContextMenu('me', 10, 10);
-  render(ParticipantContextMenu);
+  createParticipant(peer);
+  useParticipantContextUiStore(pinia).openParticipantContextMenu(String(peer.id), 20, 20, variant);
+  return await screen.findByRole('dialog', { name: `Действия для ${String(peer.name)}` });
+}
+
+test('there is no menu for yourself', async () => {
+  await mount();
+  createParticipant({ id: 'me', name: 'Я' });
+  useParticipantContextUiStore(pinia).openParticipantContextMenu('me', 10, 10);
+  await settle();
   expect(screen.queryByRole('dialog')).toBeNull();
 });
 
-test('a guest only offers local sound settings', () => {
-  const menu = openFor({ id: 'guest', name: 'Гость' });
+test('a guest only offers local sound settings', async () => {
+  const menu = await openFor({ id: 'guest', name: 'Гость' });
   expect(within(menu).getByText('Гость: доступны только локальные настройки звука.')).toBeTruthy();
   expect(within(menu).queryByRole('button', { name: 'Написать' })).toBeNull();
   expect(within(menu).getByRole('slider', { name: 'Громкость Гость' })).toBeTruthy();
@@ -94,25 +107,26 @@ test('an account shows actions for the relationship: add, accept, sent, remove',
   ];
   for (const [relationship, label] of cases) {
     relationships.set('anna-user', relationship);
-    const menu = openFor({ id: 'anna', name: 'Анна', accountUserId: 'anna-user' });
+    const menu = await openFor({ id: 'anna', name: 'Анна', accountUserId: 'anna-user' });
     expect(within(menu).getByRole('button', { name: label })).toBeTruthy();
     expect(within(menu).getByRole('button', { name: 'Написать' })).toBeTruthy();
-    cleanup();
-    closeParticipantContextMenu('', false);
+    useParticipantContextUiStore(pinia).closeParticipantContextMenu('', false);
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    state.peers.clear();
   }
 });
 
 test('adding a friend closes the menu first and reports the result', async () => {
-  const menu = openFor({ id: 'anna', name: 'Анна', accountUserId: 'anna-user' });
+  const menu = await openFor({ id: 'anna', name: 'Анна', accountUserId: 'anna-user' });
   await userEvent.click(within(menu).getByRole('button', { name: 'Добавить в друзья' }));
-  expect(participantContextMenu.open).toBe(false);
+  expect(useParticipantContextUiStore(pinia).open).toBe(false);
   expect(social.addFriend).toHaveBeenCalledWith('anna-user');
   await waitFor(() => expect(showToast).toHaveBeenCalledWith('Заявка в друзья отправлена'));
 });
 
 test('a failed action shows the server message, or a fallback per action', async () => {
   vi.mocked(social.openDm).mockRejectedValueOnce(new Error(''));
-  const menu = openFor({ id: 'anna', name: 'Анна', accountUserId: 'anna-user' });
+  const menu = await openFor({ id: 'anna', name: 'Анна', accountUserId: 'anna-user' });
   await userEvent.click(within(menu).getByRole('button', { name: 'Написать' }));
   await waitFor(() =>
     expect(showToast).toHaveBeenCalledWith('Не удалось открыть личные сообщения', { variant: 'error' })
@@ -121,11 +135,11 @@ test('a failed action shows the server message, or a fallback per action', async
 });
 
 test('volume changes and local mute are saved for this person and applied at once', async () => {
-  const menu = openFor({ id: 'anna', name: 'Анна', accountUserId: 'anna-user' });
+  const menu = await openFor({ id: 'anna', name: 'Анна', accountUserId: 'anna-user' });
   const slider = within(menu).getByRole('slider', { name: 'Громкость Анна' });
-  await fireEvent.input(slider, { target: { value: '50' } });
-  await fireEvent.change(slider, { target: { value: '50' } });
-  expect(getParticipantAudioPreference('account:anna-user').volume).toBe(0.5);
+  slider.focus();
+  await userEvent.keyboard('{Home}');
+  expect(getParticipantAudioPreference('account:anna-user').volume).toBe(0);
   expect(applyRemoteParticipantAudioPreferences).toHaveBeenCalled();
 
   const muteButton = within(menu).getByRole('button', { name: /Заглушить/ });
@@ -133,19 +147,20 @@ test('volume changes and local mute are saved for this person and applied at onc
   expect(getParticipantAudioPreference('account:anna-user').muted).toBe(true);
 });
 
-test('the list variant has no audio controls', () => {
-  const menu = openFor({ id: 'anna', name: 'Анна', accountUserId: 'anna-user' }, 'list');
+test('the list variant has no audio controls', async () => {
+  const menu = await openFor({ id: 'anna', name: 'Анна', accountUserId: 'anna-user' }, 'list');
   expect(within(menu).queryByRole('slider')).toBeNull();
 });
 
 test('only the owner can moderate, after the audio controls', async () => {
-  let menu = openFor({ id: 'anna', name: 'Анна', accountUserId: 'anna-user' });
+  let menu = await openFor({ id: 'anna', name: 'Анна', accountUserId: 'anna-user' });
   expect(within(menu).queryByRole('button', { name: /Исключить/ })).toBeNull();
-  cleanup();
-  closeParticipantContextMenu('', false);
+  useParticipantContextUiStore(pinia).closeParticipantContextMenu('', false);
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
 
-  roomSettingsUi.isOwner = true;
-  menu = openFor({ id: 'anna', name: 'Анна', accountUserId: 'anna-user' });
+  useRoomSettingsStore(pinia).isOwner = true;
+  useParticipantContextUiStore(pinia).openParticipantContextMenu('anna', 20, 20, 'tile');
+  menu = await screen.findByRole('dialog', { name: 'Действия для Анна' });
   const labels = within(menu)
     .getAllByRole('button')
     .map((button) => button.textContent?.trim() ?? '');

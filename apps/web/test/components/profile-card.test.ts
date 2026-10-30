@@ -2,13 +2,12 @@
 // accent) rather than recomputing one, falls back to the palette colour, and
 // offers actions that fit the relationship.
 
-import { cleanup, render, screen } from '@testing-library/svelte';
-import { afterEach, expect, test } from 'vitest';
-import { ProfileCard } from '../../src/lib/shared/components/profile-card';
-import type { ProfileCardPerson } from '../../src/lib/shared/components/profile-card/types';
-import { getAvatarColor } from '../../src/lib/visual/tokens';
-
-afterEach(cleanup);
+import { screen } from '@testing-library/vue';
+import { expect, test } from 'vitest';
+import { ProfileCard } from '@/shared/components/profile-card';
+import type { ProfileCardPerson } from '@/shared/components/profile-card/types';
+import { getAvatarColor } from '@/visual/tokens';
+import { renderWithApp } from '../helpers/render.ts';
 
 function person(extra: Partial<ProfileCardPerson> = {}): ProfileCardPerson {
   return {
@@ -23,25 +22,25 @@ function person(extra: Partial<ProfileCardPerson> = {}): ProfileCardPerson {
   };
 }
 
-const accent = (container: HTMLElement) =>
+const accent = (container: Element) =>
   container.querySelector<HTMLElement>('[data-profile-card]')?.style.getPropertyValue('--profile-accent');
 
-test('the card is tinted with the server accent of the avatar', () => {
-  const { container } = render(ProfileCard, { props: { person: person(), relationship: 'friend' } });
+test('the card is tinted with the server accent of the avatar', async () => {
+  const { container } = await renderWithApp(ProfileCard, { props: { person: person(), relationship: 'friend' } });
   expect(accent(container)).toBe('#4a7d5c');
 });
 
-test('without an accent the palette colour of the avatar is used', () => {
-  const { container } = render(ProfileCard, {
+test('without an accent the palette colour of the avatar is used', async () => {
+  const { container } = await renderWithApp(ProfileCard, {
     props: { person: person({ avatarAccent: null }), relationship: 'none' }
   });
   expect(accent(container)).toBe(getAvatarColor('green').background);
 });
 
-test('your own card and a guest card offer no friend actions', () => {
-  render(ProfileCard, { props: { person: person(), relationship: 'self' } });
+test('your own card and a guest card offer no friend actions', async () => {
+  const own = await renderWithApp(ProfileCard, { props: { person: person(), relationship: 'self' } });
   expect(screen.queryAllByRole('button')).toEqual([]);
-  cleanup();
-  render(ProfileCard, { props: { person: person({ userId: null }), relationship: 'unavailable' } });
+  own.unmount();
+  await renderWithApp(ProfileCard, { props: { person: person({ userId: null }), relationship: 'unavailable' } });
   expect(screen.queryAllByRole('button')).toEqual([]);
 });

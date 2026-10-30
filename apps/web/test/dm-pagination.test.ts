@@ -2,7 +2,7 @@ import { test } from 'vitest';
 import assert from 'node:assert/strict';
 
 test('G29-A01 DM history merges realtime edits/deletes with exact IDs', async () => {
-  const { createAnchoredHistory } = await import('../src/lib/shared/chat/anchored-history.svelte.ts');
+  const { createAnchoredHistory } = await import('@/shared/chat/anchored-history');
   const history = createAnchoredHistory({
     loadPage: async () => ({
       messages: [
@@ -23,7 +23,7 @@ test('G29-A01 DM history merges realtime edits/deletes with exact IDs', async ()
 });
 
 test('G29-A02 latest reconciliation removes only stale rows in its window', async () => {
-  const { createAnchoredHistory } = await import('../src/lib/shared/chat/anchored-history.svelte.ts');
+  const { createAnchoredHistory } = await import('@/shared/chat/anchored-history');
   const history = createAnchoredHistory({
     loadPage: async () => ({
       messages: [

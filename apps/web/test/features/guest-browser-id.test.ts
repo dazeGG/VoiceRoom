@@ -9,7 +9,7 @@ const sent: Array<{ type: string; payload: unknown }> = [];
 
 async function loadRoomRealtime() {
   vi.resetModules();
-  vi.doMock('../../src/lib/api/realtime', () => ({
+  vi.doMock('@/api/realtime', () => ({
     getAppRealtime: () => ({
       ensureConnected() {},
       getConnectionEpoch: () => 1,
@@ -21,8 +21,10 @@ async function loadRoomRealtime() {
       subscribe: () => () => {}
     })
   }));
-  vi.doMock('../../src/lib/entities/room/room-presence.svelte', () => ({ applyRoomSummary: () => {} }));
-  return import('../../src/lib/entities/room/room-realtime.ts');
+  vi.doMock('@/entities/room/room-presence.store', () => ({
+    useRoomPresenceStore: () => ({ applyRoomSummary: () => {} })
+  }));
+  return import('@/entities/room/room-realtime');
 }
 
 function join(realtime: Awaited<ReturnType<typeof loadRoomRealtime>>): unknown {
@@ -41,8 +43,8 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  vi.doUnmock('../../src/lib/api/realtime');
-  vi.doUnmock('../../src/lib/entities/room/room-presence.svelte');
+  vi.doUnmock('@/api/realtime');
+  vi.doUnmock('@/entities/room/room-presence.store');
 });
 
 test('a voice join carries one lasting guest id, kept across joins and reloads', async () => {

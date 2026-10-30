@@ -6,10 +6,25 @@ import { expect, test } from 'vitest';
 import { freshImport } from '../helpers/fresh-module.ts';
 
 async function load() {
-  const navigation = await freshImport(() => import('../../src/lib/features/home/model/room-navigation.svelte.ts'));
-  const voice = await import('../../src/lib/features/room/voice-session.svelte.ts');
+  const { useRoomNavigationStore } = await freshImport(
+    () => import('../../src/features/home/model/room-navigation.store.ts')
+  );
+  const { useVoiceSessionStore } = await import('../../src/features/room/voice-session.store.ts');
+  const navigation = useRoomNavigationStore();
+  const voice = useVoiceSessionStore();
   voice.clearConnectedVoiceRoom();
-  return { ...navigation, ...voice };
+  return {
+    ...navigation,
+    setConnectedVoiceRoom: voice.setConnectedVoiceRoom,
+    clearConnectedVoiceRoom: voice.clearConnectedVoiceRoom,
+    get roomNavigation() {
+      return {
+        viewedRoomId: navigation.viewedRoomId,
+        embeddedRoomId: navigation.embeddedRoomId,
+        joinIntentRoomId: navigation.joinIntentRoomId
+      };
+    }
+  };
 }
 
 test('previewing a room shows it without mounting a room client or a join request', async () => {

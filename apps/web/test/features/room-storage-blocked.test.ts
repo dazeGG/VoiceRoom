@@ -2,20 +2,19 @@
 // as soon as the page touches `localStorage`. The room must still start, with
 // the defaults, instead of failing while it builds its state.
 
-import { expect, onTestFinished, test } from 'vitest';
-import { leaveActiveRoomMembership } from '../../src/lib/entities/room/room-membership.svelte.ts';
-import { persistMasterVolume } from '../../src/lib/features/room/client/core/settings.ts';
-import { state } from '../../src/lib/features/room/client/core/state.svelte.ts';
-import { createInitialRoomState } from '../../src/lib/features/room/client/model/room-state.ts';
-import {
-  switchMicrophone,
-  switchOutputDevice,
-  updateGateThresholdFromSlider
-} from '../../src/lib/features/room/client/ui/devices.ts';
-import { roomDeviceUi } from '../../src/lib/features/room/room-device-ui.svelte.ts';
-import { clearAttachmentComposeStores } from '../../src/lib/shared/chat/attachment-compose-stores.ts';
-import { AttachmentComposeStore } from '../../src/lib/shared/chat/attachment-compose.svelte.ts';
-import { stubFetch } from '../fixtures/fetch.ts';
+import { createPinia, setActivePinia } from 'pinia';
+import { beforeEach, expect, onTestFinished, test } from 'vitest';
+import { useRoomMembershipStore } from '@/entities/room/room-membership.store';
+import { persistMasterVolume } from '@/features/room/client/core/settings';
+import { state } from '@/features/room/client/core/room-runtime.store';
+import { createInitialRoomState } from '@/features/room/client/model/room-state';
+import { switchMicrophone, switchOutputDevice, updateGateThresholdFromSlider } from '@/features/room/client/ui/devices';
+import { useRoomDeviceUiStore } from '@/features/room/room-device-ui.store';
+import { clearAttachmentComposeStores } from '@/shared/chat/attachment-compose-stores';
+import { AttachmentComposeStore } from '@/shared/chat/attachment-compose';
+import { stubFetch } from '../fixtures/fetch';
+
+beforeEach(() => setActivePinia(createPinia()));
 
 function blockLocalStorage(): void {
   const previous = Object.getOwnPropertyDescriptor(globalThis, 'localStorage');
@@ -53,7 +52,7 @@ test('blocked localStorage does not break saving a setting', () => {
 test('blocked localStorage does not break picking a microphone, a speaker or the gate level', async () => {
   blockLocalStorage();
   Object.assign(state, createInitialRoomState());
-  roomDeviceUi.microphoneId = 'usb-mic';
+  useRoomDeviceUiStore().microphoneId = 'usb-mic';
 
   await expect(switchMicrophone()).resolves.toBe(false);
   expect(state.microphoneDeviceId).toBe('usb-mic');
@@ -70,5 +69,5 @@ test('blocked localStorage does not break the room chat attachments or leaving t
 
   expect(new AttachmentComposeStore('room', 'room-blocked').drafts).toEqual([]);
   expect(() => clearAttachmentComposeStores()).not.toThrow();
-  await expect(leaveActiveRoomMembership('room-blocked')).resolves.toBe(true);
+  await expect(useRoomMembershipStore().leaveActiveRoomMembership('room-blocked')).resolves.toBe(true);
 });

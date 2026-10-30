@@ -1,10 +1,9 @@
-declare module '*?raw' {
-  const content: string;
-  export default content;
-}
-
+// Globals of the desktop shell and Client Hints, as in apps/web/src/app.d.ts.
 declare global {
   namespace App {}
+
+  /** Present only when a Node host (SSR, tests) runs the code; `typeof process` guards every use. */
+  var process: { env: Record<string, string | undefined> } | undefined;
 
   /** Chromium's User-Agent Client Hints; other browsers have none. */
   interface NavigatorUAData {

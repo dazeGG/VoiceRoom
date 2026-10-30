@@ -2,20 +2,16 @@
 // says which terms they accept and links the personal data policy. It informs;
 // a call needs no consent, so there is nothing to tick.
 
-import { cleanup, render, screen, within } from '@testing-library/svelte';
-import { afterEach, expect, test } from 'vitest';
-import RoomOverlays from '../../src/lib/features/room/components/RoomOverlays.svelte';
-import { guestNameUi } from '../../src/lib/features/room/guest-name-ui.svelte';
+import { screen, within } from '@testing-library/vue';
+import { expect, test } from 'vitest';
+import RoomOverlays from '@/features/room/components/RoomOverlays.vue';
+import { useGuestNameUiStore } from '@/features/room/guest-name-ui.store';
+import { renderWithApp } from '../helpers/render';
 
-afterEach(() => {
-  cleanup();
-  guestNameUi.open = false;
-});
-
-test('the guest name dialog links the terms and the personal data policy, with nothing to tick', () => {
-  guestNameUi.open = true;
-  render(RoomOverlays);
-  const dialog = screen.getByRole('dialog', { name: 'Как вас зовут?' });
+test('the guest name dialog links the terms and the personal data policy, with nothing to tick', async () => {
+  const view = await renderWithApp(RoomOverlays);
+  useGuestNameUiStore(view.pinia).open = true;
+  const dialog = await screen.findByRole('dialog', { name: 'Как вас зовут?' });
   const terms = within(dialog).getByRole('link', { name: 'Пользовательское соглашение' });
   const privacy = within(dialog).getByRole('link', { name: 'Политике обработки персональных данных' });
   expect(terms.getAttribute('href')).toMatch(/\/terms$/);

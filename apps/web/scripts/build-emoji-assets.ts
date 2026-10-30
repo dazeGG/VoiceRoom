@@ -1,4 +1,4 @@
-// Materialises the emoji artwork into `static/emoji/`, and writes the catalogue
+// Materialises the emoji artwork into `public/emoji/`, and writes the catalogue
 // of what that artwork actually covers.
 //
 // Emoji — in the picker, reactions, message text and names — are drawn from
@@ -30,8 +30,8 @@ import { listReactionEmojis } from '@voice-room/shared/emoji';
 
 const require = createRequire(import.meta.url);
 const webRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
-const defaultOutputDir = join(webRoot, 'static', 'emoji');
-const defaultCatalogueFile = join(webRoot, 'src', 'lib', 'shared', 'chat', 'emoji-coverage.json');
+const defaultOutputDir = join(webRoot, 'public', 'emoji');
+const defaultCatalogueFile = join(webRoot, 'src', 'shared', 'chat', 'emoji-coverage.json');
 const ARTWORK_PACKAGE = '@discordapp/twemoji';
 const packageRoot = join(dirname(require.resolve(`${ARTWORK_PACKAGE}/package.json`)), 'dist', 'svg');
 const graphicsLicenceFile = join(dirname(fileURLToPath(import.meta.url)), 'emoji-artwork-LICENSE.txt');
@@ -137,7 +137,7 @@ async function main() {
   const { copies, missing, corpus } = await buildEmojiAssets();
   console.log(
     `emoji assets: ${copies.length} of ${corpus.length} corpus entries from ${ARTWORK_PACKAGE}@${version}` +
-      ` -> static/emoji (${missing.length} not covered and not offered)`
+      ` -> public/emoji (${missing.length} not covered and not offered)`
   );
 }
 

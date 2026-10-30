@@ -1,7 +1,7 @@
 import { test, vi } from 'vitest';
-import { lobbyRoom } from './fixtures/answers.ts';
+import { lobbyRoom } from './fixtures/answers';
 import assert from 'node:assert/strict';
-import { defined } from './helpers/assert.ts';
+import { defined } from './helpers/assert';
 
 async function loadRoomRealtime() {
   vi.resetModules();
@@ -26,9 +26,8 @@ async function loadRoomRealtime() {
       return () => {};
     }
   };
-  vi.doMock('../src/lib/api/realtime', () => ({ getAppRealtime: () => connection }));
-  vi.doMock('../src/lib/entities/room/room-presence.svelte', () => ({ applyRoomSummary: () => {} }));
-  return { realtime: await import('../src/lib/entities/room/room-realtime.ts'), sent };
+  vi.doMock('@/api/realtime', () => ({ getAppRealtime: () => connection }));
+  return { realtime: await import('@/entities/room/room-realtime'), sent };
 }
 
 test('a delayed retryable error cannot cancel a newer successful voice resync attempt', async () => {

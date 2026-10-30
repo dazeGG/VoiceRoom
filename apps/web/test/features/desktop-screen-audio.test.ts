@@ -3,13 +3,13 @@
 // restarts stay silent; a final non-zero exit reports the stream audio as lost.
 
 import { afterEach, expect, test, vi } from 'vitest';
-import { state } from '../../src/lib/features/room/client/core/state.svelte';
+import { state } from '@/features/room/client/core/room-runtime.store';
 import {
   getDesktopPcmSamples,
   onDesktopScreenAudioLost,
   startDesktopSafeScreenAudioCapture,
   stopLocalScreenAudioCapture
-} from '../../src/lib/features/room/client/services/desktop-screen-audio';
+} from '@/features/room/client/services/desktop-screen-audio';
 
 type BridgeEvent = { sessionId: string; event: Record<string, unknown> };
 

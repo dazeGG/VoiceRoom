@@ -55,13 +55,13 @@ test('joining a room establishes voice through the public LiveKit gate', async (
   ]);
   expect(createdResponse.ok()).toBe(true);
   await expect(dialog).toBeHidden({ timeout: 15_000 });
-  await expect(page.locator('body')).toHaveAttribute('data-screen', 'room', { timeout: 20_000 });
+  await expect(page.locator('body')).toHaveClass(/\bscreen--room\b/, { timeout: 20_000 });
 
-  const connection = page.locator('.status-pill[data-state="connected"]');
+  const connection = page.locator('.room-topbar__status--connected');
   try {
     await expect(connection).toContainText('Голос подключен', { timeout: 30_000 });
   } catch (error) {
-    const status = await page.locator('.status-pill').allTextContents();
+    const status = await page.locator('.room-topbar__status').allTextContents();
     const toast = await page
       .locator('#toast')
       .textContent()

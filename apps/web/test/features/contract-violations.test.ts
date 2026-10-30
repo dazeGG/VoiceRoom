@@ -10,8 +10,8 @@ import { freshImport, muteWarnings } from '../helpers/fresh-module.ts';
 const Counted = Type.Object({ ok: Type.Literal(true), n: Type.Number() });
 
 test('an answer outside its contract asks for a version check', async () => {
-  const { api } = await freshImport(() => import('../../src/lib/api/client.ts'));
-  const { onContractViolation } = await import('../../src/lib/api/contract-violations.ts');
+  const { api } = await freshImport(() => import('../../src/api/client.ts'));
+  const { onContractViolation } = await import('../../src/api/contract-violations.ts');
   muteWarnings();
   const violated = vi.fn();
   onContractViolation(violated);

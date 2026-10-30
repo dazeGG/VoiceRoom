@@ -3,12 +3,12 @@
 // the top bar.
 
 import { beforeEach, expect, test, vi } from 'vitest';
-import { ApiError } from '../../src/lib/api/client.ts';
-import { state } from '../../src/lib/features/room/client/core/state.svelte.ts';
-import { checkRoomExists, requestLiveKitToken } from '../../src/lib/features/room/client/net/api.ts';
-import { resetRuntimeConfig } from '../../src/lib/platform/runtime-config.ts';
-import { stubFetch } from '../fixtures/fetch.ts';
-import { instanceOf } from '../helpers/assert.ts';
+import { ApiError } from '@/api/client';
+import { state } from '@/features/room/client/core/room-runtime.store';
+import { checkRoomExists, requestLiveKitToken } from '@/features/room/client/net/api';
+import { resetRuntimeConfig } from '@/platform/runtime-config';
+import { stubFetch } from '../fixtures/fetch';
+import { instanceOf } from '../helpers/assert';
 
 const JOIN = { name: 'Аня', peerId: 'peer0001', roomId: 'room-a', sessionToken: 'token' };
 const ADMISSION = {

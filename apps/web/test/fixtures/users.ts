@@ -1,5 +1,5 @@
 import type { NotificationPreferences } from '@voice-room/shared/contracts/notifications';
-import type { AuthUser } from '../../src/lib/api/auth.ts';
+import type { AuthUser } from '../../src/api/auth.ts';
 
 export function authUser(overrides: Partial<AuthUser> = {}): AuthUser {
   return {

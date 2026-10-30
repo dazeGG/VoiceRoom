@@ -122,7 +122,7 @@ export async function createPermanentRoom(page: Page, name: string): Promise<str
 
   await page.goto('/');
   await expect(page.getByRole('button', { name: 'Создать комнату' })).toBeVisible({ timeout: 15_000 });
-  const card = page.locator('.lv-card', { hasText: name }).first();
+  const card = page.locator('.voice-home__card', { hasText: name }).first();
   await expect(card).toBeVisible({ timeout: 15_000 });
   const roomId = created.roomId.trim();
   expect(roomId).toMatch(/^[a-z0-9]+$/i);
@@ -130,20 +130,20 @@ export async function createPermanentRoom(page: Page, name: string): Promise<str
 }
 
 // Navigate directly to a room and wait for the in-room topbar heading to
-// render (body[data-screen="room"]). Authenticated users skip the guest
+// render (body.screen--room). Authenticated users skip the guest
 // name prompt, so the room screen appears automatically.
 export async function enterRoom(page: Page, roomId: string): Promise<void> {
   await page.goto(`/r/${roomId}`);
-  await expect(page.locator('body')).toHaveAttribute('data-screen', 'room', { timeout: 20_000 });
+  await expect(page.locator('body')).toHaveClass(/\bscreen--room\b/, { timeout: 20_000 });
   await expect(roomHeading(page)).toBeVisible({ timeout: 20_000 });
 }
 
 export function roomHeading(page: Page) {
-  return page.locator('.room-heading-title');
+  return page.locator('.room-topbar__heading-title');
 }
 
 export function roomHeadingMenuButton(page: Page) {
-  return page.locator('.room-heading-trigger');
+  return page.locator('.room-topbar__heading-trigger');
 }
 
 export async function openRoomHeadingMenu(page: Page): Promise<void> {

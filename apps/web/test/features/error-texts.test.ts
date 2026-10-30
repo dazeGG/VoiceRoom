@@ -2,7 +2,7 @@
 
 import { expect, test } from 'vitest';
 import { ERROR_CODES } from '@voice-room/shared/contracts/errors';
-import { ERROR_TEXTS, errorText } from '../../src/lib/api/error-texts.ts';
+import { ERROR_TEXTS, errorText } from '../../src/api/error-texts.ts';
 
 test('the catalogue and the texts cover exactly the same codes', () => {
   expect(Object.keys(ERROR_TEXTS).sort()).toEqual([...ERROR_CODES].sort());

@@ -1,33 +1,30 @@
 // "How was the call?": when the app asks after a call, and the card that asks.
 // The answers are read in the admin app (apps/admin).
 
-import { cleanup, render, screen, within } from '@testing-library/svelte';
+import { render, screen, within } from '@testing-library/vue';
+import { nextTick } from 'vue';
 import userEvent from '@testing-library/user-event';
+import { createPinia, setActivePinia } from 'pinia';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import type { CallFeedbackCall } from '@voice-room/shared/contracts/feedback';
 import {
   FEEDBACK_ASK_INTERVAL_MS,
   FEEDBACK_MAX_INTERVAL_MS,
-  answerCallFeedback,
-  callFeedback,
-  dropCallFeedback,
   nextAskAt,
-  noteCallFinished,
-  offerCallFeedback,
-  restorePendingCallFeedback,
-  skipCallFeedback
-} from '../../src/lib/features/call-feedback/call-feedback.svelte.ts';
-import CallFeedbackPrompt from '../../src/lib/features/call-feedback/CallFeedbackPrompt.svelte';
-import LeaveScreen from '../../src/lib/features/room/components/LeaveScreen.svelte';
-import { leaveScreenUi, openLeaveScreen } from '../../src/lib/features/room/leave-screen.svelte.ts';
+  useCallFeedbackStore
+} from '@/features/call-feedback/call-feedback.store';
+import CallFeedbackPrompt from '@/features/call-feedback/CallFeedbackPrompt.vue';
+import LeaveScreen from '@/features/room/components/LeaveScreen.vue';
+import { useLeaveScreenStore } from '@/features/room/leave-screen.store';
 import {
   finishCallQuality,
   recordNetworkSample,
   recordPeerCount,
   recordPollCounts,
   startCallQuality
-} from '../../src/lib/features/room/client/room/call-quality.ts';
-import { stubFetch } from '../fixtures/fetch.ts';
+} from '@/features/room/client/room/call-quality';
+import { stubFetch } from '../fixtures/fetch';
+import { renderWithApp } from '../helpers/render';
 
 const DAY = 24 * 60 * 60 * 1000;
 const T0 = Date.UTC(2026, 9, 17, 12);
@@ -40,23 +37,33 @@ const call: CallFeedbackCall = {
   quality: null
 };
 
+let feedback = useCallFeedbackStore(setActivePinia(createPinia()));
+
 beforeEach(() => {
   localStorage.clear();
   sessionStorage.clear();
-  callFeedback.call = null;
+  const pinia = createPinia();
+  setActivePinia(pinia);
+  feedback = useCallFeedbackStore(pinia);
 });
 
 afterEach(() => {
-  cleanup();
   vi.useRealTimers();
   vi.unstubAllGlobals();
   Reflect.deleteProperty(document, 'visibilityState');
 });
 
+/** Renders the prompt and points the test's store at the one the page uses. */
+async function renderPrompt(props: { hidden?: boolean } = {}) {
+  const view = await renderWithApp(CallFeedbackPrompt, { props });
+  feedback = useCallFeedbackStore(view.pinia);
+  return view;
+}
+
 /** A call ends and the person leaves it themselves. */
 function leave(at: number, finished: CallFeedbackCall = call): void {
-  noteCallFinished(finished, at);
-  offerCallFeedback(at + 200);
+  feedback.noteCallFinished(finished, at);
+  feedback.offerCallFeedback(at + 200);
 }
 
 test('the next question waits three days, doubling with every one skipped, at most a month', () => {
@@ -68,38 +75,38 @@ test('the next question waits three days, doubling with every one skipped, at mo
 
 test('only a call of a minute or more with somebody else in it is asked about', () => {
   leave(T0, { ...call, durationS: 40 });
-  expect(callFeedback.call).toBeNull();
+  expect(feedback.call).toBeNull();
   leave(T0, { ...call, peers: 0 });
-  expect(callFeedback.call).toBeNull();
+  expect(feedback.call).toBeNull();
   leave(T0);
-  expect(callFeedback.call).toEqual(call);
+  expect(feedback.call).toEqual(call);
 });
 
 test('a call that ended without the person leaving it is not asked about', () => {
-  noteCallFinished(call, T0);
-  offerCallFeedback(T0 + 60_000);
-  expect(callFeedback.call).toBeNull();
-  offerCallFeedback(T0 + 60_100);
-  expect(callFeedback.call).toBeNull();
+  feedback.noteCallFinished(call, T0);
+  feedback.offerCallFeedback(T0 + 60_000);
+  expect(feedback.call).toBeNull();
+  feedback.offerCallFeedback(T0 + 60_100);
+  expect(feedback.call).toBeNull();
 });
 
 test('after a question the next waits three days, and longer when it was skipped', () => {
   leave(T0);
-  skipCallFeedback();
-  expect(callFeedback.call).toBeNull();
+  feedback.skipCallFeedback();
+  expect(feedback.call).toBeNull();
 
   leave(T0 + 4 * DAY);
-  expect(callFeedback.call, 'a skipped question doubles the wait to six days').toBeNull();
+  expect(feedback.call, 'a skipped question doubles the wait to six days').toBeNull();
   leave(T0 + 6 * DAY + 1000);
-  expect(callFeedback.call).toEqual(call);
+  expect(feedback.call).toEqual(call);
 });
 
 test('an answer is sent with the call and resets the wait to three days', async () => {
   const { calls } = stubFetch({ 'POST /api/feedback/calls': { status: 201, body: { ok: true } } });
   leave(T0);
-  skipCallFeedback();
+  feedback.skipCallFeedback();
   leave(T0 + 7 * DAY);
-  await answerCallFeedback({ rating: 'bad', tags: ['echo_noise'], comment: '  эхо у Пети  ' });
+  await feedback.answerCallFeedback({ rating: 'bad', tags: ['echo_noise'], comment: '  эхо у Пети  ' });
   expect(calls).toEqual([
     {
       method: 'POST',
@@ -107,20 +114,20 @@ test('an answer is sent with the call and resets the wait to three days', async 
       body: { rating: 'bad', tags: ['echo_noise'], comment: 'эхо у Пети', call }
     }
   ]);
-  expect(callFeedback.call).toBeNull();
+  expect(feedback.call).toBeNull();
   leave(T0 + 10 * DAY + 1000);
-  expect(callFeedback.call).toEqual(call);
+  expect(feedback.call).toEqual(call);
 });
 
 test('a question asked right before the page goes to the lobby is waiting there', () => {
   leave(T0);
-  callFeedback.call = null; // the page unloads
-  restorePendingCallFeedback(T0 + 3000);
-  expect(callFeedback.call).toEqual(call);
+  feedback.call = null; // the page unloads
+  feedback.restorePendingCallFeedback(T0 + 3000);
+  expect(feedback.call).toEqual(call);
 
-  callFeedback.call = null;
-  restorePendingCallFeedback(T0 + 4000);
-  expect(callFeedback.call, 'it is picked up once').toBeNull();
+  feedback.call = null;
+  feedback.restorePendingCallFeedback(T0 + 4000);
+  expect(feedback.call, 'it is picked up once').toBeNull();
 });
 
 test('a call reports its largest company along with its network numbers', () => {
@@ -170,11 +177,11 @@ test('a call reports its largest company along with its network numbers', () => 
 
 test('a thumb opens what went wrong; the answer goes with the tags and the comment', async () => {
   const { calls } = stubFetch({ 'POST /api/feedback/calls': { status: 201, body: { ok: true } } });
-  callFeedback.call = call;
-  render(CallFeedbackPrompt);
+  await renderPrompt();
+  feedback.call = call;
 
   // One window in the middle of the page, focus on the first thumb.
-  expect(screen.getByRole('dialog', { name: 'Как прошёл звонок?' })).toBeTruthy();
+  expect(await screen.findByRole('dialog', { name: 'Как прошёл звонок?' })).toBeTruthy();
   await vi.waitFor(() => expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Хорошо' })));
   expect(screen.getByText('Звонок длился 25 мин')).toBeTruthy();
   expect(screen.queryByRole('button', { name: 'Отправить' })).toBeNull();
@@ -199,13 +206,13 @@ test('a thumb opens what went wrong; the answer goes with the tags and the comme
 
 test('the cross closes the question without an answer, and a chosen thumb is sent', async () => {
   const { calls } = stubFetch({ 'POST /api/feedback/calls': { status: 201, body: { ok: true } } });
-  callFeedback.call = call;
-  render(CallFeedbackPrompt);
-  await userEvent.click(screen.getByRole('button', { name: 'Закрыть' }));
-  expect(screen.queryByRole('heading', { name: 'Как прошёл звонок?' })).toBeNull();
+  await renderPrompt();
+  feedback.call = call;
+  await userEvent.click(await screen.findByRole('button', { name: 'Закрыть' }));
+  await vi.waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
   expect(calls).toHaveLength(0);
 
-  callFeedback.call = call;
+  feedback.call = call;
   await vi.waitFor(() => expect(screen.getByRole('button', { name: 'Хорошо' })).toBeTruthy());
   await userEvent.click(screen.getByRole('button', { name: 'Хорошо' }));
   await userEvent.click(screen.getByRole('button', { name: 'Закрыть' }));
@@ -215,25 +222,32 @@ test('the cross closes the question without an answer, and a chosen thumb is sen
 
 test('a click beside the window closes it as the cross does', async () => {
   const { calls } = stubFetch({});
+  await renderPrompt();
   leave(T0);
-  render(CallFeedbackPrompt);
-  await userEvent.click(screen.getByRole('dialog', { name: 'Как прошёл звонок?' }));
-  expect(callFeedback.call, 'a click inside keeps it').toEqual(call);
+  const dialog = await screen.findByRole('dialog', { name: 'Как прошёл звонок?' });
+  await userEvent.click(dialog);
+  expect(feedback.call, 'a click inside keeps it').toEqual(call);
 
-  await userEvent.click(screen.getByRole('presentation'));
-  expect(callFeedback.call).toBeNull();
+  const overlay = dialog.parentElement;
+  if (!overlay) throw new Error('dialog has no overlay');
+  // jsdom has no stylesheet, so the pointer-events rule of the overlay is not applied.
+  await userEvent.setup({ pointerEventsCheck: 0 }).click(overlay);
+  expect(feedback.call).toBeNull();
   expect(calls).toHaveLength(0);
   // Closed unanswered: the next question waits twice as long.
   leave(T0 + 4 * DAY);
-  expect(callFeedback.call).toBeNull();
+  expect(feedback.call).toBeNull();
 });
 
 test('on the leave screen the question is the bottom of that window, not a second one', async () => {
   const { calls } = stubFetch({ 'POST /api/feedback/calls': { status: 201, body: { ok: true } } });
-  openLeaveScreen({ roomId: 'kitchen', isStatic: false, guest: true });
-  callFeedback.call = call;
-  render(LeaveScreen);
-  render(CallFeedbackPrompt, { props: { hidden: leaveScreenUi.open } });
+  const view = await renderWithApp(LeaveScreen);
+  feedback = useCallFeedbackStore(view.pinia);
+  const leaveScreen = useLeaveScreenStore(view.pinia);
+  leaveScreen.openLeaveScreen({ roomId: 'kitchen', isStatic: false, guest: true });
+  feedback.call = call;
+  render(CallFeedbackPrompt, { props: { hidden: leaveScreen.open }, global: { plugins: [view.pinia, view.router] } });
+  await nextTick();
 
   const window = screen.getByRole('dialog', { name: 'Вы вышли из комнаты' });
   expect(screen.getAllByRole('dialog')).toHaveLength(1);
@@ -255,7 +269,6 @@ test('on the leave screen the question is the bottom of that window, not a secon
   expect(within(window).getByRole('button', { name: 'Создать аккаунт' })).toBeTruthy();
   await vi.waitFor(() => expect(calls).toHaveLength(1));
   expect(calls[0]?.body).toEqual({ rating: 'bad', tags: ['delay'], call });
-  leaveScreenUi.open = false;
 });
 
 function setVisibility(value: DocumentVisibilityState): void {
@@ -265,39 +278,40 @@ function setVisibility(value: DocumentVisibilityState): void {
 
 test('the question waits out a call, and goes away unanswered only after a minute in view', async () => {
   vi.useFakeTimers({ now: T0 });
+  const view = await renderPrompt({ hidden: true });
   leave(T0);
-  const view = render(CallFeedbackPrompt, { props: { hidden: true } });
-  expect(screen.queryByRole('heading', { name: 'Как прошёл звонок?' })).toBeNull();
+  await vi.advanceTimersByTimeAsync(0);
+  expect(screen.queryByRole('dialog')).toBeNull();
 
   await view.rerender({ hidden: false });
-  expect(screen.getByRole('heading', { name: 'Как прошёл звонок?' })).toBeTruthy();
+  expect(screen.getByRole('dialog', { name: 'Как прошёл звонок?' })).toBeTruthy();
   setVisibility('hidden');
   await vi.advanceTimersByTimeAsync(5 * 60_000);
-  expect(callFeedback.call, 'time in a hidden window does not count').toEqual(call);
+  expect(feedback.call, 'time in a hidden window does not count').toEqual(call);
 
   setVisibility('visible');
   await vi.advanceTimersByTimeAsync(60_000);
-  expect(callFeedback.call).toBeNull();
-  expect(screen.queryByRole('heading', { name: 'Как прошёл звонок?' })).toBeNull();
+  expect(feedback.call).toBeNull();
+  expect(screen.queryByRole('dialog')).toBeNull();
 
   // Going away unseen is no skip: the next question comes after the usual three days.
   leave(T0 + 3 * DAY + 1000);
-  expect(callFeedback.call).toEqual(call);
+  expect(feedback.call).toEqual(call);
 });
 
 test('a new call puts away an open question without counting it as skipped', () => {
   leave(T0);
-  dropCallFeedback();
-  expect(callFeedback.call).toBeNull();
+  feedback.dropCallFeedback();
+  expect(feedback.call).toBeNull();
   leave(T0 + 3 * DAY + 1000);
-  expect(callFeedback.call).toEqual(call);
+  expect(feedback.call).toEqual(call);
 });
 
 test('a leave before the next call was up is not taken for the previous call', () => {
-  noteCallFinished(call, T0);
-  noteCallFinished(null, T0 + 2000);
-  offerCallFeedback(T0 + 2200);
-  expect(callFeedback.call).toBeNull();
+  feedback.noteCallFinished(call, T0);
+  feedback.noteCallFinished(null, T0 + 2000);
+  feedback.offerCallFeedback(T0 + 2200);
+  expect(feedback.call).toBeNull();
 });
 
 test('with storage blocked the wait still holds while the page is open', () => {
@@ -315,17 +329,17 @@ test('with storage blocked the wait still holds while the page is open', () => {
   vi.stubGlobal('localStorage', blocked);
   vi.stubGlobal('sessionStorage', blocked);
   leave(T0);
-  expect(callFeedback.call).toEqual(call);
-  skipCallFeedback();
+  expect(feedback.call).toEqual(call);
+  feedback.skipCallFeedback();
   leave(T0 + DAY);
-  expect(callFeedback.call).toBeNull();
+  expect(feedback.call).toBeNull();
 });
 
 test('Escape closes the question, and the next question starts with nothing chosen', async () => {
-  callFeedback.call = call;
-  render(CallFeedbackPrompt);
-  await userEvent.click(screen.getByRole('button', { name: 'Плохо' }));
-  callFeedback.call = { ...call, roomId: 'hall' };
+  await renderPrompt();
+  feedback.call = call;
+  await userEvent.click(await screen.findByRole('button', { name: 'Плохо' }));
+  feedback.call = { ...call, roomId: 'hall' };
   await vi.waitFor(() =>
     expect(screen.getByRole('button', { name: 'Плохо' }).getAttribute('aria-pressed')).toBe('false')
   );
@@ -333,5 +347,5 @@ test('Escape closes the question, and the next question starts with nothing chos
 
   screen.getByRole('button', { name: 'Хорошо' }).focus();
   await userEvent.keyboard('{Escape}');
-  expect(callFeedback.call).toBeNull();
+  expect(feedback.call).toBeNull();
 });

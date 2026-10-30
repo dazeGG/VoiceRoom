@@ -6,7 +6,7 @@ import vm from 'node:vm';
 
 // Runs the real worklet source in a sandbox that stands in for the
 // AudioWorkletGlobalScope, then drives it with synthetic noise and "speech".
-const SOURCE = readFileSync(`${import.meta.dirname}/../static/audio-gate.worklet.js`, 'utf8');
+const SOURCE = readFileSync(`${import.meta.dirname}/../public/audio-gate.worklet.js`, 'utf8');
 const SAMPLE_RATE = 48_000;
 const QUANTUM = 128;
 

@@ -1,17 +1,17 @@
-import { cleanup, render, screen } from '@testing-library/svelte';
+import { screen } from '@testing-library/vue';
 import userEvent from '@testing-library/user-event';
-import { afterEach, expect, test, vi } from 'vitest';
-import LinkPreviewCard from '../../src/lib/shared/chat/LinkPreviewCard.svelte';
-import RoomInviteFriendList from '../../src/lib/shared/components/room-menu/RoomInviteFriendList.svelte';
+import { cleanup } from '@testing-library/vue';
+import { expect, test, vi } from 'vitest';
+import LinkPreviewCard from '@/shared/chat/LinkPreviewCard.vue';
+import RoomInviteFriendList from '@/shared/components/room-menu/RoomInviteFriendList.vue';
 import { friend as friendAnswer, publicUser } from '../fixtures/answers.ts';
 import { stubFetch } from '../fixtures/fetch.ts';
-
-afterEach(cleanup);
+import { renderWithApp } from '../helpers/render.ts';
 
 const KEY = `lp_${'a'.repeat(32)}.webp`;
 
-test('a link preview opens the link in a new tab without sharing this page, and shows the stored copy of its image', () => {
-  render(LinkPreviewCard, {
+test('a link preview opens the link in a new tab without sharing this page, and shows the stored copy of its image', async () => {
+  await renderWithApp(LinkPreviewCard, {
     props: {
       preview: {
         url: 'https://store.example/game',
@@ -30,8 +30,8 @@ test('a link preview opens the link in a new tab without sharing this page, and 
   expect(link.textContent).toContain('Игра');
 });
 
-test('an image key that is not a stored preview copy is not shown', () => {
-  render(LinkPreviewCard, {
+test('an image key that is not a stored preview copy is not shown', async () => {
+  await renderWithApp(LinkPreviewCard, {
     props: {
       preview: {
         url: 'https://x.example',
@@ -52,13 +52,13 @@ function friend(id: string, name: string, online: boolean) {
   });
 }
 
-test('the invite list puts online friends first, alphabetically, and disables those already in the room', () => {
-  render(RoomInviteFriendList, {
+test('the invite list puts online friends first, alphabetically, and disables those already in the room', async () => {
+  await renderWithApp(RoomInviteFriendList, {
     props: {
       friends: [friend('u-b', 'Борис', false), friend('u-v', 'Вера', true), friend('u-a', 'Анна', true)],
       roomId: 'room-a',
       presentUserIds: new Set(['u-a']),
-      close: vi.fn()
+      onClose: vi.fn()
     }
   });
   const items = screen.getAllByRole('menuitem');
@@ -75,8 +75,8 @@ test('inviting rings the friend into the room and closes the menu; a failure is 
   const { calls } = stubFetch({ 'POST /api/rooms/room-a/ring': { body: { ok: true } } });
   const close = vi.fn();
   const onToast = vi.fn();
-  render(RoomInviteFriendList, {
-    props: { friends: [friend('u-v', 'Вера', true)], roomId: 'room-a', close, onToast }
+  await renderWithApp(RoomInviteFriendList, {
+    props: { friends: [friend('u-v', 'Вера', true)], roomId: 'room-a', onClose: close, onToast }
   });
   await userEvent.click(screen.getByRole('menuitem'));
   expect(calls[0]).toMatchObject({ method: 'POST', url: '/api/rooms/room-a/ring', body: { userId: 'u-v' } });
@@ -85,14 +85,14 @@ test('inviting rings the friend into the room and closes the menu; a failure is 
 
   cleanup();
   stubFetch({ 'POST /api/rooms/room-a/ring': { status: 429, body: { ok: false, error: 'Слишком часто' } } });
-  render(RoomInviteFriendList, {
-    props: { friends: [friend('u-v', 'Вера', true)], roomId: 'room-a', close: vi.fn(), onToast }
+  await renderWithApp(RoomInviteFriendList, {
+    props: { friends: [friend('u-v', 'Вера', true)], roomId: 'room-a', onClose: vi.fn(), onToast }
   });
   await userEvent.click(screen.getByRole('menuitem'));
   expect(onToast).toHaveBeenLastCalledWith('Слишком часто');
 });
 
-test('with no friends the list says how to get some', () => {
-  render(RoomInviteFriendList, { props: { friends: [], roomId: 'room-a', close: vi.fn() } });
+test('with no friends the list says how to get some', async () => {
+  await renderWithApp(RoomInviteFriendList, { props: { friends: [], roomId: 'room-a', onClose: vi.fn() } });
   expect(screen.getByText('Добавьте друзей, чтобы позвать их')).toBeTruthy();
 });

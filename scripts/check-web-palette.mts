@@ -1,7 +1,6 @@
 #!/usr/bin/env node
-// Style check for the web apps, run by `npm run check`: backgrounds use the
-// canonical palette tokens declared in theme.css (apps/web) or _tokens.scss
-// (apps/web-vue) instead of one-off colours.
+// Style check for the web app, run by `npm run check`: backgrounds use the
+// canonical palette tokens declared in _tokens.scss instead of one-off colours.
 // Exits 1 and lists every violation as `file:line selector -> value`.
 
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
@@ -9,7 +8,7 @@ import { basename, relative, resolve } from 'node:path';
 
 import { blankComments } from './lib/blank-comments.mts';
 
-/** One app whose styles are checked. */
+/** The app whose styles are checked. */
 export interface PaletteApp {
   /** App directory; reported paths are relative to it. */
   root: string;
@@ -19,8 +18,6 @@ export interface PaletteApp {
   tokensFile: string;
   /** Extensions scanned for backgrounds. */
   sources: RegExp;
-  /** SCSS: rules nest, so a stylesheet is scanned with the nesting resolved. */
-  nested: boolean;
   /** First line of the report when the app has violations. */
   heading: string;
 }
@@ -28,19 +25,9 @@ export interface PaletteApp {
 export const webApp = (root: string): PaletteApp => ({
   root,
   sourceDir: 'src',
-  tokensFile: 'src/lib/shared/styles/theme.css',
-  sources: /\.(?:css|svelte)$/,
-  nested: false,
-  heading: 'Backgrounds must use the palette tokens in theme.css'
-});
-
-export const webVueApp = (root: string): PaletteApp => ({
-  root,
-  sourceDir: 'src',
   tokensFile: 'src/styles/_tokens.scss',
   sources: /\.(?:scss|vue)$/,
-  nested: true,
-  heading: 'apps/web-vue: backgrounds must use the palette tokens in _tokens.scss'
+  heading: 'Backgrounds must use the palette tokens in _tokens.scss'
 });
 
 // Surface tokens of the default theme; the tokens file must declare exactly these.
@@ -86,7 +73,7 @@ function sourceFiles(path: string, sources: RegExp): string[] {
 const lineAt = (source: string, index: number) => source.slice(0, index).split('\n').length;
 
 function styleFragments(path: string, source: string): Fragment[] {
-  if (path.endsWith('.css') || path.endsWith('.scss')) return [{ body: source, offset: 0, context: '' }];
+  if (path.endsWith('.scss')) return [{ body: source, offset: 0, context: '' }];
   const fragments: Fragment[] = [];
   for (const match of source.matchAll(/<style(?:\s[^>]*)?>(?<body>[\s\S]*?)<\/style>/g)) {
     const body = match.groups?.body ?? '';
@@ -117,22 +104,13 @@ function isAllowedBackground(selector: string, value: string): boolean {
 
 const normalizeValue = (value: string) => value.trim().replace(/\s+/g, ' ');
 
-/** Background declarations of a plain stylesheet, where a rule never holds another rule. */
-function flatDeclarations(fragment: Fragment): Declaration[] {
-  const blocks = fragment.context
-    ? [{ selector: fragment.context, body: fragment.body, index: 0 }]
-    : [...fragment.body.matchAll(/(?<selector>[^{}]+)\{(?<body>[^{}]*)\}/g)].map((match) => ({
-        selector: (match.groups?.selector ?? '').trim().replace(/\s+/g, ' '),
-        body: match.groups?.body ?? '',
-        index: match.index + match[0].indexOf(match.groups?.body ?? '')
-      }));
-  return blocks.flatMap((block) =>
-    [...block.body.matchAll(/\bbackground(?:-color|-image)?\s*:\s*(?<value>[^;}]+)/g)].map((declaration) => ({
-      selector: block.selector,
-      value: normalizeValue(declaration.groups?.value ?? ''),
-      index: block.index + declaration.index
-    }))
-  );
+/** Background declarations of a style attribute, which holds no rules. */
+function inlineDeclarations(fragment: Fragment): Declaration[] {
+  return [...fragment.body.matchAll(/\bbackground(?:-color|-image)?\s*:\s*(?<value>[^;}]+)/g)].map((declaration) => ({
+    selector: fragment.context,
+    value: normalizeValue(declaration.groups?.value ?? ''),
+    index: declaration.index
+  }));
 }
 
 /** `&` takes the parent selector; an at-rule block (@media, @include) keeps the parent's. */
@@ -198,7 +176,7 @@ export function paletteProblems(app: PaletteApp): string[] {
     const path = relative(app.root, absolute).split('\\').join('/');
     const source = readFileSync(absolute, 'utf8');
     for (const fragment of styleFragments(path, source)) {
-      const declarations = app.nested && !fragment.context ? nestedDeclarations(fragment) : flatDeclarations(fragment);
+      const declarations = fragment.context ? inlineDeclarations(fragment) : nestedDeclarations(fragment);
       for (const declaration of declarations) {
         if (isAllowedBackground(declaration.selector, declaration.value)) continue;
         problems.push(
@@ -212,12 +190,10 @@ export function paletteProblems(app: PaletteApp): string[] {
 
 if (import.meta.main) {
   const repoRoot = resolve(import.meta.dirname, '..');
-  let failed = false;
-  for (const app of [webApp(resolve(repoRoot, 'apps/web')), webVueApp(resolve(repoRoot, 'apps/web-vue'))]) {
-    const problems = paletteProblems(app);
-    if (problems.length === 0) continue;
-    failed = true;
+  const app = webApp(resolve(repoRoot, 'apps/web'));
+  const problems = paletteProblems(app);
+  if (problems.length > 0) {
     process.stderr.write(`${app.heading}:\n${problems.sort().join('\n')}\n`);
+    process.exit(1);
   }
-  if (failed) process.exit(1);
 }

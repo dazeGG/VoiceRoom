@@ -27,7 +27,7 @@ function readInput(): StopInput {
 const input = readInput();
 if (input.stop_hook_active) process.exit(0);
 
-const CHECKED = /\.(?:[cm]?[jt]s|svelte|css|json)$/;
+const CHECKED = /\.(?:[cm]?[jt]s|vue|s?css|json)$/;
 const SCOPE = ['--', 'apps', 'packages', 'scripts'];
 
 function git(args: string[]): string[] {

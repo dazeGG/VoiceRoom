@@ -5,12 +5,12 @@
 // only filled in silence is not counted as heard.
 
 import { afterEach, expect, test, vi } from 'vitest';
-import { freshImport } from '../helpers/fresh-module.ts';
-import { defined } from '../helpers/assert.ts';
+import { freshImport } from '../helpers/fresh-module';
+import { defined } from '../helpers/assert';
 
 afterEach(() => {
   vi.useRealTimers();
-  vi.doUnmock('../../src/lib/entities/room/room-realtime');
+  vi.doUnmock('@/entities/room/room-realtime');
 });
 
 type Entry = { id: string } & Record<string, unknown>;
@@ -20,10 +20,10 @@ const report = (entries: Entry[]) => ({
 
 test('two polls of growing counters add up to the exact loss, concealment and round trip of the call', async () => {
   vi.useFakeTimers();
-  vi.doMock('../../src/lib/entities/room/room-realtime', () => ({ updateVoicePeer: () => {} }));
-  const stats = await freshImport(() => import('../../src/lib/features/room/client/room/stats.ts'));
-  const { state } = await import('../../src/lib/features/room/client/core/state.svelte.ts');
-  const quality = await import('../../src/lib/features/room/client/room/call-quality.ts');
+  vi.doMock('@/entities/room/room-realtime', () => ({ updateVoicePeer: () => {} }));
+  const stats = await freshImport(() => import('@/features/room/client/room/stats'));
+  const { state } = await import('@/features/room/client/core/room-runtime.store');
+  const quality = await import('@/features/room/client/room/call-quality');
 
   let pollNo = 0;
   const readings = [
@@ -104,10 +104,10 @@ test('two polls of growing counters add up to the exact loss, concealment and ro
 
 test("the desktop app's CPU totals give VoiceRoom's share of the computer apart from the whole computer's", async () => {
   vi.useFakeTimers();
-  vi.doMock('../../src/lib/entities/room/room-realtime', () => ({ updateVoicePeer: () => {} }));
-  const stats = await freshImport(() => import('../../src/lib/features/room/client/room/stats.ts'));
-  const { state } = await import('../../src/lib/features/room/client/core/state.svelte.ts');
-  const quality = await import('../../src/lib/features/room/client/room/call-quality.ts');
+  vi.doMock('@/entities/room/room-realtime', () => ({ updateVoicePeer: () => {} }));
+  const stats = await freshImport(() => import('@/features/room/client/room/stats'));
+  const { state } = await import('@/features/room/client/core/room-runtime.store');
+  const quality = await import('@/features/room/client/room/call-quality');
 
   // Eight cores for 3 s are 24 000 ms of core time a poll; a game keeps 80 % of it busy.
   const readings = [

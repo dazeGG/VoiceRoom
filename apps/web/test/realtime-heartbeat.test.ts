@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'vitest';
 
-import { RealtimeHeartbeatWatchdog } from '../src/lib/api/realtime-heartbeat.ts';
+import { RealtimeHeartbeatWatchdog } from '@/api/realtime-heartbeat';
 
 test('heartbeat watchdog times out from the first unanswered ping', () => {
   let now = 1_000;

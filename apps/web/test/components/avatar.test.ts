@@ -1,10 +1,11 @@
-import { cleanup, render } from '@testing-library/svelte';
-import { afterEach, expect, test } from 'vitest';
-import Avatar from '../../src/lib/shared/ui/Avatar/Avatar.svelte';
+import { render } from '@testing-library/vue';
+import { nextTick } from 'vue';
+import { expect, test } from 'vitest';
+import Avatar from '@/shared/ui/Avatar/Avatar.vue';
 
-afterEach(cleanup);
-
-const dot = (container: HTMLElement) => container.querySelector<HTMLElement>('.ui-avatar-dot');
+const dot = (container: Element) => container.querySelector('.ui-avatar__dot');
+const statusOf = (element: Element | null) =>
+  ['dnd', 'afk', 'online', 'offline'].find((status) => element?.classList.contains(`ui-avatar__dot--${status}`));
 
 test('the presence dot shows do-not-disturb over away over online, and offline otherwise', () => {
   const cases: Array<[Record<string, boolean>, string]> = [
@@ -14,9 +15,9 @@ test('the presence dot shows do-not-disturb over away over online, and offline o
     [{ online: false }, 'offline']
   ];
   for (const [props, status] of cases) {
-    const { container, unmount } = render(Avatar, { props: { name: 'Анна', showDot: true, ...props } });
-    expect(dot(container)?.dataset.status).toBe(status);
-    unmount();
+    const view = render(Avatar, { props: { name: 'Анна', showDot: true, ...props } });
+    expect(statusOf(dot(view.container))).toBe(status);
+    view.unmount();
   }
 });
 
@@ -30,18 +31,19 @@ test('an uploaded image is shown and falls back to the initial when it fails to 
   const image = container.querySelector('img');
   expect(image?.getAttribute('src')).toBe('/avatars/b.webp');
   image?.dispatchEvent(new Event('error'));
-  await Promise.resolve();
+  await nextTick();
   expect(container.querySelector('img')).toBeNull();
   // The first letter, not half of the emoji.
   expect(container.textContent?.trim()).toBe('Б');
 });
 
 test('a new image gets a fresh attempt after the previous one failed', async () => {
-  const { container, rerender } = render(Avatar, { props: { name: 'Анна', src: '/avatars/old.webp' } });
+  const view = render(Avatar, { props: { name: 'Анна', src: '/avatars/old.webp' } });
+  const { container } = view;
   container.querySelector('img')?.dispatchEvent(new Event('error'));
-  await Promise.resolve();
+  await nextTick();
   expect(container.querySelector('img')).toBeNull();
 
-  await rerender({ name: 'Анна', src: '/avatars/new.webp' });
+  await view.rerender({ name: 'Анна', src: '/avatars/new.webp' });
   expect(container.querySelector('img')?.getAttribute('src')).toBe('/avatars/new.webp');
 });

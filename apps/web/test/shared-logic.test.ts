@@ -1,8 +1,8 @@
 import { expect, test } from 'vitest';
-import { frequentReactionKey, rankFrequentReactions } from '../src/lib/shared/chat/frequent-reactions.ts';
-import { effectivePresenceStatus, presenceStatusLabel } from '../src/lib/shared/presence.ts';
-import { parseChatLinks } from '../src/lib/shared/utils/linkify.ts';
-import { clearScreenAttendance, setScreenAttendance } from '../src/lib/features/room/client/model/screen-attendance.ts';
+import { frequentReactionKey, rankFrequentReactions } from '../src/shared/chat/frequent-reactions.ts';
+import { effectivePresenceStatus, presenceStatusLabel } from '../src/shared/presence.ts';
+import { parseChatLinks } from '../src/shared/utils/linkify.ts';
+import { clearScreenAttendance, setScreenAttendance } from '../src/features/room/client/model/screen-attendance.ts';
 import { participant } from './fixtures/participant.ts';
 
 test('chat links keep hosts, paths and query strings, drop trailing punctuation, and never link scripts', () => {

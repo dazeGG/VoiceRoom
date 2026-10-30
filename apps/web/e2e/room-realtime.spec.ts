@@ -72,7 +72,7 @@ test('an owner delete propagates live to another participant without reload', as
   await dialog.getByRole('button', { name: 'Удалить навсегда' }).click();
   await ownerPage.waitForURL('**/', { timeout: 15_000 });
 
-  await expect(guestPage.locator('body')).toHaveAttribute('data-screen', 'not-found', { timeout: 20_000 });
+  await expect(guestPage.locator('body')).toHaveClass(/\bscreen--not-found\b/, { timeout: 20_000 });
   await expect(guestPage.locator('#notFoundScreen')).toBeVisible();
   await expect(guestPage.locator('#missingRoomCode')).toHaveText(roomId);
 

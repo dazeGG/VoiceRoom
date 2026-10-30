@@ -26,11 +26,11 @@ async function phone(browser: Browser, baseURL: string | undefined): Promise<Bro
 }
 
 async function expectJoinedPhoneRoom(page: Page): Promise<void> {
-  await expect(page.locator('html')).toHaveAttribute('data-platform-class', 'mobile');
+  await expect(page.locator('html')).toHaveClass(/\bplatform--mobile\b/);
   await expect(page.getByRole('main', { name: 'Неподдерживаемое устройство' })).toHaveCount(0);
-  await expect(page.locator('.status-pill[data-state="connected"]')).toBeAttached({ timeout: 30_000 });
+  await expect(page.locator('.room-topbar__status--connected')).toBeAttached({ timeout: 30_000 });
   await expect(page.getByRole('note')).toHaveText('Звонок идёт, пока браузер открыт и экран включён');
-  await expect(page.locator('.screen-button')).toBeHidden();
+  await expect(page.locator('.room-dock__button--screen')).toBeHidden();
 
   // Names what sticks out when it fails, so a regression points at its element.
   const overflow = await page.evaluate(() => {
@@ -50,10 +50,14 @@ async function expectJoinedPhoneRoom(page: Page): Promise<void> {
   ).toBeLessThanOrEqual(0);
   // With no camera on the phone keeps the room stage's 16:9 tiles, edge to edge.
   const viewport = defined(page.viewportSize(), 'viewport');
-  const mainTile = await boxOf(page.locator('.mc-tile:not([data-variant="pip"])').first());
+  const mainTile = await boxOf(page.locator('.mobile-call-tile:not(.mobile-call-tile--pip)').first());
   expect(mainTile.width).toBeGreaterThan(viewport.width * 0.9);
   expect(mainTile.width / mainTile.height, 'main tile shape').toBeCloseTo(16 / 9, 1);
-  for (const selector of ['.mc-dock-mic', '.mc-dock-output', '.mc-dock-leave']) {
+  for (const selector of [
+    '.mobile-call-dock__button--mic',
+    '.mobile-call-dock__button--output',
+    '.mobile-call-dock__button--leave'
+  ]) {
     const box = await boxOf(page.locator(selector).first());
     expect(box.width, `${selector} width`).toBeGreaterThanOrEqual(44);
     expect(box.height, `${selector} height`).toBeGreaterThanOrEqual(44);
@@ -87,12 +91,13 @@ test('a guest on a phone joins a room, chats, and stays on the room page after l
       const call = guest.locator('.mobile-call');
       const showControls = guest.getByRole('button', { name: 'Показать управление' });
       // The controls hide on their own after 5 s; the steps above may have taken that long.
-      if ((await call.getAttribute('data-chrome')) === 'hidden') await showControls.click();
-      await expect(call).toHaveAttribute('data-chrome', 'visible');
-      await guest.locator('.mc-tile:not([data-variant="pip"])').first().click();
-      await expect(call).toHaveAttribute('data-chrome', 'hidden');
+      const chromeHidden = /\bmobile-call--chrome-hidden\b/;
+      if (chromeHidden.test((await call.getAttribute('class')) ?? '')) await showControls.click();
+      await expect(call).not.toHaveClass(chromeHidden);
+      await guest.locator('.mobile-call-tile:not(.mobile-call-tile--pip)').first().click();
+      await expect(call).toHaveClass(chromeHidden);
       await showControls.click();
-      await expect(call).toHaveAttribute('data-chrome', 'visible');
+      await expect(call).not.toHaveClass(chromeHidden);
     });
 
     await test.step('guest chats from the phone', async () => {
@@ -104,7 +109,7 @@ test('a guest on a phone joins a room, chats, and stays on the room page after l
       await expect(guest.getByText('привет с телефона').last()).toBeVisible({ timeout: 15_000 });
       // Paged history is account-only and answered a guest with 401 «Room is not
       // available», which the panel rendered as a chat error.
-      await expect(guest.locator('.chat-rail-error')).toHaveCount(0);
+      await expect(guest.locator('.room-chat-panel__error')).toHaveCount(0);
       // On a narrow screen the chat covers the heading; it closes from its own header.
       await guest.getByRole('button', { name: 'Закрыть панель' }).click();
       await expect(composer).toBeHidden();
@@ -140,7 +145,7 @@ test('a signed-in phone gets the standalone room with its account, never the lob
     await member.goto(`/r/${roomId}`);
     await expectJoinedPhoneRoom(member);
     await expect(member.locator('#guestNameInput')).toBeHidden();
-    await expect(member.locator('.lv-card')).toHaveCount(0);
+    await expect(member.locator('.voice-home__card')).toHaveCount(0);
     await expect(member.getByRole('complementary', { name: 'Создать аккаунт' })).toHaveCount(0);
 
     await member.getByRole('button', { name: 'Покинуть звонок' }).click();

@@ -1,15 +1,10 @@
-import { cleanup, render, screen } from '@testing-library/svelte';
+import { render, screen } from '@testing-library/vue';
 import userEvent from '@testing-library/user-event';
-import { flushSync } from 'svelte';
-import { afterEach, expect, test } from 'vitest';
-import PinnedMessagesBar from '../../src/lib/features/room/components/PinnedMessagesBar.svelte';
-import { applyRoomPinsEvent, resetRoomPins, roomPins } from '../../src/lib/features/room/pins.svelte';
-import type { PinnedMessage } from '../../src/lib/api/pins';
-
-afterEach(() => {
-  cleanup();
-  resetRoomPins();
-});
+import { createPinia, setActivePinia } from 'pinia';
+import { expect, test } from 'vitest';
+import PinnedMessagesBar from '@/features/room/components/PinnedMessagesBar.vue';
+import { useRoomPinsStore } from '@/features/room/pins.store';
+import type { PinnedMessage } from '@/api/pins';
 
 function pin(messageId: string, text: string): PinnedMessage {
   return {
@@ -26,24 +21,26 @@ function pin(messageId: string, text: string): PinnedMessage {
 
 test('the strip folds back when the last pin goes, and a new pin shows as a count again', async () => {
   const user = userEvent.setup();
+  const pinia = createPinia();
+  setActivePinia(pinia);
+  const roomPins = useRoomPinsStore(pinia);
   roomPins.roomId = 'room';
-  applyRoomPinsEvent('room', { pins: [pin('m1', 'первое'), pin('m2', 'второе')] });
-  render(PinnedMessagesBar, { props: { onJump: () => {}, onUnpin: () => {} } });
+  roomPins.applyRoomPinsEvent('room', { pins: [pin('m1', 'первое'), pin('m2', 'второе')] });
+  render(PinnedMessagesBar, { global: { plugins: [pinia] } });
 
   await user.click(screen.getByRole('button', { name: /Закреплённые/ }));
   expect(screen.getByText('первое')).toBeTruthy();
 
-  applyRoomPinsEvent('room', { pins: [pin('m2', 'второе')] });
-  flushSync();
-  expect(screen.getByText('второе')).toBeTruthy();
+  roomPins.applyRoomPinsEvent('room', { pins: [pin('m2', 'второе')] });
+  expect(await screen.findByText('второе')).toBeTruthy();
   expect(screen.queryByText('первое')).toBeNull();
 
-  applyRoomPinsEvent('room', { pins: [] });
-  flushSync();
+  roomPins.applyRoomPinsEvent('room', { pins: [] });
+  await Promise.resolve();
   expect(screen.queryByRole('button', { name: /Закреплённые/ })).toBeNull();
 
-  applyRoomPinsEvent('room', { pins: [pin('m3', 'третье')] });
-  flushSync();
-  expect(screen.getByRole('button', { name: /Закреплённые/ }).getAttribute('aria-expanded')).toBe('false');
+  roomPins.applyRoomPinsEvent('room', { pins: [pin('m3', 'третье')] });
+  const toggle = await screen.findByRole('button', { name: /Закреплённые/ });
+  expect(toggle.getAttribute('aria-expanded')).toBe('false');
   expect(screen.queryByText('третье')).toBeNull();
 });

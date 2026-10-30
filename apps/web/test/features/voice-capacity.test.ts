@@ -1,9 +1,9 @@
 import { expect, test, vi } from 'vitest';
 
-vi.mock('../../src/lib/features/room/client/ui/toast', () => ({ showToast: vi.fn() }));
+vi.mock('@/features/room/client/ui/toast', () => ({ showToast: vi.fn() }));
 
-const { showToast } = await import('../../src/lib/features/room/client/ui/toast');
-const { createVoiceEventHandler } = await import('../../src/lib/features/room/client/room/voice-events');
+const { showToast } = await import('@/features/room/client/ui/toast');
+const { createVoiceEventHandler } = await import('@/features/room/client/room/voice-events');
 
 function handler() {
   const room = { leaveRoom: vi.fn(), showModeration: vi.fn(), showNotFound: vi.fn() };

@@ -2,17 +2,16 @@
 // attribution the emoji and geolocation licences require, open on a phone, and
 // the sign-up form points to them.
 
-import { cleanup, render, screen, within } from '@testing-library/svelte';
-import { afterEach, beforeEach, expect, test, vi } from 'vitest';
-import AuthDialog from '../../src/lib/features/auth/AuthDialog.svelte';
-import { session } from '../../src/lib/features/auth/session.svelte';
-import Licenses from '../../src/lib/features/legal/Licenses.svelte';
-import PrivacyPolicy from '../../src/lib/features/legal/PrivacyPolicy.svelte';
-import TermsOfService from '../../src/lib/features/legal/TermsOfService.svelte';
-import { isMobileRoute } from '../../src/lib/platform/mobile-routes.ts';
-import { instanceOf } from '../helpers/assert.ts';
-
-vi.mock('$app/navigation', () => ({ goto: vi.fn(async () => {}) }));
+import { screen, within } from '@testing-library/vue';
+import { beforeEach, expect, test, vi } from 'vitest';
+import AuthDialog from '@/features/auth/AuthDialog.vue';
+import { useSessionStore } from '@/features/auth/session.store';
+import Licenses from '@/features/legal/Licenses.vue';
+import PrivacyPolicy from '@/features/legal/PrivacyPolicy.vue';
+import TermsOfService from '@/features/legal/TermsOfService.vue';
+import { isMobileRoute } from '@/platform/mobile-routes';
+import { instanceOf } from '../helpers/assert';
+import { renderWithApp } from '../helpers/render';
 
 beforeEach(() => {
   for (const [name, open] of [
@@ -27,12 +26,10 @@ beforeEach(() => {
       }
     });
   }
-  session.loaded = true;
 });
-afterEach(cleanup);
 
-test('the privacy policy names the operator, the contact and the retention periods', () => {
-  const { container } = render(PrivacyPolicy);
+test('the privacy policy names the operator, the contact and the retention periods', async () => {
+  const { container } = await renderWithApp(PrivacyPolicy);
   const text = container.textContent ?? '';
   expect(text).toContain('Ефремов Владимир Владимирович');
   expect(text).toContain('152-ФЗ');
@@ -53,8 +50,8 @@ test('the privacy policy names the operator, the contact and the retention perio
   );
 });
 
-test('the terms set the minimum age and say how to report', () => {
-  const { container } = render(TermsOfService);
+test('the terms set the minimum age and say how to report', async () => {
+  const { container } = await renderWithApp(TermsOfService);
   const text = container.textContent ?? '';
   expect(text).toContain('с 14 лет');
   expect(text).toContain('«Пожаловаться»');
@@ -64,8 +61,8 @@ test('the terms set the minimum age and say how to report', () => {
   );
 });
 
-test('the licences page carries the Twemoji and DB-IP attribution', () => {
-  render(Licenses);
+test('the licences page carries the Twemoji and DB-IP attribution', async () => {
+  await renderWithApp(Licenses);
   const twemoji = instanceOf(screen.getByRole('link', { name: 'Twemoji' }).closest('li'), HTMLElement, 'Twemoji');
   expect(twemoji.textContent).toContain('© Twitter, Inc.');
   expect(within(twemoji).getByRole('link', { name: 'CC BY 4.0' }).getAttribute('href')).toBe(
@@ -81,8 +78,9 @@ test('a phone may open the legal pages but still not the account screens', () =>
 });
 
 test('the sign-up form links the terms and the policy, and the sign-in form does not', async () => {
-  const props = { onClose: vi.fn(), onModeChange: vi.fn(), onAuthenticated: vi.fn() };
-  const signUp = render(AuthDialog, { props: { ...props, mode: 'register' } });
+  const props = { onAuthenticated: vi.fn() };
+  const signUp = await renderWithApp(AuthDialog, { props: { ...props, mode: 'register' } });
+  useSessionStore().loaded = true;
   expect(screen.getByText(/вам исполнилось 14 лет/)).toBeTruthy();
   expect(screen.getByRole('link', { name: 'Пользовательское соглашение', hidden: true }).getAttribute('href')).toBe(
     '/terms'
@@ -94,6 +92,6 @@ test('the sign-up form links the terms and the policy, and the sign-in form does
   await new Promise((resolve) => setTimeout(resolve, 0));
   signUp.unmount();
 
-  render(AuthDialog, { props: { ...props, mode: 'login' } });
+  await renderWithApp(AuthDialog, { props: { ...props, mode: 'login' } });
   expect(screen.queryByText(/вам исполнилось 14 лет/)).toBeNull();
 });

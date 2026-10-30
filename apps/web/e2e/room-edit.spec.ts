@@ -33,7 +33,7 @@ test('owner can rename a room, reflected in-room and in the lobby', async ({ pag
 
   // Back in the lobby the card shows the new name.
   await page.goto('/');
-  const card = page.locator('.lv-card', { hasText: newName }).first();
+  const card = page.locator('.voice-home__card', { hasText: newName }).first();
   await expect(card).toBeVisible({ timeout: 15_000 });
-  await expect(card.locator('.lv-row-name')).toHaveText(newName);
+  await expect(card.locator('.voice-home__room-name')).toHaveText(newName);
 });

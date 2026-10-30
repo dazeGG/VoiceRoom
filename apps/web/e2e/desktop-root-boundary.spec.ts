@@ -103,7 +103,7 @@ test('G18-A02 narrow desktop remains allowed', async ({ browser }) => {
     await page.goto('/login');
     await expect(page.getByRole('dialog', { name: 'Вход' })).toBeVisible();
     await expect(page.getByRole('main', { name: 'Неподдерживаемое устройство' })).toHaveCount(0);
-    await expect(page.locator('html')).toHaveAttribute('data-desktop-boundary', 'allowed');
+    await expect(page.locator('html')).toHaveClass(/\bdesktop-boundary--allowed\b/);
   } finally {
     await context.close();
   }

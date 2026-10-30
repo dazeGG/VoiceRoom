@@ -1,14 +1,14 @@
 import { test } from 'vitest';
-import { freshImport } from './helpers/fresh-module.ts';
-import type * as PresenceIdle from '../src/lib/shared/presence-idle.ts';
-import type { PresenceIdleSnapshot } from '../src/lib/shared/presence-idle.ts';
+import { freshImport } from './helpers/fresh-module';
+import type * as PresenceIdle from '@/shared/presence-idle';
+import type { PresenceIdleSnapshot } from '@/shared/presence-idle';
 
 // A stand-in for the browser globals the idle tracker reads.
 type IdleScope = Parameters<typeof PresenceIdle.hasGrantedBrowserIdlePermission>[0];
 import assert from 'node:assert/strict';
 
 async function loadPresenceIdle() {
-  return freshImport(() => import('../src/lib/shared/presence-idle.ts'));
+  return freshImport(() => import('@/shared/presence-idle'));
 }
 
 test('automatic presence policy only restores idle-driven away', async () => {
