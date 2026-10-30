@@ -1,0 +1,37 @@
+// RoomPreviewDock (features/home/components/lobby/RoomPreviewDock.vue): where the call dock sits in the room
+// before the viewer has joined: a note and one way in.
+//
+// Svelte class -> BEM class
+//   .lobby-preview-dock                   -> .room-preview-dock
+//   .lobby-preview-dock-note              -> .room-preview-dock__note
+
+.room-preview-dock {
+  position: absolute;
+  right: 20px;
+  bottom: 20px;
+  left: 20px;
+  z-index: 6;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  width: fit-content;
+  max-width: calc(100% - 40px);
+  margin-inline: auto;
+  padding: 8px 8px 8px 18px;
+  border: 1px solid var(--vr-line-strong);
+  border-radius: 18px;
+  background: var(--vr-dock-bg);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  box-shadow: var(--vr-shadow-dock);
+}
+
+.room-preview-dock__note {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--vr-text-2);
+  font-size: 13.5px;
+}

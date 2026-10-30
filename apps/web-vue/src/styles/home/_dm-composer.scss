@@ -1,0 +1,77 @@
+// DmComposer (features/home/components/lobby/dm/DmComposer.vue): the compose field of a direct-message thread.
+//
+// Svelte class -> BEM class
+//   .lobby-dm-compose                     -> .dm-composer
+//   .lobby-dm-compose-row.attachment-compose-field -> .dm-composer__row.attachment-compose
+//   .lobby-dm-input.lobby-dm-textarea     -> .dm-composer__input
+//   .lobby-dm-send                        -> .dm-composer__send
+
+.dm-composer {
+  position: relative;
+  flex: none;
+  padding: 14px 24px 20px;
+  --chat-typing-inset: 26px;
+}
+
+.dm-composer__row {
+  display: flex;
+  align-items: stretch;
+}
+
+.dm-composer__input {
+  --composer-placeholder: var(--vr-text-3);
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+  border: 1px solid var(--vr-line-strong);
+  border-radius: 13px;
+  padding: 13px 16px 13px 8px;
+  background: var(--vr-bg);
+  color: var(--vr-text);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.15s ease;
+  resize: none;
+
+  // The field grows with its text up to the cap, then scrolls.
+  box-sizing: border-box;
+  min-height: 48px;
+  max-height: 140px;
+  overflow-y: auto;
+  line-height: 1.35;
+
+  &::placeholder {
+    color: var(--vr-text-3);
+  }
+
+  &:focus {
+    border-color: var(--focus-border);
+    box-shadow: none;
+  }
+}
+
+.dm-composer__send {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  margin: 6px 6px 6px 0;
+  border: 0;
+  border-radius: 10px;
+  background: var(--vr-accent);
+  color: var(--vr-accent-ink);
+  cursor: pointer;
+  transition: background 0.15s ease;
+
+  &:hover:not(:disabled) {
+    background: var(--vr-accent-hover);
+  }
+
+  &:disabled {
+    background: var(--vr-surface-3);
+    color: var(--vr-text-3);
+    cursor: default;
+  }
+}
