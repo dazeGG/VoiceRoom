@@ -380,6 +380,16 @@ function isRenamedToTypeScript(value: string, current: Set<string>, fileExists: 
   return current.has(`${stem}.ts`) || current.has(`${stem.replace(LAYER_SUFFIX, '.$1')}.ts`);
 }
 
+// The Svelte web kept its modules under apps/web/src/lib/; the Vue web keeps
+// the same modules one level up. The entry carries over the same way, once the
+// file under lib/ is gone.
+const SVELTE_LIB = 'apps/web/src/lib/';
+
+function isMovedOutOfSvelteLib(value: string, current: Set<string>, fileExists: FileExists) {
+  if (!value.startsWith(SVELTE_LIB) || fileExists(value)) return false;
+  return current.has(`apps/web/src/${value.slice(SVELTE_LIB.length)}`);
+}
+
 function assertPolicySuperset(
   currentValues: string[],
   baseValues: string[],
@@ -388,7 +398,12 @@ function assertPolicySuperset(
 ) {
   const current = new Set(currentValues.map(normalizePath));
   for (const value of baseValues.map(normalizePath)) {
-    if (current.has(value) || isRenamedToTypeScript(value, current, fileExists)) continue;
+    if (
+      current.has(value) ||
+      isRenamedToTypeScript(value, current, fileExists) ||
+      isMovedOutOfSvelteLib(value, current, fileExists)
+    )
+      continue;
     throw new Error(`${label} may not remove or narrow protected-base policy entry: ${value}`);
   }
 }
