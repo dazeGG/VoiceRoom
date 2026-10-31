@@ -408,6 +408,44 @@ test('G08-A03d2 a layer-named successor (-service.js to .service.ts) carries the
   );
 });
 
+test('G08-A03d3 a web module moved out of src/lib/ carries its entry once the old file is gone', () => {
+  const legacy = 'apps/web/src/lib/features/room/client/media/screen-receiver-demand.ts';
+  const moved = 'apps/web/src/features/room/client/media/screen-receiver-demand.ts';
+  const base = thresholdFixture({
+    strictBranchPaths: [legacy],
+    businessPathPatterns: [...thresholds.businessPathPatterns, legacy]
+  });
+  const relocated = thresholdFixture({
+    strictBranchPaths: [moved],
+    businessPathPatterns: [...thresholds.businessPathPatterns, moved]
+  });
+  const summary = {
+    ...greenSummary,
+    files: { ...greenSummary.files, [moved]: { lines: { pct: 100 }, branches: { pct: 100 } } }
+  };
+  const check = (thresholdsUnderTest: CoverageThresholds, fileExists: (file: string) => boolean) =>
+    enforceCoverage({ coverageSummary: summary, thresholds: thresholdsUnderTest, baseThresholds: base, fileExists });
+
+  assert.equal(check(relocated, () => false).ratchetMode, 'protected-base-ratchet');
+  assert.throws(
+    () => check(relocated, () => true),
+    /may not remove or narrow protected-base policy entry: apps\/web\/src\/lib\/features/i
+  );
+  // Only the lib/ segment may go; another place is a removal.
+  const elsewhere = 'apps/web/src/features/room/screen-receiver-demand.ts';
+  assert.throws(
+    () =>
+      check(
+        thresholdFixture({
+          strictBranchPaths: [elsewhere],
+          businessPathPatterns: [...thresholds.businessPathPatterns, elsewhere]
+        }),
+        () => false
+      ),
+    /may not remove or narrow protected-base policy entry/i
+  );
+});
+
 test('G08-A03e a .ts exclusion may only replace the .js/.mjs exclusions of a module that is gone', () => {
   const base = thresholdFixture({
     ignoredPathPatterns: [
