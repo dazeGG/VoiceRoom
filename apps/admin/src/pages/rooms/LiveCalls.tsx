@@ -8,7 +8,7 @@ import type { LiveRoom, LiveRoomPeer } from '@voice-room/shared/contracts/admin'
 import { formatPeople, formatSince } from '../../format.ts';
 import { Avatar, AvatarStack, Pill } from '../../ui/index.tsx';
 import { AccountName, ClientIcon, Origin, RoomTitle } from './room-bits.tsx';
-import { NETWORK_LABELS } from './network-bar.tsx';
+import { CAUSE_LABELS, NETWORK_LABELS } from './network-bar.tsx';
 
 const COLUMNS = '28px minmax(220px, 1.6fr) minmax(200px, 1.2fr) 110px minmax(130px, 0.9fr) minmax(170px, 1fr) 36px';
 const PEER_COLUMNS = 'minmax(200px, 1.2fr) minmax(240px, 1.6fr) minmax(150px, 0.9fr) 90px';
@@ -96,6 +96,7 @@ function PeerRow({
           <span className="live-word live-network" data-net={peer.network}>
             <span className="net-dot" data-net={peer.network} aria-hidden="true" />
             {NETWORK_LABELS[peer.network]}
+            {peer.cause ? ` · ${CAUSE_LABELS[peer.cause]}` : ''}
           </span>
         ) : null}
       </span>

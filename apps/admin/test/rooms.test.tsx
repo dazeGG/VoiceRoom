@@ -9,7 +9,14 @@ import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/re
 import userEvent from '@testing-library/user-event';
 import { useState } from 'react';
 import { afterEach, expect, test, vi } from 'vitest';
-import type { LiveRoom, LiveRooms, RoomCall, RoomCalls, RoomStay } from '@voice-room/shared/contracts/admin';
+import type {
+  LiveRoom,
+  LiveRooms,
+  RoomCall,
+  RoomCalls,
+  RoomStay,
+  VoiceMinute
+} from '@voice-room/shared/contracts/admin';
 import { RoomsPage, type HistoryRoom } from '../src/pages/RoomsPage.tsx';
 import { stubApi, renderAs, type Call, type Reply } from './helpers/harness.tsx';
 
@@ -68,7 +75,8 @@ function kitchen(): LiveRoom {
         guestId: '6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b',
         ipKey: 'fedcba9876543210',
         location: null,
-        network: 'unstable'
+        network: 'unstable',
+        cause: 'hears_badly'
       }
     ]
   };
@@ -156,9 +164,9 @@ test('a live room opens its people: accounts by login, guests by name, and an ac
   expect(within(guestPeer).getByText('экран')).toBeTruthy();
   expect(within(guestPeer).getByText('камера')).toBeTruthy();
   expect(within(alicePeer).queryByText('камера')).toBeNull();
-  // A shaky network is said; a good one stays quiet.
-  expect(within(guestPeer).getByText('сеть нестабильна')).toBeTruthy();
-  expect(within(alicePeer).queryByText(/сеть/)).toBeNull();
+  // A shaky voice is said with whose side it is on; a good one stays quiet.
+  expect(within(guestPeer).getByText('голос нестабилен · плохо слышит других')).toBeTruthy();
+  expect(within(alicePeer).queryByText(/голос|связь/)).toBeNull();
   // Where each one sits: the desktop app, a phone or a browser.
   expect(within(alicePeer).getByLabelText('приложение')).toBeTruthy();
   expect(within(guestPeer).getByLabelText('телефон')).toBeTruthy();
@@ -321,7 +329,7 @@ test('a call shows its span and length, and opens to who was there and when', as
   expect(within(guestRow).getByText('1 ч 15 мин')).toBeTruthy();
 });
 
-test("a stay's bar is coloured by how its network went, and grey where the client never said", async () => {
+test("an older stay's bar is coloured by its client's own changes, and grey where it never said", async () => {
   const startedAt = new Date(2026, 9, 15, 14, 30).getTime();
   stubApi({
     'GET /api/admin/rooms': live([]),
@@ -352,13 +360,71 @@ test("a stay's bar is coloured by how its network went, and grey where the clien
   const stretches = (row: HTMLElement) =>
     [...row.querySelectorAll('.net-stretch')].map((stretch) => stretch.getAttribute('title'));
   expect(stretches(aliceRow)).toEqual([
-    '14:30–14:50 · сеть в порядке',
-    '14:50–14:55 · сеть нестабильна',
-    '14:55–15:00 · сеть плохая',
-    '15:00–15:30 · сеть в порядке'
+    '14:30–14:50 · голос в порядке',
+    '14:50–14:55 · голос нестабилен',
+    '14:55–15:00 · плохая связь',
+    '15:00–15:30 · голос в порядке'
   ]);
-  expect(stretches(guestRow)).toEqual(['14:40–15:20 · нет данных о сети']);
-  expect(within(table).getByText('сеть нестабильна')).toBeTruthy();
+  expect(stretches(guestRow)).toEqual(['14:40–15:20 · нет данных']);
+  expect(within(table).getByText('голос нестабилен')).toBeTruthy();
+});
+
+test("a stay's bar shows its voice minute by minute with the minute's numbers, grey where none came", async () => {
+  const startedAt = new Date(2026, 9, 15, 14, 30, 20).getTime();
+  const minuteAt = (n: number) => new Date(2026, 9, 15, 14, 30 + n).getTime();
+  const quiet = { concealedPct: 0, gapsPerMin: 0 };
+  const minute = (n: number, level: 'good' | 'unstable' | 'bad' | null, extra: Partial<VoiceMinute> = {}) => ({
+    at: minuteAt(n),
+    level,
+    polls: { good: 20, unstable: 0, bad: 0 },
+    heard: quiet,
+    heardBy: quiet,
+    uplinkLossPct: 0,
+    rttMs: 40,
+    jitterBufferMs: 60,
+    transport: 'udp',
+    ...extra
+  });
+  stubApi({
+    'GET /api/admin/rooms': live([]),
+    'GET /api/admin/rooms/calls': history([
+      call('c-min', [
+        stay('s-a', {
+          account: alice,
+          joinedAt: startedAt,
+          leftAt: minuteAt(4) + 30_000,
+          minutes: [
+            minute(0, 'good'),
+            minute(1, 'bad', {
+              heardBy: { concealedPct: 21.4, gapsPerMin: 260 },
+              uplinkLossPct: 18.2,
+              rttMs: 310,
+              transport: 'relay'
+            }),
+            minute(4, 'unstable', {
+              heard: null,
+              heardBy: null,
+              uplinkLossPct: null,
+              rttMs: null,
+              jitterBufferMs: null
+            })
+          ]
+        })
+      ])
+    ])
+  });
+  renderAs(<RoomsPage onOpenAccount={vi.fn()} />);
+
+  await userEvent.click(await screen.findByRole('button', { name: 'Кто был в звонке 14:30–14:34' }));
+  const table = screen.getByRole('table', { name: 'Участники звонка' });
+  const [, aliceRow] = within(table).getAllByRole('row');
+  if (!aliceRow) throw new Error('one person expected');
+  expect([...aliceRow.querySelectorAll('.net-stretch')].map((stretch) => stretch.getAttribute('title'))).toEqual([
+    '14:30–14:31 · голос в порядке · слышал других: пропуски 0%, 0 разрывов/мин · его слышали: пропуски 0%, 0 разрывов/мин · потери от него 0% · пинг 40 мс · буфер 60 мс',
+    '14:31–14:32 · плохая связь · слышал других: пропуски 0%, 0 разрывов/мин · его слышали: пропуски 21,4%, 260 разрывов/мин · потери от него 18,2% · пинг 310 мс · буфер 60 мс · через ретранслятор',
+    '14:32–14:34 · нет данных',
+    '14:34–14:34 · голос нестабилен'
+  ]);
 });
 
 test('each seat says its device and where from, by place and address key, never the address', async () => {
