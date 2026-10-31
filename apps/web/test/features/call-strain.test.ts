@@ -122,7 +122,7 @@ const report = (entries: Entry[]) => ({
 
 async function loadStatsPoll() {
   vi.useFakeTimers();
-  vi.doMock('@/entities/room/room-realtime', () => ({ updateVoicePeer: () => {} }));
+  vi.doMock('@/entities/room/room-realtime', () => ({ updateVoicePeer: () => {}, reportVoicePoll: () => {} }));
   const stats = await freshImport(() => import('@/features/room/client/room/stats'));
   const strain = await import('@/features/room/client/room/call-strain');
   const { state } = await import('@/features/room/client/core/room-runtime.store');

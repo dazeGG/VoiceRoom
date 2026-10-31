@@ -35,7 +35,6 @@ import {
 } from '../services/microphone-service';
 import { attachMeter, startMeters, stopMeters } from '../media/meters';
 import { startPeerLatencyStats, stopPeerLatencyStats } from './stats';
-import { resetNetworkLevel } from './network-report';
 import { relieveVideo } from '../services/video-relief';
 import { clearAllPeerJoinCues, clearStreamViewerCues, playPeerCue } from '../media/cues';
 import { cancelScreenSourcePicker } from '../ui/screen-source-picker';
@@ -201,6 +200,7 @@ async function performJoinRoom(generation: number): Promise<void> {
   state.localConnectionQuality = 'unknown';
   state.localPingMs = null;
   state.localNetwork = { inboundLossPct: null, jitterMs: null, outboundLossPct: null, transport: null };
+  state.voiceQuality = null;
   resetConnectionStatus();
   setServerConnectionStatus('connecting');
   setVoiceConnectionStatus('idle');
@@ -304,7 +304,6 @@ async function performJoinRoom(generation: number): Promise<void> {
     // A question still open about an earlier call would now be about this one.
     useCallFeedbackStore().dropCallFeedback();
     startCallQuality();
-    resetNetworkLevel();
     recordPeerCount(state.peers.size);
     // Relief comes from the call showing strain (call-strain.ts), not from a busy system alone.
     startCallStrainWatch(() => {
@@ -391,6 +390,7 @@ export function leaveRoom(): void {
   state.localConnectionQuality = 'unknown';
   state.localPingMs = null;
   state.localNetwork = { inboundLossPct: null, jitterMs: null, outboundLossPct: null, transport: null };
+  state.voiceQuality = null;
   clearGateSwitchTimer();
   if (state.roomId && state.peerId && state.sessionToken) {
     sendVoiceLeave({

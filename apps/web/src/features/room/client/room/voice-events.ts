@@ -124,6 +124,13 @@ export function createVoiceEventHandler(room: {
       return;
     }
 
+    if (event.type === 'room.voice.quality') {
+      if (event.payload.peerId !== state.peerId) return;
+      const { level, cause } = event.payload;
+      state.voiceQuality = level ? { level, cause } : null;
+      return;
+    }
+
     if (event.type === 'room.peer.updated') {
       syncAuthoritativeScreenPresence(event.payload.peer.id, Boolean(event.payload.peer.screen));
       updateParticipant({ ...event.payload.peer, screenAuthoritative: Object.hasOwn(event.payload.peer, 'screen') });

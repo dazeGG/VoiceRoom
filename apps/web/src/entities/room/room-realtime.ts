@@ -427,3 +427,8 @@ export function ensureAppRealtimeConnected(): void {
 }
 
 export type { RoomSnapshot };
+
+/** One stats poll of our voice; the server answers only when its verdict changes (room.voice.quality). */
+export function reportVoicePoll(payload: ClientCommands['room.voice.report']): void {
+  getAppRealtime().send('room.voice.report', payload);
+}

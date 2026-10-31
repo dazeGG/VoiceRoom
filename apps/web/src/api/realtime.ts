@@ -30,8 +30,13 @@ const HEARTBEAT_TIMEOUT_MS = 30000;
 // After the tab comes back or the network returns, a socket that does not
 // answer a ping this fast is treated as dead rather than waited on.
 const LIVENESS_PROBE_MS = 5000;
-// Typing notices and pings are about now; sent after a reconnect they would be stale.
-const DROPPED_WHILE_DISCONNECTED: ReadonlySet<ClientCommandType> = new Set(['ping', 'dm.typing', 'room.chat.typing']);
+// Typing notices, pings and stats polls are about now; sent after a reconnect they would be stale.
+const DROPPED_WHILE_DISCONNECTED: ReadonlySet<ClientCommandType> = new Set([
+  'ping',
+  'dm.typing',
+  'room.chat.typing',
+  'room.voice.report'
+]);
 
 let shared: AppRealtimeConnection | null = null;
 

@@ -37,7 +37,8 @@ export async function publishLocalMicrophoneForRoom(
   const { Track } = await loadLiveKitClient();
 
   const publication = await room.localParticipant.publishTrack(track, {
-    audioPreset: { maxBitrate: MICROPHONE_AUDIO_BITRATE },
+    // On a short uplink the voice goes first; screens and cameras send at the default low priority.
+    audioPreset: { maxBitrate: MICROPHONE_AUDIO_BITRATE, priority: 'high' },
     dtx: true,
     name: 'microphone',
     red: true,
@@ -199,7 +200,12 @@ export async function publishLocalScreenTracksForRoom(
       // Shared audio is music and game sound: keep it stereo and continuous,
       // and skip RED, which would double a 192 kbps stream for little gain.
       ...(track.kind === 'audio'
-        ? { audioPreset: { maxBitrate: SCREEN_AUDIO_BITRATE }, dtx: false, forceStereo: true, red: false }
+        ? {
+            audioPreset: { maxBitrate: SCREEN_AUDIO_BITRATE, priority: 'low' },
+            dtx: false,
+            forceStereo: true,
+            red: false
+          }
         : {}),
       name: track.kind === 'video' ? 'screen' : 'screen-audio',
       // The video options name their own source.

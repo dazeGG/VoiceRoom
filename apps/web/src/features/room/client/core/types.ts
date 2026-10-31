@@ -3,6 +3,7 @@ import type { HotkeyBinding } from '@/shared/ui/HotkeyRecorder/types';
 import type { MicrophoneMode, NoiseMode } from './config';
 import type { Participant } from '../model/participants';
 import type { LobbyRoom } from '@voice-room/shared/contracts/rooms';
+import type { VoiceVerdict } from '@voice-room/shared/voice-quality';
 export type { Participant, PeerInfo } from '../model/participants';
 
 export type ScreenStreamMode = 'games' | 'text';
@@ -179,6 +180,8 @@ export interface RoomConnectionState {
   localConnectionQuality: LocalConnectionQuality;
   localPingMs: number | null;
   localNetwork: LocalNetworkStats;
+  /** The server's verdict on our voice, from everyone's stats polls (room.voice.quality); null until it says. */
+  voiceQuality: VoiceVerdict | null;
   livekitRoom: Room | null;
   serverConnection: ServerConnection;
   serverPeerIds: Set<string>;

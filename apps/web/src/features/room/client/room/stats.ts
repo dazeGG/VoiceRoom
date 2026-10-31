@@ -1,8 +1,11 @@
 import { PEER_LATENCY_INTERVAL_MS } from '../core/config';
 import { state } from '../core/room-runtime.store';
 import { findFirstLocalPublication, findLocalMicrophonePublication } from '../services/livekit-service';
+import { isMicrophonePublication } from '../services/livekit/publication-kinds';
 import { isActiveCandidatePair, readRtcStats, type RtcStat, type RtcStatsSource } from '../media/rtc-stats';
 import { isRecord } from '@voice-room/shared/guards';
+import type { HeardPoll } from '@voice-room/shared/contracts/realtime';
+import { reportVoicePoll } from '@/entities/room/room-realtime';
 import {
   recordLoadCounts,
   recordNetworkSample,
@@ -12,7 +15,6 @@ import {
 } from './call-quality';
 import { isSystemBusy, noteCallStrain, type StrainCounts } from './call-strain';
 import { createLossWindow } from './loss-window';
-import { noteNetworkReading } from './network-report';
 
 import { createLogger, errorContext } from '@/shared/log';
 
@@ -54,7 +56,25 @@ async function updatePeerLatencyStats(): Promise<void> {
   recordPollCounts({ ...inbound, ...outbound });
   noteCallStrain({ ...inbound, ...video });
   recordLoadCounts(load);
-  noteNetworkReading({ sample, quality: state.localConnectionQuality, voice: state.voiceConnection });
+  postVoicePoll(inbound, outbound);
+}
+
+// The longest round trip a poll reports; past it the link is gone anyway.
+const MAX_REPORTED_MS = 600_000;
+
+/** The poll as the server judges the room from it (room.voice.report); it answers with room.voice.quality. */
+function postVoicePoll(inbound: InboundCounts, outbound: OutboundCounts): void {
+  const report = (ms: number | null) => (ms === null ? null : Math.min(MAX_REPORTED_MS, Math.max(0, ms)));
+  reportVoicePoll({
+    roomId: state.roomId,
+    peerId: state.peerId,
+    sessionToken: state.sessionToken,
+    rttMs: report(state.localPingMs),
+    jitterBufferMs: report(inbound.jitterBufferMs),
+    uplink: { packets: outbound.outboundPackets, lost: outbound.outboundLost },
+    transport: state.localNetwork.transport,
+    heard: inbound.heard
+  });
 }
 
 // The browser's counters only ever grow. Each poll keeps the previous reading
@@ -67,6 +87,10 @@ interface InboundReading {
   discarded: number;
   played: number;
   concealed: number;
+  /** Concealment events: each a gap the listener heard. */
+  gaps: number;
+  bufferSeconds: number;
+  bufferSamples: number;
 }
 let previousInbound = new Map<string, InboundReading>();
 let previousOutbound: { lost: number; sent: number } | null = null;
@@ -77,7 +101,12 @@ const outboundLoss = createLossWindow();
 type InboundCounts = Pick<
   StrainCounts,
   'inboundPackets' | 'inboundLost' | 'inboundDiscarded' | 'playedSamples' | 'concealedSamples' | 'jitterMs'
->;
+> & {
+  /** Each speaker's microphone over the poll, as the server's voice verdict reads it. */
+  heard: HeardPoll[];
+  /** How long a played sample of the microphones waited in the jitter buffer, on average; null without any. */
+  jitterBufferMs: number | null;
+};
 type OutboundCounts = Pick<PollCounts, 'outboundPackets' | 'outboundLost' | 'rttSeconds' | 'rttChecks'>;
 
 /** The growth of a counter since the last reading; a counter that went back (a new stream) starts over from zero. */
@@ -91,12 +120,19 @@ async function updateInboundAudioStats(): Promise<InboundCounts> {
     inboundDiscarded: 0,
     playedSamples: 0,
     concealedSamples: 0,
-    jitterMs: null
+    jitterMs: null,
+    heard: [],
+    jitterBufferMs: null
   };
   let jitterSum = 0;
   let jitterCount = 0;
-  for (const peer of state.peers.values()) {
+  let bufferSeconds = 0;
+  let bufferSamples = 0;
+  for (const [peerId, peer] of state.peers) {
+    // Screen audio is not the voice the status speaks of.
+    let heard: HeardPoll | null = null;
     for (const publication of peer.livekitParticipant?.audioTrackPublications?.values() || []) {
+      const voice = isMicrophonePublication(publication);
       const track = publication.track;
       const stats = readRtcStats(await track?.getRTCStatsReport?.().catch(() => undefined));
       for (const report of stats.values()) {
@@ -107,14 +143,20 @@ async function updateInboundAudioStats(): Promise<InboundCounts> {
           discarded: report.packetsDiscarded || 0,
           played: report.totalSamplesReceived || 0,
           // Made-up sound that was silence anyway is not heard as a gap.
-          concealed: Math.max(0, (report.concealedSamples || 0) - (report.silentConcealedSamples || 0))
+          concealed: Math.max(0, (report.concealedSamples || 0) - (report.silentConcealedSamples || 0)),
+          gaps: report.concealmentEvents || 0,
+          bufferSeconds: report.jitterBufferDelay || 0,
+          bufferSamples: report.jitterBufferEmittedCount || 0
         };
         const before = previousInbound.get(report.id) || {
           lost: 0,
           received: 0,
           discarded: 0,
           played: 0,
-          concealed: 0
+          concealed: 0,
+          gaps: 0,
+          bufferSeconds: 0,
+          bufferSamples: 0
         };
         current.set(report.id, reading);
         const lost = growth(reading.lost, before.lost);
@@ -127,10 +169,20 @@ async function updateInboundAudioStats(): Promise<InboundCounts> {
           jitterSum += report.jitter * 1000;
           jitterCount += 1;
         }
+        if (!voice) continue;
+        heard ??= { peerId, packets: 0, lost: 0, concealedSamples: 0, gaps: 0 };
+        heard.packets += lost + growth(reading.received, before.received);
+        heard.lost += lost;
+        heard.concealedSamples += growth(reading.concealed, before.concealed);
+        heard.gaps += growth(reading.gaps, before.gaps);
+        bufferSeconds += growth(reading.bufferSeconds, before.bufferSeconds);
+        bufferSamples += growth(reading.bufferSamples, before.bufferSamples);
       }
     }
+    if (heard) counts.heard.push(heard);
   }
   previousInbound = current;
+  counts.jitterBufferMs = bufferSamples > 0 ? Math.round((bufferSeconds / bufferSamples) * 1000) : null;
   state.localNetwork.inboundLossPct = inboundLoss.add(counts.inboundLost, counts.inboundPackets);
   state.localNetwork.jitterMs = jitterCount > 0 ? Math.round(jitterSum / jitterCount) : null;
   counts.jitterMs = state.localNetwork.jitterMs;
