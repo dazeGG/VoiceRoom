@@ -38,6 +38,7 @@ export function createInitialRoomState(): AppState {
     livekitRoom: null,
     localPingMs: null,
     localNetwork: { inboundLossPct: null, jitterMs: null, outboundLossPct: null, transport: null },
+    voiceQuality: null,
     localMicPublication: null,
     localCameraPublication: null,
     localCameraStream: null,

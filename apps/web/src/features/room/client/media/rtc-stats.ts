@@ -23,6 +23,11 @@ export interface RtcStat {
   readonly totalSamplesReceived: number | undefined;
   readonly concealedSamples: number | undefined;
   readonly silentConcealedSamples: number | undefined;
+  /** inbound-rtp audio: times the receiver started making sound up, each one a gap the listener heard. */
+  readonly concealmentEvents: number | undefined;
+  /** inbound-rtp audio: seconds the played samples waited in the jitter buffer, summed, and how many samples. */
+  readonly jitterBufferDelay: number | undefined;
+  readonly jitterBufferEmittedCount: number | undefined;
   readonly jitter: number | undefined;
   readonly fractionLost: number | undefined;
   readonly roundTripTime: number | undefined;
@@ -132,6 +137,9 @@ function toRtcStat(value: unknown): RtcStat | null {
     totalSamplesReceived: number('totalSamplesReceived'),
     concealedSamples: number('concealedSamples'),
     silentConcealedSamples: number('silentConcealedSamples'),
+    concealmentEvents: number('concealmentEvents'),
+    jitterBufferDelay: number('jitterBufferDelay'),
+    jitterBufferEmittedCount: number('jitterBufferEmittedCount'),
     totalRoundTripTime: number('totalRoundTripTime'),
     responsesReceived: number('responsesReceived'),
     pliCount: number('pliCount'),

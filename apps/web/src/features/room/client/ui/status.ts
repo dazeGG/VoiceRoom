@@ -1,6 +1,6 @@
-import { NETWORK_THRESHOLDS, networkLevelOfValue, type NetworkMeasure } from '@voice-room/shared/network-quality';
+import { NETWORK_THRESHOLDS } from '@voice-room/shared/network-quality';
+import type { VoiceCause } from '@voice-room/shared/contracts/rooms';
 import { PEER_LATENCY_GOOD_MS } from '../core/config';
-import { readingLevel } from '../room/network-level';
 import { state } from '../core/room-runtime.store';
 import type { LocalConnectionQuality, ServerConnection, VoiceConnection } from '../core/types';
 
@@ -88,15 +88,11 @@ export function getConnectionStatusView(): ConnectionStatusView {
 
   if (state.voiceConnection === 'connected') {
     const ping = formatLocalPing();
-    // The level the admin panel's call bars show for this call, by the same thresholds.
-    const level = readingLevel({
-      sample: { ...state.localNetwork, rttMs: state.localPingMs },
-      quality: state.localConnectionQuality,
-      voice: state.voiceConnection
-    });
+    // The server's verdict from what everyone in the room heard, the one the admin panel shows.
+    const level = state.voiceQuality?.level ?? 'good';
+    const cause = level === 'good' ? null : state.voiceQuality?.cause;
     const head = level === 'bad' ? 'Плохая связь' : level === 'unstable' ? 'Голос нестабилен' : 'Голос подключен';
-    const causes = level === 'bad' || level === 'unstable' ? getInstabilityCauses() : [];
-    const label = [head, ...causes, ...(ping ? [ping] : [])].join(' · ');
+    const label = [head, ...(cause ? [CAUSE_LABELS[cause]] : []), ...(ping ? [ping] : [])].join(' · ');
     return {
       label,
       stateName: level === 'bad' ? 'error' : level === 'unstable' ? 'warning' : 'connected',
@@ -135,23 +131,13 @@ export function getConnectionStatusView(): ConnectionStatusView {
   };
 }
 
-const noticeable = (measure: NetworkMeasure, value: number | null) => {
-  const level = networkLevelOfValue(measure, value);
-  return level === 'unstable' || level === 'bad';
-};
-
-// What makes the voice unstable, in the words the warning shows. A warning
+// Whose side the trouble is on, in the words the warning shows. A warning
 // that only says "unstable" next to a 2 ms ping leaves the user guessing.
-function getInstabilityCauses(): string[] {
-  const { inboundLossPct, jitterMs, outboundLossPct } = state.localNetwork;
-  const causes: string[] = [];
-  const quality = getPeerLatencyQuality(state.localPingMs, state.localConnectionQuality);
-  if (quality === 'poor') causes.push(Number.isFinite(state.localPingMs) ? 'высокий пинг' : 'плохая связь');
-  if (noticeable('lossPct', outboundLossPct)) causes.push(`потери от вас ${outboundLossPct}%`);
-  if (noticeable('lossPct', inboundLossPct)) causes.push(`потери к вам ${inboundLossPct}%`);
-  if (noticeable('jitterMs', jitterMs)) causes.push(`джиттер ${jitterMs} мс`);
-  return causes;
-}
+const CAUSE_LABELS: Record<VoiceCause, string> = {
+  heard_badly: 'вас плохо слышно',
+  hears_badly: 'собеседников плохо слышно',
+  delay: 'большая задержка'
+};
 
 export function formatNetworkDetails(ping: string): string {
   const { inboundLossPct, jitterMs, outboundLossPct, transport } = state.localNetwork;
