@@ -152,7 +152,7 @@ export function createRoomPresence(deps: RoomPresenceDeps) {
       ip: peer.ip ?? '',
       joinedAt: peer.joinedAt,
       leftAt,
-      ...(peer.network?.length ? { network: [...peer.network] } : {})
+      ...(peer.voice?.minutes.length ? { minutes: [...peer.voice.minutes] } : {})
     };
   }
 

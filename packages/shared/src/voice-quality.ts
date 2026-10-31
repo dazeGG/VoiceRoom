@@ -14,7 +14,9 @@
 // speakers badly is the one hearing badly. The room's pill and the admin panel
 // show that one verdict.
 
-import type { NetworkLevel } from './contracts/rooms.ts';
+import type { NetworkLevel, VoiceCause } from './contracts/rooms.ts';
+
+export type { VoiceCause };
 
 /**
  * Where a listener rated the loss bench (scripts/voice-bench, two runs on
@@ -73,9 +75,6 @@ export interface VoiceReport {
   uplinkLossPct: number | null;
   heard: readonly HeardStream[];
 }
-
-/** Whose side the trouble is on: the peer is heard badly, hears badly, or adds the delay. */
-export type VoiceCause = 'heard_badly' | 'hears_badly' | 'delay';
 
 export interface VoiceVerdict {
   level: NetworkLevel;
