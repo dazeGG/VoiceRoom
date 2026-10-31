@@ -74,6 +74,32 @@ test('a signed-in visit renders the lobby, and a profile card opens there', asyn
   window.removeEventListener('error', onError);
 });
 
+test('the landing offers the desktop app in a browser', async () => {
+  installFakeWebSocket();
+  stubMatchMedia();
+  stubFetch({ 'GET /api/auth/me': { body: { ok: true, user: null } } });
+
+  await renderWithApp(HomePage);
+
+  expect(await screen.findByRole('region', { name: 'Десктоп-приложение' }, { timeout: 5000 })).toBeTruthy();
+});
+
+test('the landing inside the desktop app does not offer to download it', async () => {
+  installFakeWebSocket();
+  stubMatchMedia();
+  stubFetch({ 'GET /api/auth/me': { body: { ok: true, user: null } } });
+  window.voiceRoomRuntime = { isDesktop: true, platform: 'win32' };
+
+  try {
+    await renderWithApp(HomePage);
+
+    expect(await screen.findByRole('button', { name: 'Создать комнату' }, { timeout: 5000 })).toBeTruthy();
+    expect(screen.queryByRole('region', { name: 'Десктоп-приложение' })).toBeNull();
+  } finally {
+    delete window.voiceRoomRuntime;
+  }
+});
+
 test('a guest on the landing opens the sign-in from the header in place', async () => {
   // jsdom has no modal dialogs.
   for (const [name, open] of [
