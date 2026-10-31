@@ -137,15 +137,24 @@ export type PeerBanned = Static<typeof PeerBanned>;
 export const BanParams = Type.Object({ roomId: Type.String(), banId: Type.String() });
 
 /**
- * How a peer's connection is doing, as its own client judges it from loss,
- * latency and jitter (room.peer.update `network`). The server keeps each
- * stay's changes for the admin panel; nobody else in the room sees them.
+ * How a peer's voice is doing: what its listeners heard of it and what it
+ * heard of them, as the server judges the room (voice-quality.ts judgeVoice,
+ * room.voice.quality). Only the peer itself and the admin panel see it.
  */
 export const NETWORK_LEVELS = ['good', 'unstable', 'bad'] as const;
 export const NetworkLevel = Type.Enum(NETWORK_LEVELS);
 export type NetworkLevel = Static<typeof NetworkLevel>;
 
-/** A stay's network level changed at `at`, the server's time of hearing it. */
+/** Whose side the voice trouble is on: the peer is heard badly, hears the others badly, or adds the delay. */
+export const VOICE_CAUSES = ['heard_badly', 'hears_badly', 'delay'] as const;
+export const VoiceCause = Type.Enum(VOICE_CAUSES);
+export type VoiceCause = Static<typeof VoiceCause>;
+
+/**
+ * A stay's network level changed at `at`, the server's time of hearing it: what
+ * the client judged of its own connection (room.peer.update `network`) before
+ * the server judged the room. Stays recorded since keep VoiceMinute rows.
+ */
 export const NetworkPoint = Type.Object({ at: Type.Number(), level: NetworkLevel });
 export type NetworkPoint = Static<typeof NetworkPoint>;
 

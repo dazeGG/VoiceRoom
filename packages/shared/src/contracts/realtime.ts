@@ -12,7 +12,7 @@ import { AdminReportsEvent } from './admin.ts';
 import { Nullable } from './http.ts';
 import { DirectMessage, PinnedMessage, ReactionSummary, RoomMessage } from './messages.ts';
 import { NotificationPreferences } from './notifications.ts';
-import { LobbyRoom, NetworkLevel, PublicPeer, RoomRelationship } from './rooms.ts';
+import { LobbyRoom, NetworkLevel, PublicPeer, RoomRelationship, VoiceCause } from './rooms.ts';
 import { PublicUser } from './users.ts';
 
 /** The room or direct conversation a message belongs to. */
@@ -86,10 +86,50 @@ export const PeerPatch = Type.Object({
   screenProfileId: Type.Optional(Type.String()),
   screenStreamId: Type.Optional(Type.String()),
   viewedScreenPeerId: Type.Optional(Nullable(Type.String())),
-  /** The client's own read of its connection; sent alone, and only when it changes. */
+  /**
+   * A client's own read of its connection, from before the server judged the
+   * room (room.voice.report). Still accepted from tabs of that release, and
+   * ignored.
+   */
   network: Type.Optional(NetworkLevel)
 });
 export type PeerPatch = Static<typeof PeerPatch>;
+
+// Counts over one stats poll: a poll that ran late (a hidden tab) covers more
+// than its 3 seconds, so the bound leaves room for minutes of it.
+const PollCount = Type.Integer({ minimum: 0, maximum: 100_000_000 });
+const PollMs = Nullable(Type.Number({ minimum: 0, maximum: 600_000 }));
+
+/** One speaker as this client heard it over the poll; see voice-quality.ts HeardCounts. */
+export const HeardPoll = Type.Object({
+  peerId: PeerId,
+  packets: PollCount,
+  lost: PollCount,
+  concealedSamples: PollCount,
+  gaps: PollCount
+});
+export type HeardPoll = Static<typeof HeardPoll>;
+
+/** How the media reaches the server: UDP, TCP, or through a TURN relay. */
+export const VoiceTransport = Type.Union([Type.Literal('udp'), Type.Literal('tcp'), Type.Literal('relay')]);
+export type VoiceTransport = Static<typeof VoiceTransport>;
+
+/**
+ * One stats poll of a peer in voice: what it heard of each speaker since the
+ * previous poll, its own uplink and its round trip. The server judges the room
+ * from these (voice-quality.ts judgeVoice) and answers with room.voice.quality.
+ */
+export const VoicePoll = Type.Object({
+  ...VoiceTarget.properties,
+  rttMs: PollMs,
+  /** The average time a played sample waited in the jitter buffer over the poll. */
+  jitterBufferMs: PollMs,
+  /** Audio packets sent, and those the server reported it never got. */
+  uplink: Type.Object({ packets: PollCount, lost: PollCount }),
+  transport: Nullable(VoiceTransport),
+  heard: Type.Array(HeardPoll, { maxItems: 64 })
+});
+export type VoicePoll = Static<typeof VoicePoll>;
 
 /** A video source the server's media budget counts. */
 export const MediaKind = Type.Union([Type.Literal('screen'), Type.Literal('camera')]);
@@ -139,6 +179,8 @@ export const ClientCommandFrames = {
   ),
   'room.leave': Frame('room.leave', VoiceTarget),
   'room.peer.update': Frame('room.peer.update', Type.Object({ ...VoiceTarget.properties, patch: PeerPatch })),
+  /** Every stats poll while in voice; never answered on its own. */
+  'room.voice.report': Frame('room.voice.report', VoicePoll),
   /** Asked before a screen share or a camera starts; answered with room.media.grant. */
   'room.media.request': Frame(
     'room.media.request',
@@ -330,6 +372,11 @@ export const ServerEventFrames = {
     Type.Object({ ...RoomRef, peerId: Type.String(), reason: PeerLeaveReason })
   ),
   'room.peer.updated': Frame('room.peer.updated', Type.Object({ ...RoomRef, peer: PublicPeer })),
+  /** To the peer alone, when the server's verdict on its voice changes; null while nothing was heard from or by it. */
+  'room.voice.quality': Frame(
+    'room.voice.quality',
+    Type.Object({ ...RoomRef, peerId: Type.String(), level: Nullable(NetworkLevel), cause: Nullable(VoiceCause) })
+  ),
   'room.chat.message': Frame('room.chat.message', Type.Object({ ...RoomRef, message: RoomMessage })),
   'room.chat.edited': Frame('room.chat.edited', Type.Object({ ...RoomRef, message: RoomMessage })),
   'room.chat.deleted': Frame('room.chat.deleted', Type.Object({ ...RoomRef, messageId: Type.String() })),
