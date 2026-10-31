@@ -318,13 +318,13 @@ export function FeedbackPage() {
                                 role="img"
                                 aria-label={describeNetwork(
                                   { from: entry.stay.joinedAt, to: entry.stay.leftAt },
-                                  entry.stay.network ?? []
+                                  entry.stay
                                 )}
                               >
                                 <NetworkSpan
                                   from={entry.stay.joinedAt}
                                   to={entry.stay.leftAt}
-                                  points={entry.stay.network ?? []}
+                                  voice={entry.stay}
                                   style={{ left: 0, right: 0 }}
                                 />
                               </span>

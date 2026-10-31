@@ -176,8 +176,8 @@ test("a guest's answer names them, says where they came from, the worst moments 
   expect(within(answers).getByText('потери 0,1% (до 13,3%)').getAttribute('title')).toMatch(
     /^к вам: потеряно 12 из 9\s340 пакетов\nот вас: потеряно 0 из 8\s800 пакетов$/
   );
-  const network = within(answers).getByRole('img', { name: /сеть/ });
-  expect(network.getAttribute('aria-label')).toMatch(/сеть в порядке, .*сеть плохая, .*сеть в порядке$/);
+  const network = within(answers).getByRole('img', { name: /голос/ });
+  expect(network.getAttribute('aria-label')).toMatch(/голос в порядке, .*плохая связь, .*голос в порядке$/);
 });
 
 test('a slow reply for an earlier choice does not replace the latest one', async () => {

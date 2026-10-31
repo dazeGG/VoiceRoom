@@ -1,6 +1,6 @@
 // Who was in one call and when: a row per person with a bar of the call's
 // length, lit from each time they came in to when they left in the colour of
-// how their network went (network-bar.tsx).
+// how their voice went, minute by minute (network-bar.tsx).
 
 import type { RoomCall } from '@voice-room/shared/contracts/admin';
 import { formatClock, formatDuration } from '../../format.ts';
@@ -56,7 +56,7 @@ export function CallPeople({ call, onOpenAccount }: { call: RoomCall; onOpenAcco
                 key={span.from}
                 from={span.from}
                 to={span.to}
-                points={span.network}
+                voice={span}
                 style={{
                   left: `${String(share(span.from))}%`,
                   width: `${String(Math.max(1, share(span.to) - share(span.from)))}%`
