@@ -4,7 +4,7 @@
 
 import { screen } from '@testing-library/vue';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, expect, test, vi } from 'vitest';
+import { beforeAll, beforeEach, expect, test, vi } from 'vitest';
 import { useSessionStore } from '@/features/auth/session.store';
 import HomePage from '@/features/home/HomePage.vue';
 import { GUEST_ROOM_CREATED_KEY, PERMANENT_ROOM_OFFER_DISMISSED_KEY } from '@/features/home/model/returning-guest';
@@ -37,7 +37,9 @@ const createRoute = {
   }
 };
 
-let location: { href: string };
+// The lobby page loads on demand, after this stub is in place, and the room
+// state it imports reads the path.
+let location: { href: string; pathname: string };
 
 // The landing page asks for the desktop app's version on its own; only room
 // creation matters here.
@@ -59,7 +61,7 @@ beforeEach(() => {
     });
   }
   localStorage.clear();
-  location = { href: 'https://voiceroom.ru/' };
+  location = { href: 'https://voiceroom.ru/', pathname: '/' };
   stubWindow({ location });
 });
 
@@ -69,6 +71,12 @@ async function clickCreate() {
   await userEvent.click(await screen.findByRole('button', { name: /Создать комнату/ }));
   return session;
 }
+
+// The lobby is a chunk the page loads on demand; compiling it here keeps that
+// one-off cost out of the wait for the lobby to render.
+beforeAll(async () => {
+  await import('@/features/home/LobbyPage.vue');
+});
 
 test('a first room opens at once and is remembered', async () => {
   const { calls } = stubFetch(createRoute);

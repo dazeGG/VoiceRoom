@@ -99,6 +99,11 @@ function loadRuntimeConfig(options: RuntimeConfigOptions = {}): Promise<RuntimeC
   return next;
 }
 
+/** Starts loading the config so a later `resolveLiveKitUrls` finds it cached. */
+export function preloadRuntimeConfig(options: RuntimeConfigOptions = {}): void {
+  void loadRuntimeConfig(options);
+}
+
 export async function resolveLiveKitUrls(apiUrl: string, options: RuntimeConfigOptions = {}): Promise<string[]> {
   const config = await loadRuntimeConfig(options);
   return resolveLiveKitConnectUrls(config, apiUrl);
