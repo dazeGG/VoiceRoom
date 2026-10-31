@@ -17,7 +17,7 @@ export const LEGAL = Object.freeze({
   email: 'support@voiceroom.ru',
   effectiveDate: '13 октября 2026 г.',
   /** The personal data policy changed on its own since. */
-  privacyEffectiveDate: '27 октября 2026 г.',
+  privacyEffectiveDate: '31 октября 2026 г.',
   minimumAge: 14,
   sessionDays: 30,
   loginHistoryDays: 90,
