@@ -15,7 +15,8 @@
 // JSON file (RESULTS).
 //
 // Settings: BASE_URL (http://127.0.0.1:5180), LIVEKIT_CONTAINER
-// (voiceroom-livekit-1), STEP_SECONDS (30), ORDER=fixed, HEADED=1.
+// (voiceroom-livekit-1), STEP_SECONDS (30), ORDER=fixed, HEADED=1, SET=harsh
+// (heavy loss and long bursts, for where speech stops getting through).
 
 import { spawnSync } from 'node:child_process';
 import { writeFileSync, existsSync } from 'node:fs';
@@ -24,7 +25,7 @@ import { join } from 'node:path';
 import { createInterface } from 'node:readline/promises';
 import { chromium, type Browser, type Page } from '@playwright/test';
 import { isRecord } from '@voice-room/shared/guards';
-import { concealedLevel, concealedSpeechPct } from '@voice-room/shared/voice-quality';
+import { VOICE_SAMPLES_PER_PACKET, concealedLevel, concealedSpeechPct } from '@voice-room/shared/voice-quality';
 
 const roomId = process.argv[2];
 if (!roomId) throw new Error('usage: node scripts/voice-bench/loss-bench.mts <roomId>');
@@ -37,23 +38,28 @@ const sidecar = 'voice-bench-netem';
 const SETTLE_MS = 5000;
 
 // Gilbert-Elliott bursts: from a good state lose with p, stay lost with 1 - r,
-// so the mean loss is p / (p + r) and a burst lasts 1 / r packets (about 3 here).
-const burst = (meanPct: number) => {
-  const r = 30;
-  return `loss gemodel ${((meanPct * r) / (100 - meanPct)).toFixed(2)}% ${r}%`;
-};
+// so the mean loss is p / (p + r) and a burst lasts 1 / r packets: about 3
+// packets (60 ms) at r = 30 %, about 10 (200 ms) at r = 10 %.
+const burst = (meanPct: number, r = 30) => `loss gemodel ${((meanPct * r) / (100 - meanPct)).toFixed(2)}% ${r}%`;
 interface Step {
   label: string;
   netem: string | null;
 }
+const randomLoss = (pct: number): Step => ({ label: `случайные потери ${pct}%`, netem: `loss ${pct}%` });
+const bursts = (pct: number): Step => ({ label: `потери пачками ~${pct}%`, netem: burst(pct) });
+const longBursts = (pct: number): Step => ({ label: `длинные пачки по ~200 мс, ~${pct}%`, netem: burst(pct, 10) });
 /** Always first: what the room sounds like before anything is done to the line. */
 const CLEAN_STEP: Step = { label: 'чистая линия', netem: null };
-const LINE_STEPS: Step[] = [
-  ...[1, 3, 5, 10, 15, 20, 30].map((pct) => ({ label: `случайные потери ${pct}%`, netem: `loss ${pct}%` })),
-  ...[3, 10, 20].map((pct) => ({ label: `потери пачками ~${pct}%`, netem: burst(pct) })),
-  { label: 'джиттер 50 мс', netem: 'delay 50ms 30ms distribution normal' },
-  { label: 'джиттер 100 мс', netem: 'delay 100ms 60ms distribution normal' }
-];
+// SET=harsh looks for where speech stops getting through; random 20 % repeats a step of the default set.
+const LINE_STEPS: Step[] =
+  process.env.SET === 'harsh'
+    ? [...[20, 40, 50, 60].map(randomLoss), ...[30, 40].map(bursts), ...[10, 20].map(longBursts)]
+    : [
+        ...[1, 3, 5, 10, 15, 20, 30].map(randomLoss),
+        ...[3, 10, 20].map(bursts),
+        { label: 'джиттер 50 мс', netem: 'delay 50ms 30ms distribution normal' },
+        { label: 'джиттер 100 мс', netem: 'delay 100ms 60ms distribution normal' }
+      ];
 
 function run(command: string, args: string[], env?: NodeJS.ProcessEnv): string {
   const result = spawnSync(command, args, { encoding: 'utf8', env: { ...process.env, ...env } });
@@ -289,14 +295,18 @@ async function main(): Promise<void> {
         codec: measured.codec,
         lossPct: measured.packets > 0 ? Math.round((measured.lost / measured.packets) * 1000) / 10 : null,
         concealedPct,
-        concealmentsPerMin: Math.round((measured.concealmentEvents / ((stepMs - SETTLE_MS) / 1000)) * 60),
+        // Per minute of speech, as the packets measure it, so pauses do not water it down.
+        gapsPerSpeechMin:
+          measured.packets > 0
+            ? Math.round(measured.concealmentEvents / ((measured.packets * VOICE_SAMPLES_PER_PACKET) / 48_000 / 60))
+            : null,
         jitterBufferMs: measured.jitterBufferMs,
         level: concealedPct === null ? null : concealedLevel(concealedPct)
       };
       rows.push(row);
       console.log(
         `  ${row.step}: оценка «${row.rating ?? '—'}», потери ${row.lossPct}%, сокрыто ${row.concealedPct}%,` +
-          ` ${row.concealmentsPerMin} дыр/мин, буфер ${row.jitterBufferMs} мс, модель: ${row.level} (${row.codec})\n`
+          ` ${row.gapsPerSpeechMin} дыр/мин речи, буфер ${row.jitterBufferMs} мс, модель: ${row.level} (${row.codec})\n`
       );
       writeFileSync(results, JSON.stringify(rows, null, 2));
     }
