@@ -65,6 +65,8 @@ test('the terms set the minimum age and say how to report', async () => {
 test('the legal pages cover the Android app and say what reaches RuStore', async () => {
   const policy = (await renderWithApp(PrivacyPolicy)).container.textContent ?? '';
   expect(policy).toContain('приложение для Android');
+  expect(policy).toContain('микрофон и камера могут продолжать работать, когда приложение свёрнуто');
+  expect(policy).toContain('Если показ уведомлений разрешён, Android показывает уведомление об активном звонке');
   expect(policy).toContain('ООО «Много приложений»');
   expect(policy).toMatch(/служба\s+доставки\s+технически\s+может\s+его\s+прочитать/);
   expect(policy).toContain('«Скрывать текст уведомлений»');
