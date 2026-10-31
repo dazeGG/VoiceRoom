@@ -34,6 +34,9 @@ const page = usePageStore();
 const toasts = useToastsStore();
 const push = usePushNotificationsStore();
 
+// Inside the desktop app the card would offer to download the app itself.
+const desktopApp = Boolean(window.voiceRoomRuntime?.isDesktop);
+
 const roomCode = ref('');
 const creatingTemp = ref(false);
 const joining = ref(false);
@@ -229,7 +232,7 @@ function switchAuthMode(mode: AuthMode): void {
         @create-temp="handleCreateTemp"
         @join="handleJoinRoom"
       />
-      <DesktopAppCard />
+      <DesktopAppCard v-if="!desktopApp" />
     </main>
     <footer class="landing__legal">
       <LegalLinks />
