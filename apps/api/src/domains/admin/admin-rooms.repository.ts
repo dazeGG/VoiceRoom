@@ -1,7 +1,7 @@
 // What the admin panel's rooms section reads from the tables: the rooms and
 // accounts behind the live presence roster, and the finished stays in voice
-// that still carry their room, one by one or gathered into calls. Read only;
-// never a message or an address.
+// that still carry their room, one by one or gathered into calls, with their
+// voice minute by minute. Read only; never a message or an address.
 
 import { sql } from 'kysely';
 import type pg from 'pg';
@@ -11,9 +11,12 @@ import {
   ROOM_CALLS_PAGE_SIZE,
   ROOM_HISTORY_PAGE_SIZE,
   type ClientKind,
-  type RoomAccount
+  type RoomAccount,
+  type VoiceMinute,
+  type VoiceMinuteHeard
 } from '@voice-room/shared/contracts/admin';
-import { NetworkPoint } from '@voice-room/shared/contracts/rooms';
+import { NetworkPoint, type NetworkLevel } from '@voice-room/shared/contracts/rooms';
+import { concealedSpeechPct, gapsPerSpeechMin, type HeardCounts } from '@voice-room/shared/voice-quality';
 import { kyselyOn } from '../../platform/db/kysely.ts';
 import { toMillis } from '../../platform/epoch-millis.ts';
 import { avatarUrl } from '../../lib/avatar-url.ts';
@@ -42,6 +45,7 @@ export interface StoredStay {
   joinedAt: number;
   leftAt: number;
   network: NetworkPoint[];
+  minutes: VoiceMinute[];
 }
 
 export interface StoredCall {
@@ -105,6 +109,21 @@ const NetworkPoints = Type.Array(NetworkPoint);
 
 /** The column holds what voice-session.repository wrote; anything else reads as no changes. */
 const networkOf = (value: unknown): NetworkPoint[] => (Value.Check(NetworkPoints, value) ? value : []);
+
+/** A minute's level from the peer's own polls: two bad make it bad, two not good unstable. */
+export function minuteLevel(polls: VoiceMinute['polls']): NetworkLevel | null {
+  if (polls.bad >= 2) return 'bad';
+  if (polls.bad + polls.unstable >= 2) return 'unstable';
+  return polls.good + polls.unstable + polls.bad > 0 ? 'good' : null;
+}
+
+function heardOf(counts: HeardCounts): VoiceMinuteHeard | null {
+  const concealedPct = concealedSpeechPct(counts);
+  const gapsPerMin = gapsPerSpeechMin(counts);
+  return concealedPct === null || gapsPerMin === null ? null : { concealedPct, gapsPerMin: Math.round(gapsPerMin) };
+}
+
+const averageOf = (sum: number, polls: number) => (polls > 0 ? Math.round(sum / polls) : null);
 
 /** A temporary room has no name, so only a missing or deleted row means the room is gone. */
 const roomNameOf = (row: { room_name: string | null; room_deleted_at: Date | string | null }) =>
@@ -203,8 +222,54 @@ export function createAdminRoomsRepository({ pool }: { pool: pg.Pool }) {
       location: row.location,
       joinedAt: toMillis(row.joined_at),
       leftAt: toMillis(row.left_at),
-      network: networkOf(row.network)
+      network: networkOf(row.network),
+      minutes: []
     };
+  }
+
+  /** The stays with their voice minutes, read in one query. */
+  async function withMinutes(list: StoredStay[]): Promise<StoredStay[]> {
+    if (list.length === 0) return list;
+    const rows = await db
+      .selectFrom('voice_session_samples')
+      .selectAll()
+      .where(
+        'stay_id',
+        'in',
+        list.map((stay) => stay.id)
+      )
+      .orderBy('stay_id')
+      .orderBy('at')
+      .execute();
+    const byStay = new Map<string, VoiceMinute[]>();
+    for (const row of rows) {
+      const polls = { good: row.polls_good, unstable: row.polls_unstable, bad: row.polls_bad };
+      const minute: VoiceMinute = {
+        at: toMillis(row.at),
+        level: minuteLevel(polls),
+        polls,
+        heard: heardOf({
+          packets: row.heard_packets,
+          lost: row.heard_lost,
+          concealedSamples: row.heard_concealed,
+          gaps: row.heard_gaps
+        }),
+        heardBy: heardOf({
+          packets: row.heard_by_packets,
+          lost: row.heard_by_lost,
+          concealedSamples: row.heard_by_concealed,
+          gaps: row.heard_by_gaps
+        }),
+        uplinkLossPct: row.uplink_packets > 0 ? Math.round((row.uplink_lost / row.uplink_packets) * 1000) / 10 : null,
+        rttMs: averageOf(row.rtt_ms_sum, row.rtt_polls),
+        jitterBufferMs: averageOf(row.jitter_buffer_ms_sum, row.jitter_buffer_polls),
+        transport: row.transport
+      };
+      const minutes = byStay.get(row.stay_id) ?? [];
+      minutes.push(minute);
+      byStay.set(row.stay_id, minutes);
+    }
+    return list.map((stay) => ({ ...stay, minutes: byStay.get(stay.id) ?? [] }));
   }
 
   /**
@@ -230,7 +295,7 @@ export function createAdminRoomsRepository({ pool }: { pool: pg.Pool }) {
       .limit(ROOM_HISTORY_PAGE_SIZE + 1)
       .execute();
     return {
-      stays: rows.slice(0, ROOM_HISTORY_PAGE_SIZE).map(toStay),
+      stays: await withMinutes(rows.slice(0, ROOM_HISTORY_PAGE_SIZE).map(toStay)),
       more: rows.length > ROOM_HISTORY_PAGE_SIZE
     };
   }
@@ -344,8 +409,7 @@ export function createAdminRoomsRepository({ pool }: { pool: pg.Pool }) {
       .orderBy('s.id')
       .execute();
     const byCall = new Map<string, StoredStay[]>(page.map((call) => [call.id, []]));
-    for (const row of members) {
-      const stay = toStay(row);
+    for (const stay of await withMinutes(members.map(toStay))) {
       const call = page.find(
         (candidate) =>
           candidate.roomId === stay.roomId && stay.joinedAt >= candidate.startedAt && stay.leftAt <= candidate.endedAt
@@ -392,7 +456,7 @@ export function createAdminRoomsRepository({ pool }: { pool: pg.Pool }) {
     `.execute(db);
     const ids = picked.rows.map((row) => row.stay_id);
     const rows = ids.length ? await stays().where('s.id', 'in', ids).execute() : [];
-    const byId = new Map(rows.map((row) => [row.stay_id, toStay(row)]));
+    const byId = new Map((await withMinutes(rows.map(toStay))).map((stay) => [stay.id, stay]));
     const byAsk = new Map(picked.rows.map((row) => [row.n, byId.get(row.stay_id) ?? null]));
     return asks.map((_ask, n) => byAsk.get(n) ?? null);
   }

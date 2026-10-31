@@ -5,12 +5,33 @@
 // A stay says who and where from without an IP address or a city: the address
 // only yields its keyed hash (see DescribeAddress), which tells addresses apart
 // for bans and quotas; the city is shown for people in voice now, never kept.
+// Its voice minutes (voice_session_samples) are written with it.
 
+import crypto from 'node:crypto';
 import { sql } from 'kysely';
 import type pg from 'pg';
 import type { ClientKind } from '@voice-room/shared/contracts/admin';
-import type { NetworkPoint } from '@voice-room/shared/contracts/rooms';
+import type { VoiceTransport } from '@voice-room/shared/contracts/realtime';
+import type { HeardCounts } from '@voice-room/shared/voice-quality';
 import { kyselyOn } from '../../platform/db/kysely.ts';
+
+/** One minute of a stay's voice, summed by the server from its stats polls (realtime/voice-track.ts). */
+export type VoiceMinuteSample = {
+  /** The minute's start. */
+  at: number;
+  /** The peer's own polls by the verdict it was given at each. */
+  polls: { good: number; unstable: number; bad: number };
+  /** What the peer heard of every speaker, and what its listeners heard of it. */
+  heard: HeardCounts;
+  heardBy: HeardCounts;
+  rttMsSum: number;
+  rttPolls: number;
+  jitterBufferMsSum: number;
+  jitterBufferPolls: number;
+  uplink: { packets: number; lost: number };
+  /** The latest the minute saw. */
+  transport: VoiceTransport | null;
+};
 
 export type FinishedVoiceSession = {
   roomId: string;
@@ -28,8 +49,8 @@ export type FinishedVoiceSession = {
   ip: string;
   joinedAt: number;
   leftAt: number;
-  /** The changes of its network level the client reported; none when it never did. */
-  network?: readonly NetworkPoint[];
+  /** Its voice, minute by minute; none when it sent no stats. */
+  minutes?: readonly VoiceMinuteSample[];
 };
 
 /** What a stay keeps of its address: its keyed hash (lib/ip-key.ts) and its city. */
@@ -49,24 +70,37 @@ export function createVoiceSessionRepository({
   async function recordSessions(sessions: FinishedVoiceSession[]): Promise<void> {
     if (sessions.length === 0) return;
     const origins = await Promise.all(sessions.map((session) => describeAddress(session.ip)));
-    await db
-      .insertInto('voice_sessions')
-      .values(
-        sessions.map((session, index) => ({
-          room_id: session.roomId,
-          user_id: session.userId,
-          guest_name: session.userId ? null : session.guestName,
-          guest_id: (!session.userId && session.guestId) || null,
-          client: session.client,
-          os: session.os || null,
-          browser: session.browser || null,
-          ip_key: origins[index]?.ipKey ?? null,
-          joined_at: new Date(session.joinedAt),
-          left_at: new Date(Math.max(session.leftAt, session.joinedAt)),
-          network: session.network?.length ? JSON.stringify(session.network) : null
-        }))
-      )
-      .execute();
+    // The ids are made here so the minutes find their stay without trusting the order rows come back in.
+    const ids = sessions.map(() => crypto.randomUUID());
+    await db.transaction().execute(async (trx) => {
+      await trx
+        .insertInto('voice_sessions')
+        .values(
+          sessions.map((session, index) => ({
+            id: ids[index],
+            room_id: session.roomId,
+            user_id: session.userId,
+            guest_name: session.userId ? null : session.guestName,
+            guest_id: (!session.userId && session.guestId) || null,
+            client: session.client,
+            os: session.os || null,
+            browser: session.browser || null,
+            ip_key: origins[index]?.ipKey ?? null,
+            joined_at: new Date(session.joinedAt),
+            left_at: new Date(Math.max(session.leftAt, session.joinedAt))
+          }))
+        )
+        .execute();
+      const samples = sessions.flatMap((session, index) =>
+        (session.minutes ?? []).map((minute) => sampleRow(ids[index] ?? '', minute))
+      );
+      for (let start = 0; start < samples.length; start += SAMPLE_BATCH) {
+        await trx
+          .insertInto('voice_session_samples')
+          .values(samples.slice(start, start + SAMPLE_BATCH))
+          .execute();
+      }
+    });
   }
 
   /**
@@ -74,13 +108,21 @@ export function createVoiceSessionRepository({
    * and with it whose and where from it was; answers how many.
    */
   async function forgetRoomsBefore(cutoff: Date): Promise<number> {
-    const result = await db
-      .updateTable('voice_sessions')
-      .set({ room_id: null, guest_name: null, guest_id: null, ip_key: null, location: null, network: null })
-      .where('room_id', 'is not', null)
-      .where('joined_at', '<', cutoff)
-      .executeTakeFirst();
-    return Number(result.numUpdatedRows);
+    return db.transaction().execute(async (trx) => {
+      await trx
+        .deleteFrom('voice_session_samples')
+        .where('stay_id', 'in', (eb) =>
+          eb.selectFrom('voice_sessions').select('id').where('room_id', 'is not', null).where('joined_at', '<', cutoff)
+        )
+        .execute();
+      const result = await trx
+        .updateTable('voice_sessions')
+        .set({ room_id: null, guest_name: null, guest_id: null, ip_key: null, location: null, network: null })
+        .where('room_id', 'is not', null)
+        .where('joined_at', '<', cutoff)
+        .executeTakeFirst();
+      return Number(result.numUpdatedRows);
+    });
   }
 
   /**
@@ -109,3 +151,34 @@ export function createVoiceSessionRepository({
 }
 
 export type VoiceSessionRepository = ReturnType<typeof createVoiceSessionRepository>;
+
+// A row is 20 values, so this keeps a long call's minutes well under the 65535 parameters of one statement.
+const SAMPLE_BATCH = 1000;
+
+// The columns are 4-byte integers; a client's counts are bounded per poll, not per minute.
+const int = (value: number) => Math.min(Math.max(0, Math.round(value)), 2_147_483_647);
+
+function sampleRow(stayId: string, minute: VoiceMinuteSample) {
+  return {
+    stay_id: stayId,
+    at: new Date(minute.at),
+    polls_good: int(minute.polls.good),
+    polls_unstable: int(minute.polls.unstable),
+    polls_bad: int(minute.polls.bad),
+    heard_packets: int(minute.heard.packets),
+    heard_lost: int(minute.heard.lost),
+    heard_concealed: int(minute.heard.concealedSamples),
+    heard_gaps: int(minute.heard.gaps),
+    heard_by_packets: int(minute.heardBy.packets),
+    heard_by_lost: int(minute.heardBy.lost),
+    heard_by_concealed: int(minute.heardBy.concealedSamples),
+    heard_by_gaps: int(minute.heardBy.gaps),
+    rtt_ms_sum: minute.rttMsSum,
+    rtt_polls: int(minute.rttPolls),
+    jitter_buffer_ms_sum: minute.jitterBufferMsSum,
+    jitter_buffer_polls: int(minute.jitterBufferPolls),
+    uplink_packets: int(minute.uplink.packets),
+    uplink_lost: int(minute.uplink.lost),
+    transport: minute.transport
+  };
+}

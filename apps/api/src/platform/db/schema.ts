@@ -687,6 +687,29 @@ export interface VoiceSessions {
   user_id: string | null;
 }
 
+export interface VoiceSessionSamples {
+  at: Timestamp;
+  heard_by_concealed: Generated<number>;
+  heard_by_gaps: Generated<number>;
+  heard_by_lost: Generated<number>;
+  heard_by_packets: Generated<number>;
+  heard_concealed: Generated<number>;
+  heard_gaps: Generated<number>;
+  heard_lost: Generated<number>;
+  heard_packets: Generated<number>;
+  jitter_buffer_ms_sum: Generated<number>;
+  jitter_buffer_polls: Generated<number>;
+  polls_bad: Generated<number>;
+  polls_good: Generated<number>;
+  polls_unstable: Generated<number>;
+  rtt_ms_sum: Generated<number>;
+  rtt_polls: Generated<number>;
+  stay_id: string;
+  transport: string | null;
+  uplink_lost: Generated<number>;
+  uplink_packets: Generated<number>;
+}
+
 export interface DB {
   account_login_events: AccountLoginEvents;
   account_recovery_codes: AccountRecoveryCodes;
@@ -741,6 +764,7 @@ export interface DB {
   user_notifications: UserNotifications;
   user_reports: UserReports;
   users: Users;
+  voice_session_samples: VoiceSessionSamples;
   voice_sessions: VoiceSessions;
   voiceroom_migration_guard: VoiceroomMigrationGuard;
 }
