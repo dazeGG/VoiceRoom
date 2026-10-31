@@ -4,7 +4,7 @@
 
 import { screen } from '@testing-library/vue';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, expect, test, vi } from 'vitest';
+import { beforeAll, beforeEach, expect, test, vi } from 'vitest';
 import { useSessionStore } from '@/features/auth/session.store';
 import HomePage from '@/features/home/HomePage.vue';
 import { GUEST_ROOM_CREATED_KEY, PERMANENT_ROOM_OFFER_DISMISSED_KEY } from '@/features/home/model/returning-guest';
@@ -71,6 +71,12 @@ async function clickCreate() {
   await userEvent.click(await screen.findByRole('button', { name: /Создать комнату/ }));
   return session;
 }
+
+// The lobby is a chunk the page loads on demand; compiling it here keeps that
+// one-off cost out of the wait for the lobby to render.
+beforeAll(async () => {
+  await import('@/features/home/LobbyPage.vue');
+});
 
 test('a first room opens at once and is remembered', async () => {
   const { calls } = stubFetch(createRoute);

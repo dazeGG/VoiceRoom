@@ -3,7 +3,7 @@
 
 import { screen } from '@testing-library/vue';
 import userEvent from '@testing-library/user-event';
-import { expect, test, vi } from 'vitest';
+import { beforeAll, expect, test, vi } from 'vitest';
 import { useProfileCardUiStore } from '@/entities/profile-card/profile-card-ui.store';
 import HomePage from '@/features/home/HomePage.vue';
 import { stubFetch } from '../fixtures/fetch';
@@ -11,6 +11,12 @@ import { installFakeWebSocket } from '../fixtures/fake-websocket';
 import { authUser } from '../fixtures/users';
 import { stubMatchMedia } from '../helpers/match-media';
 import { renderWithApp } from '../helpers/render';
+
+// The lobby is a chunk the page loads on demand; compiling it here keeps that
+// one-off cost out of the wait for the lobby to render.
+beforeAll(async () => {
+  await import('@/features/home/LobbyPage.vue');
+});
 
 test('a signed-in visit renders the lobby, and a profile card opens there', async () => {
   const errors: unknown[] = [];

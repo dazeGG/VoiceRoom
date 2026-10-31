@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ArrowRight } from '@lucide/vue';
-import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { RouterLink, useRoute, useRouter } from 'vue-router';
 import { createRoom } from '@/api/rooms';
 import type { AuthUser } from '@/api/auth';
@@ -8,6 +8,7 @@ import AuthDialog from '@/features/auth/AuthDialog.vue';
 import type { AuthMode } from '@/features/auth/auth-mode';
 import { useSessionStore } from '@/features/auth/session.store';
 import { markInAppRoomNavigation } from '@/platform/open-in-app';
+import { lazyPage } from '@/shared/components/lazy-page';
 import LegalLinks from '@/shared/components/LegalLinks.vue';
 import Topbar from '@/shared/components/Topbar.vue';
 import { MascotIcon, ToastStack } from '@/shared/ui';
@@ -24,7 +25,7 @@ import { useToastsStore, type ToastOptions } from './model/toasts.store';
 const props = withDefaults(defineProps<{ initialAuthMode?: AuthMode | null }>(), { initialAuthMode: null });
 
 // Only a signed-in visit shows the lobby; a guest's landing does not download it.
-const LobbyPage = defineAsyncComponent(() => import('./LobbyPage.vue'));
+const LobbyPage = lazyPage(() => import('./LobbyPage.vue'));
 
 const route = useRoute();
 const router = useRouter();

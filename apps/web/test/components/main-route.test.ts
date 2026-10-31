@@ -5,18 +5,18 @@ import { cleanup, render, screen } from '@testing-library/vue';
 import { createPinia, setActivePinia } from 'pinia';
 import { defineComponent, h } from 'vue';
 import { RouterView, createWebHistory, type Router } from 'vue-router';
-import { beforeEach, expect, test, vi } from 'vitest';
+import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { createAppRouter } from '../../src/router.ts';
 import { prefetchRoom } from '../../src/features/room/prefetch.ts';
 import { shallowPush, shallowReplace } from '../../src/shared/utils/shallow-routing.ts';
 
 const mounts = vi.hoisted(() => ({ home: 0, room: 0 }));
-const device = vi.hoisted(() => ({ roomClientAllowed: true }));
+const device = vi.hoisted(() => ({ desktop: true }));
 
 vi.mock('../../src/features/room/prefetch.ts', () => ({ prefetchRoom: vi.fn() }));
 vi.mock('../../src/platform/desktop-boundary.ts', async (importOriginal) => ({
   ...(await importOriginal<object>()),
-  isRoomClientAllowed: () => device.roomClientAllowed
+  isDesktopBoundaryAllowed: () => device.desktop
 }));
 
 vi.mock('../../src/features/home/HomeRoute.vue', async () => {
@@ -45,7 +45,7 @@ vi.mock('../../src/pages/RoomRoute.vue', async () => {
 beforeEach(() => {
   mounts.home = 0;
   mounts.room = 0;
-  device.roomClientAllowed = true;
+  device.desktop = true;
   vi.mocked(prefetchRoom).mockClear();
 });
 
@@ -109,22 +109,33 @@ test('a real navigation between / and a room shows the page of the new address',
   expect(mounts).toEqual({ home: 2, room: 1 });
 });
 
-test('the landing fetches the room code once the page is idle, before any click', async () => {
-  await open('/');
-  expect(prefetchRoom).not.toHaveBeenCalled();
-  await vi.waitFor(() => expect(prefetchRoom).toHaveBeenCalledTimes(1));
+afterEach(() => {
+  vi.useRealTimers();
 });
 
-test('a device that cannot open the room client never fetches its code', async () => {
-  device.roomClientAllowed = false;
+// Long enough for any idle schedule: the requestIdleCallback timeout or the pause without it.
+const IDLE_WAIT_MS = 5_000;
+
+test('the landing fetches the room code once the page is idle, before any click', async () => {
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
   await open('/');
-  await new Promise((resolve) => setTimeout(resolve, 400));
+  expect(prefetchRoom).not.toHaveBeenCalled();
+  vi.advanceTimersByTime(IDLE_WAIT_MS);
+  expect(prefetchRoom).toHaveBeenCalledTimes(1);
+});
+
+test('a phone never fetches the room code from the landing', async () => {
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+  device.desktop = false;
+  await open('/');
+  vi.advanceTimersByTime(IDLE_WAIT_MS);
   expect(prefetchRoom).not.toHaveBeenCalled();
 });
 
 test('leaving the page before it is idle drops the prefetch', async () => {
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
   await open('/');
   cleanup();
-  await new Promise((resolve) => setTimeout(resolve, 400));
+  vi.advanceTimersByTime(IDLE_WAIT_MS);
   expect(prefetchRoom).not.toHaveBeenCalled();
 });

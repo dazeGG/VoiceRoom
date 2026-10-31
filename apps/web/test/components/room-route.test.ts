@@ -4,7 +4,7 @@
 
 import { screen } from '@testing-library/vue';
 import { nextTick } from 'vue';
-import { expect, test } from 'vitest';
+import { beforeAll, expect, test } from 'vitest';
 import RoomRoute from '../../src/pages/RoomRoute.vue';
 import { useProfileCardUiStore } from '../../src/entities/profile-card/profile-card-ui.store.ts';
 import { stubFetch } from '../fixtures/fetch.ts';
@@ -12,6 +12,12 @@ import { installFakeWebSocket } from '../fixtures/fake-websocket.ts';
 import { authUser } from '../fixtures/users.ts';
 import { stubMatchMedia } from '../helpers/match-media.ts';
 import { renderWithApp } from '../helpers/render.ts';
+
+// The lobby is a chunk the route loads on demand; compiling it here keeps that
+// one-off cost out of the wait for the lobby to render.
+beforeAll(async () => {
+  await import('../../src/features/home/LobbyPage.vue');
+});
 
 test('a signed-in room link opens exactly one profile card, and it stays open', async () => {
   installFakeWebSocket();

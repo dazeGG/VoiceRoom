@@ -7,18 +7,19 @@ import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import HomeRoute from '@/features/home/HomeRoute.vue';
 import { prefetchRoom } from '@/features/room/prefetch';
-import { isRoomClientAllowed } from '@/platform/desktop-boundary';
+import { isDesktopBoundaryAllowed } from '@/platform/desktop-boundary';
 import { whenIdle } from '@/shared/utils/idle';
 import { isShallowEntry } from '@/shared/utils/shallow-routing';
 import RoomRoute from './RoomRoute.vue';
 
 const route = useRoute();
 
-// Most visits here end in a call; its code loads while the visitor reads. A
-// device that cannot open the room client never downloads it.
+// Most visits here on a computer end in a call; its code loads while the
+// visitor reads. A phone, where the landing is rarely the way into a call,
+// does not spend mobile data on it.
 let cancelPrefetch = () => {};
 onMounted(() => {
-  if (isRoomClientAllowed()) cancelPrefetch = whenIdle(prefetchRoom);
+  if (isDesktopBoundaryAllowed()) cancelPrefetch = whenIdle(prefetchRoom);
 });
 onBeforeUnmount(() => cancelPrefetch());
 

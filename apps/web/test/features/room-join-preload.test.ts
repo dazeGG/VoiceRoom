@@ -62,4 +62,6 @@ test('LiveKit starts loading while the microphone permission is still pending', 
   microphone.refuse(new Error('NotAllowedError'));
   await joining;
   expect(state.joined).toBe(false);
+  // The join went on to listen without a microphone; end it so no socket or recovery timer outlives the test.
+  room.leaveRoom();
 });
