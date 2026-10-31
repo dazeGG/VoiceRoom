@@ -25,7 +25,7 @@ import { join } from 'node:path';
 import { createInterface } from 'node:readline/promises';
 import { chromium, type Browser, type Page } from '@playwright/test';
 import { isRecord } from '@voice-room/shared/guards';
-import { VOICE_SAMPLES_PER_PACKET, concealedLevel, concealedSpeechPct } from '@voice-room/shared/voice-quality';
+import { VOICE_SAMPLES_PER_PACKET, concealedSpeechPct, streamLevel } from '@voice-room/shared/voice-quality';
 
 const roomId = process.argv[2];
 if (!roomId) throw new Error('usage: node scripts/voice-bench/loss-bench.mts <roomId>');
@@ -195,9 +195,11 @@ interface Received {
 /** The incoming audio stream that carried the most packets: the speaking bot, with your microphone muted. */
 async function readReceived(page: Page): Promise<Received | null> {
   const stats: unknown[] = await page.evaluate(async () => {
+    // Runs in the page, so it cannot import a guard; Array.isArray alone would make the items `any`.
+    const isList = (value: unknown): value is unknown[] => Array.isArray(value);
     const connections: unknown = Reflect.get(window, '__benchConnections');
     const all: unknown[] = [];
-    if (!Array.isArray(connections)) return all;
+    if (!isList(connections)) return all;
     for (const connection of connections) {
       if (!(connection instanceof RTCPeerConnection) || connection.connectionState === 'closed') continue;
       (await connection.getStats()).forEach((stat: unknown) => all.push(stat));
@@ -287,7 +289,13 @@ async function main(): Promise<void> {
         continue;
       }
       const measured = delta(after, before);
-      const concealedPct = concealedSpeechPct({ packets: measured.packets, concealedSamples: measured.concealed });
+      const heard = {
+        packets: measured.packets,
+        lost: measured.lost,
+        concealedSamples: measured.concealed,
+        gaps: measured.concealmentEvents
+      };
+      const concealedPct = concealedSpeechPct(heard);
       const row = {
         step: step.label,
         netem: step.netem,
@@ -301,7 +309,8 @@ async function main(): Promise<void> {
             ? Math.round(measured.concealmentEvents / ((measured.packets * VOICE_SAMPLES_PER_PACKET) / 48_000 / 60))
             : null,
         jitterBufferMs: measured.jitterBufferMs,
-        level: concealedPct === null ? null : concealedLevel(concealedPct)
+        // The whole step as one window, its latest poll included.
+        level: streamLevel({ latest: heard, window: heard })
       };
       rows.push(row);
       console.log(
