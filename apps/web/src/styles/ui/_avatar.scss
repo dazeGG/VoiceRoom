@@ -1,0 +1,65 @@
+// Avatar (shared/ui/Avatar).
+//
+// Svelte class -> BEM class
+//   .ui-avatar                     -> .ui-avatar
+//   .ui-avatar--squircle           -> .ui-avatar--squircle
+//   .ui-avatar > img               -> .ui-avatar > img
+//   .ui-avatar-dot                 -> .ui-avatar__dot
+//   // Svelte: [data-status='dnd' | 'afk' | 'online' | 'offline'] (colour was inline)
+//                                  -> .ui-avatar__dot--dnd / --afk / --online / --offline
+//   (inline size/border/offset on the large avatar) -> .ui-avatar__dot--large (offset, border);
+//                                     width and height stay inline
+
+.ui-avatar {
+  position: relative;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  font-family: var(--font-ui);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.ui-avatar--squircle {
+  border-radius: 31%;
+}
+
+.ui-avatar > img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: inherit;
+}
+
+.ui-avatar__dot {
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  border-width: 2px;
+  border-radius: 50%;
+  border-style: solid;
+}
+
+.ui-avatar__dot--large {
+  right: 1px;
+  bottom: 1px;
+  border-width: 3px;
+}
+
+.ui-avatar__dot--dnd {
+  background: var(--vr-dnd);
+}
+
+.ui-avatar__dot--afk {
+  background: var(--vr-away);
+}
+
+.ui-avatar__dot--online {
+  background: var(--vr-online);
+}
+
+.ui-avatar__dot--offline {
+  background: var(--vr-offline);
+}

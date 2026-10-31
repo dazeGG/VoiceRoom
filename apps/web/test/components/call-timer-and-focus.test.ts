@@ -1,21 +1,24 @@
-import { cleanup, render, screen } from '@testing-library/svelte';
-import userEvent from '@testing-library/user-event';
-import { afterEach, expect, test, vi } from 'vitest';
-import RoomCallTimer from '../../src/lib/features/room/components/RoomCallTimer.svelte';
-import { clearConnectedVoiceRoom, setVoiceSessionTiming } from '../../src/lib/features/room/voice-session.svelte.ts';
-import { dialogFocusTrap } from '../../src/lib/shared/ui/focus-trap.ts';
-import { defined } from '../helpers/assert.ts';
+// The focus-trap case of the Svelte test is not ported: focus-trap.ts is not ported, the Vue Dialog
+// uses Reka's focus scope and its focus return is covered by dialog.test.ts.
+
+import { createPinia, setActivePinia } from 'pinia';
+import { render, screen } from '@testing-library/vue';
+import { afterEach, beforeEach, expect, test, vi } from 'vitest';
+import RoomCallTimer from '@/features/room/components/RoomCallTimer.vue';
+import { useVoiceSessionStore } from '@/features/room/voice-session.store';
+
+beforeEach(() => {
+  setActivePinia(createPinia());
+});
 
 afterEach(() => {
-  cleanup();
   vi.useRealTimers();
-  clearConnectedVoiceRoom();
 });
 
 test('the call timer counts from when the room call started on the server', async () => {
   vi.useFakeTimers();
   vi.setSystemTime(new Date('2026-09-24T12:00:00Z'));
-  setVoiceSessionTiming({ joinedAt: Date.now() - 5_000, roomActiveSince: Date.now() - 65_000 });
+  useVoiceSessionStore().setVoiceSessionTiming({ joinedAt: Date.now() - 5_000, roomActiveSince: Date.now() - 65_000 });
   render(RoomCallTimer);
   expect(screen.getByLabelText('Длительность звонка 1:05')).toBeTruthy();
 
@@ -26,31 +29,4 @@ test('the call timer counts from when the room call started on the server', asyn
 test('without a running call there is no timer', () => {
   render(RoomCallTimer);
   expect(document.querySelector('.room-call-timer')).toBeNull();
-});
-
-test('a dialog focus trap focuses the marked element, keeps Tab inside and returns focus to the opener', async () => {
-  const opener = document.createElement('button');
-  opener.textContent = 'Открыть';
-  document.body.append(opener);
-  opener.focus();
-
-  const dialog = document.createElement('div');
-  dialog.innerHTML =
-    '<button>Первая</button><input data-dialog-initial-focus aria-label="Имя" /><button>Последняя</button>';
-  document.body.append(dialog);
-  const trap = dialogFocusTrap(dialog);
-  await Promise.resolve();
-  expect(document.activeElement?.getAttribute('aria-label')).toBe('Имя');
-
-  defined(dialog.querySelectorAll('button')[1], 'second button').focus();
-  await userEvent.tab();
-  expect(document.activeElement?.textContent).toBe('Первая');
-  await userEvent.tab({ shift: true });
-  expect(document.activeElement?.textContent).toBe('Последняя');
-
-  trap.destroy();
-  await Promise.resolve();
-  expect(document.activeElement).toBe(opener);
-  dialog.remove();
-  opener.remove();
 });

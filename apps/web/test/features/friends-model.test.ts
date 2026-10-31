@@ -4,10 +4,11 @@ import { afterEach, expect, test, vi } from 'vitest';
 import { friend, incomingRequest, outgoingRequest, publicUser } from '../fixtures/answers.ts';
 import { stubFetch, type Reply } from '../fixtures/fetch.ts';
 import { notificationPreferences } from '../fixtures/users.ts';
+import { freshImport } from '../helpers/fresh-module.ts';
 
 type Handler = (event: { type: string; payload: Record<string, unknown> }) => void;
 let emit: Handler = () => {};
-vi.mock('../../src/lib/api/realtime', async (importOriginal) => ({
+vi.mock('../../src/api/realtime', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   getAppRealtime: () => ({
     subscribe: (onEvent: Handler) => {
@@ -17,7 +18,7 @@ vi.mock('../../src/lib/api/realtime', async (importOriginal) => ({
   })
 }));
 
-vi.mock('../../src/lib/features/room/client/media/cues', () => ({
+vi.mock('../../src/features/room/client/media/cues', () => ({
   playDirectMessageCue: vi.fn(),
   playFriendAcceptedCue: vi.fn(),
   playFriendRequestCue: vi.fn(),
@@ -52,9 +53,8 @@ async function startLobby(friends: Reply = friendList) {
     },
     '/api/notifications/preferences': { body: { ok: true, preferences: notificationPreferences() } }
   });
-  vi.resetModules();
-  const { LobbyStore } = await import('../../src/lib/features/home/model/lobby.svelte.ts');
-  const lobby = new LobbyStore();
+  const { useLobbyStore } = await freshImport(() => import('../../src/features/home/model/lobby.store.ts'));
+  const lobby = useLobbyStore();
   stop = lobby.init('me');
   await vi.waitFor(() => expect(lobby.loaded).toBe(true));
   return lobby;
@@ -94,7 +94,7 @@ test('a friend list refreshed after the snapshot keeps live presence for known f
 
 test('a new friend request and an accepted request each play their sound', async () => {
   await startLobby();
-  const cues = await import('../../src/lib/features/room/client/media/cues');
+  const cues = await import('../../src/features/room/client/media/cues');
   emit({ type: 'friend.request', payload: { request: { user: user('dima') } } });
   expect(cues.playFriendRequestCue).toHaveBeenCalledTimes(1);
   emit({ type: 'friend.accepted', payload: { friend: { user: user('dima'), online: true } } });
@@ -116,4 +116,27 @@ test('a reconnect picks up direct messages that arrived while the socket was dow
   unread = 2;
   emit({ type: 'ready', payload: { onlineFriendIds: ['anna'] } });
   await vi.waitFor(() => expect(lobby.friends[0]?.unreadCount).toBe(2));
+});
+
+test('signing out clears what the lobby held, so the next account sees none of it', async () => {
+  const lobby = await startLobby();
+  await vi.waitFor(() => expect(lobby.requests.incoming).toHaveLength(1));
+  lobby.setMode('rooms');
+  lobby.showPeople();
+  lobby.selectedFriendId = 'anna';
+  const queued = lobby.outboxFor('anna');
+
+  stop?.();
+  stop = null;
+
+  expect(lobby).toMatchObject({
+    friends: [],
+    incomingRequestCount: 0,
+    requests: { incoming: [], outgoing: [] },
+    loaded: false,
+    mode: 'friends',
+    view: 'home',
+    selectedFriendId: null
+  });
+  expect(lobby.outboxFor('anna')).not.toBe(queued);
 });

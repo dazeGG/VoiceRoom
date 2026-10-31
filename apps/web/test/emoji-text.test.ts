@@ -1,4 +1,4 @@
-import type { EmojiTextPart } from '../src/lib/shared/chat/emoji-text.ts';
+import type { EmojiTextPart } from '@/shared/chat/emoji-text';
 import { test, vi } from 'vitest';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -11,7 +11,7 @@ const read = (path: string) => readFileSync(resolve(webRoot, path), 'utf8');
 
 async function loadEmojiText() {
   vi.resetModules();
-  return import('../src/lib/shared/chat/emoji-text.ts');
+  return import('@/shared/chat/emoji-text');
 }
 
 const emojiParts = (parts: EmojiTextPart[]) => parts.flatMap((part) => (part.kind === 'emoji' ? [part.emoji] : []));
@@ -60,7 +60,7 @@ test('what the artwork does not draw is left as text, never offered as an image'
   const { splitEmoji, hasEmoji } = await loadEmojiText();
   const catalogue = parse(
     Type.Object({ emojis: Type.Array(Type.String()) }),
-    JSON.parse(read('src/lib/shared/chat/emoji-coverage.json'))
+    JSON.parse(read('src/shared/chat/emoji-coverage.json'))
   );
   const offered = new Set(catalogue.emojis);
 

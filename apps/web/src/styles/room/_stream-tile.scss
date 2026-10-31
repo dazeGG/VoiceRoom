@@ -1,0 +1,198 @@
+// StreamTile (features/room/components/StreamTile.vue): the tile of someone's screen share in the grid and the carousel.
+//
+// Svelte class / selector -> BEM class
+//   .stream-tile                              -> .stream-tile
+//   .stream-tile-preview                      -> .stream-tile__preview
+//   .stream-tile-video                        -> .stream-tile__video
+//   .stream-tile-icon                         -> .stream-tile__icon
+//   .stream-tile-profile-meta                 -> .stream-tile__profile-meta
+//   .stream-tile-copy / -copy-idle            -> .stream-tile__copy / .stream-tile__copy--idle (no rule)
+//   .stream-tile-plate                        -> .stream-tile__plate
+//   .stream-tile-mini-avatar                  -> .stream-tile__mini-avatar
+//   .stream-tile-actions                      -> .stream-tile__actions
+//   .stream-tile-action / -action-primary     -> .stream-tile__action / .stream-tile__action--primary (no rule)
+//   .stream-tile-expand                       -> .stream-tile__expand
+//
+// [data-*] -> modifier class
+//   [data-idle='true']                        -> .stream-tile--idle
+//   [data-preview='true']                     -> .stream-tile--preview
+//   [data-collapsed='true']                   -> .stream-tile--collapsed
+//   [data-local='true']                       -> .stream-tile--local (no rule)
+//   data-peer-id stays as an identity hook, not styled
+
+.stream-tile {
+  position: relative;
+  display: block;
+  min-width: 0;
+  min-height: 0;
+  height: auto;
+  aspect-ratio: 16 / 9;
+  border: 0;
+  border-radius: 16px;
+  padding: 0;
+  overflow: hidden;
+  background: var(--vr-video-bg);
+  box-shadow: inset 0 0 0 1px var(--vr-line);
+  color: var(--vr-text);
+  text-align: left;
+  cursor: pointer;
+  transition: box-shadow 160ms var(--ease-out);
+}
+
+.stream-tile--idle:hover,
+.stream-tile--idle:focus-visible {
+  box-shadow: inset 0 0 0 1px var(--vr-accent-line);
+}
+
+.stream-tile--preview:hover,
+.stream-tile--preview:focus-visible {
+  box-shadow: inset 0 0 0 1px var(--vr-line);
+}
+
+.stream-tile__preview {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: var(--vr-video-bg);
+}
+
+.stream-tile__video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: var(--vr-video-bg);
+  object-fit: cover;
+}
+
+.stream-tile__icon {
+  color: var(--vr-text-3);
+
+  svg {
+    width: 42px;
+    height: 42px;
+  }
+}
+
+.stream-tile--idle .stream-tile__icon {
+  display: none;
+}
+
+.stream-tile__profile-meta {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 2;
+  display: inline-flex;
+  max-width: calc(100% - 16px);
+  align-items: center;
+  overflow: hidden;
+  border-radius: 8px;
+  padding: 0 9px;
+  height: 26px;
+  background: var(--vr-scrim);
+  color: var(--vr-text-2);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  line-height: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.stream-tile__profile-meta[hidden] {
+  display: none;
+}
+
+.stream-tile__copy {
+  position: absolute;
+  left: 8px;
+  bottom: 8px;
+  z-index: 1;
+  display: grid;
+  justify-items: start;
+  min-width: 0;
+  max-width: calc(100% - 16px);
+  pointer-events: none;
+}
+
+// The name plate says «Стрим» and shows who is streaming.
+.stream-tile__plate {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 9px 0 4px;
+  border-radius: 8px;
+  background: var(--vr-scrim);
+  color: var(--vr-text);
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.stream-tile__mini-avatar {
+  display: grid;
+  width: 18px;
+  height: 18px;
+  flex: none;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 50%;
+  background: var(--avatar-bg, var(--vr-surface-3));
+  color: var(--avatar-fg, var(--vr-text));
+  font-size: 10px;
+  font-weight: 700;
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+}
+
+.stream-tile__actions {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 2;
+  display: inline-flex;
+  max-width: calc(100% - 20px);
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.stream-tile--preview:not(.stream-tile--collapsed) .stream-tile__actions {
+  display: none;
+}
+
+.stream-tile__action {
+  display: inline-flex;
+  min-height: 32px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  padding: 0 14px;
+  background: var(--vr-accent);
+  color: var(--vr-accent-ink);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.stream-tile__expand {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  background: transparent;
+  cursor: pointer;
+}

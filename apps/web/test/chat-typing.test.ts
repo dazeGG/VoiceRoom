@@ -4,7 +4,7 @@ import * as shared from '@voice-room/shared/realtime';
 
 async function loadTyping() {
   vi.resetModules();
-  return import('../src/lib/shared/chat/typing.svelte.ts');
+  return import('@/shared/chat/typing');
 }
 
 const typing = (name: string) => ({ name, activity: 'typing' as const });

@@ -9,7 +9,7 @@ import { listReactionEmojis } from '@voice-room/shared/emoji';
 import { Type, type TSchema } from 'typebox';
 import { parse } from './helpers/assert.ts';
 import { assetName, buildEmojiAssets, planEmojiAssets } from '../scripts/build-emoji-assets.ts';
-import { emojiAssetName, emojiAssetUrl } from '../src/lib/shared/chat/emoji-asset.ts';
+import { emojiAssetName, emojiAssetUrl } from '@/shared/chat/emoji-asset';
 
 const webRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
 const read = (relative: string) => readFileSync(join(webRoot, relative), 'utf8');
@@ -46,7 +46,7 @@ test('the offered catalogue is exactly what the artwork can draw', async () => {
   // drawable and what cannot be drawn is never offered.
   const { copies, missing } = await planEmojiAssets();
   const corpus = listReactionEmojis();
-  const catalogue = readJson(join(webRoot, 'src/lib/shared/chat/emoji-coverage.json'), Catalogue);
+  const catalogue = readJson(join(webRoot, 'src/shared/chat/emoji-coverage.json'), Catalogue);
   const offered = new Set(catalogue.emojis);
 
   assert.deepEqual(
@@ -97,5 +97,5 @@ test("the artwork ships the upstream licence, not the repackager's", async () =>
   const catalogue = readJson(catalogueFile, Catalogue);
   assert.equal(catalogue.source, '@discordapp/twemoji@16.0.1');
   // The committed catalogue is what a build writes.
-  assert.equal(readFileSync(catalogueFile, 'utf8'), read('src/lib/shared/chat/emoji-coverage.json'));
+  assert.equal(readFileSync(catalogueFile, 'utf8'), read('src/shared/chat/emoji-coverage.json'));
 });

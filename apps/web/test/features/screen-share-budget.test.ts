@@ -4,9 +4,9 @@
 
 import { expect, test, vi } from 'vitest';
 import type { MediaGrant } from '@voice-room/shared/contracts/realtime';
-import type * as MediaGrantModule from '../../src/lib/features/room/client/services/media-grant';
+import type * as MediaGrantModule from '@/features/room/client/services/media-grant';
 
-const P = '../../src/lib/features/room/client';
+const P = '@/features/room/client';
 
 function fakeStream() {
   const track = {
@@ -69,7 +69,7 @@ async function loadScreenShare(
     return grant;
   });
 
-  vi.doMock(`${P}/core/state.svelte`, () => ({ state }));
+  vi.doMock(`${P}/core/room-runtime.store`, () => ({ state }));
   vi.doMock(`${P}/ui/toast`, () => ({ showToast }));
   vi.doMock(`${P}/media/livekit-runtime`, () => ({
     TRACK_SOURCE: { ScreenShare: 'screen_share' },
@@ -88,7 +88,7 @@ async function loadScreenShare(
     // The desktop picker settles the profile: here the person picked 1080p 60 FPS.
     openScreenShare: async () => ({
       mode: 'games',
-      profile: (await import('../../src/lib/features/room/client/media/profiles')).getScreenProfile('high-60'),
+      profile: (await import('@/features/room/client/media/profiles')).getScreenProfile('high-60'),
       stream
     })
   }));
@@ -98,7 +98,7 @@ async function loadScreenShare(
   }));
   vi.doMock(`${P}/room/participants`, () => ({ updateParticipant: () => {} }));
   vi.doMock(`${P}/core/microphone-mute`, () => ({ isMicrophoneShownMuted: () => false }));
-  vi.doMock(`${P}/../screen-ui.svelte`, () => ({ getActiveScreenPeer: () => null }));
+  vi.doMock(`${P}/../screen-ui.store`, () => ({ getActiveScreenPeer: () => null }));
   vi.doMock(`${P}/ui/screen-view`, () => ({
     hideScreenStage: () => {},
     openLocalStreamPreview: () => {},
@@ -110,7 +110,7 @@ async function loadScreenShare(
     askForMedia
   }));
 
-  const service = await import('../../src/lib/features/room/client/services/screen-share-service');
+  const service = await import('@/features/room/client/services/screen-share-service');
   return { service, state, stream, showToast, publishLocalScreenTracks, applyScreenCaptureProfile, askForMedia };
 }
 

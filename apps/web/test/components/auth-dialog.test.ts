@@ -1,15 +1,14 @@
 // Signing in with a one-time recovery code, and restoring an account that is
 // waiting to be deleted instead of failing the sign-in.
 
-import { cleanup, render, screen } from '@testing-library/svelte';
+import { screen } from '@testing-library/vue';
 import userEvent from '@testing-library/user-event';
-import { afterEach, beforeEach, expect, test, vi } from 'vitest';
-import AuthDialog from '../../src/lib/features/auth/AuthDialog.svelte';
-import { session } from '../../src/lib/features/auth/session.svelte';
-import { stubFetch } from '../fixtures/fetch.ts';
-import { authUser } from '../fixtures/users.ts';
-
-vi.mock('$app/navigation', () => ({ goto: vi.fn(async () => {}) }));
+import { beforeEach, expect, test, vi } from 'vitest';
+import AuthDialog from '@/features/auth/AuthDialog.vue';
+import { useSessionStore } from '@/features/auth/session.store';
+import { stubFetch } from '../fixtures/fetch';
+import { authUser } from '../fixtures/users';
+import { renderWithApp } from '../helpers/render';
 
 beforeEach(() => {
   // jsdom has no modal dialogs.
@@ -25,13 +24,12 @@ beforeEach(() => {
       }
     });
   }
-  session.loaded = true;
 });
-afterEach(cleanup);
 
-function renderDialog(mode: 'login' | 'recover') {
+async function renderDialog(mode: 'login' | 'recover') {
   const onAuthenticated = vi.fn();
-  render(AuthDialog, { props: { mode, onClose: vi.fn(), onModeChange: vi.fn(), onAuthenticated } });
+  await renderWithApp(AuthDialog, { props: { mode, onAuthenticated } });
+  useSessionStore().loaded = true;
   return onAuthenticated;
 }
 
@@ -40,7 +38,7 @@ test('a recovery code signs in with a new password; a malformed code is refused 
   const { calls } = stubFetch({
     'POST /api/auth/recover': { body: { ok: true, user, recoveryCodes: { remaining: 9 } } }
   });
-  const onAuthenticated = renderDialog('recover');
+  const onAuthenticated = await renderDialog('recover');
 
   await userEvent.type(screen.getByLabelText('Логин'), 'ada');
   await userEvent.type(screen.getByLabelText('Код восстановления'), 'short');
@@ -77,7 +75,7 @@ test('signing in to an account waiting for deletion offers to restore it', async
     },
     'POST /api/auth/account/restore': { body: { ok: true, user } }
   });
-  const onAuthenticated = renderDialog('login');
+  const onAuthenticated = await renderDialog('login');
 
   await userEvent.type(screen.getByLabelText('Логин'), 'ada');
   await userEvent.type(screen.getByLabelText('Пароль'), 'old-password');

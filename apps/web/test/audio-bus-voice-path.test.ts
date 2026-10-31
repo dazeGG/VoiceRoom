@@ -71,8 +71,8 @@ async function loadBus(storage = {}) {
   vi.stubGlobal('MediaStream', FakeMediaStream);
   vi.stubGlobal('AudioContext', FakeAudioContext);
   vi.resetModules();
-  const bus = await import('../src/lib/features/room/client/services/audio-bus.ts');
-  const { state } = await import('../src/lib/features/room/client/core/state.svelte.ts');
+  const bus = await import('@/features/room/client/services/audio-bus.ts');
+  const { state } = await import('@/features/room/client/core/room-runtime.store');
   return { bus, state };
 }
 

@@ -1,0 +1,22 @@
+// Icon (shared/ui/icons/Icon.vue): a Font Awesome brand icon, replaces svelte-fa's <Fa>.
+//
+// Svelte (svelte-fa)            -> BEM class
+//   <Fa size="sm"> / "lg"        -> .icon--sm / .icon--lg (.icon--1x for the default)
+
+.icon {
+  display: inline-block;
+  height: 1em;
+  overflow: visible;
+  box-sizing: content-box;
+  vertical-align: -0.125em;
+}
+
+.icon--sm {
+  font-size: 0.875em;
+  vertical-align: -0.125em;
+}
+
+.icon--lg {
+  font-size: 1.25em;
+  vertical-align: -0.075em;
+}

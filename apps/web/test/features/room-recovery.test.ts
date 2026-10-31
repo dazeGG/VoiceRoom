@@ -3,19 +3,19 @@
 // raised and reported, ordinary transitions stay quiet.
 
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
-import type { ReplacementOutcome } from '../../src/lib/features/room/client/recovery/realtime-recovery.ts';
+import type { ReplacementOutcome } from '@/features/room/client/recovery/realtime-recovery';
 
-vi.mock('../../src/lib/entities/room/room-realtime', () => ({
+vi.mock('@/entities/room/room-realtime', () => ({
   requestActiveVoiceResync: vi.fn(() => true),
   setActiveVoiceResyncFailureHandler: vi.fn()
 }));
-vi.mock('../../src/lib/shared/log', async (importOriginal) => ({
+vi.mock('@/shared/log', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   reportClientLogs: vi.fn(async () => true)
 }));
 
-const { reportClientLogs } = await import('../../src/lib/shared/log');
-const recovery = await import('../../src/lib/features/room/client/recovery/room-recovery.ts');
+const { reportClientLogs } = await import('@/shared/log');
+const recovery = await import('@/features/room/client/recovery/room-recovery');
 
 beforeEach(() => vi.mocked(reportClientLogs).mockClear());
 afterEach(() => {

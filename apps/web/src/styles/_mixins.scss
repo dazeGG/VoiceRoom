@@ -1,0 +1,62 @@
+// Breakpoints (max-width) the CSS repeats, and the patterns it repeats.
+// Spacing, radius and motion stay CSS custom properties in _tokens.scss.
+$bp-narrow: 900px;
+$bp-phone: 600px;
+$bp-phone-sm: 560px;
+
+@mixin below($width) {
+  @media (max-width: $width) {
+    @content;
+  }
+}
+
+// Full-window dim layer that centres a modal card.
+@mixin modal-overlay($z-index, $padding) {
+  position: fixed;
+  inset: 0;
+  z-index: $z-index;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: $padding;
+  background: var(--vr-backdrop);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+// Read out by screen readers, never drawn.
+@mixin visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+// Text field used inside dialogs.
+@mixin dialog-field {
+  width: 100%;
+  min-height: 44px;
+  border: 1px solid var(--vr-line-strong);
+  border-radius: 12px;
+  padding: 0 14px;
+  background: var(--vr-surface-2);
+  color: var(--vr-text);
+  font-family: var(--font-ui);
+  font-size: 14.5px;
+  outline: none;
+  transition: border-color 0.15s ease;
+
+  &::placeholder {
+    color: var(--vr-text-3);
+  }
+
+  &:focus {
+    border-color: var(--vr-accent-line);
+    box-shadow: none;
+  }
+}

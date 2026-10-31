@@ -17,7 +17,7 @@ import {
 import type { PresencePeer } from '../rooms/room-views.ts';
 import type { DescribeAddress } from '../rooms/voice-session.repository.ts';
 import { avatarColorForPeerId } from '../rooms/avatar-color.ts';
-import { currentNetworkLevel } from '../../realtime/network-track.ts';
+import { currentVoice } from '../../realtime/voice-track.ts';
 import type { AdminRoomsRepository } from './admin-rooms.repository.ts';
 import type { StaffCheck } from '../staff/staff-check.ts';
 
@@ -106,7 +106,8 @@ export function createAdminRoomsService(deps: AdminRoomsServiceDeps) {
           guestId: (origin && !peer.accountUserId && peer.guestId) || null,
           ipKey: origins.get(peer)?.ipKey ?? null,
           location: origins.get(peer)?.location || null,
-          network: currentNetworkLevel(peer.network)
+          network: currentVoice(peer)?.level ?? null,
+          cause: currentVoice(peer)?.cause ?? null
         }))
         .sort((a, b) => (a.joinedAt ?? Infinity) - (b.joinedAt ?? Infinity));
       const row = roomById.get(room.id);

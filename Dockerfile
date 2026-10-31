@@ -14,7 +14,8 @@ FROM deps AS web-build
 COPY apps/web ./apps/web
 COPY apps/admin ./apps/admin
 COPY packages ./packages
-RUN npm run build \
+RUN npm --workspace @voice-room/web run build \
+  && npm --workspace @voice-room/admin run build \
   && node apps/web/scripts/emit-caddy-csp.ts apps/web/dist/index.html > /app/csp.caddy
 
 FROM node:24.18.0-alpine3.23 AS api

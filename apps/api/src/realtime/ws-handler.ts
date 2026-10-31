@@ -38,6 +38,10 @@ export interface WsRoomRuntime {
     connection: WsConnection,
     payload: ClientCommands['room.peer.update']
   ): Promise<{ ok: true } | { ok: false; code: ErrorCode }>;
+  reportVoice(
+    connection: WsConnection,
+    payload: ClientCommands['room.voice.report']
+  ): { ok: true } | { ok: false; code: ErrorCode };
   requestMedia(
     connection: WsConnection,
     payload: ClientCommands['room.media.request']
@@ -252,6 +256,12 @@ function createWsHandler({
         }
         return;
       }
+
+      // A poll that lost the race with a leave or a rejoin is dropped: the
+      // next one comes from the new seat within seconds.
+      case 'room.voice.report':
+        roomRuntime.reportVoice(connection, envelope.payload);
+        return;
 
       case 'room.media.request': {
         const result = roomRuntime.requestMedia(connection, envelope.payload);

@@ -1,12 +1,2 @@
 {
-  "apps/web/src/lib/features/home/HomePage.svelte": {
-    "svelte/no-navigation-without-resolve": {
-      "count": 2
-    }
-  },
-  "apps/web/src/lib/shared/chat/EmojiComposer.svelte": {
-    "svelte/no-dom-manipulating": {
-      "count": 1
-    }
-  }
 }

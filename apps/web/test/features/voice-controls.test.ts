@@ -1,28 +1,28 @@
 // Voice controls: hotkeys, push-to-talk and microphone volume.
 
+import { createPinia, setActivePinia } from 'pinia';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 
-vi.mock('../../src/lib/features/room/client/media/cues', async (importOriginal) => ({
+vi.mock('@/features/room/client/media/cues', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   playMicCue: vi.fn()
 }));
-vi.mock('../../src/lib/features/room/client/room/presence', () => ({ postState: vi.fn(async () => {}) }));
-vi.mock('../../src/lib/features/room/client/services/livekit-service', async (importOriginal) => ({
+vi.mock('@/features/room/client/room/presence', () => ({ postState: vi.fn(async () => {}) }));
+vi.mock('@/features/room/client/services/livekit-service', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   syncLocalMicrophonePublicationMuted: vi.fn(async () => {})
 }));
 
-const cues = await import('../../src/lib/features/room/client/media/cues');
-const { state } = await import('../../src/lib/features/room/client/core/state.svelte.ts');
-const { createInitialRoomState } = await import('../../src/lib/features/room/client/model/room-state.ts');
-const hotkeys = await import('../../src/lib/features/room/client/core/hotkeys.ts');
-const { isMicrophoneShownMuted } = await import('../../src/lib/features/room/client/core/microphone-mute.ts');
+const cues = await import('@/features/room/client/media/cues');
+const { state } = await import('@/features/room/client/core/room-runtime.store');
+const { createInitialRoomState } = await import('@/features/room/client/model/room-state.ts');
+const hotkeys = await import('@/features/room/client/core/hotkeys.ts');
+const { isMicrophoneShownMuted } = await import('@/features/room/client/core/microphone-mute.ts');
 const { beginPushToTalk, endPushToTalk, toggleMicrophoneMuted, toggleOutputMute } =
-  await import('../../src/lib/features/room/client/ui/controls.ts');
-const { getStoredMicrophoneVolume, persistMicrophoneVolume } =
-  await import('../../src/lib/features/room/client/core/settings.ts');
+  await import('@/features/room/client/ui/controls.ts');
+const { getStoredMicrophoneVolume, persistMicrophoneVolume } = await import('@/features/room/client/core/settings.ts');
 const { formatHotkeyBinding, hotkeyBindingFromEvent, hotkeyMatchesEvent } =
-  await import('../../src/lib/shared/ui/HotkeyRecorder/hotkey.ts');
+  await import('@/shared/ui/HotkeyRecorder/hotkey.ts');
 
 const key = (overrides: KeyboardEventInit = {}) =>
   new KeyboardEvent('keydown', {
@@ -35,6 +35,7 @@ const key = (overrides: KeyboardEventInit = {}) =>
   });
 
 beforeEach(() => {
+  setActivePinia(createPinia());
   localStorage.clear();
   Object.assign(state, createInitialRoomState());
   vi.mocked(cues.playMicCue).mockClear();

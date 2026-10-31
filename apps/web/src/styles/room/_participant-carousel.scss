@@ -1,0 +1,143 @@
+// StageTiles (features/room/components/StageTiles.vue): the spotlight («В центре внимания»): one 16:9 tile on the
+// stage — a participant tile or the screen stage — with everyone else in a paged carousel below.
+// Clicking the spotlighted tile again releases it, so there is no close X.
+//
+// Svelte class / selector -> BEM class
+//   .participant-focus-layout                 -> .participant-focus
+//   .participant-focus-stage                  -> .participant-focus__stage
+//   .participant-carousel-shell               -> .participant-carousel
+//   .participant-carousel                     -> .participant-carousel__viewport
+//   .participant-focus-strip                  -> .participant-carousel__strip
+//   .participant-carousel-nav                 -> .participant-carousel__nav
+//
+// [data-*] -> class
+//   .participant-carousel-nav[data-visible='false'] -> .participant-carousel__nav--hidden
+//
+// body[data-*] -> body class
+//   body[data-strip-collapsed='true'] .participant -> body.strip--collapsed .participant
+
+.participant-focus {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  grid-template-rows: minmax(0, 1fr) auto;
+  place-items: center;
+  gap: var(--space-md);
+}
+
+.participant-focus__stage {
+  position: relative;
+  display: grid;
+  width: min(100%, 980px);
+  height: 100%;
+  min-height: 0;
+  place-items: center;
+
+  // Fit the 16:9 spotlight tile into the stage: cap the width by both the stage
+  // itself and the strip height (100cqh = .stage-strip) minus the carousel row,
+  // so the tile keeps its aspect ratio instead of being squashed.
+  > .participant {
+    width: min(100%, calc((100cqh - 136px) * 1.7778));
+  }
+}
+
+.participant-carousel {
+  display: grid;
+  width: min(100%, 790px);
+  grid-template-columns: 34px minmax(0, 1fr) 34px;
+  align-items: center;
+  gap: 8px;
+}
+
+.participant-carousel__viewport {
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+.participant-carousel__strip {
+  display: flex;
+  width: max-content;
+  height: 112px;
+  align-items: center;
+  gap: 10px;
+  margin-inline: auto;
+
+  :is(.participant, .stream-tile) {
+    width: 148px;
+    height: 84px;
+    flex: 0 0 148px;
+    align-self: center;
+    border-radius: 12px;
+  }
+
+  // Carousel tiles stay minimal: no watch/status chrome, just the tile itself.
+  .stream-tile__actions,
+  .participant__status,
+  .participant__screen-action,
+  .participant__you {
+    display: none;
+  }
+
+  .participant__copy {
+    left: 5px;
+    bottom: 5px;
+    max-width: calc(100% - 10px);
+  }
+
+  .participant__heading {
+    height: 20px;
+    gap: 4px;
+    border-radius: 6px;
+    padding: 0 6px;
+    font-size: 11.5px;
+  }
+
+  .participant__muted-icon,
+  .participant__deafened-icon,
+  .participant__muted-icon svg,
+  .participant__deafened-icon svg {
+    width: 12px;
+    height: 12px;
+  }
+
+  .participant__ring {
+    height: 34px;
+  }
+
+  .participant__avatar {
+    font-size: 13px;
+  }
+
+  .stream-tile__icon svg {
+    width: 24px;
+    height: 24px;
+  }
+}
+
+.participant-carousel__nav {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border: 1px solid var(--vr-line-strong);
+  border-radius: 50%;
+  background: var(--vr-surface-2);
+  color: var(--vr-text-2);
+  cursor: pointer;
+}
+
+// Arrows appear only when there is another page on that side.
+.participant-carousel__nav--hidden {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+body.strip--collapsed .participant {
+  display: none;
+}

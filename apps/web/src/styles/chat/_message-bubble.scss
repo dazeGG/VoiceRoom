@@ -1,0 +1,102 @@
+// One chat message row (shared/chat/MessageBubble.vue).
+//
+// Svelte class -> BEM class
+//   .chat-msg-text                          -> .message-bubble
+//   .chat-msg-text[data-group-first=true]   -> .message-bubble--first
+//   .chat-msg-text.is-context               -> .message-bubble--context
+//   .chat-msg-text.mentions-me              -> .message-bubble--mentions-me
+//   .chat-msg-text.is-highlighted           -> .message-bubble--highlighted (set by the room chat panel)
+//   .dm-chat-message                        -> .message-bubble--dm
+//   .chat-msg-body                          -> .message-bubble__body
+//   .dm-chat-content                        -> .message-bubble__body--dm
+//   .chat-msg-content, .chat-msg-edit, .chat-msg-text a, .chat-msg-text + .chat-msg-text,
+//   .chat-msg:has(.chat-msg-text:hover)     -> stay with the room chat panel (room layout)
+
+.message-bubble {
+  position: relative;
+  // Deliberately not an isolated stacking context: the hover toolbar has to be
+  // able to paint above the author line, which lives outside this row. The
+  // hovered .chat-msg raises the whole group instead, which keeps the row's
+  // z-index:-1 highlight behind everything inside it.
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  width: calc(100% + 42px);
+  margin: 2px 0 0 -42px;
+  padding: 3px 38px 3px 42px;
+  color: var(--vr-text);
+  font-size: 14px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+
+  // The hover wash spans the whole row; on the first message of a group it
+  // reaches up to take in the avatar and the name.
+  &::before {
+    content: '';
+    position: absolute;
+    z-index: -1;
+    inset: -3px -20px;
+    border-radius: 12px;
+    background: transparent;
+    transition: background 120ms ease;
+  }
+
+  &:hover::before,
+  &:focus-within::before {
+    background: var(--vr-hover);
+  }
+
+  &:hover .message-hover-actions,
+  &:focus-within .message-hover-actions {
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: auto;
+  }
+}
+
+.message-bubble--first::before {
+  top: -25px;
+  left: -42px;
+}
+
+// A message that names you stays lit, so it is findable by scrolling back. The
+// hover and context-menu rules come later and still win.
+.message-bubble--mentions-me::before {
+  background: color-mix(in oklch, var(--vr-accent), transparent 95%);
+}
+
+.message-bubble--mentions-me.message-bubble--first::before {
+  top: -30px;
+}
+
+// While its context menu is open the message stays lit, so it is obvious which
+// message the menu belongs to.
+.message-bubble--context::before {
+  background: var(--vr-accent-soft);
+}
+
+// Brief flash after jumping here from the pinned bar.
+.message-bubble--highlighted::before {
+  background: var(--vr-accent-soft-hover);
+  transition: background 400ms ease;
+}
+
+.message-bubble--context .message-hover-actions {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+// The message body stacks its parts, so reactions land under the text on the
+// left instead of beside it — the same shape direct messages use.
+.message-bubble__body--dm {
+  display: grid;
+  min-width: 0;
+  max-width: min(720px, 100%);
+  gap: 6px;
+
+  .attachment-mosaic {
+    width: min(560px, 100%);
+  }
+}

@@ -1,0 +1,77 @@
+// Messages on their way out (shared/chat/OutgoingMessages.vue).
+//
+// Svelte class -> BEM class
+//   .outgoing-messages                         -> .outgoing-messages
+//   .outgoing-message                          -> .outgoing-messages__item
+//   .outgoing-message.is-failed                -> .outgoing-messages__item--failed
+//   .outgoing-message__bubble                  -> .outgoing-messages__bubble
+//   .outgoing-message__text                    -> .outgoing-messages__text
+//   .outgoing-message__meta                    -> .outgoing-messages__meta
+//   .outgoing-message__status                  -> .outgoing-messages__status
+
+// Lined up with the text of the messages above: the chat's 32px avatar
+// column and its 10px gap (.chat-msg in the room chat panel).
+.outgoing-messages {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0 0 0 42px;
+  list-style: none;
+}
+
+.outgoing-messages__item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+
+.outgoing-messages__bubble {
+  max-width: 100%;
+  opacity: 0.5;
+}
+
+.outgoing-messages__item--failed .outgoing-messages__bubble {
+  opacity: 0.85;
+}
+
+// Set like a sent message's text (.message-bubble).
+.outgoing-messages__text {
+  margin: 0;
+  color: var(--vr-text);
+  font-size: 14px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.outgoing-messages__meta {
+  margin: 4px 0 0;
+  color: var(--vr-text-3);
+  font-size: 12.5px;
+}
+
+.outgoing-messages__status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  color: var(--vr-text-3);
+  font-size: 12px;
+
+  button {
+    padding: 2px 8px;
+    border: 1px solid currentColor;
+    border-radius: 6px;
+    background: none;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+  }
+}
+
+.outgoing-messages__item--failed .outgoing-messages__status {
+  color: var(--vr-danger);
+}

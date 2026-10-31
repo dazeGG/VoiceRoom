@@ -2,7 +2,7 @@
 
 ## Repository map
 - `apps/api` is the Fastify/PostgreSQL/LiveKit backend.
-- `apps/web` is the Svelte/Vite frontend.
+- `apps/web` is the Vue/Vite frontend.
 - `packages/shared` owns contracts shared by API and Web. Update shared contracts before their consumers.
 - `docs/GIT_FLOW.md` is the source of truth for branches, commits, pull requests, hotfixes, and releases.
 - A release may add a `docs/RELEASE_<version>_PLAN.md` target-state plan; none is active now. Do not describe an unmet gate as already implemented.
@@ -19,8 +19,8 @@
 
 ## Verification
 - Prefer a targeted workspace test first.
-- Repository gates are `npm run check` (tsc, svelte-check and ESLint), `npm test`, and `npm run build`.
-- Prettier owns code layout (ts, js, svelte, css): run `npm run format` after editing; `npm run check` fails on unformatted files.
+- Repository gates are `npm run check` (tsc, vue-tsc and ESLint), `npm test`, and `npm run build`.
+- Prettier owns code layout (ts, js, vue, scss, css): run `npm run format` after editing; `npm run check` fails on unformatted files.
 - ESLint fails only on violations not recorded in `eslint-suppressions.json`. Never add to that file or disable a rule inline to get green; fix the code. After fixing suppressed code, run `npm run lint -- --prune-suppressions`.
 - Web end-to-end coverage is `npm run e2e` and requires the full stack described in `README.md`.
 - Database changes must be checked against both migration and rollback paths.

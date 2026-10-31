@@ -118,7 +118,7 @@ Message bodies, room chat content and attachment contents are never logged.
 
 ## Browser logs
 
-The room client keeps the last 100 records in memory (`apps/web/src/lib/shared/log.ts`).
+The room client keeps the last 100 records in memory (`apps/web/src/shared/log.ts`).
 Nothing is sent on a timer: the buffer is posted to `POST /api/client-logs` only
 when something actually failed — the room client failing to start, or the
 recovery state machine reaching its terminal `failed` phase. Reports are
@@ -156,7 +156,7 @@ Accounts come from the session cookie — a page cannot claim an identity.
    retries is `error`.
 4. Never log credentials, message content, or a raw client address.
 
-On the browser side use `createLogger('<namespace>')` from `$lib/shared/log`.
-Direct `console.*` calls are rejected by `apps/web/test/client-logging.test.ts`:
-they reach no buffer, so they are missing from the report that gets sent when a
+On the browser side use `createLogger('<namespace>')` from `@/shared/log`.
+Direct `console.*` calls are rejected by ESLint (`no-console` in
+`eslint.config.mjs`): they reach no buffer, so they are missing from the report that gets sent when a
 call fails.

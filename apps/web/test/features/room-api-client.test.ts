@@ -3,12 +3,12 @@
 // the top bar.
 
 import { beforeEach, expect, test, vi } from 'vitest';
-import { ApiError } from '../../src/lib/api/client.ts';
-import { state } from '../../src/lib/features/room/client/core/state.svelte.ts';
-import { checkRoomExists, requestLiveKitToken } from '../../src/lib/features/room/client/net/api.ts';
-import { resetRuntimeConfig } from '../../src/lib/platform/runtime-config.ts';
-import { stubFetch } from '../fixtures/fetch.ts';
-import { instanceOf } from '../helpers/assert.ts';
+import { ApiError } from '@/api/client';
+import { state } from '@/features/room/client/core/room-runtime.store';
+import { checkRoomExists, requestLiveKitToken } from '@/features/room/client/net/api';
+import { resetRuntimeConfig } from '@/platform/runtime-config';
+import { stubFetch } from '../fixtures/fetch';
+import { instanceOf } from '../helpers/assert';
 
 const JOIN = { name: 'Аня', peerId: 'peer0001', roomId: 'room-a', sessionToken: 'token' };
 const ADMISSION = {
@@ -29,7 +29,30 @@ test('credentials carry every LiveKit address to try', async () => {
   const credentials = await requestLiveKitToken(JOIN);
   expect(credentials).toMatchObject({ token: 'jwt', url: ADMISSION.url });
   expect(credentials.urls).toEqual(['wss://lk.example/']);
-  expect(calls[0]).toMatchObject({ method: 'POST', url: '/api/livekit-token', body: JOIN });
+  expect(calls.find((call) => call.method === 'POST')).toMatchObject({ url: '/api/livekit-token', body: JOIN });
+});
+
+test('the LiveKit address list is asked for while the token request is still out', async () => {
+  const asked: string[] = [];
+  let answerToken: () => void = () => {};
+  const tokenAnswered = new Promise<void>((resolve) => (answerToken = resolve));
+  vi.stubGlobal('fetch', async (input: RequestInfo | URL) => {
+    const url = input instanceof Request ? input.url : String(input);
+    if (url.endsWith('/runtime-config.json')) {
+      asked.push('config');
+      return new Response('', { status: 404 });
+    }
+    asked.push('token');
+    await tokenAnswered;
+    return new Response(JSON.stringify(ADMISSION), { headers: { 'content-type': 'application/json' } });
+  });
+
+  const credentials = requestLiveKitToken(JOIN);
+  await vi.waitFor(() => expect(asked).toContain('token'));
+  await vi.waitFor(() => expect(asked).toContain('config'));
+  answerToken();
+  expect((await credentials).urls).toEqual(['wss://lk.example/']);
+  expect(asked).toEqual(['config', 'token']);
 });
 
 test('a refused token request carries the text for its code, the room and the HTTP status', async () => {

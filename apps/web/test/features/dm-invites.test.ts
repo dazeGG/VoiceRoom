@@ -2,7 +2,7 @@
 // both people see the same invitation and its outcome in the thread.
 
 import { expect, test } from 'vitest';
-import { fetchThreadPage, respondRoomInvite } from '../../src/lib/api/dm.ts';
+import { fetchThreadPage, respondRoomInvite } from '../../src/api/dm.ts';
 import type { DirectHistoryMessage } from '@voice-room/shared/contracts/messages';
 import { directHistoryMessage, directMessage } from '../fixtures/answers.ts';
 import { stubFetch } from '../fixtures/fetch.ts';

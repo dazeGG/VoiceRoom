@@ -2,10 +2,10 @@
 // goes to the public room API with a proof of work when the server asks.
 
 import { expect, test } from 'vitest';
-import { createRoom } from '../../src/lib/api/rooms.ts';
-import { stubFetch } from '../fixtures/fetch.ts';
+import { createRoom } from '@/api/rooms';
+import { stubFetch } from '../fixtures/fetch';
 import { CreateRoomBody } from '@voice-room/shared/contracts/rooms';
-import { defined, parse } from '../helpers/assert.ts';
+import { defined, parse } from '../helpers/assert';
 
 test('a temporary room is created without a proof when the server does not require one', async () => {
   const { calls } = stubFetch({

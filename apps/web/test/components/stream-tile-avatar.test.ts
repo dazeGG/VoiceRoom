@@ -1,30 +1,31 @@
 // The "Стрим" plate on a stream tile shows the streamer's own avatar, the same
 // picture as their participant tile, and falls back to initials without one.
 
-import { cleanup, render } from '@testing-library/svelte';
-import { afterEach, expect, test } from 'vitest';
-import StreamTile from '../../src/lib/features/room/components/StreamTile.svelte';
-import { reactiveParticipant } from '../../src/lib/features/room/client/core/state.svelte';
-import type { Participant } from '../../src/lib/features/room/client/core/types';
-import { participant } from '../fixtures/participant';
+import { createPinia, setActivePinia } from 'pinia';
+import { render } from '@testing-library/vue';
+import { beforeEach, expect, test } from 'vitest';
+import StreamTile from '@/features/room/components/StreamTile.vue';
+import { state } from '@/features/room/client/core/room-runtime.store';
+import { createInitialRoomState } from '@/features/room/client/model/room-state';
+import { createParticipant } from '@/features/room/client/room/participants';
+import type { Participant } from '@/features/room/client/core/types';
 
-afterEach(cleanup);
+beforeEach(() => {
+  setActivePinia(createPinia());
+  Object.assign(state, createInitialRoomState());
+});
 
 function streamer(extra: Partial<Participant> = {}): Participant {
-  return reactiveParticipant(
-    participant({ avatarColorKey: 'blue', id: 'peer-a', name: 'Комуто Херовато', screen: true, ...extra })
-  );
+  const person = createParticipant({ avatarColorKey: 'blue', id: 'peer-a', name: 'Комуто Херовато', screen: true });
+  Object.assign(person, extra);
+  return person;
 }
 
 function plateAvatar(person: Participant): Element {
   const { container } = render(StreamTile, {
-    participant: person,
-    hasPreview: false,
-    isCollapsed: false,
-    isSubscribed: false,
-    stream: null
+    props: { participant: person, hasPreview: false, isCollapsed: false, isSubscribed: false, stream: null }
   });
-  const avatar = container.querySelector('.stream-tile-mini-avatar');
+  const avatar = container.querySelector('.stream-tile__mini-avatar');
   if (!avatar) throw new Error('the stream plate has no avatar');
   return avatar;
 }

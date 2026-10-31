@@ -13,7 +13,7 @@ import {
   getScreenProfileLabels,
   getScreenPublishVideoOptions,
   SCREEN_DEGRADATION_PREFERENCE
-} from '../../src/lib/features/room/client/media/profiles.ts';
+} from '@/features/room/client/media/profiles.ts';
 
 afterEach(() => vi.unstubAllGlobals());
 

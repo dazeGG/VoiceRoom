@@ -6,7 +6,7 @@
 import { Type, type Static } from 'typebox';
 import { Nullable, Ok } from './http.ts';
 import { ReportReasonSchema } from './reports.ts';
-import { NetworkLevel, NetworkPoint } from './rooms.ts';
+import { NetworkLevel, NetworkPoint, VoiceCause } from './rooms.ts';
 import { StaffRoleSchema } from './staff.ts';
 import { AccountBadge } from './users.ts';
 
@@ -429,11 +429,14 @@ export const LiveRoomPeer = Type.Object({
   guestId: Nullable(Type.String()),
   ...NetworkOrigin,
   /**
-   * The connection as the peer's client last judged it; null until it says.
-   * Optional, like the other network fields: the admin app and the API ship
-   * in different images, so an API a release behind sends none.
+   * The server's verdict on the peer's voice, the one its own room screen
+   * shows; null while nothing was heard from or by it. Optional, like the other
+   * network fields: the admin app and the API ship in different images, so an
+   * API a release behind sends none.
    */
-  network: Type.Optional(Nullable(NetworkLevel))
+  network: Type.Optional(Nullable(NetworkLevel)),
+  /** Whose side the trouble is on; null while the voice is good or unknown. */
+  cause: Type.Optional(Nullable(VoiceCause))
 });
 export type LiveRoomPeer = Static<typeof LiveRoomPeer>;
 
@@ -465,6 +468,36 @@ export const RoomHistoryQuery = Type.Object({
 });
 export type RoomHistoryQuery = Static<typeof RoomHistoryQuery>;
 
+/** What one side of a minute's voice sounded like; see voice-quality.ts. */
+export const VoiceMinuteHeard = Type.Object({
+  /** The share of the speech the receiver had to make up, in percent. */
+  concealedPct: Type.Number(),
+  /** Gaps per minute of speech. */
+  gapsPerMin: Type.Number()
+});
+export type VoiceMinuteHeard = Static<typeof VoiceMinuteHeard>;
+
+/**
+ * One minute of a stay's voice, from its stats polls. `level` is bad when two
+ * of the peer's own polls were bad, unstable when two were not good, good with
+ * any polls, and null when it sent none. A minute with no row had no polls.
+ */
+export const VoiceMinute = Type.Object({
+  /** The minute's start. */
+  at: Type.Number(),
+  level: Nullable(NetworkLevel),
+  polls: Type.Object({ good: Type.Integer(), unstable: Type.Integer(), bad: Type.Integer() }),
+  /** What the peer heard of the others, and they of it; null with too little speech to tell. */
+  heard: Nullable(VoiceMinuteHeard),
+  heardBy: Nullable(VoiceMinuteHeard),
+  /** The share of its audio packets the server never got, in percent. */
+  uplinkLossPct: Nullable(Type.Number()),
+  rttMs: Nullable(Type.Number()),
+  jitterBufferMs: Nullable(Type.Number()),
+  transport: Nullable(Type.String())
+});
+export type VoiceMinute = Static<typeof VoiceMinute>;
+
 /** One finished stay in a room's voice. */
 export const RoomStay = Type.Object({
   id: Type.String(),
@@ -489,7 +522,9 @@ export const RoomStay = Type.Object({
   joinedAt: Type.Number(),
   leftAt: Type.Number(),
   /** How the connection went: each change of its level, the first at or after joinedAt. Empty when the client never said. */
-  network: Type.Optional(Type.Array(NetworkPoint))
+  network: Type.Optional(Type.Array(NetworkPoint)),
+  /** The voice minute by minute, for stays since the server judged the room; empty for the ones before. */
+  minutes: Type.Optional(Type.Array(VoiceMinute))
 });
 export type RoomStay = Static<typeof RoomStay>;
 

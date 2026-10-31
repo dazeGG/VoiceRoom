@@ -1,7 +1,7 @@
 import { expect, test } from 'vitest';
-import { formatLastSeen } from '../src/lib/features/home/model/account-security.ts';
-import { loginAlertWhen } from '../src/lib/features/home/model/login-alerts.ts';
-import { dateTime, dayMonth, dayMonthYear, timeAgo } from '../src/lib/shared/utils/date-format.ts';
+import { formatLastSeen } from '../src/features/home/model/account-security.ts';
+import { loginAlertWhen } from '../src/features/home/model/login-alerts.ts';
+import { dateTime, dayMonth, dayMonthYear, timeAgo } from '../src/shared/utils/date-format.ts';
 
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;

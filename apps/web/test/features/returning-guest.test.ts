@@ -6,7 +6,7 @@ import {
   dismissPermanentRoomOffer,
   rememberGuestRoomCreated,
   shouldOfferPermanentRoom
-} from '../../src/lib/features/home/model/returning-guest';
+} from '../../src/features/home/model/returning-guest';
 
 const at = (day: number, hour: number): number => new Date(2026, 9, day, hour).getTime();
 

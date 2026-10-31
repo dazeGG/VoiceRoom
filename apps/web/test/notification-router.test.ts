@@ -1,10 +1,10 @@
 import { test, vi } from 'vitest';
 import { freshImport } from './helpers/fresh-module.ts';
-import type * as Router from '../src/lib/shared/notifications/router.ts';
+import type * as Router from '@/shared/notifications/router';
 import assert from 'node:assert/strict';
 
 async function loadRouter() {
-  return freshImport(() => import('../src/lib/shared/notifications/router.ts'));
+  return freshImport(() => import('@/shared/notifications/router'));
 }
 
 function reasonOf(result: Router.NotificationRouteResult) {

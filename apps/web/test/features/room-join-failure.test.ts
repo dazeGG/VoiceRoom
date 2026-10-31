@@ -2,16 +2,17 @@
 // that voice is unreachable, and the status pill says there is no route to
 // voice rather than a generic connection error.
 
+import { createPinia, setActivePinia } from 'pinia';
 import { expect, test, vi } from 'vitest';
-import { stubFetch } from '../fixtures/fetch.ts';
-import { FakeWebSocket } from '../fixtures/fake-websocket.ts';
+import { stubFetch } from '../fixtures/fetch';
+import { FakeWebSocket } from '../fixtures/fake-websocket';
 
-vi.mock('../../src/lib/features/room/client/ui/devices', async (importOriginal) => ({
+vi.mock('@/features/room/client/ui/devices', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   refreshDevices: vi.fn(async () => {})
 }));
-vi.mock('../../src/lib/features/room/client/ui/toast', () => ({ showToast: vi.fn() }));
-vi.mock('../../src/lib/features/room/client/media/livekit-runtime', () => ({
+vi.mock('@/features/room/client/ui/toast', () => ({ showToast: vi.fn() }));
+vi.mock('@/features/room/client/media/livekit-runtime', () => ({
   TRACK_SOURCE: { Camera: 'camera', Microphone: 'microphone', ScreenShare: 'screen_share' },
   loadLiveKitClient: async () => ({
     Room: class {
@@ -26,6 +27,7 @@ vi.mock('../../src/lib/features/room/client/media/livekit-runtime', () => ({
 
 test('LiveKit being unreachable shows a Russian toast and "no route to voice"', async () => {
   vi.resetModules();
+  setActivePinia(createPinia());
   vi.stubGlobal('WebSocket', FakeWebSocket);
   stubFetch({
     '/api/rooms/abc123': {
@@ -52,10 +54,10 @@ test('LiveKit being unreachable shows a Russian toast and "no route to voice"', 
       }
     }
   });
-  const room = await import('../../src/lib/features/room/client/room/room.ts');
-  const { state } = await import('../../src/lib/features/room/client/core/state.svelte.ts');
-  const { getConnectionStatusView } = await import('../../src/lib/features/room/client/ui/status.ts');
-  const { showToast } = await import('../../src/lib/features/room/client/ui/toast');
+  const room = await import('@/features/room/client/room/room');
+  const { state } = await import('@/features/room/client/core/room-runtime.store');
+  const { getConnectionStatusView } = await import('@/features/room/client/ui/status');
+  const { showToast } = await import('@/features/room/client/ui/toast');
   Object.assign(state, { roomId: 'abc123', peerId: 'peer-1', sessionToken: 'session-1' });
 
   await room.joinRoom();

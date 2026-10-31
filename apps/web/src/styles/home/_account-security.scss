@@ -1,0 +1,116 @@
+// The security tab of the account settings (AccountSecuritySettings.vue). It reuses the
+// settings block (home/_settings.scss) for the section titles, fields and rows.
+//
+// Svelte class -> BEM class (block "account-security")
+//   .account-security                 -> .account-security
+//   .account-security-head            -> .account-security__head
+//   .account-security-icon            -> .account-security__icon
+//   .account-security-row             -> .account-security__row
+//   .account-security-action          -> .account-security__action
+//   .account-security-password        -> .account-security__password
+//   .account-security-password-foot   -> .account-security__password-foot
+//   .account-security-danger          -> .account-security__danger
+//
+// [data-*] -> modifier class
+//   .account-security-row[data-warning='true']       -> .account-security__row--warning
+//   .account-security-action[data-highlight='true']  -> .account-security__action--highlight
+
+.account-security {
+  display: grid;
+  gap: 22px;
+}
+
+.account-security__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.account-security__head .settings__gate-hint {
+  margin-top: 0;
+}
+
+.account-security__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  background: var(--vr-surface-3);
+  color: var(--vr-text-2);
+}
+
+// The shared row style sets these in the mono face meant for @logins.
+.account-security__row .settings__notification-name small {
+  font-family: var(--font-ui);
+  letter-spacing: normal;
+}
+
+.account-security__row--warning .account-security__icon {
+  color: var(--vr-away);
+}
+
+.account-security__action {
+  padding: 8px 14px;
+  font-size: 13px;
+}
+
+.account-security__action--highlight {
+  animation: account-security-highlight 1.4s ease-in-out 4;
+}
+
+@keyframes account-security-highlight {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in oklch, var(--vr-accent), transparent 40%);
+  }
+
+  50% {
+    box-shadow: 0 0 0 7px color-mix(in oklch, var(--vr-accent), transparent 80%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .account-security__action--highlight {
+    animation: none;
+    outline: 2px solid var(--vr-accent);
+    outline-offset: 3px;
+  }
+}
+
+.account-security__password-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.account-security__password-foot .settings__gate-hint {
+  margin-top: 0;
+}
+
+.account-security__danger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.account-security__danger .settings__gate-hint {
+  margin-top: 0;
+}
+
+@media (max-width: 560px) {
+  .account-security__danger {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .account-security__head {
+    flex-direction: column;
+  }
+}

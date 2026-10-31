@@ -1,8 +1,9 @@
-// The admin panel reads a call against its network: a live call counts from
-// the call clock however often its people rejoined, each peer's network level
-// (its client's own judgement, never shown to the room) lands on its stay, and
-// an answer to "how was the call?" comes with the stay it is about: a guest by
-// the name they gave, from what device and where, and how the network went.
+// The admin panel reads a call against its voice: a live call counts from the
+// call clock however often its people rejoined, the server's verdict on each
+// peer's voice (judged from everyone's stats polls, told to that peer alone)
+// shows live and its minutes land on the stay, and an answer to "how was the
+// call?" comes with the stay it is about: a guest by the name they gave, from
+// what device and where, and how the voice went.
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -79,11 +80,37 @@ function rejoin(session: WsSession, voice: ReturnType<typeof seat>, extra: { nam
   return waitForWsType(session.frames, 'room.snapshot', (frame) => frame.payload.roomId === voice.roomId, 5000, since);
 }
 
+/** A tab from before the server judged the voice sends its own read of the network. */
 function reportNetwork(session: WsSession, voice: ReturnType<typeof seat>, network: 'good' | 'unstable' | 'bad') {
   sendWs(session.ws, 'room.peer.update', { ...voice, patch: { network } });
 }
 
-test('a live call counts from its call clock, and a stay keeps how its network went', { skip }, async (t) => {
+/** Three seconds of one speaker's continuous speech, `concealedPct` of it made up. */
+const heard = (peerId: string, concealedPct = 0, lost = 0) => ({
+  peerId,
+  packets: 150,
+  lost,
+  concealedSamples: Math.round((150 * 960 * concealedPct) / 100),
+  gaps: concealedPct > 0 ? 15 : 0
+});
+
+function reportVoice(
+  session: WsSession,
+  voice: ReturnType<typeof seat>,
+  streams: ReturnType<typeof heard>[],
+  uplinkLost = 0
+) {
+  sendWs(session.ws, 'room.voice.report', {
+    ...voice,
+    rttMs: 40,
+    jitterBufferMs: 30,
+    uplink: { packets: 150, lost: uplinkLost },
+    transport: 'udp',
+    heard: streams
+  });
+}
+
+test('a live call counts from its call clock, and a stay keeps how its voice went', { skip }, async (t) => {
   const { socketPath, pool, admin, alice } = await startWithAdmin(t, 'voice-room-call-network-');
   await pool.query(`UPDATE rooms SET avatar_key = 'room-kitchen.webp' WHERE id = 'kitchen'`);
   const aliceWs = openWs(socketPath, { cookie: alice });
@@ -118,27 +145,50 @@ test('a live call counts from its call clock, and a stay keeps how its network w
   assert.deepEqual(
     live.peers.map((peer) => peer.network),
     [null, null],
-    'nobody has said how their network is yet'
+    'nobody has sent stats yet'
   );
 
-  // The guest's client reports its network; the room hears nothing of it.
+  // A client's own read of its network changes nothing now, and the room hears nothing of it.
   const aliceFramesBefore = aliceWs.frames.length;
-  reportNetwork(guestWs, guestAgain, 'unstable');
   reportNetwork(guestWs, guestAgain, 'bad');
-  reportNetwork(guestWs, guestAgain, 'bad');
+  await pause(100);
+  assert.deepEqual(
+    (await liveKitchen()).peers.map((peer) => peer.network),
+    [null, null]
+  );
+
+  // Alice hears the guest break up, and the guest's own uplink lost as much: the guest is the one heard badly.
+  const guestFramesBefore = guestWs.frames.length;
+  reportVoice(guestWs, guestAgain, [heard(aliceAgain.peerId)], 40);
+  reportVoice(aliceWs, aliceAgain, [heard(guestAgain.peerId, 25, 40)]);
+  const told = await waitForWsType(
+    guestWs.frames,
+    'room.voice.quality',
+    (frame) => frame.payload.level === 'bad',
+    5000,
+    guestFramesBefore
+  );
+  assert.deepEqual(told.payload, { roomId: 'kitchen', peerId: guestAgain.peerId, level: 'bad', cause: 'heard_badly' });
+  reportVoice(guestWs, guestAgain, [heard(aliceAgain.peerId)], 40);
+  reportVoice(guestWs, guestAgain, [heard(aliceAgain.peerId)], 40);
   const reported = await waitFor(liveKitchen, (room) => room.peers.some((peer) => peer.network === 'bad'));
   assert.deepEqual(
-    reported.peers.map((peer) => [peer.name, peer.network]),
+    reported.peers.map((peer) => [peer.name, peer.network, peer.cause]),
     [
-      ['alice', null],
-      ['Петя', 'bad']
+      ['alice', 'good', null],
+      ['Петя', 'bad', 'heard_badly']
     ]
   );
   await pause(100);
   assert.equal(countWsType(aliceWs.frames, 'room.peer.updated', aliceFramesBefore), 0);
+  assert.ok(
+    aliceWs.frames
+      .slice(aliceFramesBefore)
+      .every((frame) => frame.type !== 'room.voice.quality' || frame.payload.peerId === aliceAgain.peerId),
+    "nobody is told another peer's verdict"
+  );
 
   // A patch that also changes what the room sees still reaches it.
-  reportNetwork(guestWs, guestAgain, 'good');
   sendWs(guestWs.ws, 'room.peer.update', { ...guestAgain, patch: { muted: true, network: 'good' } });
   await waitFor(
     async () => countWsType(aliceWs.frames, 'room.peer.updated', aliceFramesBefore),
@@ -159,17 +209,28 @@ test('a live call counts from its call clock, and a stay keeps how its network w
   const stays = (await waitFor(history, (body) => body.stays.length === 3)).stays;
   const [guestLast, ...earlier] = stays;
   assert.equal(guestLast?.guestName, 'Петя');
-  assert.deepEqual(
-    guestLast?.network?.map((point) => point.level),
-    ['unstable', 'bad', 'good'],
-    'each change once, a repeat adds nothing'
+  assert.deepEqual(guestLast?.network, [], 'a client read of the network is no longer kept');
+  const minutes = defined(guestLast?.minutes, "the guest's minutes");
+  assert.equal(
+    minutes.reduce((total, minute) => total + minute.polls.bad, 0),
+    2,
+    'the polls after the verdict count as bad'
+  );
+  assert.ok(
+    minutes.some((minute) => minute.heardBy?.concealedPct === 25),
+    "alice's poll of the guest is on the guest's minute"
+  );
+  assert.ok(
+    minutes
+      .filter((minute) => minute.rttMs !== null)
+      .every((minute) => minute.rttMs === 40 && minute.uplinkLossPct === 26.7 && minute.transport === 'udp')
   );
   const last = defined(guestLast, "the guest's last stay");
-  for (const point of last.network ?? []) assert.ok(point.at >= last.joinedAt && point.at <= last.leftAt);
+  for (const minute of minutes) assert.ok(minute.at > last.joinedAt - 60_000 && minute.at <= last.leftAt);
   assert.deepEqual(
-    earlier.map((stay) => stay.network),
+    earlier.map((stay) => stay.minutes),
     [[], []],
-    'stays whose clients never said have no changes'
+    'stays that sent no stats have no minutes'
   );
 
   // Once everyone left, the finished call carries the room's picture.
@@ -185,7 +246,7 @@ test('a live call counts from its call clock, and a stay keeps how its network w
 });
 
 test(
-  'an answer comes with the stay it is about: a guest by name, where from and how the network went',
+  'an answer comes with the stay it is about: a guest by name, where from and how the voice went',
   { skip },
   async (t) => {
     const { socketPath, admin, alice } = await startWithAdmin(t, 'voice-room-feedback-stay-');
@@ -196,7 +257,7 @@ test(
     const aliceVoice = seat('alice-peer-1', 'a');
     await joinVoiceRoom(aliceWs, { ...aliceVoice, name: 'Алиса' });
     await joinVoiceRoom(guestWs, { ...guestVoice, name: 'выевыпк', guestId: GUEST_BROWSER });
-    reportNetwork(guestWs, guestVoice, 'bad');
+    reportVoice(guestWs, guestVoice, [heard(aliceVoice.peerId)]);
     await pause(50);
     sendWs(guestWs.ws, 'room.leave', guestVoice);
     sendWs(aliceWs.ws, 'room.leave', aliceVoice);
@@ -248,8 +309,8 @@ test(
     assert.equal(fromGuest?.stay?.browser, 'Chrome');
     assert.equal(fromGuest?.stay?.os, 'Windows');
     assert.deepEqual(
-      fromGuest?.stay?.network?.map((point) => point.level),
-      ['bad']
+      fromGuest?.stay?.minutes?.map((minute) => [minute.rttMs, minute.heard]),
+      [[40, { concealedPct: 0, gapsPerMin: 0 }]]
     );
     assert.equal(fromGuest?.quality?.rttMaxMs, 1109);
     assert.equal(fromGuest?.quality?.micDrops, 3);

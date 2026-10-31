@@ -1,23 +1,25 @@
 // Participants and their speaking rings, driven through the room client's
 // public functions with a fake audio analyser.
 
+import { createPinia, setActivePinia } from 'pinia';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
-import { state } from '../../src/lib/features/room/client/core/state.svelte.ts';
-import { createInitialRoomState } from '../../src/lib/features/room/client/model/room-state.ts';
+import { state } from '@/features/room/client/core/room-runtime.store';
+import { createInitialRoomState } from '@/features/room/client/model/room-state';
 import {
   clearAllSpeaking,
   createParticipant,
   detachLiveKitParticipant,
   syncPeers,
   updatePeerStatus
-} from '../../src/lib/features/room/client/room/participants.ts';
-import { METER_INTERVAL_MS, startMeters, stopMeters } from '../../src/lib/features/room/client/media/meters.ts';
-import type { Participant } from '../../src/lib/features/room/client/core/types.ts';
-import type { MeterAnalyser } from '../../src/lib/features/room/client/model/participants.ts';
-import { defined } from '../helpers/assert.ts';
-import { FakeMediaStream, FakeMediaStreamTrack } from '../helpers/fake-media.ts';
+} from '@/features/room/client/room/participants';
+import { METER_INTERVAL_MS, startMeters, stopMeters } from '@/features/room/client/media/meters';
+import type { Participant } from '@/features/room/client/core/types';
+import type { MeterAnalyser } from '@/features/room/client/model/participants';
+import { defined } from '../helpers/assert';
+import { FakeMediaStream, FakeMediaStreamTrack } from '../helpers/fake-media';
 
 beforeEach(() => {
+  setActivePinia(createPinia());
   Object.assign(state, createInitialRoomState());
   state.peerId = 'me';
   vi.useFakeTimers();

@@ -1,0 +1,88 @@
+// DmConversation (features/home/components/lobby/dm/DmConversation.vue): the scrolling thread of one
+// direct-message conversation, its notes and its day dividers. The messages are shared MessageBubbles in
+// `.dm-group` runs (_dm-group.scss).
+//
+// Svelte class -> BEM class
+//   .lobby-dm-scroll.lobby-scroll         -> .dm-conversation__scroll (the thin scrollbar of .lobby-scroll is written here)
+//   .lobby-dm-loading                     -> .dm-conversation__loading
+//   .lobby-dm-thread                      -> .dm-conversation__thread
+//   .lobby-dm-empty                       -> .dm-conversation__empty
+//   .chat-day-divider                     -> .dm-conversation__day-divider (its <span> -> __day-label)
+// The room chat shares .chat-day-divider in Svelte; it names its own (room-chat-panel__day-divider).
+
+.dm-conversation__scroll {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  scrollbar-width: thin;
+  scrollbar-color: var(--vr-line) transparent;
+
+  &::-webkit-scrollbar {
+    width: 8px;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: var(--vr-line-strong);
+    border-radius: 4px;
+  }
+}
+
+// Covers the thread while it renders and its artwork resolves, so the reader
+// never watches messages reflow under a scroll position that is still moving.
+.dm-conversation__loading {
+  position: sticky;
+  z-index: 2;
+  top: 0;
+  display: flex;
+  height: 100%;
+  min-height: 100%;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: -100%;
+  background: var(--vr-bg);
+  color: var(--vr-text-3);
+  font-size: 13.5px;
+}
+
+.dm-conversation__thread {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  padding: 22px 24px;
+}
+
+.dm-conversation__empty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--vr-text-3);
+  font-size: 13.5px;
+}
+
+.dm-conversation__day-divider {
+  position: sticky;
+  top: 8px;
+  z-index: 5;
+  display: flex;
+  justify-content: center;
+  margin: 3px 0;
+  pointer-events: none;
+}
+
+.dm-conversation__day-label {
+  flex: none;
+  border: 1px solid var(--vr-line);
+  border-radius: 999px;
+  padding: 4px 12px;
+  background: var(--vr-surface);
+  color: var(--vr-text-3);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}

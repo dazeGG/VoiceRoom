@@ -3,7 +3,7 @@
 // the SFU, while voices and screen audio keep flowing.
 
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
-import { onAppVisibilityChange, setDesktopWindowVisible } from '../../src/lib/platform/app-visibility.ts';
+import { onAppVisibilityChange, setDesktopWindowVisible } from '@/platform/app-visibility.ts';
 import { fakeParticipant, loadLiveKitHarness } from '../helpers/livekit-harness.ts';
 
 class FakePublication {
@@ -41,7 +41,7 @@ afterEach(() => {
 test('hiding the desktop window pauses remote cameras and screens only, showing it resumes them', async () => {
   const lk = await loadLiveKitHarness();
   // The service was loaded fresh: it reads the visibility of its own module instance.
-  const visibility = await import('../../src/lib/platform/app-visibility.ts');
+  const visibility = await import('@/platform/app-visibility.ts');
   // The sources as the harness names them, see TRACK_SOURCE in livekit-harness.ts.
   const publications = {
     camera: new FakePublication('camera', 'TR_cam'),

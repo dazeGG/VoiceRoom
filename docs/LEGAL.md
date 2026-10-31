@@ -9,17 +9,17 @@ is an engineering summary, not legal advice.
 
 | Requirement | Where |
 | --- | --- |
-| Published personal data policy (152-FZ art. 18.1 part 2) | `/privacy` — `apps/web/src/lib/features/legal/PrivacyPolicy.svelte` |
-| Terms of use: minimum age 14, forbidden content, reports, intermediary liability | `/terms` — `TermsOfService.svelte` |
-| Attribution required by CC BY 4.0 (Twemoji, DB-IP, Font Awesome) and other licences | `/licenses` — `Licenses.svelte` |
-| Acceptance at sign-up | the notice above «Создать аккаунт» in `AuthDialog.svelte` |
+| Published personal data policy (152-FZ art. 18.1 part 2) | `/privacy` — `apps/web/src/features/legal/PrivacyPolicy.vue` |
+| Terms of use: minimum age 14, forbidden content, reports, intermediary liability | `/terms` — `TermsOfService.vue` |
+| Attribution required by CC BY 4.0 (Twemoji, DB-IP, Font Awesome) and other licences | `/licenses` — `Licenses.vue` |
+| Acceptance at sign-up | the notice above «Создать аккаунт» in `AuthDialog.vue` |
 | Legal pages reachable from everywhere, phones included | landing footer, settings sidebar, `lib/platform/mobile-routes.ts` |
 | Reports to the operator and removal of any message (art. 1253.1, 149-FZ art. 15.1 takedowns) | `POST /api/reports`, the admin app's reports section (`apps/admin`), `apps/api/src/domains/reports` |
 | No IP address kept in the database: stays in voice, room creators and guest room bans keep a keyed hash of it (an IPv6 address by its /64) | `apps/api/src/lib/ip-key.ts`; old guest bans are keyed by the API's `room_ban_ip_key` maintenance task |
 | Backups no older than 30 days | `scripts/cd/prune-backups.sh`, run by `remote-deploy.sh` after each rollout |
 
 Facts the pages state (operator, contact address, retention periods) live in
-`apps/web/src/lib/features/legal/legal-info.ts`. When the code changes a
+`apps/web/src/features/legal/legal-info.ts`. When the code changes a
 retention period, change it there too.
 
 ## Operator checklist

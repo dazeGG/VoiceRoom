@@ -19,7 +19,7 @@ import {
 } from 'lucide-react';
 import { useState, type FocusEvent, type MouseEvent } from 'react';
 import { STAFF_ROLE_LABELS } from '@voice-room/shared/contracts/staff';
-import logoUrl from '../../../web/static/voiceroom-icon.svg';
+import logoUrl from '../../../web/public/voiceroom-icon.svg';
 import type { Staff } from '../staff.tsx';
 import { TAB_GROUPS, TAB_LABELS, pathOf, type AdminTab } from '../tabs.ts';
 import { Avatar } from '../ui/index.tsx';

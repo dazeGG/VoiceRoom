@@ -1,19 +1,17 @@
 {
-  // The unit tests run on Node (node --test, with Vite for Svelte modules), so
-  // they get Node's types. Files that still carry `// @ts-nocheck` are not
-  // type-checked yet; remove the marker once a file passes.
+  // Tests, build scripts and config files run on Node (Vitest, Vite), so they
+  // get Node's types on top of the app's settings.
   "extends": "./tsconfig.json",
   "compilerOptions": {
-    "types": ["node"],
+    "lib": ["ES2024", "DOM", "DOM.Iterable"],
+    "types": ["vite/client", "node"],
     "noUnusedLocals": false
   },
   "include": [
-    ".svelte-kit/ambient.d.ts",
-    ".svelte-kit/non-ambient.d.ts",
     "src/**/*.ts",
-    "src/**/*.svelte",
+    "src/**/*.vue",
     "test/**/*.ts",
-    "test/**/*.svelte",
+    "test/**/*.vue",
     "e2e/**/*.ts",
     "scripts/**/*.ts",
     "playwright.config.ts",

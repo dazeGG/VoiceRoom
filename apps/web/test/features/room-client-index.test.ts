@@ -3,9 +3,9 @@
 // without a rejoin, and never on someone else's.
 
 import { afterEach, expect, test } from 'vitest';
-import { clientRoomName, syncLocalProfile } from '../../src/lib/features/room/client/index.ts';
-import { state } from '../../src/lib/features/room/client/core/state.svelte.ts';
-import { participant } from '../fixtures/participant.ts';
+import { clientRoomName, syncLocalProfile } from '@/features/room/client/index';
+import { state } from '@/features/room/client/core/room-runtime.store';
+import { participant } from '../fixtures/participant';
 
 afterEach(() => {
   state.self = null;

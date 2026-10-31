@@ -1,15 +1,36 @@
 #!/usr/bin/env node
 // Style check for the web app, run by `npm run check`: backgrounds use the
-// canonical palette tokens declared in theme.css instead of one-off colours.
+// canonical palette tokens declared in _tokens.scss instead of one-off colours.
 // Exits 1 and lists every violation as `file:line selector -> value`.
 
-import { readFileSync, readdirSync, statSync } from 'node:fs';
-import { relative, resolve } from 'node:path';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { basename, relative, resolve } from 'node:path';
 
-const webRoot = resolve(import.meta.dirname, '../apps/web');
-const sourceRoot = resolve(webRoot, 'src');
+import { blankComments } from './lib/blank-comments.mts';
 
-// Surface tokens of the default theme; theme.css must declare exactly these.
+/** The app whose styles are checked. */
+export interface PaletteApp {
+  /** App directory; reported paths are relative to it. */
+  root: string;
+  /** Directory scanned for backgrounds, relative to `root`. */
+  sourceDir: string;
+  /** File that declares the surface tokens, relative to `root`. */
+  tokensFile: string;
+  /** Extensions scanned for backgrounds. */
+  sources: RegExp;
+  /** First line of the report when the app has violations. */
+  heading: string;
+}
+
+export const webApp = (root: string): PaletteApp => ({
+  root,
+  sourceDir: 'src',
+  tokensFile: 'src/styles/_tokens.scss',
+  sources: /\.(?:scss|vue)$/,
+  heading: 'Backgrounds must use the palette tokens in _tokens.scss'
+});
+
+// Surface tokens of the default theme; the tokens file must declare exactly these.
 const SURFACE_TOKEN_VALUES: Record<string, string> = {
   '--vr-bg': 'oklch(15.5% 0.005 260)',
   '--vr-surface': 'oklch(17.5% 0.005 260)',
@@ -32,12 +53,19 @@ interface Fragment {
   context: string;
 }
 
-function sourceFiles(path: string): string[] {
+interface Declaration {
+  selector: string;
+  value: string;
+  /** Offset of the declaration in the fragment body. */
+  index: number;
+}
+
+function sourceFiles(path: string, sources: RegExp): string[] {
   const files: string[] = [];
   for (const entry of readdirSync(path)) {
     const absolute = resolve(path, entry);
-    if (statSync(absolute).isDirectory()) files.push(...sourceFiles(absolute));
-    else if (/\.(?:css|svelte)$/.test(entry)) files.push(absolute);
+    if (statSync(absolute).isDirectory()) files.push(...sourceFiles(absolute, sources));
+    else if (sources.test(entry)) files.push(absolute);
   }
   return files;
 }
@@ -45,7 +73,7 @@ function sourceFiles(path: string): string[] {
 const lineAt = (source: string, index: number) => source.slice(0, index).split('\n').length;
 
 function styleFragments(path: string, source: string): Fragment[] {
-  if (path.endsWith('.css')) return [{ body: source, offset: 0, context: '' }];
+  if (path.endsWith('.scss')) return [{ body: source, offset: 0, context: '' }];
   const fragments: Fragment[] = [];
   for (const match of source.matchAll(/<style(?:\s[^>]*)?>(?<body>[\s\S]*?)<\/style>/g)) {
     const body = match.groups?.body ?? '';
@@ -74,40 +102,98 @@ function isAllowedBackground(selector: string, value: string): boolean {
   );
 }
 
-const problems: string[] = [];
+const normalizeValue = (value: string) => value.trim().replace(/\s+/g, ' ');
 
-const themeCss = readFileSync(resolve(sourceRoot, 'lib/shared/styles/theme.css'), 'utf8');
-for (const token of Object.keys(SURFACE_TOKEN_VALUES)) {
-  const value = themeCss.match(new RegExp(`${token}\\s*:\\s*([^;]+)`))?.[1]?.trim();
-  if (!value) problems.push(`theme.css does not declare ${token}`);
-  else if (value !== SURFACE_TOKEN_VALUES[token])
-    problems.push(`${token}: expected ${SURFACE_TOKEN_VALUES[token]}, found ${value}`);
+/** Background declarations of a style attribute, which holds no rules. */
+function inlineDeclarations(fragment: Fragment): Declaration[] {
+  return [...fragment.body.matchAll(/\bbackground(?:-color|-image)?\s*:\s*(?<value>[^;}]+)/g)].map((declaration) => ({
+    selector: fragment.context,
+    value: normalizeValue(declaration.groups?.value ?? ''),
+    index: declaration.index
+  }));
 }
 
-for (const absolute of sourceFiles(sourceRoot)) {
-  const path = relative(webRoot, absolute).split('\\').join('/');
-  const source = readFileSync(absolute, 'utf8');
-  for (const fragment of styleFragments(path, source)) {
-    const blocks = fragment.context
-      ? [{ selector: fragment.context, body: fragment.body, index: 0 }]
-      : [...fragment.body.matchAll(/(?<selector>[^{}]+)\{(?<body>[^{}]*)\}/g)].map((match) => ({
-          selector: (match.groups?.selector ?? '').trim().replace(/\s+/g, ' '),
-          body: match.groups?.body ?? '',
-          index: match.index + match[0].indexOf(match.groups?.body ?? '')
-        }));
-    for (const block of blocks) {
-      for (const declaration of block.body.matchAll(/\bbackground(?:-color|-image)?\s*:\s*(?<value>[^;}]+)/g)) {
-        const value = (declaration.groups?.value ?? '').trim().replace(/\s+/g, ' ');
-        if (isAllowedBackground(block.selector, value)) continue;
+/** `&` takes the parent selector; an at-rule block (@media, @include) keeps the parent's. */
+function resolveSelector(parent: string, prelude: string): string {
+  if (prelude.startsWith('@')) return parent;
+  if (parent === '') return prelude;
+  return prelude.includes('&') ? prelude.replaceAll('&', parent) : `${parent} ${prelude}`;
+}
+
+/** Background declarations of SCSS, where rules nest and `&` stands for the parent selector. */
+function nestedDeclarations(fragment: Fragment): Declaration[] {
+  const text = blankComments(fragment.body);
+  const found: Declaration[] = [];
+  const selectors: string[] = [];
+  let start = 0;
+  let interpolation = 0;
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text.charAt(index);
+    if (char === '"' || char === "'") {
+      const end = text.indexOf(char, index + 1);
+      index = end === -1 ? text.length : end;
+    } else if (char === '#' && text.charAt(index + 1) === '{') {
+      interpolation += 1;
+      index += 1;
+    } else if (interpolation > 0) {
+      if (char === '}') interpolation -= 1;
+    } else if (char === '{') {
+      const prelude = text.slice(start, index).trim().replace(/\s+/g, ' ');
+      selectors.push(resolveSelector(selectors.at(-1) ?? '', prelude));
+      start = index + 1;
+    } else if (char === ';' || char === '}') {
+      const statement = text.slice(start, index);
+      const match = /^\s*background(?:-color|-image)?\s*:(?<value>[\s\S]+)$/.exec(statement);
+      if (match) {
+        found.push({
+          selector: selectors.at(-1) ?? '',
+          value: normalizeValue(match.groups?.value ?? ''),
+          index: start + statement.search(/\S/)
+        });
+      }
+      if (char === '}') selectors.pop();
+      start = index + 1;
+    }
+  }
+  return found;
+}
+
+/** Every palette violation of one app as `file:line selector -> value`, unsorted. */
+export function paletteProblems(app: PaletteApp): string[] {
+  const problems: string[] = [];
+  const tokensName = basename(app.tokensFile);
+
+  const tokensPath = resolve(app.root, app.tokensFile);
+  const tokens = existsSync(tokensPath) ? readFileSync(tokensPath, 'utf8') : '';
+  for (const token of Object.keys(SURFACE_TOKEN_VALUES)) {
+    const value = tokens.match(new RegExp(`${token}\\s*:\\s*([^;]+)`))?.[1]?.trim();
+    if (!value) problems.push(`${tokensName} does not declare ${token}`);
+    else if (value !== SURFACE_TOKEN_VALUES[token])
+      problems.push(`${token}: expected ${SURFACE_TOKEN_VALUES[token]}, found ${value}`);
+  }
+
+  for (const absolute of sourceFiles(resolve(app.root, app.sourceDir), app.sources)) {
+    const path = relative(app.root, absolute).split('\\').join('/');
+    const source = readFileSync(absolute, 'utf8');
+    for (const fragment of styleFragments(path, source)) {
+      const declarations = fragment.context ? inlineDeclarations(fragment) : nestedDeclarations(fragment);
+      for (const declaration of declarations) {
+        if (isAllowedBackground(declaration.selector, declaration.value)) continue;
         problems.push(
-          `${path}:${lineAt(source, fragment.offset + block.index + declaration.index)} ${block.selector} -> ${value}`
+          `${path}:${lineAt(source, fragment.offset + declaration.index)} ${declaration.selector} -> ${declaration.value}`
         );
       }
     }
   }
+  return problems;
 }
 
-if (problems.length > 0) {
-  process.stderr.write(`Backgrounds must use the palette tokens in theme.css:\n${problems.sort().join('\n')}\n`);
-  process.exit(1);
+if (import.meta.main) {
+  const repoRoot = resolve(import.meta.dirname, '..');
+  const app = webApp(resolve(repoRoot, 'apps/web'));
+  const problems = paletteProblems(app);
+  if (problems.length > 0) {
+    process.stderr.write(`${app.heading}:\n${problems.sort().join('\n')}\n`);
+    process.exit(1);
+  }
 }

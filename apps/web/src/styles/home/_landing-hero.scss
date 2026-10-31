@@ -1,0 +1,130 @@
+// The landing's left column: kicker, title, create button and room code field.
+// Svelte: LandingHero.svelte <style> and the .landing-cta-row rules of home.css.
+//
+// Svelte class -> BEM class (block "landing-hero")
+//   .landing-hero          -> .landing-hero
+//   .landing-kicker        -> .landing-hero__kicker
+//   .landing-kicker-dot    -> .landing-hero__kicker-dot
+//   .landing-title         -> .landing-hero__title
+//   .landing-lead          -> .landing-hero__lead
+//   .landing-cta-row       -> .landing-hero__cta-row
+//   .landing-join          -> .landing-hero__join
+//   .landing-join-input    -> .landing-hero__join-input
+//   .landing-join-btn      -> .landing-hero__join-btn
+//   .landing-disclaimer    -> .landing-hero__disclaimer
+// The Svelte home.css also had .lv-join* and .landing-features grid rules; the
+// component styles overrode the latter and .lv-join* belongs to the lobby.
+@use '../mixins' as *;
+
+.landing-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  text-align: left;
+}
+
+.landing-hero__kicker {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 16px;
+  color: var(--vr-accent);
+  font-size: 13.5px;
+  font-weight: 500;
+}
+
+.landing-hero__kicker-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--vr-accent);
+  box-shadow: 0 0 0 3px var(--vr-accent-soft);
+}
+
+.landing-hero__title {
+  margin: 0;
+  color: var(--vr-text);
+  font-size: clamp(34px, 4.6vw, 58px);
+  font-weight: 600;
+  line-height: 1.04;
+  letter-spacing: -0.035em;
+  text-wrap: balance;
+}
+
+.landing-hero__lead {
+  max-width: 500px;
+  margin: 18px 0 0;
+  color: var(--vr-text-2);
+  font-size: 17px;
+  line-height: 1.55;
+  text-wrap: pretty;
+}
+
+.landing-hero__cta-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 28px;
+
+  @include below(560px) {
+    flex-direction: column;
+  }
+}
+
+.landing-hero__join {
+  display: flex;
+  align-items: stretch;
+  height: 50px;
+  overflow: hidden;
+  border: 1px solid var(--vr-line-strong);
+  border-radius: 13px;
+  background: var(--vr-surface-2);
+
+  &:focus-within {
+    border-color: var(--vr-accent-line);
+  }
+}
+
+.landing-hero__join-input {
+  appearance: none;
+  width: 170px;
+  height: 100%;
+  padding: 0 16px;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--vr-text);
+  font-family: var(--font-mono);
+  font-size: 14px;
+
+  &::placeholder {
+    color: var(--vr-text-3);
+  }
+
+  &::-webkit-search-cancel-button,
+  &::-webkit-search-decoration {
+    appearance: none;
+  }
+}
+
+.landing-hero__join-btn {
+  padding: 0 18px;
+  border: 0;
+  border-left: 1px solid var(--vr-line-strong);
+  background: transparent;
+  color: var(--vr-text);
+  font: 500 14.5px var(--font-ui);
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    background: var(--vr-hover);
+  }
+}
+
+.landing-hero__disclaimer {
+  margin: 14px 0 0;
+  color: var(--vr-text-3);
+  font-size: 13px;
+}

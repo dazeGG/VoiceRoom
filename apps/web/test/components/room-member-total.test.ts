@@ -1,11 +1,10 @@
 import type { MemberPresenceStatus } from '@voice-room/shared/contracts/membership';
-import { expect, test, vi } from 'vitest';
+import { createPinia, setActivePinia } from 'pinia';
+import { beforeEach, expect, test, vi } from 'vitest';
+import { useRoomMembershipStore } from '@/entities/room/room-membership.store';
 import { stubFetch } from '../fixtures/fetch.ts';
-import {
-  ensureRoomMembership,
-  roomMemberTotal,
-  roomMembershipState
-} from '../../src/lib/entities/room/room-membership.svelte';
+
+beforeEach(() => setActivePinia(createPinia()));
 
 function member(userId: string, presenceStatus: MemberPresenceStatus) {
   return {
@@ -38,11 +37,13 @@ test('the member total counts offline members too and falls back to the live cou
       }
     }
   });
+  const membership = useRoomMembershipStore();
+  const { ensureRoomMembership, roomMemberTotal } = membership;
 
   expect(roomMemberTotal('room-total', 0)).toBe(0);
   ensureRoomMembership('room-total');
   ensureRoomMembership('room-total');
-  await vi.waitFor(() => expect(roomMembershipState.byRoomId['room-total']?.loaded).toBe(true));
+  await vi.waitFor(() => expect(membership.byRoomId['room-total']?.loaded).toBe(true));
 
   expect(roomMemberTotal('room-total', 0)).toBe(3);
   expect(calls).toHaveLength(1);

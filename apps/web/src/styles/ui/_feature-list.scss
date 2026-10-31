@@ -1,0 +1,50 @@
+// FeatureList (shared/components/FeatureList.vue): numbered feature list under the hero lead.
+// The ink colours are custom properties a page sets on an ancestor.
+//
+// Svelte class -> BEM class
+//   .feature-list  -> .feature-list
+//   .feature       -> .feature-list__item
+//   .feature-num   -> .feature-list__num
+//   .feature-body  -> .feature-list__body
+//   .feature-title -> .feature-list__title
+//   .feature-desc  -> .feature-list__desc
+
+.feature-list {
+  list-style: none;
+  margin: 44px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  max-width: 500px;
+}
+
+.feature-list__item {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.feature-list__num {
+  flex: none;
+  width: 20px;
+  padding-top: 2px;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  color: var(--feature-num-ink, var(--vr-text-3));
+}
+
+.feature-list__title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--feature-title-ink, var(--vr-text));
+  letter-spacing: -0.01em;
+}
+
+.feature-list__desc {
+  margin: 3px 0 0;
+  font-size: 14px;
+  color: var(--feature-desc-ink, var(--vr-text-3));
+  line-height: 1.5;
+}

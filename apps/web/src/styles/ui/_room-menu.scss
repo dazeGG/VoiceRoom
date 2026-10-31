@@ -1,0 +1,149 @@
+// RoomMenu, RoomMenuContent and RoomInviteFriendList (shared/components/room-menu/).
+//
+// Svelte class -> BEM class
+//   .room-menu-trigger              -> .room-menu__trigger
+//   .room-menu-title                -> .room-menu__title (on Ellipsis)
+//   .room-menu-chevron              -> .room-menu__chevron
+//   .room-menu-notifications-muted  -> .room-menu__notifications-muted
+//   .room-menu-popover              -> .room-menu__popover (no rules)
+//   .room-menu-content              -> .room-menu-content (block)
+//   .room-menu-head                 -> .room-menu-content__head
+//   .room-menu-info                 -> .room-menu-content__info
+//   .room-menu-name                 -> .room-menu-content__name (on Ellipsis)
+//   .room-menu-code                 -> .room-menu-content__code (on Ellipsis)
+//   .room-invite-list               -> .room-invite-list (block)
+//   .room-invite-empty              -> .room-invite-list__empty
+//   .room-invite-friend             -> .room-invite-list__friend
+//   .room-invite-friend-name        -> .room-invite-list__friend-name
+//   .room-invite-friend-note        -> .room-invite-list__friend-note
+//
+// [data-room-menu-content] stays on the content root as a hook; nothing styles it.
+// The trigger's open state is aria-expanded, as in Svelte.
+// The classes callers pass in (triggerClass, titleClass, chevronClass, headingClass) and
+// the .room-invite-* classes of the room topbar belong to those callers.
+
+.room-menu__trigger {
+  color: inherit;
+  font: inherit;
+}
+
+.room-menu__title {
+  min-width: 0;
+}
+
+.room-menu__chevron {
+  flex: none;
+  display: inline-flex;
+  transition: transform 150ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.room-menu__notifications-muted {
+  flex: none;
+  display: inline-flex;
+  color: var(--vr-text);
+}
+
+.room-menu__trigger[aria-expanded='true'] .room-menu__chevron {
+  transform: rotate(180deg);
+}
+
+.room-menu-content {
+  display: flex;
+  width: min(286px, calc(100vw - 28px));
+  max-width: 100%;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.room-menu-content__head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 10px 12px;
+}
+
+.room-menu-content__info {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.room-menu-content__name {
+  color: var(--vr-text);
+  font-family: var(--font-ui);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.room-menu-content__code {
+  color: var(--vr-text-2, var(--vr-text-3));
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.02em;
+}
+
+.room-invite-list {
+  display: flex;
+  max-height: min(280px, 50vh);
+  flex-direction: column;
+  gap: 2px;
+  overflow-y: auto;
+}
+
+.room-invite-list__empty {
+  margin: 0;
+  padding: 8px 12px;
+  color: var(--vr-text-3);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.room-invite-list__friend {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  height: 40px;
+  padding: 0 12px;
+  border: none;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--vr-text);
+  font-family: var(--font-ui);
+  font-size: 14.5px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background 0.14s ease,
+    color 0.14s ease;
+}
+
+.room-invite-list__friend:hover:not(:disabled),
+.room-invite-list__friend:focus-visible:not(:disabled) {
+  background: color-mix(in oklch, var(--vr-accent), transparent 88%);
+  color: var(--vr-text);
+}
+
+.room-invite-list__friend:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.room-invite-list__friend-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.room-invite-list__friend-note {
+  flex: none;
+  color: var(--vr-text-3);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}

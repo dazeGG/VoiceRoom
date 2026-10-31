@@ -2,10 +2,10 @@
 // the connection pill/bars text derived from room state.
 
 import { beforeEach, expect, test } from 'vitest';
-import { state } from '../../src/lib/features/room/client/core/state.svelte.ts';
-import { createInitialRoomState } from '../../src/lib/features/room/client/model/room-state.ts';
-import { getAvatarPresentation } from '../../src/lib/shared/ui/avatar-presentation.ts';
-import { getConnectionStatusView } from '../../src/lib/features/room/client/ui/status.ts';
+import { state } from '@/features/room/client/core/room-runtime.store';
+import { createInitialRoomState } from '@/features/room/client/model/room-state.ts';
+import { getAvatarPresentation } from '@/shared/ui/avatar-presentation.ts';
+import { getConnectionStatusView } from '@/features/room/client/ui/status.ts';
 
 beforeEach(() => {
   Object.assign(state, createInitialRoomState());
@@ -48,61 +48,46 @@ test('connecting states come before the voice is up', () => {
   expect(getConnectionStatusView()).toMatchObject({ stateName: 'connecting', label: 'Подключение голоса' });
 });
 
-test('a connected voice shows the ping and turns to a warning on noticeable loss', () => {
+test('a connected voice shows the ping, and the loss on the line only in the tooltip', () => {
   state.serverConnection = 'connected';
   state.voiceConnection = 'connected';
   state.localPingMs = 40;
-  const healthy = getConnectionStatusView();
-  expect(healthy.stateName).toBe('connected');
-  expect(healthy.label).toMatch(/^Голос подключен · /);
+  expect(getConnectionStatusView()).toMatchObject({ stateName: 'connected', label: 'Голос подключен · 40 мс' });
 
-  state.localNetwork = { ...state.localNetwork, inboundLossPct: 7 };
+  // Loss that RED and FEC repaired is not heard: until the server says otherwise the voice is fine.
+  state.localNetwork = { inboundLossPct: 12, jitterMs: 45, outboundLossPct: 0, transport: 'relay' };
   const lossy = getConnectionStatusView();
-  expect(lossy.stateName).toBe('warning');
-  expect(lossy.label).toMatch(/^Голос нестабилен/);
-  expect(lossy.title).toContain('потери к вам 7%');
+  expect(lossy).toMatchObject({ stateName: 'connected', label: 'Голос подключен · 40 мс' });
+  expect(lossy.title).toBe(
+    'Пинг до LiveKit 40 мс · потери от вас 0% · потери к вам 12% · джиттер 45 мс · через ретранслятор (UDP недоступен)'
+  );
 });
 
-test('an unstable voice names what is wrong next to the ping', () => {
+test("the pill shows the server's verdict on what the room heard, and whose side the trouble is on", () => {
   state.serverConnection = 'connected';
   state.voiceConnection = 'connected';
   state.localPingMs = 2;
-  state.localNetwork = { inboundLossPct: 7, jitterMs: 4, outboundLossPct: 0, transport: 'udp' };
-  expect(getConnectionStatusView().label).toBe('Голос нестабилен · потери к вам 7% · 2 мс');
+  state.voiceQuality = { level: 'unstable', cause: 'hears_badly' };
+  expect(getConnectionStatusView()).toMatchObject({
+    stateName: 'warning',
+    label: 'Голос нестабилен · собеседников плохо слышно · 2 мс'
+  });
 
-  state.localNetwork = { inboundLossPct: 0, jitterMs: 45, outboundLossPct: 7, transport: 'udp' };
-  expect(getConnectionStatusView().label).toBe('Голос нестабилен · потери от вас 7% · джиттер 45 мс · 2 мс');
-
-  state.localPingMs = 420;
-  state.localNetwork = { inboundLossPct: 0, jitterMs: 4, outboundLossPct: 0, transport: 'udp' };
-  expect(getConnectionStatusView().label).toBe('Голос нестабилен · высокий пинг · 420 мс');
-
-  state.localPingMs = null;
-  state.localConnectionQuality = 'poor';
-  expect(getConnectionStatusView()).toMatchObject({ stateName: 'warning', label: 'Голос нестабилен · плохая связь' });
-});
-
-test('past the shared bad thresholds the voice is a bad connection, in red like the admin panel bar', () => {
-  state.serverConnection = 'connected';
-  state.voiceConnection = 'connected';
-  state.localPingMs = 2;
-  state.localNetwork = { inboundLossPct: 0, jitterMs: 45, outboundLossPct: 12, transport: 'udp' };
+  state.voiceQuality = { level: 'bad', cause: 'heard_badly' };
   expect(getConnectionStatusView()).toMatchObject({
     stateName: 'error',
-    label: 'Плохая связь · потери от вас 12% · джиттер 45 мс · 2 мс'
+    label: 'Плохая связь · вас плохо слышно · 2 мс'
   });
 
   state.localPingMs = 700;
-  state.localNetwork = { inboundLossPct: 0, jitterMs: 4, outboundLossPct: 0, transport: 'udp' };
+  state.voiceQuality = { level: 'unstable', cause: 'delay' };
   expect(getConnectionStatusView()).toMatchObject({
-    stateName: 'error',
-    label: 'Плохая связь · высокий пинг · 700 мс'
+    stateName: 'warning',
+    label: 'Голос нестабилен · большая задержка · 700 мс'
   });
 
-  // Right under the unstable threshold the voice is fine.
-  state.localPingMs = 299;
-  state.localNetwork = { inboundLossPct: 4.9, jitterMs: 29, outboundLossPct: 0, transport: 'udp' };
-  expect(getConnectionStatusView().stateName).toBe('connected');
+  state.voiceQuality = { level: 'good', cause: null };
+  expect(getConnectionStatusView()).toMatchObject({ stateName: 'connected', label: 'Голос подключен · 700 мс' });
 });
 
 test('voice failures are errors and a lost quality overrides a connected voice', () => {

@@ -1,0 +1,404 @@
+// VoiceHome (features/home/components/lobby/VoiceHome.vue): the lobby's main pane with the
+// room code field, the callouts and the room cards.
+// Svelte: the <style> of VoiceHome.svelte and the .lv-main-scroll/.lv-join*/.lr-* rules of lobby-v2.css.
+// The .lr-* classes other lobby views used (requests, add friend) are theirs and are not here.
+//
+// Svelte class -> BEM class (block "voice-home")
+//   .lv-main-scroll          -> .voice-home
+//   .lv-home                 -> .voice-home__content
+//   .lv-home-head            -> .voice-home__head
+//   .lr-title                -> .voice-home__title
+//   .lv-home-actions         -> .voice-home__actions
+//   .lv-join                 -> .voice-home__join
+//   .lv-join-input           -> .voice-home__join-input
+//   .lv-join-btn             -> .voice-home__join-button
+//   .lv-sr-only              -> .voice-home__hint (visually hidden)
+//   .lr-callout              -> .voice-home__callout
+//   .lr-callout--request     -> .voice-home__callout--request
+//   .lr-callout-icon         -> .voice-home__callout-icon
+//   .lr-callout-icon--warning -> .voice-home__callout-icon--warning
+//   .lr-callout-main         -> .voice-home__callout-main
+//   .lr-callout-copy         -> .voice-home__callout-copy
+//   .lr-callout-title        -> .voice-home__callout-title
+//   .lr-callout-sub          -> .voice-home__callout-sub
+//   .lr-callout-dismiss      -> .voice-home__callout-dismiss
+//   .lr-empty-state          -> .voice-home__empty
+//   .lr-empty-mark           -> .voice-home__empty-mark
+//   .lr-empty                -> .voice-home__empty-text
+//   .lv-section              -> .voice-home__section
+//   .lv-section--quiet       -> .voice-home__section--quiet
+//   .lv-section-title        -> .voice-home__section-title
+//   .lr-livedot              -> .voice-home__live-dot
+//   .lv-cards                -> .voice-home__cards
+//   .lv-quiet-list           -> .voice-home__quiet-list
+//   .lv-card                 -> .voice-home__card
+//   .lv-card--quiet          -> .voice-home__card--quiet
+//   .lv-card.is-context      -> .voice-home__card--context
+//   .lv-card.has-unread      -> (no rule; dropped)
+//   .lv-card-head            -> .voice-home__card-head
+//   .lv-card-foot            -> .voice-home__card-foot
+//   .lv-spacer               -> .voice-home__spacer
+//   .lv-row-name             -> .voice-home__room-name (on Ellipsis)
+//   .lv-row-sub              -> .voice-home__room-sub
+//   .lv-notification-muted   -> .voice-home__muted
+//
+// [data-*] -> modifier
+//   none: the 1Password/LastPass/Bitwarden skip attributes on the code field are hooks for those
+//   tools, not styling.
+
+@use '../mixins';
+
+.voice-home {
+  flex: 1;
+  overflow: auto;
+  padding: 36px 44px;
+}
+
+.voice-home__content {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+.voice-home__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.voice-home__title {
+  margin: 0;
+  color: var(--vr-text);
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+}
+
+.voice-home__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.voice-home__join {
+  display: flex;
+  align-items: stretch;
+  height: 44px;
+  border: 1px solid var(--vr-line-strong);
+  border-radius: 12px;
+  background: var(--vr-surface-2);
+  overflow: hidden;
+
+  &:focus-within {
+    border-color: var(--vr-accent-line);
+  }
+}
+
+.voice-home__join-input {
+  appearance: none;
+  width: 190px;
+  height: 100%;
+  padding: 0 14px;
+  border: none;
+  background: transparent;
+  outline: none;
+  color: var(--vr-text);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1;
+
+  &::placeholder {
+    color: var(--vr-text-3);
+  }
+
+  // The room code field is a search input (see VoiceHome.vue); it keeps the look of a plain text field.
+  &::-webkit-search-cancel-button,
+  &::-webkit-search-decoration {
+    appearance: none;
+  }
+}
+
+.voice-home__join-button {
+  padding: 0 16px;
+  border: none;
+  border-left: 1px solid var(--vr-line-strong);
+  background: transparent;
+  color: var(--vr-text);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.13s ease;
+
+  &:hover {
+    background: var(--vr-hover);
+  }
+}
+
+.voice-home__hint {
+  @include mixins.visually-hidden;
+}
+
+.voice-home__callout {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 14px 14px 16px;
+  border: 1px solid var(--vr-line-strong);
+  border-radius: 14px;
+  background: var(--vr-surface-2);
+}
+
+.voice-home__callout--request {
+  border-color: var(--vr-accent-line);
+  background: var(--vr-accent-soft);
+}
+
+.voice-home__callout-icon {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
+  background: var(--vr-accent);
+  color: var(--vr-accent-ink);
+}
+
+.voice-home__callout-icon--warning {
+  background: color-mix(in oklch, var(--vr-warning), transparent 86%);
+  color: var(--vr-warning);
+}
+
+.voice-home__callout-main {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.voice-home__callout-copy {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.voice-home__callout-title {
+  color: var(--vr-text);
+  font-size: 14.5px;
+  font-weight: 600;
+}
+
+.voice-home__callout-sub {
+  color: var(--vr-text-2);
+  font-size: 13px;
+}
+
+.voice-home__callout-dismiss {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--vr-text-2);
+  cursor: pointer;
+
+  &:hover {
+    background: var(--vr-hover);
+    color: var(--vr-text);
+  }
+}
+
+.voice-home__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 56px 24px;
+  border: 1px dashed var(--vr-line-strong);
+  border-radius: 20px;
+  text-align: center;
+}
+
+.voice-home__empty-mark {
+  position: relative;
+  width: 56px;
+  height: 56px;
+  border-radius: 17px;
+  background: var(--vr-surface-2);
+
+  &::after {
+    content: '';
+    position: absolute;
+    inset: 13px;
+    background: var(--vr-accent);
+    mask: url('/voiceroom-mascot.svg') center / contain no-repeat;
+  }
+}
+
+.voice-home__empty-text {
+  max-width: 340px;
+  margin: 0;
+  color: var(--vr-text-2);
+  font-size: 14.5px;
+  line-height: 1.5;
+}
+
+.voice-home__section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.voice-home__section--quiet {
+  gap: 4px;
+
+  .voice-home__section-title {
+    padding-bottom: 8px;
+  }
+}
+
+.voice-home__section-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: var(--vr-text-2);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.voice-home__live-dot {
+  width: 6px;
+  height: 6px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--vr-accent);
+  box-shadow: 0 0 0 3px var(--vr-accent-soft);
+}
+
+.voice-home__cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+
+  @media (max-width: 980px) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.voice-home__quiet-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.voice-home__card {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 18px;
+  border: 1px solid var(--vr-line);
+  border-radius: 16px;
+  background: var(--vr-surface-2);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+
+  &:hover,
+  &.voice-home__card--context {
+    border-color: var(--vr-accent-line);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--vr-accent);
+    outline-offset: 2px;
+  }
+
+  .voice-home__room-name {
+    flex: 0 1 auto;
+    min-width: 0;
+    font-size: 15px;
+  }
+}
+
+.voice-home__card--quiet {
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+  height: 50px;
+  padding: 0 12px;
+  border-color: transparent;
+  border-radius: 12px;
+  background: transparent;
+
+  &:hover,
+  &.voice-home__card--context {
+    border-color: transparent;
+    background: var(--vr-hover);
+  }
+
+  .voice-home__room-name {
+    font-size: 14px;
+  }
+}
+
+.voice-home__card-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.voice-home__card-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 24px;
+}
+
+.voice-home__spacer {
+  flex: 1;
+}
+
+.voice-home__room-name {
+  color: var(--vr-text);
+  font-weight: 400;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.voice-home__room-sub {
+  width: 56px;
+  color: var(--vr-text-3);
+  font-size: 12.5px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.voice-home__muted {
+  display: inline-flex;
+  flex: none;
+  color: var(--vr-text-3);
+}

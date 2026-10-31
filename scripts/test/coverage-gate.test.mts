@@ -65,7 +65,7 @@ const WEB_ROOM_COVERAGE_SCRIPT = String.raw`
   import { registerHooks, stripTypeScriptTypes } from "node:module";
   import path from "node:path";
   import { pathToFileURL } from "node:url";
-  const targetPath = path.resolve("apps/web/src/lib/features/room/client/room/room.ts");
+  const targetPath = path.resolve("apps/web/src/features/room/client/room/room.ts");
   const targetUrl = pathToFileURL(targetPath).href;
   const originalSource = fs.readFileSync(targetPath, "utf8");
   const importNames = new Map();
@@ -191,7 +191,7 @@ function thresholdFixture(overrides: Partial<CoverageThresholds> = {}): Coverage
         name: 'media',
         enforcement: 'on-changed',
         paths: [],
-        pathPatterns: ['apps/web/src/lib/features/room/client/media/']
+        pathPatterns: ['apps/web/src/features/room/client/media/']
       }
     ],
     businessPathPatterns: ['apps/api/src/', 'apps/web/src/', 'packages/shared/src/'],
@@ -208,7 +208,7 @@ const greenSummary: CoverageSummary = {
   total: { lines: { pct: 82 }, branches: { pct: 72 } },
   files: {
     'apps/api/src/domains/admission/gate-credential-signer.js': { lines: { pct: 100 }, branches: { pct: 100 } },
-    'apps/web/src/lib/api/http.ts': { lines: { pct: 91 }, branches: { pct: 86 } }
+    'apps/web/src/api/client.ts': { lines: { pct: 91 }, branches: { pct: 86 } }
   }
 };
 
@@ -408,6 +408,44 @@ test('G08-A03d2 a layer-named successor (-service.js to .service.ts) carries the
   );
 });
 
+test('G08-A03d3 a web module moved out of src/lib/ carries its entry once the old file is gone', () => {
+  const legacy = 'apps/web/src/lib/features/room/client/media/screen-receiver-demand.ts';
+  const moved = 'apps/web/src/features/room/client/media/screen-receiver-demand.ts';
+  const base = thresholdFixture({
+    strictBranchPaths: [legacy],
+    businessPathPatterns: [...thresholds.businessPathPatterns, legacy]
+  });
+  const relocated = thresholdFixture({
+    strictBranchPaths: [moved],
+    businessPathPatterns: [...thresholds.businessPathPatterns, moved]
+  });
+  const summary = {
+    ...greenSummary,
+    files: { ...greenSummary.files, [moved]: { lines: { pct: 100 }, branches: { pct: 100 } } }
+  };
+  const check = (thresholdsUnderTest: CoverageThresholds, fileExists: (file: string) => boolean) =>
+    enforceCoverage({ coverageSummary: summary, thresholds: thresholdsUnderTest, baseThresholds: base, fileExists });
+
+  assert.equal(check(relocated, () => false).ratchetMode, 'protected-base-ratchet');
+  assert.throws(
+    () => check(relocated, () => true),
+    /may not remove or narrow protected-base policy entry: apps\/web\/src\/lib\/features/i
+  );
+  // Only the lib/ segment may go; another place is a removal.
+  const elsewhere = 'apps/web/src/features/room/screen-receiver-demand.ts';
+  assert.throws(
+    () =>
+      check(
+        thresholdFixture({
+          strictBranchPaths: [elsewhere],
+          businessPathPatterns: [...thresholds.businessPathPatterns, elsewhere]
+        }),
+        () => false
+      ),
+    /may not remove or narrow protected-base policy entry/i
+  );
+});
+
 test('G08-A03e a .ts exclusion may only replace the .js/.mjs exclusions of a module that is gone', () => {
   const base = thresholdFixture({
     ignoredPathPatterns: [
@@ -483,7 +521,7 @@ test('G08-A04 rejects unmeasured/regressed coverage and changed business gaps', 
 });
 
 test('G08-A05 changed auth and web media strict files fail closed when missing or below the strict minimum', () => {
-  const media = 'apps/web/src/lib/features/room/client/media/screen-receiver-demand.ts';
+  const media = 'apps/web/src/features/room/client/media/screen-receiver-demand.ts';
   assert.throws(
     () =>
       checkCoverage({
@@ -632,8 +670,8 @@ test('G08 web TypeScript producer measures actual auth and media decision files'
   t.after(() => {
     globalThis.fetch = originalFetch;
   });
-  const auth = await import('../../apps/web/src/lib/api/auth.ts');
-  const media = await import('../../apps/web/src/lib/features/room/client/media/screen-receiver-demand.ts');
+  const auth = await import('../../apps/web/src/api/auth.ts');
+  const media = await import('../../apps/web/src/features/room/client/media/screen-receiver-demand.ts');
   const user = {
     avatarAccent: null,
     avatarColorKey: 'blurple',

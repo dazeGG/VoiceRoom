@@ -2,13 +2,13 @@
 // lost subscribe frame would leave that room's chat deaf until a reload.
 
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
-import { FakeWebSocket, installFakeWebSocket } from '../fixtures/fake-websocket.ts';
+import { FakeWebSocket, installFakeWebSocket } from '../fixtures/fake-websocket';
 
 async function load() {
   vi.resetModules();
   installFakeWebSocket();
-  vi.doMock('../../src/lib/entities/room/room-presence.svelte', () => ({ applyRoomSummary: () => {} }));
-  return import('../../src/lib/entities/room/room-realtime.ts');
+  vi.doMock('@/entities/room/room-presence.store', () => ({ applyRoomSummary: () => {} }));
+  return import('@/entities/room/room-realtime');
 }
 
 /** The preview snapshot the server answers a subscription with. */

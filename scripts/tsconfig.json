@@ -17,9 +17,7 @@
     "exactOptionalPropertyTypes": true,
     "noImplicitOverride": true,
     "noFallthroughCasesInSwitch": true,
-    "skipLibCheck": true,
-    // The G08 test imports a web module that uses the SvelteKit alias.
-    "paths": { "$lib/*": ["../apps/web/src/lib/*", "../apps/web/src/lib/*.ts"] }
+    "skipLibCheck": true
   },
   "include": ["**/*.mts"]
 }

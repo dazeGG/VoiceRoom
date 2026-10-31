@@ -1,0 +1,22 @@
+// "Need a room again?" offer shown to a returning guest.
+// Svelte: PermanentRoomOfferDialog.svelte <style>.
+//
+// Svelte class -> BEM class (block "permanent-room-offer")
+//   .permanent-room-offer-text     -> .permanent-room-offer__text
+//   .permanent-room-offer-actions  -> .permanent-room-offer__actions
+//   .permanent-room-offer-register -> .permanent-room-offer__register (focus hook only)
+
+.permanent-room-offer__text {
+  margin: 0;
+  color: var(--vr-text-2);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.permanent-room-offer__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 18px;
+}

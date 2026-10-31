@@ -1,0 +1,181 @@
+// Global page rules: reset, scrollbars, the app shell and the start layout.
+//
+// Svelte class / selector -> BEM name (classes of other components' blocks that
+// a global rule has to reach; the component that owns each one keeps this name):
+//   .app-shell                              -> .app-shell (block)
+//   .topbar                                 -> .topbar (block)
+//   .start-layout                           -> .start-layout (block)
+//   .start-copy                             -> .start-layout__copy
+//   .ui-toaststack                          -> .ui-toast-stack (block)
+//   .lucide                                 -> .lucide (set by @lucide/vue, not ours)
+//   body[data-screen='room']                -> body.screen--room
+//   body[data-screen='checking']            -> body.screen--checking
+//   body[data-screen='start']               -> body.screen--start
+//   body[data-screen-view='true']           -> body.screen-view--open
+@use 'mixins' as *;
+
+:root {
+  font-family: var(--font-ui);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+html {
+  min-height: 100%;
+}
+
+body {
+  min-height: 100dvh;
+  margin: 0;
+  background: var(--vr-bg);
+  color: var(--vr-text);
+  font-size: 16px;
+  line-height: 1.45;
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.56;
+}
+
+.lucide {
+  display: block;
+  flex-shrink: 0;
+}
+
+// Thin accent scrollbars everywhere. Firefox only gets the standard
+// properties when ::-webkit-scrollbar is unsupported, since they would
+// otherwise override the webkit styling in Chromium.
+@supports not selector(::-webkit-scrollbar) {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--vr-accent) transparent;
+  }
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 99px;
+  background: var(--vr-accent);
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-button {
+  display: none;
+}
+
+.app-shell {
+  display: grid;
+  min-height: 100dvh;
+  grid-template-rows: auto 1fr;
+  padding: var(--space-lg);
+  gap: var(--space-lg);
+}
+
+// Svelte: body:not([data-screen='room'])
+body:not(.screen--room) .app-shell {
+  padding-inline: 40px;
+}
+
+body:not(.screen--room) .topbar {
+  width: min(100%, 1160px);
+  margin-inline: auto;
+}
+
+.start-layout {
+  display: grid;
+  width: min(100%, 1020px);
+  grid-template-columns: minmax(0, 1fr) minmax(340px, 452px);
+  align-items: start;
+  align-content: start;
+  gap: clamp(var(--space-lg), 4vw, 56px);
+  margin-inline: auto;
+  padding-top: clamp(24px, 6vh, 72px);
+}
+
+.start-layout__copy {
+  max-width: 680px;
+}
+
+.start-layout__copy h1 {
+  max-width: 14ch;
+  font-size: clamp(2.75rem, 4.8vw, 3.625rem);
+}
+
+@keyframes blink {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@include below($bp-narrow) {
+  .app-shell {
+    padding: var(--space-md);
+  }
+
+  body:not(.screen--room) .app-shell {
+    padding-inline: 20px;
+  }
+
+  .start-layout {
+    grid-template-columns: 1fr;
+    gap: var(--space-xl);
+  }
+
+  .start-layout__copy h1 {
+    max-width: 14ch;
+    font-size: 2.75rem;
+  }
+}
+
+@include below($bp-phone-sm) {
+  .start-layout__copy h1 {
+    font-size: 2.25rem;
+  }
+
+  // In the room the toasts sit above the dock.
+  // Svelte: body[data-screen='room'] / body[data-screen='checking']
+  body.screen--room .ui-toast-stack,
+  body.screen--checking .ui-toast-stack {
+    right: var(--space-md);
+    bottom: calc(max(var(--space-lg), env(safe-area-inset-bottom)) + 72px);
+  }
+}

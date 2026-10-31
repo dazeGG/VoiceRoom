@@ -1,0 +1,191 @@
+// RoomMemberList (entities/room/components/RoomMemberList.vue): the roster of a room.
+//
+// Svelte class / selector -> BEM class
+//   .room-member-list                         -> .room-member-list
+//   h3                                        -> .room-member-list__heading
+//   ul                                        -> .room-member-list__list
+//   li                                        -> .room-member-list__item
+//   .room-member-list__count / __row / __member / __you / __menu-trigger / __menu / __notice / __empty / __more -> same
+//   .room-member-list__member > span          -> .room-member-list__text
+//   strong                                    -> .room-member-list__name
+//   small                                     -> .room-member-list__login
+//   .room-member-list__menu-root (global)     -> .room-member-list__menu-root (rootClass of the Popover)
+//   .sr-only                                  -> .room-member-list__sr-only
+//
+// [data-*] -> aria
+//   .room-member-list__menu-trigger[data-open='true'] -> .room-member-list__menu-trigger[aria-expanded='true']
+
+@use '../mixins' as *;
+
+.room-member-list {
+  display: grid;
+  gap: 4px;
+  min-width: 240px;
+}
+
+.room-member-list__heading {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  padding: 6px 10px 8px;
+  color: var(--vr-text-2);
+  font-size: 12.5px;
+  font-weight: 500;
+}
+
+.room-member-list__heading:not(:first-child) {
+  margin-top: 14px;
+}
+
+.room-member-list__count {
+  color: var(--vr-text-3);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  font-weight: 400;
+}
+
+.room-member-list__list {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.room-member-list__item {
+  min-width: 0;
+}
+
+.room-member-list__row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  border-radius: 10px;
+  transition: background 120ms ease;
+}
+
+.room-member-list__row:hover,
+.room-member-list__row:focus-within {
+  background: var(--vr-hover);
+}
+
+.room-member-list__member {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.room-member-list__member:focus-visible {
+  outline: 2px solid var(--vr-accent);
+  outline-offset: -2px;
+}
+
+.room-member-list__text {
+  display: grid;
+  min-width: 0;
+}
+
+.room-member-list__name,
+.room-member-list__login {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.room-member-list__name {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.room-member-list__you {
+  margin-left: 6px;
+  color: var(--vr-text-3);
+  font-size: 13px;
+  font-style: normal;
+  font-weight: 400;
+}
+
+.room-member-list__login {
+  color: var(--vr-text-3);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+}
+
+.room-member-list__row .room-member-list__menu-root {
+  margin-right: 6px;
+}
+
+.room-member-list__menu-trigger {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--vr-text-3);
+  cursor: pointer;
+  transition:
+    background 120ms ease,
+    color 120ms ease;
+}
+
+.room-member-list__menu-trigger:hover:not(:disabled),
+.room-member-list__menu-trigger[aria-expanded='true'] {
+  background: var(--vr-hover);
+  color: var(--vr-text);
+}
+
+.room-member-list__menu-trigger:focus-visible {
+  outline: 2px solid var(--vr-accent);
+  outline-offset: -2px;
+}
+
+.room-member-list__menu-trigger:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.room-member-list__menu {
+  display: flex;
+  width: min(232px, calc(100vw - 28px));
+  flex-direction: column;
+  gap: 2px;
+}
+
+.room-member-list__notice,
+.room-member-list__empty {
+  margin: 0;
+  color: var(--vr-text-2);
+  font-size: 13px;
+}
+
+.room-member-list__notice p {
+  margin: 0;
+}
+
+.room-member-list__more {
+  justify-self: stretch;
+  min-height: 38px;
+  border: 1px solid var(--vr-line-strong);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--vr-text);
+}
+
+.room-member-list__sr-only {
+  @include visually-hidden;
+}

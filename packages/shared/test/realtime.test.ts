@@ -81,6 +81,38 @@ test('a media request names the voice session and whether it is a screen share o
   );
 });
 
+test('a stats poll names the voice session and carries counts only; its verdict goes back to the peer', () => {
+  const target = { roomId: 'abcdefghij', peerId: 'peer-0001', sessionToken: 't'.repeat(32) };
+  const stream = { peerId: 'peer-0002', packets: 150, lost: 3, concealedSamples: 960, gaps: 1 };
+  const poll = (extra: Record<string, unknown> = {}) =>
+    validateClientCommand({
+      type: 'room.voice.report',
+      payload: {
+        ...target,
+        rttMs: 42.5,
+        jitterBufferMs: null,
+        uplink: { packets: 150, lost: 0 },
+        transport: 'udp',
+        heard: [stream],
+        ...extra
+      }
+    });
+  assert.equal(poll().ok, true);
+  assert.equal(poll({ rttMs: null, transport: null, heard: [] }).ok, true, 'alone in the room, before ICE settles');
+  assert.equal(poll({ heard: [{ ...stream, lost: -1 }] }).ok, false);
+  assert.equal(poll({ heard: [{ ...stream, gaps: 0.5 }] }).ok, false);
+  assert.equal(poll({ heard: Array.from({ length: 65 }, () => stream) }).ok, false);
+  assert.equal(poll({ transport: 'quic' }).ok, false);
+  assert.deepEqual(poll({ peerId: 'x' }), { ok: false, code: 'invalid_peer_id' });
+
+  const verdict = (payload: Record<string, unknown>) =>
+    parseServerFrame({ type: 'room.voice.quality', payload: { roomId: 'abcdefghij', peerId: 'peer-0001', ...payload } })
+      .ok;
+  assert.equal(verdict({ level: 'unstable', cause: 'delay' }), true);
+  assert.equal(verdict({ level: null, cause: null }), true);
+  assert.equal(verdict({ level: 'bad', cause: 'cpu' }), false);
+});
+
 test('parseClientEnvelope accepts valid envelopes', () => {
   const result = parseClientEnvelope(JSON.stringify({ type: 'ping', payload: { at: 1 } }));
   assert.equal(result.ok, true);

@@ -1,0 +1,434 @@
+import type {
+  ClientCommands,
+  MediaGrant,
+  ServerEventOf,
+  ServerEvents,
+  ServerEventType
+} from '@voice-room/shared/contracts/realtime';
+import { getAppRealtime, type RealtimeEvent, type RoomSnapshot } from '@/api/realtime';
+import { useRoomPresenceStore } from './room-presence.store';
+import { guestBrowserId } from './guest-id';
+import type { OwnedRoom } from '@/api/auth';
+
+type RoomDetailHandler = (event: RealtimeEvent) => void;
+
+const previewSubscriptions = new Map<string, number>();
+const detailHandlers = new Map<string, Set<RoomDetailHandler>>();
+
+// The server answers a preview subscription with the room's snapshot, or says
+// it is gone or closed to this client. Until one of those arrives the
+// subscription is sent again: one lost frame would otherwise leave the room's
+// chat deaf until a reload.
+const PREVIEW_ACK_MS = 4_000;
+const PREVIEW_MAX_ATTEMPTS = 4;
+const pendingPreviewAcks = new Map<string, { attempts: number; timer: ReturnType<typeof setTimeout> }>();
+
+function clearPreviewAck(roomId: string): void {
+  const pending = pendingPreviewAcks.get(roomId);
+  if (!pending) return;
+  clearTimeout(pending.timer);
+  pendingPreviewAcks.delete(roomId);
+}
+
+function sendPreviewSubscribe(roomId: string, attempts = 0): void {
+  getAppRealtime().send('room.preview.subscribe', { roomId });
+  armPreviewAck(roomId, attempts + 1);
+}
+
+function armPreviewAck(roomId: string, attempts: number): void {
+  clearPreviewAck(roomId);
+  if (attempts >= PREVIEW_MAX_ATTEMPTS) return;
+  const timer = setTimeout(() => {
+    pendingPreviewAcks.delete(roomId);
+    if (!previewSubscriptions.has(roomId)) return;
+    // A frame still queued behind a closed socket was not lost: it goes out
+    // when the socket opens, so the wait starts over instead of resending.
+    if (getAppRealtime().isConnected()) sendPreviewSubscribe(roomId, attempts);
+    else armPreviewAck(roomId, attempts);
+  }, PREVIEW_ACK_MS);
+  pendingPreviewAcks.set(roomId, { attempts, timer });
+}
+
+function acknowledgePreview(event: RealtimeEvent): void {
+  if (event.type !== 'room.snapshot' && event.type !== 'room.not_found' && event.type !== 'room.banned') return;
+  clearPreviewAck(event.payload.roomId);
+}
+
+// The room each server event belongs to; null for events no room handler sees.
+// Exhaustive: a new event type does not compile until it is given its room.
+const ROOM_OF: { [Type in ServerEventType]: ((payload: ServerEvents[Type]) => string | undefined) | null } = {
+  ready: null,
+  pong: null,
+  'friend.presence': null,
+  'friend.request': null,
+  'friend.accepted': null,
+  'friend.removed': null,
+  'friend.updated': null,
+  'ring.incoming': null,
+  'notification.settings.updated': null,
+  'account.login.new': null,
+  'account.login.resolved': null,
+  'admin.reports': null,
+  'dm.message': null,
+  'dm.message.edited': null,
+  'dm.message.deleted': null,
+  'dm.read': null,
+  'dm.typing': null,
+  'notification.dm.message': null,
+  'notification.room.message': (payload) => payload.room.roomId,
+  'notification.friend.request': null,
+  'notification.friend.accepted': null,
+  'room.summary': (payload) => payload.room.roomId,
+  'room.snapshot': (payload) => payload.roomId,
+  'room.updated': (payload) => payload.room.roomId,
+  'room.deleted': (payload) => payload.roomId,
+  'room.not_found': (payload) => payload.roomId,
+  'room.full': (payload) => payload.roomId,
+  'server.full': (payload) => payload.roomId,
+  'room.media.grant': (payload) => payload.roomId,
+  'room.kicked': (payload) => payload.roomId,
+  'room.banned': (payload) => payload.roomId,
+  'room.left': (payload) => payload.roomId,
+  'room.peer.joined': (payload) => payload.roomId,
+  'room.peer.left': (payload) => payload.roomId,
+  'room.peer.updated': (payload) => payload.roomId,
+  'room.voice.quality': (payload) => payload.roomId,
+  'room.chat.message': (payload) => payload.roomId,
+  'room.chat.edited': (payload) => payload.roomId,
+  'room.chat.deleted': (payload) => payload.roomId,
+  'room.chat.typing': (payload) => payload.roomId,
+  'room.pins': (payload) => payload.roomId,
+  'reaction.updated': (payload) => payload.roomId
+};
+
+function roomOf<Type extends ServerEventType>(event: ServerEventOf<Type>): string | undefined {
+  return ROOM_OF[event.type]?.(event.payload);
+}
+
+function roomDetailEventTargetsRoom(event: RealtimeEvent, roomId: string): boolean {
+  return event.type !== 'error' && roomOf(event) === roomId;
+}
+
+function dispatchRoomDetail(roomId: string, event: RealtimeEvent): void {
+  const handlers = detailHandlers.get(roomId);
+  if (!handlers) return;
+  for (const handler of handlers) handler(event);
+}
+
+// One shared connection subscription fans events out to per-room handlers.
+// A subscription per subscribeRoom* call would dispatch every event once per
+// subscriber of that room (preview + voice on the same room = duplicates).
+let detailDispatchUnsub: (() => void) | null = null;
+let detailDispatchRefs = 0;
+
+function retainDetailDispatch(): void {
+  detailDispatchRefs += 1;
+  if (detailDispatchUnsub) return;
+  detailDispatchUnsub = getAppRealtime().subscribe((event) => {
+    acknowledgeActiveVoiceResync(event);
+    acknowledgePreview(event);
+    if (event.type === 'pong') {
+      // Heartbeat has no roomId; every room handler may use it as liveness.
+      for (const roomId of detailHandlers.keys()) dispatchRoomDetail(roomId, event);
+      return;
+    }
+    for (const roomId of detailHandlers.keys()) {
+      if (roomDetailEventTargetsRoom(event, roomId)) dispatchRoomDetail(roomId, event);
+    }
+  });
+}
+
+function releaseDetailDispatch(): void {
+  detailDispatchRefs = Math.max(0, detailDispatchRefs - 1);
+  if (detailDispatchRefs === 0) {
+    detailDispatchUnsub?.();
+    detailDispatchUnsub = null;
+  }
+}
+
+let activeVoiceJoin: ClientCommands['room.join'] | null = null;
+let restoreHooked = false;
+let lastRestoreEpoch = 0;
+let lastActiveResyncKey = '';
+let activeResync: {
+  key: string;
+  requestId: string;
+  currentRequestId: string;
+  requestIds: Set<string>;
+  attempts: number;
+  timer: ReturnType<typeof setTimeout> | null;
+} | null = null;
+let activeResyncSequence = 0;
+let activeResyncFailureHandler: ((failure: { code: string; requestId: string }) => void) | null = null;
+const retryableActiveResyncErrors = new Set([
+  'network_error',
+  'reconnect_finalize_failed',
+  'superseded_join',
+  'transport_error'
+]);
+
+function clearActiveResync(): void {
+  if (activeResync?.timer) clearTimeout(activeResync.timer);
+  activeResync = null;
+}
+
+function sendActiveResyncAttempt(): void {
+  if (!activeResync || !activeVoiceJoin) return;
+  const pending = activeResync;
+  pending.attempts += 1;
+  pending.currentRequestId = `${pending.requestId}-attempt-${pending.attempts}`;
+  pending.requestIds.add(pending.currentRequestId);
+  getAppRealtime().send('room.join', activeVoiceJoin, pending.currentRequestId);
+  pending.timer = setTimeout(
+    () => {
+      if (activeResync !== pending) return;
+      if (pending.attempts < 3) {
+        sendActiveResyncAttempt();
+        return;
+      }
+      clearActiveResync();
+      activeResyncFailureHandler?.({ code: 'transport_error', requestId: pending.currentRequestId });
+    },
+    1_000 * 2 ** (pending.attempts - 1)
+  );
+}
+
+function isRetryableActiveResyncError(code: string): boolean {
+  return retryableActiveResyncErrors.has(code);
+}
+
+export function setActiveVoiceResyncFailureHandler(
+  handler: ((failure: { code: string; requestId: string }) => void) | null
+): void {
+  activeResyncFailureHandler = handler;
+}
+
+export function acknowledgeActiveVoiceResync(event: RealtimeEvent): boolean {
+  const pending = activeResync;
+  if (!pending) return false;
+  if (
+    event.type === 'room.snapshot' &&
+    pending.requestIds.has(event.id || '') &&
+    event.id === pending.currentRequestId &&
+    event.payload.mode === 'active' &&
+    event.payload.roomId === activeVoiceJoin?.roomId
+  ) {
+    clearActiveResync();
+    return true;
+  }
+  if (event.type === 'room.snapshot' && pending.requestIds.has(event.id || '')) return true;
+  if (event.type === 'error' && pending.requestIds.has(event.payload.id || '')) {
+    if (event.payload.id !== pending.currentRequestId) return true;
+    if (isRetryableActiveResyncError(event.payload.code) && pending.attempts < 3) {
+      if (pending.timer) clearTimeout(pending.timer);
+      pending.timer = null;
+      sendActiveResyncAttempt();
+      return true;
+    }
+    clearActiveResync();
+    activeResyncFailureHandler?.({ code: event.payload.code, requestId: pending.currentRequestId });
+    return true;
+  }
+  return false;
+}
+
+function ensureReconnectRestore(): void {
+  if (restoreHooked) return;
+  restoreHooked = true;
+  getAppRealtime().onRestore((connectionEpoch) => {
+    if (connectionEpoch <= lastRestoreEpoch) return;
+    lastRestoreEpoch = connectionEpoch;
+    lastActiveResyncKey = '';
+    clearActiveResync();
+    for (const roomId of previewSubscriptions.keys()) sendPreviewSubscribe(roomId);
+    if (activeVoiceJoin) {
+      getAppRealtime().send('room.join', activeVoiceJoin);
+    }
+  });
+}
+
+export function initLobbyRoomRealtime(
+  onRoomsUpdate: (updater: (rooms: OwnedRoom[]) => OwnedRoom[]) => void,
+  onReconnect?: () => void
+): () => void {
+  const conn = getAppRealtime();
+  // Rosters resync via the room.summary push that follows `ready`; the rooms
+  // list itself (created/deleted/renamed while offline) needs a refetch.
+  const offRestore = onReconnect ? conn.onRestore(onReconnect) : null;
+  const unsubscribe = conn.subscribe((event) => {
+    if (event.type === 'room.summary') {
+      useRoomPresenceStore().applyRoomSummary(event.payload.room);
+      const summary = event.payload.room;
+      onRoomsUpdate((rooms) =>
+        rooms.map((room) =>
+          room.roomId === summary.roomId
+            ? {
+                ...room,
+                peers: summary.peers,
+                name: summary.name || room.name,
+                ...(summary.unreadCount === undefined ? {} : { unreadCount: summary.unreadCount })
+              }
+            : room
+        )
+      );
+      return;
+    }
+
+    if (event.type === 'room.deleted') {
+      onRoomsUpdate((rooms) => rooms.filter((room) => room.roomId !== event.payload.roomId));
+      return;
+    }
+
+    if (event.type === 'room.updated') {
+      const updated = event.payload.room;
+      onRoomsUpdate((rooms) =>
+        rooms.map((room) =>
+          room.roomId === updated.roomId ? { ...room, ...updated, relationship: room.relationship } : room
+        )
+      );
+    }
+  });
+
+  return () => {
+    offRestore?.();
+    unsubscribe();
+  };
+}
+
+export function subscribeRoomPreview(roomId: string, handler: RoomDetailHandler): () => void {
+  ensureReconnectRestore();
+  const conn = getAppRealtime();
+  let handlers = detailHandlers.get(roomId);
+  if (!handlers) {
+    handlers = new Set();
+    detailHandlers.set(roomId, handlers);
+  }
+  handlers.add(handler);
+  retainDetailDispatch();
+
+  const count = (previewSubscriptions.get(roomId) ?? 0) + 1;
+  previewSubscriptions.set(roomId, count);
+  if (count === 1) sendPreviewSubscribe(roomId);
+
+  return () => {
+    handlers?.delete(handler);
+    if (handlers && handlers.size === 0) detailHandlers.delete(roomId);
+    releaseDetailDispatch();
+
+    const next = (previewSubscriptions.get(roomId) ?? 1) - 1;
+    if (next <= 0) {
+      previewSubscriptions.delete(roomId);
+      clearPreviewAck(roomId);
+      conn.send('room.preview.unsubscribe', { roomId });
+    } else {
+      previewSubscriptions.set(roomId, next);
+    }
+  };
+}
+
+export function subscribeRoomVoice(roomId: string, handler: RoomDetailHandler): () => void {
+  let handlers = detailHandlers.get(roomId);
+  if (!handlers) {
+    handlers = new Set();
+    detailHandlers.set(roomId, handlers);
+  }
+  handlers.add(handler);
+  retainDetailDispatch();
+
+  return () => {
+    handlers?.delete(handler);
+    if (handlers && handlers.size === 0) detailHandlers.delete(roomId);
+    releaseDetailDispatch();
+  };
+}
+
+export function joinVoiceRoom(payload: { roomId: string; peerId: string; sessionToken: string; name: string }): void {
+  ensureReconnectRestore();
+  const guestId = guestBrowserId();
+  const join = guestId ? { ...payload, guestId } : payload;
+  activeVoiceJoin = join;
+  getAppRealtime().send('room.join', join);
+}
+
+export function leaveVoiceRoom(payload: { roomId: string; peerId: string; sessionToken: string }): void {
+  if (activeVoiceJoin?.roomId === payload.roomId && activeVoiceJoin.peerId === payload.peerId) {
+    activeVoiceJoin = null;
+    lastActiveResyncKey = '';
+    clearActiveResync();
+  }
+  getAppRealtime().send('room.leave', payload);
+}
+
+export function requestActiveVoiceResync(recoveryEpoch: number, appEpoch: number): boolean {
+  const conn = getAppRealtime();
+  if (!activeVoiceJoin || !conn.isConnected() || conn.getConnectionEpoch() !== appEpoch) return false;
+  const key = `${recoveryEpoch}:${appEpoch}`;
+  if (lastActiveResyncKey === key) return false;
+  lastActiveResyncKey = key;
+  clearActiveResync();
+  activeResync = {
+    key,
+    requestId: `voice-resync-${appEpoch}-${++activeResyncSequence}`,
+    currentRequestId: '',
+    requestIds: new Set(),
+    attempts: 0,
+    timer: null
+  };
+  sendActiveResyncAttempt();
+  return true;
+}
+
+export function updateVoicePeer(payload: {
+  roomId: string;
+  peerId: string;
+  sessionToken: string;
+  patch: Record<string, unknown>;
+}): void {
+  getAppRealtime().send('room.peer.update', payload);
+}
+
+// A server that never answers (an older one, or a socket that dropped) must
+// not cost the person their stream: the request then resolves null and the
+// caller goes ahead as before.
+const MEDIA_GRANT_TIMEOUT_MS = 4_000;
+let mediaRequestSequence = 0;
+const pendingMediaRequestIds = new Set<string>();
+
+/** An error frame that answers a media request: the request handles it, nobody shows it. */
+export function isMediaRequestError(id: string | undefined): boolean {
+  return Boolean(id && pendingMediaRequestIds.has(id));
+}
+
+/** Asks the server whether a screen share or a camera may start, and at which screen profile. */
+export function requestMediaGrant(payload: ClientCommands['room.media.request']): Promise<MediaGrant | null> {
+  const conn = getAppRealtime();
+  const id = `media-${++mediaRequestSequence}`;
+  return new Promise((resolve) => {
+    let unsubscribe = () => {};
+    const timer = setTimeout(() => finish(null), MEDIA_GRANT_TIMEOUT_MS);
+    function finish(grant: MediaGrant | null): void {
+      clearTimeout(timer);
+      // Other handlers see the same frame after this one; they skip it while the id is pending.
+      queueMicrotask(() => pendingMediaRequestIds.delete(id));
+      unsubscribe();
+      resolve(grant);
+    }
+    unsubscribe = conn.subscribe((event) => {
+      if (event.type === 'room.media.grant' && event.id === id) finish(event.payload);
+      else if (event.type === 'error' && event.payload.id === id) finish(null);
+    });
+    pendingMediaRequestIds.add(id);
+    conn.send('room.media.request', payload, id);
+  });
+}
+
+export function ensureAppRealtimeConnected(): void {
+  getAppRealtime().ensureConnected();
+}
+
+export type { RoomSnapshot };
+
+/** One stats poll of our voice; the server answers only when its verdict changes (room.voice.quality). */
+export function reportVoicePoll(payload: ClientCommands['room.voice.report']): void {
+  getAppRealtime().send('room.voice.report', payload);
+}

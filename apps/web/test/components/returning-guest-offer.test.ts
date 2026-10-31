@@ -2,27 +2,24 @@
 // offered an account with a permanent room before making yet another one. A
 // first visit, or a second room the same day, goes straight to the room.
 
-import { cleanup, render, screen } from '@testing-library/svelte';
+import { screen } from '@testing-library/vue';
 import userEvent from '@testing-library/user-event';
-import { afterEach, beforeEach, expect, test, vi } from 'vitest';
-import HomePage from '../../src/lib/features/home/HomePage.svelte';
-import { session, setUser } from '../../src/lib/features/auth/session.svelte';
-import {
-  GUEST_ROOM_CREATED_KEY,
-  PERMANENT_ROOM_OFFER_DISMISSED_KEY
-} from '../../src/lib/features/home/model/returning-guest';
-import { stubFetch } from '../fixtures/fetch.ts';
-import { installFakeWebSocket } from '../fixtures/fake-websocket.ts';
-import { authUser } from '../fixtures/users.ts';
-import { stubWindow } from '../helpers/fresh-module.ts';
-import { stubMatchMedia } from '../helpers/match-media.ts';
-
-vi.mock('$app/navigation', () => ({ pushState: vi.fn(), replaceState: vi.fn(), goto: vi.fn(async () => {}) }));
+import { beforeAll, beforeEach, expect, test, vi } from 'vitest';
+import { useSessionStore } from '@/features/auth/session.store';
+import HomePage from '@/features/home/HomePage.vue';
+import { GUEST_ROOM_CREATED_KEY, PERMANENT_ROOM_OFFER_DISMISSED_KEY } from '@/features/home/model/returning-guest';
+import { stubFetch } from '../fixtures/fetch';
+import { installFakeWebSocket } from '../fixtures/fake-websocket';
+import { authUser } from '../fixtures/users';
+import { stubWindow } from '../helpers/fresh-module';
+import { stubMatchMedia } from '../helpers/match-media';
+import { renderWithApp } from '../helpers/render';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 // What the API answers, in full: the client checks every answer against its contract.
 const createRoute = {
+  'GET /api/auth/me': { body: { ok: true, user: null } },
   '/api/pow-challenge': { body: { ok: true, required: false } },
   'POST /api/rooms': {
     status: 201,
@@ -40,7 +37,9 @@ const createRoute = {
   }
 };
 
-let location: { href: string };
+// The lobby page loads on demand, after this stub is in place, and the room
+// state it imports reads the path.
+let location: { href: string; pathname: string };
 
 // The landing page asks for the desktop app's version on its own; only room
 // creation matters here.
@@ -62,17 +61,22 @@ beforeEach(() => {
     });
   }
   localStorage.clear();
-  session.user = null;
-  session.loaded = true;
-  location = { href: 'https://voiceroom.ru/' };
+  location = { href: 'https://voiceroom.ru/', pathname: '/' };
   stubWindow({ location });
 });
-afterEach(cleanup);
 
-async function clickCreate(): Promise<void> {
-  render(HomePage);
-  await userEvent.click(screen.getByRole('button', { name: /Создать комнату/ }));
+async function clickCreate() {
+  const app = await renderWithApp(HomePage);
+  const session = useSessionStore(app.pinia);
+  await userEvent.click(await screen.findByRole('button', { name: /Создать комнату/ }));
+  return session;
 }
+
+// The lobby is a chunk the page loads on demand; compiling it here keeps that
+// one-off cost out of the wait for the lobby to render.
+beforeAll(async () => {
+  await import('@/features/home/LobbyPage.vue');
+});
 
 test('a first room opens at once and is remembered', async () => {
   const { calls } = stubFetch(createRoute);
@@ -114,12 +118,13 @@ test('an account made from the offer lands on the new-room dialog, permanent by 
   localStorage.setItem(GUEST_ROOM_CREATED_KEY, String(Date.now() - 2 * DAY_MS));
   const user = authUser({ id: 'ada', login: 'ada', displayName: 'Ада', hasUsedDesktopApp: true });
   const { calls } = stubFetch({
+    'GET /api/auth/me': { body: { ok: true, user: null } },
     'POST /api/auth/register': { status: 201, body: { ok: true, user } },
     'GET /api/auth/rooms': { body: { ok: true, rooms: [] } },
     'GET /api/friends': { body: { ok: true, incomingRequestCount: 0, friends: [] } },
     'GET /api/friends/requests': { body: { ok: true, incoming: [], outgoing: [] } }
   });
-  await clickCreate();
+  const session = await clickCreate();
 
   await userEvent.click(await screen.findByRole('button', { name: 'Создать аккаунт' }));
   await userEvent.type(screen.getByLabelText('Логин'), 'ada');
@@ -134,9 +139,9 @@ test('an account made from the offer lands on the new-room dialog, permanent by 
   expect(roomCalls(calls)).toEqual([]);
 
   // Signed out and back in without the offer: the lobby opens bare.
-  setUser(null);
+  session.setUser(null);
   expect(await screen.findByRole('button', { name: /Создать комнату/ })).toBeTruthy();
-  setUser(user);
+  session.setUser(user);
   await screen.findByRole('button', { name: 'Создать комнату' }, { timeout: 5000 });
   expect(screen.queryByRole('dialog', { name: 'Новая комната' })).toBeNull();
 });

@@ -1,0 +1,107 @@
+// Popover menu row.
+//
+// Svelte class -> BEM class
+//   .popover-menu-item                   -> .popover-menu-item
+//   .popover-menu-item--{variant}        -> .popover-menu-item--{variant} (default, accent, friendly, danger)
+//   .popover-menu-item.is-selected       -> .popover-menu-item--selected
+//   .popover-menu-item-icon              -> .popover-menu-item__icon
+//   .popover-menu-item-label             -> .popover-menu-item__label
+//   .popover-menu-item-hint              -> .popover-menu-item__hint
+//   .popover-menu-item-check             -> .popover-menu-item__check
+//   .popover-menu-item-chevron           -> .popover-menu-item__chevron
+//   .popover-menu-item-chevron.is-active -> .popover-menu-item__chevron--active
+
+.popover-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  height: 36px;
+  padding: 0 10px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--vr-text);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  font-weight: 400;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background 0.14s ease,
+    color 0.14s ease;
+}
+
+// Hover and keyboard focus land on the same treatment so arrow-key users see
+// exactly what a pointer user sees.
+.popover-menu-item:hover:not(:disabled),
+.popover-menu-item:focus-visible:not(:disabled),
+.popover-menu-item--selected {
+  background: var(--vr-hover);
+  color: var(--vr-text);
+}
+
+.popover-menu-item:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.popover-menu-item__icon {
+  flex: none;
+  display: inline-flex;
+  color: currentcolor;
+}
+
+.popover-menu-item__label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.popover-menu-item__hint {
+  flex: none;
+  color: var(--vr-text-3);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  font-weight: 500;
+}
+
+.popover-menu-item__check,
+.popover-menu-item__chevron {
+  flex: none;
+  display: inline-flex;
+  color: var(--vr-text-3);
+}
+
+.popover-menu-item__check,
+.popover-menu-item__chevron--active {
+  color: var(--vr-accent);
+}
+
+.popover-menu-item--accent {
+  color: var(--vr-text);
+}
+
+.popover-menu-item--friendly {
+  color: var(--vr-online);
+}
+
+.popover-menu-item--friendly:hover:not(:disabled),
+.popover-menu-item--friendly:focus-visible:not(:disabled),
+.popover-menu-item--friendly.popover-menu-item--selected {
+  background: var(--vr-accent-soft);
+  color: var(--vr-online);
+}
+
+.popover-menu-item--danger {
+  color: var(--vr-danger);
+}
+
+.popover-menu-item--danger:hover:not(:disabled),
+.popover-menu-item--danger:focus-visible:not(:disabled),
+.popover-menu-item--danger.popover-menu-item--selected {
+  background: var(--vr-danger-hover);
+  color: var(--vr-danger);
+}

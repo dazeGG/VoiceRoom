@@ -1,14 +1,15 @@
 // While a shared screen's video is being republished, its audio keeps playing
 // through a separate hidden audio element.
 
-import { afterEach, expect, test, vi } from 'vitest';
+import { createPinia, setActivePinia } from 'pinia';
+import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { participant } from './fixtures/participant.ts';
 import { instanceOf } from './helpers/assert.ts';
 import { FakeMediaStream, FakeMediaStreamTrack } from './helpers/fake-media.ts';
 
 const applied: Array<{ element: HTMLMediaElement; options: { boostAllowed?: boolean } }> = [];
 const released: HTMLMediaElement[] = [];
-vi.mock('../src/lib/features/room/client/services/media-playback-service', () => ({
+vi.mock('@/features/room/client/services/media-playback-service', () => ({
   isAppPlaybackMuted: () => false,
   applyScreenMediaElementVolume: (element: HTMLMediaElement, options: { boostAllowed?: boolean }) => {
     applied.push({ element, options });
@@ -18,16 +19,21 @@ vi.mock('../src/lib/features/room/client/services/media-playback-service', () =>
     released.push(element);
   }
 }));
-vi.mock('../src/lib/features/room/screen-ui.svelte', () => ({
-  bumpScreenUiRevision: () => {},
-  getActiveScreenPeer: () => null,
-  getScreenStage: () => null,
-  getScreenVideo: () => null,
-  getStreamVolumeSlider: () => null,
-  screenUi: {}
+vi.mock('@/features/room/screen-ui.store', () => ({
+  useScreenUiStore: () => ({
+    bumpScreenUiRevision: () => {},
+    getActiveScreenPeer: () => null,
+    getScreenStage: () => null,
+    getScreenVideo: () => null,
+    getStreamVolumeSlider: () => null
+  })
 }));
 
-const { syncScreenAudioFallback } = await import('../src/lib/features/room/client/ui/screen-stage-controls.ts');
+const { syncScreenAudioFallback } = await import('@/features/room/client/ui/screen-stage-controls.ts');
+
+beforeEach(() => {
+  setActivePinia(createPinia());
+});
 
 afterEach(() => {
   applied.length = 0;

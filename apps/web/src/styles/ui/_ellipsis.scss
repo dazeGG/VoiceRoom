@@ -1,0 +1,19 @@
+// Ellipsis (shared/ui/Ellipsis): single-line truncation.
+//
+// Svelte class -> BEM class
+//   .ellipsis          -> .ellipsis
+//   .ellipsis--inline  -> .ellipsis--inline
+
+.ellipsis {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ellipsis--inline {
+  display: inline-block;
+  vertical-align: bottom;
+}

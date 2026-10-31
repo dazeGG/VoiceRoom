@@ -1,14 +1,14 @@
 import { expect, test, vi } from 'vitest';
-import type * as RoomRealtime from '../../src/lib/entities/room/room-realtime';
+import type * as RoomRealtime from '@/entities/room/room-realtime';
 
-vi.mock('../../src/lib/features/room/client/ui/toast', () => ({ showToast: vi.fn() }));
-vi.mock('../../src/lib/entities/room/room-realtime', async (importOriginal) => ({
+vi.mock('@/features/room/client/ui/toast', () => ({ showToast: vi.fn() }));
+vi.mock('@/entities/room/room-realtime', async (importOriginal) => ({
   ...(await importOriginal<typeof RoomRealtime>()),
   isMediaRequestError: (id: string | undefined) => id === 'media-1'
 }));
 
-const { showToast } = await import('../../src/lib/features/room/client/ui/toast');
-const { createVoiceEventHandler } = await import('../../src/lib/features/room/client/room/voice-events');
+const { showToast } = await import('@/features/room/client/ui/toast');
+const { createVoiceEventHandler } = await import('@/features/room/client/room/voice-events');
 
 function handler() {
   const room = { leaveRoom: vi.fn(), showModeration: vi.fn(), showNotFound: vi.fn() };

@@ -48,7 +48,14 @@ test('a modified code file runs the check', (t) => {
 test('an untracked code file in a new directory runs the check', (t) => {
   const root = repo(t);
   fs.mkdirSync(path.join(root, 'apps', 'web'), { recursive: true });
-  fs.writeFileSync(path.join(root, 'apps', 'web', 'App.svelte'), '<p>hi</p>\n');
+  fs.writeFileSync(path.join(root, 'apps', 'web', 'App.vue'), '<p>hi</p>\n');
+  assert.equal(stop(root), 2);
+});
+
+test('a stylesheet partial runs the check', (t) => {
+  const root = repo(t);
+  fs.mkdirSync(path.join(root, 'apps', 'web'), { recursive: true });
+  fs.writeFileSync(path.join(root, 'apps', 'web', '_x.scss'), '.x { color: red; }\n');
   assert.equal(stop(root), 2);
 });
 

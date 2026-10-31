@@ -74,7 +74,7 @@ test('manual polish renders direct messages with the shared flat chat row and ar
     expect(accepted.ok()).toBe(true);
 
     await page.reload();
-    await page.locator('.lv-row', { hasText: secondLogin }).first().click();
+    await page.locator('.sidebar__row', { hasText: secondLogin }).first().click();
     const composer = page.getByPlaceholder('Написать сообщение…');
     await expect(composer).toBeVisible();
     await composer.fill('flat direct message');
@@ -82,16 +82,15 @@ test('manual polish renders direct messages with the shared flat chat row and ar
     // Anchor on the row id: the composer preview repeats the message text once a
     // reply target is picked, and the text leaves the row entirely in edit mode,
     // so a text lookup would drift away from the row under test.
-    const sentMessage = page.locator('.dm-chat-message', { hasText: 'flat direct message' }).last();
+    const sentMessage = page.locator('.message-bubble--dm', { hasText: 'flat direct message' }).last();
     await expect(sentMessage).toBeVisible();
     const message = page.locator(
-      `.dm-chat-message[data-message-id="${await sentMessage.getAttribute('data-message-id')}"]`
+      `.message-bubble--dm[data-message-id="${await sentMessage.getAttribute('data-message-id')}"]`
     );
     await expect(message).toBeVisible();
-    await expect(message.locator('xpath=ancestor::div[contains(@class,"dm-chat-group")]')).toHaveAttribute(
-      'data-self',
-      'true'
-    );
+    await expect(
+      message.locator('xpath=ancestor::div[@class="dm-group"]').getByRole('button', { name: 'Ваш профиль' }).first()
+    ).toBeVisible();
     const style = await message.evaluate((element) => {
       const computed = getComputedStyle(element);
       return {
@@ -139,14 +138,14 @@ test('the lobby preview runs the same room chat as the rail, with jumpable quote
   const roomName = `Parity ${login}`;
   const roomId = await createPermanentRoom(page, roomName);
 
-  await page.locator('.lv-card', { hasText: roomName }).first().click();
+  await page.locator('.voice-home__card', { hasText: roomName }).first().click();
   await page.getByRole('button', { name: 'Чат', exact: true }).first().click();
   const composer = page.getByPlaceholder('Написать в комнату…');
   await expect(composer).toBeVisible({ timeout: 20_000 });
   await composer.fill('parity message');
   await composer.press('Enter');
 
-  const row = page.locator('.chat-msg-text', { hasText: 'parity message' }).last();
+  const row = page.locator('.message-bubble', { hasText: 'parity message' }).last();
   await expect(row).toBeVisible();
 
   // The preview owns the same hover toolbar as the room rail, reactions included.
@@ -185,9 +184,9 @@ test('the lobby preview runs the same room chat as the rail, with jumpable quote
   if (await rail.evaluate((element) => element instanceof HTMLElement && element.hidden)) {
     await page.locator('button[title="Чат"]').first().click();
   }
-  const railBody = page.locator('.room-chat-rail .chat-rail-body');
+  const railBody = page.locator('.room-chat-rail .room-chat-panel__body');
   await expect(railBody).toBeVisible({ timeout: 20_000 });
-  await expect(railBody.locator('.chat-msg-text', { hasText: 'parity message' })).toBeVisible();
+  await expect(railBody.locator('.message-bubble', { hasText: 'parity message' })).toBeVisible();
   await expect
     .poll(async () =>
       railBody.evaluate((element) => Math.round(element.scrollHeight - element.scrollTop - element.clientHeight))
@@ -296,7 +295,7 @@ test('manual polish keeps the newest mention query, emits login-bound segments, 
     await composer.press('Enter');
   }
   await page.setViewportSize({ width: 1000, height: 420 });
-  const first = page.locator('.chat-msg-text', { hasText: 'picker row 0' });
+  const first = page.locator('.message-bubble', { hasText: 'picker row 0' });
   await first.evaluate((element) => element.scrollIntoView({ block: 'start' }));
   await expect.poll(async () => (await first.boundingBox())?.y ?? 1000).toBeLessThan(180);
   await first.hover();
@@ -305,13 +304,32 @@ test('manual polish keeps the newest mention query, emits login-bound segments, 
   await pickerTrigger.press('Enter');
   const picker = page.getByRole('dialog', { name: 'Выбор реакции' });
   await expect(picker).toBeVisible();
-  await expect(picker).toHaveAttribute('data-placement', 'bottom-start');
+  // Flipped below the trigger near the top edge. Svelte said so in
+  // data-placement='bottom-start'; Reka sets data-side and data-align.
+  await expect(picker).toHaveAttribute('data-side', 'bottom');
+  await expect(picker).toHaveAttribute('data-align', 'start');
   const pickerBox = await boxOf(picker);
+  const triggerBox = await boxOf(pickerTrigger);
+  expect(pickerBox.y).toBeGreaterThanOrEqual(triggerBox.y + triggerBox.height - 1);
   expect(pickerBox.y).toBeGreaterThanOrEqual(8);
   expect(pickerBox.y + pickerBox.height).toBeLessThanOrEqual(420);
-  await expect.poll(() => picker.evaluate((element) => getComputedStyle(element).position)).toBe('fixed');
+  // Fixed to the viewport (Reka positions the box around the panel), not
+  // scrolling inside the chat body.
   await expect
-    .poll(() => page.locator('.chat-rail-body').evaluate((element) => element.scrollWidth <= element.clientWidth + 1))
+    .poll(() =>
+      picker.evaluate((element) => {
+        const placed = element.closest('[data-reka-popper-content-wrapper]') ?? element;
+        return {
+          position: getComputedStyle(placed).position,
+          inChat: Boolean(element.closest('.room-chat-panel__body'))
+        };
+      })
+    )
+    .toEqual({ position: 'fixed', inChat: false });
+  await expect
+    .poll(() =>
+      page.locator('.room-chat-panel__body').evaluate((element) => element.scrollWidth <= element.clientWidth + 1)
+    )
     .toBe(true);
 });
 
@@ -369,7 +387,7 @@ test('room members panel releases navigation, switches to chat, collapses, and k
     await enterRoom(page, roomId);
 
     const panel = page.locator('.room-chat-rail');
-    const topbarTabs = page.locator('.room-heading-actions .room-panel-tabs');
+    const topbarTabs = page.locator('.room-topbar__heading-actions .room-panel-tabs');
     await topbarTabs.getByRole('button', { name: 'Участники' }).click();
     await expect(panel).toBeVisible();
     await expect(panel.locator('#room-panel-participants')).toBeVisible();
@@ -398,11 +416,11 @@ test('room members panel releases navigation, switches to chat, collapses, and k
     await expect(panel.locator('#room-panel-participants')).toBeVisible();
     expect(membershipRequests).toBeLessThanOrEqual(2);
 
-    const localTile = page.locator('.participant[data-local="true"]').first();
+    const localTile = page.locator('.participant--local').first();
     await expect(localTile).toBeVisible({ timeout: 20_000 });
     const speakingStyle = await localTile.evaluate((element) => {
       const tile = getComputedStyle(element);
-      const voiceRing = element.querySelector('.voice-ring');
+      const voiceRing = element.querySelector('.participant__ring');
       if (!voiceRing) throw new Error('the tile has no voice ring');
       const ring = getComputedStyle(voiceRing);
       return {
@@ -416,12 +434,12 @@ test('room members panel releases navigation, switches to chat, collapses, and k
     expect(speakingStyle.ringTransitionDuration).toBe('0s');
     expect(speakingStyle.ringTransform).toBe('none');
 
-    await page.locator('.lv-row', { hasText: friendLogin }).first().click();
+    await page.locator('.sidebar__row', { hasText: friendLogin }).first().click();
     await expect(page.getByPlaceholder('Написать сообщение…')).toBeVisible();
-    await expect(page.locator('body')).toHaveAttribute('data-screen', 'start');
+    await expect(page.locator('body')).toHaveClass(/\bscreen--start\b/);
 
     await page.getByRole('button', { name: `Открыть комнату ${roomName}` }).click();
-    await expect(page.locator('body')).toHaveAttribute('data-screen', 'room');
+    await expect(page.locator('body')).toHaveClass(/\bscreen--room\b/);
     await expect(panel).toBeVisible();
     await panel.getByRole('button', { name: 'Свернуть панель' }).click();
     await expect(panel).toBeHidden();
@@ -434,9 +452,9 @@ test('room members panel releases navigation, switches to chat, collapses, and k
 
     await topbarTabs.getByRole('button', { name: 'Участники' }).click();
     await expect(panel.locator('#room-panel-participants')).toBeVisible();
-    await page.locator('.lv-side-head').click();
+    await page.locator('.sidebar__head').click();
     await expect(page.getByRole('button', { name: 'Создать комнату' })).toBeVisible();
-    await expect(page.locator('body')).toHaveAttribute('data-screen', 'start');
+    await expect(page.locator('body')).toHaveClass(/\bscreen--start\b/);
   } finally {
     await friendContext.close();
   }

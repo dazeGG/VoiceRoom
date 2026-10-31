@@ -1,0 +1,159 @@
+// Pending images above the text row (shared/chat/AttachmentComposer.vue). A
+// pending image is a button so it can be opened for a closer look; it keeps
+// the tile's shape so the row still reads as a strip of thumbnails. The
+// bordered host row (.attachment-compose) and @keyframes attachment-spin are in _attachment.scss.
+//
+// Svelte class -> BEM class
+//   .attachment-composer          -> .attachment-composer
+//   .attachment-draft-list        -> .attachment-composer__list
+//   .attachment-draft             -> .attachment-composer__draft
+//   li[data-state]                -> .attachment-composer__draft--<failed|ready|...> (no rules of their own)
+//   .attachment-draft-open        -> .attachment-composer__open
+//   .attachment-draft-placeholder -> .attachment-composer__placeholder
+//   .attachment-draft-loading     -> .attachment-composer__loading
+//   .attachment-draft-remove      -> .attachment-composer__remove
+//   .attachment-draft-retry       -> .attachment-composer__retry
+//   .attachment-compose-error     -> .attachment-composer__error
+
+.attachment-composer {
+  min-width: 0;
+  padding: 12px 12px 0;
+}
+
+.attachment-composer__error {
+  margin: 6px 12px 0;
+  color: var(--vr-danger);
+  font-size: 12px;
+}
+
+.attachment-composer__open {
+  display: block;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+  cursor: zoom-in;
+
+  img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    border-radius: inherit;
+    object-fit: cover;
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--vr-accent);
+    outline-offset: 2px;
+  }
+}
+
+.attachment-composer__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.attachment-composer__draft {
+  position: relative;
+  width: 72px;
+  height: 72px;
+  flex: none;
+  border: 1px solid var(--vr-line-strong);
+  border-radius: 12px;
+  background: var(--vr-bg);
+
+  > img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    border-radius: inherit;
+    object-fit: cover;
+  }
+
+  &:hover .attachment-composer__remove,
+  &:focus-within .attachment-composer__remove {
+    opacity: 1;
+  }
+}
+
+.attachment-composer__placeholder {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  place-items: center;
+  overflow: hidden;
+  border-radius: inherit;
+  color: var(--vr-text-2);
+}
+
+.attachment-composer__loading {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: white;
+  overflow: hidden;
+  border-radius: inherit;
+  background: color-mix(in srgb, var(--vr-bg) 56%, transparent);
+  backdrop-filter: brightness(0.68);
+
+  svg {
+    box-sizing: content-box;
+    padding: 8px;
+    border-radius: 50%;
+    background: color-mix(in srgb, var(--vr-bg) 82%, transparent);
+    animation: attachment-spin 0.9s linear infinite;
+  }
+}
+
+.attachment-composer__remove,
+.attachment-composer__retry {
+  position: absolute;
+  z-index: 2;
+  display: grid;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  color: white;
+  background: color-mix(in srgb, var(--vr-bg) 90%, transparent);
+  cursor: pointer;
+  transition:
+    opacity 0.14s ease,
+    transform 0.14s ease,
+    background 0.14s ease;
+}
+
+.attachment-composer__remove {
+  top: -6px;
+  right: -6px;
+  width: 22px;
+  height: 22px;
+  border: 2px solid var(--vr-bg);
+  color: white;
+  background: var(--vr-danger);
+  box-shadow: 0 2px 7px color-mix(in srgb, var(--vr-bg) 66%, transparent);
+  opacity: 0;
+
+  &:not(:disabled):hover {
+    background: color-mix(in oklch, var(--vr-danger), var(--vr-bg) 16%);
+  }
+
+  &:focus-visible {
+    outline: 2px solid white;
+    outline-offset: 2px;
+  }
+}
+
+.attachment-composer__retry {
+  right: 5px;
+  bottom: 5px;
+}

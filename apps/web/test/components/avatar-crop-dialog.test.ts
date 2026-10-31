@@ -1,16 +1,15 @@
-import { cleanup, render, screen } from '@testing-library/svelte';
+import { render, screen } from '@testing-library/vue';
 import userEvent from '@testing-library/user-event';
 import { afterEach, expect, test, vi } from 'vitest';
-import AvatarCropDialog from '../../src/lib/shared/ui/AvatarCropDialog/AvatarCropDialog.svelte';
+import AvatarCropDialog from '@/shared/ui/AvatarCropDialog/AvatarCropDialog.vue';
 import { stubCanvasAndImages } from '../helpers/fake-canvas.ts';
 
 vi.mock(
-  '../../src/lib/shared/ui/AvatarCropDialog/canvas-2d.ts',
+  '@/shared/ui/AvatarCropDialog/canvas-2d.ts',
   async () => (await import('../helpers/fake-canvas.ts')).fakeCanvas2d
 );
 
 afterEach(() => {
-  cleanup();
   vi.restoreAllMocks();
 });
 
@@ -27,7 +26,7 @@ test('the crop is exported as a 256px webp square once the picked image has load
   const { exports } = stubCanvasAndImages();
   const { onSave } = renderDialog();
 
-  const done = screen.getByRole('button', { name: 'Готово' });
+  const done = await screen.findByRole('button', { name: 'Готово' });
   await vi.waitFor(() => expect(done).toHaveProperty('disabled', false));
   await userEvent.click(done);
 
@@ -42,18 +41,18 @@ test('a failed export is shown in the dialog and nothing is saved', async () => 
   stubCanvasAndImages({ failExport: true });
   const { onSave } = renderDialog();
 
-  const done = screen.getByRole('button', { name: 'Готово' });
+  const done = await screen.findByRole('button', { name: 'Готово' });
   await vi.waitFor(() => expect(done).toHaveProperty('disabled', false));
   await userEvent.click(done);
 
-  expect(screen.getByRole('alert').textContent).toBe('Не удалось подготовить изображение');
+  expect((await screen.findByRole('alert')).textContent).toBe('Не удалось подготовить изображение');
   expect(onSave).not.toHaveBeenCalled();
 });
 
 test('cancel and Escape close without saving', async () => {
   stubCanvasAndImages();
   const { onSave, onClose } = renderDialog();
-  await userEvent.click(screen.getByRole('button', { name: 'Отмена' }));
+  await userEvent.click(await screen.findByRole('button', { name: 'Отмена' }));
   await userEvent.keyboard('{Escape}');
   expect(onClose).toHaveBeenCalledTimes(2);
   expect(onSave).not.toHaveBeenCalled();

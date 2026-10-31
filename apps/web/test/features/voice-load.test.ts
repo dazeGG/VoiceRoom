@@ -4,13 +4,13 @@
 // microphone stops processing audio without breaking push-to-talk.
 
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
-import { state } from '../../src/lib/features/room/client/core/state.svelte.ts';
-import { createInitialRoomState } from '../../src/lib/features/room/client/model/room-state.ts';
+import { state } from '@/features/room/client/core/room-runtime.store';
+import { createInitialRoomState } from '@/features/room/client/model/room-state';
 import {
   startCpuPressureWatch,
   stopCpuPressureWatch,
   type PressureObserverConstructor
-} from '../../src/lib/features/room/client/services/cpu-pressure.ts';
+} from '@/features/room/client/services/cpu-pressure';
 import {
   finishCallQuality,
   QUALITY_MIN_CALL_MS,
@@ -21,19 +21,19 @@ import {
   recordReconnect,
   startCallQuality,
   type PollCounts
-} from '../../src/lib/features/room/client/room/call-quality.ts';
+} from '@/features/room/client/room/call-quality';
 import {
   PROCESSING_RESUME_CHECK_MS,
   PROCESSING_SUSPEND_DELAY_MS,
   syncMicrophoneProcessing
-} from '../../src/lib/features/room/client/services/microphone-service.ts';
-import { clearLogBuffer, readLogBuffer } from '../../src/lib/shared/log.ts';
-import type { MicProcessor } from '../../src/lib/features/room/client/core/types.ts';
-import { defined, instanceOf } from '../helpers/assert.ts';
-import { FakeMediaStream } from '../helpers/fake-media.ts';
+} from '@/features/room/client/services/microphone-service';
+import { clearLogBuffer, readLogBuffer } from '@/shared/log';
+import type { MicProcessor } from '@/features/room/client/core/types';
+import { defined, instanceOf } from '../helpers/assert';
+import { FakeMediaStream } from '../helpers/fake-media';
 
 const reopenMicrophone = vi.hoisted(() => vi.fn(async () => true));
-vi.mock('../../src/lib/features/room/client/ui/devices', () => ({ reopenMicrophone }));
+vi.mock('@/features/room/client/ui/devices', () => ({ reopenMicrophone }));
 
 beforeEach(() => {
   Object.assign(state, createInitialRoomState());

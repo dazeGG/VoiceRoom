@@ -1,16 +1,16 @@
 import { beforeEach, expect, test, vi } from 'vitest';
 import type { Ban } from '@voice-room/shared/contracts/moderation';
-import type { ModerationNotice } from '../../src/lib/entities/room/room-moderation.ts';
-import { defined } from '../helpers/assert.ts';
+import type { ModerationNotice } from '@/entities/room/room-moderation';
+import { defined } from '../helpers/assert';
 
-vi.mock('../../src/lib/api/moderation', () => ({
+vi.mock('@/api/moderation', () => ({
   putBan: vi.fn(),
   unban: vi.fn()
 }));
-vi.mock('../../src/lib/api/rooms', () => ({ kickRoomPeer: vi.fn() }));
+vi.mock('@/api/rooms', () => ({ kickRoomPeer: vi.fn() }));
 
-const api = await import('../../src/lib/api/moderation');
-const roomsApi = await import('../../src/lib/api/rooms');
+const api = await import('@/api/moderation');
+const roomsApi = await import('@/api/rooms');
 const {
   BAN_DURATIONS,
   BAN_UNDO_DURATION_MS,
@@ -19,7 +19,7 @@ const {
   banSubjectName,
   kickRoomMember,
   liftRoomBan
-} = await import('../../src/lib/entities/room/room-moderation.ts');
+} = await import('@/entities/room/room-moderation');
 
 const ban = (overrides: Partial<Ban> = {}): Ban => ({
   id: 'ban-1',

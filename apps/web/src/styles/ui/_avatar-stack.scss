@@ -1,0 +1,51 @@
+// AvatarStack (shared/ui/AvatarStack).
+//
+// Svelte class -> BEM class
+//   .avatar-stack                 -> .avatar-stack
+//   .avatar-stack-item            -> .avatar-stack__item
+//   .avatar-stack-rest            -> .avatar-stack__rest
+//   .avatar-stack-avatar          -> .avatar-stack__avatar
+
+.avatar-stack {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  isolation: isolate;
+}
+
+.avatar-stack__item,
+.avatar-stack__rest {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--avatar-stack-size, 24px);
+  height: var(--avatar-stack-size, 24px);
+  margin-left: calc(var(--avatar-stack-size, 24px) * -0.28);
+  border: 2px solid var(--avatar-stack-ring, var(--vr-surface-2));
+  border-radius: 999px;
+  font-family: var(--font-ui, sans-serif);
+  font-size: var(--avatar-stack-font, 10px);
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: -0.04em;
+}
+
+.avatar-stack__item:first-child,
+.avatar-stack__rest:first-child {
+  margin-left: 0;
+}
+
+.avatar-stack__item {
+  background: var(--avatar-bg, var(--vr-surface-3));
+  color: var(--avatar-fg, var(--vr-text));
+  box-shadow: var(--avatar-shadow, none);
+}
+
+.avatar-stack__item .avatar-stack__avatar {
+  box-shadow: none;
+}
+
+.avatar-stack__rest {
+  background: var(--vr-surface-3);
+  color: var(--vr-text-2);
+}

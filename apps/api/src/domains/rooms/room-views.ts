@@ -2,12 +2,13 @@
 // @voice-room/shared/contracts/rooms, which the HTTP routes register and the
 // realtime runtime sends over the socket.
 
-import type { LobbyRoom, NetworkPoint, PublicPeer, RoomRelationship } from '@voice-room/shared/contracts/rooms';
+import type { LobbyRoom, PublicPeer, RoomRelationship } from '@voice-room/shared/contracts/rooms';
 import type { ClientKind } from '@voice-room/shared/contracts/admin';
 import { avatarUrl } from '../../lib/avatar-url.ts';
 import { avatarColorForPeerId } from './avatar-color.ts';
 import { failure, type Failure } from '../../platform/http/http-kit.ts';
 import type { WsConnection } from '../../realtime/registry.ts';
+import type { PeerVoice } from '../../realtime/voice-track.ts';
 
 /** A peer as the in-memory presence roster holds it. */
 export interface PresencePeer {
@@ -44,8 +45,8 @@ export interface PresencePeer {
    */
   transport?: { id: string; connection: WsConnection | null } | null;
   viewedScreenPeerId?: string;
-  /** The stay's network changes as its client reported them (realtime/network-track.ts). */
-  network?: NetworkPoint[];
+  /** The stay's voice as the room's stats polls tell it (realtime/voice-track.ts). */
+  voice?: PeerVoice | undefined;
 }
 
 /** A room row as the store returns it. */

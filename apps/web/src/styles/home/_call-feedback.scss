@@ -1,0 +1,161 @@
+// "How was the call?": the question card. The window around it is the shared
+// Dialog (ui/_dialog.scss); the overlay and window rules of the Svelte prompt
+// are gone with it.
+// Svelte: the <style> of CallFeedbackCard.svelte and CallFeedbackPrompt.svelte.
+//
+// Svelte class -> BEM class (block "call-feedback")
+//   .call-feedback-card      -> .call-feedback
+//   .call-feedback-head      -> .call-feedback__head
+//   .call-feedback-head h2   -> .call-feedback__title
+//   .call-feedback-sub       -> .call-feedback__sub
+//   .call-feedback-close     -> (gone: the Dialog's own cross)
+//   .call-feedback-thumbs    -> .call-feedback__thumbs
+//   .call-feedback-thumb     -> .call-feedback__thumb
+//   .is-good / .is-bad       -> .call-feedback__thumb--good / --bad
+//   .call-feedback-details   -> .call-feedback__details
+//   .call-feedback-tags      -> .call-feedback__tags
+//   .call-feedback-tag       -> .call-feedback__tag
+//   .call-feedback-comment   -> .call-feedback__comment
+//   .call-feedback-actions   -> .call-feedback__actions
+//   .call-feedback-thanks    -> .call-feedback__thanks
+//   .call-feedback-overlay, .call-feedback (window) -> (gone: ui/_dialog.scss)
+//
+// [data-*] -> aria
+//   thumb and tag pressed state is aria-pressed, as before.
+
+.call-feedback {
+  display: grid;
+  gap: 12px;
+}
+
+.call-feedback__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.call-feedback__title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.call-feedback__sub {
+  margin: 3px 0 0;
+  color: var(--vr-text-3);
+  font-size: 13px;
+}
+
+.call-feedback__thumbs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.call-feedback__thumb {
+  display: grid;
+  height: 44px;
+  place-items: center;
+  border: 1px solid var(--vr-line);
+  border-radius: 12px;
+  background: var(--vr-surface-2);
+  color: var(--vr-text-2);
+  cursor: pointer;
+  transition:
+    border-color 0.14s ease,
+    background 0.14s ease,
+    color 0.14s ease;
+
+  &:hover {
+    background: var(--vr-surface-2-hover);
+    color: var(--vr-text);
+  }
+}
+
+.call-feedback__thumb--good[aria-pressed='true'] {
+  border-color: var(--vr-success);
+  background: color-mix(in oklch, var(--vr-success), transparent 88%);
+  color: var(--vr-success);
+}
+
+.call-feedback__thumb--bad[aria-pressed='true'] {
+  border-color: var(--vr-danger);
+  background: color-mix(in oklch, var(--vr-danger), transparent 88%);
+  color: var(--vr-danger);
+}
+
+.call-feedback__details {
+  display: grid;
+  gap: 12px;
+}
+
+.call-feedback__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+
+  legend {
+    margin-bottom: 8px;
+    padding: 0;
+    color: var(--vr-text-2);
+    font-size: 13px;
+    font-weight: 500;
+  }
+}
+
+.call-feedback__tag {
+  min-height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--vr-line);
+  border-radius: 999px;
+  background: var(--vr-surface-2);
+  color: var(--vr-text);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  transition:
+    border-color 0.14s ease,
+    background 0.14s ease;
+
+  &:hover {
+    background: var(--vr-surface-2-hover);
+  }
+
+  &[aria-pressed='true'] {
+    border-color: var(--vr-accent-line);
+    background: color-mix(in oklch, var(--vr-accent), transparent 88%);
+  }
+}
+
+.call-feedback__comment {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--vr-line-strong);
+  border-radius: 12px;
+  background: var(--vr-surface-2);
+  color: var(--vr-text);
+  font: inherit;
+  font-size: 13.5px;
+  resize: vertical;
+  outline: none;
+
+  &:focus {
+    border-color: var(--vr-accent-line);
+  }
+}
+
+.call-feedback__actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.call-feedback__thanks {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  text-align: center;
+}

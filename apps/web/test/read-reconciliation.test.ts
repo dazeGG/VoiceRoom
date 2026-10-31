@@ -3,28 +3,31 @@ import { isRecord } from '@voice-room/shared/guards';
 import assert from 'node:assert/strict';
 
 test('G31-A01 multiple render advances coalesce to the newest pending cursor', async () => {
-  const { createReadReconciliation } = await import('../src/lib/shared/chat/read-reconciliation.ts');
+  const { createReadReconciliation } = await import('@/shared/chat/read-reconciliation');
   const commits: unknown[] = [];
-  const gate = Promise.withResolvers<void>();
+  let release = () => {};
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
   const state = createReadReconciliation({
     scope: 'room:r',
     commit: async (cursor) => {
       commits.push(cursor);
-      if (commits.length === 1) await gate.promise;
+      if (commits.length === 1) await gate;
       return cursor;
     }
   });
   const first = state.advanceAfterRender('c1');
   void state.advanceAfterRender('c2');
   void state.advanceAfterRender('c3');
-  gate.resolve();
+  release();
   await first;
   assert.deepEqual(commits, ['c1', 'c3']);
   state.dispose();
 });
 
 test('G31-A02 older or around loads alone cannot advance reads', async () => {
-  const { createReadReconciliation } = await import('../src/lib/shared/chat/read-reconciliation.ts');
+  const { createReadReconciliation } = await import('@/shared/chat/read-reconciliation');
   let commits = 0;
   const state = createReadReconciliation({
     scope: 'room:r',
@@ -66,7 +69,7 @@ test('G31-A03 two tabs accept repeated newer cursors and suppress identical or o
   }
   vi.stubGlobal('BroadcastChannel', FakeBroadcastChannel);
   try {
-    const { createReadReconciliation } = await import('../src/lib/shared/chat/read-reconciliation.ts');
+    const { createReadReconciliation } = await import('@/shared/chat/read-reconciliation');
     const commitsA: unknown[] = [];
     const commitsB: unknown[] = [];
     const tabA = createReadReconciliation({

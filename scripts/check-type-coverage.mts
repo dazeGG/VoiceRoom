@@ -4,9 +4,10 @@
 // 100%), and no file opts out with a type-coverage:ignore comment. Each area
 // is measured from inside its own folder against its own tsconfig:
 // type-coverage counts only the files under the folder it runs in, and the
-// web's `$lib` alias resolves correctly only that way. `.svelte` files are not
-// part of a TypeScript program; ESLint's no-unsafe-* rules and svelte-check
-// cover them. Exits 1 and lists every untyped spot as `file:line:column name`.
+// web's `@/` alias resolves correctly only that way. `.vue` files are not
+// part of a TypeScript program; ESLint's no-unsafe-* rules and vue-tsc cover
+// them. Exits 1 and lists every untyped spot
+// as `file:line:column name`.
 
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
@@ -30,7 +31,7 @@ const AREAS: ReadonlyArray<{ folder: string; project: string; ignore?: readonly 
   {
     folder: 'apps/web',
     project: 'tsconfig.test.json',
-    ignore: ['src/**', 'test/**', 'e2e/**', 'scripts/**', '*.js']
+    ignore: ['src/**', 'test/**', 'e2e/**', 'scripts/**', 'public/**']
   },
   // The admin app (React): its source, its tests and its vite config.
   { folder: 'apps/admin/src', project: '../tsconfig.json' },
@@ -72,7 +73,7 @@ async function measure({ folder, project, ignore = [] }: Area): Promise<{ ok: bo
 
 // An ignore comment would be a cast nobody reviews, like an inline eslint-disable.
 async function optOuts(): Promise<{ ok: boolean; report: string }> {
-  const { code, output } = await run('git', ['grep', '-n', OPT_OUT, '--', '*.ts', '*.mts', '*.tsx', '*.svelte'], root);
+  const { code, output } = await run('git', ['grep', '-n', OPT_OUT, '--', '*.ts', '*.mts', '*.tsx', '*.vue'], root);
   const lines = output
     .split('\n')
     .filter((line) => line.trim() && !line.startsWith('scripts/check-type-coverage.mts:'));

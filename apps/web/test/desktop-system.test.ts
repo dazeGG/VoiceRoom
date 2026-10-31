@@ -38,7 +38,7 @@ function fakeBridge(initialGameMode = false) {
 async function load(bridge?: unknown) {
   stubWindow(bridge ? { voiceRoomDesktopSystem: bridge } : {});
   muteWarnings();
-  return freshImport(() => import('../src/lib/platform/desktop-system.ts'));
+  return freshImport(() => import('../src/platform/desktop-system.ts'));
 }
 
 test('without a desktop bridge binding is a no-op', async () => {
@@ -87,7 +87,7 @@ test('a pushed state is not overwritten by the late answer to the first request'
 test('the shell window state feeds the app visibility, and an older shell counts as visible', async () => {
   const fake = fakeBridge();
   const system = await load(fake.bridge);
-  const visibility = await import('../src/lib/platform/app-visibility.ts');
+  const visibility = await import('../src/platform/app-visibility.ts');
   const unbind = system.bindDesktopSystem({ onWake: () => {} });
   fake.pushState({ gameMode: false, windowVisible: false });
   expect(visibility.isAppVisible()).toBe(false);

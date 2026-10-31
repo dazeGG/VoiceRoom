@@ -5,12 +5,12 @@
 // only filled in silence is not counted as heard.
 
 import { afterEach, expect, test, vi } from 'vitest';
-import { freshImport } from '../helpers/fresh-module.ts';
-import { defined } from '../helpers/assert.ts';
+import { freshImport } from '../helpers/fresh-module';
+import { defined } from '../helpers/assert';
 
 afterEach(() => {
   vi.useRealTimers();
-  vi.doUnmock('../../src/lib/entities/room/room-realtime');
+  vi.doUnmock('@/entities/room/room-realtime');
 });
 
 type Entry = { id: string } & Record<string, unknown>;
@@ -20,10 +20,10 @@ const report = (entries: Entry[]) => ({
 
 test('two polls of growing counters add up to the exact loss, concealment and round trip of the call', async () => {
   vi.useFakeTimers();
-  vi.doMock('../../src/lib/entities/room/room-realtime', () => ({ updateVoicePeer: () => {} }));
-  const stats = await freshImport(() => import('../../src/lib/features/room/client/room/stats.ts'));
-  const { state } = await import('../../src/lib/features/room/client/core/state.svelte.ts');
-  const quality = await import('../../src/lib/features/room/client/room/call-quality.ts');
+  vi.doMock('@/entities/room/room-realtime', () => ({ updateVoicePeer: () => {}, reportVoicePoll: () => {} }));
+  const stats = await freshImport(() => import('@/features/room/client/room/stats'));
+  const { state } = await import('@/features/room/client/core/room-runtime.store');
+  const quality = await import('@/features/room/client/room/call-quality');
 
   let pollNo = 0;
   const readings = [
@@ -102,12 +102,80 @@ test('two polls of growing counters add up to the exact loss, concealment and ro
   });
 });
 
+test("each poll tells the server what this tab heard of every speaker's microphone over the poll", async () => {
+  vi.useFakeTimers();
+  const polls: unknown[] = [];
+  vi.doMock('@/entities/room/room-realtime', () => ({
+    updateVoicePeer: () => {},
+    reportVoicePoll: (payload: unknown) => polls.push(payload)
+  }));
+  const stats = await freshImport(() => import('@/features/room/client/room/stats'));
+  const { state } = await import('@/features/room/client/core/room-runtime.store');
+
+  let pollNo = 0;
+  const voiceOf = (packets: number, lost: number, concealed: number, gaps: number, buffered: number) => ({
+    packetsReceived: packets - lost,
+    packetsLost: lost,
+    concealedSamples: concealed,
+    silentConcealedSamples: 0,
+    concealmentEvents: gaps,
+    jitterBufferDelay: buffered,
+    jitterBufferEmittedCount: packets * 960
+  });
+  const readings = [voiceOf(150, 0, 0, 0, 7_200), voiceOf(300, 10, 9_600, 4, 21_600)];
+  const audio = (id: string) => ({
+    getRTCStatsReport: async () =>
+      report([
+        { id, type: 'inbound-rtp', kind: 'audio', ...defined(readings[Math.min(pollNo, readings.length - 1)], 'r') }
+      ])
+  });
+  const mic = {
+    getRTCStatsReport: async () =>
+      report([
+        { id: 'out-1', type: 'outbound-rtp', kind: 'audio', packetsSent: 150 * (pollNo + 1) },
+        { id: 'rin-1', type: 'remote-inbound-rtp', kind: 'audio', packetsLost: 3 * pollNo },
+        { id: 'pair', type: 'candidate-pair', state: 'succeeded', nominated: true, currentRoundTripTime: 0.08 }
+      ])
+  };
+  const publications = new Map([
+    ['mic', { source: 'microphone', track: audio('in-mic') }],
+    // Screen audio is not the voice the status speaks of.
+    ['screen', { source: 'screen_share_audio', track: audio('in-screen') }]
+  ]);
+  Object.assign(state, {
+    joined: true,
+    roomId: 'kitchen',
+    peerId: 'peer-self-1',
+    sessionToken: 's'.repeat(32),
+    localMicPublication: { track: mic },
+    peers: new Map([['peer-anna-1', { livekitParticipant: { audioTrackPublications: publications } }]])
+  });
+
+  stats.startPeerLatencyStats();
+  await vi.advanceTimersByTimeAsync(0);
+  pollNo = 1;
+  await vi.advanceTimersByTimeAsync(3_000);
+  stats.stopPeerLatencyStats();
+
+  expect(polls.at(-1)).toEqual({
+    roomId: 'kitchen',
+    peerId: 'peer-self-1',
+    sessionToken: 's'.repeat(32),
+    rttMs: 80,
+    // 14 400 s of waiting summed over 144 000 samples: 100 ms a sample.
+    jitterBufferMs: 100,
+    uplink: { packets: 150, lost: 3 },
+    transport: null,
+    heard: [{ peerId: 'peer-anna-1', packets: 150, lost: 10, concealedSamples: 9_600, gaps: 4 }]
+  });
+});
+
 test("the desktop app's CPU totals give VoiceRoom's share of the computer apart from the whole computer's", async () => {
   vi.useFakeTimers();
-  vi.doMock('../../src/lib/entities/room/room-realtime', () => ({ updateVoicePeer: () => {} }));
-  const stats = await freshImport(() => import('../../src/lib/features/room/client/room/stats.ts'));
-  const { state } = await import('../../src/lib/features/room/client/core/state.svelte.ts');
-  const quality = await import('../../src/lib/features/room/client/room/call-quality.ts');
+  vi.doMock('@/entities/room/room-realtime', () => ({ updateVoicePeer: () => {}, reportVoicePoll: () => {} }));
+  const stats = await freshImport(() => import('@/features/room/client/room/stats'));
+  const { state } = await import('@/features/room/client/core/room-runtime.store');
+  const quality = await import('@/features/room/client/room/call-quality');
 
   // Eight cores for 3 s are 24 000 ms of core time a poll; a game keeps 80 % of it busy.
   const readings = [

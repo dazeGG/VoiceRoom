@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'vitest';
 
-import { ScreenRecoveryGraceController } from '../src/lib/features/room/client/recovery/screen-recovery-grace.ts';
+import { ScreenRecoveryGraceController } from '@/features/room/client/recovery/screen-recovery-grace.ts';
 
 function clock() {
   let now = 0;

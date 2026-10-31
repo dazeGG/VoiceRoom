@@ -1,0 +1,72 @@
+// "Download the app" menu at the foot of the lobby sidebar.
+// Svelte: SidebarDownload.svelte <style> and the .sidebar-download*/.lobby-gear rules of friends.css.
+//
+// Svelte class -> BEM class (block "sidebar-download")
+//   .sidebar-download                    -> .sidebar-download (Popover root)
+//   .lobby-gear.sidebar-download-trigger -> .sidebar-download__trigger
+//   .is-open                             -> [aria-expanded='true']
+//   .sidebar-download-popover            -> .sidebar-download__popover
+//   .sidebar-download-head               -> .sidebar-download__head
+//   .sidebar-download-note               -> .sidebar-download__note
+
+.sidebar-download {
+  flex: none;
+  display: inline-flex;
+}
+
+// Inside the Electron shell the preload tags <html> with .is-desktop before
+// page scripts run, so the download control is hidden with no flash.
+html.is-desktop .sidebar-download {
+  display: none;
+}
+
+.sidebar-download__trigger {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  border: none;
+  background: transparent;
+  color: var(--vr-text-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s ease;
+
+  &:hover {
+    background: var(--vr-hover);
+    color: var(--vr-text);
+  }
+
+  &[aria-expanded='true'] {
+    background: var(--vr-surface-3-hover);
+    color: var(--vr-text);
+  }
+}
+
+.sidebar-download__popover {
+  width: max-content;
+  min-width: 268px;
+  padding: 6px;
+
+  [role='menuitem'] {
+    white-space: nowrap;
+  }
+}
+
+.sidebar-download__head {
+  padding: 6px 10px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--vr-text-2);
+}
+
+.sidebar-download__note {
+  padding: 8px 10px 4px;
+  font-size: 11.5px;
+  line-height: 1.4;
+  color: var(--vr-away);
+}

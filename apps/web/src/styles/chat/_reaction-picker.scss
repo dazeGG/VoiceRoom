@@ -1,0 +1,43 @@
+// Quick reactions and the emoji picker trigger (shared/chat/ReactionPicker.vue).
+//
+// Svelte class -> BEM class
+//   .reaction-quick-actions     -> .reaction-picker
+//   .reaction-quick-trigger     -> .reaction-picker__button
+//   .reaction-picker-trigger    -> .reaction-picker__button--more
+//   .reaction-picker-panel      -> unchanged, passed as `panel-class`; styled with the emoji picker panel (S2)
+
+// Sits inside the hover pill, so these carry the same 36px round-square shape
+// as the sibling action buttons.
+.reaction-picker {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  overflow: visible;
+}
+
+.reaction-picker__button {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border: 0;
+  border-radius: 12px;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  transition:
+    background 120ms ease,
+    color 120ms ease;
+
+  &:hover,
+  &:focus-visible {
+    background: color-mix(in oklch, var(--vr-accent), transparent 86%);
+    color: var(--vr-accent);
+    outline: none;
+  }
+}
+
+.reaction-picker__button--more {
+  color: color-mix(in oklch, currentColor, transparent 42%);
+}

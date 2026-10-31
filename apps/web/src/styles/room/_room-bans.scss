@@ -1,0 +1,216 @@
+// ModerationCenter (entities/room/components/ModerationCenter.vue): active bans of one room.
+//
+// Svelte class -> BEM class
+//   .room-bans                       -> .room-bans
+//   .room-bans-head                  -> .room-bans__head
+//   .room-bans-head p                -> .room-bans__hint
+//   .room-bans-title                 -> .room-bans__title
+//   .room-bans-count                 -> .room-bans__count
+//   .room-bans-error                 -> .room-bans__error
+//   .room-bans-loading               -> .room-bans__loading
+//   .room-bans-empty                 -> .room-bans__empty
+//   .room-bans-empty strong          -> .room-bans__empty-title
+//   .room-bans-empty-icon            -> .room-bans__empty-icon
+//   .room-bans-list                  -> .room-bans__list
+//   .room-bans-more                  -> .room-bans__more
+//   .room-ban                        -> .room-ban (block)
+//   .room-ban-body                   -> .room-ban__body
+//   .room-ban-name                   -> .room-ban__name
+//   .room-ban-name strong / small    -> .room-ban__display-name / .room-ban__login
+//   .room-ban-term                   -> .room-ban__term
+//   .room-ban-reason                 -> .room-ban__reason
+//   .settings-unblock-button         -> .settings__unblock-button (home/_settings.scss) + .room-ban__unblock
+//
+// [data-*] -> modifier class
+//   .room-ban-term[data-permanent='true'] -> .room-ban__term--permanent
+
+.room-bans {
+  display: grid;
+  gap: 16px;
+  color: var(--vr-text);
+}
+
+.room-bans__head {
+  display: grid;
+  gap: 6px;
+}
+
+.room-bans__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.room-bans__count {
+  color: var(--vr-text-3);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+
+.room-bans__hint {
+  margin: 0;
+  color: var(--vr-text-3);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.room-bans__error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--vr-danger-soft);
+  color: var(--vr-danger);
+  font-size: 13px;
+}
+
+.room-bans__error button {
+  flex: none;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: 600 13px var(--font-ui);
+  cursor: pointer;
+}
+
+.room-bans__loading {
+  margin: 0;
+  color: var(--vr-text-3);
+  font-size: 13px;
+}
+
+.room-bans__empty {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  padding: 28px 16px;
+  border: 1px dashed var(--vr-line);
+  border-radius: 14px;
+  color: var(--vr-text-3);
+  font-size: 12.5px;
+  text-align: center;
+}
+
+.room-bans__empty-title {
+  color: var(--vr-text);
+  font-size: 14px;
+}
+
+.room-bans__empty-icon {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  margin-bottom: 4px;
+  place-items: center;
+  border-radius: 12px;
+  background: var(--vr-surface-3);
+  color: var(--vr-text-2);
+}
+
+.room-bans__list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.room-ban {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--vr-line);
+  border-radius: 12px;
+  background: var(--vr-surface-2);
+}
+
+.room-ban__body {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.room-ban__name {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+
+.room-ban__display-name,
+.room-ban__login {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.room-ban__display-name {
+  font-size: 14px;
+}
+
+.room-ban__login {
+  color: var(--vr-text-3);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+}
+
+.room-ban__term {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--vr-text-2);
+  font-size: 12px;
+}
+
+// Svelte: [data-permanent='true']
+.room-ban__term--permanent {
+  color: var(--vr-danger);
+}
+
+.room-ban__reason {
+  margin: 0;
+  color: var(--vr-text-3);
+  font-size: 12px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.room-bans__more {
+  justify-self: stretch;
+  min-height: 38px;
+  border: 1px solid var(--vr-line-strong);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--vr-text);
+  font: 600 13px var(--font-ui);
+  cursor: pointer;
+}
+
+.room-bans__more:hover:not(:disabled) {
+  background: var(--vr-hover);
+}
+
+.room-bans__more:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+@media (max-width: 520px) {
+  .room-ban {
+    grid-template-columns: 36px minmax(0, 1fr);
+  }
+
+  .room-ban__unblock {
+    grid-column: 2;
+    justify-self: start;
+  }
+}

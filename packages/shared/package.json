@@ -1,6 +1,6 @@
 {
   "name": "@voice-room/shared",
-  "version": "2.11.0",
+  "version": "2.12.0",
   "private": true,
   "type": "module",
   "exports": {
@@ -19,6 +19,7 @@
     "./realtime": "./src/realtime.ts",
     "./media-budget": "./src/media-budget.ts",
     "./network-quality": "./src/network-quality.ts",
+    "./voice-quality": "./src/voice-quality.ts",
     "./avatar-accent": "./src/avatar-accent.ts",
     "./emoji": "./src/emoji.ts",
     "./runtime-config": "./src/runtime-config.ts",

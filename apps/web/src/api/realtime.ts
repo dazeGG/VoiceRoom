@@ -1,0 +1,349 @@
+// App-level WebSocket at /api/ws: account events, room summaries, preview/detail, voice.
+
+import { isErrorCode, type ErrorCode } from '@voice-room/shared/contracts/errors';
+import type {
+  ClientCommands,
+  ClientCommandType,
+  RoomRealtimeSummary,
+  RoomSnapshot,
+  ServerEvent
+} from '@voice-room/shared/contracts/realtime';
+import { parseServerFrame, SESSION_ENDED_CLOSE_CODE } from '@voice-room/shared/realtime';
+import { isRealtimeBlocked } from '@/platform/desktop-boundary';
+import { reportContractViolation } from './contract-violations';
+import { RealtimeHeartbeatWatchdog } from './realtime-heartbeat';
+
+/** A refusal from the server, as handlers see it. */
+export type RealtimeErrorEvent = { type: 'error'; payload: { code: ErrorCode | ''; message: string; id?: string } };
+
+/** Every event handlers receive: the server's events plus refusals. */
+export type RealtimeEvent = ServerEvent | RealtimeErrorEvent;
+export type { RoomRealtimeSummary, RoomSnapshot };
+
+/** Sends one command; the payload must be the one its type carries. */
+type Send = <Type extends ClientCommandType>(type: Type, payload: ClientCommands[Type], id?: string) => void;
+
+const RECONNECT_BASE_MS = 500;
+const RECONNECT_MAX_MS = 8000;
+const HEARTBEAT_MS = 15000;
+const HEARTBEAT_TIMEOUT_MS = 30000;
+// After the tab comes back or the network returns, a socket that does not
+// answer a ping this fast is treated as dead rather than waited on.
+const LIVENESS_PROBE_MS = 5000;
+// Typing notices, pings and stats polls are about now; sent after a reconnect they would be stale.
+const DROPPED_WHILE_DISCONNECTED: ReadonlySet<ClientCommandType> = new Set([
+  'ping',
+  'dm.typing',
+  'room.chat.typing',
+  'room.voice.report'
+]);
+
+let shared: AppRealtimeConnection | null = null;
+
+function wsUrl(): string {
+  if (typeof window === 'undefined') return 'ws://127.0.0.1/api/ws';
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  return `${protocol}//${window.location.host}/api/ws`;
+}
+
+/**
+ * The one place a server frame becomes an event: it must match its event's
+ * schema in the realtime contract, or it is logged and dropped. An error frame
+ * becomes an `error` event.
+ */
+function parseRealtimeEvent(frame: unknown): RealtimeEvent | null {
+  const parsed = parseServerFrame(frame);
+  if (!parsed.ok) {
+    reportContractViolation('realtime', { type: parsed.type, reason: parsed.reason });
+    return null;
+  }
+  const event = parsed.frame;
+  if (event.type !== 'error') return event;
+  // A code newer than this build still refuses the command, with the generic text.
+  const code = isErrorCode(event.error.code) ? event.error.code : '';
+  return { type: 'error', payload: { code, message: event.error.message, ...(event.id ? { id: event.id } : {}) } };
+}
+
+class AppRealtimeConnection {
+  private socket: WebSocket | null = null;
+  private handlers = new Set<(event: RealtimeEvent) => void>();
+  private refCount = 0;
+  private closedByClient = false;
+  private reconnectAttempt = 0;
+  private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private outboundQueue: string[] = [];
+  private restoreHandlers = new Set<(connectionEpoch: number) => void>();
+  private stateHandlers = new Set<(connected: boolean, connectionEpoch: number) => void>();
+  private everConnected = false;
+  private connectionEpoch = 0;
+  private openGeneration = 0;
+  private heartbeatWatchdog = new RealtimeHeartbeatWatchdog({ timeoutMs: HEARTBEAT_TIMEOUT_MS });
+  private lastPongAt = 0;
+  private probeTimer: ReturnType<typeof setTimeout> | null = null;
+  private lifecycleAttached = false;
+
+  subscribe(handler: (event: RealtimeEvent) => void): () => void {
+    if (isRealtimeBlocked()) return () => {};
+    this.handlers.add(handler);
+    this.refCount += 1;
+    this.attachLifecycle();
+    this.ensureConnected();
+    return () => {
+      this.handlers.delete(handler);
+      this.refCount = Math.max(0, this.refCount - 1);
+      if (this.refCount === 0) this.disconnect();
+    };
+  }
+
+  send: Send = (type, payload, id) => {
+    if (isRealtimeBlocked()) return;
+    const frame = JSON.stringify({ ...(id ? { id } : {}), type, payload });
+    if (this.socket?.readyState === WebSocket.OPEN) {
+      this.socket.send(frame);
+      return;
+    }
+    // After a client or session-ended close the frame belongs to a socket
+    // that is gone; the next one must not receive it.
+    if (this.closedByClient || DROPPED_WHILE_DISCONNECTED.has(type)) return;
+    this.outboundQueue.push(frame);
+    // The first command may open the socket; after a drop the backoff timer reconnects.
+    if (this.reconnectTimer === null) this.ensureConnected();
+  };
+
+  private clearTimers(): void {
+    if (this.heartbeatTimer) {
+      clearInterval(this.heartbeatTimer);
+      this.heartbeatTimer = null;
+    }
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+    if (this.probeTimer) {
+      clearTimeout(this.probeTimer);
+      this.probeTimer = null;
+    }
+    this.heartbeatWatchdog.reset();
+  }
+
+  // A socket whose peer stopped answering is dropped at once. close() on a
+  // dead connection can wait a long time for the closing handshake before
+  // onclose fires, and every message sent meanwhile is lost.
+  private abandonSocket(): void {
+    const socket = this.socket;
+    this.openGeneration += 1;
+    this.clearTimers();
+    this.socket = null;
+    try {
+      socket?.close(4000, 'heartbeat_timeout');
+    } catch {
+      // The socket is already gone.
+    }
+    this.emitState(false);
+    this.scheduleReconnect();
+  }
+
+  // Waking from sleep, coming back to the tab or regaining the network is when
+  // a socket that still looks open is most likely dead.
+  private checkLiveness = (): void => {
+    if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+    this.probeLiveness();
+  };
+
+  /**
+   * Checks the socket now instead of after the heartbeat timeout. The desktop
+   * app calls this when the computer wakes from sleep or the lock screen; its
+   * page reads as visible during a call even when the window is hidden, so no
+   * visibilitychange would ever do it.
+   */
+  probeLiveness(): void {
+    if (this.closedByClient || this.refCount === 0) return;
+    if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
+      this.reconnectAttempt = 0;
+      this.ensureConnected();
+      return;
+    }
+    if (this.probeTimer) return;
+    const sentAt = Date.now();
+    const socket = this.socket;
+    this.send('ping', { at: sentAt });
+    this.probeTimer = setTimeout(() => {
+      this.probeTimer = null;
+      if (this.socket === socket && this.lastPongAt < sentAt) this.abandonSocket();
+    }, LIVENESS_PROBE_MS);
+  }
+
+  private attachLifecycle(): void {
+    if (this.lifecycleAttached || typeof window === 'undefined') return;
+    this.lifecycleAttached = true;
+    window.addEventListener('online', this.checkLiveness);
+    document.addEventListener('visibilitychange', this.checkLiveness);
+  }
+
+  private detachLifecycle(): void {
+    if (!this.lifecycleAttached) return;
+    this.lifecycleAttached = false;
+    window.removeEventListener('online', this.checkLiveness);
+    document.removeEventListener('visibilitychange', this.checkLiveness);
+  }
+
+  private emit(event: RealtimeEvent): void {
+    for (const handler of this.handlers) handler(event);
+  }
+
+  private flushQueue(): void {
+    if (!this.socket || this.socket.readyState !== WebSocket.OPEN) return;
+    while (this.outboundQueue.length > 0) {
+      const next = this.outboundQueue.shift();
+      if (next) this.socket.send(next);
+    }
+  }
+
+  private scheduleReconnect(): void {
+    if (this.closedByClient || this.refCount === 0 || this.reconnectTimer !== null) return;
+    const baseDelay = Math.min(RECONNECT_MAX_MS, RECONNECT_BASE_MS * 2 ** this.reconnectAttempt);
+    const delay = baseDelay * (0.5 + Math.random() * 0.5);
+    this.reconnectAttempt += 1;
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null;
+      this.ensureConnected();
+    }, delay);
+  }
+
+  private startHeartbeat(): void {
+    if (this.heartbeatTimer) clearInterval(this.heartbeatTimer);
+    this.heartbeatWatchdog.reset();
+    this.heartbeatTimer = setInterval(() => {
+      if (this.heartbeatWatchdog.isTimedOut()) {
+        this.abandonSocket();
+        return;
+      }
+      this.heartbeatWatchdog.recordPing();
+      this.send('ping', { at: Date.now() });
+    }, HEARTBEAT_MS);
+  }
+
+  private openSocket(): void {
+    if (this.socket && (this.socket.readyState === WebSocket.OPEN || this.socket.readyState === WebSocket.CONNECTING))
+      return;
+    const generation = ++this.openGeneration;
+    const socket = new WebSocket(wsUrl());
+    this.socket = socket;
+    socket.onopen = () => {
+      if (this.socket !== socket || generation !== this.openGeneration) return;
+      this.connectionEpoch += 1;
+      this.reconnectAttempt = 0;
+      this.send('hello', {});
+      // Restore handlers replay subscriptions lost with the previous socket.
+      // On the very first open the originals are still sitting in the
+      // outbound queue, so replaying would double-send them.
+      if (this.everConnected) {
+        for (const restore of this.restoreHandlers) restore(this.connectionEpoch);
+      }
+      this.everConnected = true;
+      this.flushQueue();
+      this.startHeartbeat();
+      this.emitState(true);
+    };
+    socket.onmessage = (event: MessageEvent<unknown>) => {
+      if (this.socket !== socket || generation !== this.openGeneration) return;
+      let frame: unknown;
+      try {
+        frame = JSON.parse(String(event.data));
+      } catch {
+        return;
+      }
+      const parsed = parseRealtimeEvent(frame);
+      if (!parsed) return;
+      if (parsed.type === 'pong') {
+        this.lastPongAt = Date.now();
+        this.heartbeatWatchdog.recordPong();
+      }
+      this.emit(parsed);
+    };
+    socket.onclose = (event?: CloseEvent) => {
+      if (this.socket !== socket || generation !== this.openGeneration) return;
+      this.clearTimers();
+      this.socket = null;
+      this.emitState(false);
+      if (event?.code === SESSION_ENDED_CLOSE_CODE) {
+        // The account session behind this socket was ended; reconnecting would
+        // only come back as a guest, so hand control to the sign-out flow.
+        this.closedByClient = true;
+        for (const handler of this.sessionEndedHandlers) handler();
+        return;
+      }
+      this.scheduleReconnect();
+    };
+    socket.onerror = () => {
+      socket.close();
+    };
+  }
+
+  private sessionEndedHandlers = new Set<() => void>();
+
+  // Fires when the server closed the socket because its account session ended
+  // (signed out elsewhere, revoked from another device, password replaced).
+  onSessionEnded(handler: () => void): () => void {
+    this.sessionEndedHandlers.add(handler);
+    return () => {
+      this.sessionEndedHandlers.delete(handler);
+    };
+  }
+
+  onRestore(handler: (connectionEpoch: number) => void): () => void {
+    this.restoreHandlers.add(handler);
+    return () => {
+      this.restoreHandlers.delete(handler);
+    };
+  }
+
+  // Connection liveness for UI indicators: true on socket open, false on loss.
+  onStateChange(handler: (connected: boolean, connectionEpoch: number) => void): () => void {
+    this.stateHandlers.add(handler);
+    return () => {
+      this.stateHandlers.delete(handler);
+    };
+  }
+
+  private emitState(connected: boolean): void {
+    for (const handler of this.stateHandlers) handler(connected, this.connectionEpoch);
+  }
+
+  getConnectionEpoch(): number {
+    return this.connectionEpoch;
+  }
+
+  isConnected(): boolean {
+    return this.socket?.readyState === WebSocket.OPEN;
+  }
+
+  ensureConnected(): void {
+    if (isRealtimeBlocked()) return;
+    if (this.socket && (this.socket.readyState === WebSocket.OPEN || this.socket.readyState === WebSocket.CONNECTING)) {
+      return;
+    }
+    this.closedByClient = false;
+    if (this.reconnectTimer !== null) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+    this.openSocket();
+  }
+
+  private disconnect(): void {
+    this.closedByClient = true;
+    this.detachLifecycle();
+    this.openGeneration += 1;
+    this.clearTimers();
+    this.outboundQueue.length = 0;
+    this.socket?.close();
+    this.socket = null;
+  }
+}
+
+export function getAppRealtime(): AppRealtimeConnection {
+  if (!shared) shared = new AppRealtimeConnection();
+  return shared;
+}

@@ -8,7 +8,7 @@ test('room context menu supports pointer, keyboard navigation, focus restore, an
   await registerViaUi(page, login);
   await createPermanentRoom(page, roomName);
 
-  const card = page.locator('.lv-card', { hasText: roomName }).first();
+  const card = page.locator('.voice-home__card', { hasText: roomName }).first();
   const menu = page.getByRole('menu', { name: `Меню комнаты ${roomName}` });
   const items = menu.getByRole('menuitem');
 
@@ -30,16 +30,18 @@ test('room context menu supports pointer, keyboard navigation, focus restore, an
   await expect(menu).toBeVisible();
   await page.keyboard.press('Escape');
 
+  // locator.dispatchEvent('contextmenu') builds a plain Event without coordinates.
+  const openAtCorner = (clientX = 4, clientY = 4) =>
+    card.evaluate(
+      (element, point) =>
+        element.dispatchEvent(
+          new MouseEvent('contextmenu', { bubbles: true, cancelable: true, button: 2, buttons: 2, ...point })
+        ),
+      { clientX, clientY }
+    );
   await page.setViewportSize({ width: 360, height: 240 });
   await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
-  await card.dispatchEvent('contextmenu', {
-    bubbles: true,
-    button: 2,
-    buttons: 2,
-    cancelable: true,
-    clientX: 4,
-    clientY: 4
-  });
+  await openAtCorner();
   await expect(menu).toBeVisible();
   const box = await boxOf(menu);
   expect(box.x).toBeGreaterThanOrEqual(8);
@@ -47,16 +49,20 @@ test('room context menu supports pointer, keyboard navigation, focus restore, an
   expect(box.x + box.width).toBeLessThanOrEqual(352);
   expect(box.y + box.height).toBeLessThanOrEqual(232);
 
+  // The far corner keeps the same margins.
+  await page.keyboard.press('Escape');
+  await expect(menu).toBeHidden();
+  await openAtCorner(356, 236);
+  await expect(menu).toBeVisible();
+  const farBox = await boxOf(menu);
+  expect(farBox.x).toBeGreaterThanOrEqual(8);
+  expect(farBox.y).toBeGreaterThanOrEqual(8);
+  expect(farBox.x + farBox.width).toBeLessThanOrEqual(352);
+  expect(farBox.y + farBox.height).toBeLessThanOrEqual(232);
+
   await page.setViewportSize({ width: 360, height: 120 });
   await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
-  await card.dispatchEvent('contextmenu', {
-    bubbles: true,
-    button: 2,
-    buttons: 2,
-    cancelable: true,
-    clientX: 4,
-    clientY: 4
-  });
+  await openAtCorner();
   await menu.evaluate((element) => {
     element.scrollTop = element.scrollHeight;
     element.dispatchEvent(new Event('scroll'));
@@ -64,13 +70,17 @@ test('room context menu supports pointer, keyboard navigation, focus restore, an
   await expect(menu).toBeVisible();
 });
 
-test('friend rows open only the direct-message thread and do not expose a context menu', async ({ browser, page }) => {
+test('friend rows open only the direct-message thread and do not expose a context menu', async ({
+  browser,
+  page,
+  baseURL
+}) => {
   const firstLogin = uniqueLogin('friendone');
   const secondLogin = uniqueLogin('friendtwo');
 
   await registerViaUi(page, firstLogin);
 
-  const secondContext = await browser.newContext({ baseURL: 'http://localhost:5180' });
+  const secondContext = await browser.newContext(baseURL ? { baseURL } : {});
   const secondPage = await secondContext.newPage();
   try {
     await registerViaUi(secondPage, secondLogin);
@@ -89,7 +99,7 @@ test('friend rows open only the direct-message thread and do not expose a contex
     expect(acceptResponse.ok()).toBe(true);
 
     await page.reload();
-    const friendRow = page.locator('.lv-row', { hasText: secondLogin }).first();
+    const friendRow = page.locator('.sidebar__row', { hasText: secondLogin }).first();
     await expect(friendRow).toBeVisible();
 
     await friendRow.click({ button: 'right' });
@@ -120,7 +130,7 @@ test('bookmarked room menu can remove the room from the list but cannot open own
     expect(added.ok()).toBe(true);
     await member.reload();
 
-    const card = member.locator('.lv-card', { hasText: roomName }).first();
+    const card = member.locator('.voice-home__card', { hasText: roomName }).first();
     await expect(card).toBeVisible();
     await card.click({ button: 'right' });
     const menu = member.getByRole('menu', { name: `Меню комнаты ${roomName}` });

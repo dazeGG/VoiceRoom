@@ -1,6 +1,6 @@
 {
   "name": "voice-room",
-  "version": "2.11.0",
+  "version": "2.12.0",
   "private": true,
   "description": "Simple link-based LiveKit voice chat with screen sharing.",
   "workspaces": [
@@ -24,7 +24,7 @@
     "dev:host:admin": "npm --workspace @voice-room/admin run dev",
     "dev:host:livekit": "docker run --rm -e LIVEKIT_KEYS=\"devkey: devsecret\" -p 7880:7880 -p 7881:7881 -p 7882:7882/udp livekit/livekit-server:v1.13.2 --dev --bind 0.0.0.0",
     "build": "npm --workspace @voice-room/web run build && npm --workspace @voice-room/admin run build",
-    "check": "npm --workspace @voice-room/shared run check && npm --workspace @voice-room/api run check && npm --workspace @voice-room/web run check && npm --workspace @voice-room/admin run check && tsc -p scripts/tsconfig.json && node scripts/check-web-palette.mts && node scripts/check-test-source-reads.mts && node scripts/check-type-coverage.mts && npm run lint && npm run format:check",
+    "check": "npm --workspace @voice-room/shared run check && npm --workspace @voice-room/api run check && npm --workspace @voice-room/web run check && npm --workspace @voice-room/admin run check && tsc -p scripts/tsconfig.json && node scripts/check-web-palette.mts && node scripts/check-web-styles.mts && node scripts/check-test-source-reads.mts && node scripts/check-type-coverage.mts && npm run lint && npm run format:check",
     "lint": "eslint . --cache --cache-location node_modules/.cache/eslint/",
     "format": "prettier --write .",
     "format:check": "prettier --check . --log-level warn",
@@ -43,11 +43,11 @@
     "@eslint/js": "^10.0.1",
     "eslint": "^10.11.0",
     "eslint-plugin-react-hooks": "7.1.1",
-    "eslint-plugin-svelte": "^3.23.0",
+    "eslint-plugin-vue": "^10.12.0",
     "globals": "^17.12.0",
     "prettier": "^3.9.9",
-    "prettier-plugin-svelte": "^4.1.1",
     "type-coverage": "2.29.7",
-    "typescript-eslint": "^8.70.1"
+    "typescript-eslint": "^8.70.1",
+    "vue-eslint-parser": "^10.4.1"
   }
 }

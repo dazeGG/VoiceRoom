@@ -1,0 +1,667 @@
+// Screen source picker of RoomOverlays (features/room/components/RoomOverlays.vue).
+// Svelte: room/styles/overlays.css, the scoped styles of RoomOverlays.svelte and the
+// .screen-source-* rules of responsive.css.
+//
+// Svelte class -> BEM class
+//   .screen-source-dialog            -> .screen-source-dialog
+//   .screen-source-panel             -> .screen-source-dialog__panel
+//   .screen-source-heading           -> .screen-source-dialog__heading
+//   .screen-source-close             -> .screen-source-dialog__close
+//   .screen-source-tabs / -tab       -> .screen-source-dialog__tabs / __tab
+//   .screen-source-options           -> .screen-source-dialog__options
+//   .screen-source-option            -> .screen-source-dialog__option
+//   .screen-source-preview           -> .screen-source-dialog__preview
+//   .screen-source-placeholder       -> .screen-source-dialog__placeholder
+//   .screen-source-ph-bar/-left/-right -> .screen-source-dialog__placeholder-bar/-left/-right
+//   .screen-source-check             -> .screen-source-dialog__check
+//   .screen-source-label             -> .screen-source-dialog__label
+//   .screen-source-footer            -> .screen-source-dialog__footer
+//   .screen-source-summary(-icon/-text/-name/-detail) -> .screen-source-dialog__summary(-icon/-text/-name/-detail)
+//   .screen-source-footer-actions    -> .screen-source-dialog__footer-actions
+//   .screen-source-res-toggle        -> .screen-source-dialog__toggle-group
+//   .screen-source-res-btn           -> .screen-source-dialog__toggle-button
+//   .screen-source-gear-wrap         -> .screen-source-dialog__gear-wrap
+//   .screen-source-gear              -> .screen-source-dialog__gear
+//   .screen-source-popover           -> .screen-source-dialog__popover
+//   .screen-source-pop-label         -> .screen-source-dialog__popover-label
+//   .screen-source-pop-presets       -> .screen-source-dialog__presets
+//   .screen-source-pop-preset        -> .screen-source-dialog__preset
+//   .screen-source-pop-icon/-info/-title/-desc/-radio/-dot -> .screen-source-dialog__preset-icon/-info/-title/-desc/-radio/-dot
+//   .screen-source-pop-sep           -> .screen-source-dialog__popover-sep
+//   .screen-source-pop-audio(-label) -> .screen-source-dialog__audio(-label)
+//   .screen-source-toggle(-knob)     -> .screen-source-dialog__switch(-knob)
+//   .screen-source-launch            -> .screen-source-dialog__launch
+//   @keyframes screen-pop            -> @keyframes screen-source-dialog-pop
+//
+// [data-*] -> aria / modifier class
+//   .screen-source-toggle[data-on='true'] -> .screen-source-dialog__switch--on
+//   (tabs, options, toggle buttons, gear and presets already select on aria-pressed)
+@use '../mixins' as *;
+
+.screen-source-dialog {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  padding: var(--space-lg);
+  background: color-mix(in srgb, var(--vr-bg) 76%, transparent);
+}
+
+.screen-source-dialog__panel {
+  display: flex;
+  flex-direction: column;
+  width: min(1040px, 100%);
+  max-height: min(740px, calc(100vh - 48px));
+  border: 1px solid var(--vr-line-strong);
+  border-radius: 22px;
+  overflow: hidden;
+  background:
+    radial-gradient(78% 90% at 100% 0%, color-mix(in oklch, var(--vr-surface-3), transparent 74%), transparent 56%),
+    radial-gradient(60% 74% at 0% 4%, color-mix(in oklch, var(--vr-surface), transparent 82%), transparent 54%),
+    var(--vr-surface-2);
+  box-shadow: 0 34px 80px oklch(10% 0.01 92 / 0.6);
+}
+
+// ---- header ----
+
+.screen-source-dialog__heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-md);
+  padding: 26px 28px 0;
+}
+
+.screen-source-dialog__heading h2 {
+  margin: 0;
+  font-size: 1.45rem;
+  font-weight: 800;
+  line-height: 1.08;
+  letter-spacing: -0.02em;
+  color: var(--vr-text);
+}
+
+.screen-source-dialog__close {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid var(--vr-line-strong);
+  border-radius: 11px;
+  padding: 0;
+  background: var(--vr-surface-3);
+  color: var(--vr-text-2);
+  transition:
+    background 140ms var(--ease-out),
+    color 140ms var(--ease-out);
+}
+
+.screen-source-dialog__close:hover {
+  background: var(--vr-surface-3-hover);
+  color: var(--vr-text);
+}
+
+// ---- tabs ----
+
+.screen-source-dialog__tabs {
+  display: inline-flex;
+  gap: 4px;
+  margin: 20px 28px 0;
+  padding: 4px;
+  background: var(--vr-bg);
+  border: 1px solid var(--vr-line);
+  border-radius: 13px;
+}
+
+.screen-source-dialog__tab {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  border: none;
+  border-radius: 9px;
+  padding: 8px 15px;
+  background: transparent;
+  color: var(--vr-text-2);
+  font-size: 0.84rem;
+  font-weight: 600;
+  transition: color 140ms var(--ease-out);
+}
+
+.screen-source-dialog__tab[aria-pressed='true'] {
+  background: var(--vr-accent);
+  color: var(--vr-accent-ink);
+  font-weight: 700;
+}
+
+.screen-source-dialog__tab:not([aria-pressed='true']):hover {
+  color: var(--vr-text);
+}
+
+// ---- source grid ----
+
+.screen-source-dialog__options {
+  display: grid;
+  flex: 1;
+  min-height: 0;
+  max-height: min(560px, calc(100vh - 280px));
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 16px;
+  padding: 20px 28px 26px;
+  overflow: auto;
+}
+
+.screen-source-dialog__option {
+  display: grid;
+  min-width: 0;
+  grid-template-rows: auto minmax(42px, auto);
+  gap: 0;
+  border: 1.5px solid var(--vr-line);
+  border-radius: 15px;
+  padding: 9px;
+  background: var(--vr-surface);
+  color: inherit;
+  text-align: left;
+  transition:
+    border-color 140ms var(--ease-out),
+    background 140ms var(--ease-out);
+}
+
+.screen-source-dialog__option[aria-pressed='true'] {
+  border-color: color-mix(in oklch, var(--vr-text) 70%, transparent);
+  background: var(--vr-surface-3);
+}
+
+.screen-source-dialog__option:not([aria-pressed='true']):hover,
+.screen-source-dialog__option:not([aria-pressed='true']):focus-visible {
+  border-color: var(--vr-line-strong);
+  background: var(--vr-surface-3);
+}
+
+.screen-source-dialog__preview {
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  border-radius: 11px;
+  overflow: hidden;
+  background: var(--vr-bg);
+}
+
+.screen-source-dialog__preview img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+// Decorative placeholder when there is no thumbnail.
+.screen-source-dialog__placeholder {
+  position: absolute;
+  inset: 0;
+  background-image: repeating-linear-gradient(
+    135deg,
+    color-mix(in oklch, var(--vr-line-strong) 40%, transparent) 0 2px,
+    transparent 2px 11px
+  );
+}
+
+.screen-source-dialog__placeholder-bar {
+  position: absolute;
+  left: 11px;
+  top: 11px;
+  right: 11px;
+  height: 7px;
+  border-radius: 3px;
+  background: var(--vr-surface-3-hover);
+}
+
+.screen-source-dialog__placeholder-left {
+  position: absolute;
+  left: 11px;
+  top: 26px;
+  width: 38%;
+  bottom: 12px;
+  border-radius: 6px;
+  background: var(--vr-surface-3);
+}
+
+.screen-source-dialog__placeholder-right {
+  position: absolute;
+  left: calc(38% + 20px);
+  top: 26px;
+  right: 11px;
+  bottom: 12px;
+  border-radius: 6px;
+  background: var(--vr-surface-3);
+}
+
+// Check mark of the selected source.
+.screen-source-dialog__check {
+  position: absolute;
+  top: 9px;
+  right: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--vr-text);
+}
+
+.screen-source-dialog__label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 12px 4px 2px;
+  color: var(--vr-text-2);
+  font-size: 0.875rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  transition: color 140ms var(--ease-out);
+}
+
+.screen-source-dialog__option[aria-pressed='true'] .screen-source-dialog__label {
+  color: var(--vr-text);
+}
+
+.screen-source-dialog__label img {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 auto;
+}
+
+.screen-source-dialog__label svg {
+  flex: 0 0 auto;
+  color: var(--vr-text-3);
+  transition: color 140ms var(--ease-out);
+}
+
+.screen-source-dialog__option[aria-pressed='true'] .screen-source-dialog__label svg {
+  color: var(--vr-text);
+}
+
+.screen-source-dialog__label > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+// ---- footer bar ----
+
+.screen-source-dialog__footer {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 20px;
+  border-top: 1px solid var(--vr-line);
+  background: color-mix(in oklch, var(--vr-bg), transparent 50%);
+  flex-wrap: wrap;
+}
+
+.screen-source-dialog__summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex: 1;
+}
+
+.screen-source-dialog__summary-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--vr-line);
+  border-radius: 10px;
+  background: var(--vr-surface-3);
+  color: var(--vr-text-2);
+}
+
+.screen-source-dialog__summary-text {
+  min-width: 0;
+}
+
+.screen-source-dialog__summary-name {
+  font-size: 0.84rem;
+  font-weight: 700;
+  color: var(--vr-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.screen-source-dialog__summary-detail {
+  font-size: 0.69rem;
+  font-family: var(--font-mono, monospace);
+  color: var(--vr-text-3);
+  margin-top: 2px;
+}
+
+.screen-source-dialog__footer-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 0 0 auto;
+}
+
+// SD / HD and 30 / 60 toggles.
+.screen-source-dialog__toggle-group {
+  display: inline-flex;
+  gap: 3px;
+  padding: 3px;
+  background: var(--vr-bg);
+  border: 1px solid var(--vr-line);
+  border-radius: 11px;
+}
+
+.screen-source-dialog__toggle-button {
+  border: none;
+  border-radius: 8px;
+  padding: 8px 16px;
+  background: transparent;
+  color: var(--vr-text-2);
+  font-size: 0.81rem;
+  font-weight: 600;
+  transition:
+    background 140ms var(--ease-out),
+    color 140ms var(--ease-out);
+}
+
+.screen-source-dialog__toggle-button[aria-pressed='true'] {
+  background: var(--vr-accent);
+  color: var(--vr-accent-ink);
+  font-weight: 700;
+}
+
+.screen-source-dialog__toggle-button:not([aria-pressed='true']):hover {
+  color: var(--vr-text);
+}
+
+// ---- gear button and its popover ----
+
+.screen-source-dialog__gear-wrap {
+  position: relative;
+}
+
+.screen-source-dialog__gear {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  flex: 0 0 auto;
+  border: 1px solid var(--vr-line);
+  border-radius: 11px;
+  background: var(--vr-surface-3);
+  color: var(--vr-text-2);
+  transition:
+    background 140ms var(--ease-out),
+    color 140ms var(--ease-out),
+    border-color 140ms var(--ease-out);
+}
+
+.screen-source-dialog__gear[aria-pressed='true'] {
+  border-color: color-mix(in oklch, var(--vr-text) 70%, transparent);
+  background: var(--vr-surface-3);
+  color: var(--vr-text);
+}
+
+.screen-source-dialog__gear:not([aria-pressed='true']):hover {
+  background: var(--vr-surface-3-hover);
+  color: var(--vr-text);
+}
+
+.screen-source-dialog__popover {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 10px);
+  width: 320px;
+  z-index: 30;
+  padding: 16px;
+  background: var(--vr-surface-2);
+  border: 1px solid var(--vr-line-strong);
+  border-radius: 16px;
+  box-shadow: 0 24px 60px oklch(0% 0 0 / 0.55);
+  animation: screen-source-dialog-pop 160ms var(--ease-out);
+  transform-origin: bottom right;
+}
+
+@keyframes screen-source-dialog-pop {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.screen-source-dialog__popover-label {
+  padding: 2px 4px 12px;
+  font-family: var(--font-ui, sans-serif);
+  font-size: 0.66rem;
+  font-weight: 500;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--vr-text-3);
+}
+
+.screen-source-dialog__presets {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.screen-source-dialog__preset {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  padding: 9px;
+  border: 1px solid transparent;
+  border-radius: 11px;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  transition:
+    background 140ms var(--ease-out),
+    border-color 140ms var(--ease-out);
+}
+
+.screen-source-dialog__preset[aria-pressed='true'] {
+  background: var(--vr-surface-3);
+  border-color: color-mix(in oklch, var(--vr-text) 28%, transparent);
+}
+
+.screen-source-dialog__preset:not([aria-pressed='true']):hover {
+  background: var(--vr-surface-3);
+}
+
+.screen-source-dialog__preset-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  background: var(--vr-surface-3);
+  color: var(--vr-text-2);
+  transition:
+    background 140ms var(--ease-out),
+    color 140ms var(--ease-out);
+}
+
+.screen-source-dialog__preset[aria-pressed='true'] .screen-source-dialog__preset-icon {
+  background: var(--vr-surface-3-hover);
+  color: var(--vr-text);
+}
+
+.screen-source-dialog__preset-info {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.screen-source-dialog__preset-title {
+  font-size: 0.84rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--vr-text-2);
+  transition: color 140ms var(--ease-out);
+}
+
+.screen-source-dialog__preset[aria-pressed='true'] .screen-source-dialog__preset-title {
+  color: var(--vr-text);
+}
+
+.screen-source-dialog__preset-desc {
+  font-size: 0.72rem;
+  color: var(--vr-text-3);
+  margin-top: 1px;
+}
+
+.screen-source-dialog__preset-radio {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  border: 1.6px solid color-mix(in oklch, var(--vr-text) 22%, transparent);
+  border-radius: 50%;
+  transition: border-color 140ms var(--ease-out);
+}
+
+.screen-source-dialog__preset[aria-pressed='true'] .screen-source-dialog__preset-radio {
+  border-color: var(--vr-text);
+}
+
+.screen-source-dialog__preset-dot {
+  display: block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--vr-text);
+}
+
+.screen-source-dialog__popover-sep {
+  margin: 12px 0 0;
+  padding-top: 14px;
+  border-top: 1px solid var(--vr-line);
+}
+
+.screen-source-dialog__audio {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 8px;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: inherit;
+  transition: background 140ms var(--ease-out);
+}
+
+.screen-source-dialog__audio:hover {
+  background: var(--vr-surface-3);
+}
+
+.screen-source-dialog__audio-label {
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: var(--vr-text);
+}
+
+.screen-source-dialog__switch {
+  position: relative;
+  display: flex;
+  flex: 0 0 auto;
+  width: 36px;
+  height: 21px;
+  border-radius: 11px;
+  background: var(--vr-surface-3);
+  transition: background 180ms var(--ease-out);
+}
+
+.screen-source-dialog__switch--on {
+  background: var(--vr-online);
+}
+
+.screen-source-dialog__switch-knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  background: var(--vr-text);
+  transition: transform 180ms var(--ease-out);
+}
+
+.screen-source-dialog__switch--on .screen-source-dialog__switch-knob {
+  transform: translateX(15px);
+}
+
+// ---- launch ----
+
+.screen-source-dialog__launch {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 42px;
+  padding: 0 20px;
+  border: none;
+  border-radius: 12px;
+  background: var(--vr-accent);
+  color: var(--vr-accent-ink);
+  font-size: 0.91rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  transition:
+    transform 120ms var(--ease-out),
+    opacity 120ms var(--ease-out);
+}
+
+.screen-source-dialog__launch:not(:disabled):hover {
+  transform: translateY(-1px);
+}
+
+.screen-source-dialog__launch:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+// ---- small screens ----
+
+@include below($bp-phone-sm) {
+  .screen-source-dialog {
+    padding: var(--space-sm);
+  }
+
+  .screen-source-dialog__panel {
+    max-height: calc(100vh - 24px);
+    padding: var(--space-md);
+  }
+
+  .screen-source-dialog__heading h2 {
+    font-size: 1.24rem;
+  }
+
+  .screen-source-dialog__options {
+    max-height: calc(100vh - 160px);
+    grid-template-columns: 1fr;
+  }
+}

@@ -1,0 +1,65 @@
+// "Update available" notice: a pill at the top centre of the page.
+// Svelte: the <style> of features/app-update/AppUpdateNotice.svelte.
+//
+// Svelte class -> BEM class (block "app-update")
+//   .app-update         -> .app-update
+//   .app-update-dot     -> .app-update__dot
+//   .app-update-title   -> .app-update__title
+//   .app-update-note    -> .app-update__note
+//   .app-update-action  -> .app-update__action
+
+.app-update {
+  // Top centre: the lobby sidebar keeps its profile controls bottom-left and
+  // the room chat its composer bottom-right.
+  position: fixed;
+  // The desktop shell's topbar covers the top of the window.
+  top: calc(var(--voice-room-shell-topbar, 0px) + 14px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 900;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 6px 6px 12px;
+  border: 1px solid var(--vr-line-strong);
+  border-radius: 999px;
+  background: var(--vr-surface);
+  box-shadow: var(--vr-shadow-toast);
+  color: var(--vr-text);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.app-update__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--vr-accent);
+}
+
+.app-update__note {
+  padding-right: 8px;
+  color: var(--vr-offline);
+  font-weight: 500;
+}
+
+.app-update__action {
+  height: 28px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--vr-accent);
+  color: var(--vr-accent-ink);
+  font: inherit;
+  cursor: pointer;
+
+  &:hover {
+    background: var(--vr-accent-hover);
+  }
+
+  &:disabled {
+    cursor: progress;
+    opacity: 0.7;
+  }
+}

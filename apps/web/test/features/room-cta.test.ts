@@ -2,7 +2,7 @@
 // desktop browser is offered the app, and the one-time app prompt waits.
 
 import { expect, test } from 'vitest';
-import { resolveRoomCta, shouldOpenAppPrompt } from '../../src/lib/features/room/room-cta.ts';
+import { resolveRoomCta, shouldOpenAppPrompt } from '@/features/room/room-cta.ts';
 
 const base = { joined: true, guest: false, appAvailable: true, hasUsedDesktopApp: false, dismissed: false };
 

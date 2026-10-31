@@ -21,7 +21,7 @@ import { createVoiceJoin, type JoinUser } from './voice-join.ts';
 import { claimMedia, decideMediaRequest, MEDIA_MIN_VIEWERS, type MediaLimits } from './media-budget.ts';
 import { createMediaMinute } from './media-minute.ts';
 import { leaveReasonOf } from './runtime-types.ts';
-import { noteNetworkLevel } from './network-track.ts';
+import { noteVoiceReport } from './voice-track.ts';
 import { isRecord } from '@voice-room/shared/guards';
 import type {
   FinalizeError,
@@ -429,8 +429,8 @@ function createRoomRealtimeRuntime(deps: RoomRuntimeDeps) {
     if (Object.hasOwn(patch, 'viewedScreenPeerId')) {
       peer.viewedScreenPeerId = resolveViewedScreenPeerId(room, peer.id, patch.viewedScreenPeerId);
     }
-    if (patch.network) noteNetworkLevel((peer.network ??= []), patch.network, now());
-    // Nobody in the room sees the network, so a patch of it alone tells them nothing.
+    // A tab from before room.voice.report still sends its own read of the
+    // network alone; the server judges the voice itself, so it changes nothing.
     if (Object.hasOwn(patch, 'network') && Object.keys(patch).length === 1)
       return { ok: true as const, peer: publicPeer(peer) };
 
@@ -443,6 +443,28 @@ function createRoomRealtimeRuntime(deps: RoomRuntimeDeps) {
     publishRoomEvent(roomId, buildServerEnvelope('room.peer.updated', { roomId, peer: publicPeer(peer) }));
     summaries.schedule(roomId);
     return { ok: true as const, peer: publicPeer(peer) };
+  }
+
+  // A stats poll of a peer in voice: the room is judged again and every peer
+  // whose verdict changed is told, on its own socket only.
+  function reportVoice(connection: WsConnection, payload: ClientCommands['room.voice.report']) {
+    const active = activePeer(connection, payload);
+    if (!active.ok) return active;
+    const { roomId } = payload;
+    for (const { peer, verdict } of noteVoiceReport(active.room.peers, active.peer, payload, now())) {
+      const socket = peer.transport?.connection;
+      if (!socket) continue;
+      wsRegistry.sendToConnection(
+        socket,
+        buildServerEnvelope('room.voice.quality', {
+          roomId,
+          peerId: peer.id,
+          level: verdict?.level ?? null,
+          cause: verdict?.cause ?? null
+        })
+      );
+    }
+    return { ok: true as const };
   }
 
   // Asked before a screen share or a camera starts. A grant holds its share of
@@ -534,6 +556,7 @@ function createRoomRealtimeRuntime(deps: RoomRuntimeDeps) {
     invalidateRecipientCache: summaries.invalidateRecipients,
     joinVoiceRoom,
     leaveVoiceRoom,
+    reportVoice,
     requestMedia,
     scheduleSummaryBroadcast: summaries.schedule,
     /** The server's video over the minute so far, for the system sample; starts the next one. */

@@ -18,6 +18,7 @@ import type { ReconnectLeases } from './reconnect-leases.ts';
 import type { ConnectionRegistry, WsConnection } from './registry.ts';
 import type { createRoomSummaries } from './room-summaries.ts';
 import type { Peer, PresenceRoom, RuntimeLogger, RuntimeRoomStore } from './runtime-types.ts';
+import { rejoinedVoice } from './voice-track.ts';
 
 /** What a join reads of the signed-in account taking the seat; null for a guest. */
 export type JoinUser =
@@ -391,7 +392,7 @@ export function createVoiceJoin(deps: VoiceJoinDeps) {
         screenStreamId: previous?.screenStreamId ?? '',
         serverMuted: Boolean(previous?.serverMuted || persistedServerMuted),
         viewedScreenPeerId: previous?.viewedScreenPeerId ?? '',
-        network: previous?.network ?? [],
+        voice: rejoinedVoice(previous?.voice),
         sessionToken,
         transport
       };

@@ -7,7 +7,7 @@ import {
   getParticipantAudioPreference,
   getParticipantAudioPreferenceKey,
   storeParticipantAudioPreference
-} from '../../src/lib/features/room/client/core/settings.ts';
+} from '@/features/room/client/core/settings.ts';
 
 beforeEach(() => localStorage.clear());
 
@@ -47,8 +47,7 @@ test('the interface sound volume is a stored percentage', () => {
 });
 
 test('the master volume is stored as a whole percent between 0 and 200', async () => {
-  const { getStoredMasterVolume, persistMasterVolume } =
-    await import('../../src/lib/features/room/client/core/settings.ts');
+  const { getStoredMasterVolume, persistMasterVolume } = await import('@/features/room/client/core/settings.ts');
   expect(getStoredMasterVolume()).toBe(100);
   expect(persistMasterVolume(250)).toBe(200);
   expect(persistMasterVolume(-1)).toBe(0);

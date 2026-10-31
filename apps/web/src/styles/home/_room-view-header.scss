@@ -1,0 +1,77 @@
+// RoomViewHeader (features/home/components/lobby/RoomViewHeader.vue): back button and room
+// menu above a room shown in the lobby (preview and browse views).
+// Svelte: the <style> of RoomViewHeader.svelte and .lobby-roomview-name/-trigger/-chevron of friends.css.
+// The rest of the .lobby-roomview-* rules (actions, content, stage) belong to the views.
+//
+// Svelte class -> BEM class (block "room-view-header")
+//   .lobby-roomview-head     -> .room-view-header
+//   .lobby-roomview-back     -> .room-view-header__back
+//   .lobby-roomview-trigger  -> .room-view-header__trigger (RoomMenu triggerClass)
+//   .lobby-roomview-name     -> .room-view-header__name (RoomMenu titleClass)
+//   .lobby-roomview-chevron  -> .room-view-header__chevron (RoomMenu chevronClass)
+//
+// [data-*] -> aria
+//   .lobby-roomview-trigger[aria-expanded='true'] is unchanged.
+
+.room-view-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.room-view-header__back {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 11px;
+  border: 1px solid var(--vr-line);
+  background: var(--vr-surface-3);
+  color: var(--vr-text);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s ease;
+
+  &:hover {
+    background: var(--vr-surface-3-hover);
+  }
+}
+
+.room-view-header__trigger {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 360px;
+  padding: 4px 10px 4px 4px;
+  border: none;
+  border-radius: 12px;
+  background: transparent;
+  cursor: pointer;
+  transition: background 0.15s ease;
+
+  &:hover,
+  &[aria-expanded='true'] {
+    background: var(--vr-hover);
+  }
+}
+
+.room-view-header__name {
+  font-family: var(--font-ui);
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--vr-text);
+  letter-spacing: -0.015em;
+  min-width: 0;
+}
+
+.room-view-header__chevron {
+  flex: none;
+  display: inline-flex;
+  color: var(--vr-text-3);
+  transition: transform 0.15s ease;
+}
+
+.room-view-header__trigger[aria-expanded='true'] .room-view-header__chevron {
+  transform: rotate(180deg);
+}

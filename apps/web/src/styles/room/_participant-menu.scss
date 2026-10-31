@@ -1,0 +1,54 @@
+// ParticipantContextMenu (features/room/components/ParticipantContextMenu.vue): the
+// body of the right-click menu on a participant.
+//
+// Svelte class -> BEM class
+//   .participant-menu                 -> .participant-menu
+//   .participant-menu-note            -> .participant-menu__note
+//   .participant-menu-volume          -> .participant-menu__volume
+//   .participant-menu-volume-head     -> .participant-menu__volume-head
+//   .participant-menu-volume-label    -> .participant-menu__volume-label
+//   .participant-menu-volume-value    -> .participant-menu__volume-value
+
+.participant-menu {
+  display: flex;
+  width: min(288px, calc(100vw - 28px));
+  flex-direction: column;
+  gap: 2px;
+}
+
+.participant-menu__note {
+  margin: 0;
+  padding: 4px 12px 10px;
+  color: var(--vr-text-3);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.participant-menu__volume {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding: 10px 12px 12px;
+}
+
+.participant-menu__volume-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.participant-menu__volume-label {
+  display: inline-flex;
+  flex: 1;
+  align-items: center;
+  gap: 10px;
+  color: var(--vr-text);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.participant-menu__volume-value {
+  color: var(--vr-text-3);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+}

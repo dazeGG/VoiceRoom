@@ -3,9 +3,10 @@
 // Each call gives a fresh module graph and fresh fakes.
 
 import type { RoomOptions } from 'livekit-client';
+import { createPinia, setActivePinia } from 'pinia';
 import { vi } from 'vitest';
-import type { Participant } from '../../src/lib/features/room/client/core/types.ts';
-import type * as LiveKitServiceModule from '../../src/lib/features/room/client/services/livekit-service.ts';
+import type { Participant } from '@/features/room/client/core/types.ts';
+import type * as LiveKitServiceModule from '@/features/room/client/services/livekit-service.ts';
 
 type Peer = Record<string, unknown> & { id: string };
 
@@ -54,7 +55,7 @@ export interface LiveKitHarness {
   }>;
 }
 
-const P = '../../src/lib/features/room/client';
+const P = '@/features/room/client';
 
 export async function loadLiveKitHarness(
   options: {
@@ -72,6 +73,7 @@ export async function loadLiveKitHarness(
   } = {}
 ): Promise<LiveKitHarness> {
   vi.resetModules();
+  setActivePinia(createPinia());
 
   const state: LiveKitHarness['state'] = {
     outputMuted: false,
@@ -160,8 +162,8 @@ export async function loadLiveKitHarness(
     }
   };
 
-  vi.doMock('../../src/lib/features/room/start-ui.svelte', () => ({ startUi: {} }));
-  vi.doMock(`${P}/core/state.svelte`, () => ({ state }));
+  vi.doMock('@/features/room/start-ui.store', () => ({ useStartUiStore: () => ({}) }));
+  vi.doMock(`${P}/core/room-runtime.store`, () => ({ state }));
   vi.doMock(`${P}/ui/status`, () => ({ setVoiceConnectionStatus: () => {} }));
   vi.doMock(`${P}/ui/toast`, () => ({
     showToast: (message: string) => {
@@ -171,7 +173,7 @@ export async function loadLiveKitHarness(
   vi.doMock(`${P}/media/input-silence`, () => ({
     isMicrophoneInputSilent: options.inputSilent ?? (async () => false)
   }));
-  const { ApiError } = await import('../../src/lib/api/client.ts');
+  const { ApiError } = await import('@/api/client.ts');
   vi.doMock(`${P}/net/api`, () => ({
     requestLiveKitToken: options.requestToken ?? (async () => ({}))
   }));
@@ -289,7 +291,7 @@ export async function loadLiveKitHarness(
     }
   }));
 
-  const service = await import('../../src/lib/features/room/client/services/livekit-service.ts');
+  const service = await import('@/features/room/client/services/livekit-service.ts');
   return {
     service,
     state,

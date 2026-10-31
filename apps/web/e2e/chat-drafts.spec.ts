@@ -40,7 +40,7 @@ test('unsent direct message text stays with its own thread across switches and p
 
     const composer = page.getByPlaceholder('Написать сообщение…');
     const openThread = async (login: string) => {
-      await page.locator('.lv-row', { hasText: login }).first().click();
+      await page.locator('.sidebar__row', { hasText: login }).first().click();
       await expect(composer).toBeVisible();
     };
 
@@ -58,7 +58,7 @@ test('unsent direct message text stays with its own thread across switches and p
 
     // Sending ends that draft; the other thread keeps its own.
     await composer.press('Enter');
-    await expect(page.locator('.dm-chat-message', { hasText: 'черновик для Линуса' }).last()).toBeVisible();
+    await expect(page.locator('.message-bubble--dm', { hasText: 'черновик для Линуса' }).last()).toBeVisible();
     await expect(composer).toHaveText('');
     await page.goto('/');
     await openThread(linus.login);
@@ -79,7 +79,7 @@ test('unsent room chat text survives leaving the page and is gone once sent', as
 
   const composer = page.getByPlaceholder('Написать в комнату…');
   const openRoomChat = async () => {
-    await page.locator('.lv-card', { hasText: roomName }).first().click();
+    await page.locator('.voice-home__card', { hasText: roomName }).first().click();
     await page.getByRole('button', { name: 'Чат', exact: true }).first().click();
     await expect(composer).toBeVisible({ timeout: 20_000 });
   };
@@ -91,7 +91,7 @@ test('unsent room chat text survives leaving the page and is gone once sent', as
   await expect(composer).toHaveText('недописанное сообщение');
 
   await composer.press('Enter');
-  await expect(page.locator('.chat-msg-text', { hasText: 'недописанное сообщение' }).last()).toBeVisible();
+  await expect(page.locator('.message-bubble', { hasText: 'недописанное сообщение' }).last()).toBeVisible();
   await page.goto('/');
   await openRoomChat();
   await expect(composer).toHaveText('');

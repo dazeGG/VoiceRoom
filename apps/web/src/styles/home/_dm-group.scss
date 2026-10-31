@@ -1,0 +1,160 @@
+// One author's run of messages in a direct-message thread (DmConversation.vue): the avatar and name,
+// then each message as a shared MessageBubble. The room chat has the same layout under its own names
+// (room/_room-chat-group.scss); in Svelte both used .chat-msg.
+//
+// Svelte class -> BEM class
+//   .chat-msg.dm-chat-group                 -> .dm-group
+//   .chat-avatar-button                     -> .dm-group__avatar-button
+//   .chat-msg-avatar                        -> .dm-group__avatar
+//   .chat-msg-main                          -> .dm-group__main
+//   .chat-msg-meta                          -> .dm-group__meta
+//   .chat-msg-author                        -> .dm-group__author
+//   .chat-msg-trigger                       -> .dm-group__trigger
+//   .chat-msg-time                          -> .dm-group__time
+//   .chat-msg-content.dm-msg-content        -> .dm-group__content
+//   .dm-msg-edited                          -> .dm-group__edited
+//   .dm-chat-message a                      -> .dm-group .message-bubble a
+//   .chat-msg-text + .chat-msg-text         -> .dm-group .message-bubble + .message-bubble
+//   .chat-msg:has(.chat-msg-text:hover)     -> .dm-group:has(.message-bubble:hover)
+//   .chat-msg-meta:hover + .chat-msg-text .chat-msg-actions -> .dm-group__meta:hover + .message-bubble .message-hover-actions
+//   .chat-msg-avatar.chat-msg-trigger:hover/:focus-visible  -> .dm-group__avatar-button:hover/:focus-visible
+//   .chat-msg[data-self]                    -> no rules; dropped
+//   .dm-chat-message, .dm-chat-content      -> .message-bubble--dm, .message-bubble__body--dm (chat/_message-bubble.scss)
+
+.dm-group {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  isolation: isolate;
+}
+
+// A hovered message must rise above the sticky day divider so its toolbar,
+// lifted above the message body, is not covered by the pinned date bubble.
+.dm-group:has(.message-bubble:hover),
+.dm-group:has(.message-bubble:focus-within) {
+  z-index: 6;
+}
+
+.dm-group__avatar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.dm-group__avatar-button {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+
+  &:hover,
+  &:focus-visible {
+    outline: 2px solid var(--vr-accent);
+    outline-offset: 2px;
+  }
+}
+
+.dm-group__main {
+  flex: 1;
+  min-width: 0;
+}
+
+.dm-group__meta {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.dm-group__author {
+  color: var(--vr-text);
+  font-size: 14px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+// Message rows reach 42px into the avatar column to widen the hover target, and
+// being positioned they paint over it. Lift the identity triggers back on top so
+// the avatar and the name stay clickable.
+.dm-group__avatar-button,
+.dm-group__meta .dm-group__trigger {
+  position: relative;
+  z-index: 1;
+}
+
+.dm-group__trigger {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  background: none;
+  font: inherit;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+button.dm-group__author {
+  max-width: 100%;
+  font-family: var(--font-ui);
+  text-align: left;
+}
+
+.dm-group__author.dm-group__trigger:hover,
+.dm-group__author.dm-group__trigger:focus-visible {
+  text-decoration: underline;
+  outline: none;
+}
+
+.dm-group__time {
+  flex: none;
+  color: var(--vr-text-3);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+// The author line holds the first message's toolbar open: it floats over that
+// band, so it would vanish the moment the pointer crosses it on its way to the
+// toolbar, or after an overlay closes under the pointer there.
+.dm-group__meta:hover + .message-bubble .message-hover-actions {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+.dm-group__content {
+  min-width: 0;
+  flex: 1;
+}
+
+.dm-group__edited {
+  margin-left: 5px;
+  color: var(--vr-text-3);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.dm-group .message-bubble + .message-bubble {
+  margin-top: 3px;
+}
+
+.dm-group .message-bubble a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+
+  &:hover {
+    opacity: 0.85;
+  }
+}
