@@ -1,3 +1,5 @@
+import type { SelectOption } from '@/shared/ui/Select/types';
+
 // Chrome on Windows lists two aliases next to the real devices: "default"
 // (the system default) and "communications" (the Windows communications
 // device). Both point at a device that is already in the list, and the menus
@@ -13,4 +15,16 @@ export function listPhysicalDevices(devices: MediaDeviceInfo[], kind: MediaDevic
     seen.add(device.deviceId);
     return true;
   });
+}
+
+/**
+ * A menu of real devices plus the saved one the system no longer has. The sound
+ * stays off for a saved speaker that is gone (see audio-output-transition), so
+ * the menu says so, and any other entry, the system one too, is a change that
+ * brings the sound back. With only the system entry the browser may be hiding
+ * device ids until the microphone is allowed, so nothing can be said yet.
+ */
+export function withSavedDeviceMissing(options: SelectOption[], savedId: string): SelectOption[] {
+  if (!savedId || options.length < 2 || options.some((option) => option.value === savedId)) return options;
+  return [...options, { value: savedId, label: 'Устройство недоступно' }];
 }
