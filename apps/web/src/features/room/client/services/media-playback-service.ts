@@ -7,8 +7,10 @@ import type { Participant } from '../core/types';
 import { setVoiceConnectionStatus } from '../ui/status';
 import {
   getSharedAudioContext,
+  moveOutputToSystem,
   playVoiceElement,
   releaseMediaStreamElement,
+  restoreSavedOutput,
   routeMediaStreamElement,
   syncAudioBusOutput,
   syncAudioBusSettings,
@@ -19,7 +21,7 @@ import { createLogger, errorContext } from '@/shared/log';
 
 const log = createLogger('room:playback');
 
-export { getSharedAudioContext } from './audio-bus';
+export { getSharedAudioContext, isOutputOnSystemFallback } from './audio-bus';
 
 function syncScreenVideoAudioSoon(): void {
   void import('../ui/screen-view').then((module) => module.syncScreenVideoAudio());
@@ -66,6 +68,18 @@ export function releaseRemoteAudioElement(mediaElement: HTMLMediaElement): void 
 
 export async function syncAudioOutputDevices(): Promise<boolean> {
   const synced = await syncAudioBusOutput();
+  syncScreenVideoAudioSoon();
+  return synced;
+}
+
+export async function restoreAudioOutput(): Promise<boolean> {
+  const synced = await restoreSavedOutput();
+  syncScreenVideoAudioSoon();
+  return synced;
+}
+
+export async function moveAudioOutputToSystem(): Promise<boolean> {
+  const synced = await moveOutputToSystem();
   syncScreenVideoAudioSoon();
   return synced;
 }

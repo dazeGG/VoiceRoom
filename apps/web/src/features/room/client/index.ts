@@ -49,7 +49,7 @@ export {
   persistNotificationVolume
 } from './core/settings';
 export { clientRoomName } from './core/room-runtime.store';
-export { setOutputDevice, syncAudioBusSettings } from './services/audio-bus';
+export { restoreOutputDevice, setOutputDevice, syncAudioBusSettings } from './services/audio-bus';
 export { setMicrophoneVolume } from './services/microphone-service';
 export { setMicrophoneMode } from './ui/controls';
 export { syncLocalProfile } from './room/participants';

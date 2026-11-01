@@ -1,16 +1,17 @@
-// The sound stays off while the saved speaker is gone, so the settings say so
-// instead of showing the system device, and leaving it brings the sound back.
+// The sound plays on the system device while the saved speaker is gone, so the
+// settings say so, and choosing the system entry makes the move final.
 
 import { screen, waitFor } from '@testing-library/vue';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
-import { setOutputDevice } from '@/features/room/client';
+import { restoreOutputDevice, setOutputDevice } from '@/features/room/client';
 import SoundSettings from '@/features/home/components/settings/SoundSettings.vue';
 import { stubOverlayDom } from '../helpers/overlay-dom';
 import { renderWithApp } from '../helpers/render';
 
 vi.mock('@/features/room/client', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
+  restoreOutputDevice: vi.fn(async () => true),
   setOutputDevice: vi.fn(async () => true)
 }));
 
@@ -33,6 +34,7 @@ async function renderSettings() {
 beforeEach(() => {
   localStorage.clear();
   vi.mocked(setOutputDevice).mockClear();
+  vi.mocked(restoreOutputDevice).mockClear();
   stubOverlayDom();
   vi.stubGlobal('MediaDeviceInfo', class {});
 });
@@ -62,6 +64,22 @@ test('a saved speaker the system no longer has shows as unavailable, and the sys
     'Системный',
     'speakers'
   ]);
+});
+
+test('a failed pick goes back to the saved speaker without leaving the sound off', async () => {
+  localStorage.setItem('voice-room:output-device-id', 'gone');
+  stubDevices([speaker('speakers')]);
+  vi.mocked(setOutputDevice).mockResolvedValueOnce(false);
+
+  const trigger = await renderSettings();
+  await waitFor(() => expect(trigger.textContent).toContain('Устройство недоступно'));
+
+  const user = userEvent.setup();
+  await user.click(trigger);
+  await user.click(await screen.findByRole('option', { name: 'speakers' }));
+
+  await waitFor(() => expect(restoreOutputDevice).toHaveBeenCalledWith('gone'));
+  expect(localStorage.getItem('voice-room:output-device-id')).toBe('gone');
 });
 
 test('a saved speaker that is still there shows by its name', async () => {

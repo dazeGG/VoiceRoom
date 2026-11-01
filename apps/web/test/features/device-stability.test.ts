@@ -11,6 +11,7 @@ import * as devices from '@/features/room/client/ui/devices';
 import * as microphone from '@/features/room/client/services/microphone-service';
 import * as livekit from '@/features/room/client/services/livekit-service';
 import * as playback from '@/features/room/client/services/media-playback-service';
+import { showToast } from '@/features/room/client/ui/toast';
 import { useRoomDeviceUiStore } from '@/features/room/room-device-ui.store';
 import { defined } from '../helpers/assert';
 
@@ -19,10 +20,22 @@ vi.mock('@/features/room/client/services/livekit-service', () => ({
   replaceLocalMicrophoneTrack: vi.fn(async () => true),
   unpublishLocalMicrophone: vi.fn(async () => {})
 }));
-vi.mock('@/features/room/client/services/media-playback-service', () => ({
-  supportsAudioOutputSelection: () => true,
-  syncAudioOutputDevices: vi.fn(async () => true)
-}));
+vi.mock('@/features/room/client/services/media-playback-service', () => {
+  let onSystem = false;
+  return {
+    isOutputOnSystemFallback: () => onSystem,
+    moveAudioOutputToSystem: vi.fn(async () => {
+      onSystem = true;
+      return true;
+    }),
+    restoreAudioOutput: vi.fn(async () => {
+      onSystem = false;
+      return true;
+    }),
+    supportsAudioOutputSelection: () => true,
+    syncAudioOutputDevices: vi.fn(async () => true)
+  };
+});
 vi.mock('@/features/room/client/services/microphone-service', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   openLocalMicrophone: vi.fn(),
@@ -94,6 +107,10 @@ async function load() {
   vi.mocked(livekit.publishLocalMicrophone).mockClear();
   vi.mocked(livekit.unpublishLocalMicrophone).mockClear();
   vi.mocked(playback.syncAudioOutputDevices).mockClear();
+  await playback.restoreAudioOutput();
+  vi.mocked(playback.restoreAudioOutput).mockClear();
+  vi.mocked(playback.moveAudioOutputToSystem).mockClear();
+  vi.mocked(showToast).mockClear();
 
   /** Puts the room in a call that captures `current`. */
   const joinWith = (current: ReturnType<typeof fakeCapture>) => {
@@ -239,21 +256,87 @@ test('a new system default microphone is followed when no device is saved', asyn
   expect(state.localStream).toBe(headset.capture.stream);
 });
 
-test('the saved speaker is selected again when it comes back', async () => {
+test('the sound moves to the system speaker while the saved one is away, and back when it returns', async () => {
   vi.useFakeTimers();
   const { state, devices, playback } = await load();
   state.outputDeviceId = 'headphones';
 
+  listed = [device('audiooutput', 'speakers'), device('audiooutput', 'headphones')];
+  devices.handleDeviceChange();
+  await vi.advanceTimersByTimeAsync(1000);
+  expect(playback.moveAudioOutputToSystem).not.toHaveBeenCalled();
+  expect(playback.restoreAudioOutput).not.toHaveBeenCalled();
+  expect(showToast).not.toHaveBeenCalled();
+
   listed = [device('audiooutput', 'speakers')];
   devices.handleDeviceChange();
   await vi.advanceTimersByTimeAsync(1000);
-  expect(playback.syncAudioOutputDevices).not.toHaveBeenCalled();
+  expect(playback.moveAudioOutputToSystem).toHaveBeenCalledTimes(1);
+  expect(showToast).toHaveBeenCalledWith('Динамик недоступен, звук идёт через системный');
+
+  // Still away: the person has been told once.
+  devices.handleDeviceChange();
+  await vi.advanceTimersByTimeAsync(1000);
+  expect(showToast).toHaveBeenCalledTimes(1);
+  expect(state.outputDeviceId).toBe('headphones');
+  expect(playback.restoreAudioOutput).not.toHaveBeenCalled();
 
   listed = [device('audiooutput', 'speakers'), device('audiooutput', 'headphones')];
   devices.handleDeviceChange();
   await vi.advanceTimersByTimeAsync(1000);
-  expect(playback.syncAudioOutputDevices).toHaveBeenCalledTimes(1);
+  expect(playback.restoreAudioOutput).toHaveBeenCalledTimes(1);
   expect(state.outputDeviceId).toBe('headphones');
+
+  // Lost again later: that is news again.
+  listed = [device('audiooutput', 'speakers')];
+  devices.handleDeviceChange();
+  await vi.advanceTimersByTimeAsync(1000);
+  expect(showToast).toHaveBeenCalledTimes(2);
+});
+
+test('a saved speaker missing since the app started is selected once it is plugged in', async () => {
+  vi.useFakeTimers();
+  const { state, devices, playback } = await load();
+  state.outputDeviceId = 'headphones';
+  // The audio bus found the speaker missing on its own, before any device list.
+  await playback.moveAudioOutputToSystem();
+
+  listed = [device('audiooutput', 'speakers'), device('audiooutput', 'headphones')];
+  devices.handleDeviceChange();
+  await vi.advanceTimersByTimeAsync(1000);
+
+  expect(playback.restoreAudioOutput).toHaveBeenCalledTimes(1);
+});
+
+test('nothing is said about a saved speaker while the browser hides device ids', async () => {
+  const { state, devices, playback } = await load();
+  state.outputDeviceId = 'headphones';
+
+  listed = [device('audiooutput', '')];
+  await devices.refreshDevices();
+  await Promise.resolve();
+
+  expect(playback.moveAudioOutputToSystem).not.toHaveBeenCalled();
+  expect(showToast).not.toHaveBeenCalled();
+});
+
+test('a failed pick goes back to the saved choice without leaving the sound off', async () => {
+  localStorage.setItem('voice-room:output-device-id', 'gone');
+  const { state, devices, roomDeviceUi, playback } = await load();
+  state.outputDeviceId = 'gone';
+  listed = [device('audiooutput', 'speakers')];
+  await devices.refreshDevices();
+  await vi.waitFor(() => expect(playback.moveAudioOutputToSystem).toHaveBeenCalled());
+
+  vi.mocked(playback.syncAudioOutputDevices).mockResolvedValueOnce(false);
+  vi.mocked(playback.restoreAudioOutput).mockClear();
+  roomDeviceUi.outputDeviceId = 'speakers';
+  await devices.switchOutputDevice();
+
+  expect(playback.restoreAudioOutput).toHaveBeenCalledTimes(1);
+  expect(state.outputDeviceId).toBe('gone');
+  expect(localStorage.getItem('voice-room:output-device-id')).toBe('gone');
+  expect(showToast).toHaveBeenCalledWith('Не удалось переключить динамик');
 });
 
 test('a saved speaker the system no longer has shows as unavailable and can be left for the system one', async () => {
