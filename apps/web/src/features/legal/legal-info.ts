@@ -15,9 +15,9 @@ export const LEGAL = Object.freeze({
   operator: 'Ефремов Владимир Владимирович',
   operatorStatus: 'физическое лицо, плательщик налога на профессиональный доход (самозанятый)',
   email: 'support@voiceroom.ru',
-  effectiveDate: '13 октября 2026 г.',
+  effectiveDate: '1 ноября 2026 г.',
   /** The personal data policy changed on its own since. */
-  privacyEffectiveDate: '31 октября 2026 г.',
+  privacyEffectiveDate: '1 ноября 2026 г.',
   minimumAge: 14,
   sessionDays: 30,
   loginHistoryDays: 90,

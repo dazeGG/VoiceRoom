@@ -61,6 +61,20 @@ test('the terms set the minimum age and say how to report', async () => {
   );
 });
 
+test('the legal pages cover the Android app and say what reaches RuStore', async () => {
+  const policy = (await renderWithApp(PrivacyPolicy)).container.textContent ?? '';
+  expect(policy).toContain('приложение для Android');
+  expect(policy).toContain('ООО «Много приложений»');
+  expect(policy).toMatch(/служба\s+доставки\s+технически\s+может\s+его\s+прочитать/);
+  expect(policy).toContain('«Скрывать текст уведомлений»');
+  expect(policy).toMatch(/Токен\s+устройства\s+для\s+уведомлений/);
+  expect(screen.getByRole('link', { name: 'политике конфиденциальности' }).getAttribute('href')).toBe(
+    'https://www.rustore.ru/help/legal/privacy-policy-users'
+  );
+  const terms = (await renderWithApp(TermsOfService)).container.textContent ?? '';
+  expect(terms).toContain('в приложении для Android');
+});
+
 test('the licences page carries the Twemoji and DB-IP attribution', async () => {
   await renderWithApp(Licenses);
   const twemoji = instanceOf(screen.getByRole('link', { name: 'Twemoji' }).closest('li'), HTMLElement, 'Twemoji');
