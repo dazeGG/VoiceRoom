@@ -3,6 +3,7 @@ import type { RingSnapshot } from '@voice-room/shared/contracts/rings';
 import type { SocialUser } from '../social/social-views.ts';
 import { notificationActor } from '../social/social-views.ts';
 import type { AccountMessage } from '../../realtime/account-events.ts';
+import type { DirectMessage } from '../messaging/direct-messages.service.ts';
 import type { PushPayload, PushContext } from '../notifications/notification-dispatch.ts';
 import type { PushContext as TransportContext } from '../../lib/push-service.ts';
 import { shouldDeliverPush } from '../../lib/push-service.ts';
@@ -13,6 +14,12 @@ export interface RingServiceDeps {
   findUser(userId: string): Promise<SocialUser | null>;
   findRoom(roomId: string): Promise<{ id: string; name?: string; emoji?: string } | null>;
   notifyUser(userId: string, event: AccountMessage): void;
+  /** Answers the Ring's pending invitation DM; null when it is no longer pending. */
+  answerInvitation(input: {
+    messageId: string;
+    recipientId: string;
+    status: 'accepted' | 'declined';
+  }): Promise<DirectMessage | null>;
   queueWebPush(userId: string, payload: PushPayload, context: PushContext): Promise<unknown>;
   nativePush(userId: string, payload: unknown, context: TransportContext): Promise<unknown>;
   preferences(userId: string): Promise<{
@@ -71,8 +78,30 @@ export function createRingService(deps: RingServiceDeps) {
     );
     return result;
   }
-  function act(ringId: string, actorUserId: string, action: RingAction, ip = ''): Promise<RingSnapshot | null> {
-    return deps.repository().act({ ringId, actorUserId, action, ip });
+  async function act(ringId: string, actorUserId: string, action: RingAction, ip = ''): Promise<RingSnapshot | null> {
+    const ring = await deps.repository().act({ ringId, actorUserId, action, ip });
+    // The recipient's answer to the Ring is their answer to its invitation DM too.
+    // Expiry and cancellation leave the invitation pending. A replayed answer
+    // finds it answered already and emits nothing.
+    const answer =
+      action === 'accept' && ring?.state === 'accepted'
+        ? 'accepted'
+        : action === 'decline' && ring?.state === 'declined'
+          ? 'declined'
+          : null;
+    if (ring && answer) {
+      const message = await deps.answerInvitation({
+        messageId: ring.inviteMessageId,
+        recipientId: ring.recipientUserId,
+        status: answer
+      });
+      if (message) {
+        const event: AccountMessage = { type: 'dm.message.edited', message };
+        deps.notifyUser(ring.recipientUserId, event);
+        deps.notifyUser(ring.callerUserId, event);
+      }
+    }
+    return ring;
   }
   async function drainOnce(): Promise<boolean> {
     const repository = deps.repository();

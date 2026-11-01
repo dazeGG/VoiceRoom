@@ -161,6 +161,7 @@ export function createDomainServices(deps: DomainServiceDeps) {
     findUser: (userId) => services.getUserStore().getUserById(userId),
     findRoom: (roomId) => services.getRoomStore().getRoom(roomId),
     notifyUser: (userId, event) => hub.broadcastToUser(userId, event),
+    answerInvitation: (input) => services.getMessageService().direct.respondInvite(input),
     queueWebPush: (userId, payload, context) => hub.notifications.queuePush(userId, payload, context),
     nativePush: (userId, payload, context) => services.getNativePushService().sendToUser(userId, payload, context),
     preferences: (userId) => services.getNotificationPreferences().getPreferences(userId),
