@@ -30,7 +30,13 @@ import {
   replaceLocalMicrophoneTrack,
   unpublishLocalMicrophone
 } from '../services/livekit-service';
-import { supportsAudioOutputSelection, syncAudioOutputDevices } from '../services/media-playback-service';
+import {
+  isOutputOnSystemFallback,
+  moveAudioOutputToSystem,
+  restoreAudioOutput,
+  supportsAudioOutputSelection,
+  syncAudioOutputDevices
+} from '../services/media-playback-service';
 import { attachMeter, syncSpeakingThresholds } from '../media/meters';
 import { setParticipantSpeaking } from '../room/participants';
 import { recordMicDrop } from '../room/call-quality';
@@ -45,7 +51,7 @@ let confirmedOutputDeviceId: string | null = null;
 let outputSwitchGeneration = 0;
 let microphoneTasks: Promise<unknown> = Promise.resolve();
 let deviceChangeTimer = 0;
-let preferredOutputPresent = true;
+let outputLossAnnounced = false;
 const DEVICE_CHANGE_SETTLE_MS = 400;
 // Remembers the last non-off threshold so toggling the gate back on restores it,
 // mirroring SettingsModal's local gateDb/gateOn split.
@@ -135,7 +141,7 @@ function syncOutputDeviceUiStateSoon(): void {
  * a Bluetooth headset asleep, or ids the browser hides until the microphone is
  * allowed) keeps its saved choice: the menu shows the system device until it
  * is back, and the call returns to it on its own. The speaker menu names a
- * missing saved device instead, because its sound stays off until then.
+ * missing saved device instead, so that the system entry can make the move final.
  */
 export async function refreshDevices(): Promise<MediaDeviceInfo[]> {
   if (!navigator.mediaDevices?.enumerateDevices) return [];
@@ -169,6 +175,10 @@ export async function refreshDevices(): Promise<MediaDeviceInfo[]> {
   useRoomDeviceUiStore().cameraId = listedOrSystem(useRoomDeviceUiStore().cameraOptions, state.cameraDeviceId);
 
   syncOutputDeviceUiStateSoon();
+  // Not awaited: entering a room must not wait for an audio device to answer.
+  followPreferredOutput(devices).catch((error: unknown) =>
+    log.warn('output device follow failed', errorContext(error))
+  );
   return devices;
 }
 
@@ -195,7 +205,6 @@ async function followDeviceChange(): Promise<void> {
   } else if (shouldReopenMicrophone(devices)) {
     await restartMicrophone({ refreshDeviceList: false });
   }
-  await followPreferredOutput(devices);
 }
 
 function listedDevices(devices: MediaDeviceInfo[], kind: MediaDeviceKind): MediaDeviceInfo[] {
@@ -226,17 +235,24 @@ function shouldReopenMicrophone(devices: MediaDeviceInfo[]): boolean {
 }
 
 /**
- * A missing saved output stays fail-closed (see audio-output-transition), so
- * the sound comes back only when that device returns: re-select it then.
+ * While the saved speaker is gone the sound plays on the system device, and the
+ * saved choice is selected again when it returns. No ids: the browser hides them,
+ * so nothing can be said about the saved speaker yet.
  */
 async function followPreferredOutput(devices: MediaDeviceInfo[]): Promise<void> {
   const outputs = listedDevices(devices, 'audiooutput');
   if (outputs.length === 0 || !supportsAudioOutputSelection()) return;
   const preferred = state.outputDeviceId;
-  const present = !preferred || outputs.some((device) => device.deviceId === preferred);
-  const returned = present && !preferredOutputPresent;
-  preferredOutputPresent = present;
-  if (returned && preferred) await syncAudioOutputDevices();
+  if (!preferred || outputs.some((device) => device.deviceId === preferred)) {
+    outputLossAnnounced = false;
+    if (preferred && isOutputOnSystemFallback()) await restoreAudioOutput();
+    return;
+  }
+
+  await moveAudioOutputToSystem();
+  if (outputLossAnnounced) return;
+  outputLossAnnounced = true;
+  showToast('Динамик недоступен, звук идёт через системный');
 }
 
 function buildDeviceOptions(
@@ -526,13 +542,12 @@ export async function switchOutputDevice(): Promise<void> {
     if (hasOptionValue(useRoomDeviceUiStore().outputOptions, confirmedOutputDeviceId)) {
       useRoomDeviceUiStore().outputDeviceId = confirmedOutputDeviceId;
     }
-    await syncAudioOutputDevices();
+    await restoreAudioOutput();
     showToast('Не удалось переключить динамик');
     return;
   }
 
   confirmedOutputDeviceId = requestedDeviceId;
-  preferredOutputPresent = true;
   showToast('Динамик переключен');
   // The entry of a device that is gone has served its purpose: drop it from the menu.
   refreshDevices().catch((error: unknown) => log.warn('device list refresh failed', errorContext(error)));
