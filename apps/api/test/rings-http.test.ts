@@ -83,10 +83,11 @@ test('new Ring routes authorize actors, replay safely and retain the exact legac
   assert.equal(legacy.status, 200);
   assert.deepEqual(legacy.body, { ok: true });
   assert.equal((await pool.query('SELECT * FROM room_rings')).rowCount, 2);
-  assert.equal(
-    (await pool.query<{ status: string }>(`SELECT metadata->>'status' AS status FROM direct_messages`)).rows.every(
-      (row) => row.status === 'pending'
-    ),
-    true
+  // The accepted Ring answered its invitation; the legacy one still waits.
+  assert.deepEqual(
+    (await pool.query<{ status: string }>(`SELECT metadata->>'status' AS status FROM direct_messages`)).rows
+      .map((row) => row.status)
+      .sort(),
+    ['accepted', 'pending']
   );
 });
