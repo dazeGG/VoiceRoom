@@ -28,13 +28,18 @@ export function createAudioOutputTransitionQueue(): (transition: () => Promise<b
 }
 
 /**
- * Initial output selection deliberately has no automatic default fallback: a
- * rejected persisted custom sink must remain silent until the user chooses a
- * different output.
+ * Selects the saved output, or the system one when the saved output is rejected:
+ * remote voices keep playing on the system device then, so staying silent would
+ * only lose the interface and stream sounds. A device someone picks by hand goes
+ * through transitionAudioOutput alone, so a failed pick is reported, not hidden.
  */
-export function initializeAudioOutput(
+export async function selectOutputOrSystem(
   selectOutput: (sinkId: string) => Promise<boolean>,
-  sinkId: string
+  sinkId: string,
+  onFallback: () => void
 ): Promise<boolean> {
-  return selectOutput(sinkId);
+  if (await selectOutput(sinkId)) return true;
+  if (!sinkId || !(await selectOutput(''))) return false;
+  onFallback();
+  return true;
 }

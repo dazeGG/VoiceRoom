@@ -2,7 +2,7 @@ import { state } from '../core/room-runtime.store';
 import { getNotificationVolumeMultiplier, getStoredMasterVolume } from '../core/settings';
 import {
   createAudioOutputTransitionQueue,
-  initializeAudioOutput,
+  selectOutputOrSystem,
   transitionAudioOutput
 } from './audio-output-transition';
 
@@ -43,6 +43,9 @@ const voiceElements = new Map<HTMLMediaElement, VoicePlayback>();
 let graph: AudioBusGraph | null = null;
 let sinkDestination: MediaStreamAudioDestinationNode | null = null;
 let sinkElement: HTMLAudioElement | null = null;
+// The saved speaker is gone, so the sound plays on the system device. The saved
+// choice stays in place and is selected again when that speaker comes back.
+let onSystemFallback = false;
 const queueAudioOutputTransition = createAudioOutputTransitionQueue();
 
 function supportsContextSink(): boolean {
@@ -80,8 +83,7 @@ function createGraph(): AudioBusGraph {
 
   graph = { context, limiter, master, media, sfx, voice };
   syncAudioBusSettings();
-  const initialSinkId = state.outputDeviceId || '';
-  void initializeAudioOutput(syncAudioBusOutput, initialSinkId);
+  void restoreSavedOutput();
   return graph;
 }
 
@@ -188,6 +190,7 @@ async function applyAudioBusOutput(sinkId: string): Promise<boolean> {
 export function syncAudioBusOutput(requestedId = state.outputDeviceId || ''): Promise<boolean> {
   const applyRequestedOutput = async () => {
     const selected = await applyAudioBusOutput(requestedId);
+    if (selected) onSystemFallback = false;
     for (const element of voiceElements.keys()) {
       if (!routedSources.has(element)) applyElementSink(element, requestedId);
     }
@@ -200,6 +203,34 @@ export function syncAudioBusOutput(requestedId = state.outputDeviceId || ''): Pr
 export function setOutputDevice(deviceId: string): Promise<boolean> {
   state.outputDeviceId = deviceId;
   return syncAudioBusOutput(deviceId);
+}
+
+/** Selects the saved speaker, or the system one while that speaker is gone. */
+export function restoreSavedOutput(): Promise<boolean> {
+  return selectOutputOrSystem(syncAudioBusOutput, state.outputDeviceId || '', () => {
+    onSystemFallback = true;
+  });
+}
+
+/** Goes back to a saved choice after a failed pick, from outside the room. */
+export function restoreOutputDevice(deviceId: string): Promise<boolean> {
+  state.outputDeviceId = deviceId;
+  return restoreSavedOutput();
+}
+
+/**
+ * Leaves a saved speaker that has just disappeared. It is not asked first: a sink
+ * selecting itself succeeds without touching the device, gone or not.
+ */
+export async function moveOutputToSystem(): Promise<boolean> {
+  if (onSystemFallback) return true;
+  const selected = await syncAudioBusOutput('');
+  if (selected) onSystemFallback = true;
+  return selected;
+}
+
+export function isOutputOnSystemFallback(): boolean {
+  return onSystemFallback;
 }
 
 function outputGain(): number {
@@ -243,7 +274,7 @@ function applyVoicePlayback(element: HTMLMediaElement, playback: VoicePlayback):
   }
   element.volume = level;
   element.muted = level <= 0;
-  applyElementSink(element, state.outputDeviceId || '');
+  applyElementSink(element, onSystemFallback ? '' : state.outputDeviceId || '');
   return 'direct';
 }
 

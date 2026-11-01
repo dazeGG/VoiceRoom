@@ -8,6 +8,7 @@ import {
   playPeerCue,
   playRoomChatMessageCue,
   playStreamCue,
+  restoreOutputDevice,
   setMicrophoneMode,
   setMicrophoneVolume,
   setOutputDevice,
@@ -169,7 +170,7 @@ async function onSpeakerChange(value: string): Promise<void> {
 
   speakerId.value = confirmedSpeakerId;
   persistSpeaker(confirmedSpeakerId);
-  await setOutputDevice(confirmedSpeakerId);
+  await restoreOutputDevice(confirmedSpeakerId);
   emit('toast', 'Не удалось переключить динамик');
 }
 

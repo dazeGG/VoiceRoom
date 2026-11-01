@@ -2,7 +2,7 @@ import { test } from 'vitest';
 import assert from 'node:assert/strict';
 import {
   createAudioOutputTransitionQueue,
-  initializeAudioOutput,
+  selectOutputOrSystem,
   transitionAudioOutput
 } from '@/features/room/client/services/audio-output-transition.ts';
 
@@ -73,13 +73,53 @@ test('sink transitions are serialized in request order', async () => {
   assert.deepEqual(events, ['first:start', 'first:end', 'second']);
 });
 
-test('failed initial custom sink never falls back to the default output', async () => {
+test('a rejected saved sink falls back to the system output and says so', async () => {
   const requested: string[] = [];
-  const selected = await initializeAudioOutput(async (sinkId: string) => {
-    requested.push(sinkId);
-    return false;
-  }, 'custom-speaker');
+  let fellBack = 0;
+  const selected = await selectOutputOrSystem(
+    async (sinkId: string) => {
+      requested.push(sinkId);
+      return sinkId === '';
+    },
+    'custom-speaker',
+    () => (fellBack += 1)
+  );
+
+  assert.equal(selected, true);
+  assert.deepEqual(requested, ['custom-speaker', '']);
+  assert.equal(fellBack, 1);
+});
+
+test('a saved sink that works is not a fallback', async () => {
+  const requested: string[] = [];
+  let fellBack = 0;
+  const selected = await selectOutputOrSystem(
+    async (sinkId: string) => {
+      requested.push(sinkId);
+      return true;
+    },
+    'custom-speaker',
+    () => (fellBack += 1)
+  );
+
+  assert.equal(selected, true);
+  assert.deepEqual(requested, ['custom-speaker']);
+  assert.equal(fellBack, 0);
+});
+
+test('nothing is reported as a fallback when the system output fails too', async () => {
+  const requested: string[] = [];
+  let fellBack = 0;
+  const selected = await selectOutputOrSystem(
+    async (sinkId: string) => {
+      requested.push(sinkId);
+      return false;
+    },
+    'custom-speaker',
+    () => (fellBack += 1)
+  );
 
   assert.equal(selected, false);
-  assert.deepEqual(requested, ['custom-speaker']);
+  assert.deepEqual(requested, ['custom-speaker', '']);
+  assert.equal(fellBack, 0);
 });
