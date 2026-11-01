@@ -6,8 +6,11 @@ The legacy `POST /api/rooms/:roomId/ring` still returns exactly `{ok:true}` and
 emits the existing `ring.incoming` plus room-invitation DM events. Caller voice
 presence is not required. A Ring is a short-lived invitation cue, not a voice
 session. Accepting it acknowledges the invitation; room join, bans, microphone
-permission and media admission remain separate checks. Ring expiry/cancellation
-never changes the persistent invitation DM's status.
+permission and media admission remain separate checks. The recipient's accept
+or decline also answers the persistent invitation DM through the DM
+repository (`respondInvite`), and both accounts receive `dm.message.edited`.
+Ring expiry/cancellation never changes the invitation DM's status: it stays
+answerable.
 
 New endpoints:
 - `POST /api/rings`: `roomId`, `userId`, `clientRequestId` (UUID); returns `RingAnswer`.

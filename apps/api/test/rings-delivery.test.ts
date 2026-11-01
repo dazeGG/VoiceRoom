@@ -4,8 +4,10 @@ import crypto from 'node:crypto';
 import type { PushPayload } from '@voice-room/shared/notifications';
 import { isRecord } from '@voice-room/shared/guards';
 import type { PushContext } from '../src/lib/push-service.ts';
+import type { AccountMessage } from '../src/realtime/account-events.ts';
 import { createRingRepository } from '../src/domains/rings/ring.repository.ts';
 import { createRingService } from '../src/domains/rings/ring.service.ts';
+import { createDmThreadRepository } from '../src/domains/messaging/dm-thread.repository.ts';
 import { createTestDatabase } from './db-harness.ts';
 import { storedUser } from './fakes/index.ts';
 
@@ -25,7 +27,7 @@ async function fixture(t: TestContext) {
   const repository = createRingRepository({ pool: db.pool, isBanned: async () => false });
   const native: Array<{ userId: string; payload: PushPayload; context: PushContext }> = [],
     web: unknown[] = [],
-    events: unknown[] = [];
+    events: Array<[string, AccountMessage]> = [];
   let fail = false,
     dnd = false,
     privateText = false;
@@ -34,6 +36,7 @@ async function fixture(t: TestContext) {
     findUser: async (id) => storedUser({ id, login: 'alice', displayName: 'Alice' }),
     findRoom: async () => ({ id: 'ring-room', name: 'Private Room', emoji: 'x' }),
     notifyUser: (id, event) => events.push([id, event]),
+    answerInvitation: (input) => createDmThreadRepository({ pool: db.pool }).respondInvite(input),
     queueWebPush: async (...args) => {
       web.push(args);
     },
@@ -142,5 +145,51 @@ test(
     await f.service.create(storedUser({ id: f.a }), 'ring-room', f.b, crypto.randomUUID());
     await f.service.drainOnce();
     assert.equal(f.native.length, 1);
+  }
+);
+
+test(
+  "The recipient's Ring answer also answers its invitation DM; expiry and cancellation leave it pending",
+  { skip: !process.env.TEST_DATABASE_URL },
+  async (t) => {
+    const f = await fixture(t);
+    const ring = async () => {
+      // Step past the per-pair cooldown left by the previous Ring.
+      await f.pool.query(`UPDATE room_rings SET created_at=clock_timestamp()-interval '1 hour'`);
+      const created = await f.service.create(storedUser({ id: f.a }), 'ring-room', f.b, crypto.randomUUID());
+      if (created.status !== 'rung') throw new Error(`Ring was not created: ${created.status}`);
+      return created.ring;
+    };
+    const statusOf = async (messageId: string) =>
+      (
+        await f.pool.query<{ status: string }>(
+          `SELECT metadata->>'status' AS status FROM direct_messages WHERE id=$1`,
+          [messageId]
+        )
+      ).rows[0]?.status;
+    const editedFor = () => f.events.flatMap(([userId, event]) => (event.type === 'dm.message.edited' ? [userId] : []));
+
+    const accepted = await ring();
+    await f.service.act(accepted.id, f.b, 'accept');
+    assert.equal(await statusOf(accepted.inviteMessageId), 'accepted');
+    const declined = await ring();
+    await f.service.act(declined.id, f.b, 'decline');
+    assert.equal(await statusOf(declined.inviteMessageId), 'declined');
+    assert.deepEqual(editedFor().sort(), [f.a, f.a, f.b, f.b].sort(), 'both accounts see each answer');
+    await f.service.act(declined.id, f.b, 'decline');
+    assert.equal(editedFor().length, 4, 'a replayed answer emits nothing');
+
+    const cancelled = await ring();
+    await f.service.act(cancelled.id, f.a, 'cancel');
+    await f.service.act(cancelled.id, f.b, 'accept');
+    assert.equal(await statusOf(cancelled.inviteMessageId), 'pending');
+    const expired = await ring();
+    await f.pool.query(
+      `UPDATE room_rings SET created_at=clock_timestamp()-interval '1 minute',expires_at=clock_timestamp()-interval '1 second' WHERE id=$1`,
+      [expired.id]
+    );
+    assert.equal((await f.service.act(expired.id, f.b, 'accept'))?.state, 'expired');
+    assert.equal(await statusOf(expired.inviteMessageId), 'pending');
+    assert.equal(editedFor().length, 4);
   }
 );
