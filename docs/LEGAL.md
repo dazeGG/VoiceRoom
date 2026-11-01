@@ -42,11 +42,11 @@ retention period, change it there too.
    - categories: иные (логин, отображаемое имя, изображение профиля, сведения об устройстве и городе входа, сообщения, IP-адрес в случаях из политики); subjects: пользователи сервиса;
    - legal basis: п. 5 и п. 7 ч. 1 ст. 6 152-ФЗ;
    - actions: сбор, запись, систематизация, хранение, уточнение, использование, обезличивание, блокирование, удаление, уничтожение; processing: автоматизированная, с передачей по сети интернет;
-   - cross-border transfer: нет (Web Push payloads are encrypted end to end; confirm with a lawyer);
+   - third-party recipient: ООО «Много приложений» (RuStore push delivery of the Android app: device token and notification content);
+   - cross-border transfer: нет (Web Push payloads are encrypted end to end; RuStore is in Russia; confirm with a lawyer);
    - database location: the country and hosting provider of the prod server;
    - start date and the person responsible for processing (yourself).
-5. **Effective date.** `legal-info.ts` says 13 October 2026. Set it to the day
-   the release that ships these pages reaches prod.
+5. **Effective date.** Set `effectiveDate` and `privacyEffectiveDate` in `legal-info.ts` to the day the release that ships a change to the pages reaches prod.
 
 ## For a lawyer
 
@@ -59,10 +59,22 @@ retention period, change it there too.
 - Whether Web Push through Google, Mozilla, Apple or Microsoft is a
   cross-border transfer that needs its own notice.
 - Whether a separate consent document is needed beyond the contract basis.
+- Whether handing RuStore the device token and readable notification content needs
+  the user's consent or an operator's instruction (152-FZ art. 6 part 3), and
+  whether the RuStore push service is operated by the same company as the store.
+- Whether the RuStore module's own telemetry (below) makes the operator of this
+  service responsible for it.
 
 ## Known gaps
 
-- Deleted direct messages stay in the database as soft-deleted rows; only room
+- The RuStore push SDK in the Android app carries its own telemetry, which we do
+  not control: `ru.rustore.sdk:metrics` (`stats.rustore.ru`) and Tracer crash
+  reports (`sdk-api.apptracer.ru`). Its classes reference an Android device id,
+  the manufacturer and the OS version. The policy words this as "may send": it
+  comes from reading the SDK 6.9.1 classes, not from captured traffic, and we
+  found no RuStore list of what the SDK sends. Recheck on an SDK upgrade.
+- RuStore pushes carry readable text, unlike Web Push; «Скрывать текст
+  уведомлений» removes the message text, not the sender's name in the title.- Deleted direct messages stay in the database as soft-deleted rows; only room
   messages are purged 30 days after deletion. The policy promises the purge for
   room messages only.
 - Container logs have no rotation configured in `docker-compose.yml`, so the
