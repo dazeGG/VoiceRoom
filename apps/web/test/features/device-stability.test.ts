@@ -256,6 +256,42 @@ test('the saved speaker is selected again when it comes back', async () => {
   expect(state.outputDeviceId).toBe('headphones');
 });
 
+test('a saved speaker the system no longer has shows as unavailable and can be left for the system one', async () => {
+  localStorage.setItem('voice-room:output-device-id', 'gone');
+  const { state, devices, roomDeviceUi, playback } = await load();
+  state.outputDeviceId = 'gone';
+
+  listed = [device('audiooutput', 'default', 'speakers'), device('audiooutput', 'speakers')];
+  await devices.refreshDevices();
+
+  expect(roomDeviceUi.outputDeviceId).toBe('gone');
+  expect(roomDeviceUi.outputOptions).toEqual([
+    { value: '', label: 'Системный' },
+    { value: 'speakers', label: 'speakers' },
+    { value: 'gone', label: 'Устройство недоступно' }
+  ]);
+
+  roomDeviceUi.outputDeviceId = '';
+  await devices.switchOutputDevice();
+
+  expect(playback.syncAudioOutputDevices).toHaveBeenCalledTimes(1);
+  expect(state.outputDeviceId).toBe('');
+  expect(localStorage.getItem('voice-room:output-device-id')).toBeNull();
+  await vi.waitFor(() => expect(roomDeviceUi.outputOptions.map((option) => option.value)).toEqual(['', 'speakers']));
+});
+
+test('a saved speaker is not called unavailable while the browser hides device ids', async () => {
+  const { state, devices, roomDeviceUi } = await load();
+  state.outputDeviceId = 'headphones';
+
+  listed = [device('audiooutput', '')];
+  await devices.refreshDevices();
+
+  expect(roomDeviceUi.outputOptions).toEqual([{ value: '', label: 'Системный' }]);
+  expect(roomDeviceUi.outputDeviceId).toBe('');
+  expect(state.outputDeviceId).toBe('headphones');
+});
+
 test('a microphone that is lost with nothing to replace it leaves the call listening', async () => {
   const { state, open, stop, joinWith, livekit } = await load();
   const only = fakeCapture('usb-mic');

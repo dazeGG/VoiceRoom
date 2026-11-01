@@ -8,7 +8,7 @@ import {
   OUTPUT_DEVICE_STORAGE_KEY
 } from '../core/config';
 import type { SelectOption } from '@/shared/ui/Select/types';
-import { listPhysicalDevices } from '@/shared/audio/device-list';
+import { listPhysicalDevices, withSavedDeviceMissing } from '@/shared/audio/device-list';
 import { removeStorage, writeStorage } from '@/shared/storage';
 import { useRoomDeviceUiStore } from '@/features/room/room-device-ui.store';
 import { state } from '../core/room-runtime.store';
@@ -134,7 +134,8 @@ function syncOutputDeviceUiStateSoon(): void {
  * Rebuilds the device menus. A saved device missing from the list (unplugged,
  * a Bluetooth headset asleep, or ids the browser hides until the microphone is
  * allowed) keeps its saved choice: the menu shows the system device until it
- * is back, and the call returns to it on its own.
+ * is back, and the call returns to it on its own. The speaker menu names a
+ * missing saved device instead, because its sound stays off until then.
  */
 export async function refreshDevices(): Promise<MediaDeviceInfo[]> {
   if (!navigator.mediaDevices?.enumerateDevices) return [];
@@ -154,10 +155,10 @@ export async function refreshDevices(): Promise<MediaDeviceInfo[]> {
   );
 
   useRoomDeviceUiStore().outputDisabled = !supportsAudioOutputSelection();
-  useRoomDeviceUiStore().outputOptions = buildDeviceOptions(outputs, {
-    defaultLabel: 'Системный',
-    fallbackLabel: 'Динамик'
-  });
+  useRoomDeviceUiStore().outputOptions = withSavedDeviceMissing(
+    buildDeviceOptions(outputs, { defaultLabel: 'Системный', fallbackLabel: 'Динамик' }),
+    state.outputDeviceId
+  );
   useRoomDeviceUiStore().outputDeviceId = listedOrSystem(useRoomDeviceUiStore().outputOptions, state.outputDeviceId);
   if (useRoomDeviceUiStore().outputDeviceId === state.outputDeviceId) confirmedOutputDeviceId = state.outputDeviceId;
 
@@ -533,6 +534,8 @@ export async function switchOutputDevice(): Promise<void> {
   confirmedOutputDeviceId = requestedDeviceId;
   preferredOutputPresent = true;
   showToast('Динамик переключен');
+  // The entry of a device that is gone has served its purpose: drop it from the menu.
+  refreshDevices().catch((error: unknown) => log.warn('device list refresh failed', errorContext(error)));
 }
 
 export function closeDevicePopover(): void {

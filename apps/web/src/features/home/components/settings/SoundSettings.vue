@@ -14,6 +14,7 @@ import {
   syncAudioBusSettings,
   type MicrophoneMode
 } from '@/features/room/client';
+import { withSavedDeviceMissing } from '@/shared/audio/device-list';
 import { SegmentControl, Select, Slider, type SegmentOption } from '@/shared/ui';
 import {
   enumerateMicrophones,
@@ -77,10 +78,15 @@ const microphoneOptions = computed(() => [
   { value: '', label: 'Системный' },
   ...microphones.value.map((mic) => ({ value: mic.deviceId, label: mic.label }))
 ]);
-const speakerOptions = computed(() => [
-  { value: '', label: 'Системный' },
-  ...speakers.value.map((speaker) => ({ value: speaker.deviceId, label: speaker.label }))
-]);
+const speakerOptions = computed(() =>
+  withSavedDeviceMissing(
+    [
+      { value: '', label: 'Системный' },
+      ...speakers.value.map((speaker) => ({ value: speaker.deviceId, label: speaker.label }))
+    ],
+    speakerId.value
+  )
+);
 const MICROPHONE_MODE_OPTIONS: SegmentOption<MicrophoneMode>[] = [
   { value: 'open', label: 'Открытый микрофон' },
   { value: 'push-to-talk', label: 'Push-to-talk' }
