@@ -450,7 +450,19 @@ function createRoomRealtimeRuntime(deps: RoomRuntimeDeps) {
   function reportVoice(connection: WsConnection, payload: ClientCommands['room.voice.report']) {
     const active = activePeer(connection, payload);
     if (!active.ok) return active;
-    const { roomId } = payload;
+    const { roomId, mic } = payload;
+    if (mic && (mic.reopens > 0 || mic.replacements > 0)) {
+      logger.warn(
+        {
+          evt: LOG_EVENTS.ROOM_MIC_STALL_RECOVERY,
+          connId: connection.id,
+          userId: connection.userId || undefined,
+          roomId,
+          mic
+        },
+        'a client recovered a stalled microphone'
+      );
+    }
     for (const { peer, verdict } of noteVoiceReport(active.room.peers, active.peer, payload, now())) {
       const socket = peer.transport?.connection;
       if (!socket) continue;

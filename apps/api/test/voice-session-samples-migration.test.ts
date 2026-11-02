@@ -27,6 +27,7 @@ const minute = (at: number, polls: VoiceMinuteSample['polls']): VoiceMinuteSampl
   jitterBufferMsSum: 600,
   jitterBufferPolls: 20,
   uplink: { packets: 3000, lost: 300 },
+  mic: { expectedMs: 60_000, deliveredMs: 21_000, contextMs: 59_000, reopens: 1, replacements: 2 },
   transport: 'relay'
 });
 
@@ -84,6 +85,22 @@ test('a stay keeps its voice minutes, read back with their level and numbers', {
     transport: 'relay'
   });
   assert.equal(stays.filter((one) => one.minutes.length === 0).length, 1, 'a stay without stats has none');
+  assert.deepEqual(
+    {
+      ...(await queryRow(
+        pool,
+        Type.Object({
+          mic_expected_ms: Type.Integer(),
+          mic_delivered_ms: Type.Integer(),
+          mic_context_ms: Type.Integer(),
+          mic_reopens: Type.Integer(),
+          mic_replacements: Type.Integer()
+        }),
+        'SELECT mic_expected_ms, mic_delivered_ms, mic_context_ms, mic_reopens, mic_replacements FROM voice_session_samples LIMIT 1'
+      ))
+    },
+    { mic_expected_ms: 60_000, mic_delivered_ms: 21_000, mic_context_ms: 59_000, mic_reopens: 1, mic_replacements: 2 }
+  );
 });
 
 test(
@@ -106,6 +123,12 @@ test(
     assert.equal(await count(pool), 1, "only the forgotten stay's minutes go");
     await pool.query("DELETE FROM voice_sessions WHERE room_id = 'new-room'");
     assert.equal(await count(pool), 0, 'a deleted stay takes its minutes along');
+
+    await rollBackThrough(databaseUrl, '20261102120000_add_mic_to_voice_session_samples');
+    await pool.query('SELECT 1 FROM voice_session_samples');
+    await assert.rejects(pool.query('SELECT mic_expected_ms FROM voice_session_samples'), /does not exist/);
+    await runMigrations({ databaseUrl, logger: SILENT });
+    await pool.query('SELECT mic_expected_ms FROM voice_session_samples');
 
     await rollBackThrough(databaseUrl, '20261031120000_create_voice_session_samples');
     await assert.rejects(pool.query('SELECT 1 FROM voice_session_samples'), /does not exist/);

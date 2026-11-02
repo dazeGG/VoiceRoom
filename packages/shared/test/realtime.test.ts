@@ -103,6 +103,11 @@ test('a stats poll names the voice session and carries counts only; its verdict 
   assert.equal(poll({ heard: [{ ...stream, gaps: 0.5 }] }).ok, false);
   assert.equal(poll({ heard: Array.from({ length: 65 }, () => stream) }).ok, false);
   assert.equal(poll({ transport: 'quic' }).ok, false);
+  const mic = { expectedMs: 3000, deliveredMs: 0, contextMs: 2990, reopens: 1, replacements: 0 };
+  assert.equal(poll({ mic }).ok, true);
+  assert.equal(poll({ mic: { ...mic, deliveredMs: -1 } }).ok, false);
+  assert.equal(poll({ mic: { ...mic, reopens: 0.5 } }).ok, false);
+  assert.equal(poll({ mic: { expectedMs: 3000 } }).ok, false);
   assert.deepEqual(poll({ peerId: 'x' }), { ok: false, code: 'invalid_peer_id' });
 
   const verdict = (payload: Record<string, unknown>) =>
