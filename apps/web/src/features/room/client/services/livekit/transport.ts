@@ -71,7 +71,10 @@ export async function connectLiveKitWithFallback(
     const room = new Room({
       adaptiveStream: false,
       dynacast: true,
-      reconnectPolicy: createSignalReconnectPolicy()
+      reconnectPolicy: createSignalReconnectPolicy(),
+      // Every capture is stopped by its owner. A room the server dropped would
+      // otherwise stop the microphone its replacement is already publishing.
+      stopLocalTrackOnUnpublish: false
     });
 
     try {
