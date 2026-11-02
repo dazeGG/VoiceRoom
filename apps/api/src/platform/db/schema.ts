@@ -699,6 +699,11 @@ export interface VoiceSessionSamples {
   heard_packets: Generated<number>;
   jitter_buffer_ms_sum: Generated<number>;
   jitter_buffer_polls: Generated<number>;
+  mic_context_ms: Generated<number>;
+  mic_delivered_ms: Generated<number>;
+  mic_expected_ms: Generated<number>;
+  mic_reopens: Generated<number>;
+  mic_replacements: Generated<number>;
   polls_bad: Generated<number>;
   polls_good: Generated<number>;
   polls_unstable: Generated<number>;

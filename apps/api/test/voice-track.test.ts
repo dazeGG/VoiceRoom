@@ -106,6 +106,35 @@ test("a stay's minutes sum its polls, what it heard and what its listeners heard
   assert.deepEqual(minute?.polls, { good: 2, unstable: 0, bad: 0 });
 });
 
+test('a minute sums how the microphone reached its encoder, and a poll without it adds nothing', () => {
+  const peers = room('a', 'b');
+  const mic = { expectedMs: 3000, deliveredMs: 1000, contextMs: 2900, reopens: 1, replacements: 0 };
+  noteVoiceReport(peers, peer(peers, 'a'), { ...poll([heard('b')]), mic }, T);
+  noteVoiceReport(
+    peers,
+    peer(peers, 'a'),
+    { ...poll([heard('b')]), mic: { ...mic, reopens: 0, replacements: 1 } },
+    T + 3000
+  );
+  noteVoiceReport(peers, peer(peers, 'a'), poll([heard('b')]), T + 6000);
+
+  assert.deepEqual(peer(peers, 'a').voice?.minutes[0]?.mic, {
+    expectedMs: 6000,
+    deliveredMs: 2000,
+    contextMs: 5800,
+    reopens: 1,
+    replacements: 1
+  });
+  noteVoiceReport(peers, peer(peers, 'b'), poll([heard('a')]), T);
+  assert.deepEqual(peer(peers, 'b').voice?.minutes[0]?.mic, {
+    expectedMs: 0,
+    deliveredMs: 0,
+    contextMs: 0,
+    reopens: 0,
+    replacements: 0
+  });
+});
+
 test('a rejoined seat keeps its minutes and is told its verdict afresh', () => {
   const peers = room('a', 'b');
   noteVoiceReport(peers, peer(peers, 'a'), poll([heard('b')]), T);

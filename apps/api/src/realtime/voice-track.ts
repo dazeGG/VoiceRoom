@@ -87,6 +87,7 @@ function minuteOf(voice: PeerVoice, at: number): VoiceMinuteSample {
     jitterBufferMsSum: 0,
     jitterBufferPolls: 0,
     uplink: { packets: 0, lost: 0 },
+    mic: { expectedMs: 0, deliveredMs: 0, contextMs: 0, reopens: 0, replacements: 0 },
     transport: null
   };
   voice.minutes.push(minute);
@@ -134,7 +135,7 @@ function reportOf(peer: VoicePeer & { voice: PeerVoice }, inRoom: (peerId: strin
 export function noteVoiceReport<Peer extends VoicePeer>(
   peers: ReadonlyMap<string, Peer>,
   peer: Peer,
-  poll: Pick<VoicePoll, 'rttMs' | 'jitterBufferMs' | 'uplink' | 'transport' | 'heard'>,
+  poll: Pick<VoicePoll, 'rttMs' | 'jitterBufferMs' | 'uplink' | 'transport' | 'heard' | 'mic'>,
   at: number
 ): VoiceChange<Peer>[] {
   const voice = (peer.voice ??= emptyVoice());
@@ -173,6 +174,13 @@ export function noteVoiceReport<Peer extends VoicePeer>(
   }
   minute.uplink.packets += poll.uplink.packets;
   minute.uplink.lost += poll.uplink.lost;
+  if (poll.mic) {
+    minute.mic.expectedMs += poll.mic.expectedMs;
+    minute.mic.deliveredMs += poll.mic.deliveredMs;
+    minute.mic.contextMs += poll.mic.contextMs;
+    minute.mic.reopens += poll.mic.reopens;
+    minute.mic.replacements += poll.mic.replacements;
+  }
   minute.transport = poll.transport ?? minute.transport;
 
   const changes = judgeRoom(peers, at);

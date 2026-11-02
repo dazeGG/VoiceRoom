@@ -29,6 +29,8 @@ export type VoiceMinuteSample = {
   jitterBufferMsSum: number;
   jitterBufferPolls: number;
   uplink: { packets: number; lost: number };
+  /** How its microphone reached the encoder; all zero while it was muted or the browser did not say. */
+  mic: { expectedMs: number; deliveredMs: number; contextMs: number; reopens: number; replacements: number };
   /** The latest the minute saw. */
   transport: VoiceTransport | null;
 };
@@ -152,7 +154,7 @@ export function createVoiceSessionRepository({
 
 export type VoiceSessionRepository = ReturnType<typeof createVoiceSessionRepository>;
 
-// A row is 20 values, so this keeps a long call's minutes well under the 65535 parameters of one statement.
+// A row is 25 values, so this keeps a long call's minutes well under the 65535 parameters of one statement.
 const SAMPLE_BATCH = 1000;
 
 // The columns are 4-byte integers; a client's counts are bounded per poll, not per minute.
@@ -179,6 +181,11 @@ function sampleRow(stayId: string, minute: VoiceMinuteSample) {
     jitter_buffer_polls: int(minute.jitterBufferPolls),
     uplink_packets: int(minute.uplink.packets),
     uplink_lost: int(minute.uplink.lost),
+    mic_expected_ms: int(minute.mic.expectedMs),
+    mic_delivered_ms: int(minute.mic.deliveredMs),
+    mic_context_ms: int(minute.mic.contextMs),
+    mic_reopens: int(minute.mic.reopens),
+    mic_replacements: int(minute.mic.replacements),
     transport: minute.transport
   };
 }
