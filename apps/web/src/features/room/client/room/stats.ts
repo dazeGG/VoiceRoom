@@ -15,6 +15,8 @@ import {
 } from './call-quality';
 import { isSystemBusy, noteCallStrain, type StrainCounts } from './call-strain';
 import { createLossWindow } from './loss-window';
+import { noteMicSend, takeMicPoll, type MicReading } from './mic-send';
+import { getMicrophoneProcessors, isMicrophoneProcessingIdle } from '../services/microphone-service';
 
 import { createLogger, errorContext } from '@/shared/log';
 
@@ -65,6 +67,7 @@ const MAX_REPORTED_MS = 600_000;
 /** The poll as the server judges the room from it (room.voice.report); it answers with room.voice.quality. */
 function postVoicePoll(inbound: InboundCounts, outbound: OutboundCounts): void {
   const report = (ms: number | null) => (ms === null ? null : Math.min(MAX_REPORTED_MS, Math.max(0, ms)));
+  const mic = takeMicPoll();
   reportVoicePoll({
     roomId: state.roomId,
     peerId: state.peerId,
@@ -73,8 +76,33 @@ function postVoicePoll(inbound: InboundCounts, outbound: OutboundCounts): void {
     jitterBufferMs: report(inbound.jitterBufferMs),
     uplink: { packets: outbound.outboundPackets, lost: outbound.outboundLost },
     transport: state.localNetwork.transport,
-    heard: inbound.heard
+    heard: inbound.heard,
+    ...(mic ? { mic } : {})
   });
+}
+
+/**
+ * The microphone's way to its encoder, read from its own sender. Nothing while
+ * it is muted (its capture is suspended on purpose), while the connection is
+ * not up, or where the browser does not count it: a count that never moved
+ * says nothing, so a browser without it is never taken for a stalled microphone.
+ */
+function readMicSend(stats: Map<string, RtcStat>): MicReading | null {
+  const publication = state.localMicPublication;
+  if (!publication || state.voiceConnection !== 'connected' || isMicrophoneProcessingIdle()) return null;
+  const context = getMicrophoneProcessors(state.micProcessor)[0]?.context;
+  if (!context || context.state === 'closed') return null;
+  const reports = [...stats.values()];
+  const source = reports.find((report) => report.type === 'media-source' && report.kind === 'audio');
+  // A sender without its track has no media-source; the rest of the report still has the clock.
+  const atMs = source?.timestamp ?? reports.find((report) => report.timestamp !== undefined)?.timestamp;
+  if (atMs === undefined) return null;
+  return {
+    atMs,
+    deliveredSeconds: source?.totalSamplesDuration ?? 0,
+    contextSeconds: context.currentTime,
+    upstreamPaused: publication.track?.isUpstreamPaused === true
+  };
 }
 
 // The browser's counters only ever grow. Each poll keeps the previous reading
@@ -318,6 +346,7 @@ async function updateLocalLiveKitLatency(): Promise<OutboundCounts> {
   try {
     const publication = state.localMicPublication || findLocalMicrophonePublication() || findFirstLocalPublication();
     const stats = readRtcStats(await publication?.track?.getRTCStatsReport?.());
+    noteMicSend(readMicSend(stats));
     const rttMs = getRoundTripTimeFromStats(stats);
     if (rttMs !== null) {
       state.localPingMs = Math.max(0, Math.round(rttMs));
