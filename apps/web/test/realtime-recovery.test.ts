@@ -310,3 +310,189 @@ test('a request that got no answer during recovery is retried and logged as unav
   });
   assert.equal(sanitizeRecoveryCode('unavailable'), 'unavailable');
 });
+
+test('an asked replacement that keeps failing keeps the standing connection and leaves no timer behind', async () => {
+  const made: unknown[] = [];
+  const { controller, clock } = createController({
+    attemptReplacement: async (context) => {
+      made.push(context);
+      return { retryable: true, code: 'internal', status: 503 };
+    },
+    maxAttempts: 2,
+    retryDelaysMs: [100]
+  });
+  controller.appSnapshotApplied({ appEpoch: 4, active: true, hasLocalPeer: true });
+  controller.livekitReconciled();
+  assert.equal(controller.requestLiveKitReplacement(), true);
+  controller.appSnapshotApplied({ appEpoch: 4, active: true, hasLocalPeer: true });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  clock.advance(100);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(made.length, 2);
+  const after = controller.getSnapshot();
+  assert.equal(after.phase, 'healthy');
+  assert.equal(after.livekitReady, true);
+  assert.equal(after.snapshotReady, true);
+  assert.equal(clock.pending(), 0, 'no cooldown would try again on a microphone that has recovered');
+});
+
+test('an asked replacement whose snapshot is refused keeps the standing connection', () => {
+  const { controller } = createController();
+  controller.appSnapshotApplied({ appEpoch: 4, active: true, hasLocalPeer: true });
+  controller.livekitReconciled();
+  controller.requestLiveKitReplacement();
+  controller.appSnapshotRequestFailed({ code: 'invalid_session' });
+  assert.equal(controller.getSnapshot().phase, 'healthy');
+  assert.equal(controller.getSnapshot().livekitReady, true);
+});
+
+test('a resync still retrying when the app connection went away fails nothing: the call waits for its socket', () => {
+  const { controller } = createController();
+  controller.appSnapshotApplied({ appEpoch: 4, active: true, hasLocalPeer: true });
+  controller.livekitReconciled();
+  controller.requestLiveKitReplacement();
+  controller.appWsLost(4);
+  controller.appSnapshotRequestFailed({ code: 'transport_error' });
+  assert.equal(controller.getSnapshot().phase, 'waiting-app-snapshot');
+  controller.appWsRestored(5);
+  controller.appSnapshotApplied({ appEpoch: 5, active: true, hasLocalPeer: true });
+  assert.equal(controller.getSnapshot().phase, 'healthy');
+});
+
+function healthy(overrides: Parameters<typeof createController>[0] = {}) {
+  const made = createController(overrides);
+  made.controller.appSnapshotApplied({ appEpoch: 4, active: true, hasLocalPeer: true });
+  made.controller.livekitReconciled();
+  return made;
+}
+
+test('a resync failing after its replacement was abandoned does not fail a healthy call', () => {
+  const { controller, clock } = healthy();
+  controller.requestLiveKitReplacement();
+  controller.appSnapshotRequestFailed({ code: 'invalid_session' });
+  assert.equal(controller.getSnapshot().phase, 'healthy');
+  controller.appSnapshotRequestFailed({ code: 'transport_error' });
+  assert.equal(controller.getSnapshot().phase, 'healthy');
+  assert.equal(clock.pending(), 0);
+});
+
+test('the app connection going away ends an asked replacement: none fires when it is back', async () => {
+  const { controller, attempts } = healthy();
+  controller.requestLiveKitReplacement();
+  controller.appWsLost(4);
+  controller.appWsRestored(5);
+  controller.appSnapshotApplied({ appEpoch: 5, active: true, hasLocalPeer: true });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(attempts.length, 0);
+  assert.equal(controller.getSnapshot().phase, 'healthy');
+});
+
+test('an attempt still running when its replacement is abandoned may not take over', async () => {
+  const pending = deferred();
+  const { controller } = healthy({ attemptReplacement: () => pending.promise });
+  controller.requestLiveKitReplacement();
+  controller.appSnapshotApplied({ appEpoch: 4, active: true, hasLocalPeer: true });
+  const attemptEpoch = controller.getSnapshot().epoch;
+  assert.equal(controller.isCurrent(attemptEpoch), true);
+  controller.appSnapshotRequestFailed({ code: 'invalid_session' });
+  assert.equal(controller.isCurrent(attemptEpoch), false);
+  pending.resolve({ ok: true });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(controller.getSnapshot().phase, 'healthy');
+});
+
+test('a snapshot without this peer ends an asked replacement instead of leaving it waiting', () => {
+  const { controller, attempts } = healthy();
+  controller.requestLiveKitReplacement();
+  assert.equal(controller.appSnapshotApplied({ appEpoch: 4, active: true, hasLocalPeer: false }), false);
+  assert.equal(controller.getSnapshot().phase, 'healthy');
+  assert.equal(attempts.length, 0);
+});
+
+test('a real drop right after an asked replacement was reconciled gets its own snapshot request', async () => {
+  const keys = new Set<number>();
+  const { controller, attempts } = healthy({
+    requestAppSnapshot: ({ epoch }) => {
+      // As the room's realtime does: one request per recovery epoch.
+      if (keys.has(epoch)) return false;
+      keys.add(epoch);
+      return true;
+    }
+  });
+  controller.requestLiveKitReplacement();
+  controller.livekitReconciled();
+  controller.livekitDisconnected();
+  assert.notEqual(controller.getSnapshot().phase, 'failed');
+  controller.appSnapshotApplied({ appEpoch: 4, active: true, hasLocalPeer: true });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(attempts.length, 1);
+  assert.equal(controller.getSnapshot().phase, 'healthy');
+});
+
+test('offline and back with both connections standing is healthy again, and may be replaced', () => {
+  const { controller } = healthy();
+  controller.networkOffline();
+  assert.equal(controller.requestLiveKitReplacement(), false);
+  controller.networkOnline();
+  assert.equal(controller.getSnapshot().phase, 'healthy');
+  assert.equal(controller.requestLiveKitReplacement(), true);
+});
+
+test('a connection that reconnects by itself ends an asked replacement, and its attempt may not take over', async () => {
+  const pending = deferred();
+  const { controller } = healthy({ attemptReplacement: () => pending.promise });
+  controller.requestLiveKitReplacement();
+  controller.appSnapshotApplied({ appEpoch: 4, active: true, hasLocalPeer: true });
+  const attemptEpoch = controller.getSnapshot().epoch;
+  controller.livekitReconnecting();
+  controller.livekitReconciled();
+  assert.equal(controller.getSnapshot().phase, 'healthy');
+  assert.equal(controller.isCurrent(attemptEpoch), false);
+  pending.resolve({ ok: true });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(controller.getSnapshot().phase, 'healthy');
+});
+
+test('a preview of the same room says nothing of the call: the asked replacement goes on', async () => {
+  const { controller, attempts } = healthy();
+  controller.requestLiveKitReplacement();
+  assert.equal(controller.appSnapshotApplied({ appEpoch: 4, active: false, hasLocalPeer: false }), false);
+  assert.equal(controller.getSnapshot().phase, 'waiting-app-snapshot');
+  controller.appSnapshotApplied({ appEpoch: 4, active: true, hasLocalPeer: true });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(attempts.length, 1);
+  assert.equal(controller.getSnapshot().phase, 'healthy');
+});
+
+test('abandoning with the app connection down leaves a later real drop all its attempts', () => {
+  const pending = deferred();
+  const { controller } = healthy({ attemptReplacement: () => pending.promise });
+  controller.requestLiveKitReplacement();
+  controller.appSnapshotApplied({ appEpoch: 4, active: true, hasLocalPeer: true });
+  assert.equal(controller.getSnapshot().attempts, 1);
+  controller.appWsLost(4);
+  assert.equal(controller.getSnapshot().attempts, 0);
+});
+
+test('a real drop after an asked replacement went through, before its snapshot, gets a snapshot request of its own', async () => {
+  const pending = deferred();
+  const asked = new Set<number>();
+  const { controller } = healthy({
+    attemptReplacement: () => pending.promise,
+    requestAppSnapshot: ({ epoch }) => {
+      // As the room's realtime does: one request per recovery epoch.
+      if (asked.has(epoch)) return false;
+      asked.add(epoch);
+      return true;
+    }
+  });
+  controller.requestLiveKitReplacement();
+  controller.appSnapshotApplied({ appEpoch: 4, active: true, hasLocalPeer: true });
+  controller.appWsRestored(5);
+  pending.resolve({ ok: true });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(controller.getSnapshot().phase, 'waiting-app-snapshot');
+  controller.livekitDisconnected();
+  assert.equal(controller.getSnapshot().phase, 'waiting-app-snapshot');
+  assert.equal(asked.size, 2);
+});

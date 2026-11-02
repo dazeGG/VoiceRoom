@@ -45,6 +45,9 @@ export interface RealtimeRecoveryOptions {
   cooldownMs?: number;
 }
 
+/** The trigger of the transition in which an asked replacement gave way to the standing connection. */
+export const REPLACEMENT_ABANDONED = 'replacement_abandoned';
+
 const DEFAULT_RETRY_DELAYS_MS: readonly number[] = Object.freeze([500, 1_000, 2_000, 4_000]);
 const DEFAULT_MAX_ATTEMPTS = 5;
 const DEFAULT_COOLDOWN_MS = 10_000;
@@ -108,6 +111,8 @@ export class RealtimeRecoveryController {
   snapshotReady: boolean;
   livekitReady: boolean;
   replacementRequired: boolean;
+  optionalReplacement: boolean;
+  abandonedSnapshotRequest: boolean;
   attempts: number;
   startedAt: number;
   effectGeneration: number;
@@ -156,6 +161,8 @@ export class RealtimeRecoveryController {
     this.snapshotReady = false;
     this.livekitReady = false;
     this.replacementRequired = false;
+    this.optionalReplacement = false;
+    this.abandonedSnapshotRequest = false;
     this.attempts = 0;
     this.startedAt = 0;
     this.effectGeneration = 0;
@@ -183,6 +190,8 @@ export class RealtimeRecoveryController {
     this.snapshotReady = false;
     this.livekitReady = false;
     this.replacementRequired = false;
+    this.optionalReplacement = false;
+    this.abandonedSnapshotRequest = false;
     this.attempts = 0;
     this.phase = 'waiting-app-snapshot';
     this.startedAt = this.now();
@@ -209,6 +218,8 @@ export class RealtimeRecoveryController {
       this.emit('app_ws_lost', 'ignored');
       return false;
     }
+    // It could fire long after the socket comes back, on a connection that is fine by then.
+    if (this.optionalReplacement) this.keepStandingConnection('app_ws_lost', {});
     if (this.phase !== 'healthy') {
       this.clearRetryTimer();
       this.effectGeneration += 1;
@@ -258,6 +269,9 @@ export class RealtimeRecoveryController {
   }): boolean {
     if (!this.active || appEpoch !== this.appEpoch || !active || !hasLocalPeer) {
       this.emit('app_snapshot', 'rejected');
+      if (this.active && appEpoch === this.appEpoch && this.optionalReplacement && active) {
+        this.keepStandingConnection('rejected', {});
+      }
       return false;
     }
     this.snapshotReady = true;
@@ -276,6 +290,13 @@ export class RealtimeRecoveryController {
   appSnapshotRequestFailed(error: unknown): void {
     if (!this.active) return;
     const classified = classifyRecoveryFailure(error);
+    // The answer to a request nothing waits for any more: an abandoned replacement's
+    // keeps retrying for seconds, and the call may be waiting for its socket by then.
+    if (this.phase === 'healthy' || this.abandonedSnapshotRequest) {
+      this.abandonedSnapshotRequest = false;
+      this.emit('app_snapshot_failed', 'ignored', this.attempts, classified.status, classified.code);
+      return;
+    }
     this.emit(
       'app_snapshot_failed',
       classified.retryable ? 'retryable' : 'terminal',
@@ -296,6 +317,12 @@ export class RealtimeRecoveryController {
 
   livekitReconciled(): void {
     if (!this.active) return;
+    // The standing connection came back by itself: nothing was replaced, and the
+    // attempt must not go on to replace it. A stall that outlives this comes back.
+    if (this.optionalReplacement) {
+      this.keepStandingConnection('reconciled', {});
+      return;
+    }
     this.effectGeneration += 1;
     this.clearRetryTimer();
     this.inFlight = false;
@@ -308,14 +335,37 @@ export class RealtimeRecoveryController {
   livekitDisconnected(): void {
     if (!this.active) return;
     const alreadyWaiting = this.replacementRequired && !this.livekitReady;
+    const wasOptional = this.optionalReplacement;
+    // The connection is really gone now: a replacement already under way is no longer optional.
+    this.optionalReplacement = false;
     this.livekitReady = false;
     this.replacementRequired = true;
     if (!alreadyWaiting) {
+      // Snapshot requests are one per epoch, and the asked replacement already made this one's.
+      if (wasOptional) this.epoch += 1;
       this.snapshotReady = false;
       this.beginRecovery('livekit_disconnected');
       this.setPhase('waiting-app-snapshot', 'livekit_disconnected');
       this.requestSnapshot();
     }
+  }
+
+  /**
+   * A new connection for one that still stands (the microphone stopped reaching
+   * it). Runs like the recovery of a lost connection, except that failing leaves
+   * the standing connection in place instead of a failed recovery. False when a
+   * recovery is already running, or the room is not healthy to begin with.
+   */
+  requestLiveKitReplacement(): boolean {
+    if (!this.active || this.phase !== 'healthy') return false;
+    this.optionalReplacement = true;
+    this.livekitReady = false;
+    this.replacementRequired = true;
+    this.snapshotReady = false;
+    this.beginRecovery('livekit_replacement_requested');
+    this.setPhase('waiting-app-snapshot', 'livekit_replacement_requested');
+    this.requestSnapshot();
+    return true;
   }
 
   networkOffline(): void {
@@ -329,6 +379,10 @@ export class RealtimeRecoveryController {
     this.isNetworkOnline = true;
     if (this.phase === 'failed') {
       this.markMeaningfulRearm('network_online', true);
+      return;
+    }
+    if (this.phase === 'recovering' && !this.replacementRequired && this.livekitReady && this.snapshotReady) {
+      this.completeHealthy('network_online');
       return;
     }
     if (this.replacementRequired) {
@@ -376,6 +430,7 @@ export class RealtimeRecoveryController {
     this.cancelAllTimers();
     this.effectGeneration += 1;
     this.inFlight = false;
+    this.optionalReplacement = false;
     this.attempts = 0;
     this.cooldownCycles = 0;
     this.setPhase('healthy', trigger, 'succeeded');
@@ -383,6 +438,7 @@ export class RealtimeRecoveryController {
 
   requestSnapshot(): void {
     if (!this.active || !this.appConnected) return;
+    this.abandonedSnapshotRequest = false;
     const requested = this.requestAppSnapshot({ epoch: this.epoch, appEpoch: this.appEpoch });
     if (requested === false) this.appSnapshotRequestFailed({ code: 'transport_error' });
   }
@@ -445,14 +501,41 @@ export class RealtimeRecoveryController {
   // The failed transition carries the reason, so a failure report says why
   // recovery gave up instead of "unknown_error".
   fail(result: 'terminal' | 'exhausted', failure: { status?: number; code?: string } = {}): void {
+    if (this.optionalReplacement) {
+      this.keepStandingConnection(result, failure);
+      return;
+    }
     this.clearRetryTimer();
     this.failedAppEpoch = this.appEpoch;
     this.phase = 'failed';
     this.emit('recovery_failed', result, this.attempts, failure.status ?? 0, failure.code ?? 'unknown_error');
   }
 
+  // The replacement was not needed to stay in the call, so nothing is left waiting
+  // for it: no cooldown that would try again later on a microphone that has
+  // recovered, and no failed state that a real drop afterwards could not leave.
+  keepStandingConnection(result: string, failure: { status?: number; code?: string }): void {
+    this.clearRetryTimer();
+    this.effectGeneration += 1;
+    this.epoch += 1;
+    this.inFlight = false;
+    this.optionalReplacement = false;
+    this.abandonedSnapshotRequest = true;
+    this.replacementRequired = false;
+    this.livekitReady = true;
+    this.emit(REPLACEMENT_ABANDONED, result, this.attempts, failure.status ?? 0, failure.code ?? 'unknown_error');
+    this.attempts = 0;
+    if (this.appConnected) {
+      this.snapshotReady = true;
+      this.completeHealthy(REPLACEMENT_ABANDONED);
+    } else {
+      this.setPhase('waiting-app-snapshot', REPLACEMENT_ABANDONED);
+    }
+  }
+
   enterCooldown(failure: { status?: number; code?: string } = {}): void {
     this.fail('exhausted', failure);
+    if (this.phase !== 'failed') return;
     this.cooldownComplete = false;
     this.meaningfulRearm = false;
     this.rearmNeedsSnapshotRequest = false;

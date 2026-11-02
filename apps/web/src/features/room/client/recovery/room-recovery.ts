@@ -1,4 +1,5 @@
 import {
+  REPLACEMENT_ABANDONED,
   RealtimeRecoveryController,
   classifyRecoveryFailure,
   type RecoveryTransition,
@@ -110,6 +111,30 @@ export function notifyLiveKitReconciled(): void {
 
 export function notifyLiveKitDisconnected(): void {
   controller?.livekitDisconnected();
+}
+
+/**
+ * Asks for a new LiveKit connection although the current one stands. Null when a
+ * recovery is running or nothing is joined; otherwise answers once it is over,
+ * whether the connection was replaced.
+ */
+export function requestLiveKitReplacement(): Promise<boolean> | null {
+  const current = controller;
+  if (!current) return null;
+  let answer = (_replaced: boolean) => {};
+  const replaced = new Promise<boolean>((resolve) => {
+    answer = resolve;
+  });
+  // Listening first: an attempt can be abandoned before the request returns.
+  const unsubscribe = subscribeRoomRecoveryTransitions(({ phase, trigger }) => {
+    const gaveUp = trigger === REPLACEMENT_ABANDONED || phase === 'failed' || phase === 'cancelled';
+    if (!gaveUp && phase !== 'healthy') return;
+    unsubscribe();
+    answer(!gaveUp);
+  });
+  if (current.requestLiveKitReplacement()) return replaced;
+  unsubscribe();
+  return null;
 }
 
 export function isCurrentRoomRecoveryEpoch(epoch: number): boolean {
