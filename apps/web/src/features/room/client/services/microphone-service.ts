@@ -486,7 +486,7 @@ export const PROCESSING_RESUME_CHECK_MS = 1500;
 let processingSuspendTimer = 0;
 const suspendedContexts = new WeakSet<AudioContext>();
 
-function isMicrophoneProcessingIdle(): boolean {
+export function isMicrophoneProcessingIdle(): boolean {
   return state.muted && isMicrophoneShownMuted();
 }
 

@@ -172,6 +172,9 @@ export async function attemptFreshLiveKitReplacement({
       .sort()
       .join(':') ?? '') === screenTrackIds;
   const isCurrent = () => identityCurrent() && state.livekitRoom === oldRoom;
+  const sameCall = () =>
+    state.joined && state.roomId === roomId && state.peerId === peerId && state.sessionToken === sessionToken;
+  let committed = false;
   let candidate: Room | null = null;
   let microphonePublication: LocalTrackPublication | null = null;
   let screenPublications = new Map<string, LocalTrackPublication>();
@@ -183,7 +186,10 @@ export async function attemptFreshLiveKitReplacement({
 
     candidate = await connectLiveKitWithFallback(credentials, isCurrent);
     if (!candidate || !isCurrent()) return { retryable: true, code: 'transport_error' };
-    const eventCurrent = () => identityCurrent() && (state.livekitRoom === oldRoom || state.livekitRoom === candidate);
+    // The attempt's epoch and streams only decide whether it may still commit. Once
+    // it has, they change in the ordinary course of a call (a new capture, a screen
+    // share, a later recovery) and the room must keep hearing its events.
+    const eventCurrent = () => (committed ? sameCall() : isCurrent());
     if (!(await bindLiveKitRoomEvents(candidate, eventCurrent)) || !isCurrent()) {
       await disconnectLiveKitRoomInstance(candidate);
       return { retryable: true, code: 'transport_error' };
@@ -205,6 +211,7 @@ export async function attemptFreshLiveKitReplacement({
 
     // Commit the fully reconciled candidate as one state transition. Until this
     // point its guarded event handlers cannot mutate shared room state.
+    committed = true;
     state.livekitRoom = candidate;
     state.localMicPublication = microphonePublication;
     state.localScreenPublications = screenPublications;

@@ -52,8 +52,13 @@ export interface LiveKitHarness {
     unpublished: unknown[];
     /** Calls the handlers bound to a RoomEvent, as LiveKit does. */
     emit(event: string, ...args: unknown[]): void;
+    /** The server ends the session: unless told otherwise, LiveKit stops the tracks the room published. */
+    dropByServer(): void;
   }>;
 }
+
+const isStoppable = (track: unknown): track is { stop(): void } =>
+  typeof track === 'object' && track !== null && 'stop' in track && typeof track.stop === 'function';
 
 const P = '@/features/room/client';
 
@@ -67,7 +72,7 @@ export async function loadLiveKitHarness(
     /** What the raw-microphone silence check answers. */
     inputSilent?: () => Promise<boolean>;
     /** Whether a recovery epoch is still current. */
-    recoveryEpochCurrent?: () => boolean;
+    recoveryEpochCurrent?: (epoch: number) => boolean;
     /** The codec this browser would send a camera in. */
     cameraCodec?: 'h264' | 'vp8';
   } = {}
@@ -136,6 +141,12 @@ export async function loadLiveKitHarness(
     }
     async disconnect() {
       this.disconnected = true;
+    }
+    dropByServer() {
+      if (this.roomOptions.stopLocalTrackOnUnpublish !== false) {
+        for (const { track } of this.published) if (isStoppable(track)) track.stop();
+      }
+      this.emit('Disconnected');
     }
   }
   const RoomEvent = new Proxy({}, { get: (_target, name) => String(name) });
@@ -260,7 +271,7 @@ export async function loadLiveKitHarness(
     refreshScreenTiles: () => {}
   }));
   vi.doMock(`${P}/recovery/room-recovery`, () => ({
-    isCurrentRoomRecoveryEpoch: () => options.recoveryEpochCurrent?.() ?? true,
+    isCurrentRoomRecoveryEpoch: (epoch: number) => options.recoveryEpochCurrent?.(epoch) ?? true,
     notifyLiveKitDisconnected: () => {},
     notifyLiveKitReconciled: () => {},
     notifyLiveKitReconnecting: () => {},

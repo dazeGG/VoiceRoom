@@ -60,6 +60,7 @@ const LOG_EVENTS = Object.freeze({
   ROOM_SUMMARY_FLUSH_FAILED: 'room.summary_flush_failed',
   ROOM_INVITATION_EXPIRY_FAILED: 'room.invitation_expiry_failed',
   ROOM_VOICE_SESSION_RECORD_FAILED: 'room.voice_session_record_failed',
+  ROOM_MIC_STALL_RECOVERY: 'room.mic_stall_recovery',
 
   // LiveKit admission boundary.
   LIVEKIT_ADMISSION_DENIED: 'livekit.admission_denied',

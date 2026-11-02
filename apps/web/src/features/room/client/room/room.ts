@@ -48,10 +48,12 @@ import {
   refreshDevices,
   refreshMicrophoneLevelMeter,
   relieveNoiseSuppression,
+  reopenMicrophone,
   watchLocalMicrophone
 } from '../ui/devices';
 import { startCpuPressureWatch, stopCpuPressureWatch } from '../services/cpu-pressure';
 import { noteCpuPressure, startCallStrainWatch, stopCallStrainWatch } from './call-strain';
+import { canRecoverMic, startMicSendWatch, stopMicSendWatch } from './mic-send';
 import {
   finishCallQuality,
   type CallQualitySummary,
@@ -78,6 +80,7 @@ import {
   notifyRoomAppConnection,
   notifyRoomNetworkOffline,
   notifyRoomNetworkOnline,
+  requestLiveKitReplacement,
   notifyLiveKitReconciled,
   startRoomRecovery
 } from '../recovery/room-recovery';
@@ -313,6 +316,11 @@ async function performJoinRoom(generation: number): Promise<void> {
       });
       void relieveVideo().then(() => recordCpuRelief());
     });
+    startMicSendWatch({
+      reopen: reopenMicrophone,
+      replace: requestLiveKitReplacement,
+      canRecover: canRecoverMic
+    });
     startCpuPressureWatch({
       onState: (pressure) => {
         recordCpuPressure(pressure);
@@ -426,6 +434,7 @@ export function leaveRoom(): void {
   stopVideoVisibilitySync = null;
   stopCpuPressureWatch();
   stopCallStrainWatch();
+  stopMicSendWatch();
   noteFinishedCall(disconnectedRoomId, finishCallQuality());
 
   state.muted = false;

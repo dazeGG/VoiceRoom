@@ -115,6 +115,24 @@ export const VoiceTransport = Type.Union([Type.Literal('udp'), Type.Literal('tcp
 export type VoiceTransport = Static<typeof VoiceTransport>;
 
 /**
+ * Whether this peer's microphone reached its encoder over the poll. Sound that
+ * never reaches the encoder is lost no packet, so the uplink counts cannot show
+ * it. `deliveredMs` falling behind `expectedMs` with `contextMs` keeping up says
+ * the capture ran and gave nothing; with `contextMs` behind too, the capture
+ * itself stopped. Absent while the microphone is muted, and where the browser
+ * does not count it.
+ */
+export const MicPoll = Type.Object({
+  expectedMs: PollCount,
+  deliveredMs: PollCount,
+  contextMs: PollCount,
+  /** How often the client rebuilt the capture, or the media connection, for a stalled microphone. */
+  reopens: PollCount,
+  replacements: PollCount
+});
+export type MicPoll = Static<typeof MicPoll>;
+
+/**
  * One stats poll of a peer in voice: what it heard of each speaker since the
  * previous poll, its own uplink and its round trip. The server judges the room
  * from these (voice-quality.ts judgeVoice) and answers with room.voice.quality.
@@ -127,7 +145,8 @@ export const VoicePoll = Type.Object({
   /** Audio packets sent, and those the server reported it never got. */
   uplink: Type.Object({ packets: PollCount, lost: PollCount }),
   transport: Nullable(VoiceTransport),
-  heard: Type.Array(HeardPoll, { maxItems: 64 })
+  heard: Type.Array(HeardPoll, { maxItems: 64 }),
+  mic: Type.Optional(MicPoll)
 });
 export type VoicePoll = Static<typeof VoicePoll>;
 

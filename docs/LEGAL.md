@@ -28,9 +28,12 @@ retention period, change it there too.
    Russian citizens to be collected and stored in a database in Russia, and
    the policy says so. Check the prod VPS location in the Aeza panel; if it is
    abroad, move the service before publishing the policy.
-2. **Mailbox.** Set up `support@voiceroom.ru`: the policy and the terms give it
-   for data requests and complaints. Requests must be answered within 10
-   working days.
+2. **Mailbox.** Done: `support@voiceroom.ru` runs on VK WorkSpace, with MX, SPF,
+   DKIM and DMARC published; SPF, DKIM and DMARC passed in Gmail on 2026-11-01.
+   The policy and the terms give it for data requests and complaints. Requests
+   must be answered within 10 working days. The `mailru-domain` TXT record that
+   verified the domain is no longer in DNS; put it back alongside SPF if VK
+   WorkSpace reports the domain as unverified.
 3. **Platform administrator.** Put your account id into
    `PLATFORM_ADMIN_USER_IDS` in the host `.env` (find it with
    `SELECT id FROM users WHERE login = '<login>'`), then
