@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 // Downloads the free DB-IP City Lite database (CC BY 4.0, https://db-ip.com),
 // which the API uses for the city and country in the signed-in devices list.
-// DB-IP publishes a new file every month: run this monthly on the server and
-// restart the API so it reopens the file.
+// DB-IP publishes a new file every month: run this monthly on the server. The
+// API notices the new file at its next lookup, so it needs no restart.
 //
 //   node scripts/geoip/fetch-dbip-city-lite.mjs geoip/dbip-city-lite.mmdb
 import { mkdir, rename, writeFile } from 'node:fs/promises';

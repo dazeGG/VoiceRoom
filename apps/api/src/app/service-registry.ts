@@ -275,7 +275,7 @@ export function createServiceRegistry(config: ServiceRegistryConfig, deps: Servi
   );
   // Web Push and the Android app: what the dispatch sends a push through.
   const pushDelivery = cached(() => createPushFanout(() => [{ name: 'web', ...pushService.get() }, nativePush.get()]));
-  // Not on the pool: the reader of the GeoIP file is opened once.
+  // Not on the pool: one locator holds the reader of the GeoIP file and follows its changes.
   let geoLocator: ReturnType<typeof createGeoLocator> | null = null;
   const getGeoLocator = () => (geoLocator ??= createGeoLocator({ databasePath: GEOIP_DB_PATH }));
   // An address becomes its keyed hash and its city; the address itself is never kept.
