@@ -162,7 +162,7 @@ VAPID_SUBJECT
 
 ## CI/CD (GitHub Actions)
 
-Пайплайн описан в `.github/workflows/ci.yml`. Проверки запускаются для pull request и push в `develop`. Тег их не повторяет: защита `main` пускает туда только PR с зелёными проверками, актуальный относительно `main`. Ветки, PR, коммиты, hotfix и релизы ведутся по [`GIT_FLOW.md`](./GIT_FLOW.md):
+Пайплайн описан в `.github/workflows/ci.yml`. Проверки запускаются для pull request и push в `develop`. `main` и теги их не повторяют: защита `main` не пускает туда коммит без зелёных проверок на ветке, актуальной относительно `main`. Ветки, PR, коммиты, hotfix и релизы ведутся по [`GIT_FLOW.md`](./GIT_FLOW.md):
 
 - **policy** — проверяет допустимый Git Flow маршрут PR и Conventional Commit формат PR title.
 - **check** — `npm ci`, `npm run check` (tsc, vue-tsc, ESLint и Prettier по shared, api и web), `npm run build` (Vite).
@@ -172,9 +172,9 @@ VAPID_SUBJECT
 
 **Деплой** (`.github/workflows/deploy.yml`, вызывается из `ci.yml` после публикации образов; на `develop` образы собираются только после зелёных `check`, `test`, `test-web`, `voice-join` и G05):
 
-- **images** — на каждый push в `develop` и тег `v*` собирает таргеты `api`, `worker`, `web` и публикует `ghcr.io/dazegg/voiceroom-<target>:<commit-sha>`.
+- **images** — на каждый push в `develop`, `main` и тег `v*` собирает таргеты `api`, `worker`, `web` и публикует `ghcr.io/dazegg/voiceroom-<target>:<commit-sha>`.
 - **deploy-dev** — push в `develop` сразу выкатывается на dev (environment `dev`, https://dev.voiceroom.ru).
-- **deploy-production** — тег `v*` на коммите из `main`, совпадающий с версией в `package.json`, сразу выкатывается на прод без ручного подтверждения: environment `production` только ограничивает деплой тегами `v*` (https://voiceroom.ru).
+- **deploy-production** — тег `v*` на коммите, влитом в `main` (первый родитель), совпадающий с версией в `package.json`, сразу выкатывается на прод без ручного подтверждения: environment `production` только ограничивает деплой тегами `v*` (https://voiceroom.ru).
 
 Выкатку делает `scripts/cd/remote-deploy.sh` на сервере по SSH: бэкап `.env` и `pg_dump` в `deploy-backups/ci/` (хранятся 5 последних, а дампы и копии `.env` старше 30 дней удаляются и в `deploy-backups/ci/`, и в `deploy-backups/manual/`), `git checkout` коммита, `docker pull` образов, подстановка `VOICEROOM_*_IMAGE` в `.env`, `docker compose config`, `docker compose up -d --wait`. Если любой шаг падает, возвращаются прежние коммит, `.env` и контейнеры. Миграции при этом **не откатываются** — после неудачной миграции восстанавливайте БД из дампа (см. «Миграции» ниже).
 

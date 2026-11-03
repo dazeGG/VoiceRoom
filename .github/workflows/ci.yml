@@ -2,7 +2,9 @@ name: CI/CD
 
 on:
   push:
-    branches: [develop]
+    # main only publishes images: a tag can restore Docker layers from the default
+    # branch's cache but not from an earlier tag's.
+    branches: [develop, main]
     tags: ['v*']
   pull_request:
     branches: [develop, main]
@@ -14,8 +16,8 @@ concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
-# A release commit reaches main only through a pull request that passed these
-# jobs while up to date with main (branch protection), so a tag does not repeat them.
+# Branch protection keeps a commit off main unless these jobs passed on it while
+# up to date with main, so neither main nor a tag on it repeats them.
 jobs:
   policy:
     name: Git Flow policy
@@ -49,7 +51,7 @@ jobs:
 
   check:
     name: Lint, typecheck & build
-    if: github.ref_type != 'tag'
+    if: github.ref_type != 'tag' && github.ref != 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -64,7 +66,7 @@ jobs:
   # API and web tests run as separate jobs so neither waits for the other.
   test:
     name: API tests
-    if: github.ref_type != 'tag'
+    if: github.ref_type != 'tag' && github.ref != 'refs/heads/main'
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -97,7 +99,7 @@ jobs:
 
   test-web:
     name: Web tests
-    if: github.ref_type != 'tag'
+    if: github.ref_type != 'tag' && github.ref != 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -111,7 +113,7 @@ jobs:
 
   voice-join:
     name: Voice room join smoke
-    if: github.ref_type != 'tag'
+    if: github.ref_type != 'tag' && github.ref != 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -137,7 +139,7 @@ jobs:
 
   goal-g05:
     name: G05 strict LiveKit gate proof
-    if: github.ref_type != 'tag'
+    if: github.ref_type != 'tag' && github.ref != 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -222,8 +224,8 @@ jobs:
   images:
     name: Publish ${{ matrix.target }} image
     needs: [check, test, test-web, voice-join, goal-g05]
-    # Skipped verification jobs (a tag) must not skip this; failed ones must.
-    if: github.event_name == 'push' && !cancelled() && !failure()
+    # Skipped verification jobs (main, a tag) must not skip this; failed or timed out ones must.
+    if: github.event_name == 'push' && !cancelled() && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled')
     runs-on: ubuntu-latest
     permissions:
       contents: read

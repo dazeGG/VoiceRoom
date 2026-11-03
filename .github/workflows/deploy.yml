@@ -20,6 +20,8 @@ permissions:
 jobs:
   deploy:
     name: Roll out to ${{ inputs.environment }}
+    # The caller decides whether to deploy, and on a tag its verification jobs are skipped.
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment:
@@ -41,8 +43,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
-            echo "::error::$GITHUB_REF_NAME does not point at a commit on main"
+          # First parents only: a commit inside a merged branch is an ancestor of main
+          # but its own checks may have failed. No -q: an early exit would trip pipefail.
+          if ! git rev-list --first-parent origin/main | grep -x "$GITHUB_SHA" > /dev/null; then
+            echo "::error::$GITHUB_REF_NAME does not point at a commit merged into main"
             exit 1
           fi
           version="v$(node -p "require('./package.json').version")"
