@@ -4,11 +4,10 @@
 
 // Shorter than this is a server restart or a bad moment, which reconnecting already covers.
 const REPORTED_FROM_MS = 30_000;
-// A longer wait between two signs of life is a sleeping computer rather than an
-// unreachable server, so at most this much of it counts. With the longest wait
-// before a retry (8 seconds) on top it stays below the threshold, so that waking
-// up and failing once is not an outage.
-const COUNTED_GAP_MS = 20_000;
+// Longer than any real wait between two signs of life (a connect timeout and a
+// retry, a dead socket being noticed, a hidden tab's timers running once a
+// minute): such a gap is a computer that slept, and it does not count at all.
+const SLEEP_GAP_MS = 90_000;
 
 export type RealtimeOutageReport = {
   durationMs: number;
@@ -25,16 +24,16 @@ export class RealtimeOutage {
   private offline = false;
 
   private advance(now: number): void {
-    if (this.lastSeenAt !== null) this.unreachableMs += Math.min(now - this.lastSeenAt, COUNTED_GAP_MS);
+    if (this.lastSeenAt !== null && now - this.lastSeenAt <= SLEEP_GAP_MS) this.unreachableMs += now - this.lastSeenAt;
     this.lastSeenAt = now;
   }
 
-  /** An open socket was lost. */
-  noteLost(now: number): void {
-    this.lastSeenAt ??= now;
+  /** An open socket was lost; the server was last known to be there at `lastAlive`. */
+  noteLost(lastAlive: number): void {
+    this.lastSeenAt ??= lastAlive;
   }
 
-  /** A socket closed without ever opening. */
+  /** A socket closed or timed out without ever opening. */
   noteFailedAttempt(now: number, online: boolean): void {
     this.advance(now);
     this.attempts += 1;
@@ -46,7 +45,7 @@ export class RealtimeOutage {
     this.advance(now);
     const report = { durationMs: this.unreachableMs, attempts: this.attempts, offline: this.offline };
     this.reset();
-    return report.attempts > 0 && report.durationMs >= REPORTED_FROM_MS ? report : null;
+    return report.durationMs >= REPORTED_FROM_MS ? report : null;
   }
 
   reset(): void {

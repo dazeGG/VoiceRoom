@@ -123,15 +123,18 @@ Nothing is sent on a timer: the buffer is posted to `POST /api/client-logs` only
 when something actually failed — the room client failing to start, the recovery
 state machine reaching its terminal `failed` phase, or the realtime socket coming
 back after the server was out of reach for 30 seconds or more. Reports are
-throttled to one per 30 seconds per page.
+throttled to one per 30 seconds per page: a report held back goes out when the
+window ends, and a report that never got out does not use up the window.
 
 That last report is how a network problem between one user and the server becomes
 visible at all, because the failed connections never reached the server. It arrives
 once the connection is back, as a record with `ns: "realtime"`, the message
 `server was unreachable`, and `durationMs`, `attempts` and `offline` in `ctx`.
-`offline: true` means the browser itself reported no network at some attempt. Time
-the computer spent asleep is mostly left out of `durationMs`. The record's `at` is
-when the connection came back.
+`offline: true` means the browser itself reported no network at some attempt.
+`durationMs` starts when an open socket was last heard from, and leaves out any
+gap over 90 seconds as a computer that slept, so a shorter sleep can still count.
+`attempts` can be 0: a socket that fell silent, followed by one that opened at
+once. The record's `at` is when the connection came back.
 
 ```bash
 … | jq 'select(.evt == "client.report" and .ns == "realtime")'

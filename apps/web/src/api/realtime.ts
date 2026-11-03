@@ -32,6 +32,9 @@ const HEARTBEAT_TIMEOUT_MS = 30000;
 // After the tab comes back or the network returns, a socket that does not
 // answer a ping this fast is treated as dead rather than waited on.
 const LIVENESS_PROBE_MS = 5000;
+// A server that accepts the connection and never answers would otherwise hold
+// the handshake, and every retry after it, for minutes.
+const CONNECT_TIMEOUT_MS = 20000;
 // Typing notices, pings and stats polls are about now; sent after a reconnect they would be stale.
 const DROPPED_WHILE_DISCONNECTED: ReadonlySet<ClientCommandType> = new Set([
   'ping',
@@ -87,6 +90,8 @@ class AppRealtimeConnection {
   private probeTimer: ReturnType<typeof setTimeout> | null = null;
   private lifecycleAttached = false;
   private outage = new RealtimeOutage();
+  private connectTimer: ReturnType<typeof setTimeout> | null = null;
+  private lastHeardAt = 0;
 
   subscribe(handler: (event: RealtimeEvent) => void): () => void {
     if (isRealtimeBlocked()) return () => {};
@@ -129,20 +134,29 @@ class AppRealtimeConnection {
       clearTimeout(this.probeTimer);
       this.probeTimer = null;
     }
+    this.clearConnectTimer();
     this.heartbeatWatchdog.reset();
+  }
+
+  private clearConnectTimer(): void {
+    if (this.connectTimer) {
+      clearTimeout(this.connectTimer);
+      this.connectTimer = null;
+    }
   }
 
   // A socket whose peer stopped answering is dropped at once. close() on a
   // dead connection can wait a long time for the closing handshake before
   // onclose fires, and every message sent meanwhile is lost.
-  private abandonSocket(): void {
+  private abandonSocket(reason = 'heartbeat_timeout'): void {
     const socket = this.socket;
     this.openGeneration += 1;
     this.clearTimers();
     this.socket = null;
-    this.outage.noteLost(Date.now());
+    // Silence is what gave it away, so the outage began when it fell silent.
+    this.outage.noteLost(this.lastHeardAt);
     try {
-      socket?.close(4000, 'heartbeat_timeout');
+      socket?.close(4000, reason);
     } catch {
       // The socket is already gone.
     }
@@ -237,9 +251,17 @@ class AppRealtimeConnection {
     const socket = new WebSocket(wsUrl());
     this.socket = socket;
     let opened = false;
+    this.connectTimer = setTimeout(() => {
+      this.connectTimer = null;
+      if (this.socket !== socket || generation !== this.openGeneration) return;
+      this.outage.noteFailedAttempt(Date.now(), navigator.onLine);
+      this.abandonSocket('connect_timeout');
+    }, CONNECT_TIMEOUT_MS);
     socket.onopen = () => {
       if (this.socket !== socket || generation !== this.openGeneration) return;
       opened = true;
+      this.clearConnectTimer();
+      this.lastHeardAt = Date.now();
       this.connectionEpoch += 1;
       this.reconnectAttempt = 0;
       this.send('hello', {});
@@ -257,6 +279,7 @@ class AppRealtimeConnection {
     };
     socket.onmessage = (event: MessageEvent<unknown>) => {
       if (this.socket !== socket || generation !== this.openGeneration) return;
+      this.lastHeardAt = Date.now();
       let frame: unknown;
       try {
         frame = JSON.parse(String(event.data));

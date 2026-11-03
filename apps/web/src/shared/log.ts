@@ -46,6 +46,9 @@ const buffer: ClientLogRecord[] = [];
 const FLUSH_INTERVAL_MS = 30_000;
 let lastFlushAt = 0;
 let flushInFlight: Promise<void> | null = null;
+// A report the throttle held back goes out when the window ends, since nothing
+// else may ever send one.
+let heldReport: ReturnType<typeof setTimeout> | null = null;
 // The intake route answers 404 when an operator has not enabled it. Rather than
 // plumb a capability flag to the client, the first 404 stops further attempts
 // for the life of the page.
@@ -118,10 +121,18 @@ export function clearLogBuffer(): void {
 export async function reportClientLogs(reason: string): Promise<boolean> {
   if (!browser || !intakeAvailable || buffer.length === 0) return false;
   const at = Date.now();
-  if (at - lastFlushAt < FLUSH_INTERVAL_MS) return false;
-  if (flushInFlight) return false;
+  const sinceLast = at - lastFlushAt;
+  if (flushInFlight || sinceLast < FLUSH_INTERVAL_MS) {
+    heldReport ??= setTimeout(
+      () => {
+        heldReport = null;
+        void reportClientLogs(reason);
+      },
+      flushInFlight ? FLUSH_INTERVAL_MS : FLUSH_INTERVAL_MS - sinceLast
+    );
+    return false;
+  }
 
-  lastFlushAt = at;
   const events = buffer.slice();
   events.push({ at, level: 'error', ns: 'report', msg: reason });
 
@@ -133,6 +144,9 @@ export async function reportClientLogs(reason: string): Promise<boolean> {
         headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
         method: 'POST'
       });
+      // Only an answer uses up the window: a report that never got out says
+      // nothing about the server's limit, and the next one should not wait.
+      lastFlushAt = at;
       if (response.status === 404) intakeAvailable = false;
       // Delivered records are dropped so a later report carries what happened
       // since, not a second copy of what the log stream already holds. Only

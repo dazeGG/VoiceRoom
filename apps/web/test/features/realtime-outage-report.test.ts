@@ -106,6 +106,72 @@ test('a computer that slept and failed once on waking has no outage to report', 
   expect(reports()).toEqual([]);
 });
 
+test('a server that accepts the connection and never answers is reported for the whole time', async () => {
+  const reports = await start();
+  FakeWebSocket.latest().open();
+  FakeWebSocket.latest().serverClose(1006);
+
+  // No socket opens or closes by itself: each one waits for the connect timeout.
+  await vi.advanceTimersByTimeAsync(180_000);
+  expect(FakeWebSocket.instances.length).toBeGreaterThan(6);
+  FakeWebSocket.latest().open();
+  await vi.advanceTimersByTimeAsync(0);
+
+  const [report] = reports();
+  expect(report?.ctx).toMatchObject({ durationMs: 180_000, offline: false });
+  expect(report?.ctx?.attempts).toBeGreaterThanOrEqual(5);
+});
+
+test('a connection that opens in time is not cut off by the connect timeout', async () => {
+  await start();
+  const socket = FakeWebSocket.latest();
+  await vi.advanceTimersByTimeAsync(19_000);
+  socket.open();
+  await vi.advanceTimersByTimeAsync(5_000);
+  expect(FakeWebSocket.latest()).toBe(socket);
+  expect(socket.readyState).toBe(FakeWebSocket.OPEN);
+});
+
+test('a socket that fell silent counts from its silence, even when the next one opens at once', async () => {
+  const reports = await start();
+  FakeWebSocket.latest().open();
+
+  // No pong ever comes, so the heartbeat gives up on the socket after 45 seconds.
+  await vi.advanceTimersByTimeAsync(46_000);
+  expect(FakeWebSocket.instances).toHaveLength(2);
+  FakeWebSocket.latest().open();
+  await vi.advanceTimersByTimeAsync(0);
+
+  expect(reports()).toMatchObject([{ ctx: { attempts: 0, offline: false } }]);
+  expect(reports()[0]?.ctx?.durationMs).toBeGreaterThanOrEqual(45_000);
+});
+
+test('a socket that goes on answering is never an outage, however long it stays open', async () => {
+  const reports = await start();
+  const socket = FakeWebSocket.latest();
+  socket.open();
+  for (let beat = 0; beat < 20; beat += 1) {
+    await vi.advanceTimersByTimeAsync(15_000);
+    socket.receive({ type: 'pong', payload: { at: Date.now() } });
+  }
+  socket.serverClose(1001);
+  await failAttempts(1);
+  await reconnect();
+  expect(reports()).toEqual([]);
+});
+
+test('a computer that slept with no socket open does not count the waking moments as an outage', async () => {
+  const reports = await start();
+  FakeWebSocket.latest().open();
+  FakeWebSocket.latest().serverClose(1006);
+  await failAttempts(1);
+
+  vi.setSystemTime(Date.now() + 8 * 60 * 60 * 1000);
+  await failAttempts(2);
+  await reconnect();
+  expect(reports()).toEqual([]);
+});
+
 test('a browser with no network says so in the report', async () => {
   const reports = await start();
   FakeWebSocket.latest().open();

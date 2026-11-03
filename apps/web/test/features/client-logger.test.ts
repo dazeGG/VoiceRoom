@@ -91,6 +91,44 @@ test('a report that cannot be delivered never throws and keeps the buffer', asyn
   expect(log.readLogBuffer()).toHaveLength(1);
 });
 
+test('a report that never got out does not hold back the next one', async () => {
+  const fetchMock = vi.fn(async () => {
+    throw new TypeError('offline');
+  });
+  vi.stubGlobal('fetch', fetchMock);
+  const log = await load();
+  log.createLogger('room').error('a');
+  await log.reportClientLogs('during the outage');
+
+  const { calls } = stubFetch({ 'POST /api/client-logs': { body: { ok: true } } });
+  await expect(log.reportClientLogs('connection back')).resolves.toBe(true);
+  expect(calls).toHaveLength(1);
+});
+
+test('a report the throttle held back goes out once when the window ends', async () => {
+  const { calls } = stubFetch({ 'POST /api/client-logs': { body: { ok: true } } });
+  const log = await load();
+  const logger = log.createLogger('room');
+  logger.error('a');
+  await log.reportClientLogs('first');
+
+  logger.error('b');
+  await expect(log.reportClientLogs('held')).resolves.toBe(false);
+  logger.error('c');
+  await expect(log.reportClientLogs('held too')).resolves.toBe(false);
+  expect(calls).toHaveLength(1);
+
+  await vi.advanceTimersByTimeAsync(29_000);
+  expect(calls).toHaveLength(1);
+  await vi.advanceTimersByTimeAsync(1_500);
+  expect(calls).toHaveLength(2);
+  const body = parse(Type.Object({ events: Type.Array(Type.Object({ msg: Type.String() })) }), calls[1]?.body);
+  expect(body.events.map((event) => event.msg)).toEqual(['b', 'c', 'held']);
+
+  await vi.advanceTimersByTimeAsync(120_000);
+  expect(calls).toHaveLength(2);
+});
+
 test('uncaught errors and rejected promises are captured', async () => {
   const log = await load();
   log.installGlobalErrorCapture();
