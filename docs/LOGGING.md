@@ -120,9 +120,22 @@ Message bodies, room chat content and attachment contents are never logged.
 
 The room client keeps the last 100 records in memory (`apps/web/src/shared/log.ts`).
 Nothing is sent on a timer: the buffer is posted to `POST /api/client-logs` only
-when something actually failed — the room client failing to start, or the
-recovery state machine reaching its terminal `failed` phase. Reports are
+when something actually failed — the room client failing to start, the recovery
+state machine reaching its terminal `failed` phase, or the realtime socket coming
+back after the server was out of reach for 30 seconds or more. Reports are
 throttled to one per 30 seconds per page.
+
+That last report is how a network problem between one user and the server becomes
+visible at all, because the failed connections never reached the server. It arrives
+once the connection is back, as a record with `ns: "realtime"`, the message
+`server was unreachable`, and `durationMs`, `attempts` and `offline` in `ctx`.
+`offline: true` means the browser itself reported no network at some attempt. Time
+the computer spent asleep is mostly left out of `durationMs`. The record's `at` is
+when the connection came back.
+
+```bash
+… | jq 'select(.evt == "client.report" and .ns == "realtime")'
+```
 
 The API re-emits each record into the same log stream as `client.report`, with
 `source: "web"`. **Nothing is stored in the database**, so there is no schema,

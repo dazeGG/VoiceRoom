@@ -10,8 +10,10 @@ import type {
 } from '@voice-room/shared/contracts/realtime';
 import { parseServerFrame, SESSION_ENDED_CLOSE_CODE } from '@voice-room/shared/realtime';
 import { isRealtimeBlocked } from '@/platform/desktop-boundary';
+import { createLogger, reportClientLogs } from '@/shared/log';
 import { reportContractViolation } from './contract-violations';
 import { RealtimeHeartbeatWatchdog } from './realtime-heartbeat';
+import { RealtimeOutage } from './realtime-outage';
 
 /** A refusal from the server, as handlers see it. */
 export type RealtimeErrorEvent = { type: 'error'; payload: { code: ErrorCode | ''; message: string; id?: string } };
@@ -37,6 +39,8 @@ const DROPPED_WHILE_DISCONNECTED: ReadonlySet<ClientCommandType> = new Set([
   'room.chat.typing',
   'room.voice.report'
 ]);
+
+const log = createLogger('realtime');
 
 let shared: AppRealtimeConnection | null = null;
 
@@ -82,6 +86,7 @@ class AppRealtimeConnection {
   private lastPongAt = 0;
   private probeTimer: ReturnType<typeof setTimeout> | null = null;
   private lifecycleAttached = false;
+  private outage = new RealtimeOutage();
 
   subscribe(handler: (event: RealtimeEvent) => void): () => void {
     if (isRealtimeBlocked()) return () => {};
@@ -135,6 +140,7 @@ class AppRealtimeConnection {
     this.openGeneration += 1;
     this.clearTimers();
     this.socket = null;
+    this.outage.noteLost(Date.now());
     try {
       socket?.close(4000, 'heartbeat_timeout');
     } catch {
@@ -230,8 +236,10 @@ class AppRealtimeConnection {
     const generation = ++this.openGeneration;
     const socket = new WebSocket(wsUrl());
     this.socket = socket;
+    let opened = false;
     socket.onopen = () => {
       if (this.socket !== socket || generation !== this.openGeneration) return;
+      opened = true;
       this.connectionEpoch += 1;
       this.reconnectAttempt = 0;
       this.send('hello', {});
@@ -245,6 +253,7 @@ class AppRealtimeConnection {
       this.flushQueue();
       this.startHeartbeat();
       this.emitState(true);
+      this.reportOutageEnded();
     };
     socket.onmessage = (event: MessageEvent<unknown>) => {
       if (this.socket !== socket || generation !== this.openGeneration) return;
@@ -266,6 +275,8 @@ class AppRealtimeConnection {
       if (this.socket !== socket || generation !== this.openGeneration) return;
       this.clearTimers();
       this.socket = null;
+      if (opened) this.outage.noteLost(Date.now());
+      else this.outage.noteFailedAttempt(Date.now(), navigator.onLine);
       this.emitState(false);
       if (event?.code === SESSION_ENDED_CLOSE_CODE) {
         // The account session behind this socket was ended; reconnecting would
@@ -279,6 +290,13 @@ class AppRealtimeConnection {
     socket.onerror = () => {
       socket.close();
     };
+  }
+
+  private reportOutageEnded(): void {
+    const report = this.outage.recovered(Date.now());
+    if (!report) return;
+    log.warn('server was unreachable', report);
+    void reportClientLogs('realtime outage');
   }
 
   private sessionEndedHandlers = new Set<() => void>();
@@ -338,6 +356,7 @@ class AppRealtimeConnection {
     this.openGeneration += 1;
     this.clearTimers();
     this.outboundQueue.length = 0;
+    this.outage.reset();
     this.socket?.close();
     this.socket = null;
   }
