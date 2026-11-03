@@ -131,7 +131,7 @@ visible at all, because the failed connections never reached the server. It arri
 once the connection is back, as a record with `ns: "realtime"`, the message
 `server was unreachable`, and `durationMs`, `attempts` and `offline` in `ctx`.
 `offline: true` means the browser itself reported no network at some attempt.
-`durationMs` starts when an open socket was last heard from (for a clean close,
+`durationMs` starts when a silent socket was last heard from (for any other close,
 at the close), and leaves out any gap over 90 seconds as a computer that slept, so
 a shorter sleep can still be reported as an outage.
 `attempts` can be 0: a socket that fell silent, followed by one that opened at

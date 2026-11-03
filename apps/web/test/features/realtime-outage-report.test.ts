@@ -163,6 +163,22 @@ test('an abnormal close after silence counts from the silence', async () => {
   expect(reports()).toMatchObject([{ ctx: { attempts: 0, durationMs: 40_000 } }]);
 });
 
+test('an abnormal close with every ping answered counts from the close', async () => {
+  const reports = await start();
+  const socket = FakeWebSocket.latest();
+  socket.open();
+
+  await vi.advanceTimersByTimeAsync(15_000);
+  socket.receive({ type: 'pong', payload: { at: Date.now() } });
+  await vi.advanceTimersByTimeAsync(14_000);
+  socket.serverClose(1006);
+  await vi.advanceTimersByTimeAsync(17_000);
+  FakeWebSocket.latest().open();
+  await vi.advanceTimersByTimeAsync(0);
+
+  expect(reports()).toEqual([]);
+});
+
 test('a clean close after a quiet stretch is not an outage', async () => {
   const reports = await start();
   FakeWebSocket.latest().open();

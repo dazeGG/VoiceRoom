@@ -297,11 +297,14 @@ class AppRealtimeConnection {
     };
     socket.onclose = (event?: CloseEvent) => {
       if (this.socket !== socket || generation !== this.openGeneration) return;
+      const pingUnanswered = this.heartbeatWatchdog.pendingSince !== null;
       this.clearTimers();
       this.socket = null;
-      // An abnormal close may be the network giving up long after the server
-      // fell silent; a clean one means the server was there until just now.
-      if (opened) this.outage.noteLost(event?.code === ABNORMAL_CLOSE_CODE ? this.lastHeardAt : Date.now());
+      // An abnormal close with a ping unanswered may be the network giving up
+      // long after the server fell silent. Otherwise the socket was fine until
+      // now, however long ago it last had something to say.
+      if (opened)
+        this.outage.noteLost(event?.code === ABNORMAL_CLOSE_CODE && pingUnanswered ? this.lastHeardAt : Date.now());
       else this.outage.noteFailedAttempt(Date.now(), navigator.onLine);
       this.emitState(false);
       if (event?.code === SESSION_ENDED_CLOSE_CODE) {
