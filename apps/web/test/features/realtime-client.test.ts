@@ -93,7 +93,7 @@ test('a dropped connection reconnects and restores subscriptions on the new sock
 
   FakeWebSocket.latest().serverClose(1006);
   expect(realtime.getAppRealtime().isConnected()).toBe(false);
-  await vi.advanceTimersByTimeAsync(60_000);
+  await vi.advanceTimersByTimeAsync(10_000);
   expect(FakeWebSocket.instances).toHaveLength(2);
 
   FakeWebSocket.latest().open();
@@ -145,7 +145,7 @@ test('connecting eagerly cancels a scheduled reconnect, so one socket and one he
 
   connection.ensureConnected();
   expect(FakeWebSocket.instances).toHaveLength(2);
-  await vi.advanceTimersByTimeAsync(60_000);
+  await vi.advanceTimersByTimeAsync(10_000);
   expect(FakeWebSocket.instances).toHaveLength(2);
 
   FakeWebSocket.latest().open();

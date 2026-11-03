@@ -1,6 +1,6 @@
 {
   "name": "@voice-room/shared",
-  "version": "2.12.6",
+  "version": "2.12.7",
   "private": true,
   "type": "module",
   "exports": {
