@@ -1,6 +1,6 @@
 name: Deploy
 
-# Called from ci.yml once the verification jobs and image publication are green.
+# Called from ci.yml for develop and release.yml for a tag, once images are published.
 # Each environment carries its own SSH_HOST / SSH_USER / SSH_KEY secrets and
 # DEPLOY_PATH / SSH_FINGERPRINT variables.
 on:
@@ -40,8 +40,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
-            echo "::error::$GITHUB_REF_NAME does not point at a commit on main"
+          # First parents only: a commit inside a merged branch is an ancestor of main
+          # but its own checks may have failed. No -q: an early exit would trip pipefail.
+          if ! git rev-list --first-parent origin/main | grep -x "$GITHUB_SHA" > /dev/null; then
+            echo "::error::$GITHUB_REF_NAME does not point at a commit merged into main"
             exit 1
           fi
           version="v$(node -p "require('./package.json').version")"
