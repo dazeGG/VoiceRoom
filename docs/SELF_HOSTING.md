@@ -162,7 +162,7 @@ VAPID_SUBJECT
 
 ## CI/CD (GitHub Actions)
 
-Пайплайн описан в `.github/workflows/ci.yml`. Проверки запускаются для pull request и push в `develop`. `main` и теги их не повторяют: защита `main` не пускает туда коммит без зелёных проверок на ветке, актуальной относительно `main`. Ветки, PR, коммиты, hotfix и релизы ведутся по [`GIT_FLOW.md`](./GIT_FLOW.md):
+Пайплайн описан в `.github/workflows/ci.yml`. Проверки запускаются для pull request и push в `develop`. `main` и теги их не повторяют: защита `main` принимает только PR, голова которого прошла проверки и актуальна относительно `main`. Для них работает отдельный `.github/workflows/release.yml`. Ветки, PR, коммиты, hotfix и релизы ведутся по [`GIT_FLOW.md`](./GIT_FLOW.md):
 
 - **policy** — проверяет допустимый Git Flow маршрут PR и Conventional Commit формат PR title.
 - **check** — `npm ci`, `npm run check` (tsc, vue-tsc, ESLint и Prettier по shared, api и web), `npm run build` (Vite).
@@ -170,7 +170,7 @@ VAPID_SUBJECT
 - **voice-join** — проверка входа в голосовую комнату через LiveKit.
 - **G05 / G08** — строгий LiveKit-профиль и порог покрытия изменённого кода.
 
-**Деплой** (`.github/workflows/deploy.yml`, вызывается из `ci.yml` после публикации образов; на `develop` образы собираются только после зелёных `check`, `test`, `test-web`, `voice-join` и G05):
+**Деплой** (`.github/workflows/deploy.yml`, вызывается после публикации образов; на `develop` образы собираются только после зелёных `check`, `test`, `test-web`, `voice-join` и G05):
 
 - **images** — на каждый push в `develop`, `main` и тег `v*` собирает таргеты `api`, `worker`, `web` и публикует `ghcr.io/dazegg/voiceroom-<target>:<commit-sha>`.
 - **deploy-dev** — push в `develop` сразу выкатывается на dev (environment `dev`, https://dev.voiceroom.ru).
