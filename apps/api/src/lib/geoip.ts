@@ -47,37 +47,60 @@ function formatLocation(input: unknown): string {
 // MaxMind-format database (DB-IP City Lite in production). The address is only
 // read here: it is never stored or sent anywhere. Without a database every
 // lookup answers '' and the list simply shows no location.
+//
+// The monthly refresh renames a new file over the old one, so each lookup
+// compares the file's modified time and the first one after a change opens it.
+// A file that goes missing or does not open leaves the reader already in use.
 function createGeoLocator({
   databasePath = '',
   logger = createLogger({ name: 'api' }),
   openReader
 }: {
   databasePath?: string;
-  logger?: Pick<Logger, 'warn' | 'error'>;
+  logger?: Pick<Logger, 'info' | 'warn' | 'error'>;
   openReader?: (path: string) => Promise<GeoReader>;
 } = {}): GeoLocator {
-  let readerPromise: Promise<GeoReader | null> | null = null;
+  let reader: GeoReader | null = null;
+  // The modified time last acted on: null for a missing file, undefined before the first look.
+  let seenVersion: number | null | undefined;
+  let refreshing: Promise<void> | null = null;
 
-  function loadReader(): Promise<GeoReader | null> {
-    if (!databasePath) return Promise.resolve(null);
-    readerPromise ||= (async (): Promise<GeoReader | null> => {
-      if (!fs.existsSync(databasePath)) {
-        logger.warn(
-          { evt: LOG_EVENTS.GEOIP_UNAVAILABLE, databasePath, reason: 'missing' },
-          'GeoIP database not found; device locations are disabled'
-        );
-        return null;
-      }
-      const open = openReader || ((path: string) => import('maxmind').then((maxmind) => maxmind.open(path)));
-      return open(databasePath);
-    })().catch((error: unknown) => {
+  async function refresh(): Promise<void> {
+    const version = await fs.promises.stat(databasePath).then(
+      (stats) => stats.mtimeMs,
+      () => null
+    );
+    if (version === seenVersion) return;
+    seenVersion = version;
+    if (version === null) {
+      logger.warn(
+        { evt: LOG_EVENTS.GEOIP_UNAVAILABLE, databasePath, reason: 'missing' },
+        reader
+          ? 'GeoIP database not found; keeping the one already open'
+          : 'GeoIP database not found; device locations are disabled'
+      );
+      return;
+    }
+    const open = openReader || ((path: string) => import('maxmind').then((maxmind) => maxmind.open(path)));
+    try {
+      const replaced = reader !== null;
+      reader = await open(databasePath);
+      if (replaced) logger.info({ evt: LOG_EVENTS.GEOIP_RELOADED, databasePath }, 'reloaded the GeoIP database');
+    } catch (error: unknown) {
       logger.error(
         { evt: LOG_EVENTS.GEOIP_UNAVAILABLE, databasePath, reason: 'open_failed', err: error },
         'failed to open the GeoIP database'
       );
-      return null;
+    }
+  }
+
+  async function loadReader(): Promise<GeoReader | null> {
+    if (!databasePath) return null;
+    refreshing ||= refresh().finally(() => {
+      refreshing = null;
     });
-    return readerPromise;
+    await refreshing;
+    return reader;
   }
 
   async function locate(ip: unknown): Promise<string> {

@@ -107,6 +107,7 @@ const LOG_EVENTS = Object.freeze({
   MIGRATION_COMPLETED: 'migration.completed',
   SESSION_TOUCH_FAILED: 'session.touch_failed',
   GEOIP_UNAVAILABLE: 'geoip.unavailable',
+  GEOIP_RELOADED: 'geoip.reloaded',
   DESKTOP_RELEASE_FETCH_FAILED: 'desktop.release_fetch_failed',
 
   // Browser-sourced records relayed through POST /api/client-logs.
