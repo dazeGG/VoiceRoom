@@ -1,6 +1,7 @@
 name: Deploy
 
-# Called from ci.yml once the verification jobs and image publication are green.
+# Called from ci.yml once image publication is green. On develop that follows the
+# verification jobs; a release tag relies on them having passed in its pull request.
 # Each environment carries its own SSH_HOST / SSH_USER / SSH_KEY secrets and
 # DEPLOY_PATH / SSH_FINGERPRINT variables.
 on:

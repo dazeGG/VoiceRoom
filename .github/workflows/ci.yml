@@ -2,7 +2,7 @@ name: CI/CD
 
 on:
   push:
-    branches: [develop, main]
+    branches: [develop]
     tags: ['v*']
   pull_request:
     branches: [develop, main]
@@ -14,6 +14,8 @@ concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
+# A release commit reaches main only through a pull request that passed these
+# jobs while up to date with main (branch protection), so a tag does not repeat them.
 jobs:
   policy:
     name: Git Flow policy
@@ -47,6 +49,7 @@ jobs:
 
   check:
     name: Lint, typecheck & build
+    if: github.ref_type != 'tag'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -61,6 +64,7 @@ jobs:
   # API and web tests run as separate jobs so neither waits for the other.
   test:
     name: API tests
+    if: github.ref_type != 'tag'
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -93,6 +97,7 @@ jobs:
 
   test-web:
     name: Web tests
+    if: github.ref_type != 'tag'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -106,6 +111,7 @@ jobs:
 
   voice-join:
     name: Voice room join smoke
+    if: github.ref_type != 'tag'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -131,6 +137,7 @@ jobs:
 
   goal-g05:
     name: G05 strict LiveKit gate proof
+    if: github.ref_type != 'tag'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -215,7 +222,8 @@ jobs:
   images:
     name: Publish ${{ matrix.target }} image
     needs: [check, test, test-web, voice-join, goal-g05]
-    if: github.event_name == 'push'
+    # Skipped verification jobs (a tag) must not skip this; failed ones must.
+    if: github.event_name == 'push' && !cancelled() && !failure()
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -258,7 +266,7 @@ jobs:
   deploy-production:
     name: Deploy production
     needs: images
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && !cancelled() && needs.images.result == 'success'
     uses: ./.github/workflows/deploy.yml
     with:
       environment: production
