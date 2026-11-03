@@ -105,6 +105,32 @@ test('a report that never got out does not hold back the next one', async () => 
   expect(calls).toHaveLength(1);
 });
 
+test('a report the server never answers gives up, and the one held behind it still goes out', async () => {
+  const bodies: unknown[] = [];
+  const fetchMock = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+    bodies.push(init?.body);
+    if (bodies.length > 1) return new Response('{}', { status: 202 });
+    return new Promise<Response>((_resolve, reject) => {
+      init?.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')));
+    });
+  });
+  vi.stubGlobal('fetch', fetchMock);
+  const log = await load();
+  const logger = log.createLogger('room');
+  logger.error('a');
+  const hung = log.reportClientLogs('hangs');
+
+  logger.error('b');
+  await expect(log.reportClientLogs('held behind it')).resolves.toBe(false);
+  await vi.advanceTimersByTimeAsync(15_000);
+  await expect(hung).resolves.toBe(true);
+  expect(fetchMock).toHaveBeenCalledTimes(1);
+
+  await vi.advanceTimersByTimeAsync(15_000);
+  expect(fetchMock).toHaveBeenCalledTimes(2);
+  expect(log.readLogBuffer()).toEqual([]);
+});
+
 test('a report the throttle held back goes out once when the window ends', async () => {
   const { calls } = stubFetch({ 'POST /api/client-logs': { body: { ok: true } } });
   const log = await load();

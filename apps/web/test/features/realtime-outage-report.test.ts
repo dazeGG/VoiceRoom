@@ -21,18 +21,22 @@ const ReportBody = Type.Object({
 
 const cleanups: Array<() => void> = [];
 
-async function start() {
+async function startConnection() {
   installFakeWebSocket();
   muteWarnings();
   const { calls } = stubFetch({ '/api/client-logs': { status: 202, body: { ok: true } } });
   const realtime = await freshImport(() => import('../../src/api/realtime.ts'));
-  cleanups.push(realtime.getAppRealtime().subscribe(() => {}));
-  return () =>
+  const connection = realtime.getAppRealtime();
+  cleanups.push(connection.subscribe(() => {}));
+  const reports = () =>
     calls
       .filter((call) => call.url === '/api/client-logs')
       .flatMap((call) => parse(ReportBody, call.body).events)
       .filter((event) => event.ns === 'realtime');
+  return { connection, reports };
 }
+
+const start = async () => (await startConnection()).reports;
 
 // Each reconnect fires within the backoff's cap of 8 seconds.
 const nextAttempt = () => vi.advanceTimersByTimeAsync(8_000);
@@ -144,6 +148,45 @@ test('a socket that fell silent counts from its silence, even when the next one 
 
   expect(reports()).toMatchObject([{ ctx: { attempts: 0, offline: false } }]);
   expect(reports()[0]?.ctx?.durationMs).toBeGreaterThanOrEqual(45_000);
+});
+
+test('an abnormal close after silence counts from the silence', async () => {
+  const reports = await start();
+  FakeWebSocket.latest().open();
+
+  await vi.advanceTimersByTimeAsync(36_000);
+  FakeWebSocket.latest().serverClose(1006);
+  await vi.advanceTimersByTimeAsync(4_000);
+  FakeWebSocket.latest().open();
+  await vi.advanceTimersByTimeAsync(0);
+
+  expect(reports()).toMatchObject([{ ctx: { attempts: 0, durationMs: 40_000 } }]);
+});
+
+test('a clean close after a quiet stretch is not an outage', async () => {
+  const reports = await start();
+  FakeWebSocket.latest().open();
+
+  await vi.advanceTimersByTimeAsync(36_000);
+  FakeWebSocket.latest().serverClose(1001);
+  await vi.advanceTimersByTimeAsync(4_000);
+  FakeWebSocket.latest().open();
+  await vi.advanceTimersByTimeAsync(0);
+
+  expect(reports()).toEqual([]);
+});
+
+test('a session the server ended is not an outage when the page connects again', async () => {
+  const { connection, reports } = await startConnection();
+  FakeWebSocket.latest().open();
+  FakeWebSocket.latest().serverClose(4401);
+
+  await vi.advanceTimersByTimeAsync(60_000);
+  connection.ensureConnected();
+  FakeWebSocket.latest().open();
+  await vi.advanceTimersByTimeAsync(0);
+
+  expect(reports()).toEqual([]);
 });
 
 test('a socket that goes on answering is never an outage, however long it stays open', async () => {

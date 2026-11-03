@@ -44,6 +44,8 @@ const buffer: ClientLogRecord[] = [];
 // Matches CLIENT_LOG_RATE_LIMIT on the API with room to spare: a failing room
 // must not turn one user's bad network into a flood of reports.
 const FLUSH_INTERVAL_MS = 30_000;
+// A server that accepts the request and never answers must not hold back every later report.
+const REPORT_TIMEOUT_MS = 15_000;
 let lastFlushAt = 0;
 let flushInFlight: Promise<void> | null = null;
 // A report the throttle held back goes out when the window ends, since nothing
@@ -137,12 +139,15 @@ export async function reportClientLogs(reason: string): Promise<boolean> {
   events.push({ at, level: 'error', ns: 'report', msg: reason });
 
   flushInFlight = (async () => {
+    const controller = new AbortController();
+    const giveUp = setTimeout(() => controller.abort(), REPORT_TIMEOUT_MS);
     try {
       const response = await fetch('/api/client-logs', {
         body: JSON.stringify({ sessionId, events }),
         credentials: 'same-origin',
         headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
-        method: 'POST'
+        method: 'POST',
+        signal: controller.signal
       });
       // Only an answer uses up the window: a report that never got out says
       // nothing about the server's limit, and the next one should not wait.
@@ -158,6 +163,7 @@ export async function reportClientLogs(reason: string): Promise<boolean> {
     } catch {
       // Offline or blocked: the buffer stays for the next attempt.
     } finally {
+      clearTimeout(giveUp);
       flushInFlight = null;
     }
   })();

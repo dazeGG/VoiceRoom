@@ -35,6 +35,7 @@ const LIVENESS_PROBE_MS = 5000;
 // A server that accepts the connection and never answers would otherwise hold
 // the handshake, and every retry after it, for minutes.
 const CONNECT_TIMEOUT_MS = 20000;
+const ABNORMAL_CLOSE_CODE = 1006;
 // Typing notices, pings and stats polls are about now; sent after a reconnect they would be stale.
 const DROPPED_WHILE_DISCONNECTED: ReadonlySet<ClientCommandType> = new Set([
   'ping',
@@ -298,10 +299,14 @@ class AppRealtimeConnection {
       if (this.socket !== socket || generation !== this.openGeneration) return;
       this.clearTimers();
       this.socket = null;
-      if (opened) this.outage.noteLost(Date.now());
+      // An abnormal close may be the network giving up long after the server
+      // fell silent; a clean one means the server was there until just now.
+      if (opened) this.outage.noteLost(event?.code === ABNORMAL_CLOSE_CODE ? this.lastHeardAt : Date.now());
       else this.outage.noteFailedAttempt(Date.now(), navigator.onLine);
       this.emitState(false);
       if (event?.code === SESSION_ENDED_CLOSE_CODE) {
+        // The server was there to end it, so nothing was out of reach.
+        this.outage.reset();
         // The account session behind this socket was ended; reconnecting would
         // only come back as a guest, so hand control to the sign-out flow.
         this.closedByClient = true;
