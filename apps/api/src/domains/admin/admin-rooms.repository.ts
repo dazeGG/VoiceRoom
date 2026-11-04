@@ -10,16 +10,24 @@ import { Value } from 'typebox/value';
 import {
   ROOM_CALLS_PAGE_SIZE,
   ROOM_HISTORY_PAGE_SIZE,
+  STATIC_ROOMS_PAGE_SIZE,
+  TROUBLE_BAD_PCT,
   type ClientKind,
   type RoomAccount,
+  type StaticRoomRow,
+  type StaticRoomsFilter,
+  type StaticRoomsSort,
   type VoiceMinute,
-  type VoiceMinuteHeard
+  type VoiceMinuteHeard,
+  type VoiceQuality
 } from '@voice-room/shared/contracts/admin';
-import { NetworkPoint, type NetworkLevel } from '@voice-room/shared/contracts/rooms';
+import { NetworkPoint, type CpuPressure, type NetworkLevel } from '@voice-room/shared/contracts/rooms';
 import { concealedSpeechPct, gapsPerSpeechMin, type HeardCounts } from '@voice-room/shared/voice-quality';
 import { kyselyOn } from '../../platform/db/kysely.ts';
+import { escapeLike } from '../../platform/db/like.ts';
 import { toMillis } from '../../platform/epoch-millis.ts';
 import { avatarUrl } from '../../lib/avatar-url.ts';
+import type { StayEvent, StayEventKind, VoiceMinuteSample } from '../rooms/voice-session.repository.ts';
 
 export interface AdminRoomRow {
   id: string;
@@ -57,6 +65,20 @@ export interface StoredCall {
   startedAt: number;
   endedAt: number;
   stays: StoredStay[];
+  /** Bad answers given about it. */
+  badFeedback?: number;
+  /** Answers about it come before this moment: FEEDBACK_AFTER_CALL_MS after it, or the room's next call. */
+  feedbackUntil?: number;
+}
+
+export interface StaticRoomsListQuery {
+  q: string;
+  filter: StaticRoomsFilter;
+  sort: StaticRoomsSort;
+  order: 'asc' | 'desc';
+  page: number;
+  /** The rooms with someone in voice now. */
+  liveIds: string[];
 }
 
 /** Whose stay in which room to find, ending around `at` (see lastStays). */
@@ -72,6 +94,29 @@ export interface StayAsk {
 // lease holds off past the moment its owner already answered.
 const STAY_ENDS_AFTER_MS = 5 * 60_000;
 const STAY_ENDS_BEFORE_MS = 24 * 60 * 60_000;
+/** An answer belongs to the call it came during or this soon after, unless the room's next call began first. */
+export const FEEDBACK_AFTER_CALL_MS = 30 * 60_000;
+
+/**
+ * The joined_at index narrows the stays of the last 30 days; no stay lasts the two days more.
+ * Their minutes are then found by their stay, which keeps these reads off the whole of the samples.
+ */
+export const RECENT_STAYS_DAYS = sql.lit(32);
+
+/** A minute's level in SQL, as minuteLevel reads it: over the rows of voice_session_samples `m`. */
+export const QUALITY_COLUMNS = sql`
+  count(*) FILTER (WHERE m.polls_bad < 2 AND m.polls_bad + m.polls_unstable < 2
+    AND m.polls_good + m.polls_unstable + m.polls_bad > 0) AS good,
+  count(*) FILTER (WHERE m.polls_bad < 2 AND m.polls_bad + m.polls_unstable >= 2) AS unstable,
+  count(*) FILTER (WHERE m.polls_bad >= 2) AS bad`;
+
+/** The minutes of each level as counted by QUALITY_COLUMNS; null without any. */
+export function qualityOf(row: { good?: unknown; unstable?: unknown; bad?: unknown }): VoiceQuality | null {
+  const good = Number(row.good) || 0;
+  const unstable = Number(row.unstable) || 0;
+  const bad = Number(row.bad) || 0;
+  return good + unstable + bad > 0 ? { good, unstable, bad } : null;
+}
 
 /** Where a page of history continues: the end and id of the last stay (or call) already shown. */
 export interface HistoryAfter {
@@ -125,9 +170,79 @@ function heardOf(counts: HeardCounts): VoiceMinuteHeard | null {
 
 const averageOf = (sum: number, polls: number) => (polls > 0 ? Math.round(sum / polls) : null);
 
+// The column only ever holds these four (voice_session_samples_cpu_pressure_check).
+function pressureOf(value: string | null): CpuPressure | null {
+  return value === 'nominal' || value === 'fair' || value === 'serious' || value === 'critical' ? value : null;
+}
+
+// The column only ever holds these (voice_call_events_kind_check).
+function stayEventKind(value: string): StayEventKind | null {
+  return value === 'screen_on' ||
+    value === 'screen_off' ||
+    value === 'camera_on' ||
+    value === 'camera_off' ||
+    value === 'cpu_critical' ||
+    value === 'relieved_ns'
+    ? value
+    : null;
+}
+
+/** A minute as the panel reads it, from its counts. A seat still held has them in memory, a finished one in its row. */
+export function minuteOfSample(sample: VoiceMinuteSample): VoiceMinute {
+  const { polls, uplink, cpu } = sample;
+  return {
+    at: sample.at,
+    level: minuteLevel(polls),
+    polls,
+    heard: heardOf(sample.heard),
+    heardBy: heardOf(sample.heardBy),
+    uplinkLossPct: uplink.packets > 0 ? Math.round((uplink.lost / uplink.packets) * 1000) / 10 : null,
+    rttMs: averageOf(sample.rttMsSum, sample.rttPolls),
+    jitterBufferMs: averageOf(sample.jitterBufferMsSum, sample.jitterBufferPolls),
+    transport: sample.transport,
+    // Most clients say nothing of their computer, and a minute then carries nothing of it.
+    ...(cpu && (cpu.polls > 0 || cpu.pressureMax || cpu.relieved)
+      ? {
+          cpuAppPct: averageOf(cpu.appPctSum, cpu.polls),
+          cpuSystemPct: averageOf(cpu.systemPctSum, cpu.polls),
+          cpuPressure: cpu.pressureMax,
+          relieved: cpu.relieved
+        }
+      : {})
+  };
+}
+
+// The column only ever holds these three (voice_session_samples_transport_check).
+function voiceTransportOf(value: string | null): VoiceMinuteSample['transport'] {
+  return value === 'udp' || value === 'tcp' || value === 'relay' ? value : null;
+}
+
 /** A temporary room has no name, so only a missing or deleted row means the room is gone. */
 const roomNameOf = (row: { room_name: string | null; room_deleted_at: Date | string | null }) =>
   row.room_deleted_at === null ? row.room_name : null;
+
+export type StaticRoomCounts = { all: number; active: number; trouble: number; quiet: number };
+
+type StaticRoomSqlRow = AccountColumns & {
+  room_id: string;
+  name: string;
+  room_avatar_key: string | null;
+  created_at: Date;
+  members: unknown;
+  calls: unknown;
+  minutes: unknown;
+  last_at: Date | null;
+  live: boolean;
+  good: unknown;
+  unstable: unknown;
+  bad: unknown;
+};
+
+/** The end of the span of answers about a call that ended at `endedAt`. */
+function feedbackUntil(endedAt: number, nextStartedAt: number | null): number {
+  const latest = endedAt + FEEDBACK_AFTER_CALL_MS;
+  return nextStartedAt === null ? latest : Math.min(latest, Math.max(nextStartedAt, endedAt + 1));
+}
 
 export function createAdminRoomsRepository({ pool }: { pool: pg.Pool }) {
   const db = kyselyOn(pool);
@@ -243,28 +358,42 @@ export function createAdminRoomsRepository({ pool }: { pool: pg.Pool }) {
       .execute();
     const byStay = new Map<string, VoiceMinute[]>();
     for (const row of rows) {
-      const polls = { good: row.polls_good, unstable: row.polls_unstable, bad: row.polls_bad };
-      const minute: VoiceMinute = {
+      const minute = minuteOfSample({
         at: toMillis(row.at),
-        level: minuteLevel(polls),
-        polls,
-        heard: heardOf({
+        polls: { good: row.polls_good, unstable: row.polls_unstable, bad: row.polls_bad },
+        heard: {
           packets: row.heard_packets,
           lost: row.heard_lost,
           concealedSamples: row.heard_concealed,
           gaps: row.heard_gaps
-        }),
-        heardBy: heardOf({
+        },
+        heardBy: {
           packets: row.heard_by_packets,
           lost: row.heard_by_lost,
           concealedSamples: row.heard_by_concealed,
           gaps: row.heard_by_gaps
-        }),
-        uplinkLossPct: row.uplink_packets > 0 ? Math.round((row.uplink_lost / row.uplink_packets) * 1000) / 10 : null,
-        rttMs: averageOf(row.rtt_ms_sum, row.rtt_polls),
-        jitterBufferMs: averageOf(row.jitter_buffer_ms_sum, row.jitter_buffer_polls),
-        transport: row.transport
-      };
+        },
+        rttMsSum: row.rtt_ms_sum,
+        rttPolls: row.rtt_polls,
+        jitterBufferMsSum: row.jitter_buffer_ms_sum,
+        jitterBufferPolls: row.jitter_buffer_polls,
+        uplink: { packets: row.uplink_packets, lost: row.uplink_lost },
+        mic: {
+          expectedMs: row.mic_expected_ms,
+          deliveredMs: row.mic_delivered_ms,
+          contextMs: row.mic_context_ms,
+          reopens: row.mic_reopens,
+          replacements: row.mic_replacements
+        },
+        transport: voiceTransportOf(row.transport),
+        cpu: {
+          appPctSum: row.cpu_app_pct_sum,
+          systemPctSum: row.cpu_system_pct_sum,
+          polls: row.cpu_polls,
+          pressureMax: pressureOf(row.cpu_pressure_max),
+          relieved: row.cpu_relieved
+        }
+      });
       const minutes = byStay.get(row.stay_id) ?? [];
       minutes.push(minute);
       byStay.set(row.stay_id, minutes);
@@ -309,10 +438,20 @@ export function createAdminRoomsRepository({ pool }: { pool: pg.Pool }) {
    */
   async function calls(query: {
     roomId?: string | undefined;
+    accountId?: string | undefined;
+    /** One call by its first stay's id. */
+    callId?: string | undefined;
     after?: HistoryAfter | undefined;
     from?: number | undefined;
     to?: number | undefined;
   }): Promise<{ calls: StoredCall[]; more: boolean }> {
+    // One call is told from its room's stays alone, not from every room's.
+    const callRoom = query.callId
+      ? (await db.selectFrom('voice_sessions').select('room_id').where('id', '=', query.callId).executeTakeFirst())
+          ?.room_id
+      : undefined;
+    if (query.callId && !callRoom) return { calls: [], more: false };
+    const roomId = query.roomId ?? callRoom ?? undefined;
     let pageQuery = db
       .with('ordered', (qb) => {
         let base = qb
@@ -320,6 +459,7 @@ export function createAdminRoomsRepository({ pool }: { pool: pg.Pool }) {
           .select([
             'id',
             'room_id',
+            'user_id',
             'joined_at',
             'left_at',
             sql<Date | null>`max(left_at) over (
@@ -329,13 +469,20 @@ export function createAdminRoomsRepository({ pool }: { pool: pg.Pool }) {
           ])
           .where('room_id', 'is not', null)
           .where('room_id', '!=', '');
-        if (query.roomId) base = base.where('room_id', '=', query.roomId);
+        if (roomId) base = base.where('room_id', '=', roomId);
+        if (query.accountId) {
+          const { accountId } = query;
+          base = base.where('room_id', 'in', (eb) =>
+            eb.selectFrom('voice_sessions').select('room_id').where('user_id', '=', accountId)
+          );
+        }
         return base;
       })
       .with('numbered', (qb) =>
         qb.selectFrom('ordered').select([
           'id',
           'room_id',
+          'user_id',
           'joined_at',
           'left_at',
           sql<string>`sum(case when earlier_end is null or joined_at > earlier_end then 1 else 0 end) over (
@@ -351,7 +498,11 @@ export function createAdminRoomsRepository({ pool }: { pool: pg.Pool }) {
             'call_no',
             sql<string>`(array_agg(id order by joined_at, id))[1]`.as('call_id'),
             sql<Date>`min(joined_at)`.as('started_at'),
-            sql<Date>`max(left_at)`.as('ended_at')
+            sql<Date>`max(left_at)`.as('ended_at'),
+            sql<Date | null>`lead(min(joined_at)) over (partition by room_id order by min(joined_at))`.as(
+              'next_started_at'
+            ),
+            sql<boolean>`coalesce(bool_or(user_id = ${query.accountId ?? null}), false)`.as('has_account')
           ])
           .groupBy(['room_id', 'call_no'])
       )
@@ -362,11 +513,14 @@ export function createAdminRoomsRepository({ pool }: { pool: pg.Pool }) {
         'c.room_id',
         'c.started_at',
         'c.ended_at',
+        'c.next_started_at',
         'r.name as room_name',
         'r.deleted_at as room_deleted_at',
         'r.is_static',
         'r.avatar_key as room_avatar_key'
       ]);
+    if (query.accountId) pageQuery = pageQuery.where('c.has_account', '=', true);
+    if (query.callId) pageQuery = pageQuery.where('c.call_id', '=', query.callId);
     if (query.from !== undefined) pageQuery = pageQuery.where('c.ended_at', '>', new Date(query.from));
     if (query.to !== undefined) pageQuery = pageQuery.where('c.started_at', '<', new Date(query.to));
     const after = query.after;
@@ -388,9 +542,32 @@ export function createAdminRoomsRepository({ pool }: { pool: pg.Pool }) {
       isStatic: row.is_static,
       avatarUrl: row.room_deleted_at === null ? avatarUrl(row.room_avatar_key) : null,
       startedAt: toMillis(row.started_at),
-      endedAt: toMillis(row.ended_at)
+      endedAt: toMillis(row.ended_at),
+      feedbackUntil: feedbackUntil(toMillis(row.ended_at), row.next_started_at ? toMillis(row.next_started_at) : null)
     }));
     if (page.length === 0) return { calls: [], more: false };
+
+    const bad = await db
+      .selectFrom('call_feedback')
+      .select(['room_id', 'created_at'])
+      .where('rating', '=', 'bad')
+      .where((eb) =>
+        eb.or(
+          page.map((call) =>
+            eb.and([
+              eb('room_id', '=', call.roomId),
+              eb('created_at', '>=', new Date(call.startedAt)),
+              eb('created_at', '<', new Date(call.feedbackUntil))
+            ])
+          )
+        )
+      )
+      .execute();
+    const badFeedbackOf = (call: (typeof page)[number]) =>
+      bad.filter((answer) => {
+        const at = toMillis(answer.created_at);
+        return answer.room_id === call.roomId && at >= call.startedAt && at < call.feedbackUntil;
+      }).length;
 
     // A room's calls never overlap, so a call's stays are the room's stays inside its span.
     const members = await stays()
@@ -417,8 +594,144 @@ export function createAdminRoomsRepository({ pool }: { pool: pg.Pool }) {
       if (call) byCall.get(call.id)?.push(stay);
     }
     return {
-      calls: page.map((call) => ({ ...call, stays: byCall.get(call.id) ?? [] })),
+      calls: page.map((call) => ({
+        ...call,
+        stays: byCall.get(call.id) ?? [],
+        badFeedback: badFeedbackOf(call)
+      })),
       more: rows.length > ROOM_CALLS_PAGE_SIZE
+    };
+  }
+
+  /** A room's finished stays since a moment, in the order people joined: the ones gone from a call still going on. */
+  async function staysSince(roomId: string, since: number): Promise<StoredStay[]> {
+    const rows = await stays()
+      .where('s.room_id', '=', roomId)
+      .where('s.left_at', '>=', new Date(since))
+      .orderBy('s.joined_at')
+      .orderBy('s.id')
+      .execute();
+    return withMinutes(rows.map(toStay));
+  }
+
+  /** What each stay's seat did, oldest first. */
+  async function stayEvents(stayIds: readonly string[]): Promise<Map<string, StayEvent[]>> {
+    const byStay = new Map<string, StayEvent[]>();
+    if (stayIds.length === 0) return byStay;
+    const rows = await db
+      .selectFrom('voice_call_events')
+      .select(['stay_id', 'at', 'kind'])
+      .where('stay_id', 'in', [...stayIds])
+      .orderBy('at')
+      .execute();
+    for (const row of rows) {
+      const kind = stayEventKind(row.kind);
+      if (!kind) continue;
+      const events = byStay.get(row.stay_id) ?? [];
+      events.push({ at: toMillis(row.at), kind });
+      byStay.set(row.stay_id, events);
+    }
+    return byStay;
+  }
+
+  /** The persistent rooms with their numbers of the last 30 days, a page at a time, and how many each filter holds. */
+  async function staticRooms(
+    query: StaticRoomsListQuery
+  ): Promise<{ rooms: StaticRoomRow[]; total: number; counts: StaticRoomCounts }> {
+    const pattern = `%${escapeLike(query.q)}%`;
+    const search = query.q
+      ? sql`(name ILIKE ${pattern} OR room_id ILIKE ${pattern} OR login ILIKE ${pattern})`
+      : sql`true`;
+    const listed = sql`
+      WITH stays AS (
+        SELECT id, room_id, joined_at, left_at,
+          max(left_at) OVER (
+            PARTITION BY room_id ORDER BY joined_at, id ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING
+          ) AS earlier_end
+        FROM voice_sessions
+        WHERE room_id IS NOT NULL AND room_id <> ''
+          AND joined_at > now() - interval '${RECENT_STAYS_DAYS} days' AND left_at > now() - interval '30 days'
+      ),
+      usage AS (
+        SELECT room_id,
+          count(*) FILTER (WHERE earlier_end IS NULL OR joined_at > earlier_end) AS calls,
+          sum(extract(epoch FROM left_at - joined_at)) / 60.0 AS minutes
+        FROM stays GROUP BY room_id
+      ),
+      last_stay AS (
+        SELECT room_id, max(left_at) AS last_at FROM voice_sessions WHERE room_id IS NOT NULL GROUP BY room_id
+      ),
+      quality AS (
+        SELECT s.room_id, ${QUALITY_COLUMNS}
+        FROM voice_session_samples m JOIN stays s ON s.id = m.stay_id
+        WHERE m.at > now() - interval '30 days'
+        GROUP BY s.room_id
+      ),
+      member_count AS (SELECT room_id, count(*) AS members FROM room_memberships GROUP BY room_id),
+      listed AS (
+        SELECT r.id AS room_id, r.name, r.avatar_key AS room_avatar_key, r.created_at,
+          o.id, o.login, o.display_name, o.avatar_key, o.avatar_color_key, o.avatar_accent,
+          coalesce(mc.members, 0) AS members,
+          coalesce(u.calls, 0) AS calls,
+          coalesce(u.minutes, 0) AS minutes,
+          l.last_at,
+          r.id = ANY(${query.liveIds}::text[]) AS live,
+          coalesce(q.good, 0) AS good, coalesce(q.unstable, 0) AS unstable, coalesce(q.bad, 0) AS bad
+        FROM rooms r
+        LEFT JOIN users o ON o.id = r.owner_id
+        LEFT JOIN usage u ON u.room_id = r.id
+        LEFT JOIN last_stay l ON l.room_id = r.id
+        LEFT JOIN quality q ON q.room_id = r.id
+        LEFT JOIN member_count mc ON mc.room_id = r.id
+        WHERE r.is_static AND r.deleted_at IS NULL
+      )`;
+    const active = sql`(live OR last_at > now() - interval '7 days')`;
+    const quiet = sql`(NOT live AND (last_at IS NULL OR last_at <= now() - interval '30 days'))`;
+    const trouble = sql`(bad > 0 AND bad * 100 >= ${TROUBLE_BAD_PCT} * (good + unstable + bad))`;
+    const filters = { all: sql`true`, active, quiet, trouble };
+    const order = query.order === 'asc' ? sql`ASC` : sql`DESC`;
+    const sorts: Record<StaticRoomsSort, unknown> = {
+      lastCall: sql`CASE WHEN live THEN now() ELSE last_at END`,
+      voice: sql`minutes`,
+      members: sql`members`,
+      quality: sql`CASE WHEN good + unstable + bad > 0 THEN bad::float / (good + unstable + bad) END`,
+      created: sql`created_at`
+    };
+    const [rows, counted] = await Promise.all([
+      sql<StaticRoomSqlRow>`${listed}
+        SELECT * FROM listed WHERE ${filters[query.filter]} AND ${search}
+        ORDER BY ${sorts[query.sort]} ${order} NULLS LAST, room_id ASC
+        LIMIT ${STATIC_ROOMS_PAGE_SIZE} OFFSET ${(query.page - 1) * STATIC_ROOMS_PAGE_SIZE}`.execute(db),
+      sql<Record<keyof StaticRoomCounts | 'found', unknown>>`${listed}
+        SELECT count(*) FILTER (WHERE ${filters[query.filter]} AND ${search}) AS found,
+          count(*) AS "all",
+          count(*) FILTER (WHERE ${active}) AS active,
+          count(*) FILTER (WHERE ${trouble}) AS trouble,
+          count(*) FILTER (WHERE ${quiet}) AS quiet
+        FROM listed`.execute(db)
+    ]);
+    const count = counted.rows[0];
+    return {
+      rooms: rows.rows.map((row) => ({
+        id: row.room_id,
+        name: row.name,
+        avatarUrl: avatarUrl(row.room_avatar_key),
+        owner: account(row),
+        members: Number(row.members) || 0,
+        createdAt: toMillis(row.created_at),
+        calls30d: Number(row.calls) || 0,
+        voiceMinutes30d: Math.round(Number(row.minutes) || 0),
+        lastCallAt: row.last_at ? toMillis(row.last_at) : null,
+        live: row.live,
+        quality30d: qualityOf(row)
+      })),
+      total: Number(count?.found) || 0,
+      counts: {
+        all: Number(count?.all) || 0,
+        active: Number(count?.active) || 0,
+        trouble: Number(count?.trouble) || 0,
+        quiet: Number(count?.quiet) || 0
+      }
     };
   }
 
@@ -461,7 +774,7 @@ export function createAdminRoomsRepository({ pool }: { pool: pg.Pool }) {
     return asks.map((_ask, n) => byAsk.get(n) ?? null);
   }
 
-  return Object.freeze({ rooms, accounts, history, calls, lastStays });
+  return Object.freeze({ rooms, accounts, history, calls, staysSince, stayEvents, staticRooms, lastStays });
 }
 
 export type AdminRoomsRepository = ReturnType<typeof createAdminRoomsRepository>;

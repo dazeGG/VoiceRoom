@@ -12,7 +12,7 @@ import { AdminReportsEvent } from './admin.ts';
 import { Nullable } from './http.ts';
 import { DirectMessage, PinnedMessage, ReactionSummary, RoomMessage } from './messages.ts';
 import { NotificationPreferences } from './notifications.ts';
-import { LobbyRoom, NetworkLevel, PublicPeer, RoomRelationship, VoiceCause } from './rooms.ts';
+import { CpuPressure, LobbyRoom, NetworkLevel, PublicPeer, RoomRelationship, VoiceCause } from './rooms.ts';
 import { PublicUser } from './users.ts';
 
 /** The room or direct conversation a message belongs to. */
@@ -132,6 +132,22 @@ export const MicPoll = Type.Object({
 });
 export type MicPoll = Static<typeof MicPoll>;
 
+const PollPct = Nullable(Type.Number({ minimum: 0, maximum: 100 }));
+
+/**
+ * How the computer did over the poll: VoiceRoom's share and the whole system's
+ * (the desktop app only, null elsewhere), the pressure at the moment (null where
+ * the browser cannot tell), and whether the overload made the call switch to
+ * its lighter noise suppression. Absent where none of it is known.
+ */
+export const CpuPoll = Type.Object({
+  appPct: PollPct,
+  systemPct: PollPct,
+  pressure: Nullable(CpuPressure),
+  relieved: Type.Boolean()
+});
+export type CpuPoll = Static<typeof CpuPoll>;
+
 /**
  * One stats poll of a peer in voice: what it heard of each speaker since the
  * previous poll, its own uplink and its round trip. The server judges the room
@@ -146,7 +162,8 @@ export const VoicePoll = Type.Object({
   uplink: Type.Object({ packets: PollCount, lost: PollCount }),
   transport: Nullable(VoiceTransport),
   heard: Type.Array(HeardPoll, { maxItems: 64 }),
-  mic: Type.Optional(MicPoll)
+  mic: Type.Optional(MicPoll),
+  cpu: Type.Optional(CpuPoll)
 });
 export type VoicePoll = Static<typeof VoicePoll>;
 

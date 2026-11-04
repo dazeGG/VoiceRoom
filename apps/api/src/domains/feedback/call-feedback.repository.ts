@@ -91,7 +91,44 @@ export function createCallFeedbackRepository({ pool }: { pool: pg.Pool }) {
 
   /** The newest answers since `since`, with who gave them and the room as it stands now. */
   async function listRecent(since: Date, rating: CallFeedbackRating | null): Promise<StoredCallFeedback[]> {
-    let query = db
+    let query = answers().where('f.created_at', '>=', since);
+    if (rating) query = query.where('f.rating', '=', rating);
+    const rows = await query
+      .orderBy('f.created_at', 'desc')
+      .orderBy('f.id', 'desc')
+      .limit(ADMIN_CALL_FEEDBACK_LIMIT)
+      .execute();
+    return rows.flatMap(toStored);
+  }
+
+  /** The answers in a room over a span: those about one call, in the order they came. */
+  async function listForRoomSpan(roomId: string, from: Date, until: Date): Promise<StoredCallFeedback[]> {
+    const rows = await answers()
+      .where('f.room_id', '=', roomId)
+      .where('f.created_at', '>=', from)
+      .where('f.created_at', '<', until)
+      .orderBy('f.created_at')
+      .orderBy('f.id')
+      .limit(ADMIN_CALL_FEEDBACK_LIMIT)
+      .execute();
+    return rows.flatMap(toStored);
+  }
+
+  /** Answers older than `cutoff` stop saying whose they were; returns how many changed. */
+  async function forgetAuthorsBefore(cutoff: Date): Promise<number> {
+    const result = await db
+      .updateTable('call_feedback')
+      .set({ user_id: null, guest_id: null })
+      .where((eb) => eb.or([eb('user_id', 'is not', null), eb('guest_id', 'is not', null)]))
+      .where('created_at', '<', cutoff)
+      .executeTakeFirst();
+    return Number(result.numUpdatedRows);
+  }
+
+  return Object.freeze({ insert, summarize, listRecent, listForRoomSpan, forgetAuthorsBefore });
+
+  function answers() {
+    return db
       .selectFrom('call_feedback as f')
       .leftJoin('users as u', 'u.id', 'f.user_id')
       .leftJoin('rooms as r', (join) => join.onRef('r.id', '=', 'f.room_id').on('r.deleted_at', 'is', null))
@@ -112,15 +149,11 @@ export function createCallFeedbackRepository({ pool }: { pool: pg.Pool }) {
         'u.login as author_login',
         'u.display_name as author_display_name',
         'r.name as room_name'
-      ])
-      .where('f.created_at', '>=', since);
-    if (rating) query = query.where('f.rating', '=', rating);
-    const rows = await query
-      .orderBy('f.created_at', 'desc')
-      .orderBy('f.id', 'desc')
-      .limit(ADMIN_CALL_FEEDBACK_LIMIT)
-      .execute();
-    return rows.flatMap((row) => {
+      ]);
+  }
+
+  function toStored(row: Awaited<ReturnType<ReturnType<typeof answers>['execute']>>[number]): StoredCallFeedback[] {
+    {
       const { platform, quality } = row;
       const answer = row.rating;
       if (!isRating(answer) || !isPlatform(platform)) return [];
@@ -149,21 +182,8 @@ export function createCallFeedbackRepository({ pool }: { pool: pg.Pool }) {
           guestId: row.guest_id
         }
       ];
-    });
+    }
   }
-
-  /** Answers older than `cutoff` stop saying whose they were; returns how many changed. */
-  async function forgetAuthorsBefore(cutoff: Date): Promise<number> {
-    const result = await db
-      .updateTable('call_feedback')
-      .set({ user_id: null, guest_id: null })
-      .where((eb) => eb.or([eb('user_id', 'is not', null), eb('guest_id', 'is not', null)]))
-      .where('created_at', '<', cutoff)
-      .executeTakeFirst();
-    return Number(result.numUpdatedRows);
-  }
-
-  return Object.freeze({ insert, summarize, listRecent, forgetAuthorsBefore });
 }
 
 export type CallFeedbackRepository = ReturnType<typeof createCallFeedbackRepository>;

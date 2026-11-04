@@ -8,6 +8,7 @@
 import type pg from 'pg';
 import { sql } from 'kysely';
 import type { ProductDay, RetentionWeek } from '@voice-room/shared/contracts/admin';
+import { REPORT_REASONS, type ReportReason } from '@voice-room/shared/contracts/reports';
 import { kyselyOn } from '../../platform/db/kysely.ts';
 
 const MSK = sql.lit('Europe/Moscow');
@@ -27,7 +28,14 @@ export type OverviewCounts = {
   weeklyActive: number;
   monthlyActive: number;
   openReports: number;
+  callsToday: number;
+  callsYesterday: number;
+  oldestOpenReportAt: number | null;
+  openReportReasons: ReportReason[];
 };
+
+const REASONS: ReadonlySet<string> = new Set(REPORT_REASONS);
+const isReason = (value: string): value is ReportReason => REASONS.has(value);
 
 const n = (value: unknown): number => Number(value) || 0;
 
@@ -48,6 +56,10 @@ type OverviewRow = {
   weekly_active: Count;
   monthly_active: Count;
   open_reports: Count;
+  calls_today: Count;
+  calls_yesterday: Count;
+  oldest_open_report: Date | null;
+  open_report_reasons: string[] | null;
 };
 
 type ProductDayRow = {
@@ -105,10 +117,41 @@ const liveRetention = sql`
 export function createAdminStatsRepository({ pool }: { pool: pg.Pool }) {
   const db = kyselyOn(pool);
 
-  async function overview(): Promise<OverviewCounts> {
+  /** `liveCalls` are the calls still going on: their stays already over count with them, not as a call of their own. */
+  async function overview(liveCalls: readonly { roomId: string; since: number }[] = []): Promise<OverviewCounts> {
     const today = sql`(now() AT TIME ZONE ${MSK})::date`;
+    const dayStart = (day: unknown) => sql`(${day})::timestamp AT TIME ZONE ${MSK}`;
+    const yesterdayStart = dayStart(sql`${today} - 1`);
+    const live = liveCalls.length
+      ? sql`(VALUES ${sql.join(liveCalls.map((call) => sql`(${call.roomId}::text, ${new Date(call.since)}::timestamptz)`))}) AS l(room_id, since)`
+      : sql`(SELECT NULL::text AS room_id, NULL::timestamptz AS since WHERE false) AS l`;
     const result = await sql<OverviewRow>`
+      WITH stays AS (
+        SELECT id, room_id, joined_at, left_at,
+          max(left_at) OVER (
+            PARTITION BY room_id ORDER BY joined_at, id ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING
+          ) AS earlier_end
+        FROM voice_sessions
+        WHERE room_id IS NOT NULL AND room_id <> '' AND left_at >= ${yesterdayStart} - interval '1 day'
+      ),
+      numbered AS (
+        SELECT *, sum(CASE WHEN earlier_end IS NULL OR joined_at > earlier_end THEN 1 ELSE 0 END) OVER (
+          PARTITION BY room_id ORDER BY joined_at, id
+        ) AS call_no
+        FROM stays
+      ),
+      calls AS (
+        SELECT room_id, min(joined_at) AS started_at, max(left_at) AS ended_at FROM numbered GROUP BY room_id, call_no
+      ),
+      finished AS (
+        SELECT c.* FROM calls c
+        WHERE NOT EXISTS (SELECT 1 FROM ${live} WHERE l.room_id = c.room_id AND c.ended_at >= l.since)
+      )
       SELECT
+        (SELECT count(*) FROM finished WHERE ended_at >= ${dayStart(today)} AND started_at < ${dayStart(sql`${today} + 1`)}) AS calls_today,
+        (SELECT count(*) FROM finished WHERE ended_at >= ${yesterdayStart} AND started_at < ${dayStart(today)}) AS calls_yesterday,
+        (SELECT min(created_at) FROM content_reports WHERE status = 'open') AS oldest_open_report,
+        (SELECT array_agg(DISTINCT reason) FROM content_reports WHERE status = 'open') AS open_report_reasons,
         to_char(${today}, 'YYYY-MM-DD') AS day,
         (SELECT count(*) FROM user_activity_days WHERE day = ${today}) AS active_today,
         (SELECT count(*) FROM users WHERE ${mskDay('created_at')} = ${today}) AS new_today,
@@ -139,7 +182,11 @@ export function createAdminStatsRepository({ pool }: { pool: pg.Pool }) {
       messages: n(row?.messages),
       weeklyActive: n(row?.weekly_active),
       monthlyActive: n(row?.monthly_active),
-      openReports: n(row?.open_reports)
+      openReports: n(row?.open_reports),
+      callsToday: n(row?.calls_today),
+      callsYesterday: n(row?.calls_yesterday),
+      oldestOpenReportAt: row?.oldest_open_report ? row.oldest_open_report.getTime() : null,
+      openReportReasons: (row?.open_report_reasons ?? []).filter(isReason)
     };
   }
 

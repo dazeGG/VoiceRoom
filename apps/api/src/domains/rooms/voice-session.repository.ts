@@ -11,6 +11,7 @@ import crypto from 'node:crypto';
 import { sql } from 'kysely';
 import type pg from 'pg';
 import type { ClientKind } from '@voice-room/shared/contracts/admin';
+import type { CpuPressure } from '@voice-room/shared/contracts/rooms';
 import type { VoiceTransport } from '@voice-room/shared/contracts/realtime';
 import type { HeardCounts } from '@voice-room/shared/voice-quality';
 import { kyselyOn } from '../../platform/db/kysely.ts';
@@ -33,7 +34,24 @@ export type VoiceMinuteSample = {
   mic: { expectedMs: number; deliveredMs: number; contextMs: number; reopens: number; replacements: number };
   /** The latest the minute saw. */
   transport: VoiceTransport | null;
+  /** How its computer did, summed like the rest; absent while its client said nothing of it. */
+  cpu?: MinuteCpu | undefined;
 };
+
+export type MinuteCpu = {
+  appPctSum: number;
+  systemPctSum: number;
+  /** The polls behind the two sums. */
+  polls: number;
+  /** The highest pressure the minute saw. */
+  pressureMax: CpuPressure | null;
+  /** The lighter noise suppression was on. */
+  relieved: boolean;
+};
+
+/** What the stay's seat did that the stay itself does not say (voice_call_events). */
+export type StayEventKind = 'screen_on' | 'screen_off' | 'camera_on' | 'camera_off' | 'cpu_critical' | 'relieved_ns';
+export type StayEvent = { at: number; kind: StayEventKind };
 
 export type FinishedVoiceSession = {
   roomId: string;
@@ -53,6 +71,7 @@ export type FinishedVoiceSession = {
   leftAt: number;
   /** Its voice, minute by minute; none when it sent no stats. */
   minutes?: readonly VoiceMinuteSample[];
+  events?: readonly StayEvent[];
 };
 
 /** What a stay keeps of its address: its keyed hash (lib/ip-key.ts) and its city. */
@@ -102,6 +121,19 @@ export function createVoiceSessionRepository({
           .values(samples.slice(start, start + SAMPLE_BATCH))
           .execute();
       }
+      const events = sessions.flatMap((session, index) =>
+        (session.events ?? []).map((event) => ({
+          stay_id: ids[index] ?? '',
+          at: new Date(event.at),
+          kind: event.kind
+        }))
+      );
+      for (let start = 0; start < events.length; start += SAMPLE_BATCH) {
+        await trx
+          .insertInto('voice_call_events')
+          .values(events.slice(start, start + SAMPLE_BATCH))
+          .execute();
+      }
     });
   }
 
@@ -111,6 +143,12 @@ export function createVoiceSessionRepository({
    */
   async function forgetRoomsBefore(cutoff: Date): Promise<number> {
     return db.transaction().execute(async (trx) => {
+      await trx
+        .deleteFrom('voice_call_events')
+        .where('stay_id', 'in', (eb) =>
+          eb.selectFrom('voice_sessions').select('id').where('room_id', 'is not', null).where('joined_at', '<', cutoff)
+        )
+        .execute();
       await trx
         .deleteFrom('voice_session_samples')
         .where('stay_id', 'in', (eb) =>
@@ -154,7 +192,7 @@ export function createVoiceSessionRepository({
 
 export type VoiceSessionRepository = ReturnType<typeof createVoiceSessionRepository>;
 
-// A row is 25 values, so this keeps a long call's minutes well under the 65535 parameters of one statement.
+// A row is 30 values, so this keeps a long call's minutes well under the 65535 parameters of one statement.
 const SAMPLE_BATCH = 1000;
 
 // The columns are 4-byte integers; a client's counts are bounded per poll, not per minute.
@@ -186,6 +224,11 @@ function sampleRow(stayId: string, minute: VoiceMinuteSample) {
     mic_context_ms: int(minute.mic.contextMs),
     mic_reopens: int(minute.mic.reopens),
     mic_replacements: int(minute.mic.replacements),
-    transport: minute.transport
+    transport: minute.transport,
+    cpu_app_pct_sum: minute.cpu?.appPctSum ?? 0,
+    cpu_system_pct_sum: minute.cpu?.systemPctSum ?? 0,
+    cpu_polls: int(minute.cpu?.polls ?? 0),
+    cpu_pressure_max: minute.cpu?.pressureMax ?? null,
+    cpu_relieved: minute.cpu?.relieved ?? false
   };
 }

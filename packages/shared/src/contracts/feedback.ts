@@ -5,7 +5,7 @@
 // administrator reads the answers in the admin panel.
 
 import { Type, type Static } from 'typebox';
-import { RoomStay } from './admin.ts';
+import { CallEvent, RoomAccount, RoomCall, RoomStay } from './admin.ts';
 import { Nullable, Ok } from './http.ts';
 
 export const CALL_FEEDBACK_RATINGS = ['good', 'bad'] as const;
@@ -161,3 +161,17 @@ export const AdminCallFeedbackPage = Ok({
 export type AdminCallFeedbackPage = Static<typeof AdminCallFeedbackPage>;
 
 export const ADMIN_CALL_FEEDBACK_LIMIT = 200;
+
+/**
+ * One call for its own page: everyone in it, what went on and what was said of
+ * it afterwards. The answers are for those who may read them; events and answers
+ * are optional for an API a release behind.
+ */
+export const RoomCallDetail = Ok({
+  call: RoomCall,
+  /** The owner of its room; null for a room without one. */
+  owner: Type.Optional(Nullable(RoomAccount)),
+  events: Type.Optional(Type.Array(CallEvent)),
+  feedback: Type.Optional(Type.Array(AdminCallFeedbackEntry))
+});
+export type RoomCallDetail = Static<typeof RoomCallDetail>;
