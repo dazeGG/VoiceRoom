@@ -96,7 +96,7 @@ export function getConnectionStatusView(): ConnectionStatusView {
     return {
       label,
       stateName: level === 'bad' ? 'error' : level === 'unstable' ? 'warning' : 'connected',
-      title: formatNetworkDetails(ping)
+      title: [...(cause ? [CAUSE_DETAILS[cause]] : []), formatNetworkDetails(ping)].join(' · ')
     };
   }
 
@@ -137,6 +137,13 @@ const CAUSE_LABELS: Record<VoiceCause, string> = {
   heard_badly: 'вас плохо слышно',
   hears_badly: 'собеседников плохо слышно',
   delay: 'большая задержка'
+};
+
+// The numbers after it are the line's, and they can all be fine: the warning is about the sound.
+const CAUSE_DETAILS: Record<VoiceCause, string> = {
+  heard_badly: 'Собеседники слышат разрывы в вашем голосе, оценка по самому звуку, а не по пингу',
+  hears_badly: 'В голосах собеседников слышны разрывы, оценка по самому звуку, а не по пингу',
+  delay: 'Голос доходит с заметной задержкой: пинг, буфер воспроизведения и кодек вместе дают больше 400 мс'
 };
 
 export function formatNetworkDetails(ping: string): string {

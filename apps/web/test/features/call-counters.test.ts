@@ -170,6 +170,63 @@ test("each poll tells the server what this tab heard of every speaker's micropho
   });
 });
 
+test('a poll that could not read a stream does not count its whole history again at the next one', async () => {
+  vi.useFakeTimers();
+  const polls: Array<{ heard: unknown }> = [];
+  vi.doMock('@/entities/room/room-realtime', () => ({
+    updateVoicePeer: () => {},
+    reportVoicePoll: (payload: { heard: unknown }) => polls.push(payload)
+  }));
+  const stats = await freshImport(() => import('@/features/room/client/room/stats'));
+  const { state } = await import('@/features/room/client/core/room-runtime.store');
+
+  // An hour into a call, with its share of gaps; then one read fails, as a track being swapped makes it.
+  const reading = (packets: number, gaps: number) => ({
+    id: 'in-mic',
+    type: 'inbound-rtp',
+    kind: 'audio',
+    packetsReceived: packets,
+    packetsLost: 0,
+    concealedSamples: gaps * 1440,
+    silentConcealedSamples: 0,
+    concealmentEvents: gaps,
+    jitterBufferDelay: 0,
+    jitterBufferEmittedCount: packets * 960
+  });
+  const answers = [
+    async () => report([reading(180_000, 400)]),
+    async () => {
+      throw new Error('the track is being replaced');
+    },
+    async () => report([reading(180_300, 400)])
+  ];
+  let pollNo = 0;
+  const track = { getRTCStatsReport: () => defined(answers[pollNo], 'answer')() };
+  Object.assign(state, {
+    joined: true,
+    roomId: 'kitchen',
+    peerId: 'peer-self-1',
+    sessionToken: 's'.repeat(32),
+    localMicPublication: { track: { getRTCStatsReport: async () => report([]) } },
+    peers: new Map([
+      [
+        'peer-anna-1',
+        { livekitParticipant: { audioTrackPublications: new Map([['mic', { source: 'microphone', track }]]) } }
+      ]
+    ])
+  });
+
+  stats.startPeerLatencyStats();
+  await vi.advanceTimersByTimeAsync(0);
+  pollNo = 1;
+  await vi.advanceTimersByTimeAsync(3_000);
+  pollNo = 2;
+  await vi.advanceTimersByTimeAsync(3_000);
+  stats.stopPeerLatencyStats();
+
+  expect(polls.at(-1)?.heard).toEqual([{ peerId: 'peer-anna-1', packets: 300, lost: 0, concealedSamples: 0, gaps: 0 }]);
+});
+
 test("the desktop app's CPU totals give VoiceRoom's share of the computer apart from the whole computer's", async () => {
   vi.useFakeTimers();
   vi.doMock('@/entities/room/room-realtime', () => ({ updateVoicePeer: () => {}, reportVoicePoll: () => {} }));
