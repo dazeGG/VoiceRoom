@@ -10,6 +10,8 @@ import type { ClientCommands, CpuPoll } from '@voice-room/shared/contracts/realt
 import { CPU_PRESSURES, type CpuPressure } from '@voice-room/shared/contracts/rooms';
 import {
   VOICE_WINDOW_POLLS,
+  concealedSpeechPct,
+  heardGaps,
   judgeVoice,
   type HeardCounts,
   type VoiceReport,
@@ -19,7 +21,8 @@ import type {
   MinuteCpu,
   StayEvent,
   StayEventKind,
-  VoiceMinuteSample
+  VoiceMinuteSample,
+  WorstWindow
 } from '../domains/rooms/voice-session.repository.ts';
 
 type VoicePoll = ClientCommands['room.voice.report'];
@@ -32,13 +35,18 @@ export const VOICE_MINUTES_MAX = 720;
 /** A stay keeps this many events; past it the oldest go. */
 export const VOICE_EVENTS_MAX = 200;
 const MINUTE_MS = 60_000;
+/** Fewer measured polls than this say nothing of a delay: it settles over the first seconds of a call. */
+const DELAY_MIN_POLLS = 3;
+/** A poll covers three seconds, so one heard this soon after a microphone changed can hold the change. */
+const MIC_SETTLE_MS = 4000;
 
-/** A peer's voice: its latest poll, its windows, the verdict and its minutes. */
+/** A peer's voice: its latest polls, its windows, the verdict and its minutes. */
 export interface PeerVoice {
   /** When its latest poll came; null for a speaker known only from its listeners. */
   reportedAt: number | null;
-  rttMs: number | null;
-  jitterBufferMs: number | null;
+  /** The last VOICE_WINDOW_POLLS polls' round trip and jitter buffer, the latest last. */
+  rttPolls: (number | null)[];
+  jitterBufferPolls: (number | null)[];
   /** Per speaker, the counts of the last VOICE_WINDOW_POLLS polls, the latest last. */
   heard: Map<string, HeardCounts[]>;
   uplink: Uplink[];
@@ -53,6 +61,8 @@ export interface PeerVoice {
   cpuPressure: CpuPressure | null;
   /** Its call switched to the lighter noise suppression. */
   relieved: boolean;
+  /** When its microphone last went on or off. */
+  micChangedAt?: number | undefined;
 }
 
 /** What the runtime needs of a room and its peers. */
@@ -71,8 +81,8 @@ const NO_COUNTS: HeardCounts = { packets: 0, lost: 0, concealedSamples: 0, gaps:
 
 const emptyVoice = (): PeerVoice => ({
   reportedAt: null,
-  rttMs: null,
-  jitterBufferMs: null,
+  rttPolls: [],
+  jitterBufferPolls: [],
   heard: new Map(),
   uplink: [],
   verdict: null,
@@ -90,6 +100,11 @@ const pushEvent = (voice: PeerVoice, kind: StayEventKind, at: number) => {
 /** Keeps something a peer's seat did with its stay: a screen or a camera going on or off. */
 export function noteStayEvent(peer: VoicePeer, kind: StayEventKind, at: number): void {
   pushEvent((peer.voice ??= emptyVoice()), kind, at);
+}
+
+/** A peer's microphone went on or off: see micChanging. */
+export function noteMicChange(peer: VoicePeer, at: number): void {
+  (peer.voice ??= emptyVoice()).micChangedAt = at;
 }
 
 const higherPressure = (a: CpuPressure | null, b: CpuPressure | null): CpuPressure | null => {
@@ -125,6 +140,41 @@ const sameVerdict = (a: VoiceVerdict | null | undefined, b: VoiceVerdict | null)
 const keepLast = (items: unknown[]) => {
   if (items.length > VOICE_WINDOW_POLLS) items.splice(0, items.length - VOICE_WINDOW_POLLS);
 };
+
+/**
+ * What most of the latest polls measured at least: over five, three of them.
+ * A single spike of a round trip or a buffer is not a long delay, as Twilio's
+ * voice SDK reads each of its warnings over three of its last five samples.
+ * The round trip is measured every poll, so too few polls mean the call has only
+ * begun; the buffer only while someone speaks, so one reading has to do.
+ */
+function settled(polls: readonly (number | null)[], minPolls: number): number | null {
+  const measured = polls.filter((value) => value !== null).sort((a, b) => a - b);
+  if (measured.length < minPolls) return null;
+  return measured[Math.floor((measured.length - 1) / 2)] ?? null;
+}
+
+/**
+ * A speaker's microphone went on or off within the poll. LiveKit stops forwarding
+ * a muted microphone, and its listeners' receivers make up its last moment, with
+ * nothing wrong on any line. While it stays off nothing is made up (those events
+ * are silence, which heardGaps drops), so only the change itself is skipped, and a
+ * `muted` left over from before a reconnect never hides a voice breaking up.
+ */
+const micChanging = (sender: VoicePeer, at: number) => {
+  const changedAt = sender.voice?.micChangedAt;
+  return changedAt !== undefined && at - changedAt < MIC_SETTLE_MS;
+};
+
+/** Keeps the worst of the windows a minute saw of any one speaker, each number on its own. */
+function worseWindow(worst: WorstWindow | undefined, window: HeardCounts): WorstWindow | undefined {
+  const concealedPct = concealedSpeechPct(window);
+  if (concealedPct === null) return worst;
+  return {
+    concealedPct: Math.max(worst?.concealedPct ?? 0, concealedPct),
+    gaps: Math.max(worst?.gaps ?? 0, heardGaps(window))
+  };
+}
 
 /** The running minute of a stay at `at`, started when the clock passed into a new one. */
 function minuteOf(voice: PeerVoice, at: number): VoiceMinuteSample {
@@ -169,8 +219,8 @@ function reportOf(peer: VoicePeer & { voice: PeerVoice }, inRoom: (peerId: strin
   );
   return {
     peerId: peer.id,
-    rttMs: voice.rttMs,
-    jitterBufferMs: voice.jitterBufferMs,
+    rttMs: settled(voice.rttPolls, DELAY_MIN_POLLS),
+    jitterBufferMs: settled(voice.jitterBufferPolls, 1),
     uplinkLossPct: uplink.packets > 0 ? (uplink.lost / uplink.packets) * 100 : null,
     heard: [...voice.heard]
       .filter(([senderId]) => inRoom(senderId))
@@ -195,10 +245,15 @@ export function noteVoiceReport<Peer extends VoicePeer>(
   const voice = (peer.voice ??= emptyVoice());
   const minute = minuteOf(voice, at);
 
-  // A speaker the poll does not name sent nothing since the previous one.
+  // A speaker the poll does not name sent nothing since the previous one, and
+  // one whose microphone was changing said nothing we can judge. Only here, poll
+  // by poll, can the events spent on silence be told from gaps.
   const polled = new Map<string, HeardCounts>();
   for (const { peerId, ...counts } of poll.heard) {
-    if (peerId !== peer.id && peers.has(peerId) && !polled.has(peerId)) polled.set(peerId, counts);
+    const sender = peers.get(peerId);
+    if (peerId !== peer.id && sender && !polled.has(peerId)) {
+      polled.set(peerId, micChanging(sender, at) ? NO_COUNTS : { ...counts, gaps: heardGaps(counts) });
+    }
   }
   for (const senderId of voice.heard.keys()) if (!polled.has(senderId)) polled.set(senderId, NO_COUNTS);
   for (const [senderId, counts] of polled) {
@@ -209,14 +264,21 @@ export function noteVoiceReport<Peer extends VoicePeer>(
     else voice.heard.set(senderId, polls);
     if (counts === NO_COUNTS) continue;
     addCounts(minute.heard, counts);
+    const window = polls.reduce(addCounts, { ...NO_COUNTS });
+    minute.worstHeard = worseWindow(minute.worstHeard, window);
     const sender = peers.get(senderId);
-    if (sender) addCounts(minuteOf((sender.voice ??= emptyVoice()), at).heardBy, counts);
+    if (!sender) continue;
+    const senderMinute = minuteOf((sender.voice ??= emptyVoice()), at);
+    addCounts(senderMinute.heardBy, counts);
+    senderMinute.worstHeardBy = worseWindow(senderMinute.worstHeardBy, window);
   }
 
   voice.uplink.push({ ...poll.uplink });
   keepLast(voice.uplink);
-  voice.rttMs = poll.rttMs;
-  voice.jitterBufferMs = poll.jitterBufferMs;
+  voice.rttPolls.push(poll.rttMs);
+  keepLast(voice.rttPolls);
+  voice.jitterBufferPolls.push(poll.jitterBufferMs);
+  keepLast(voice.jitterBufferPolls);
   voice.reportedAt = at;
   if (poll.rttMs !== null) {
     minute.rttMsSum += poll.rttMs;
@@ -239,7 +301,13 @@ export function noteVoiceReport<Peer extends VoicePeer>(
   if (poll.cpu) noteCpu(voice, minute, poll.cpu, at);
 
   const changes = judgeRoom(peers, at);
-  if (voice.verdict) minute.polls[voice.verdict.level] += 1;
+  if (voice.verdict) {
+    minute.polls[voice.verdict.level] += 1;
+    if (voice.verdict.cause) {
+      minute.causes ??= { heard_badly: 0, hears_badly: 0, delay: 0 };
+      minute.causes[voice.verdict.cause] += 1;
+    }
+  }
   return changes;
 }
 

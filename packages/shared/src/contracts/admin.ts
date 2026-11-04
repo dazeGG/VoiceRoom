@@ -603,20 +603,43 @@ export const VoiceMinuteHeard = Type.Object({
   /** The share of the speech the receiver had to make up, in percent. */
   concealedPct: Type.Number(),
   /** Gaps per minute of speech. */
-  gapsPerMin: Type.Number()
+  gapsPerMin: Type.Number(),
+  /** The seconds of speech behind them, to weigh this minute against others. Optional for an API a release behind. */
+  speechS: Type.Optional(Type.Number()),
+  /**
+   * The worst 15 seconds of any one speaker among the windows ending in this
+   * minute: the numbers above are summed over everyone, which waters down one
+   * speaker's trouble. Absent when no window had enough speech, and for minutes
+   * before they were kept.
+   */
+  worstConcealedPct: Type.Optional(Type.Number()),
+  worstGaps: Type.Optional(Type.Integer())
 });
 export type VoiceMinuteHeard = Static<typeof VoiceMinuteHeard>;
 
+/** How many of a minute's polls gave each cause of trouble. */
+export const VoiceMinuteCauses = Type.Object({
+  heard_badly: Type.Integer(),
+  hears_badly: Type.Integer(),
+  delay: Type.Integer()
+});
+export type VoiceMinuteCauses = Static<typeof VoiceMinuteCauses>;
+
 /**
  * One minute of a stay's voice, from its stats polls. `level` is bad when two
- * of the peer's own polls were bad, unstable when two were not good, good with
- * any polls, and null when it sent none. A minute with no row had no polls.
+ * of the peer's own polls were bad, unstable when at least two and a third of
+ * them were not good (one trouble stays in the 15 second window for five polls,
+ * so it alone does not colour a minute), good with any other polls, and null
+ * when it sent none. `polls` tells how long a shorter trouble lasted. A minute
+ * with no row had no polls.
  */
 export const VoiceMinute = Type.Object({
   /** The minute's start. */
   at: Type.Number(),
   level: Nullable(NetworkLevel),
   polls: Type.Object({ good: Type.Integer(), unstable: Type.Integer(), bad: Type.Integer() }),
+  /** Why its polls were not good; absent when all were, or for minutes before they were kept. */
+  causes: Type.Optional(VoiceMinuteCauses),
   /** What the peer heard of the others, and they of it; null with too little speech to tell. */
   heard: Nullable(VoiceMinuteHeard),
   heardBy: Nullable(VoiceMinuteHeard),

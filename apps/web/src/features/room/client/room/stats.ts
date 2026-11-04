@@ -119,9 +119,10 @@ function readMicSend(stats: Map<string, RtcStat>): MicReading | null {
 }
 
 // The browser's counters only ever grow. Each poll keeps the previous reading
-// (inbound per stats id) and takes its own difference, so nothing between two
-// polls is missed or counted twice; the loss windows (loss-window.ts) then
-// count over the last few polls, the call's account (call-quality.ts) over all.
+// (inbound per stats id, for the whole call, so a stream one poll could not read
+// is not counted from zero again) and takes its own difference, so nothing
+// between two polls is missed or counted twice; the loss windows (loss-window.ts)
+// then count over the last few polls, the call's account (call-quality.ts) over all.
 interface InboundReading {
   lost: number;
   received: number;
@@ -154,7 +155,6 @@ type OutboundCounts = Pick<PollCounts, 'outboundPackets' | 'outboundLost' | 'rtt
 const growth = (now: number, before: number) => (now >= before ? now - before : now);
 
 async function updateInboundAudioStats(): Promise<InboundCounts> {
-  const current = new Map<string, InboundReading>();
   const counts: InboundCounts = {
     inboundPackets: 0,
     inboundLost: 0,
@@ -199,7 +199,7 @@ async function updateInboundAudioStats(): Promise<InboundCounts> {
           bufferSeconds: 0,
           bufferSamples: 0
         };
-        current.set(report.id, reading);
+        previousInbound.set(report.id, reading);
         const lost = growth(reading.lost, before.lost);
         counts.inboundLost += lost;
         counts.inboundPackets += lost + growth(reading.received, before.received);
@@ -222,7 +222,6 @@ async function updateInboundAudioStats(): Promise<InboundCounts> {
     }
     if (heard) counts.heard.push(heard);
   }
-  previousInbound = current;
   counts.jitterBufferMs = bufferSamples > 0 ? Math.round((bufferSeconds / bufferSamples) * 1000) : null;
   state.localNetwork.inboundLossPct = inboundLoss.add(counts.inboundLost, counts.inboundPackets);
   state.localNetwork.jitterMs = jitterCount > 0 ? Math.round(jitterSum / jitterCount) : null;

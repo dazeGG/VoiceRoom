@@ -12,7 +12,9 @@
 // room from all its listeners' reports instead (judgeVoice): a speaker most
 // listeners hear badly is the one heard badly, a listener who hears most
 // speakers badly is the one hearing badly. The room's pill and the admin panel
-// show that one verdict.
+// show that one verdict. It is about the sound, not the line, so it can be
+// unstable with a low ping and no loss: packets arriving unevenly, or a computer
+// too busy to play them in time.
 
 import type { NetworkLevel, VoiceCause } from './contracts/rooms.ts';
 
@@ -23,8 +25,13 @@ export type { VoiceCause };
  * 2026-10-31, 22 steps of random loss, bursts and jitter) "noise" and "barely
  * audible", each threshold halfway between the steps on either side of it:
  * - unstable: 10 gaps a minute of speech (clean steps had up to 7, noisy ones
- *   12 and more), at least two in the window so one click is not a trend; or
- *   3 % of the latest poll's speech made up, so a dropout shows at once.
+ *   12 and more). 12 a minute is three gaps in 15 seconds, so three is the
+ *   fewest that say so: at 7 a minute, the most the bench rated clean, chance
+ *   alone puts two gaps in about 40 % of windows with 12 seconds of speech. Or
+ *   a dropout that shows at once: the latest poll lost 3 % of its speech and at
+ *   least 150 ms, what WebRTC itself calls an interruption (kInterruptionLenMs
+ *   in NetEQ). Or dropouts that keep coming, too few to be a rate: 3 % of the
+ *   window's speech, where no step the bench rated clean went past 0.5 %.
  * - bad: 18 % of the window's speech made up (16.2 % was still followable,
  *   19.4 % was not), or 8 % in gaps of 50 ms and longer (5.5 % of 60 ms gaps
  *   was followable, 10.7 % of 64 ms gaps was not; short gaps ran 24-41 ms).
@@ -32,7 +39,14 @@ export type { VoiceCause };
  * other; it never makes a call bad on its own.
  */
 export const VOICE_THRESHOLDS = {
-  unstable: { gapsPerSpeechMin: 10, minGaps: 2, pollConcealedPct: 3, mouthToEarMs: 400 },
+  unstable: {
+    gapsPerSpeechMin: 10,
+    minGaps: 3,
+    pollConcealedPct: 3,
+    pollConcealedMs: 150,
+    windowConcealedPct: 3,
+    mouthToEarMs: 400
+  },
   bad: { concealedPct: 18, longGapConcealedPct: 8, longGapMs: 50 }
 } as const;
 
@@ -41,8 +55,21 @@ export const VOICE_WINDOW_POLLS = 5;
 /** Opus frames are 20 ms at 48 kHz. */
 export const VOICE_SAMPLES_PER_PACKET = 960;
 const SAMPLE_RATE = 48_000;
-/** Less speech than this (half a second) says nothing about how it sounded. */
-export const VOICE_MIN_SPEECH_SAMPLES = 24_000;
+/**
+ * Less speech than this (three seconds) says nothing of how a window or a
+ * minute sounded: a DTX stream's silence alone comes to most of a second, and
+ * one gap in it reads as a hundred a minute. Teams leaves a stream of under 500
+ * packets (ten seconds) unclassified for the same reason.
+ */
+export const VOICE_MIN_SPEECH_SAMPLES = 144_000;
+/** Less speech than this (half a second) in a poll cannot show a dropout. */
+export const VOICE_MIN_POLL_SPEECH_SAMPLES = 24_000;
+/**
+ * The receiver plays 10 ms at a time, so a gap that made up voice made up about
+ * this much at least. WebRTC also counts a concealment event for silence and
+ * comfort noise (NetEQ ExpandedNoiseSamples), and nobody hears those as gaps.
+ */
+export const VOICE_MIN_GAP_SAMPLES = 480;
 /** Capture, a 20 ms frame with the encoder's look-ahead, and playout, on top of the network and the jitter buffer. */
 export const VOICE_CODEC_DELAY_MS = 40;
 
@@ -53,7 +80,7 @@ export interface HeardCounts {
   lost: number;
   /** Samples made up for missing packets outside silence. */
   concealedSamples: number;
-  /** Times the receiver started making sound up: each one a gap the listener heard. */
+  /** Times the receiver started making sound up, as WebRTC counts them; heardGaps says how many can have been voice. */
   gaps: number;
 }
 
@@ -88,10 +115,25 @@ const speechSamples = (counts: Pick<HeardCounts, 'packets'>) => Math.max(0, coun
 const concealedOf = (counts: Pick<HeardCounts, 'packets' | 'concealedSamples'>) =>
   Math.min(Math.max(0, counts.concealedSamples), speechSamples(counts));
 
+/** How much speech the packets carried, in seconds. */
+export const speechSeconds = (counts: Pick<HeardCounts, 'packets'>) => speechSamples(counts) / SAMPLE_RATE;
+
+/**
+ * The gaps that can have made up voice: no more than its concealed samples have
+ * frames. Over one poll this drops the events it spent on silence alone; summed
+ * over several it is only an upper bound, so the server takes it poll by poll.
+ */
+export function heardGaps(counts: Pick<HeardCounts, 'concealedSamples' | 'gaps'>): number {
+  return Math.min(Math.max(0, counts.gaps), Math.floor(Math.max(0, counts.concealedSamples) / VOICE_MIN_GAP_SAMPLES));
+}
+
 /** The share of the speech that was made up, in percent; null with too little speech to tell. */
-export function concealedSpeechPct(counts: Pick<HeardCounts, 'packets' | 'concealedSamples'>): number | null {
+export function concealedSpeechPct(
+  counts: Pick<HeardCounts, 'packets' | 'concealedSamples'>,
+  minSpeechSamples: number = VOICE_MIN_SPEECH_SAMPLES
+): number | null {
   const speech = speechSamples(counts);
-  if (speech < VOICE_MIN_SPEECH_SAMPLES) return null;
+  if (speech < minSpeechSamples) return null;
   return Math.round((concealedOf(counts) / speech) * 1000) / 10;
 }
 
@@ -99,25 +141,37 @@ export function concealedSpeechPct(counts: Pick<HeardCounts, 'packets' | 'concea
 export function gapsPerSpeechMin(counts: HeardCounts): number | null {
   const speech = speechSamples(counts);
   if (speech < VOICE_MIN_SPEECH_SAMPLES) return null;
-  return Math.max(0, counts.gaps) / (speech / SAMPLE_RATE / 60);
+  return heardGaps(counts) / (speech / SAMPLE_RATE / 60);
 }
 
 /** How long a gap lasted on average, in ms; 0 without gaps. */
 export function averageGapMs(counts: HeardCounts): number {
-  return counts.gaps > 0 ? (concealedOf(counts) / counts.gaps / SAMPLE_RATE) * 1000 : 0;
+  const gaps = heardGaps(counts);
+  return gaps > 0 ? (concealedOf(counts) / gaps / SAMPLE_RATE) * 1000 : 0;
 }
 
-/** How a speaker sounded to a listener: the window's gaps and their length, and a dropout in the latest poll; null with too little speech. */
+/** The latest poll lost a stretch of speech long enough to hear on its own. */
+function droppedOut(latest: HeardCounts): boolean {
+  const { pollConcealedMs, pollConcealedPct } = VOICE_THRESHOLDS.unstable;
+  const pct = concealedSpeechPct(latest, VOICE_MIN_POLL_SPEECH_SAMPLES);
+  return pct !== null && pct >= pollConcealedPct && (concealedOf(latest) / SAMPLE_RATE) * 1000 >= pollConcealedMs;
+}
+
+/**
+ * How a speaker sounded to a listener: the window's gaps and their length, and
+ * a dropout in the latest poll; null with too little speech to tell and no
+ * dropout either.
+ */
 export function streamLevel(stream: Pick<HeardStream, 'latest' | 'window'>): NetworkLevel | null {
   const { bad, unstable } = VOICE_THRESHOLDS;
+  const dropout = droppedOut(stream.latest);
   const concealedPct = concealedSpeechPct(stream.window);
   const rate = gapsPerSpeechMin(stream.window);
-  if (concealedPct === null || rate === null) return null;
+  if (concealedPct === null || rate === null) return dropout ? 'unstable' : null;
   const longGaps = averageGapMs(stream.window) >= bad.longGapMs;
   if (concealedPct >= bad.concealedPct || (longGaps && concealedPct >= bad.longGapConcealedPct)) return 'bad';
-  const latestPct = concealedSpeechPct(stream.latest);
-  if (latestPct !== null && latestPct >= unstable.pollConcealedPct) return 'unstable';
-  return stream.window.gaps >= unstable.minGaps && rate >= unstable.gapsPerSpeechMin ? 'unstable' : 'good';
+  if (dropout || concealedPct >= unstable.windowConcealedPct) return 'unstable';
+  return heardGaps(stream.window) >= unstable.minGaps && rate >= unstable.gapsPerSpeechMin ? 'unstable' : 'good';
 }
 
 /** Mouth to ear: each side's half of its round trip, the listener's jitter buffer and the codec; null without both round trips. */

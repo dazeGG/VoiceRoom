@@ -70,7 +70,9 @@ test("the pill shows the server's verdict on what the room heard, and whose side
   state.voiceQuality = { level: 'unstable', cause: 'hears_badly' };
   expect(getConnectionStatusView()).toMatchObject({
     stateName: 'warning',
-    label: 'Голос нестабилен · собеседников плохо слышно · 2 мс'
+    label: 'Голос нестабилен · собеседников плохо слышно · 2 мс',
+    // A fine ping next to a warning needs saying that the warning is not about the ping.
+    title: 'В голосах собеседников слышны разрывы, оценка по самому звуку, а не по пингу · Пинг до LiveKit 2 мс'
   });
 
   state.voiceQuality = { level: 'bad', cause: 'heard_badly' };

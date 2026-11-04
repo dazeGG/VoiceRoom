@@ -22,12 +22,17 @@ import {
   type VoiceQuality
 } from '@voice-room/shared/contracts/admin';
 import { NetworkPoint, type CpuPressure, type NetworkLevel } from '@voice-room/shared/contracts/rooms';
-import { concealedSpeechPct, gapsPerSpeechMin, type HeardCounts } from '@voice-room/shared/voice-quality';
+import {
+  concealedSpeechPct,
+  gapsPerSpeechMin,
+  speechSeconds,
+  type HeardCounts
+} from '@voice-room/shared/voice-quality';
 import { kyselyOn } from '../../platform/db/kysely.ts';
 import { escapeLike } from '../../platform/db/like.ts';
 import { toMillis } from '../../platform/epoch-millis.ts';
 import { avatarUrl } from '../../lib/avatar-url.ts';
-import type { StayEvent, StayEventKind, VoiceMinuteSample } from '../rooms/voice-session.repository.ts';
+import type { StayEvent, StayEventKind, VoiceMinuteSample, WorstWindow } from '../rooms/voice-session.repository.ts';
 
 export interface AdminRoomRow {
   id: string;
@@ -105,9 +110,11 @@ export const RECENT_STAYS_DAYS = sql.lit(32);
 
 /** A minute's level in SQL, as minuteLevel reads it: over the rows of voice_session_samples `m`. */
 export const QUALITY_COLUMNS = sql`
-  count(*) FILTER (WHERE m.polls_bad < 2 AND m.polls_bad + m.polls_unstable < 2
+  count(*) FILTER (WHERE m.polls_bad < 2 AND NOT (m.polls_bad + m.polls_unstable >= 2
+      AND (m.polls_bad + m.polls_unstable) * 3 >= m.polls_good + m.polls_unstable + m.polls_bad)
     AND m.polls_good + m.polls_unstable + m.polls_bad > 0) AS good,
-  count(*) FILTER (WHERE m.polls_bad < 2 AND m.polls_bad + m.polls_unstable >= 2) AS unstable,
+  count(*) FILTER (WHERE m.polls_bad < 2 AND m.polls_bad + m.polls_unstable >= 2
+    AND (m.polls_bad + m.polls_unstable) * 3 >= m.polls_good + m.polls_unstable + m.polls_bad) AS unstable,
   count(*) FILTER (WHERE m.polls_bad >= 2) AS bad`;
 
 /** The minutes of each level as counted by QUALITY_COLUMNS; null without any. */
@@ -155,18 +162,35 @@ const NetworkPoints = Type.Array(NetworkPoint);
 /** The column holds what voice-session.repository wrote; anything else reads as no changes. */
 const networkOf = (value: unknown): NetworkPoint[] => (Value.Check(NetworkPoints, value) ? value : []);
 
-/** A minute's level from the peer's own polls: two bad make it bad, two not good unstable. */
+/**
+ * A minute's level from the peer's own polls: two bad make it bad, and at least
+ * two not good that are also a third of them make it unstable. One trouble stays
+ * in the 15 second window for five polls of a minute's twenty, so on its own it
+ * shows in the minute's numbers and does not colour the minute.
+ */
 export function minuteLevel(polls: VoiceMinute['polls']): NetworkLevel | null {
+  const all = polls.good + polls.unstable + polls.bad;
+  if (all === 0) return null;
   if (polls.bad >= 2) return 'bad';
-  if (polls.bad + polls.unstable >= 2) return 'unstable';
-  return polls.good + polls.unstable + polls.bad > 0 ? 'good' : null;
+  const notGood = polls.bad + polls.unstable;
+  return notGood >= 2 && notGood * 3 >= all ? 'unstable' : 'good';
 }
 
-function heardOf(counts: HeardCounts): VoiceMinuteHeard | null {
+function heardOf(counts: HeardCounts, worst: WorstWindow | undefined): VoiceMinuteHeard | null {
   const concealedPct = concealedSpeechPct(counts);
   const gapsPerMin = gapsPerSpeechMin(counts);
-  return concealedPct === null || gapsPerMin === null ? null : { concealedPct, gapsPerMin: Math.round(gapsPerMin) };
+  if (concealedPct === null || gapsPerMin === null) return null;
+  return {
+    concealedPct,
+    gapsPerMin: Math.round(gapsPerMin),
+    speechS: Math.round(speechSeconds(counts)),
+    ...(worst ? { worstConcealedPct: worst.concealedPct, worstGaps: worst.gaps } : {})
+  };
 }
+
+/** A minute's worst window as its row holds it; none before they were kept or with too little speech. */
+const worstOf = (concealedPct: number | null, gaps: number): WorstWindow | undefined =>
+  concealedPct === null ? undefined : { concealedPct, gaps };
 
 const averageOf = (sum: number, polls: number) => (polls > 0 ? Math.round(sum / polls) : null);
 
@@ -189,13 +213,14 @@ function stayEventKind(value: string): StayEventKind | null {
 
 /** A minute as the panel reads it, from its counts. A seat still held has them in memory, a finished one in its row. */
 export function minuteOfSample(sample: VoiceMinuteSample): VoiceMinute {
-  const { polls, uplink, cpu } = sample;
+  const { causes, polls, uplink, cpu } = sample;
   return {
     at: sample.at,
     level: minuteLevel(polls),
     polls,
-    heard: heardOf(sample.heard),
-    heardBy: heardOf(sample.heardBy),
+    ...(causes && causes.heard_badly + causes.hears_badly + causes.delay > 0 ? { causes } : {}),
+    heard: heardOf(sample.heard, sample.worstHeard),
+    heardBy: heardOf(sample.heardBy, sample.worstHeardBy),
     uplinkLossPct: uplink.packets > 0 ? Math.round((uplink.lost / uplink.packets) * 1000) / 10 : null,
     rttMs: averageOf(sample.rttMsSum, sample.rttPolls),
     jitterBufferMs: averageOf(sample.jitterBufferMsSum, sample.jitterBufferPolls),
@@ -361,6 +386,13 @@ export function createAdminRoomsRepository({ pool }: { pool: pg.Pool }) {
       const minute = minuteOfSample({
         at: toMillis(row.at),
         polls: { good: row.polls_good, unstable: row.polls_unstable, bad: row.polls_bad },
+        causes: {
+          heard_badly: row.polls_heard_badly,
+          hears_badly: row.polls_hears_badly,
+          delay: row.polls_delay
+        },
+        worstHeard: worstOf(row.heard_worst_concealed_pct, row.heard_worst_gaps),
+        worstHeardBy: worstOf(row.heard_by_worst_concealed_pct, row.heard_by_worst_gaps),
         heard: {
           packets: row.heard_packets,
           lost: row.heard_lost,

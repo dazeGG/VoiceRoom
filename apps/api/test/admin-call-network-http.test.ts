@@ -310,7 +310,7 @@ test(
     assert.equal(fromGuest?.stay?.os, 'Windows');
     assert.deepEqual(
       fromGuest?.stay?.minutes?.map((minute) => [minute.rttMs, minute.heard]),
-      [[40, { concealedPct: 0, gapsPerMin: 0 }]]
+      [[40, { concealedPct: 0, gapsPerMin: 0, speechS: 3, worstConcealedPct: 0, worstGaps: 0 }]]
     );
     assert.equal(fromGuest?.quality?.rttMaxMs, 1109);
     assert.equal(fromGuest?.quality?.micDrops, 3);

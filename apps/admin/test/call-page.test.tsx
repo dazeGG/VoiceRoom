@@ -16,7 +16,7 @@ import type {
 } from '@voice-room/shared/contracts/admin';
 import type { RoomCallDetail } from '@voice-room/shared/contracts/feedback';
 import { cpuConclusion } from '../src/pages/AccountPanel.tsx';
-import { verdictOf } from '../src/pages/call/verdict.ts';
+import { delayOf, heardSummary, verdictOf, worstOf } from '../src/pages/call/verdict.ts';
 import { CallPage } from '../src/pages/CallPage.tsx';
 import { FIRST_STATIC_VIEW, StaticRooms } from '../src/pages/rooms/StaticRooms.tsx';
 import { QualityBar, qualityShort } from '../src/pages/rooms/QualityBar.tsx';
@@ -277,6 +277,86 @@ test('a voice is read from its minutes, and blames only what the numbers show', 
   );
   expect(verdictOf([minute(0, { ...bad, transport: 'relay' })]).title).toBe('Связь шла через ретранслятор');
   expect(verdictOf([minute(0, bad)]).title).toBe('Были плохие минуты');
+});
+
+test('a network is called bad by the same line the room is judged by', () => {
+  const unstable = { level: 'unstable' as const, polls: { good: 10, unstable: 10, bad: 0 } };
+  // 150 ms is a fine ping for a call: the voice trouble of this minute is not the network's.
+  expect(verdictOf([minute(0, { ...unstable, rttMs: 150 })]).title).toBe('Были нестабильные минуты');
+  expect(verdictOf([minute(0, { ...unstable, rttMs: 300 })]).title).toBe('Плохая сеть');
+});
+
+test('a long delay is named as the cause, from the polls that gave it or from its numbers', () => {
+  const unstable = { level: 'unstable' as const, polls: { good: 0, unstable: 20, bad: 0 } };
+  const buffered = verdictOf([minute(0, { ...unstable, rttMs: 100, jitterBufferMs: 300 })]);
+  expect(buffered.title).toBe('Большая задержка голоса');
+  expect(buffered.text).toContain('пинг 100 мс, буфер 300 мс');
+  const told = minute(0, { ...unstable, causes: { heard_badly: 2, hears_badly: 0, delay: 18 } });
+  expect(verdictOf([told]).title).toBe('Большая задержка голоса');
+  // Gaps by far outweigh it, and the numbers do not reach the line either.
+  const gaps = minute(0, { ...unstable, causes: { heard_badly: 0, hears_badly: 18, delay: 2 } });
+  expect(verdictOf([gaps]).title).toBe('Были нестабильные минуты');
+  expect(verdictOf([gaps]).text).toContain('В самом звуке были разрывы');
+  expect(delayOf({ rttMs: 100, jitterBufferMs: 300 })).toBe(440);
+  expect(delayOf({ rttMs: null, jitterBufferMs: 300 })).toBeNull();
+});
+
+test('the causes the server gave outrank a delay worked out from one side of it', () => {
+  // A ping and a buffer that add up past the line, and yet no poll blamed the delay.
+  const minuteOfGaps = minute(0, {
+    level: 'unstable',
+    polls: { good: 13, unstable: 7, bad: 0 },
+    causes: { heard_badly: 0, hears_badly: 7, delay: 0 },
+    rttMs: 290,
+    jitterBufferMs: 80
+  });
+  expect(delayOf(minuteOfGaps)).toBe(410);
+  expect(verdictOf([minuteOfGaps]).title).toBe('Были нестабильные минуты');
+});
+
+test('a minute one trouble passed through stays good, and the verdict still says it happened', () => {
+  const clean = verdictOf([minute(0), minute(1)]);
+  expect(clean.title).toBe('Голос в порядке');
+  expect(clean.text).toBe('Связь была ровной весь звонок.');
+  const passing = verdictOf([minute(0, { polls: { good: 15, unstable: 5, bad: 0 } }), minute(1), minute(2), minute(3)]);
+  expect(passing.title).toBe('Голос в порядке');
+  expect(passing.tone).toBe('success');
+  expect(passing.text).toContain('всего 15 с');
+});
+
+test('short troubles that keep coming are not called fine, though no minute was coloured', () => {
+  // 300 ms lost every ten seconds: 18 seconds of each minute, under the third that colours one.
+  const each = { polls: { good: 14, unstable: 6, bad: 0 } };
+  const verdict = verdictOf([minute(0, each), minute(1, each), minute(2, each)]);
+  expect(verdict.title).toBe('Были повторяющиеся сбои');
+  expect(verdict.tone).toBe('warning');
+  expect(verdict.text).toContain('54 с из 180 с');
+});
+
+test("a minute's worst is never less than its own number, for speakers too brief to fill a window", () => {
+  expect(worstOf({ concealedPct: 4, gapsPerMin: 20, worstConcealedPct: 0, worstGaps: 0 })).toBe(4);
+  expect(worstOf({ concealedPct: 0.3, gapsPerMin: 2, worstConcealedPct: 6, worstGaps: 3 })).toBe(6);
+  expect(worstOf({ concealedPct: 2, gapsPerMin: 2 })).toBe(2);
+  expect(worstOf(null)).toBeNull();
+});
+
+test('one side of a voice weighs minutes by their speech and keeps its worst moment', () => {
+  const summary = heardSummary([
+    { concealedPct: 0.2, gapsPerMin: 2, speechS: 57, worstConcealedPct: 6, worstGaps: 4 },
+    { concealedPct: 4, gapsPerMin: 40, speechS: 3, worstConcealedPct: 4, worstGaps: 2 },
+    null
+  ]);
+  // A minute of three seconds does not count as much as one of nearly all speech.
+  expect(summary?.concealedPct).toBeCloseTo(0.39, 2);
+  expect(summary?.worstConcealedPct).toBe(6);
+  expect(summary?.worstGaps).toBe(4);
+  expect(heardSummary([null, undefined])).toBeNull();
+  // Minutes from before the worst moment was kept read as their own number, and no gaps are made up.
+  expect(heardSummary([{ concealedPct: 5, gapsPerMin: 3 }])).toEqual({
+    concealedPct: 5,
+    worstConcealedPct: 5,
+    worstGaps: null
+  });
 });
 
 test('a computer busy far beyond VoiceRoom is only a hint, and only with bad minutes on top', () => {

@@ -8,6 +8,7 @@ import { useState } from 'react';
 import type { CallEvent, RoomCall, RoomStay, VoiceMinute } from '@voice-room/shared/contracts/admin';
 import type { AdminCallFeedbackEntry } from '@voice-room/shared/contracts/feedback';
 import { CALL_FEEDBACK_TAG_LABELS } from '@voice-room/shared/feedback-labels';
+import { CONCEALMENT_THRESHOLDS } from '@voice-room/shared/network-quality';
 import { fetchLiveCall, fetchRoomCall } from '../api/admin.ts';
 import { ApiError } from '../api/client.ts';
 import {
@@ -27,7 +28,18 @@ import { Notice } from '../Notice.tsx';
 import type { CallRef } from '../tabs.ts';
 import { Avatar, Button, Empty, Pill, RoomAvatar, Stat, Stats } from '../ui/index.tsx';
 import { MinuteChart } from './call/MinuteChart.tsx';
-import { CONCEALED_LIMIT_PCT, LOSS_LIMIT_PCT, RTT_LIMIT_MS, seriesOf, verdictOf } from './call/verdict.ts';
+import {
+  CONCEALED_LIMIT_PCT,
+  DELAY_LIMIT_MS,
+  LOSS_LIMIT_PCT,
+  RTT_LIMIT_MS,
+  delayOf,
+  heardSummary,
+  seriesOf,
+  verdictOf,
+  worstOf,
+  type HeardSummary
+} from './call/verdict.ts';
 import { CallPeople } from './rooms/CallPeople.tsx';
 import { NetworkLegend, NetworkSpan } from './rooms/network-bar.tsx';
 import { qualityOfMinutes, qualityShares } from './rooms/QualityBar.tsx';
@@ -100,6 +112,22 @@ function sharedAddresses(people: readonly CallPerson[]): Map<string, CallPerson[
 
 const TRANSPORTS: Record<string, string> = { udp: 'UDP', tcp: 'TCP', relay: 'через ретранслятор (TURN)' };
 
+/** How one side of a voice went over the call: its whole share, and its worst moment, which the share waters down. */
+function heardFact(
+  label: string,
+  summary: HeardSummary
+): { label: string; value: string; tone?: 'warning' | 'danger' } {
+  const { noticeablePct, badPct } = CONCEALMENT_THRESHOLDS;
+  const { concealedPct, worstConcealedPct, worstGaps } = summary;
+  if (concealedPct < 1 && worstConcealedPct < noticeablePct) return { label, value: 'в порядке' };
+  const gaps = worstGaps === null ? '' : `, разрывов до ${formatCount(worstGaps)}`;
+  const value = `додумано ${formatPercent(Math.round(concealedPct * 10) / 10)} речи · худшие 15 с: до ${formatPercent(worstConcealedPct)}${gaps}`;
+  if (concealedPct >= badPct) return { label, value, tone: 'danger' };
+  return concealedPct >= noticeablePct || worstConcealedPct >= noticeablePct
+    ? { label, value, tone: 'warning' }
+    : { label, value };
+}
+
 function Facts({ person, events }: { person: CallPerson; events: readonly CallEvent[] }) {
   const minutes = minutesOfPerson(person);
   const ids = new Set(person.stayIds);
@@ -109,10 +137,11 @@ function Facts({ person, events }: { person: CallPerson; events: readonly CallEv
       .filter((event) => event.kind === on || event.kind === off)
       .map((event) => `${event.kind === on ? 'с' : 'до'} ${formatClock(event.at)}`)
       .join(', ');
-  const heard = seriesOf(minutes.map((minute) => minute.heard?.concealedPct));
-  const heardBy = seriesOf(minutes.map((minute) => minute.heardBy?.concealedPct));
-  const gapsBy = seriesOf(minutes.map((minute) => minute.heardBy?.gapsPerMin));
+  const heard = heardSummary(minutes.map((minute) => minute.heard));
+  const heardBy = heardSummary(minutes.map((minute) => minute.heardBy));
   const rtt = seriesOf(minutes.map((minute) => minute.rttMs));
+  const buffer = seriesOf(minutes.map((minute) => minute.jitterBufferMs));
+  const delay = seriesOf(minutes.map(delayOf));
   const loss = seriesOf(minutes.map((minute) => minute.uplinkLossPct));
   const app = seriesOf(minutes.map((minute) => minute.cpuAppPct));
   const system = seriesOf(minutes.map((minute) => minute.cpuSystemPct));
@@ -146,6 +175,14 @@ function Facts({ person, events }: { person: CallPerson; events: readonly CallEv
       ...(rtt.avg >= RTT_LIMIT_MS ? { tone: 'danger' as const } : {})
     });
   }
+  if (buffer.avg !== null) facts.push({ label: 'Буфер', value: formatMs(Math.round(buffer.avg)) });
+  if (delay.avg !== null) {
+    facts.push({
+      label: 'Задержка голоса',
+      value: `около ${formatMs(Math.round(delay.avg))}`,
+      ...(delay.avg >= DELAY_LIMIT_MS ? { tone: 'warning' as const } : {})
+    });
+  }
   if (loss.avg !== null) {
     facts.push({
       label: 'Потери от него',
@@ -164,31 +201,8 @@ function Facts({ person, events }: { person: CallPerson; events: readonly CallEv
     facts.push({ label: 'Нагрузка системы', value: `critical с ${formatClock(firstCritical.at)}`, tone: 'danger' });
   }
   if (firstRelief) facts.push({ label: 'Шумодав', value: `облегчённый с ${formatClock(firstRelief.at)}` });
-  if (heardBy.avg !== null) {
-    facts.push({
-      label: 'Как его слышали',
-      value:
-        heardBy.avg < 1
-          ? 'в порядке'
-          : `додумано ${Math.round(heardBy.avg)} % речи${gapsBy.avg === null ? '' : ` · ${Math.round(gapsBy.avg)} разрывов/мин`}`,
-      ...(heardBy.avg >= CONCEALED_LIMIT_PCT
-        ? { tone: 'danger' as const }
-        : heardBy.avg >= 3
-          ? { tone: 'warning' as const }
-          : {})
-    });
-  }
-  if (heard.avg !== null) {
-    facts.push({
-      label: 'Как он слышал',
-      value: heard.avg < 1 ? 'в порядке' : `додумано ${Math.round(heard.avg)} % речи`,
-      ...(heard.avg >= CONCEALED_LIMIT_PCT
-        ? { tone: 'danger' as const }
-        : heard.avg >= 3
-          ? { tone: 'warning' as const }
-          : {})
-    });
-  }
+  if (heardBy) facts.push(heardFact('Как его слышали', heardBy));
+  if (heard) facts.push(heardFact('Как он слышал', heard));
   return (
     <dl className="call-facts">
       {facts.map((fact) => (
@@ -634,6 +648,14 @@ export function CallPage({
                   points={minutesOfPerson(person).map((minute) => ({ at: minute.at, value: minute.rttMs }))}
                 />
                 <MinuteChart
+                  label="Задержка голоса: пинг, буфер и кодек"
+                  from={call.startedAt}
+                  to={call.endedAt}
+                  limit={DELAY_LIMIT_MS}
+                  format={(value) => (value === null ? '—' : formatMs(Math.round(value)))}
+                  points={minutesOfPerson(person).map((minute) => ({ at: minute.at, value: delayOf(minute) }))}
+                />
+                <MinuteChart
                   label="Потери от участника к серверу"
                   from={call.startedAt}
                   to={call.endedAt}
@@ -642,14 +664,25 @@ export function CallPage({
                   points={minutesOfPerson(person).map((minute) => ({ at: minute.at, value: minute.uplinkLossPct }))}
                 />
                 <MinuteChart
-                  label="Как его слышали: доля додуманной речи"
+                  label="Как его слышали: додуманная речь, худшие 15 с минуты"
                   from={call.startedAt}
                   to={call.endedAt}
                   limit={CONCEALED_LIMIT_PCT}
                   format={(value) => (value === null ? '—' : formatPercent(value))}
                   points={minutesOfPerson(person).map((minute) => ({
                     at: minute.at,
-                    value: minute.heardBy?.concealedPct
+                    value: worstOf(minute.heardBy)
+                  }))}
+                />
+                <MinuteChart
+                  label="Как он слышал: додуманная речь, худшие 15 с минуты"
+                  from={call.startedAt}
+                  to={call.endedAt}
+                  limit={CONCEALED_LIMIT_PCT}
+                  format={(value) => (value === null ? '—' : formatPercent(value))}
+                  points={minutesOfPerson(person).map((minute) => ({
+                    at: minute.at,
+                    value: worstOf(minute.heard)
                   }))}
                 />
                 <div className="call-levels">
