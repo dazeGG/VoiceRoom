@@ -25,7 +25,7 @@ import { join } from 'node:path';
 import { createInterface } from 'node:readline/promises';
 import { chromium, type Browser, type Page } from '@playwright/test';
 import { isRecord } from '@voice-room/shared/guards';
-import { VOICE_SAMPLES_PER_PACKET, concealedSpeechPct, streamLevel } from '@voice-room/shared/voice-quality';
+import { concealedSpeechPct, gapsPerSpeechMin, streamLevel } from '@voice-room/shared/voice-quality';
 
 const roomId = process.argv[2];
 if (!roomId) throw new Error('usage: node scripts/voice-bench/loss-bench.mts <roomId>');
@@ -296,6 +296,7 @@ async function main(): Promise<void> {
         gaps: measured.concealmentEvents
       };
       const concealedPct = concealedSpeechPct(heard);
+      const rate = gapsPerSpeechMin(heard);
       const row = {
         step: step.label,
         netem: step.netem,
@@ -304,10 +305,7 @@ async function main(): Promise<void> {
         lossPct: measured.packets > 0 ? Math.round((measured.lost / measured.packets) * 1000) / 10 : null,
         concealedPct,
         // Per minute of speech, as the packets measure it, so pauses do not water it down.
-        gapsPerSpeechMin:
-          measured.packets > 0
-            ? Math.round(measured.concealmentEvents / ((measured.packets * VOICE_SAMPLES_PER_PACKET) / 48_000 / 60))
-            : null,
+        gapsPerSpeechMin: rate === null ? null : Math.round(rate),
         jitterBufferMs: measured.jitterBufferMs,
         // The whole step as one window, its latest poll included.
         level: streamLevel({ latest: heard, window: heard })

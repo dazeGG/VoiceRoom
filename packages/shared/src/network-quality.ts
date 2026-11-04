@@ -1,6 +1,7 @@
-// When a connection is unstable or bad: one set of thresholds for the room's
-// connection pill, the level the client reports for the admin panel's call
-// bars, and the red numbers in the admin panel's call feedback.
+// When the numbers of a line stop being fine: the colour of a ping, the marks
+// on the admin panel's call page and the red numbers in its call feedback. The
+// room's pill and the admin panel's call bars judge the sound itself instead
+// (voice-quality.ts), so a line within these can still sound unstable.
 
 import type { NetworkLevel } from './contracts/rooms.ts';
 
