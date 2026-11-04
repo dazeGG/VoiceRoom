@@ -6,7 +6,8 @@
 // panel shows live, and every stay sums its polls into minutes, written with
 // the stay when it ends (voice_session_samples).
 
-import type { ClientCommands } from '@voice-room/shared/contracts/realtime';
+import type { ClientCommands, CpuPoll } from '@voice-room/shared/contracts/realtime';
+import { CPU_PRESSURES, type CpuPressure } from '@voice-room/shared/contracts/rooms';
 import {
   VOICE_WINDOW_POLLS,
   judgeVoice,
@@ -14,7 +15,12 @@ import {
   type VoiceReport,
   type VoiceVerdict
 } from '@voice-room/shared/voice-quality';
-import type { VoiceMinuteSample } from '../domains/rooms/voice-session.repository.ts';
+import type {
+  MinuteCpu,
+  StayEvent,
+  StayEventKind,
+  VoiceMinuteSample
+} from '../domains/rooms/voice-session.repository.ts';
 
 type VoicePoll = ClientCommands['room.voice.report'];
 type Uplink = VoiceMinuteSample['uplink'];
@@ -23,6 +29,8 @@ type Uplink = VoiceMinuteSample['uplink'];
 export const VOICE_REPORT_STALE_MS = 10_000;
 /** A stay keeps this many minutes (12 hours); past it the oldest go. */
 export const VOICE_MINUTES_MAX = 720;
+/** A stay keeps this many events; past it the oldest go. */
+export const VOICE_EVENTS_MAX = 200;
 const MINUTE_MS = 60_000;
 
 /** A peer's voice: its latest poll, its windows, the verdict and its minutes. */
@@ -39,6 +47,12 @@ export interface PeerVoice {
   told?: VoiceVerdict | null | undefined;
   /** Its minutes, oldest first, the running one last. */
   minutes: VoiceMinuteSample[];
+  /** What its seat did, oldest first. */
+  events: StayEvent[];
+  /** The pressure its computer last reported; null where its client cannot tell. */
+  cpuPressure: CpuPressure | null;
+  /** Its call switched to the lighter noise suppression. */
+  relieved: boolean;
 }
 
 /** What the runtime needs of a room and its peers. */
@@ -62,8 +76,48 @@ const emptyVoice = (): PeerVoice => ({
   heard: new Map(),
   uplink: [],
   verdict: null,
-  minutes: []
+  minutes: [],
+  events: [],
+  cpuPressure: null,
+  relieved: false
 });
+
+const pushEvent = (voice: PeerVoice, kind: StayEventKind, at: number) => {
+  voice.events.push({ at, kind });
+  if (voice.events.length > VOICE_EVENTS_MAX) voice.events.shift();
+};
+
+/** Keeps something a peer's seat did with its stay: a screen or a camera going on or off. */
+export function noteStayEvent(peer: VoicePeer, kind: StayEventKind, at: number): void {
+  pushEvent((peer.voice ??= emptyVoice()), kind, at);
+}
+
+const higherPressure = (a: CpuPressure | null, b: CpuPressure | null): CpuPressure | null => {
+  if (!a || !b) return a ?? b;
+  return CPU_PRESSURES.indexOf(a) >= CPU_PRESSURES.indexOf(b) ? a : b;
+};
+
+/** Sums a poll's computer into the minute and marks where it first overloaded or got relief. */
+function noteCpu(voice: PeerVoice, minute: VoiceMinuteSample, poll: CpuPoll, at: number): void {
+  const cpu: MinuteCpu = (minute.cpu ??= {
+    appPctSum: 0,
+    systemPctSum: 0,
+    polls: 0,
+    pressureMax: null,
+    relieved: false
+  });
+  if (poll.appPct !== null && poll.systemPct !== null) {
+    cpu.appPctSum += poll.appPct;
+    cpu.systemPctSum += poll.systemPct;
+    cpu.polls += 1;
+  }
+  cpu.pressureMax = higherPressure(cpu.pressureMax, poll.pressure);
+  cpu.relieved ||= poll.relieved;
+  if (poll.pressure === 'critical' && voice.cpuPressure !== 'critical') pushEvent(voice, 'cpu_critical', at);
+  if (poll.relieved && !voice.relieved) pushEvent(voice, 'relieved_ns', at);
+  voice.cpuPressure = poll.pressure;
+  voice.relieved ||= poll.relieved;
+}
 
 const sameVerdict = (a: VoiceVerdict | null | undefined, b: VoiceVerdict | null) =>
   a !== undefined && a?.level === b?.level && a?.cause === b?.cause;
@@ -135,7 +189,7 @@ function reportOf(peer: VoicePeer & { voice: PeerVoice }, inRoom: (peerId: strin
 export function noteVoiceReport<Peer extends VoicePeer>(
   peers: ReadonlyMap<string, Peer>,
   peer: Peer,
-  poll: Pick<VoicePoll, 'rttMs' | 'jitterBufferMs' | 'uplink' | 'transport' | 'heard' | 'mic'>,
+  poll: Pick<VoicePoll, 'rttMs' | 'jitterBufferMs' | 'uplink' | 'transport' | 'heard' | 'mic' | 'cpu'>,
   at: number
 ): VoiceChange<Peer>[] {
   const voice = (peer.voice ??= emptyVoice());
@@ -182,6 +236,7 @@ export function noteVoiceReport<Peer extends VoicePeer>(
     minute.mic.replacements += poll.mic.replacements;
   }
   minute.transport = poll.transport ?? minute.transport;
+  if (poll.cpu) noteCpu(voice, minute, poll.cpu, at);
 
   const changes = judgeRoom(peers, at);
   if (voice.verdict) minute.polls[voice.verdict.level] += 1;

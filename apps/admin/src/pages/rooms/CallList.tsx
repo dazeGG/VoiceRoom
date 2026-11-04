@@ -1,15 +1,16 @@
 // Finished calls by day, a row per call: when (and how long), the room, who
-// was in it. A row opens its people with when each was there; a room's name
-// narrows the history to that room.
+// was in it, how its voice went. A row opens the call's page, its chevron its
+// people with when each was there; a room's name narrows the history to that room.
 
-import { ChevronDown, ChevronUp } from 'lucide-react';
+import { ChevronDown, ChevronUp, ThumbsDown } from 'lucide-react';
 import type { RoomCall } from '@voice-room/shared/contracts/admin';
 import { formatClock, formatCount, formatDayHeading, formatDuration, formatPeople, plural } from '../../format.ts';
 import { AvatarStack } from '../../ui/index.tsx';
 import { CallPeople } from './CallPeople.tsx';
+import { QualityCell, qualityOfCall } from './QualityBar.tsx';
 import { RoomTitle, peopleOf } from './room-bits.tsx';
 
-const COLUMNS = '132px minmax(0, 1.3fr) minmax(0, 1fr) 28px';
+const COLUMNS = '132px minmax(200px, 1.3fr) minmax(180px, 1fr) minmax(170px, 0.9fr) 28px';
 
 const dayOf = (at: number) => new Date(at).setHours(0, 0, 0, 0);
 
@@ -31,6 +32,7 @@ export function CallList({
   open,
   onToggle,
   onFilterRoom,
+  onOpen,
   onOpenAccount
 }: {
   calls: readonly RoomCall[];
@@ -38,6 +40,7 @@ export function CallList({
   open: ReadonlySet<string>;
   onToggle: (callId: string) => void;
   onFilterRoom: (call: RoomCall) => void;
+  onOpen: (call: RoomCall) => void;
   onOpenAccount: (accountId: string) => void;
 }) {
   return (
@@ -64,7 +67,7 @@ export function CallList({
                     <div
                       className="ui-tr ui-row-link call-row"
                       style={{ '--cols': COLUMNS }}
-                      onClick={() => onToggle(call.id)}
+                      onClick={() => onOpen(call)}
                     >
                       <span className="call-when">
                         <span className="ui-mono call-time">
@@ -100,6 +103,15 @@ export function CallList({
                           }))}
                         />
                         <span className="live-count">{formatPeople(people.length)}</span>
+                      </span>
+                      <span className="call-quality">
+                        <QualityCell quality={qualityOfCall(call)} />
+                        {call.badFeedback ? (
+                          <span className="call-bad-feedback" title="Плохие отзывы об этом звонке">
+                            <ThumbsDown size={14} aria-label="Плохих отзывов" />
+                            {formatCount(call.badFeedback)}
+                          </span>
+                        ) : null}
                       </span>
                       <button
                         type="button"

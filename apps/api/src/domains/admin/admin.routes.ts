@@ -14,17 +14,22 @@ import {
   AdminOverview,
   BadgeBody,
   BlockBody,
+  CallIdParams,
   DeleteAccountBody,
   LiveRooms,
   RoomCalls,
   RoomCallsQuery,
   RoomHistory,
   RoomHistoryQuery,
+  RoomIdParams,
   ProductQuery,
   ProductStats,
+  StaticRooms,
+  StaticRoomsQuery,
   SystemQuery,
   SystemStats
 } from '@voice-room/shared/contracts/admin';
+import { RoomCallDetail } from '@voice-room/shared/contracts/feedback';
 import type { ApiContext } from '../../app/context.ts';
 import { failure, optionalJsonBody } from '../../platform/http/http-kit.ts';
 import type { AccountAction, AdminAccountsService } from './admin-accounts.service.ts';
@@ -32,6 +37,7 @@ import type { AdminRoomsService } from './admin-rooms.service.ts';
 import type { AdminService } from './admin.service.ts';
 
 const ADMIN_REQUIRED = failure('Platform administrator access required', { code: 'platform_admin_required' });
+const CALL_NOT_FOUND = failure('Call not found', { code: 'call_not_found' });
 const REFUSALS: Record<Exclude<AccountAction['status'], 'done'>, [number, ReturnType<typeof failure>]> = {
   forbidden: [403, ADMIN_REQUIRED],
   not_found: [404, failure('Account not found', { code: 'account_not_found' })],
@@ -54,7 +60,7 @@ export interface AdminRoutesDeps {
     AdminAccountsService,
     'list' | 'detail' | 'block' | 'unblock' | 'signOutEverywhere' | 'remove' | 'cancelDeletion' | 'setBadge' | 'badges'
   >;
-  rooms: Pick<AdminRoomsService, 'live' | 'history' | 'calls'>;
+  rooms: Pick<AdminRoomsService, 'live' | 'history' | 'calls' | 'staticRooms' | 'call' | 'liveCall'>;
   /** The staff member behind the admin-app session, or null with the 401 sent. */
   staffUserId(request: FastifyRequest, reply: FastifyReply): Promise<string | null>;
 }
@@ -131,6 +137,44 @@ export function registerAdminRoutes(root: FastifyInstance, ctx: ApiContext, deps
       const calls = await deps.rooms.calls(userId, request.query);
       if (!calls) return reply.code(403).send(ADMIN_REQUIRED);
       return { ok: true as const, ...calls };
+    }
+  );
+
+  app.get(
+    '/api/admin/rooms/static',
+    { schema: { querystring: StaticRoomsQuery, response: { 200: StaticRooms, '4xx': Failure } } },
+    async (request, reply) => {
+      const userId = await actor(request, reply);
+      if (!userId) return reply;
+      const rooms = await deps.rooms.staticRooms(userId, request.query);
+      if (!rooms) return reply.code(403).send(ADMIN_REQUIRED);
+      return { ok: true as const, ...rooms };
+    }
+  );
+
+  app.get(
+    '/api/admin/rooms/calls/:callId',
+    { schema: { params: CallIdParams, response: { 200: RoomCallDetail, '4xx': Failure } } },
+    async (request, reply) => {
+      const userId = await actor(request, reply);
+      if (!userId) return reply;
+      const detail = await deps.rooms.call(userId, request.params.callId);
+      if (detail === null) return reply.code(403).send(ADMIN_REQUIRED);
+      if (detail === undefined) return reply.code(404).send(CALL_NOT_FOUND);
+      return { ok: true as const, ...detail };
+    }
+  );
+
+  app.get(
+    '/api/admin/rooms/live/:roomId',
+    { schema: { params: RoomIdParams, response: { 200: RoomCallDetail, '4xx': Failure } } },
+    async (request, reply) => {
+      const userId = await actor(request, reply);
+      if (!userId) return reply;
+      const detail = await deps.rooms.liveCall(userId, request.params.roomId);
+      if (detail === null) return reply.code(403).send(ADMIN_REQUIRED);
+      if (detail === undefined) return reply.code(404).send(CALL_NOT_FOUND);
+      return { ok: true as const, ...detail };
     }
   );
 

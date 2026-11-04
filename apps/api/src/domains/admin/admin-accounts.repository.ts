@@ -7,11 +7,15 @@ import type pg from 'pg';
 import { sql, type RawBuilder } from 'kysely';
 import {
   ACCOUNT_DAYS,
+  ACCOUNTS_FILTERS,
   ACCOUNTS_PAGE_SIZE,
+  TROUBLE_BAD_PCT,
   type AccountDay,
+  type AccountDetail,
   type AccountDevice,
   type AccountsFilter,
-  type AccountsSort
+  type AccountsSort,
+  type VoiceQuality
 } from '@voice-room/shared/contracts/admin';
 import type { AccountBadge } from '@voice-room/shared/contracts/users';
 import { ACCOUNT_DELETION_GRACE_MS, describeUserAgent } from '@voice-room/shared/account-security';
@@ -19,6 +23,7 @@ import { kyselyOn } from '../../platform/db/kysely.ts';
 import { epochMillis } from '../../platform/epoch-millis.ts';
 import { avatarUrl } from '../../lib/avatar-url.ts';
 import { escapeLike } from '../../platform/db/like.ts';
+import { QUALITY_COLUMNS, RECENT_STAYS_DAYS, qualityOf } from './admin-rooms.repository.ts';
 
 const MSK = sql.lit('Europe/Moscow');
 const TODAY = sql`(now() AT TIME ZONE ${MSK})::date`;
@@ -40,6 +45,7 @@ export interface StoredAccountRow {
   ownedRooms: number;
   reportsAgainst: number;
   badge: AccountBadge | null;
+  voiceQuality30d: VoiceQuality | null;
   blocked: { at: number; until: number | null; reason: string } | null;
   deletion: { scheduledFor: number; byAdmin: boolean } | null;
 }
@@ -60,6 +66,8 @@ export interface StoredAccountDetail {
   memberOf: number;
   devices: AccountDevice[];
   reports: { against: number; againstOpen: number; filed: number };
+  voice30d: Exclude<AccountDetail['voice30d'], undefined>;
+  cpu30d: Exclude<AccountDetail['cpu30d'], undefined>;
 }
 
 const n = (value: unknown): number => Number(value) || 0;
@@ -88,7 +96,33 @@ type AccountSqlRow = {
   messages: number | string;
   owned_rooms: number | string;
   reports_against: number | string;
+  voice_good: number | string;
+  voice_unstable: number | string;
+  voice_bad: number | string;
 };
+
+type VoiceSummaryRow = Record<
+  | 'good'
+  | 'unstable'
+  | 'bad'
+  | 'minutes'
+  | 'rtt_sum'
+  | 'rtt_polls'
+  | 'jitter_sum'
+  | 'jitter_polls'
+  | 'uplink_lost'
+  | 'uplink_packets'
+  | 'udp'
+  | 'tcp'
+  | 'relay'
+  | 'app_sum'
+  | 'system_sum'
+  | 'cpu_polls'
+  | 'cpu_calls'
+  | 'critical_calls'
+  | 'relieved_calls',
+  number | string | null
+>;
 
 type DayRow = { day: string; active: boolean; messages: number | string; voice_minutes: number | string };
 type ReportCountRow = { against: number | string; against_open: number | string; filed: number | string };
@@ -100,6 +134,8 @@ const SORT_COLUMNS: Record<AccountsSort, RawBuilder<unknown>> = {
   voice: sql`voice_minutes`,
   messages: sql`messages`,
   reports: sql`reports_against`,
+  quality: sql`CASE WHEN voice_good + voice_unstable + voice_bad > 0
+    THEN voice_bad::float / (voice_good + voice_unstable + voice_bad) END`,
   name: sql`lower(coalesce(nullif(display_name, ''), login))`
 };
 
@@ -136,6 +172,13 @@ function accountsWith(where: RawBuilder<unknown>) {
       LEFT JOIN direct_messages d ON c.target_kind = 'direct_message' AND d.id = c.message_id
       GROUP BY 1
     ),
+    voice_quality AS (
+      SELECT s.user_id, ${QUALITY_COLUMNS}
+      FROM voice_session_samples m JOIN voice_sessions s ON s.id = m.stay_id
+      WHERE s.user_id IS NOT NULL AND s.joined_at > now() - interval '${RECENT_STAYS_DAYS} days'
+        AND m.at > now() - interval '30 days'
+      GROUP BY s.user_id
+    ),
     accounts AS (
       SELECT u.id, u.login, u.display_name, u.avatar_key, u.avatar_color_key, u.avatar_accent, u.created_at,
         u.badge, u.blocked_at, u.blocked_until, u.block_reason, u.deletion_requested_at,
@@ -149,7 +192,10 @@ function accountsWith(where: RawBuilder<unknown>) {
         coalesce(v.minutes, 0) AS voice_minutes,
         coalesce(rs.sent, 0) + coalesce(ds.sent, 0) AS messages,
         coalesce(o.rooms, 0) AS owned_rooms,
-        coalesce(r.reports, 0) AS reports_against
+        coalesce(r.reports, 0) AS reports_against,
+        coalesce(q.good, 0) AS voice_good,
+        coalesce(q.unstable, 0) AS voice_unstable,
+        coalesce(q.bad, 0) AS voice_bad
       FROM users u
       LEFT JOIN activity a ON a.user_id = u.id
       LEFT JOIN seen s ON s.user_id = u.id
@@ -158,6 +204,7 @@ function accountsWith(where: RawBuilder<unknown>) {
       LEFT JOIN direct_sent ds ON ds.user_id = u.id
       LEFT JOIN owned o ON o.user_id = u.id
       LEFT JOIN reported r ON r.user_id = u.id
+      LEFT JOIN voice_quality q ON q.user_id = u.id
       WHERE u.deleted_at IS NULL
     )
     SELECT * FROM accounts WHERE ${where}`;
@@ -181,6 +228,8 @@ function filterClause(filter: AccountsFilter, onlineIds: string[]): RawBuilder<u
       return sql`deletion_requested_at IS NOT NULL`;
     case 'badged':
       return sql`badge IS NOT NULL`;
+    case 'trouble':
+      return sql`voice_bad > 0 AND voice_bad * 100 >= ${TROUBLE_BAD_PCT} * (voice_good + voice_unstable + voice_bad)`;
     default:
       return sql`true`;
   }
@@ -213,6 +262,7 @@ function mapRow(row: AccountSqlRow, now: number): StoredAccountRow {
     ownedRooms: n(row.owned_rooms),
     reportsAgainst: n(row.reports_against),
     badge,
+    voiceQuality30d: qualityOf({ good: row.voice_good, unstable: row.voice_unstable, bad: row.voice_bad }),
     blocked:
       blockedAt !== null && (blockedUntil === null || blockedUntil > now)
         ? { at: blockedAt, until: blockedUntil, reason: row.block_reason ?? '' }
@@ -224,6 +274,36 @@ function mapRow(row: AccountSqlRow, now: number): StoredAccountRow {
   };
 }
 
+/** The voice and the computer of one account over the last 30 days; each null without a minute of it. */
+function voiceSummary(row: VoiceSummaryRow | undefined): Pick<StoredAccountDetail, 'voice30d' | 'cpu30d'> {
+  const quality = row ? qualityOf(row) : null;
+  if (!row || !quality) return { voice30d: null, cpu30d: null };
+  const average = (sum: unknown, polls: unknown) => (n(polls) > 0 ? Math.round(n(sum) / n(polls)) : null);
+  const transports = n(row.udp) + n(row.tcp) + n(row.relay);
+  const share = (minutes: unknown) => (transports > 0 ? Math.round((n(minutes) * 100) / transports) : 0);
+  return {
+    voice30d: {
+      minutes: n(row.minutes),
+      quality,
+      rttAvgMs: average(row.rtt_sum, row.rtt_polls),
+      uplinkLossPct:
+        n(row.uplink_packets) > 0 ? Math.round((n(row.uplink_lost) / n(row.uplink_packets)) * 1000) / 10 : null,
+      jitterBufferAvgMs: average(row.jitter_sum, row.jitter_polls),
+      transport: { udp: share(row.udp), tcp: share(row.tcp), relay: share(row.relay) }
+    },
+    cpu30d:
+      n(row.cpu_calls) > 0
+        ? {
+            appAvgPct: average(row.app_sum, row.cpu_polls),
+            systemAvgPct: average(row.system_sum, row.cpu_polls),
+            calls: n(row.cpu_calls),
+            criticalCalls: n(row.critical_calls),
+            relievedCalls: n(row.relieved_calls)
+          }
+        : null
+  };
+}
+
 export function createAdminAccountsRepository({ pool }: { pool: pg.Pool }) {
   const db = kyselyOn(pool);
 
@@ -231,13 +311,40 @@ export function createAdminAccountsRepository({ pool }: { pool: pg.Pool }) {
     const where = sql`${filterClause(query.filter, query.onlineIds)} AND ${searchClause(query.q)}`;
     const order = query.order === 'asc' ? sql`ASC` : sql`DESC`;
     const offset = (query.page - 1) * ACCOUNTS_PAGE_SIZE;
-    const [rows, count] = await Promise.all([
+    // Every filter's count is over all the accounts: it names how many it holds,
+    // whatever the search; `total` is how many this search and filter found.
+    const filterCounts = ACCOUNTS_FILTERS.map(
+      (filter) => sql`count(*) FILTER (WHERE ${filterClause(filter, query.onlineIds)}) AS ${sql.ref(filter)}`
+    );
+    const [rows, count, overloaded] = await Promise.all([
       sql<AccountSqlRow>`${accountsWith(where)}
         ORDER BY ${SORT_COLUMNS[query.sort]} ${order} NULLS LAST, id ASC
         LIMIT ${ACCOUNTS_PAGE_SIZE} OFFSET ${offset}`.execute(db),
-      sql<{ total: unknown }>`SELECT count(*) AS total FROM (${accountsWith(where)}) AS listed`.execute(db)
+      sql<Record<string, unknown>>`
+        SELECT count(*) FILTER (WHERE ${where}) AS listed_total, ${sql.join(filterCounts)}
+        FROM (${accountsWith(sql`true`)}) AS listed`.execute(db),
+      sql<{ accounts: unknown }>`
+        WITH stays AS (
+          SELECT s.user_id, s.id, bool_or(m.cpu_pressure_max = 'critical') AS critical
+          FROM voice_session_samples m JOIN voice_sessions s ON s.id = m.stay_id
+          WHERE s.user_id IS NOT NULL AND s.joined_at > now() - interval '${RECENT_STAYS_DAYS} days'
+            AND m.at > now() - interval '30 days'
+            AND (m.cpu_polls > 0 OR m.cpu_pressure_max IS NOT NULL)
+          GROUP BY s.user_id, s.id
+        ),
+        people AS (
+          SELECT user_id, count(*) FILTER (WHERE critical) AS critical, count(*) AS stays
+          FROM stays GROUP BY user_id
+        )
+        SELECT count(*) AS accounts FROM people WHERE critical > 0 AND critical * 2 >= stays`.execute(db)
     ]);
-    return { accounts: rows.rows.map((row) => mapRow(row, now)), total: n(count.rows[0]?.total) };
+    const counted = count.rows[0] ?? {};
+    return {
+      accounts: rows.rows.map((row) => mapRow(row, now)),
+      total: n(counted.listed_total),
+      counts: Object.fromEntries(ACCOUNTS_FILTERS.map((filter) => [filter, n(counted[filter])])),
+      cpuOverloaded: n(overloaded.rows[0]?.accounts)
+    };
   }
 
   async function detail(userId: string, now: number = Date.now()): Promise<StoredAccountDetail | null> {
@@ -245,7 +352,7 @@ export function createAdminAccountsRepository({ pool }: { pool: pg.Pool }) {
     const row = found.rows[0];
     if (!row) return null;
     const since = sql`${TODAY} - ${sql.lit(ACCOUNT_DAYS - 1)}`;
-    const [days, rooms, memberOf, devices, reports] = await Promise.all([
+    const [days, rooms, memberOf, devices, reports, voice] = await Promise.all([
       sql<DayRow>`
         WITH span AS (SELECT generate_series(${since}, ${TODAY}, interval '1 day')::date AS day),
         sent AS (
@@ -301,7 +408,23 @@ export function createAdminAccountsRepository({ pool }: { pool: pg.Pool }) {
           count(*) FILTER (WHERE c.reporter_user_id = ${userId}) AS filed
         FROM content_reports c
         LEFT JOIN room_messages m ON c.target_kind = 'room_message' AND m.id = c.message_id
-        LEFT JOIN direct_messages d ON c.target_kind = 'direct_message' AND d.id = c.message_id`.execute(db)
+        LEFT JOIN direct_messages d ON c.target_kind = 'direct_message' AND d.id = c.message_id`.execute(db),
+      sql<VoiceSummaryRow>`
+        SELECT ${QUALITY_COLUMNS},
+          count(*) AS minutes,
+          sum(m.rtt_ms_sum) AS rtt_sum, sum(m.rtt_polls) AS rtt_polls,
+          sum(m.jitter_buffer_ms_sum) AS jitter_sum, sum(m.jitter_buffer_polls) AS jitter_polls,
+          sum(m.uplink_lost) AS uplink_lost, sum(m.uplink_packets) AS uplink_packets,
+          count(*) FILTER (WHERE m.transport = 'udp') AS udp,
+          count(*) FILTER (WHERE m.transport = 'tcp') AS tcp,
+          count(*) FILTER (WHERE m.transport = 'relay') AS relay,
+          sum(m.cpu_app_pct_sum) AS app_sum, sum(m.cpu_system_pct_sum) AS system_sum, sum(m.cpu_polls) AS cpu_polls,
+          count(DISTINCT m.stay_id) FILTER (WHERE m.cpu_polls > 0 OR m.cpu_pressure_max IS NOT NULL) AS cpu_calls,
+          count(DISTINCT m.stay_id) FILTER (WHERE m.cpu_pressure_max = 'critical') AS critical_calls,
+          count(DISTINCT m.stay_id) FILTER (WHERE m.cpu_relieved) AS relieved_calls
+        FROM voice_session_samples m JOIN voice_sessions s ON s.id = m.stay_id
+        WHERE s.user_id = ${userId} AND s.joined_at > now() - interval '${RECENT_STAYS_DAYS} days'
+          AND m.at > now() - interval '30 days'`.execute(db)
     ]);
     const counted = reports.rows[0];
     return {
@@ -323,7 +446,8 @@ export function createAdminAccountsRepository({ pool }: { pool: pg.Pool }) {
           lastSeenAt: epochMillis(session.last_seen_at) ?? 0
         };
       }),
-      reports: { against: n(counted?.against), againstOpen: n(counted?.against_open), filed: n(counted?.filed) }
+      reports: { against: n(counted?.against), againstOpen: n(counted?.against_open), filed: n(counted?.filed) },
+      ...voiceSummary(voice.rows[0])
     };
   }
 

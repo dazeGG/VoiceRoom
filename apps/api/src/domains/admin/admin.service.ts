@@ -13,6 +13,7 @@ import {
   type SystemQuery,
   type SystemStats
 } from '@voice-room/shared/contracts/admin';
+import type { CallFeedbackRepository } from '../feedback/call-feedback.repository.ts';
 import type { AdminStatsRepository } from './admin-stats.repository.ts';
 import type { SystemSnapshotRepository } from '../ops/system-snapshot.repository.ts';
 import type { StaffCheck } from '../staff/staff-check.ts';
@@ -98,6 +99,10 @@ export interface AdminServiceDeps {
   stats(): Pick<AdminStatsRepository, 'overview' | 'productDays' | 'retention' | 'openReports' | 'firstAccountDay'>;
   systemSnapshots(): Pick<SystemSnapshotRepository, 'latest' | 'buckets'>;
   live(): LiveNumbers;
+  /** The calls going on now, for telling them from the finished ones. */
+  liveCalls(): { roomId: string; since: number }[];
+  /** How "how was the call?" was answered; unavailable while the store is. */
+  feedback(): Pick<CallFeedbackRepository, 'summarize'>;
   livekitEnabled(): boolean;
   version: string;
   startedAt: number;
@@ -110,7 +115,13 @@ export function createAdminService(deps: AdminServiceDeps) {
 
   async function overview(userId: string): Promise<Payload<AdminOverview> | null> {
     if (!(await allowed(userId))) return null;
-    const [counts, system] = await Promise.all([deps.stats().overview(), deps.systemSnapshots().latest()]);
+    const at = now();
+    const [counts, system, feedbackDay, feedbackWeek] = await Promise.all([
+      deps.stats().overview(deps.liveCalls()),
+      deps.systemSnapshots().latest(),
+      deps.feedback().summarize(new Date(at - DAY_MS)),
+      deps.feedback().summarize(new Date(at - 7 * DAY_MS))
+    ]);
     return {
       live: deps.live(),
       today: {
@@ -119,7 +130,9 @@ export function createAdminService(deps: AdminServiceDeps) {
         newAccounts: counts.newToday,
         messages: counts.messagesToday,
         voiceJoins: counts.voiceJoinsToday,
-        voiceMinutes: counts.voiceMinutesToday
+        voiceMinutes: counts.voiceMinutesToday,
+        calls: counts.callsToday,
+        callsYesterday: counts.callsYesterday
       },
       totals: {
         accounts: counts.accounts,
@@ -130,6 +143,8 @@ export function createAdminService(deps: AdminServiceDeps) {
         monthlyActive: counts.monthlyActive
       },
       openReports: counts.openReports,
+      reports: { oldestAt: counts.oldestOpenReportAt, reasons: counts.openReportReasons },
+      feedback: { day: feedbackDay, week: feedbackWeek },
       livekit: deps.livekitEnabled(),
       version: deps.version,
       startedAt: deps.startedAt,

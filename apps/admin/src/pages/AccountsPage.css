@@ -1,6 +1,53 @@
 /* The accounts list: a search, the filters, and the table of accounts in a
    card that scrolls sideways under its width. */
 
+.acc-layout {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.acc-list {
+  min-width: 0;
+  flex: 999 1 640px;
+}
+
+.acc-filter-count {
+  margin-left: 6px;
+  color: var(--vr-text-3);
+  font-weight: 500;
+}
+
+.acc-table tbody tr[data-selected='true'] {
+  background: oklch(100% 0 0 / 0.04);
+  box-shadow: inset 3px 0 0 var(--vr-accent);
+}
+
+.acc-quality {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.acc-quality-text {
+  color: var(--vr-text-3);
+  font-size: 12px;
+}
+
+.acc-quality-text[data-tone='warning'] {
+  color: var(--vr-warning);
+}
+
+.acc-quality-text[data-tone='danger'] {
+  color: var(--vr-danger);
+}
+
+.acc-quality-none {
+  font-size: 12.5px;
+}
+
 .acc-search {
   display: flex;
   width: min(340px, 100%);
@@ -36,7 +83,7 @@
 
 .acc-table {
   width: 100%;
-  min-width: 1060px;
+  min-width: 760px;
   border-collapse: collapse;
   table-layout: fixed;
   font-size: 13.5px;
@@ -158,9 +205,24 @@ th[aria-sort='descending'] .acc-sort {
   text-overflow: ellipsis;
 }
 
+.acc-person-line {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+}
+
+.acc-person-line .ui-pill {
+  flex: none;
+}
+
 .acc-person-login {
+  min-width: 0;
+  overflow: hidden;
   color: var(--vr-text-3);
   font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .acc-dim {

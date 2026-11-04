@@ -18,7 +18,8 @@ const FILTER_LABELS: Record<AccountsFilter, string> = {
   gone: 'Пропавшие (2+ недели)',
   blocked: 'Заблокированные',
   deleting: 'Удаляются',
-  badged: 'С отметкой'
+  badged: 'С отметкой',
+  trouble: 'Связь хуже нормы'
 };
 
 /** The list's filters in the contract's order. */
@@ -27,11 +28,11 @@ export const ACCOUNT_FILTERS = AccountsFilter.anyOf.map(({ const: value }) => ({
 /** The list's columns that sort, and the order each starts in when picked. */
 export const SORT_COLUMNS: { sort: AccountsSort; label: string; first: 'asc' | 'desc' }[] = [
   { sort: 'name', label: 'Аккаунт', first: 'asc' },
-  { sort: 'created', label: 'Регистрация', first: 'desc' },
   { sort: 'lastSeen', label: 'Визит', first: 'desc' },
+  { sort: 'created', label: 'Регистрация', first: 'desc' },
   { sort: 'activeDays', label: 'Дней', first: 'desc' },
   { sort: 'voice', label: 'Войс', first: 'desc' },
-  { sort: 'messages', label: 'Сообщений', first: 'desc' },
+  { sort: 'quality', label: 'Связь за 30 дней', first: 'desc' },
   { sort: 'reports', label: 'Жалоб', first: 'desc' }
 ];
 

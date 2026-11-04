@@ -138,6 +138,8 @@ export interface CallPerson {
   guestName: string | null;
   /** The latest stay's seat: where they last came from. */
   seat: Seat;
+  /** The stays that make them up. */
+  stayIds: string[];
   /** Each stay with its voice minutes, or the network changes of an older one. */
   spans: { from: number; to: number; network: NetworkPoint[]; minutes: VoiceMinute[] }[];
   /** Time in the call, the gaps between their stays left out. */
@@ -159,6 +161,7 @@ export function peopleOf(call: Pick<RoomCall, 'stays'>): CallPerson[] {
     const span = { from: stay.joinedAt, to: stay.leftAt, network: stay.network ?? [], minutes: stay.minutes ?? [] };
     const known = people.get(key);
     if (known) {
+      known.stayIds.push(stay.id);
       known.spans.push(span);
       known.total += span.to - span.from;
       known.seat = stay;
@@ -168,6 +171,7 @@ export function peopleOf(call: Pick<RoomCall, 'stays'>): CallPerson[] {
         account: stay.account,
         guestName: stay.guestName,
         seat: stay,
+        stayIds: [stay.id],
         spans: [span],
         total: span.to - span.from
       });

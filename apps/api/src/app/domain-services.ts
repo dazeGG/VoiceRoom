@@ -12,7 +12,7 @@ import packageJson from '../../package.json' with { type: 'json' };
 import { createAccountService } from '../domains/account/account.service.ts';
 import { createAdminService } from '../domains/admin/admin.service.ts';
 import { createAdminAccountsService } from '../domains/admin/admin-accounts.service.ts';
-import { createAdminRoomsService } from '../domains/admin/admin-rooms.service.ts';
+import { callSince, createAdminRoomsService } from '../domains/admin/admin-rooms.service.ts';
 import { createSessionCookies } from '../domains/account/session-cookie.ts';
 import type { AdmissionService } from '../domains/admission/admission.service.ts';
 import { createAvatarsService } from '../domains/media/avatars.service.ts';
@@ -270,6 +270,12 @@ export function createDomainServices(deps: DomainServiceDeps) {
     stats: () => required(services.getAdminStatsRepository()),
     systemSnapshots: () => required(services.getSystemSnapshotRepository()),
     live: deps.liveNumbers,
+    liveCalls: () =>
+      [...hub.presenceRooms.values()].flatMap((room) => {
+        const since = room.peers.size > 0 ? callSince(room) : null;
+        return since === null ? [] : [{ roomId: room.id, since }];
+      }),
+    feedback: () => required(services.getCallFeedbackRepository()),
     livekitEnabled: () => deps.liveKit.config().enabled,
     version: packageJson.version,
     startedAt: Date.now()
@@ -296,7 +302,11 @@ export function createDomainServices(deps: DomainServiceDeps) {
     staff,
     presenceRooms: () => hub.presenceRooms.values(),
     repository: () => required(services.getAdminRoomsRepository()),
-    describeAddress: services.describeAddress
+    describeAddress: services.describeAddress,
+    feedbackInRoom: async (roomId, from, until) =>
+      (
+        await required(services.getCallFeedbackRepository()).listForRoomSpan(roomId, new Date(from), new Date(until))
+      ).map(({ userId: _userId, guestId: _guestId, ...answer }) => answer)
   });
 
   const desktopReleaseService = createDesktopReleaseService({

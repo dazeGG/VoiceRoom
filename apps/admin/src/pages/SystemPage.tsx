@@ -52,10 +52,10 @@ function lossShare(lost: number | null, packets: number | null): number | null {
 }
 
 /** On the way in LiveKit counts what arrived; the lost packets come on top. */
-const lossIn = (sample: SystemSample) =>
+export const lossIn = (sample: SystemSample) =>
   lossShare(sample.sfuLostIn, sample.sfuPacketsIn === null ? null : sample.sfuPacketsIn + (sample.sfuLostIn ?? 0));
 /** On the way out the listeners' receivers report what never reached them of all that was sent. */
-const lossOut = (sample: SystemSample) => lossShare(sample.sfuLostOut, sample.sfuPacketsOut);
+export const lossOut = (sample: SystemSample) => lossShare(sample.sfuLostOut, sample.sfuPacketsOut);
 const retransmitShare = (sample: SystemSample) =>
   sample.sfuRetransmitOut === null || sample.sfuPacketsOut === null || sample.sfuPacketsOut < MEDIA_MIN_PACKETS
     ? null

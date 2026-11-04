@@ -17,6 +17,8 @@ export const ERROR_CODES = [
   'not_supported',
   'client_outdated',
 
+  'call_not_found',
+
   // Account
   'account_not_found',
   'account_deleted',

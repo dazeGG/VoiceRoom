@@ -6,7 +6,7 @@
 import { Type, type Static } from 'typebox';
 import { Nullable, Ok } from './http.ts';
 import { ReportReasonSchema } from './reports.ts';
-import { NetworkLevel, NetworkPoint, VoiceCause } from './rooms.ts';
+import { CpuPressure, NetworkLevel, NetworkPoint, VoiceCause } from './rooms.ts';
 import { StaffRoleSchema } from './staff.ts';
 import { AccountBadge } from './users.ts';
 
@@ -82,6 +82,14 @@ export const SystemSample = Type.Object({
 });
 export type SystemSample = Static<typeof SystemSample>;
 
+/** Good and bad answers, and how often each tag came with them, the most frequent first. */
+export const FeedbackTally = Type.Object({
+  good: Type.Number(),
+  bad: Type.Number(),
+  tags: Type.Array(Type.Object({ tag: Type.String(), count: Type.Number() }))
+});
+export type FeedbackTally = Static<typeof FeedbackTally>;
+
 export const AdminOverview = Ok({
   live: LiveNumbers,
   today: Type.Object({
@@ -90,7 +98,10 @@ export const AdminOverview = Ok({
     newAccounts: Type.Number(),
     messages: Type.Number(),
     voiceJoins: Type.Number(),
-    voiceMinutes: Type.Number()
+    voiceMinutes: Type.Number(),
+    /** Calls that went on today and are over, and the same of yesterday. Optional for an API a release behind. */
+    calls: Type.Optional(Type.Number()),
+    callsYesterday: Type.Optional(Type.Number())
   }),
   totals: Type.Object({
     accounts: Type.Number(),
@@ -101,6 +112,10 @@ export const AdminOverview = Ok({
     monthlyActive: Type.Number()
   }),
   openReports: Type.Number(),
+  /** What the open reports are: since when, and for what. Optional for an API a release behind. */
+  reports: Type.Optional(Type.Object({ oldestAt: Nullable(Type.Number()), reasons: Type.Array(ReportReasonSchema) })),
+  /** Answers to "how was the call?" over the last day and the last week. Optional for an API a release behind. */
+  feedback: Type.Optional(Type.Object({ day: FeedbackTally, week: FeedbackTally })),
   livekit: Type.Boolean(),
   version: Type.String(),
   startedAt: Type.Number(),
@@ -202,7 +217,8 @@ export const ADMIN_REASON_MAX_LENGTH = 300;
 /**
  * Which accounts the list shows: everyone, online now, registered in the last
  * week, active in the last week, gone (not seen for two weeks), blocked,
- * waiting to be deleted, or carrying a mark.
+ * waiting to be deleted, carrying a mark, or with a voice worse than the norm
+ * (TROUBLE_BAD_PCT of the minutes of the last 30 days were bad).
  */
 export const AccountsFilter = Type.Union([
   Type.Literal('all'),
@@ -212,9 +228,12 @@ export const AccountsFilter = Type.Union([
   Type.Literal('gone'),
   Type.Literal('blocked'),
   Type.Literal('deleting'),
-  Type.Literal('badged')
+  Type.Literal('badged'),
+  Type.Literal('trouble')
 ]);
 export type AccountsFilter = Static<typeof AccountsFilter>;
+/** Every filter, for counting what each holds. */
+export const ACCOUNTS_FILTERS: readonly AccountsFilter[] = AccountsFilter.anyOf.map((option) => option.const);
 
 export const AccountsSort = Type.Union([
   Type.Literal('created'),
@@ -223,9 +242,21 @@ export const AccountsSort = Type.Union([
   Type.Literal('voice'),
   Type.Literal('messages'),
   Type.Literal('reports'),
-  Type.Literal('name')
+  Type.Literal('name'),
+  Type.Literal('quality')
 ]);
 export type AccountsSort = Static<typeof AccountsSort>;
+
+/** The share of bad minutes over 30 days from which a voice counts as worse than the norm. */
+export const TROUBLE_BAD_PCT = 5;
+
+/** A stretch of voice by the minutes of each level; minutes nothing is known of are not counted. */
+export const VoiceQuality = Type.Object({
+  good: Type.Number(),
+  unstable: Type.Number(),
+  bad: Type.Number()
+});
+export type VoiceQuality = Static<typeof VoiceQuality>;
 
 /** Search by name, login or id; without a sort the newest come first. Pages count from 1. */
 export const AccountsQuery = Type.Object({
@@ -263,7 +294,9 @@ export const AccountRow = Type.Object({
   online: Type.Boolean(),
   admin: Type.Boolean(),
   badge: Nullable(AccountBadge),
-  status: AccountStatus
+  status: AccountStatus,
+  /** The minutes in voice of the last 30 days by level; null without any. Optional for an API a release behind. */
+  voiceQuality30d: Type.Optional(Nullable(VoiceQuality))
 });
 export type AccountRow = Static<typeof AccountRow>;
 
@@ -271,7 +304,11 @@ export const AccountsPage = Ok({
   accounts: Type.Array(AccountRow),
   total: Type.Number(),
   page: Type.Number(),
-  pageSize: Type.Number()
+  pageSize: Type.Number(),
+  /** How many accounts each filter holds, the search aside. Optional for an API a release behind. */
+  counts: Type.Optional(Type.Record(Type.String(), Type.Number())),
+  /** Accounts whose computer was overloaded in at least half of their calls of the last 30 days; 0 without data. */
+  cpuOverloaded: Type.Optional(Type.Number())
 });
 export type AccountsPage = Static<typeof AccountsPage>;
 
@@ -338,7 +375,33 @@ export const AccountDetail = Ok({
   memberOf: Type.Number(),
   devices: Type.Array(AccountDevice),
   reports: Type.Object({ against: Type.Number(), againstOpen: Type.Number(), filed: Type.Number() }),
-  actions: Type.Array(AdminActionEntry)
+  actions: Type.Array(AdminActionEntry),
+  /** How the voice went over the last 30 days; null without a minute of it. Optional for an API a release behind. */
+  voice30d: Type.Optional(
+    Nullable(
+      Type.Object({
+        minutes: Type.Number(),
+        quality: VoiceQuality,
+        rttAvgMs: Nullable(Type.Number()),
+        uplinkLossPct: Nullable(Type.Number()),
+        jitterBufferAvgMs: Nullable(Type.Number()),
+        /** Shares of the minutes, in percent. */
+        transport: Type.Object({ udp: Type.Number(), tcp: Type.Number(), relay: Type.Number() })
+      })
+    )
+  ),
+  /** How the computer did in those calls; null until its client has reported any. */
+  cpu30d: Type.Optional(
+    Nullable(
+      Type.Object({
+        appAvgPct: Nullable(Type.Number()),
+        systemAvgPct: Nullable(Type.Number()),
+        calls: Type.Number(),
+        criticalCalls: Type.Number(),
+        relievedCalls: Type.Number()
+      })
+    )
+  )
 });
 export type AccountDetail = Static<typeof AccountDetail>;
 
@@ -436,7 +499,11 @@ export const LiveRoomPeer = Type.Object({
    */
   network: Type.Optional(Nullable(NetworkLevel)),
   /** Whose side the trouble is on; null while the voice is good or unknown. */
-  cause: Type.Optional(Nullable(VoiceCause))
+  cause: Type.Optional(Nullable(VoiceCause)),
+  /** How hard its computer works now; null where the client cannot tell. */
+  cpuPressure: Type.Optional(Nullable(CpuPressure)),
+  /** The overload made its call switch to the lighter noise suppression. */
+  relieved: Type.Optional(Type.Boolean())
 });
 export type LiveRoomPeer = Static<typeof LiveRoomPeer>;
 
@@ -457,6 +524,69 @@ export type LiveRoom = Static<typeof LiveRoom>;
 /** The rooms with someone in voice right now, the fullest first. */
 export const LiveRooms = Ok({ rooms: Type.Array(LiveRoom) });
 export type LiveRooms = Static<typeof LiveRooms>;
+
+/** Rooms on one page of the persistent rooms. */
+export const STATIC_ROOMS_PAGE_SIZE = 50;
+
+/** All, with a call in the last week, with a voice worse than the norm, or without a call for 30 days. */
+export const StaticRoomsFilter = Type.Union([
+  Type.Literal('all'),
+  Type.Literal('active'),
+  Type.Literal('trouble'),
+  Type.Literal('quiet')
+]);
+export type StaticRoomsFilter = Static<typeof StaticRoomsFilter>;
+
+export const StaticRoomsSort = Type.Union([
+  Type.Literal('lastCall'),
+  Type.Literal('voice'),
+  Type.Literal('members'),
+  Type.Literal('quality'),
+  Type.Literal('created')
+]);
+export type StaticRoomsSort = Static<typeof StaticRoomsSort>;
+
+/** Search by name, code or the owner's login. Pages count from 1. */
+export const StaticRoomsQuery = Type.Object({
+  q: Type.Optional(Type.String({ maxLength: 100 })),
+  filter: Type.Optional(StaticRoomsFilter),
+  sort: Type.Optional(StaticRoomsSort),
+  order: Type.Optional(Type.Union([Type.Literal('asc'), Type.Literal('desc')])),
+  page: Type.Optional(Type.String({ pattern: '^[1-9][0-9]{0,5}$' }))
+});
+export type StaticRoomsQuery = Static<typeof StaticRoomsQuery>;
+
+/** A persistent room with its numbers of the last 30 days. */
+export const StaticRoomRow = Type.Object({
+  id: Type.String(),
+  name: Type.String(),
+  avatarUrl: Nullable(Type.String()),
+  owner: Nullable(RoomAccount),
+  members: Type.Number(),
+  createdAt: Type.Number(),
+  calls30d: Type.Number(),
+  voiceMinutes30d: Type.Number(),
+  /** When its last finished stay ended; null when the history keeps none. */
+  lastCallAt: Nullable(Type.Number()),
+  /** Someone is in its voice now. */
+  live: Type.Boolean(),
+  quality30d: Nullable(VoiceQuality)
+});
+export type StaticRoomRow = Static<typeof StaticRoomRow>;
+
+export const StaticRooms = Ok({
+  rooms: Type.Array(StaticRoomRow),
+  total: Type.Number(),
+  page: Type.Number(),
+  pageSize: Type.Number(),
+  counts: Type.Object({
+    all: Type.Number(),
+    active: Type.Number(),
+    trouble: Type.Number(),
+    quiet: Type.Number()
+  })
+});
+export type StaticRooms = Static<typeof StaticRooms>;
 
 /** Where a page of history continues: the end and id of the last stay shown. */
 export const HistoryCursor = Type.String({ pattern: '^[0-9]{1,15}_[0-9a-f-]{36}$' });
@@ -494,7 +624,16 @@ export const VoiceMinute = Type.Object({
   uplinkLossPct: Nullable(Type.Number()),
   rttMs: Nullable(Type.Number()),
   jitterBufferMs: Nullable(Type.Number()),
-  transport: Nullable(Type.String())
+  transport: Nullable(Type.String()),
+  /**
+   * How its computer did over the minute: VoiceRoom's share and the system's on
+   * average (the desktop app only), the highest pressure, and whether the
+   * lighter noise suppression was on. Optional for an API a release behind.
+   */
+  cpuAppPct: Type.Optional(Nullable(Type.Number())),
+  cpuSystemPct: Type.Optional(Nullable(Type.Number())),
+  cpuPressure: Type.Optional(Nullable(CpuPressure)),
+  relieved: Type.Optional(Type.Boolean())
 });
 export type VoiceMinute = Static<typeof VoiceMinute>;
 
@@ -542,10 +681,12 @@ export const ROOM_CALLS_PAGE_SIZE = 20;
 /**
  * Finished calls, the latest end first, of one room or of all; `from` and `to`
  * (milliseconds) keep the calls that overlap that span, as a day's timeline
- * asks. `after` is where the previous page stopped.
+ * asks. `after` is where the previous page stopped; `accountId` keeps the
+ * calls that account was in.
  */
 export const RoomCallsQuery = Type.Object({
   roomId: Type.Optional(Type.String({ minLength: 1, maxLength: 64 })),
+  accountId: Type.Optional(Type.String({ minLength: 1, maxLength: 64 })),
   after: Type.Optional(HistoryCursor),
   from: Type.Optional(MillisString),
   to: Type.Optional(MillisString)
@@ -568,9 +709,39 @@ export const RoomCall = Type.Object({
   avatarUrl: Type.Optional(Nullable(Type.String())),
   startedAt: Type.Number(),
   endedAt: Type.Number(),
-  stays: Type.Array(RoomStay)
+  stays: Type.Array(RoomStay),
+  /** Bad answers to "how was the call?" given about it. Optional for an API a release behind. */
+  badFeedback: Type.Optional(Type.Number())
 });
 export type RoomCall = Static<typeof RoomCall>;
+
+/** What went on in a call besides who was in it. Join, leave and network are read from its stays, the rest is kept. */
+export const CallEventKind = Type.Union([
+  Type.Literal('join'),
+  Type.Literal('leave'),
+  Type.Literal('screen_on'),
+  Type.Literal('screen_off'),
+  Type.Literal('camera_on'),
+  Type.Literal('camera_off'),
+  Type.Literal('network'),
+  Type.Literal('cpu_critical'),
+  Type.Literal('relieved_ns')
+]);
+export type CallEventKind = Static<typeof CallEventKind>;
+
+export const CallEvent = Type.Object({
+  at: Type.Number(),
+  kind: CallEventKind,
+  /** Whose: the stay it happened in. */
+  stayId: Nullable(Type.String()),
+  /** For a network change, the level it went to. */
+  detail: Type.Optional(Type.String())
+});
+export type CallEvent = Static<typeof CallEvent>;
+
+/** A call's address: its first stay's id, which the room's own history keeps. */
+export const CallIdParams = Type.Object({ callId: Type.String({ pattern: '^[0-9a-f-]{36}$' }) });
+export const RoomIdParams = Type.Object({ roomId: Type.String({ minLength: 1, maxLength: 64 }) });
 
 export const RoomCalls = Ok({
   calls: Type.Array(RoomCall),

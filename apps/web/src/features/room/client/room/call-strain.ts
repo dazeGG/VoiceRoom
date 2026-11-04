@@ -155,6 +155,11 @@ export function noteCpuPressure(state: CpuPressureState): void {
   pressure = state;
 }
 
+/** The latest pressure the system reported; null where the browser has no API. */
+export function currentCpuPressure(): CpuPressureState | null {
+  return pressure;
+}
+
 /** Whether other people's frames and sound are worth reading: they only count while the system is busy. */
 export function isSystemBusy(): boolean {
   return isBusy(pressure);

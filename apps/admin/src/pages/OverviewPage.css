@@ -1,5 +1,5 @@
-/* The overview: the open reports strip, the headline tiles with a trend
-   along each one's foot, two charts, and the server beside its day of load. */
+/* The overview: what asks for attention, the strip of numbers, and sections in
+   pairs that drop under each other on a narrow screen. */
 
 .dash-quiet {
   margin: 0;
@@ -7,74 +7,125 @@
   font-size: 12.5px;
 }
 
-.dash-reports {
+.dash-pair {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
-  gap: 12px;
-  border: 1px solid color-mix(in oklch, var(--vr-danger) 22%, transparent);
-  border-radius: 14px;
-  padding: 11px 12px 11px 16px;
-  background: color-mix(in oklch, var(--vr-danger) 10%, transparent);
-  color: var(--vr-text);
-  font-size: 14px;
+  align-items: flex-start;
+  gap: 16px;
 }
 
-.dash-reports > svg {
-  color: var(--vr-danger);
-}
-
-.ui-button.dash-reports-go {
-  min-height: 32px;
-  margin-left: auto;
-  border-radius: 8px;
-  font-size: 13px;
-}
-
-.kpis {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 170px), 1fr));
-  gap: 14px;
-}
-
-.kpi {
-  display: flex;
+.dash-wide {
   min-width: 0;
+  flex: 999 1 560px;
+}
+
+.dash-narrow {
+  min-width: 0;
+  flex: 1 1 440px;
+}
+
+.dash-stack {
+  display: flex;
   flex-direction: column;
-  gap: 6px;
-  overflow: hidden;
+  gap: 16px;
+}
+
+.dash-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
   border: 1px solid var(--vr-line);
   border-radius: 16px;
-  padding: 16px 18px 0;
+  padding: 16px 18px;
   background: var(--vr-surface);
 }
 
-.kpi-label {
+.dash-big {
+  color: var(--vr-text);
+  font-size: 22px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* What asks for attention. */
+.attention {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+  gap: 12px;
+}
+
+.attention-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border: 1px solid var(--vr-line);
+  border-radius: 16px;
+  padding: 14px 16px;
+  background: var(--vr-surface);
+}
+
+.attention-card[data-danger='true'] {
+  border-color: color-mix(in oklch, var(--vr-danger) 30%, transparent);
+  background: color-mix(in oklch, var(--vr-danger) 6%, var(--vr-surface));
+}
+
+.attention-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   color: var(--vr-text-2);
   font-size: 12.5px;
 }
 
-.kpi-value {
-  color: var(--vr-text);
-  font-size: 30px;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: -0.02em;
-  line-height: 1.1;
+.attention-card[data-danger='true'] .attention-label svg,
+.attention-card[data-danger='true'] .attention-value {
+  color: var(--vr-danger);
 }
 
-.kpi-foot {
-  display: flex;
-  min-height: 34px;
-  flex-wrap: wrap;
-  align-content: flex-start;
-  align-items: center;
-  gap: 3px 8px;
+.attention-dot {
+  width: 8px;
+  height: 8px;
+  flex: none;
+  border-radius: 50%;
+}
+
+.attention-dot[data-tone='danger'] {
+  background: var(--vr-danger);
+}
+
+.attention-dot[data-tone='warning'] {
+  background: var(--vr-warning);
+}
+
+.attention-value {
+  color: var(--vr-text);
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.15;
+}
+
+.attention-detail {
+  color: var(--vr-text-3);
   font-size: 12px;
 }
 
-.kpi-hint {
+.attention-action {
+  align-self: flex-start;
+  margin-top: 4px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.attention-action .ui-button {
+  min-height: 32px;
+  font-size: 13px;
+}
+
+.attention-calm {
+  margin: 0;
   color: var(--vr-text-3);
+  font-size: 13.5px;
 }
 
 .kpi-delta {
@@ -98,48 +149,132 @@
   font-weight: 500;
 }
 
-/* The trend runs edge to edge along the tile's foot. */
-.kpi-spark {
-  display: block;
-  margin: 2px -18px 0;
+/* The compact lists of calls. */
+.dash-list {
+  margin: 0;
+  overflow: hidden;
+  border: 1px solid var(--vr-line);
+  border-radius: 16px;
+  padding: 0;
+  background: var(--vr-surface);
+  list-style: none;
 }
 
-.kpi-spark .spark-area {
-  opacity: 0.12;
+.dash-list > li + li {
+  border-top: 1px solid oklch(100% 0 0 / 0.05);
 }
 
-.dash-row {
+.dash-row-button {
   display: flex;
-  flex-wrap: wrap;
-  align-items: stretch;
-  gap: 14px;
-}
-
-.dash-server {
-  flex: 1 1 300px;
-}
-
-.dash-load {
-  display: grid;
-  min-width: 0;
-  flex: 2 1 520px;
-}
-
-.dash-server-head {
-  display: flex;
+  width: 100%;
   flex-wrap: wrap;
   align-items: center;
-  gap: 6px 10px;
+  gap: 8px 14px;
+  border: 0;
+  padding: 10px 16px;
+  background: transparent;
+  color: var(--vr-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.dash-row-button:hover {
+  background: oklch(100% 0 0 / 0.03);
+}
+
+.dash-row-button:focus-visible {
+  outline: 2px solid var(--vr-accent);
+  outline-offset: -2px;
+}
+
+.dash-room {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 220px;
+  align-items: center;
+  gap: 10px;
+}
+
+.dash-room-text {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  line-height: 1.3;
+}
+
+.dash-room-name {
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dash-room-note {
+  color: var(--vr-text-3);
+  font-size: 12px;
+}
+
+.dash-people {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.dash-people-count {
+  min-width: 76px;
+  color: var(--vr-text-2);
+  font-size: 13px;
+}
+
+.dash-trouble {
+  display: flex;
+  flex: 0 0 150px;
+  justify-content: flex-end;
+}
+
+.dash-call-when {
+  display: flex;
+  flex: 0 0 104px;
+  flex-direction: column;
+  font-size: 12.5px;
+  line-height: 1.3;
+}
+
+.dash-call-room {
+  flex-basis: 180px;
+}
+
+.dash-call-quality {
+  display: flex;
+  min-width: 0;
+  flex: 0 1 150px;
+  flex-direction: column;
+}
+
+.dash-bad {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--vr-danger);
+  font-size: 12px;
+}
+
+/* The server. */
+.dash-server {
+  gap: 14px;
 }
 
 .gauges {
   display: grid;
-  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 14px;
 }
 
 .gauge {
   display: grid;
-  gap: 5px;
+  gap: 6px;
 }
 
 .gauge-head {
@@ -151,12 +286,13 @@
 
 .gauge-head strong {
   color: var(--vr-text);
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
 
 .gauge-bar {
   display: block;
-  height: 8px;
+  height: 6px;
   overflow: hidden;
   border-radius: 999px;
   background: var(--vr-surface-3);
@@ -166,7 +302,7 @@
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: var(--vr-success);
+  background: var(--vr-accent);
 }
 
 .gauge[data-level='warn'] .gauge-bar span {
@@ -187,16 +323,85 @@
 }
 
 .gauge-facts {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 14px;
-  margin-top: auto;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 16px;
+  margin: 0;
   border-top: 1px solid var(--vr-line);
   padding-top: 12px;
-  color: var(--vr-text-2);
-  font-size: 12.5px;
+  font-size: 13px;
 }
 
-.gauge-facts strong {
-  color: var(--vr-text);
+.gauge-facts > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.gauge-facts dt {
+  color: var(--vr-text-3);
+}
+
+.gauge-facts dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The answers of the week. */
+.week-answers-share {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 16px;
+}
+
+.week-answers-counts {
+  color: var(--vr-text-2);
+  font-size: 13px;
+}
+
+.week-answers-counts [data-tone='good'] {
+  color: var(--vr-success);
+}
+
+.week-answers-counts [data-tone='bad'] {
+  color: var(--vr-danger);
+}
+
+.week-answers-bar {
+  display: flex;
+  height: 8px;
+  overflow: hidden;
+  gap: 2px;
+  border-radius: 999px;
+}
+
+.week-answers-bar > span {
+  flex-basis: 0;
+  background: var(--net-tone);
+}
+
+.week-answers-tags {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.week-answers-tag {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 90px 24px;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+}
+
+.week-answers-tag-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.week-answers-tag-count {
+  color: var(--vr-text-2);
+  text-align: right;
 }

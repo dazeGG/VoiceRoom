@@ -1,9 +1,11 @@
 // Who is in which room's voice right now, a row per room refreshed every few
-// seconds, and the finished calls before: by day, a page at a time, or the
-// timeline of a day picked on the calendar. Names, accounts, times and the kind of client only: nothing
-// said in a room. An account opens its card; a room narrows the history to it.
+// seconds, the persistent rooms with their last 30 days, and the finished calls
+// before: by day, a page at a time, or the timeline of a day picked on the
+// calendar. Names, accounts, times and the kind of client only: nothing said in
+// a room. An account opens its card; a room narrows the history to it; a call
+// opens its page.
 
-import { ChartGantt, ChevronLeft, ChevronRight, List, X } from 'lucide-react';
+import { ArrowUpRight, ChartGantt, ChevronLeft, ChevronRight, List, X } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   VOICE_HISTORY_KEEP_DAYS,
@@ -11,20 +13,25 @@ import {
   type RoomCall,
   type RoomCallsQuery
 } from '@voice-room/shared/contracts/admin';
-import { fetchLiveRooms, fetchRoomCalls } from '../api/admin.ts';
-import { formatClock, formatCount, formatDuration, formatPeople, plural } from '../format.ts';
+import { fetchLiveRooms, fetchOverview, fetchRoomCalls, fetchStaticRooms } from '../api/admin.ts';
+import { formatClock, formatCount, formatDuration, formatHours, formatPeople, plural } from '../format.ts';
 import { useRefreshStatus } from '../frame.tsx';
 import { useAdminResource } from '../load-state.ts';
 import { Notice } from '../Notice.tsx';
-import { Button, Empty, Panel, Pill, Segment } from '../ui/index.tsx';
+import { useCan } from '../staff.tsx';
+import type { CallRef } from '../tabs.ts';
+import { Button, Empty, Panel, Pill, Segment, Stat, Stats } from '../ui/index.tsx';
+import { Section, useSectionState } from '../ui/Section.tsx';
 import { CallList } from './rooms/CallList.tsx';
 import { CallPeople } from './rooms/CallPeople.tsx';
 import { DayPicker, shiftDay, startOfDay } from './rooms/DayPicker.tsx';
 import { DayTimeline } from './rooms/DayTimeline.tsx';
 import { LiveCalls } from './rooms/LiveCalls.tsx';
+import { FIRST_STATIC_VIEW, StaticRooms, type StaticRoomsView } from './rooms/StaticRooms.tsx';
 import './RoomsPage.css';
 
 const REFRESH_MS = 5000;
+const SLOW_REFRESH_MS = 30_000;
 /** A day's timeline follows the pages up to this many; a busier day shows its latest calls. */
 const TIMELINE_PAGES = 10;
 
@@ -103,11 +110,19 @@ async function fetchHistory({ view, room, cursors, index, dayStart }: HistoryQue
 
 export function RoomsPage({
   onOpenAccount,
-  focusRoom = null
+  onOpenCall,
+  focusRoom = null,
+  focusLive = null,
+  onLiveFocused
 }: {
   onOpenAccount: (accountId: string) => void;
+  onOpenCall: (call: CallRef) => void;
   /** A room picked elsewhere (the search): the history narrows to it. */
   focusRoom?: HistoryRoom | null;
+  /** A call picked elsewhere (the overview): its row opens. */
+  focusLive?: { roomId: string } | null;
+  /** That pick is done with: coming back here later does not open the row again. */
+  onLiveFocused?: () => void;
 }) {
   // --- who is in voice now ---------------------------------------------------
   const live = useAdminResource(fetchLiveRooms, [], {
@@ -119,6 +134,41 @@ export function RoomsPage({
   const now = live.heardAt ?? mountedAt;
   const [openLive, setOpenLive] = useState<ReadonlySet<string>>(new Set());
   const liveSection = useRef<HTMLElement>(null);
+  const liveFold = useSectionState('rooms', 'live');
+  const historyFold = useSectionState('rooms', 'history');
+  const staticFold = useSectionState('rooms', 'static');
+
+  // A call picked elsewhere opens its row, once for each pick.
+  const [seenFocusLive, setSeenFocusLive] = useState<{ roomId: string } | null>(null);
+  if (focusLive !== seenFocusLive) {
+    setSeenFocusLive(focusLive);
+    if (focusLive) setOpenLive((open) => new Set(open).add(focusLive.roomId));
+  }
+
+  // --- the persistent rooms ---------------------------------------------------
+  const [staticView, setStaticView] = useState<StaticRoomsView>(FIRST_STATIC_VIEW);
+  const staticRooms = useAdminResource(
+    () =>
+      fetchStaticRooms({
+        filter: staticView.filter,
+        sort: staticView.sort,
+        page: String(staticView.page),
+        ...(staticView.q ? { q: staticView.q } : {})
+      }),
+    [staticView],
+    {
+      failureText: 'Не удалось загрузить постоянные комнаты',
+      ...(staticFold.open ? { refreshMs: SLOW_REFRESH_MS } : {})
+    }
+  );
+  const staticCounts = staticRooms.data?.counts ?? null;
+
+  // --- today's numbers, for those who may read them --------------------------
+  const canStats = useCan('stats.view');
+  const today = useAdminResource(() => (canStats ? fetchOverview() : Promise.resolve(null)), [canStats], {
+    failureText: 'Не удалось загрузить обзор',
+    refreshMs: SLOW_REFRESH_MS
+  }).data?.today;
 
   // --- the calls before --------------------------------------------------------
   const [historyQuery, setHistoryQuery] = useState<HistoryQuery>(() => firstPage('calls', null));
@@ -152,6 +202,7 @@ export function RoomsPage({
   function showRoomHistory(room: HistoryRoom | null, scroll = false): void {
     setPicked(null);
     setHistoryQuery(firstPage(view, room, historyQuery.dayStart));
+    if (room) historyFold.setOpen(true);
     if (scroll) historySection.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
   }
 
@@ -168,10 +219,12 @@ export function RoomsPage({
   // The top bar's refresh asks for the rooms now and the history on screen again.
   const { reload: reloadLive } = live;
   const { reload: reloadHistory } = history;
+  const { reload: reloadStatic } = staticRooms;
   const reload = useCallback(() => {
     reloadLive();
     reloadHistory();
-  }, [reloadLive, reloadHistory]);
+    reloadStatic();
+  }, [reloadLive, reloadHistory, reloadStatic]);
   useRefreshStatus({ at: live.loadedAt, everyMs: REFRESH_MS, busy: live.busy, reload });
 
   // A room picked in the search narrows the history like any other narrowing: in the view
@@ -185,11 +238,26 @@ export function RoomsPage({
       setHistoryQuery(firstPage(view, focusRoom, historyQuery.dayStart));
     }
   }
+  const { setOpen: openHistoryFold } = historyFold;
+  const { setOpen: openLiveFold } = liveFold;
   useEffect(() => {
-    if (focusRoom) historySection.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
-  }, [focusRoom]);
+    if (!focusRoom) return;
+    openHistoryFold(true);
+    historySection.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+  }, [focusRoom, openHistoryFold]);
+  useEffect(() => {
+    if (!focusLive) return;
+    openLiveFold(true);
+    onLiveFocused?.();
+  }, [focusLive, openLiveFold, onLiveFocused]);
 
   const peopleInVoice = (rooms ?? []).reduce((count, room) => count + room.peers.length, 0);
+  const livePeers = (rooms ?? []).flatMap((room) => room.peers);
+  const badPeers = livePeers.filter((peer) => peer.network === 'bad').length;
+  const unstablePeers = livePeers.filter((peer) => peer.network === 'unstable').length;
+  const liveSummary = rooms?.length
+    ? `${formatCount(rooms.length)} ${plural(rooms.length, ['комната', 'комнаты', 'комнат'])} · ${formatPeople(peopleInVoice)}`
+    : null;
   const pageIndex = callsPage?.index ?? 0;
   const hasNextPage = callsPage ? callsPage.cursors.length > callsPage.index + 1 : false;
   const pickedCall = day?.calls.find((call) => call.id === picked) ?? null;
@@ -209,17 +277,58 @@ export function RoomsPage({
 
   return (
     <>
-      <section className="rooms-section" aria-labelledby="rooms-live-title" ref={liveSection}>
-        <header className="ui-section-head">
-          <h2 id="rooms-live-title">Сейчас в звонках</h2>
-          {rooms?.length ? (
-            <Pill tone="success" dot>
-              {`${formatCount(rooms.length)} ${plural(rooms.length, ['комната', 'комнаты', 'комнат'])} · ${formatPeople(peopleInVoice)}`}
-            </Pill>
-          ) : null}
-          <span className="ui-section-note">обновляется каждые 5 с</span>
-        </header>
+      <Stats label="Главное о комнатах" min={170}>
+        <Stat
+          label="В звонках"
+          value={rooms ? formatPeople(peopleInVoice) : '…'}
+          note={
+            rooms ? `${formatCount(rooms.length)} ${plural(rooms.length, ['комната', 'комнаты', 'комнат'])}` : undefined
+          }
+          dot="success"
+        />
+        <Stat
+          label="Связь хуже нормы"
+          value={rooms ? formatPeople(badPeers + unstablePeers) : '…'}
+          tone={badPeers ? 'danger' : unstablePeers ? 'warning' : undefined}
+          note={rooms ? `${formatCount(badPeers)} плохо · ${formatCount(unstablePeers)} нестабильно` : undefined}
+          dot={badPeers ? 'danger' : unstablePeers ? 'warning' : undefined}
+        />
+        <Stat
+          label="Постоянных комнат"
+          value={staticCounts ? formatCount(staticCounts.all) : '…'}
+          note={staticCounts ? `${formatCount(staticCounts.active)} активных за неделю` : undefined}
+        />
+        {today?.calls !== undefined ? (
+          <Stat
+            label="Звонков сегодня"
+            value={formatCount(today.calls + (rooms?.length ?? 0))}
+            note={`${formatCount(today.calls)} завершены · ${formatCount(rooms?.length ?? 0)} идут`}
+          />
+        ) : null}
+        {today ? (
+          <Stat
+            label="Часов в войсе сегодня"
+            value={formatHours(today.voiceMinutes / 60)}
+            note="минуты всех участников"
+          />
+        ) : null}
+      </Stats>
 
+      <Section
+        page="rooms"
+        id="live"
+        title="Сейчас в звонках"
+        state={liveFold}
+        sectionRef={liveSection}
+        summary={
+          liveSummary ? (
+            <Pill tone="success" dot>
+              {liveSummary}
+            </Pill>
+          ) : null
+        }
+        link="обновляется каждые 5 с"
+      >
         {live.failure && !rooms ? (
           <Notice failure={live.failure} onRetry={reloadLive} />
         ) : (
@@ -243,24 +352,58 @@ export function RoomsPage({
                   open={openLive}
                   onToggle={(roomId) => setOpenLive((open) => toggled(open, roomId))}
                   onShowHistory={(room) => showRoomHistory({ id: room.roomId, name: room.name }, true)}
+                  onOpenCall={(room) => onOpenCall({ kind: 'live', roomId: room.roomId })}
                   onOpenAccount={onOpenAccount}
                 />
               )}
             </Panel>
           </>
         )}
-      </section>
+      </Section>
 
-      <section className="rooms-section" aria-labelledby="rooms-history-title" ref={historySection}>
-        <header className="ui-section-head">
-          <h2 id="rooms-history-title">История звонков</h2>
-          {historyRoom ? (
-            <button type="button" className="rooms-filter" onClick={() => showRoomHistory(null)}>
-              {historyRoom.name || historyRoom.id}
-              <X size={13} aria-label="Показать все комнаты" />
-            </button>
-          ) : null}
-          <span className="rooms-view">
+      <Section
+        page="rooms"
+        id="static"
+        title="Постоянные комнаты"
+        state={staticFold}
+        summary={staticCounts ? <Pill>{formatCount(staticCounts.all)}</Pill> : null}
+        link="цифры за 30 дней"
+      >
+        <StaticRooms
+          page={staticRooms.data}
+          failure={staticRooms.failure}
+          busy={staticRooms.busy}
+          view={staticView}
+          now={staticRooms.heardAt ?? now}
+          onChange={setStaticView}
+          onRetry={reloadStatic}
+          onShowHistory={(room) => showRoomHistory({ id: room.id, name: room.name }, true)}
+        />
+      </Section>
+
+      <Section
+        page="rooms"
+        id="history"
+        title="История звонков"
+        state={historyFold}
+        sectionRef={historySection}
+        summary={
+          <>
+            {historyRoom ? (
+              <button type="button" className="rooms-filter" onClick={() => showRoomHistory(null)}>
+                {historyRoom.name || historyRoom.id}
+                <X size={13} aria-label="Показать все комнаты" />
+              </button>
+            ) : null}
+            {today?.calls !== undefined && today.callsYesterday !== undefined ? (
+              <span className="ui-toolbar-note">
+                {`сегодня ${formatCount(today.calls)} · вчера ${formatCount(today.callsYesterday)}`}
+              </span>
+            ) : null}
+          </>
+        }
+        link={
+          <>
             {view === 'timeline' ? (
               <DayPicker
                 dayStart={historyQuery.dayStart}
@@ -278,9 +421,9 @@ export function RoomsPage({
                 { value: 'timeline', label: 'Лента дня', icon: <ChartGantt size={14} aria-hidden="true" /> }
               ]}
             />
-          </span>
-        </header>
-
+          </>
+        }
+      >
         {history.failure && !(view === 'calls' ? callsPage : day) ? (
           <Notice failure={history.failure} onRetry={() => showRoomHistory(historyRoom)} />
         ) : !shown ? (
@@ -308,6 +451,7 @@ export function RoomsPage({
                     open={openCalls}
                     onToggle={(callId) => setOpenCalls((open) => toggled(open, callId))}
                     onFilterRoom={(call) => showRoomHistory({ id: call.roomId, name: call.roomName || null })}
+                    onOpen={(call) => onOpenCall({ kind: 'finished', callId: call.id })}
                     onOpenAccount={onOpenAccount}
                   />
                   {pageIndex > 0 || hasNextPage ? (
@@ -364,7 +508,15 @@ export function RoomsPage({
                 {pickedCall ? (
                   <Panel
                     title={`${pickedCall.roomName || pickedCall.roomId} · ${formatClock(pickedCall.startedAt)}–${formatClock(pickedCall.endedAt)}`}
-                    aside={formatDuration(pickedCall.endedAt - pickedCall.startedAt)}
+                    aside={
+                      <span className="rooms-picked-aside">
+                        {formatDuration(pickedCall.endedAt - pickedCall.startedAt)}
+                        <Button variant="ghost" onClick={() => onOpenCall({ kind: 'finished', callId: pickedCall.id })}>
+                          Подробно о звонке
+                          <ArrowUpRight size={14} aria-hidden="true" />
+                        </Button>
+                      </span>
+                    }
                     flush
                   >
                     <div className="call-detail">
@@ -382,7 +534,7 @@ export function RoomsPage({
             для статистики.
           </p>
         ) : null}
-      </section>
+      </Section>
     </>
   );
 }

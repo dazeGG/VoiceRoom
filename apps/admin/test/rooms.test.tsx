@@ -18,7 +18,7 @@ import type {
   VoiceMinute
 } from '@voice-room/shared/contracts/admin';
 import { RoomsPage, type HistoryRoom } from '../src/pages/RoomsPage.tsx';
-import { stubApi, renderAs, type Call, type Reply } from './helpers/harness.tsx';
+import { stubApi as stubRoutes, renderAs, type Call, type Reply, type Route } from './helpers/harness.tsx';
 
 const MINUTE = 60_000;
 const NEXT_PAGE = '1760000000000_6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b';
@@ -27,6 +27,14 @@ afterEach(() => {
   cleanup();
   vi.useRealTimers();
 });
+
+const NO_STATIC_ROOMS: Reply = {
+  body: { ok: true, rooms: [], total: 0, page: 1, pageSize: 50, counts: { all: 0, active: 0, trouble: 0, quiet: 0 } }
+};
+
+/** Every test here is about the calls; the persistent rooms answer with nothing unless it says otherwise. */
+const stubApi = (routes: Record<string, Route>) =>
+  stubRoutes({ 'GET /api/admin/rooms/static': NO_STATIC_ROOMS, ...routes });
 
 const alice = {
   id: 'u-alice',
@@ -138,7 +146,7 @@ test('a live room opens its people: accounts by login, guests by name, and an ac
     'GET /api/admin/rooms/calls': history([])
   });
   const onOpenAccount = vi.fn();
-  renderAs(<RoomsPage onOpenAccount={onOpenAccount} />);
+  renderAs(<RoomsPage onOpenCall={vi.fn()} onOpenAccount={onOpenAccount} />);
 
   // Closed, the row sums the room up.
   const row = within(await screen.findByRole('list', { name: 'Сейчас в звонках' })).getByRole('listitem');
@@ -189,7 +197,7 @@ test('someone in the Android app shows as Android', async () => {
     ]),
     'GET /api/admin/rooms/calls': history([])
   });
-  renderAs(<RoomsPage onOpenAccount={vi.fn()} />);
+  renderAs(<RoomsPage onOpenCall={vi.fn()} onOpenAccount={vi.fn()} />);
 
   const people = await openLiveRoom('Кухня');
   const [peer] = within(people).getAllByRole('listitem');
@@ -204,8 +212,8 @@ test('the list of who is in voice refreshes every few seconds', async () => {
     'GET /api/admin/rooms': () => live(rooms),
     'GET /api/admin/rooms/calls': history([])
   });
-  renderAs(<RoomsPage onOpenAccount={vi.fn()} />);
-  expect(await screen.findByText('2 человека')).toBeTruthy();
+  renderAs(<RoomsPage onOpenCall={vi.fn()} onOpenAccount={vi.fn()} />);
+  expect(within(await screen.findByRole('list', { name: 'Сейчас в звонках' })).getByText('2 человека')).toBeTruthy();
 
   rooms = [];
   await vi.advanceTimersByTimeAsync(5000);
@@ -220,8 +228,8 @@ test('a failed refresh keeps the rooms already shown and says why', async () => 
       failing ? { status: 500, body: { ok: false, error: 'boom', code: 'internal_error' } } : live([kitchen()]),
     'GET /api/admin/rooms/calls': history([])
   });
-  renderAs(<RoomsPage onOpenAccount={vi.fn()} />);
-  expect(await screen.findByText('2 человека')).toBeTruthy();
+  renderAs(<RoomsPage onOpenCall={vi.fn()} onOpenAccount={vi.fn()} />);
+  expect(within(await screen.findByRole('list', { name: 'Сейчас в звонках' })).getByText('2 человека')).toBeTruthy();
 
   failing = true;
   await vi.advanceTimersByTimeAsync(5000);
@@ -236,7 +244,7 @@ test('an unnamed temporary room that is still there goes by its code and is not 
       call('c-tmp', [stay('s-tmp', { roomId: '8vjx8udrdu', roomName: '', isStatic: false })])
     ])
   });
-  renderAs(<RoomsPage onOpenAccount={vi.fn()} />);
+  renderAs(<RoomsPage onOpenCall={vi.fn()} onOpenAccount={vi.fn()} />);
 
   const room = await screen.findByRole('button', { name: /8vjx8udrdu/ });
   expect(within(room).getByText('временная')).toBeTruthy();
@@ -266,7 +274,7 @@ test('the calls come by day, a page at a time, and narrow to one room', async ()
       return history([latest, earlier, gone], NEXT_PAGE);
     }
   });
-  renderAs(<RoomsPage onOpenAccount={vi.fn()} />);
+  renderAs(<RoomsPage onOpenCall={vi.fn()} onOpenAccount={vi.fn()} />);
 
   // Today's two calls under today, the call in the room that is gone under yesterday.
   const todays = await screen.findByRole('region', { name: /^Сегодня, / });
@@ -313,7 +321,7 @@ test('a call shows its span and length, and opens to who was there and when', as
       ])
     ])
   });
-  renderAs(<RoomsPage onOpenAccount={vi.fn()} />);
+  renderAs(<RoomsPage onOpenCall={vi.fn()} onOpenAccount={vi.fn()} />);
 
   expect(await screen.findByText('14:30–15:55')).toBeTruthy();
   expect(screen.getByText('1 ч 25 мин')).toBeTruthy();
@@ -351,7 +359,7 @@ test("an older stay's bar is coloured by its client's own changes, and grey wher
       ])
     ])
   });
-  renderAs(<RoomsPage onOpenAccount={vi.fn()} />);
+  renderAs(<RoomsPage onOpenCall={vi.fn()} onOpenAccount={vi.fn()} />);
 
   await userEvent.click(await screen.findByRole('button', { name: 'Кто был в звонке 14:30–15:30' }));
   const table = screen.getByRole('table', { name: 'Участники звонка' });
@@ -413,7 +421,7 @@ test("a stay's bar shows its voice minute by minute with the minute's numbers, g
       ])
     ])
   });
-  renderAs(<RoomsPage onOpenAccount={vi.fn()} />);
+  renderAs(<RoomsPage onOpenCall={vi.fn()} onOpenAccount={vi.fn()} />);
 
   await userEvent.click(await screen.findByRole('button', { name: 'Кто был в звонке 14:30–14:34' }));
   const table = screen.getByRole('table', { name: 'Участники звонка' });
@@ -444,7 +452,7 @@ test('each seat says its device and where from, by place and address key, never 
       ])
     ])
   });
-  renderAs(<RoomsPage onOpenAccount={vi.fn()} />);
+  renderAs(<RoomsPage onOpenCall={vi.fn()} onOpenAccount={vi.fn()} />);
 
   const people = await openLiveRoom('Кухня');
   const [alicePeer, guestPeer] = within(people).getAllByRole('listitem');
@@ -477,7 +485,7 @@ test('a role that is not told where people came from sees only what the server s
     ]),
     'GET /api/admin/rooms/calls': history([call('c-anon', [stay('s-anon')])])
   });
-  renderAs(<RoomsPage onOpenAccount={vi.fn()} />, 'moderator');
+  renderAs(<RoomsPage onOpenCall={vi.fn()} onOpenAccount={vi.fn()} />, 'moderator');
 
   const people = await openLiveRoom('Кухня');
   expect(within(people).getByText('Петя')).toBeTruthy();
@@ -508,14 +516,14 @@ test('a slow answer is waited for: the refresh does not ask again until it comes
     'GET /api/admin/rooms/calls': history([])
   });
   const liveCalls = () => calls.filter((one) => one.url.pathname === '/api/admin/rooms').length;
-  renderAs(<RoomsPage onOpenAccount={vi.fn()} />);
+  renderAs(<RoomsPage onOpenCall={vi.fn()} onOpenAccount={vi.fn()} />);
   await waitFor(() => expect(liveCalls()).toBe(1));
 
   await vi.advanceTimersByTimeAsync(20_000);
   expect(liveCalls()).toBe(1);
 
   release(live([kitchen()]));
-  expect(await screen.findByText('2 человека')).toBeTruthy();
+  expect(within(await screen.findByRole('list', { name: 'Сейчас в звонках' })).getByText('2 человека')).toBeTruthy();
   await vi.advanceTimersByTimeAsync(5000);
   await waitFor(() => expect(liveCalls()).toBe(2));
   expect(await screen.findByText('Сейчас никто не в звонке')).toBeTruthy();
@@ -529,7 +537,7 @@ test('a room filter that could not be loaded does not stand over the calls of an
         ? { status: 500, body: { ok: false, error: 'boom', code: 'internal_error' } }
         : history([call('c-before', [stay('s-before', { guestName: 'Раньше' })])])
   });
-  renderAs(<RoomsPage onOpenAccount={vi.fn()} />);
+  renderAs(<RoomsPage onOpenCall={vi.fn()} onOpenAccount={vi.fn()} />);
   await screen.findByRole('button', { name: /^Кто был в звонке/ });
 
   await userEvent.click(within(liveTable()).getByRole('button', { name: 'История звонков: Кухня' }));
@@ -546,7 +554,7 @@ test('a failed history load is told even when no calls are shown', async () => {
     'GET /api/admin/rooms/calls': () =>
       failing ? { status: 500, body: { ok: false, error: 'boom', code: 'internal_error' } } : history([])
   });
-  renderAs(<RoomsPage onOpenAccount={vi.fn()} />);
+  renderAs(<RoomsPage onOpenCall={vi.fn()} onOpenAccount={vi.fn()} />);
   await screen.findByText('Завершённых звонков пока нет');
 
   failing = true;
@@ -564,7 +572,7 @@ test('a view switch that fails shows only why and a retry, not the other view as
         ? { status: 500, body: { ok: false, error: 'boom', code: 'internal_error' } }
         : history([call('c-before', [stay('s-before', { guestName: 'Раньше' })])])
   });
-  renderAs(<RoomsPage onOpenAccount={vi.fn()} />);
+  renderAs(<RoomsPage onOpenCall={vi.fn()} onOpenAccount={vi.fn()} />);
   await screen.findByRole('button', { name: /^Кто был в звонке/ });
 
   await userEvent.click(screen.getByRole('radio', { name: 'Лента дня' }));
@@ -592,7 +600,7 @@ test("the day's timeline asks for today's calls, and a call's bar shows who was 
           ])
         : history([])
   });
-  renderAs(<RoomsPage onOpenAccount={vi.fn()} />);
+  renderAs(<RoomsPage onOpenCall={vi.fn()} onOpenAccount={vi.fn()} />);
   await screen.findByText('Завершённых звонков пока нет');
 
   await userEvent.click(screen.getByRole('radio', { name: 'Лента дня' }));
@@ -619,7 +627,7 @@ test("a room's picture shows in the call history and on the day's line", async (
     'GET /api/admin/rooms': live([]),
     'GET /api/admin/rooms/calls': history([pictured])
   });
-  const { container } = renderAs(<RoomsPage onOpenAccount={vi.fn()} />);
+  const { container } = renderAs(<RoomsPage onOpenCall={vi.fn()} onOpenAccount={vi.fn()} />);
   await screen.findByText('01:00–01:30');
   expect(container.querySelector('.call-room img')?.getAttribute('src')).toBe('/media/avatars/kitchen.webp');
 
@@ -642,7 +650,7 @@ test("the day's line goes to another day: a day back, any day on the calendar, a
         : history([]);
     }
   });
-  renderAs(<RoomsPage onOpenAccount={vi.fn()} />);
+  renderAs(<RoomsPage onOpenCall={vi.fn()} onOpenAccount={vi.fn()} />);
   await userEvent.click(await screen.findByRole('radio', { name: 'Лента дня' }));
   const picker = await screen.findByRole('group', { name: 'День ленты' });
   expect(within(picker).getByRole('button', { name: 'Следующий день' }).hasAttribute('disabled')).toBe(true);
@@ -678,7 +686,7 @@ test('a room picked elsewhere narrows the history to it', async () => {
     'GET /api/admin/rooms': live([]),
     'GET /api/admin/rooms/calls': history([])
   });
-  renderAs(<RoomsPage onOpenAccount={vi.fn()} focusRoom={{ id: 'kitchen', name: 'Кухня' }} />);
+  renderAs(<RoomsPage onOpenCall={vi.fn()} onOpenAccount={vi.fn()} focusRoom={{ id: 'kitchen', name: 'Кухня' }} />);
   expect(await screen.findByRole('button', { name: /Кухня/ })).toBeTruthy();
   expect(callRequests(calls).at(-1)?.url.searchParams.get('roomId')).toBe('kitchen');
 });
@@ -701,7 +709,7 @@ test("a room picked elsewhere while the day's timeline is on screen narrows the 
         <button type="button" onClick={() => setRoom({ id: 'kitchen', name: 'Кухня' })}>
           Найти Кухню
         </button>
-        <RoomsPage onOpenAccount={vi.fn()} focusRoom={room} />
+        <RoomsPage onOpenCall={vi.fn()} onOpenAccount={vi.fn()} focusRoom={room} />
       </>
     );
   }

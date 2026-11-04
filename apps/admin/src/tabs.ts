@@ -1,6 +1,6 @@
 // The admin app's sections, their addresses, the menu groups they sit in and
 // who may open each. An account's card has its own address under the accounts
-// section.
+// section, and a call's page under the rooms section.
 
 import type { StaffPermission } from '@voice-room/shared/contracts/staff';
 
@@ -29,7 +29,7 @@ export const TAB_TITLES: Record<AdminTab, string> = {
   product: 'Продукт',
   feedback: 'Отзывы о звонках',
   system: 'Сервер',
-  accounts: 'Аккаунты',
+  accounts: 'Пользователи',
   rooms: 'Комнаты',
   reports: 'Жалобы',
   staff: 'Сотрудники'
@@ -39,7 +39,7 @@ export const TAB_LABELS: Record<AdminTab, string> = {
   overview: 'Обзор',
   product: 'Продукт',
   system: 'Сервер',
-  accounts: 'Аккаунты',
+  accounts: 'Пользователи',
   rooms: 'Комнаты',
   reports: 'Жалобы',
   feedback: 'Отзывы',
@@ -57,9 +57,13 @@ export const TAB_PERMISSIONS: Record<AdminTab, StaffPermission> = {
   staff: 'staff.manage'
 };
 
+/** A call's page: a finished one by its id, or the one going on in a room. */
+export type CallRef = { kind: 'finished'; callId: string } | { kind: 'live'; roomId: string };
+
 export interface AdminLocation {
   tab: AdminTab;
   accountId: string | null;
+  call?: CallRef;
 }
 
 function isTab(value: string): value is AdminTab {
@@ -75,8 +79,18 @@ function decoded(text: string): string | null {
   }
 }
 
-/** "/" is the overview, "/accounts/<id>" a card; an unknown or malformed address is the overview too. */
+/**
+ * "/" is the overview, "/accounts/<id>" a card, "/rooms/calls/<id>" and "/rooms/live/<room>" a
+ * call's page; an unknown or malformed address is the overview too.
+ */
 export function locationFromPath(pathname: string): AdminLocation {
+  const callPage = /^\/rooms\/(calls|live)\/([^/]+)\/?$/.exec(pathname);
+  if (callPage?.[2]) {
+    const id = decoded(callPage[2]);
+    if (id === null) return { tab: 'overview', accountId: null };
+    const call: CallRef = callPage[1] === 'live' ? { kind: 'live', roomId: id } : { kind: 'finished', callId: id };
+    return { tab: 'rooms', accountId: null, call };
+  }
   const card = /^\/accounts\/([^/]+)\/?$/.exec(pathname);
   if (card?.[1]) {
     const accountId = decoded(card[1]);
@@ -86,7 +100,12 @@ export function locationFromPath(pathname: string): AdminLocation {
   return { tab: isTab(name) ? name : 'overview', accountId: null };
 }
 
-export function pathOf({ tab, accountId }: AdminLocation): string {
+export function pathOf({ tab, accountId, call }: AdminLocation): string {
+  if (tab === 'rooms' && call) {
+    return call.kind === 'live'
+      ? `/rooms/live/${encodeURIComponent(call.roomId)}`
+      : `/rooms/calls/${encodeURIComponent(call.callId)}`;
+  }
   if (tab === 'accounts' && accountId) return `/accounts/${encodeURIComponent(accountId)}`;
   return tab === 'overview' ? '/' : `/${tab}`;
 }

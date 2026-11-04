@@ -209,6 +209,11 @@ export function recordCpuRelief(): void {
   if (current) current.cpuRelieved = true;
 }
 
+/** The call went over to the lighter noise suppression. */
+export function isCpuRelieved(): boolean {
+  return current?.cpuRelieved ?? false;
+}
+
 /** The call's numbers that "how was the call?" sends along with the answer. */
 export interface CallStats {
   durationS: number;

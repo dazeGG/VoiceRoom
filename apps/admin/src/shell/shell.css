@@ -346,6 +346,11 @@
   white-space: nowrap;
 }
 
+.top-still {
+  color: var(--vr-text-3);
+  font-size: 12.5px;
+}
+
 .top-fresh {
   display: flex;
   flex: 0 1 auto;

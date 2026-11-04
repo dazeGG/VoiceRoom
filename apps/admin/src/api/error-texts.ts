@@ -12,6 +12,7 @@ export const ERROR_TEXTS = {
   invalid_request: 'Проверьте введённые данные',
   rate_limited: 'Слишком много запросов, попробуйте чуть позже',
   account_not_found: 'Аккаунт не найден',
+  call_not_found: 'Звонок не найден или уже закончился',
   account_deletion_unavailable: 'Удаление аккаунтов сейчас недоступно',
   cannot_moderate_admin: 'Аккаунт сотрудника нельзя заблокировать или удалить',
   confirmation_mismatch: 'Логин не совпадает с этим аккаунтом',
