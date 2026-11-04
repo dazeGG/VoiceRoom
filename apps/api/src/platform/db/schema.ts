@@ -704,10 +704,14 @@ export interface VoiceSessionSamples {
   heard_by_gaps: Generated<number>;
   heard_by_lost: Generated<number>;
   heard_by_packets: Generated<number>;
+  heard_by_worst_concealed_pct: number | null;
+  heard_by_worst_gaps: Generated<number>;
   heard_concealed: Generated<number>;
   heard_gaps: Generated<number>;
   heard_lost: Generated<number>;
   heard_packets: Generated<number>;
+  heard_worst_concealed_pct: number | null;
+  heard_worst_gaps: Generated<number>;
   jitter_buffer_ms_sum: Generated<number>;
   jitter_buffer_polls: Generated<number>;
   mic_context_ms: Generated<number>;
@@ -716,7 +720,10 @@ export interface VoiceSessionSamples {
   mic_reopens: Generated<number>;
   mic_replacements: Generated<number>;
   polls_bad: Generated<number>;
+  polls_delay: Generated<number>;
   polls_good: Generated<number>;
+  polls_heard_badly: Generated<number>;
+  polls_hears_badly: Generated<number>;
   polls_unstable: Generated<number>;
   rtt_ms_sum: Generated<number>;
   rtt_polls: Generated<number>;

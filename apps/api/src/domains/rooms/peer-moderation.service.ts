@@ -12,6 +12,7 @@ import type { LiveKitConfig } from '../admission/livekit-config.ts';
 import type { PeerEviction } from './peer-eviction.ts';
 import type { LiveRoom, PresencePeer } from './room-views.ts';
 import { codeOf } from '../../platform/error-code.ts';
+import { noteMicChange } from '../../realtime/voice-track.ts';
 
 export type PeerModerationStore = Pick<ServerMuteRepository, 'setRoomServerMute' | 'clearRoomServerMute'> &
   Pick<RoomBanRepository, 'createRoomBan' | 'deleteRoomBan'> & {
@@ -97,7 +98,10 @@ export function createPeerModerationService(deps: PeerModerationDeps) {
     if (result.status === 'invalid') return { status: 'unsupported' };
 
     peer.serverMuted = muted;
-    if (muted) peer.muted = true;
+    if (muted) {
+      if (!peer.muted) noteMicChange(peer, Date.now());
+      peer.muted = true;
+    }
 
     // Every gate credential issued before the mute was paired with a JWT that
     // still grants the microphone. Revoke them so a reconnect has to fetch a

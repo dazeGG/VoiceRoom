@@ -11,7 +11,7 @@ import crypto from 'node:crypto';
 import { sql } from 'kysely';
 import type pg from 'pg';
 import type { ClientKind } from '@voice-room/shared/contracts/admin';
-import type { CpuPressure } from '@voice-room/shared/contracts/rooms';
+import type { CpuPressure, VoiceCause } from '@voice-room/shared/contracts/rooms';
 import type { VoiceTransport } from '@voice-room/shared/contracts/realtime';
 import type { HeardCounts } from '@voice-room/shared/voice-quality';
 import { kyselyOn } from '../../platform/db/kysely.ts';
@@ -22,9 +22,14 @@ export type VoiceMinuteSample = {
   at: number;
   /** The peer's own polls by the verdict it was given at each. */
   polls: { good: number; unstable: number; bad: number };
+  /** Why those polls were not good; absent while none was. */
+  causes?: Record<VoiceCause, number> | undefined;
   /** What the peer heard of every speaker, and what its listeners heard of it. */
   heard: HeardCounts;
   heardBy: HeardCounts;
+  /** The worst window of any one speaker on each side, which the sums above water down; absent with too little speech. */
+  worstHeard?: WorstWindow | undefined;
+  worstHeardBy?: WorstWindow | undefined;
   rttMsSum: number;
   rttPolls: number;
   jitterBufferMsSum: number;
@@ -37,6 +42,9 @@ export type VoiceMinuteSample = {
   /** How its computer did, summed like the rest; absent while its client said nothing of it. */
   cpu?: MinuteCpu | undefined;
 };
+
+/** The most of a minute's windows of one speaker: each number is the highest it saw, not always of the same window. */
+export type WorstWindow = { concealedPct: number; gaps: number };
 
 export type MinuteCpu = {
   appPctSum: number;
@@ -205,6 +213,13 @@ function sampleRow(stayId: string, minute: VoiceMinuteSample) {
     polls_good: int(minute.polls.good),
     polls_unstable: int(minute.polls.unstable),
     polls_bad: int(minute.polls.bad),
+    polls_heard_badly: int(minute.causes?.heard_badly ?? 0),
+    polls_hears_badly: int(minute.causes?.hears_badly ?? 0),
+    polls_delay: int(minute.causes?.delay ?? 0),
+    heard_worst_concealed_pct: minute.worstHeard?.concealedPct ?? null,
+    heard_worst_gaps: int(minute.worstHeard?.gaps ?? 0),
+    heard_by_worst_concealed_pct: minute.worstHeardBy?.concealedPct ?? null,
+    heard_by_worst_gaps: int(minute.worstHeardBy?.gaps ?? 0),
     heard_packets: int(minute.heard.packets),
     heard_lost: int(minute.heard.lost),
     heard_concealed: int(minute.heard.concealedSamples),

@@ -249,8 +249,8 @@ test('a call going on joins those still in it to those already gone, and ends wi
     ip: '127.0.0.1',
     voice: {
       reportedAt: NOW - 1000,
-      rttMs: null,
-      jitterBufferMs: null,
+      rttPolls: [],
+      jitterBufferPolls: [],
       heard: new Map(),
       uplink: [],
       verdict: null,
