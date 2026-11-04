@@ -402,7 +402,12 @@ test("a stay's bar shows its voice minute by minute with the minute's numbers, g
           joinedAt: startedAt,
           leftAt: minuteAt(4) + 30_000,
           minutes: [
-            minute(0, 'good'),
+            // One trouble passed through: the minute stays green, and its numbers say what went on.
+            minute(0, 'good', {
+              polls: { good: 15, unstable: 5, bad: 0 },
+              causes: { heard_badly: 0, hears_badly: 5, delay: 0 },
+              heard: { concealedPct: 0.4, gapsPerMin: 6, worstConcealedPct: 6, worstGaps: 4 }
+            }),
             minute(1, 'bad', {
               heardBy: { concealedPct: 21.4, gapsPerMin: 260 },
               uplinkLossPct: 18.2,
@@ -428,7 +433,7 @@ test("a stay's bar shows its voice minute by minute with the minute's numbers, g
   const [, aliceRow] = within(table).getAllByRole('row');
   if (!aliceRow) throw new Error('one person expected');
   expect([...aliceRow.querySelectorAll('.net-stretch')].map((stretch) => stretch.getAttribute('title'))).toEqual([
-    '14:30–14:31 · голос в порядке · слышал других: пропуски 0%, 0 разрывов/мин · его слышали: пропуски 0%, 0 разрывов/мин · потери от него 0% · пинг 40 мс · буфер 60 мс',
+    '14:30–14:31 · голос в порядке · сбои 15 с из 60 с: плохо слышит других · слышал других: пропуски 0,4%, 6 разрывов/мин, худшие 15 с: до 6% · его слышали: пропуски 0%, 0 разрывов/мин · потери от него 0% · пинг 40 мс · буфер 60 мс',
     '14:31–14:32 · плохая связь · слышал других: пропуски 0%, 0 разрывов/мин · его слышали: пропуски 21,4%, 260 разрывов/мин · потери от него 18,2% · пинг 310 мс · буфер 60 мс · через ретранслятор',
     '14:32–14:34 · нет данных',
     '14:34–14:34 · голос нестабилен'

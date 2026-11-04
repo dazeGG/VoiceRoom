@@ -5,9 +5,15 @@
 // own changes of level (NetworkPoint).
 
 import type { CSSProperties } from 'react';
-import type { VoiceMinute } from '@voice-room/shared/contracts/admin';
-import type { NetworkLevel, NetworkPoint, VoiceCause } from '@voice-room/shared/contracts/rooms';
+import type { VoiceMinute, VoiceMinuteHeard } from '@voice-room/shared/contracts/admin';
+import {
+  VOICE_CAUSES,
+  type NetworkLevel,
+  type NetworkPoint,
+  type VoiceCause
+} from '@voice-room/shared/contracts/rooms';
 import { formatClock, formatCount, formatMs, formatPercent } from '../../format.ts';
+import { POLL_SECONDS, troubleSeconds } from '../call/verdict.ts';
 import './network-bar.css';
 
 export const NETWORK_LABELS: Record<NetworkLevel, string> = {
@@ -92,19 +98,31 @@ export const stayStretches = (span: { from: number; to: number }, voice: StayVoi
 
 const TRANSPORT_LABELS: Record<string, string> = { relay: 'через ретранслятор', tcp: 'через TCP' };
 
-/** A minute's numbers: what the person heard, how they were heard, their uplink, ping, buffer and route. */
+/** How long a minute's trouble lasted and what it was most: a minute can be good and still have had some. */
+function troubleOf({ causes, polls }: VoiceMinute): string | null {
+  const seconds = troubleSeconds(polls);
+  if (seconds === 0) return null;
+  const cause = causes
+    ? VOICE_CAUSES.reduce((most, one) => (causes[one] > causes[most] ? one : most), VOICE_CAUSES[0])
+    : null;
+  const all = (polls.good + polls.unstable + polls.bad) * POLL_SECONDS;
+  return `сбои ${formatCount(seconds)} с из ${formatCount(all)} с${cause ? `: ${CAUSE_LABELS[cause]}` : ''}`;
+}
+
+/** One side of a minute: over everyone's speech, and the worst 15 seconds of any one speaker where it stands out. */
+function heardDetails(label: string, heard: VoiceMinuteHeard): string {
+  const line = `${label}: пропуски ${formatPercent(heard.concealedPct)}, ${formatCount(heard.gapsPerMin)} разрывов/мин`;
+  const worst = heard.worstConcealedPct;
+  return worst !== undefined && worst > heard.concealedPct ? `${line}, худшие 15 с: до ${formatPercent(worst)}` : line;
+}
+
+/** A minute's numbers: its trouble, what the person heard, how they were heard, their uplink, ping, buffer and route. */
 function minuteDetails(minute: VoiceMinute): string[] {
   const parts: string[] = [];
-  if (minute.heard) {
-    parts.push(
-      `слышал других: пропуски ${formatPercent(minute.heard.concealedPct)}, ${formatCount(minute.heard.gapsPerMin)} разрывов/мин`
-    );
-  }
-  if (minute.heardBy) {
-    parts.push(
-      `его слышали: пропуски ${formatPercent(minute.heardBy.concealedPct)}, ${formatCount(minute.heardBy.gapsPerMin)} разрывов/мин`
-    );
-  }
+  const trouble = troubleOf(minute);
+  if (trouble) parts.push(trouble);
+  if (minute.heard) parts.push(heardDetails('слышал других', minute.heard));
+  if (minute.heardBy) parts.push(heardDetails('его слышали', minute.heardBy));
   if (minute.uplinkLossPct !== null) parts.push(`потери от него ${formatPercent(minute.uplinkLossPct)}`);
   if (minute.rttMs !== null) parts.push(`пинг ${formatMs(minute.rttMs)}`);
   if (minute.jitterBufferMs !== null) parts.push(`буфер ${formatMs(minute.jitterBufferMs)}`);

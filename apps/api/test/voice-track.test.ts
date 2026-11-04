@@ -7,6 +7,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import type { CpuPressure } from '@voice-room/shared/contracts/rooms';
 import {
+  noteMicChange,
   noteStayEvent,
   noteVoiceReport,
   rejoinedVoice,
@@ -17,6 +18,7 @@ import {
 
 interface Peer {
   id: string;
+  muted?: boolean | undefined;
   voice?: PeerVoice | undefined;
 }
 
@@ -112,6 +114,137 @@ test("a stay's minutes sum its polls, what it heard and what its listeners heard
   const minute = peer(peers, 'a').voice?.minutes[0];
   assert.deepEqual([minute?.rttMsSum, minute?.rttPolls], [60, 1], 'a poll without a round trip is not averaged in');
   assert.deepEqual(minute?.polls, { good: 2, unstable: 0, bad: 0 });
+});
+
+test('a concealment event that made up no voice is not a gap, for the verdict or for the minute', () => {
+  const peers = room('a', 'b');
+  // WebRTC counts events for silence as well: a poll of clean speech with 30 of them, and nothing made up.
+  const quiet = { peerId: 'b', packets: 150, lost: 0, concealedSamples: 0, gaps: 30 };
+  for (let n = 0; n < 5; n += 1) noteVoiceReport(peers, peer(peers, 'a'), poll([quiet]), T + n * 3000);
+  assert.deepEqual(peer(peers, 'a').voice?.verdict, { level: 'good', cause: null });
+  assert.equal(peer(peers, 'a').voice?.minutes[0]?.heard.gaps, 0);
+  assert.equal(peer(peers, 'b').voice?.minutes[0]?.heardBy.gaps ?? 0, 0);
+});
+
+test('a microphone going off or on is not a voice breaking up, on a line with nothing wrong', () => {
+  const peers = room('a', 'b');
+  const speaker = peer(peers, 'b');
+  // As a real listener measured them. LiveKit stops forwarding a muted microphone and the receiver makes up its last moment;
+  // while it stays off, the receiver reports event after event of pure silence.
+  const change = { peerId: 'b', packets: 100, lost: 0, concealedSamples: 2400, gaps: 8 };
+  const silence = { peerId: 'b', packets: 0, lost: 0, concealedSamples: 0, gaps: 30 };
+  const good = { level: 'good', cause: null };
+  noteVoiceReport(peers, peer(peers, 'a'), poll([heard('b')]), T);
+
+  noteMicChange(speaker, T + 1000);
+  noteVoiceReport(peers, peer(peers, 'a'), poll([change]), T + 3000);
+  assert.deepEqual(speaker.voice?.verdict, good, 'as it went off');
+  for (const at of [T + 6000, T + 9000]) {
+    noteVoiceReport(peers, peer(peers, 'a'), poll([silence]), at);
+    assert.deepEqual(speaker.voice?.verdict, good, 'while it stays off');
+  }
+  noteMicChange(speaker, T + 11_000);
+  noteVoiceReport(peers, peer(peers, 'a'), poll([change]), T + 12_000);
+  assert.deepEqual(speaker.voice?.verdict, good, 'as it came back');
+  assert.equal(peer(peers, 'a').voice?.minutes[0]?.heard.gaps, 0, 'the minute of the one listening');
+  assert.equal(speaker.voice?.minutes[0]?.heardBy.gaps, 0, 'the minute of the one speaking');
+  assert.equal(speaker.voice?.minutes[0]?.heardBy.concealedSamples, 0);
+});
+
+test('every listener skips the change, whichever polls first', () => {
+  const peers = room('a', 'b', 'c');
+  const change = { peerId: 'b', packets: 150, lost: 0, concealedSamples: 2400, gaps: 8 };
+  noteMicChange(peer(peers, 'b'), T);
+  noteVoiceReport(peers, peer(peers, 'a'), poll([change]), T + 500);
+  noteVoiceReport(peers, peer(peers, 'c'), poll([change]), T + 2900);
+  assert.equal(peer(peers, 'b').voice?.minutes[0]?.heardBy.gaps ?? 0, 0);
+});
+
+test('the first poll wholly after a microphone came back counts: only the change is skipped', () => {
+  const peers = room('a', 'b');
+  noteMicChange(peer(peers, 'b'), T);
+  noteVoiceReport(peers, peer(peers, 'a'), poll([heard('b', 25)]), T + 1000);
+  assert.equal(peer(peers, 'b').voice?.minutes[0]?.heardBy.concealedSamples ?? 0, 0, 'this poll holds the change');
+  noteVoiceReport(peers, peer(peers, 'a'), poll([heard('b', 25)]), T + 4000);
+  assert.equal(peer(peers, 'b').voice?.minutes[0]?.heardBy.concealedSamples, 36_000, 'this one does not');
+  assert.deepEqual(peer(peers, 'a').voice?.verdict, { level: 'bad', cause: 'hears_badly' });
+});
+
+test('a muted flag left over from before a reconnect does not hide a voice breaking up', () => {
+  const peers = room('a', 'b');
+  peer(peers, 'b').muted = true;
+  noteVoiceReport(peers, peer(peers, 'a'), poll([heard('b', 25)]), T);
+  assert.deepEqual(peer(peers, 'a').voice?.verdict, { level: 'bad', cause: 'hears_badly' });
+});
+
+test('a long buffer of someone who says little still counts toward a delay', () => {
+  const peers = room('a', 'b');
+  const buffered = (buffer: number | null) => ({ ...poll([heard('b')]), jitterBufferMs: buffer, rttMs: 200 });
+  noteVoiceReport(peers, peer(peers, 'b'), poll([heard('a')], { rttMs: 200 }), T);
+  noteVoiceReport(peers, peer(peers, 'b'), poll([heard('a')], { rttMs: 200 }), T + 3000);
+  noteVoiceReport(peers, peer(peers, 'b'), poll([heard('a')], { rttMs: 200 }), T + 6000);
+  noteVoiceReport(peers, peer(peers, 'a'), buffered(null), T + 6100);
+  noteVoiceReport(peers, peer(peers, 'a'), buffered(null), T + 6200);
+  assert.deepEqual(peer(peers, 'a').voice?.verdict, { level: 'good', cause: null });
+  noteVoiceReport(peers, peer(peers, 'a'), buffered(300), T + 6300);
+  assert.deepEqual(
+    peer(peers, 'a').voice?.verdict,
+    { level: 'unstable', cause: 'delay' },
+    'one reading, 200 + 300 + 40'
+  );
+});
+
+test("a stay's minute keeps its speaker's worst window, which summing over everyone would water down", () => {
+  const peers = room('a', 'b', 'c');
+  noteVoiceReport(peers, peer(peers, 'a'), poll([heard('b', 10), heard('c')]), T);
+  noteVoiceReport(peers, peer(peers, 'a'), poll([heard('b'), heard('c')]), T + 3000);
+  const minute = peer(peers, 'a').voice?.minutes[0];
+  assert.deepEqual(minute?.worstHeard, { concealedPct: 10, gaps: 6 }, 'b alone, over its first window');
+  assert.deepEqual(peer(peers, 'b').voice?.minutes[0]?.worstHeardBy, { concealedPct: 10, gaps: 6 });
+  assert.equal(peer(peers, 'c').voice?.minutes[0]?.worstHeardBy?.concealedPct, 0);
+});
+
+test('a minute counts why its polls were not good', () => {
+  const peers = room('a', 'b');
+  noteVoiceReport(peers, peer(peers, 'b'), poll([heard('a')]), T);
+  noteVoiceReport(peers, peer(peers, 'a'), poll([heard('b')]), T + 100);
+  assert.equal(peer(peers, 'a').voice?.minutes[0]?.causes, undefined, 'nothing to say of a good poll');
+  noteVoiceReport(peers, peer(peers, 'a'), poll([heard('b', 25)]), T + 3000);
+  noteVoiceReport(peers, peer(peers, 'a'), poll([heard('b', 25)]), T + 6000);
+  assert.deepEqual(peer(peers, 'a').voice?.minutes[0]?.causes, { heard_badly: 0, hears_badly: 2, delay: 0 });
+});
+
+test('a delay is read from most of the latest polls, so one spike of the round trip is not a long delay', () => {
+  const peers = room('a', 'b');
+  const verdictOfA = () => peer(peers, 'a').voice?.verdict;
+  let at = T;
+  const round = (rttMs: number) => {
+    noteVoiceReport(peers, peer(peers, 'b'), poll([heard('a')]), at);
+    noteVoiceReport(peers, peer(peers, 'a'), poll([heard('b')], { rttMs }), at + 100);
+    at += 3000;
+  };
+  for (const rttMs of [40, 40, 900, 40, 40]) {
+    round(rttMs);
+    assert.deepEqual(verdictOfA(), { level: 'good', cause: null }, `${rttMs} ms`);
+  }
+  round(900);
+  assert.deepEqual(verdictOfA(), { level: 'good', cause: null }, 'two of the latest five');
+  round(900);
+  assert.deepEqual(verdictOfA(), { level: 'unstable', cause: 'delay' }, 'three of the latest five');
+  round(40);
+  assert.deepEqual(verdictOfA(), { level: 'good', cause: null }, 'the oldest of the three has left the five');
+});
+
+test('the first polls of a call say nothing of its delay', () => {
+  const peers = room('a', 'b');
+  noteVoiceReport(peers, peer(peers, 'b'), poll([heard('a')]), T);
+  noteVoiceReport(peers, peer(peers, 'a'), poll([heard('b')], { rttMs: 900 }), T + 100);
+  noteVoiceReport(peers, peer(peers, 'b'), poll([heard('a')]), T + 3000);
+  noteVoiceReport(peers, peer(peers, 'a'), poll([heard('b')], { rttMs: 900 }), T + 3100);
+  assert.deepEqual(peer(peers, 'a').voice?.verdict, { level: 'good', cause: null }, 'two polls measured');
+  noteVoiceReport(peers, peer(peers, 'b'), poll([heard('a')]), T + 6000);
+  noteVoiceReport(peers, peer(peers, 'a'), poll([heard('b')], { rttMs: 900 }), T + 6100);
+  assert.deepEqual(peer(peers, 'a').voice?.verdict, { level: 'unstable', cause: 'delay' }, 'three polls measured');
 });
 
 test('a minute sums how the microphone reached its encoder, and a poll without it adds nothing', () => {

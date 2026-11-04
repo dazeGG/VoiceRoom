@@ -4,11 +4,19 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { sql } from 'kysely';
 import type pg from 'pg';
 import { Type } from 'typebox';
+import type { NetworkLevel } from '@voice-room/shared/contracts/rooms';
 import { runMigrations } from '../src/lib/migrate.ts';
+import { kyselyOn } from '../src/platform/db/kysely.ts';
 import { createVoiceSessionRepository, type VoiceMinuteSample } from '../src/domains/rooms/voice-session.repository.ts';
-import { createAdminRoomsRepository } from '../src/domains/admin/admin-rooms.repository.ts';
+import {
+  QUALITY_COLUMNS,
+  createAdminRoomsRepository,
+  minuteLevel,
+  qualityOf
+} from '../src/domains/admin/admin-rooms.repository.ts';
 import { queryRow } from './helpers/checked.ts';
 import { createTestDatabase } from './db-harness.ts';
 import { rollBackThrough } from './migration-steps.ts';
@@ -61,7 +69,11 @@ test('a stay keeps its voice minutes, read back with their level and numbers', {
   const joinedAt = Date.UTC(2026, 9, 31, 12, 0);
   await createVoiceSessionRepository({ pool }).recordSessions([
     stay('kitchen', joinedAt, [
-      minute(joinedAt, { good: 18, unstable: 1, bad: 1 }),
+      {
+        ...minute(joinedAt, { good: 13, unstable: 7, bad: 0 }),
+        causes: { heard_badly: 0, hears_badly: 5, delay: 2 },
+        worstHeardBy: { concealedPct: 31.5, gaps: 12 }
+      },
       minute(joinedAt + MINUTE, { good: 0, unstable: 0, bad: 0 }),
       minute(joinedAt + 2 * MINUTE, { good: 10, unstable: 0, bad: 2 })
     ]),
@@ -76,9 +88,10 @@ test('a stay keeps its voice minutes, read back with their level and numbers', {
   assert.deepEqual(kept?.minutes[0], {
     at: joinedAt,
     level: 'unstable',
-    polls: { good: 18, unstable: 1, bad: 1 },
-    heard: { concealedPct: 0, gapsPerMin: 0 },
-    heardBy: { concealedPct: 20, gapsPerMin: 240 },
+    polls: { good: 13, unstable: 7, bad: 0 },
+    causes: { heard_badly: 0, hears_badly: 5, delay: 2 },
+    heard: { concealedPct: 0, gapsPerMin: 0, speechS: 60 },
+    heardBy: { concealedPct: 20, gapsPerMin: 240, speechS: 60, worstConcealedPct: 31.5, worstGaps: 12 },
     uplinkLossPct: 10,
     rttMs: 45,
     jitterBufferMs: 30,
@@ -103,6 +116,41 @@ test('a stay keeps its voice minutes, read back with their level and numbers', {
   );
 });
 
+test('a minute one trouble passed through is good, and the panel and the SQL read it the same', { skip }, async (t) => {
+  const { cleanup, databaseUrl, pool } = await createTestDatabase(t);
+  t.after(cleanup);
+  await runMigrations({ databaseUrl, logger: SILENT });
+  const cases: [VoiceMinuteSample['polls'], NetworkLevel | null][] = [
+    [{ good: 15, unstable: 5, bad: 0 }, 'good'], // One trouble stays in the window for five polls.
+    [{ good: 14, unstable: 6, bad: 0 }, 'good'],
+    [{ good: 13, unstable: 7, bad: 0 }, 'unstable'], // A third of the minute.
+    [{ good: 19, unstable: 0, bad: 1 }, 'good'],
+    [{ good: 18, unstable: 0, bad: 2 }, 'bad'],
+    [{ good: 2, unstable: 2, bad: 0 }, 'unstable'], // The end of a stay, with few polls.
+    [{ good: 0, unstable: 1, bad: 0 }, 'good'], // One poll says nothing.
+    [{ good: 0, unstable: 0, bad: 0 }, null]
+  ];
+  const at = Date.UTC(2026, 9, 31, 12, 0);
+  await createVoiceSessionRepository({ pool }).recordSessions(
+    cases.map(([polls], index) => stay(`room-${index}`, at, [minute(at, polls)]))
+  );
+  const { rows } = await sql<{ room_id: string; good: unknown; unstable: unknown; bad: unknown }>`
+    SELECT s.room_id, ${QUALITY_COLUMNS}
+    FROM voice_session_samples m JOIN voice_sessions s ON s.id = m.stay_id
+    GROUP BY s.room_id`.execute(kyselyOn(pool));
+  const counted = new Map(rows.map((row) => [row.room_id, qualityOf(row)]));
+  assert.equal(counted.size, cases.length);
+  cases.forEach(([polls, level], index) => {
+    const label = JSON.stringify(polls);
+    assert.equal(minuteLevel(polls), level, `the panel on ${label}`);
+    assert.deepEqual(
+      counted.get(`room-${index}`),
+      level ? { good: 0, unstable: 0, bad: 0, [level]: 1 } : null,
+      `the SQL on ${label}`
+    );
+  });
+});
+
 test(
   "the minutes go with the room's history and with the stay, and the table rolls back cleanly",
   { skip },
@@ -123,6 +171,13 @@ test(
     assert.equal(await count(pool), 1, "only the forgotten stay's minutes go");
     await pool.query("DELETE FROM voice_sessions WHERE room_id = 'new-room'");
     assert.equal(await count(pool), 0, 'a deleted stay takes its minutes along');
+
+    await rollBackThrough(databaseUrl, '20261104180000_keep_voice_minute_worst_and_causes');
+    await assert.rejects(pool.query('SELECT polls_delay FROM voice_session_samples'), /does not exist/);
+    await assert.rejects(pool.query('SELECT heard_worst_gaps FROM voice_session_samples'), /does not exist/);
+    await pool.query('SELECT cpu_polls FROM voice_session_samples');
+    await runMigrations({ databaseUrl, logger: SILENT });
+    await pool.query('SELECT polls_delay, heard_by_worst_concealed_pct FROM voice_session_samples');
 
     await rollBackThrough(databaseUrl, '20261102120000_add_mic_to_voice_session_samples');
     await pool.query('SELECT 1 FROM voice_session_samples');
