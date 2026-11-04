@@ -1,0 +1,35 @@
+/* A voice's minutes by level on one line (QualityBar.tsx); the tones are network-bar.css's. */
+
+.quality-bar {
+  display: flex;
+  overflow: hidden;
+  gap: 2px;
+  border-radius: 999px;
+}
+
+.quality-bar > span {
+  flex-basis: 0;
+  min-width: 2px;
+  background: var(--net-tone);
+}
+
+.quality-cell {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.quality-text {
+  color: var(--vr-text-3);
+  font-size: 12px;
+}
+
+.quality-text[data-alarm='true'] {
+  color: var(--vr-danger);
+}
+
+.quality-none {
+  color: var(--vr-text-3);
+  font-size: 12.5px;
+}

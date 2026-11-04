@@ -1,0 +1,73 @@
+/* A section that folds under its heading (Section.tsx). */
+
+.ui-fold {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.ui-fold-toggle {
+  display: inline-flex;
+  min-height: 36px;
+  align-items: center;
+  gap: 8px;
+  margin-left: -8px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  padding: 0 8px;
+  background: transparent;
+  color: var(--vr-text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.ui-fold-toggle:hover {
+  background: var(--vr-surface-2);
+}
+
+.ui-fold-toggle:focus-visible,
+.ui-text-link:focus-visible {
+  outline: 2px solid var(--vr-accent);
+  outline-offset: 1px;
+}
+
+.ui-fold-chevron {
+  color: var(--vr-text-3);
+  transition: transform 0.15s var(--ease-out);
+}
+
+.ui-fold-chevron[data-open='false'] {
+  transform: rotate(-90deg);
+}
+
+.ui-fold-link {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  color: var(--vr-text-3);
+  font-size: 12.5px;
+}
+
+.ui-fold-body {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.ui-text-link {
+  border: 0;
+  border-radius: 4px;
+  padding: 0;
+  background: transparent;
+  color: var(--vr-accent);
+  font: inherit;
+  cursor: pointer;
+}
+
+.ui-text-link:hover {
+  text-decoration: underline;
+}

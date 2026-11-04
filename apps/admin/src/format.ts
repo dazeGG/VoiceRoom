@@ -137,6 +137,14 @@ export function formatClock(at: number): string {
 
 const dayMonth = new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long' });
 
+/** A day in a tight row: 'сегодня', 'вчера', or '20 октября'. */
+export function formatShortDay(at: number, now: number): string {
+  const startOfDay = (time: number) => new Date(time).setHours(0, 0, 0, 0);
+  const days = Math.round((startOfDay(now) - startOfDay(at)) / (24 * 60 * 60 * 1000));
+  if (days === 0) return 'сегодня';
+  return days === 1 ? 'вчера' : dayMonth.format(at);
+}
+
 /** A day's heading: 'Сегодня, 22 октября', 'Вчера, 21 октября', or '20 октября'. */
 export function formatDayHeading(at: number, now: number): string {
   const startOfDay = (time: number) => new Date(time).setHours(0, 0, 0, 0);

@@ -1,27 +1,42 @@
 // The rooms with someone in voice now, a row each: the room, who is in it,
 // how long it has gone on, its owner and what is going on (screens shown,
 // cameras, the kinds of client). A row opens the list of its people; the
-// clock button narrows the call history to the room.
+// clock button narrows the call history to the room and the arrow opens the
+// call's page.
 
-import { ChevronDown, ChevronRight, History, MonitorUp, Video } from 'lucide-react';
+import { ArrowUpRight, ChevronDown, ChevronRight, History, MonitorUp, Video } from 'lucide-react';
 import type { LiveRoom, LiveRoomPeer } from '@voice-room/shared/contracts/admin';
 import { formatPeople, formatSince } from '../../format.ts';
-import { Avatar, AvatarStack, Pill } from '../../ui/index.tsx';
+import { Avatar, AvatarStack, Pill, type Tone } from '../../ui/index.tsx';
 import { AccountName, ClientIcon, Origin, RoomTitle } from './room-bits.tsx';
 import { CAUSE_LABELS, NETWORK_LABELS } from './network-bar.tsx';
 
-const COLUMNS = '28px minmax(220px, 1.6fr) minmax(200px, 1.2fr) 110px minmax(130px, 0.9fr) minmax(170px, 1fr) 36px';
+const COLUMNS = '28px minmax(220px, 1.6fr) minmax(200px, 1.2fr) 110px minmax(130px, 0.9fr) minmax(200px, 1.1fr) 76px';
 const PEER_COLUMNS = 'minmax(200px, 1.2fr) minmax(240px, 1.6fr) minmax(150px, 0.9fr) 90px';
 
 /** Under a minute reads as just now, not as "0 мин". */
 const since = (at: number, now: number) => (now - at < 60_000 ? 'только что' : formatSince(at, now));
 
+/** How many in a room have a voice worse than the norm, in the tone of the worst; null when nobody has. */
+export function troubleOf(peers: readonly LiveRoomPeer[]): { count: number; tone: Tone } | null {
+  const bad = peers.filter((peer) => peer.network === 'bad').length;
+  const unstable = peers.filter((peer) => peer.network === 'unstable').length;
+  if (!bad && !unstable) return null;
+  return { count: bad + unstable, tone: bad ? 'danger' : 'warning' };
+}
+
 function Summary({ peers }: { peers: readonly LiveRoomPeer[] }) {
+  const trouble = troubleOf(peers);
   const screens = peers.filter((peer) => peer.screen).length;
   const cameras = peers.filter((peer) => peer.camera).length;
   const clients = [...new Set(peers.map((peer) => peer.client).filter((client) => client !== null))];
   return (
     <span className="live-summary">
+      {trouble ? (
+        <Pill tone={trouble.tone} dot compact>
+          {`${trouble.count} со связью`}
+        </Pill>
+      ) : null}
       {screens ? (
         <span
           className="live-chip"
@@ -111,6 +126,7 @@ export function LiveCalls({
   open,
   onToggle,
   onShowHistory,
+  onOpenCall,
   onOpenAccount
 }: {
   rooms: readonly LiveRoom[];
@@ -118,11 +134,12 @@ export function LiveCalls({
   open: ReadonlySet<string>;
   onToggle: (roomId: string) => void;
   onShowHistory: (room: LiveRoom) => void;
+  onOpenCall: (room: LiveRoom) => void;
   onOpenAccount: (accountId: string) => void;
 }) {
   return (
     <div className="ui-table-scroll">
-      <div className="ui-table" style={{ '--table-min': '940px' }}>
+      <div className="ui-table" style={{ '--table-min': '980px' }}>
         <div className="ui-tr ui-thead" style={{ '--cols': COLUMNS }} aria-hidden="true">
           <span />
           <span>Комната</span>
@@ -185,18 +202,32 @@ export function LiveCalls({
                     )}
                   </span>
                   <Summary peers={room.peers} />
-                  <button
-                    type="button"
-                    className="live-history"
-                    aria-label={`История звонков: ${room.name}`}
-                    title="Показать историю звонков этой комнаты"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      onShowHistory(room);
-                    }}
-                  >
-                    <History size={16} aria-hidden="true" />
-                  </button>
+                  <span className="live-actions">
+                    <button
+                      type="button"
+                      className="live-history"
+                      aria-label={`История звонков: ${room.name}`}
+                      title="Показать историю звонков этой комнаты"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onShowHistory(room);
+                      }}
+                    >
+                      <History size={16} aria-hidden="true" />
+                    </button>
+                    <button
+                      type="button"
+                      className="live-history"
+                      aria-label={`Подробно о звонке: ${room.name}`}
+                      title="Подробно о звонке"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onOpenCall(room);
+                      }}
+                    >
+                      <ArrowUpRight size={16} aria-hidden="true" />
+                    </button>
+                  </span>
                 </div>
                 {expanded ? (
                   <ul id={peersId} className="live-peers" aria-label={`В звонке: ${room.name}`}>

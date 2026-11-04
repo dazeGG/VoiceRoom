@@ -75,44 +75,54 @@ const page = (accounts: AccountRow[]): Reply => ({
 
 const lastParam = (calls: Call[], name: string) => calls.at(-1)?.url.searchParams.get(name);
 
-test('the list asks for what is searched, filtered and sorted, and a row opens the card', async () => {
+test('the list asks for what is searched, filtered and sorted, and a row shows the account beside it', async () => {
   const calls = stubApi({
+    'GET /api/admin/accounts/u-alice': { body: detail() },
+    'GET /api/admin/rooms': { body: { ok: true, rooms: [] } },
+    'GET /api/admin/rooms/calls': { body: { ok: true, calls: [], next: null, keepDays: 90 } },
     'GET /api/admin/accounts': page([
       row(),
       row({ id: 'u-bob', login: 'bob', displayName: '', status: 'blocked', admin: false, reportsAgainst: 0 })
     ])
   });
   const onOpenAccount = vi.fn();
-  renderAs(<AccountsSection accountId={null} onOpenAccount={onOpenAccount} />);
+  renderAs(
+    <AccountsSection onOpenCall={vi.fn()} onShowCalls={vi.fn()} accountId={null} onOpenAccount={onOpenAccount} />
+  );
 
   const alice = await screen.findByRole('button', { name: /Алиса/ });
   expect(screen.getByText('@alice')).toBeTruthy();
   expect(screen.getByText('заблокирован')).toBeTruthy();
   expect(screen.getAllByText('2,5 ч')).toHaveLength(2);
-  expect(calls[0]?.url.searchParams.get('sort')).toBe('created');
-  expect(calls[0]?.url.searchParams.get('order')).toBe('desc');
+  const asked = () => calls.filter((call) => call.url.pathname === '/api/admin/accounts');
+  expect(asked()[0]?.url.searchParams.get('sort')).toBe('created');
+  expect(asked()[0]?.url.searchParams.get('order')).toBe('desc');
 
   await userEvent.type(screen.getByRole('searchbox', { name: 'Поиск аккаунта' }), 'ali');
-  await waitFor(() => expect(lastParam(calls, 'q')).toBe('ali'));
+  await waitFor(() => expect(lastParam(asked(), 'q')).toBe('ali'));
 
   await userEvent.click(
     within(screen.getByRole('radiogroup', { name: 'Показать' })).getByRole('radio', { name: 'Заблокированные' })
   );
-  await waitFor(() => expect(lastParam(calls, 'filter')).toBe('blocked'));
+  await waitFor(() => expect(lastParam(asked(), 'filter')).toBe('blocked'));
 
-  await userEvent.click(screen.getByRole('button', { name: 'Сообщений' }));
-  await waitFor(() => expect(lastParam(calls, 'sort')).toBe('messages'));
-  expect(lastParam(calls, 'order')).toBe('desc');
-  await userEvent.click(screen.getByRole('button', { name: 'Сообщений, по убыванию' }));
-  await waitFor(() => expect(lastParam(calls, 'order')).toBe('asc'));
+  await userEvent.click(screen.getByRole('button', { name: 'Дней' }));
+  await waitFor(() => expect(lastParam(asked(), 'sort')).toBe('activeDays'));
+  expect(lastParam(asked(), 'order')).toBe('desc');
+  await userEvent.click(screen.getByRole('button', { name: 'Дней, по убыванию' }));
+  await waitFor(() => expect(lastParam(asked(), 'order')).toBe('asc'));
 
   await userEvent.click(alice);
+  expect(alice.getAttribute('aria-pressed')).toBe('true');
+  expect(onOpenAccount).not.toHaveBeenCalled();
+  const panel = await screen.findByRole('complementary', { name: 'Аккаунт: Алиса' });
+  await userEvent.click(within(panel).getByRole('button', { name: 'Открыть карточку аккаунта' }));
   expect(onOpenAccount).toHaveBeenCalledWith('u-alice');
 });
 
 test('a staff member is called a сотрудник in the list', async () => {
   stubApi({ 'GET /api/admin/accounts': page([row({ admin: true })]) });
-  renderAs(<AccountsSection accountId={null} onOpenAccount={vi.fn()} />);
+  renderAs(<AccountsSection onOpenCall={vi.fn()} onShowCalls={vi.fn()} accountId={null} onOpenAccount={vi.fn()} />);
   expect(await screen.findByText('сотрудник')).toBeTruthy();
 });
 
@@ -137,7 +147,7 @@ test('the card blocks with a term and a reason, then offers to lift it', async (
     'GET /api/admin/accounts/u-alice': { body: detail() },
     'POST /api/admin/accounts/u-alice/block': { body: blocked }
   });
-  renderAs(<AccountsSection accountId="u-alice" onOpenAccount={vi.fn()} />);
+  renderAs(<AccountsSection onOpenCall={vi.fn()} onShowCalls={vi.fn()} accountId="u-alice" onOpenAccount={vi.fn()} />);
 
   await screen.findByRole('heading', { name: /Алиса/ });
   expect(screen.getByText('Кухня')).toBeTruthy();
@@ -168,7 +178,7 @@ test('deleting asks for the login again and a reason', async () => {
       })
     }
   });
-  renderAs(<AccountsSection accountId="u-alice" onOpenAccount={vi.fn()} />);
+  renderAs(<AccountsSection onOpenCall={vi.fn()} onShowCalls={vi.fn()} accountId="u-alice" onOpenAccount={vi.fn()} />);
   await userEvent.click(await screen.findByRole('button', { name: 'Удалить аккаунт…' }));
   const dialog = await screen.findByRole('dialog', { name: 'Удалить аккаунт' });
   const submit = within(dialog).getByRole('button', { name: 'Удалить аккаунт' });
@@ -197,7 +207,7 @@ test('a staff account offers no sanctions, but may be marked official', async ()
       }
     })
   });
-  renderAs(<AccountsSection accountId="u-root" onOpenAccount={vi.fn()} />);
+  renderAs(<AccountsSection onOpenCall={vi.fn()} onShowCalls={vi.fn()} accountId="u-root" onOpenAccount={vi.fn()} />);
   await screen.findByText(/аккаунт сотрудника/);
   expect(screen.queryByRole('button', { name: 'Заблокировать…' })).toBeNull();
   expect(screen.queryByRole('button', { name: 'Удалить аккаунт…' })).toBeNull();
@@ -243,7 +253,10 @@ test('the log words a role given and taken away', () => {
 test('a moderator is offered a timed block and sign-out; an admin also delete, the mark and a block for good', async () => {
   stubApi({ 'GET /api/admin/accounts/u-alice': { body: detail() } });
 
-  renderAs(<AccountsSection accountId="u-alice" onOpenAccount={vi.fn()} />, 'moderator');
+  renderAs(
+    <AccountsSection onOpenCall={vi.fn()} onShowCalls={vi.fn()} accountId="u-alice" onOpenAccount={vi.fn()} />,
+    'moderator'
+  );
   await userEvent.click(await screen.findByRole('button', { name: 'Заблокировать…' }));
   const timed = await screen.findByRole('dialog', { name: 'Заблокировать Алиса' });
   expect(within(timed).getByRole('radio', { name: 'Неделя' })).toBeTruthy();
@@ -254,7 +267,10 @@ test('a moderator is offered a timed block and sign-out; an admin also delete, t
   expect(screen.queryByRole('switch', { name: 'Официальный аккаунт' })).toBeNull();
   cleanup();
 
-  renderAs(<AccountsSection accountId="u-alice" onOpenAccount={vi.fn()} />, 'admin');
+  renderAs(
+    <AccountsSection onOpenCall={vi.fn()} onShowCalls={vi.fn()} accountId="u-alice" onOpenAccount={vi.fn()} />,
+    'admin'
+  );
   await userEvent.click(await screen.findByRole('button', { name: 'Заблокировать…' }));
   const forever = await screen.findByRole('dialog', { name: 'Заблокировать Алиса' });
   expect(within(forever).getByRole('radio', { name: 'Навсегда' })).toBeTruthy();
@@ -268,12 +284,18 @@ test('a moderator lifts a block with an end but not one without', async () => {
     detail({ account: row({ status: 'blocked' }), block: { at: Date.now(), until, reason: 'Спам' } });
 
   stubApi({ 'GET /api/admin/accounts/u-alice': { body: blockedFor(Date.now() + DAY) } });
-  renderAs(<AccountsSection accountId="u-alice" onOpenAccount={vi.fn()} />, 'moderator');
+  renderAs(
+    <AccountsSection onOpenCall={vi.fn()} onShowCalls={vi.fn()} accountId="u-alice" onOpenAccount={vi.fn()} />,
+    'moderator'
+  );
   expect(await screen.findByRole('button', { name: 'Разблокировать' })).toBeTruthy();
   cleanup();
 
   stubApi({ 'GET /api/admin/accounts/u-alice': { body: blockedFor(null) } });
-  renderAs(<AccountsSection accountId="u-alice" onOpenAccount={vi.fn()} />, 'moderator');
+  renderAs(
+    <AccountsSection onOpenCall={vi.fn()} onShowCalls={vi.fn()} accountId="u-alice" onOpenAccount={vi.fn()} />,
+    'moderator'
+  );
   await screen.findByText(/Заблокирован навсегда/);
   expect(screen.queryByRole('button', { name: 'Разблокировать' })).toBeNull();
 });

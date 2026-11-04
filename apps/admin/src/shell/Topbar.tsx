@@ -34,7 +34,10 @@ function Freshness({ status }: { status: RefreshStatus }) {
         <span className="top-fresh-ago">
           {status.at === null ? 'Загружаем…' : `Обновлено ${formatFresh(status.at, Math.max(now, status.at))}`}
         </span>
-        <span className="top-fresh-every">· {formatEvery(status.everyMs)}</span>
+        <span className="top-fresh-every">
+          · {status.what ? `${status.what} ` : ''}
+          {formatEvery(status.everyMs)}
+        </span>
       </span>
       <button
         type="button"
@@ -54,12 +57,15 @@ export function Topbar({
   crumb,
   title,
   search,
-  refresh
+  refresh,
+  still = null
 }: {
   crumb: string;
   title: string;
   search: ReactNode;
   refresh: RefreshStatus | null;
+  /** In place of the freshness on a page that does not change. */
+  still?: string | null;
 }) {
   return (
     <header className="top">
@@ -69,7 +75,13 @@ export function Topbar({
         <h1 className="top-title">{title}</h1>
       </div>
       {search}
-      {refresh ? <Freshness status={refresh} /> : <span className="top-fresh" />}
+      {refresh ? (
+        <Freshness status={refresh} />
+      ) : still ? (
+        <span className="top-fresh top-still">{still}</span>
+      ) : (
+        <span className="top-fresh" />
+      )}
     </header>
   );
 }

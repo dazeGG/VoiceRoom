@@ -105,7 +105,7 @@ async function sections(): Promise<string[]> {
 test('a moderator sees accounts, rooms and reports, and no numbers or staff', async () => {
   signedInAs('moderator');
   render(<App />);
-  expect(await sections()).toEqual(['Аккаунты', 'Комнаты', 'Жалобы']);
+  expect(await sections()).toEqual(['Пользователи', 'Комнаты', 'Жалобы']);
   // A group with nothing the role may open is not shown at all.
   expect(within(await menu()).queryByText('Аналитика')).toBeNull();
   // "/" is the overview, which a moderator may not open: the first allowed section opens instead.
@@ -121,7 +121,7 @@ test('a superadmin sees every section in the menu order, the staff one included'
     'Продукт',
     'Отзывы',
     'Сервер',
-    'Аккаунты',
+    'Пользователи',
     'Комнаты',
     'Жалобы',
     'Сотрудники'
@@ -249,7 +249,7 @@ test("an account's card puts the account's name in the top bar under the account
   render(<App />);
   expect(await screen.findByRole('heading', { level: 1, name: 'Алиса' })).toBeTruthy();
   const top = document.querySelector<HTMLElement>('header.top');
-  expect(top && within(top).getByText('Аккаунты')).toBeTruthy();
+  expect(top && within(top).getByText('Пользователи')).toBeTruthy();
 });
 
 test('the top bar says how fresh the rooms are and asks again on a click', async () => {

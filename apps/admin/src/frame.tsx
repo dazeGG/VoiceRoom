@@ -14,6 +14,8 @@ export interface RefreshStatus {
   busy: boolean;
   /** Ask again now. */
   reload: () => void;
+  /** What it asks for that often, where it is not everything on screen: "звонки каждые 5 с". */
+  what?: string;
 }
 
 export interface Frame {
@@ -35,10 +37,16 @@ export function usePageTitle(title: string | null): void {
 }
 
 /** The top bar's refresh status while this section is on screen. `reload` must keep its identity. */
-export function useRefreshStatus({ at, everyMs, busy, reload }: RefreshStatus): void {
+/** The same as the hook, for a page that reports it only in one of its views. */
+export function RefreshReport(status: RefreshStatus): null {
+  useRefreshStatus(status);
+  return null;
+}
+
+export function useRefreshStatus({ at, everyMs, busy, reload, what }: RefreshStatus): void {
   const { setRefresh } = useContext(FrameContext);
   useEffect(() => {
-    setRefresh({ at, everyMs, busy, reload });
-  }, [at, everyMs, busy, reload, setRefresh]);
+    setRefresh({ at, everyMs, busy, reload, ...(what ? { what } : {}) });
+  }, [at, everyMs, busy, reload, what, setRefresh]);
   useEffect(() => () => setRefresh(null), [setRefresh]);
 }

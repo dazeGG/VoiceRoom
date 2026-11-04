@@ -1,5 +1,5 @@
 // The admin app: who is signed in, the sections their role opens, and the
-// address that keeps the section (and an account's card) across reloads.
+// address that keeps the section (and an account's card, a call's page) across reloads.
 // The frame around the sections is the menu on the left and the top bar.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -8,6 +8,7 @@ import { fetchOpenReports, fetchOpenUserReports } from './api/admin.ts';
 import { fetchMe, signOut } from './api/staff.ts';
 import { FrameContext, type Frame, type RefreshStatus } from './frame.tsx';
 import { AccountsPage } from './pages/AccountsPage.tsx';
+import { CallPage } from './pages/CallPage.tsx';
 import { FeedbackPage } from './pages/FeedbackPage.tsx';
 import { OverviewPage } from './pages/OverviewPage.tsx';
 import { ProductPage } from './pages/ProductPage.tsx';
@@ -28,7 +29,8 @@ import {
   locationFromPath,
   pathOf,
   type AdminLocation,
-  type AdminTab
+  type AdminTab,
+  type CallRef
 } from './tabs.ts';
 import { Button } from './ui/index.tsx';
 
@@ -62,6 +64,9 @@ export function App() {
   const [frame] = useState<Frame>(() => ({ setTitle: setPageTitle, setRefresh }));
   // A room picked in the search: the rooms section narrows its history to it.
   const [roomFocus, setRoomFocus] = useState<HistoryRoom | null>(null);
+  // A call picked elsewhere (the overview): the rooms section opens its row. An object, for each pick to count.
+  const [liveFocus, setLiveFocus] = useState<{ roomId: string } | null>(null);
+  const clearLiveFocus = useCallback(() => setLiveFocus(null), []);
   const main = useRef<HTMLElement>(null);
 
   useEffect(() => {
@@ -101,7 +106,7 @@ export function App() {
   // Another section (or another account) starts at its top.
   useEffect(() => {
     main.current?.scrollTo?.({ top: 0 });
-  }, [tab, location.accountId]);
+  }, [tab, location.accountId, location.call]);
 
   if (failed) {
     return (
@@ -117,7 +122,13 @@ export function App() {
 
   const selectTab = (next: AdminTab) => go({ tab: next, accountId: null });
   const openAccount = (accountId: string | null) => go({ tab: 'accounts', accountId });
+  const openCall = (call: CallRef) => go({ tab: 'rooms', accountId: null, call });
+  const openRoomHistory = (room: HistoryRoom) => {
+    setRoomFocus(room);
+    selectTab('rooms');
+  };
   const onCard = tab === 'accounts' && location.accountId !== null;
+  const callOpen = tab === 'rooms' ? location.call : undefined;
 
   return (
     <StaffContext.Provider value={staff}>
@@ -137,28 +148,54 @@ export function App() {
           />
           <div className="frame-column">
             <Topbar
-              crumb={onCard ? TAB_LABELS.accounts : groupOf(tab)}
-              title={onCard ? (pageTitle ?? 'Аккаунт') : TAB_TITLES[tab]}
+              crumb={onCard ? TAB_LABELS.accounts : callOpen ? TAB_LABELS.rooms : groupOf(tab)}
+              title={onCard ? (pageTitle ?? 'Аккаунт') : callOpen ? 'Звонок' : TAB_TITLES[tab]}
               refresh={refresh}
-              search={
-                <GlobalSearch
-                  onOpenAccount={openAccount}
-                  onOpenRoom={(room) => {
-                    setRoomFocus(room);
-                    selectTab('rooms');
-                  }}
-                />
-              }
+              still={callOpen?.kind === 'finished' ? 'Звонок завершён · данные не меняются' : null}
+              search={<GlobalSearch onOpenAccount={openAccount} onOpenRoom={openRoomHistory} />}
             />
             <main className="frame-main" ref={main}>
               <div className="frame-content">
-                {tab === 'overview' ? <OverviewPage onOpenReports={() => selectTab('reports')} /> : null}
+                {tab === 'overview' ? (
+                  <OverviewPage
+                    onOpenReports={() => selectTab('reports')}
+                    onOpenTab={selectTab}
+                    onOpenAccount={openAccount}
+                    onOpenCall={openCall}
+                    onOpenLiveRoom={(roomId) => {
+                      setLiveFocus({ roomId });
+                      selectTab('rooms');
+                    }}
+                  />
+                ) : null}
                 {tab === 'product' ? <ProductPage /> : null}
                 {tab === 'system' ? <SystemPage /> : null}
                 {tab === 'accounts' ? (
-                  <AccountsPage accountId={location.accountId} onOpenAccount={openAccount} />
+                  <AccountsPage
+                    accountId={location.accountId}
+                    onOpenAccount={openAccount}
+                    onOpenCall={openCall}
+                    onShowCalls={() => selectTab('rooms')}
+                  />
                 ) : null}
-                {tab === 'rooms' ? <RoomsPage onOpenAccount={openAccount} focusRoom={roomFocus} /> : null}
+                {tab === 'rooms' && callOpen ? (
+                  <CallPage
+                    key={callOpen.kind === 'live' ? `live-${callOpen.roomId}` : callOpen.callId}
+                    call={callOpen}
+                    onBack={() => selectTab('rooms')}
+                    onOpenAccount={openAccount}
+                    onOpenRoomHistory={openRoomHistory}
+                  />
+                ) : null}
+                {tab === 'rooms' && !callOpen ? (
+                  <RoomsPage
+                    onOpenAccount={openAccount}
+                    onOpenCall={openCall}
+                    focusRoom={roomFocus}
+                    focusLive={liveFocus}
+                    onLiveFocused={clearLiveFocus}
+                  />
+                ) : null}
                 {tab === 'reports' ? <ReportsPage onResolved={setOpenReports} onOpenAccount={openAccount} /> : null}
                 {tab === 'feedback' ? <FeedbackPage /> : null}
                 {tab === 'staff' ? <StaffPage /> : null}
