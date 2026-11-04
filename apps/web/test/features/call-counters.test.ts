@@ -209,3 +209,51 @@ test("the desktop app's CPU totals give VoiceRoom's share of the computer apart 
     systemCpuAvgPct: 80
   });
 });
+
+test('each poll says how the computer did, for the admin panel, and nothing where the client cannot tell', async () => {
+  vi.useFakeTimers();
+  const polls: Record<string, unknown>[] = [];
+  vi.doMock('@/entities/room/room-realtime', () => ({
+    updateVoicePeer: () => {},
+    reportVoicePoll: (payload: Record<string, unknown>) => polls.push(payload)
+  }));
+  const stats = await freshImport(() => import('@/features/room/client/room/stats'));
+  const { state } = await import('@/features/room/client/core/room-runtime.store');
+  const quality = await import('@/features/room/client/room/call-quality');
+  const strain = await import('@/features/room/client/room/call-strain');
+  Object.assign(state, { joined: true, localMicPublication: null, peers: new Map<string, never>() });
+  quality.startCallQuality(0);
+  strain.startCallStrainWatch(() => {});
+
+  // A browser without the desktop app's totals or the pressure API has nothing to say.
+  stats.startPeerLatencyStats();
+  await vi.advanceTimersByTimeAsync(0);
+  expect(polls.at(-1)).not.toHaveProperty('cpu');
+  stats.stopPeerLatencyStats();
+
+  // The pressure alone is still worth saying; the shares stay unknown.
+  strain.noteCpuPressure('serious');
+  stats.startPeerLatencyStats();
+  await vi.advanceTimersByTimeAsync(0);
+  expect(polls.at(-1)?.cpu).toEqual({ appPct: null, systemPct: null, pressure: 'serious', relieved: false });
+  stats.stopPeerLatencyStats();
+
+  // Over one poll VoiceRoom took 1 200 ms and the computer was busy for 19 200 of 24 000.
+  let pollNo = 0;
+  const readings = [
+    { appCpuMs: 900_000, systemBusyMs: 5_000_000, systemTotalMs: 9_000_000 },
+    { appCpuMs: 901_200, systemBusyMs: 5_019_200, systemTotalMs: 9_024_000 }
+  ];
+  Object.assign(window, {
+    voiceRoomDesktopLoad: { read: async () => readings[Math.min(pollNo, readings.length - 1)] }
+  });
+  strain.noteCpuPressure('critical');
+  quality.recordCpuRelief();
+  stats.startPeerLatencyStats();
+  await vi.advanceTimersByTimeAsync(0);
+  pollNo = 1;
+  await vi.advanceTimersByTimeAsync(3_000);
+  stats.stopPeerLatencyStats();
+  Reflect.deleteProperty(window, 'voiceRoomDesktopLoad');
+  expect(polls.at(-1)?.cpu).toEqual({ appPct: 5, systemPct: 80, pressure: 'critical', relieved: true });
+});
