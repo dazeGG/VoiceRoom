@@ -140,7 +140,16 @@ test('only a platform administrator reads the panel, and its numbers come from t
   assert.deepEqual(overview.live, { onlineAccounts: 2, guestConnections: 0, voicePeers: 0, voiceRooms: 0 });
   assert.deepEqual(
     { ...overview.today, day: undefined },
-    { day: undefined, activeAccounts: 2, newAccounts: 2, messages: 3, voiceJoins: 2, voiceMinutes: 45 }
+    {
+      day: undefined,
+      activeAccounts: 2,
+      newAccounts: 2,
+      messages: 3,
+      voiceJoins: 2,
+      voiceMinutes: 45,
+      calls: 2,
+      callsYesterday: 0
+    }
   );
   assert.match(overview.today.day, /^\d{4}-\d{2}-\d{2}$/);
   assert.deepEqual(overview.totals, {

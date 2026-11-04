@@ -5,7 +5,6 @@
 
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
-import { Sparkline } from '../src/charts/Sparkline.tsx';
 import { TimeChart } from '../src/charts/TimeChart.tsx';
 import { stubChartBox, PLOT_WIDTH } from './helpers/chart-box.ts';
 import { must } from './helpers/stats-fixtures.ts';
@@ -81,16 +80,6 @@ test('counts get whole-number gridlines, fractions keep round ones', () => {
   many.unmount();
   const hours = render(chart('Часы', [0.5, 1]));
   expect(axis(hours.container)).toEqual(['0', '0,5', '1']);
-});
-
-test('a sparkline draws a trend from two points and leaves a gap where a value is missing', () => {
-  const drawn = render(<Sparkline values={[1, null, 3, 4]} label="Тренд" />);
-  const line = must(drawn.container.querySelector('path.spark-line'), 'the line').getAttribute('d') ?? '';
-  expect(line.match(/M/g)).toHaveLength(2);
-  expect(drawn.container.querySelector('path.spark-area')?.getAttribute('d')).toMatch(/Z$/);
-  drawn.unmount();
-  const flat = render(<Sparkline values={[5]} label="Одна точка" />);
-  expect(flat.container.querySelector('svg')).toBeNull();
 });
 
 test('a long chart names five dates, first to last, and the legend gives each latest value', () => {

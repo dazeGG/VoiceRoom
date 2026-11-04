@@ -664,6 +664,12 @@ export interface Users {
   updated_at: Generated<Timestamp>;
 }
 
+export interface VoiceCallEvents {
+  at: Timestamp;
+  kind: string;
+  stay_id: string;
+}
+
 export interface VoiceroomMigrationGuard {
   id: number;
   marker: string | null;
@@ -689,6 +695,11 @@ export interface VoiceSessions {
 
 export interface VoiceSessionSamples {
   at: Timestamp;
+  cpu_app_pct_sum: Generated<number>;
+  cpu_polls: Generated<number>;
+  cpu_pressure_max: string | null;
+  cpu_relieved: Generated<boolean>;
+  cpu_system_pct_sum: Generated<number>;
   heard_by_concealed: Generated<number>;
   heard_by_gaps: Generated<number>;
   heard_by_lost: Generated<number>;
@@ -769,6 +780,7 @@ export interface DB {
   user_notifications: UserNotifications;
   user_reports: UserReports;
   users: Users;
+  voice_call_events: VoiceCallEvents;
   voice_session_samples: VoiceSessionSamples;
   voice_sessions: VoiceSessions;
   voiceroom_migration_guard: VoiceroomMigrationGuard;

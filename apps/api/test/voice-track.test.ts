@@ -5,7 +5,15 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { noteVoiceReport, rejoinedVoice, VOICE_REPORT_STALE_MS, type PeerVoice } from '../src/realtime/voice-track.ts';
+import type { CpuPressure } from '@voice-room/shared/contracts/rooms';
+import {
+  noteStayEvent,
+  noteVoiceReport,
+  rejoinedVoice,
+  VOICE_EVENTS_MAX,
+  VOICE_REPORT_STALE_MS,
+  type PeerVoice
+} from '../src/realtime/voice-track.ts';
 
 interface Peer {
   id: string;
@@ -144,4 +152,50 @@ test('a rejoined seat keeps its minutes and is told its verdict afresh', () => {
   assert.deepEqual(told(noteVoiceReport(peers, peer(peers, 'b'), poll([heard('a')]), T + 100)), {
     a: { level: 'good', cause: null }
   });
+});
+
+test('a minute sums what the computer reported, and an overload and its relief are kept once each', () => {
+  const peers = room('a', 'b');
+  const cpu = (
+    pressure: CpuPressure | null,
+    relieved = false,
+    appPct: number | null = 10,
+    systemPct: number | null = 80
+  ) => ({
+    appPct,
+    systemPct,
+    pressure,
+    relieved
+  });
+  noteVoiceReport(peers, peer(peers, 'a'), { ...poll([heard('b')]), cpu: cpu('fair') }, T);
+  noteVoiceReport(peers, peer(peers, 'a'), { ...poll([heard('b')]), cpu: cpu('critical') }, T + 3000);
+  noteVoiceReport(peers, peer(peers, 'a'), { ...poll([heard('b')]), cpu: cpu('critical', true, null, null) }, T + 6000);
+  noteVoiceReport(peers, peer(peers, 'a'), { ...poll([heard('b')]), cpu: cpu('fair', true) }, T + 9000);
+  noteVoiceReport(peers, peer(peers, 'a'), { ...poll([heard('b')]), cpu: cpu('critical', true) }, T + 12_000);
+  noteVoiceReport(peers, peer(peers, 'a'), poll([heard('b')]), T + 15_000);
+
+  const voice = peer(peers, 'a').voice;
+  assert.deepEqual(voice?.minutes[0]?.cpu, {
+    appPctSum: 40,
+    systemPctSum: 320,
+    polls: 4,
+    pressureMax: 'critical',
+    relieved: true
+  });
+  assert.deepEqual(voice?.events, [
+    { at: T + 3000, kind: 'cpu_critical' },
+    { at: T + 6000, kind: 'relieved_ns' },
+    { at: T + 12_000, kind: 'cpu_critical' }
+  ]);
+  assert.equal(voice?.cpuPressure, 'critical', 'a poll that says nothing leaves what was last said');
+  assert.equal(peer(peers, 'b').voice?.minutes[0]?.cpu, undefined, 'nothing was said of b');
+  assert.deepEqual(rejoinedVoice(voice)?.events, voice?.events, 'a rejoined seat keeps them');
+});
+
+test('a stay keeps only its latest events', () => {
+  const peers = room('a');
+  const seat = peer(peers, 'a');
+  for (let n = 0; n <= VOICE_EVENTS_MAX; n += 1) noteStayEvent(seat, 'screen_on', T + n);
+  assert.equal(seat.voice?.events.length, VOICE_EVENTS_MAX);
+  assert.equal(seat.voice?.events[0]?.at, T + 1);
 });

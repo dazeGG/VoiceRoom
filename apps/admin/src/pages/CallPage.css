@@ -1,0 +1,508 @@
+/* A call's page: its heading, its numbers, who was in it, one person's voice
+   beside what it looks like, and what went on beside the answers. */
+
+.call-page {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.call-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px 20px;
+}
+
+.call-back {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  flex: none;
+  place-items: center;
+  border: 1px solid var(--vr-line-strong);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--vr-text-2);
+  cursor: pointer;
+}
+
+.call-back:hover {
+  color: var(--vr-text);
+}
+
+.call-back:focus-visible {
+  outline: 2px solid var(--vr-accent);
+  outline-offset: 1px;
+}
+
+.call-head-text {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 320px;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.call-head-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.call-head-title h2 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.call-head-line {
+  color: var(--vr-text-2);
+  font-size: 13.5px;
+}
+
+.call-head-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.call-head-actions a {
+  text-decoration: none;
+}
+
+.call-card {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 14px;
+  border: 1px solid var(--vr-line);
+  border-radius: 16px;
+  padding: 16px 18px;
+  background: var(--vr-surface);
+}
+
+.call-card--flush {
+  gap: 0;
+  overflow: hidden;
+  padding: 0;
+}
+
+.call-card-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 12px;
+  padding: 16px 18px 12px;
+}
+
+.call-card-head--inset {
+  padding: 0;
+}
+
+.call-card-head h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.call-note {
+  color: var(--vr-text-3);
+  font-size: 12px;
+}
+
+.call-card .call-people {
+  min-width: 900px;
+  border-top: 1px solid var(--vr-line);
+}
+
+.call-card .call-people-head,
+.call-card .call-person {
+  padding-inline: 18px;
+}
+
+.call-card .call-people-head {
+  border-bottom: 1px solid var(--vr-line);
+  padding-block: 8px;
+}
+
+.call-person-origin-code {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.call-person-origin-code .rooms-origin-parts {
+  white-space: normal;
+}
+
+.call-shared {
+  margin: 0;
+  border-top: 1px solid var(--vr-line);
+  padding: 10px 18px 14px;
+  color: var(--vr-text-3);
+  font-size: 12px;
+}
+
+.call-axis {
+  position: relative;
+  display: block;
+  height: 16px;
+  color: var(--vr-text-3);
+  font-size: 11.5px;
+  font-weight: 400;
+}
+
+.call-axis > span {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+}
+
+.call-axis > span[data-edge='start'] {
+  transform: none;
+}
+
+.call-axis > span[data-edge='end'] {
+  transform: translateX(-100%);
+}
+
+.call-pair {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.call-pair-wide {
+  flex: 999 1 560px;
+}
+
+.call-pair-narrow,
+.call-person-panel {
+  flex: 1 1 340px;
+}
+
+/* One number over the call. */
+.minute-chart {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.minute-chart-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 12px;
+}
+
+.minute-chart-label {
+  color: var(--vr-text-2);
+  font-size: 13px;
+}
+
+.minute-chart-numbers {
+  color: var(--vr-text-3);
+  font-size: 12.5px;
+}
+
+.minute-chart-numbers b {
+  color: var(--vr-text);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.minute-chart-numbers b[data-tone='warning'] {
+  color: var(--vr-warning);
+}
+
+.minute-chart-numbers b[data-tone='danger'] {
+  color: var(--vr-danger);
+}
+
+.minute-chart-plot {
+  position: relative;
+  height: 96px;
+  overflow: hidden;
+  border-radius: 10px;
+  background: var(--vr-surface-2);
+}
+
+.minute-chart-plot svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.minute-chart-limit {
+  stroke: var(--vr-danger);
+  stroke-dasharray: 4 4;
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.minute-chart-line {
+  fill: none;
+  stroke: var(--vr-accent);
+  stroke-linejoin: round;
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+}
+
+.minute-chart-point {
+  fill: var(--vr-accent);
+}
+
+.minute-chart-limit-text {
+  position: absolute;
+  right: 8px;
+  color: var(--vr-danger);
+  font-size: 11px;
+  transform: translateY(-110%);
+}
+
+.call-levels {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.call-levels-bar {
+  position: relative;
+  display: block;
+  height: 10px;
+  border-radius: 999px;
+  background: oklch(100% 0 0 / 0.04);
+}
+
+/* One person. */
+.call-person-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.call-person-title {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  line-height: 1.3;
+}
+
+.call-person-name {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.call-person-login {
+  color: var(--vr-text-3);
+  font-size: 12px;
+}
+
+.call-verdict {
+  --verdict-tone: var(--vr-text-3);
+
+  display: flex;
+  flex-direction: column;
+  border: 1px solid color-mix(in oklch, var(--verdict-tone) 28%, transparent);
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: color-mix(in oklch, var(--verdict-tone) 9%, transparent);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.call-verdict[data-tone='success'] {
+  --verdict-tone: var(--vr-success);
+}
+
+.call-verdict[data-tone='warning'] {
+  --verdict-tone: var(--vr-warning);
+}
+
+.call-verdict[data-tone='danger'] {
+  --verdict-tone: var(--vr-danger);
+}
+
+.call-verdict-title {
+  color: var(--verdict-tone);
+  font-weight: 600;
+}
+
+.call-verdict-text {
+  color: var(--vr-text-2);
+}
+
+.call-facts {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  margin: 0;
+  font-size: 13px;
+}
+
+.call-facts > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.call-facts dt {
+  flex: none;
+  color: var(--vr-text-3);
+}
+
+.call-facts dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.call-facts dd[data-tone='warning'] {
+  color: var(--vr-warning);
+}
+
+.call-facts dd[data-tone='danger'] {
+  color: var(--vr-danger);
+}
+
+/* What went on. */
+.call-events {
+  margin: 0;
+  padding: 0 0 8px;
+  list-style: none;
+}
+
+.call-events > li {
+  display: grid;
+  grid-template-columns: 52px 14px minmax(0, 1fr);
+  align-items: start;
+  gap: 10px;
+  padding: 7px 18px;
+}
+
+.call-event-at {
+  padding-top: 1px;
+  color: var(--vr-text-3);
+  font-size: 12.5px;
+}
+
+.call-event-dot {
+  width: 8px;
+  height: 8px;
+  margin-top: 6px;
+  border-radius: 50%;
+  background: var(--vr-text-3);
+}
+
+.call-event-dot[data-tone='accent'] {
+  background: var(--vr-accent);
+}
+
+.call-event-dot[data-tone='info'] {
+  background: var(--vr-info);
+}
+
+.call-event-dot[data-tone='warning'] {
+  background: var(--vr-warning);
+}
+
+.call-event-dot[data-tone='danger'] {
+  background: var(--vr-danger);
+}
+
+.call-event-text {
+  font-size: 13.5px;
+}
+
+/* The answers. */
+.call-answer {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border-top: 1px solid oklch(100% 0 0 / 0.05);
+  padding: 12px 18px;
+}
+
+.call-answer-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.call-answer-rating {
+  display: inline-flex;
+}
+
+.call-answer-rating[data-rating='good'] {
+  color: var(--vr-success);
+}
+
+.call-answer-rating[data-rating='bad'] {
+  color: var(--vr-danger);
+}
+
+.call-answer-who {
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+.call-answer-at {
+  margin-left: auto;
+  color: var(--vr-text-3);
+  font-size: 12px;
+}
+
+.call-answer-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.call-answer-comment {
+  margin: 0;
+  font-size: 13.5px;
+}
+
+.call-answer-line {
+  margin: 0;
+  color: var(--vr-text-3);
+  font-size: 12px;
+}
+
+/* The people's table when a row picks a person. */
+.call-person[data-selected='true'] {
+  background: oklch(100% 0 0 / 0.04);
+  box-shadow: inset 3px 0 0 var(--vr-accent);
+}
+
+.call-person-pick {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--vr-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.call-person-pick:focus-visible {
+  outline: 2px solid var(--vr-accent);
+  outline-offset: 2px;
+}
+
+.call-person-origin-code[data-shared='true'] .rooms-code {
+  border-color: color-mix(in oklch, var(--vr-warning) 40%, transparent);
+  color: var(--vr-warning);
+}

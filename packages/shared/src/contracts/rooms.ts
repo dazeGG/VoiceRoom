@@ -145,6 +145,11 @@ export const NETWORK_LEVELS = ['good', 'unstable', 'bad'] as const;
 export const NetworkLevel = Type.Enum(NETWORK_LEVELS);
 export type NetworkLevel = Static<typeof NetworkLevel>;
 
+/** How hard a computer works, by the Compute Pressure API, from the least to the most. */
+export const CPU_PRESSURES = ['nominal', 'fair', 'serious', 'critical'] as const;
+export const CpuPressure = Type.Enum(CPU_PRESSURES);
+export type CpuPressure = Static<typeof CpuPressure>;
+
 /** Whose side the voice trouble is on: the peer is heard badly, hears the others badly, or adds the delay. */
 export const VOICE_CAUSES = ['heard_badly', 'hears_badly', 'delay'] as const;
 export const VoiceCause = Type.Enum(VOICE_CAUSES);

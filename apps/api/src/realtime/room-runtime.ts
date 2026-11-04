@@ -21,7 +21,7 @@ import { createVoiceJoin, type JoinUser } from './voice-join.ts';
 import { claimMedia, decideMediaRequest, MEDIA_MIN_VIEWERS, type MediaLimits } from './media-budget.ts';
 import { createMediaMinute } from './media-minute.ts';
 import { leaveReasonOf } from './runtime-types.ts';
-import { noteVoiceReport } from './voice-track.ts';
+import { noteStayEvent, noteVoiceReport } from './voice-track.ts';
 import { isRecord } from '@voice-room/shared/guards';
 import type {
   FinalizeError,
@@ -420,6 +420,12 @@ function createRoomRealtimeRuntime(deps: RoomRuntimeDeps) {
     // itself, but an unmute is dropped until the owner lifts the server mute.
     if (Object.hasOwn(patch, 'muted')) peer.muted = peer.serverMuted || Boolean(patch.muted);
     if (Object.hasOwn(patch, 'deafened')) peer.deafened = Boolean(patch.deafened);
+    if (Object.hasOwn(patch, 'camera') && Boolean(peer.camera) !== Boolean(patch.camera)) {
+      noteStayEvent(peer, patch.camera ? 'camera_on' : 'camera_off', now());
+    }
+    if (Object.hasOwn(patch, 'screen') && Boolean(peer.screen) !== Boolean(patch.screen)) {
+      noteStayEvent(peer, patch.screen ? 'screen_on' : 'screen_off', now());
+    }
     if (Object.hasOwn(patch, 'camera')) peer.camera = Boolean(patch.camera);
     if (Object.hasOwn(patch, 'screen')) peer.screen = Boolean(patch.screen);
     if (Object.hasOwn(patch, 'screenAudio')) peer.screenAudio = Boolean(patch.screenAudio);

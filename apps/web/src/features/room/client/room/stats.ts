@@ -4,16 +4,17 @@ import { findFirstLocalPublication, findLocalMicrophonePublication } from '../se
 import { isMicrophonePublication } from '../services/livekit/publication-kinds';
 import { isActiveCandidatePair, readRtcStats, type RtcStat, type RtcStatsSource } from '../media/rtc-stats';
 import { isRecord } from '@voice-room/shared/guards';
-import type { HeardPoll } from '@voice-room/shared/contracts/realtime';
+import type { CpuPoll, HeardPoll } from '@voice-room/shared/contracts/realtime';
 import { reportVoicePoll } from '@/entities/room/room-realtime';
 import {
+  isCpuRelieved,
   recordLoadCounts,
   recordNetworkSample,
   recordPollCounts,
   type LoadCounts,
   type PollCounts
 } from './call-quality';
-import { isSystemBusy, noteCallStrain, type StrainCounts } from './call-strain';
+import { currentCpuPressure, isSystemBusy, noteCallStrain, type StrainCounts } from './call-strain';
 import { createLossWindow } from './loss-window';
 import { noteMicSend, takeMicPoll, type MicReading } from './mic-send';
 import { getMicrophoneProcessors, isMicrophoneProcessingIdle } from '../services/microphone-service';
@@ -58,16 +59,27 @@ async function updatePeerLatencyStats(): Promise<void> {
   recordPollCounts({ ...inbound, ...outbound });
   noteCallStrain({ ...inbound, ...video });
   recordLoadCounts(load);
-  postVoicePoll(inbound, outbound);
+  postVoicePoll(inbound, outbound, load);
 }
 
 // The longest round trip a poll reports; past it the link is gone anyway.
 const MAX_REPORTED_MS = 600_000;
 
+/** How the computer did over the poll, for the admin panel's call page; nothing where the client can tell nothing. */
+function cpuPoll(load: LoadCounts): CpuPoll | null {
+  const pressure = currentCpuPressure();
+  const relieved = isCpuRelieved();
+  const measured = load.systemTotalMs > 0;
+  if (!measured && pressure === null && !relieved) return null;
+  const percent = (ms: number) => (measured ? Math.min(100, (ms / load.systemTotalMs) * 100) : null);
+  return { appPct: percent(load.appCpuMs), systemPct: percent(load.systemBusyMs), pressure, relieved };
+}
+
 /** The poll as the server judges the room from it (room.voice.report); it answers with room.voice.quality. */
-function postVoicePoll(inbound: InboundCounts, outbound: OutboundCounts): void {
+function postVoicePoll(inbound: InboundCounts, outbound: OutboundCounts, load: LoadCounts): void {
   const report = (ms: number | null) => (ms === null ? null : Math.min(MAX_REPORTED_MS, Math.max(0, ms)));
   const mic = takeMicPoll();
+  const cpu = cpuPoll(load);
   reportVoicePoll({
     roomId: state.roomId,
     peerId: state.peerId,
@@ -77,7 +89,8 @@ function postVoicePoll(inbound: InboundCounts, outbound: OutboundCounts): void {
     uplink: { packets: outbound.outboundPackets, lost: outbound.outboundLost },
     transport: state.localNetwork.transport,
     heard: inbound.heard,
-    ...(mic ? { mic } : {})
+    ...(mic ? { mic } : {}),
+    ...(cpu ? { cpu } : {})
   });
 }
 

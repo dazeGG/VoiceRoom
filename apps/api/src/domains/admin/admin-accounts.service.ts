@@ -97,7 +97,9 @@ export function createAdminAccountsService(deps: AdminAccountsDeps) {
       accounts: result.accounts.map((account) => row(account, online, staffIds)),
       total: result.total,
       page,
-      pageSize: ACCOUNTS_PAGE_SIZE
+      pageSize: ACCOUNTS_PAGE_SIZE,
+      counts: result.counts,
+      cpuOverloaded: result.cpuOverloaded
     };
   }
 

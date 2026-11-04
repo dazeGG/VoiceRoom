@@ -21,6 +21,7 @@ export const ERROR_TEXTS: Record<ErrorCode, string> = {
   not_supported: 'Не поддерживается',
   client_outdated: 'Версия приложения устарела, обновите его',
 
+  call_not_found: 'Звонок не найден',
   account_not_found: 'Аккаунт не найден',
   account_deleted: 'Аккаунт удалён',
   account_already_deleted: 'Аккаунт уже удалён',
