@@ -168,7 +168,15 @@ export function createVoiceSessionRepository({
         .execute();
       const result = await trx
         .updateTable('voice_sessions')
-        .set({ room_id: null, guest_name: null, guest_id: null, ip_key: null, location: null, network: null })
+        .set({
+          room_id: null,
+          guest_name: null,
+          guest_id: null,
+          ip_key: null,
+          location: null,
+          network: null,
+          join_timing: null
+        })
         .where('room_id', 'is not', null)
         .where('joined_at', '<', cutoff)
         .executeTakeFirst();

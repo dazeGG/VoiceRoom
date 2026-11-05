@@ -237,12 +237,18 @@ async function measureJoin(
   });
 
   await page.waitForTimeout(thinkMs);
-  // Strings, like the probe they talk to: it is not part of any typed page.
+  // Over the debugging channel, which the page's CSP does not govern; a string
+  // passed to waitForFunction would need eval in the page, and that is refused.
   await page.evaluate('window.__joinStart()');
   await join.click(page);
-  await page.waitForFunction('window.__joinMarks.firstSoundHeard && window.__joinMarks.statusConnected', undefined, {
-    timeout: 60_000
-  });
+  await page.waitForFunction(
+    () => {
+      const marks: unknown = Reflect.get(window, '__joinMarks');
+      return typeof marks === 'object' && marks !== null && 'firstSoundHeard' in marks && 'statusConnected' in marks;
+    },
+    undefined,
+    { timeout: 60_000 }
+  );
   const marks: unknown = JSON.parse(await page.evaluate<string>('JSON.stringify(window.__joinMarks)'));
   const stages: StageTimes = {};
   for (const stage of STAGES) {

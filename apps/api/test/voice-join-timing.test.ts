@@ -70,6 +70,23 @@ test('a stay keeps how its join went, and one whose client did not say keeps not
   assert.deepEqual(row, { total: 2, measured: 1, kept: TIMING.totalMs });
 });
 
+test('past the kept days a stay forgets how its join went, with the rest of what it said', { skip }, async (t) => {
+  const { cleanup, databaseUrl, pool } = await createTestDatabase(t);
+  t.after(cleanup);
+  await runMigrations({ databaseUrl, logger: SILENT });
+  const repository = createVoiceSessionRepository({ pool });
+  await repository.recordSessions([stay(TIMING)]);
+
+  await repository.forgetRoomsBefore(new Date(Date.UTC(2027, 0, 1)));
+
+  const row = await queryRow(
+    pool,
+    Type.Object({ measured: Type.Integer() }),
+    'SELECT count(join_timing)::int AS measured FROM voice_sessions'
+  );
+  assert.equal(row.measured, 0);
+});
+
 test('the column rolls back and comes back', { skip }, async (t) => {
   const { cleanup, databaseUrl, pool } = await createTestDatabase(t);
   t.after(cleanup);
