@@ -10,6 +10,7 @@ import type { PublicUser } from '@/api/friends';
 import { createAnchoredHistory } from '@/shared/chat/anchored-history';
 import { createHistoryCache } from '@/shared/chat/history-cache';
 import { createReadReconciliation } from '@/shared/chat/read-reconciliation';
+import { createTrailingTask } from '@/shared/utils/trailing-task';
 
 /** Conversations kept between visits, by peer id. */
 const dmHistoryCache = createHistoryCache<DirectMessage>((messages) =>
@@ -17,6 +18,8 @@ const dmHistoryCache = createHistoryCache<DirectMessage>((messages) =>
 );
 
 /** `isOpen` answers whether the lobby still shows this peer's thread. */
+const READ_RESYNC_DELAY_MS = 1000;
+
 export function useDmThread(isOpen: (peerId: string) => boolean) {
   const peer = ref<PublicUser | null>(null);
   const messages = ref<DirectMessage[]>([]);
@@ -85,6 +88,9 @@ export function useDmThread(isOpen: (peerId: string) => boolean) {
     // delivered; the later, preview-less copy must not wipe it.
     const known = messages.value.find((existing) => existing.id === incoming.id);
     const knownPreview = known ? toRaw(known).linkPreview : undefined;
+    // A new message has no reactions yet; an edit keeps those it had. Either way
+    // the reaction store has nothing to ask the server about.
+    incoming = { ...incoming, reactions: incoming.reactions ?? known?.reactions ?? [] };
     history.upsert(knownPreview && !incoming.linkPreview ? { ...incoming, linkPreview: knownPreview } : incoming);
   }
 
@@ -118,8 +124,27 @@ export function useDmThread(isOpen: (peerId: string) => boolean) {
       return;
     }
     if (!isOpen(peerId)) return;
-    await resync(peerId).catch(() => {});
+    resyncPeerId = peerId;
+    readResync.schedule();
   }
+
+  // Asking for the newest message alone gives its cursor, and one cursor marks
+  // everything before it read too: once for a whole burst, not a page per message.
+  let resyncPeerId = '';
+  const readResync = createTrailingTask(READ_RESYNC_DELAY_MS, () => {
+    const peerId = resyncPeerId;
+    void fetchThreadPage(peerId, { mode: 'latest', limit: 1 })
+      .then((page) => {
+        if (!isOpen(peerId)) return;
+        const firstCreatedAt = page.messages[0]?.createdAt;
+        history.reconcileLatest(
+          page.messages,
+          (message) => firstCreatedAt == null || message.createdAt >= firstCreatedAt
+        );
+        noteLatestRendered();
+      })
+      .catch(() => {});
+  });
 
   const toggleProfile = (): void => {
     profileOpen.value = !profileOpen.value;
@@ -131,6 +156,7 @@ export function useDmThread(isOpen: (peerId: string) => boolean) {
 
   /** Stops loading the thread that was open (another one opens, or the lobby closes). */
   function close(): void {
+    readResync.cancel();
     readReconciliation?.dispose();
     readReconciliation = null;
     history.close();

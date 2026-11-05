@@ -16,6 +16,7 @@ import {
 import { useRoomPresenceStore } from '@/entities/room/room-presence.store';
 import { subscribeRoomPreview } from '@/entities/room/room-realtime';
 import { useSessionStore } from '@/features/auth/session.store';
+import { createTrailingTask } from '@/shared/utils/trailing-task';
 import { useNotificationPreferencesStore } from '@/shared/notifications/preferences.store';
 import { useChatScroll } from '@/shared/chat/use-chat-scroll';
 import { Outbox } from '@/shared/chat/outbox';
@@ -59,6 +60,12 @@ export interface RoomChatHost {
   };
 }
 
+const READ_RESYNC_DELAY_MS = 1000;
+
+// A message that has only just been written has no reactions yet, and every
+// reaction after this reaches the store as a realtime event: nothing to ask about.
+const asNewMessage = (message: ChatMessage): ChatMessage => ({ ...message, reactions: message.reactions ?? [] });
+
 export function useRoomChatSession(host: RoomChatHost) {
   const sessionStore = useSessionStore();
   const roomPins = useRoomPinsStore();
@@ -84,7 +91,7 @@ export function useRoomChatSession(host: RoomChatHost) {
           idempotencyKey
         }),
       onSent: (message) => {
-        if (timeline.add(message) && host.visible()) host.onRead();
+        if (timeline.add(asNewMessage(message)) && host.visible()) host.onRead();
       }
     })
   );
@@ -171,7 +178,7 @@ export function useRoomChatSession(host: RoomChatHost) {
           return;
         }
         case 'room.chat.message':
-          receive(chatMessageFromRoomMessage(event.payload.message));
+          receive(asNewMessage(chatMessageFromRoomMessage(event.payload.message)));
           return;
         default:
           return;
@@ -181,6 +188,7 @@ export function useRoomChatSession(host: RoomChatHost) {
     return () => {
       controller.abort();
       timeline.close();
+      readResync.cancel();
       readReconciliation?.dispose();
       roomPins.resetRoomPins();
       unsubscribe();
@@ -292,6 +300,7 @@ export function useRoomChatSession(host: RoomChatHost) {
     // «Room is not available», which surfaced as a chat error in a room a guest
     // can otherwise read and write. Guests keep the recent-window endpoint.
     const paged = Boolean(sessionStore.user?.id);
+    readResync.cancel();
     readReconciliation?.dispose();
     readReconciliation = paged
       ? createReadReconciliation({
@@ -346,12 +355,19 @@ export function useRoomChatSession(host: RoomChatHost) {
       await markLatestRenderedRead(message.readCursor);
       return;
     }
+    readResync.schedule();
+  }
+
+  // A live message comes without its read cursor. Asking for the newest message
+  // alone gives it, and one cursor marks everything before it read too, so a busy
+  // chat asks once for a whole burst instead of a page of history per message.
+  const readResync = createTrailingTask(READ_RESYNC_DELAY_MS, () => void resyncNewestRead());
+
+  async function resyncNewestRead(): Promise<void> {
     try {
       const roomId = host.roomId();
-      const page = await fetchRoomChatPage(roomId, { mode: 'latest' });
-      if (!timeline.paged || host.roomId() !== roomId || !page.messages.some((item) => item.id === message.id)) {
-        return;
-      }
+      const page = await fetchRoomChatPage(roomId, { mode: 'latest', limit: 1 });
+      if (!timeline.paged || host.roomId() !== roomId) return;
       timeline.reconcileLatest(page.messages);
       await nextTick();
       await markLatestRenderedRead();

@@ -1,4 +1,4 @@
-import type { ReactionSummary, ReactorList } from '@voice-room/shared/contracts/messages';
+import { MAX_REACTION_BATCH, type ReactionSummary, type ReactorList } from '@voice-room/shared/contracts/messages';
 import type pg from 'pg';
 import {
   normalizeReactionMutation,
@@ -7,6 +7,7 @@ import {
   normalizeReactorQuery
 } from '@voice-room/shared/reactions';
 import { isRecord, textOf } from '@voice-room/shared/guards';
+import { isUuid } from '@voice-room/shared/validation';
 import type { CursorCodec } from '../../platform/cursor-codec.ts';
 import { DomainError } from '../../platform/http/domain-error.ts';
 import type { createReactionRepository } from './reaction.repository.ts';
@@ -17,7 +18,7 @@ type Client = Pick<pg.PoolClient, 'query'>;
 
 export type ReactionRepository = Pick<
   ReturnType<typeof createReactionRepository>,
-  'getSummary' | 'listReactors' | 'listSummaries' | 'setDesiredState' | 'transaction'
+  'getSummary' | 'listReactors' | 'listSummaries' | 'listSummariesForMessages' | 'setDesiredState' | 'transaction'
 >;
 
 type VisibilityCheck = (input: {
@@ -48,11 +49,14 @@ function createReactionService({
   repository,
   cursorCodec,
   requireVisible,
+  listVisible,
   publish
 }: {
   repository: ReactionRepository;
   cursorCodec: Pick<CursorCodec, 'encode' | 'decode'>;
   requireVisible: VisibilityCheck;
+  /** Which of these messages the viewer may read: requireVisible's answer, for many in one query. */
+  listVisible: (input: { conversation: Conversation; messageIds: string[]; viewer: Viewer }) => Promise<string[]>;
   publish: (event: ReactionEvent) => unknown;
 }) {
   async function assertVisible({
@@ -91,6 +95,38 @@ function createReactionService({
       userId: viewer?.id || null
     });
     return summaries.map(normalizeReactionSummary).filter((summary): summary is ReactionSummary => Boolean(summary));
+  }
+
+  // A chat that opens with messages it has no reactions for asks about all of
+  // them at once. One by one they took the whole connection pool, and a join
+  // waited behind them for its token.
+  async function getSummariesForMessages({
+    conversation: rawConversation,
+    messageIds,
+    viewer
+  }: {
+    conversation?: unknown;
+    messageIds: string[];
+    viewer?: Viewer;
+  }): Promise<Record<string, ReactionSummary[]>> {
+    const conversation = normalizeConversation(rawConversation);
+    const unique = [...new Set(messageIds.map((id) => id.trim()).filter(Boolean))];
+    if (unique.length > MAX_REACTION_BATCH || !unique.every(isUuid)) {
+      throw new DomainError('invalid_message', 400, 'Invalid message');
+    }
+    const visible = await listVisible({ conversation, messageIds: unique, viewer });
+    const stored = await repository.listSummariesForMessages({
+      type: conversation.type,
+      messageIds: visible,
+      userId: viewer?.id || null
+    });
+    const answer: Record<string, ReactionSummary[]> = {};
+    for (const [messageId, summaries] of stored) {
+      answer[messageId] = summaries
+        .map(normalizeReactionSummary)
+        .filter((summary): summary is ReactionSummary => !!summary);
+    }
+    return answer;
   }
 
   async function setDesired({
@@ -194,7 +230,7 @@ function createReactionService({
     return normalizedPage;
   }
 
-  return Object.freeze({ getReactors, getSummaries, setDesired });
+  return Object.freeze({ getReactors, getSummaries, getSummariesForMessages, setDesired });
 }
 
 export type ReactionService = ReturnType<typeof createReactionService>;

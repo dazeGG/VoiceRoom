@@ -5,6 +5,9 @@ import type { TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
 import type { FastifyInstance } from 'fastify';
 import { Failure } from '@voice-room/shared/contracts/http';
 import {
+  ReactionBatch,
+  ReactionBatchParams,
+  ReactionBatchQuery,
   ReactionBody,
   ReactionParams,
   ReactionSet,
@@ -18,7 +21,7 @@ import type { ReactionService } from './reaction.service.ts';
 import { createRepeatReadBrake, type RepeatReadBrake } from './repeat-read-brake.ts';
 
 export interface ReactionRoutesDeps {
-  reactions: Pick<ReactionService, 'getSummaries' | 'setDesired' | 'getReactors'>;
+  reactions: Pick<ReactionService, 'getSummaries' | 'getSummariesForMessages' | 'setDesired' | 'getReactors'>;
   /** Slows a client that re-reads one message's reactions in a loop. */
   repeatReads?: RepeatReadBrake;
 }
@@ -38,6 +41,25 @@ export function registerReactionRoutes(root: FastifyInstance, ctx: ApiContext, d
     id: params.conversationId
   });
   const repeatReads = deps.repeatReads ?? createRepeatReadBrake();
+
+  app.get(
+    '/api/reactions/:type/:conversationId',
+    {
+      config,
+      schema: { params: ReactionBatchParams, querystring: ReactionBatchQuery, response: answers(ReactionBatch) }
+    },
+    async (request, reply) => {
+      const { type, conversationId } = request.params;
+      const asker = `${ctx.clientIp(request.raw)} ${type}/${conversationId}?${request.query.ids}`;
+      if (!(await repeatReads.admit(asker))) return reply.code(429).send(ASKED_TOO_OFTEN);
+      const messages = await deps.reactions.getSummariesForMessages({
+        conversation: { type, id: conversationId },
+        messageIds: request.query.ids.split(','),
+        viewer: await viewer(request.raw)
+      });
+      return { ok: true as const, messages };
+    }
+  );
 
   app.get(
     '/api/reactions/:type/:conversationId/:messageId',

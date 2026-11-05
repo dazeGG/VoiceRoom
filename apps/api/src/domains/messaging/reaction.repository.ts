@@ -6,6 +6,7 @@ import type { RoomMessageReactionRevisions, RoomMessageReactions } from '../../p
 import { transaction as runInTransaction } from '../../platform/db/pool.ts';
 import { fromMicros, microsOf } from '../../platform/db/micros.ts';
 import { avatarUrl } from '../../lib/avatar-url.ts';
+import { between } from '../social/social-records.ts';
 
 // Room and DM reactions live in tables with the same columns.
 type ReactionTable = 'room_message_reactions' | 'direct_message_reactions';
@@ -297,10 +298,38 @@ function createReactionRepository({ client }: { client?: ReactionPool | null } =
     return rows.map(mapReactor);
   }
 
+  /** Which of these messages stand in this room: the rule of one room message read, for many at once. */
+  async function listRoomMessageIds(roomId: string, messageIds: string[]): Promise<string[]> {
+    if (messageIds.length === 0) return [];
+    const rows = await on()
+      .selectFrom('room_messages')
+      .select('id')
+      .where('room_id', '=', roomId)
+      .where('id', 'in', messageIds)
+      .where('deleted_at', 'is', null)
+      .execute();
+    return rows.map((row) => row.id);
+  }
+
+  /** Which of these messages stand between these two people. */
+  async function listDirectMessageIds(userId: string, peerId: string, messageIds: string[]): Promise<string[]> {
+    if (messageIds.length === 0) return [];
+    const rows = await on()
+      .selectFrom('direct_messages')
+      .select('id')
+      .where('id', 'in', messageIds)
+      .where(between(userId, peerId))
+      .where('deleted_at', 'is', null)
+      .execute();
+    return rows.map((row) => row.id);
+  }
+
   return Object.freeze({
     getActive,
     getSummary,
+    listDirectMessageIds,
     listReactors,
+    listRoomMessageIds,
     listSummaries,
     listSummariesForMessages,
     setDesiredState,

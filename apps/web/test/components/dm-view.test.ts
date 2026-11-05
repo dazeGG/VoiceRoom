@@ -207,20 +207,18 @@ test('a reader at the newest message stays on it when loading artwork grows the 
   expect(scroll.scrollTop).toBe(100);
 });
 
-test("an open thread asks for each message's reactions once, however the answers come back", async () => {
+test("an open thread asks for its messages' reactions once, in one request", async () => {
   const lobby = useLobbyStore(pinia);
   await open(lobby, ada, [message('m1', 'me', 'раз'), message('m2', 'ada', 'два'), message('m3', 'me', 'три')]);
   const { calls } = stubFetch({
-    '/api/reactions/dm/ada/m1': { body: { ok: true, summaries: [] } },
-    '/api/reactions/dm/ada/m2': { body: { ok: true, summaries: [] } },
-    '/api/reactions/dm/ada/m3': { status: 500, body: { ok: false, error: 'boom' } }
+    '/api/reactions/dm/ada?ids=m1,m2,m3': { body: { ok: true, messages: {} } }
   });
   mount(lobby);
   await screen.findByText('три');
   await new Promise((resolve) => setTimeout(resolve, 300));
 
   const asked = calls.filter((call) => call.url.startsWith('/api/reactions/')).map((call) => call.url);
-  expect(asked.sort()).toEqual(['/api/reactions/dm/ada/m1', '/api/reactions/dm/ada/m2', '/api/reactions/dm/ada/m3']);
+  expect(asked).toEqual(['/api/reactions/dm/ada?ids=m1,m2,m3']);
 });
 
 test('a sent message empties the field at once, shows dimmed, and a failed one waits in its thread to be retried', async () => {
@@ -319,10 +317,60 @@ function historyMessage(id: string, readCursor: string) {
   };
 }
 
+test('a burst of live messages asks once for the newest cursor, not for a page of history each', async () => {
+  let newest = historyMessage('m1', 'c1');
+  const page = () => ({
+    body: {
+      ok: true,
+      contractVersion: 1,
+      mode: 'latest',
+      messages: [newest],
+      pageInfo: { hasMoreBefore: false, hasMoreAfter: false }
+    }
+  });
+  const { calls } = stubFetch({
+    'GET /api/dm/ada/history?mode=latest&limit=50': page,
+    'GET /api/dm/ada/history?mode=latest&limit=1': page,
+    'POST /api/dm/ada/read': { body: { ok: true } }
+  });
+  const asked = (limit: number) =>
+    calls.filter((call) => call.url === `/api/dm/ada/history?mode=latest&limit=${limit}`).length;
+  const lobby = useLobbyStore(pinia);
+  const stop = lobby.init('me');
+  const socket = FakeWebSocket.latest();
+  socket.open();
+  mount(lobby);
+  await lobby.openDm('ada');
+  await vi.waitFor(() => expect(asked(50)).toBe(1));
+
+  newest = historyMessage('m4', 'c4');
+  for (const id of ['m2', 'm3', 'm4']) {
+    socket.receive({ type: 'dm.message', payload: { message: message(id, 'ada', id) } });
+  }
+
+  await vi.waitFor(() => expect(asked(1)).toBe(1), { timeout: 3000 });
+  await new Promise((resolve) => setTimeout(resolve, 100));
+  expect(asked(1)).toBe(1);
+  expect(asked(50)).toBe(1);
+  await vi.waitFor(() =>
+    expect(calls.filter((call) => call.method === 'POST').at(-1)?.body).toMatchObject({ cursor: 'c4' })
+  );
+  stop();
+});
+
 test('a hidden conversation reports nothing as read, and a shown one does again', async () => {
   let newest = historyMessage('m1', 'c1');
   const { calls } = stubFetch({
     'GET /api/dm/ada/history?mode=latest&limit=50': () => ({
+      body: {
+        ok: true,
+        contractVersion: 1,
+        mode: 'latest',
+        messages: [newest],
+        pageInfo: { hasMoreBefore: false, hasMoreAfter: false }
+      }
+    }),
+    'GET /api/dm/ada/history?mode=latest&limit=1': () => ({
       body: {
         ok: true,
         contractVersion: 1,
