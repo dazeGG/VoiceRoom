@@ -2,7 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 import {
   ReactionBody,
   type ReactionSet,
-  type ReactionSummaries,
+  type ReactionBatch,
   type ReactorPage
 } from '@voice-room/shared/contracts/messages';
 import { parse } from '../test/helpers/assert';
@@ -30,10 +30,9 @@ test('G70 supplemental mocked keyboard and pagination rendering remains determin
       return route.fulfill({ json });
     }
     if (route.request().method() === 'GET') {
-      const json: ReactionSummaries = {
-        ok: true,
-        summaries: [{ emoji: '👍', count: 120, reactedByMe: false, revision: '1' }]
-      };
+      const summaries = [{ emoji: '👍', count: 120, reactedByMe: false, revision: '1' }];
+      const ids = (url.searchParams.get('ids') ?? '').split(',').filter(Boolean);
+      const json: ReactionBatch = { ok: true, messages: Object.fromEntries(ids.map((id) => [id, summaries])) };
       return route.fulfill({ json });
     }
     const requested = parse(ReactionBody, route.request().postDataJSON());
@@ -90,7 +89,7 @@ test('G70-A03 late reaction response cannot revive a deleted message', async ({ 
   await enableReactions(page);
   await page.route('**/api/reactions/**', async (route) => {
     if (route.request().method() === 'GET') {
-      const json: ReactionSummaries = { ok: true, summaries: [] };
+      const json: ReactionBatch = { ok: true, messages: {} };
       return route.fulfill({ json });
     }
     await mutationBlocked;

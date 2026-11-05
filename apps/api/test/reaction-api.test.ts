@@ -197,6 +197,34 @@ test('G69 routes preserve no-store reads and service authorization status', asyn
   assert.equal(write.statusCode, 403);
 });
 
+test('the reactions of many messages answer in one request, with what they hold', async (t) => {
+  const app = fastify();
+  t.after(() => app.close());
+  registerHttpKit(app, { securityHeaders: () => ({}), recordRequest() {}, logRequest() {}, logHandlerFailure() {} });
+  const first = '11111111-1111-4111-8111-111111111111';
+  const second = '22222222-2222-4222-8222-222222222222';
+  const summary = { emoji: '😀', count: 3, reactedByMe: false, revision: '9' };
+  registerReactionRoutes(app, fake<ApiContext>({ resolveSession: async () => null, clientIp: () => '203.0.113.5' }), {
+    reactions: service({
+      repository: fake<ReactionRepository>({
+        async listSummariesForMessages({ messageIds }) {
+          return new Map(messageIds.map((id) => [id, [summary]]));
+        }
+      }),
+      listVisible: async ({ messageIds }) => messageIds.filter((id) => id === first)
+    })
+  });
+
+  const answer = await app.inject({ method: 'GET', url: `/api/reactions/room/room?ids=${first},${second}` });
+
+  assert.equal(answer.statusCode, 200);
+  assert.equal(answer.headers['cache-control'], 'no-store');
+  assert.deepEqual(answer.json(), { ok: true, messages: { [first]: [summary] } });
+
+  const refused = await app.inject({ method: 'GET', url: '/api/reactions/room/room?ids=not-an-id' });
+  assert.equal(refused.statusCode, 400);
+});
+
 test('a client re-reading one message in a loop is held and refused; other reads go on', async (t) => {
   const app = fastify();
   t.after(() => app.close());
