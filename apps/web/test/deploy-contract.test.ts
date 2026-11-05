@@ -112,7 +112,8 @@ test('the dev server leaves the address of the RNNoise module alone', { timeout:
   try {
     const module = await server.transformRequest('/src/features/room/client/services/microphone-service.ts');
     assert.ok(module, 'the module transforms');
-    assert.doesNotMatch(module.code, /__vite__injectQuery/);
+    // Left as written: it ends in .mjs, so nothing is added to it.
+    assert.match(module.code, /^\s*`\$\{RNNOISE_ASSET_BASE\}rnnoise\.mjs`\s*$/m);
   } finally {
     await server.close();
   }

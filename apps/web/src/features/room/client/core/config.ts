@@ -12,7 +12,7 @@ export const PREVIOUS_GATE_MAX_AMPLITUDE = 0.18;
 export const PREVIOUS_GATE_MIN_AMPLITUDE = 0.006;
 // Caddy caches a versioned URL for a year: without it every join asked the
 // server about each of these files in turn, one round trip after another.
-export const VOICE_ASSET_QUERY = import.meta.env.PROD ? `?v=${import.meta.env.VITE_VOICE_ASSET_VERSION}` : '';
+const VOICE_ASSET_QUERY = import.meta.env.PROD ? `?v=${import.meta.env.VITE_VOICE_ASSET_VERSION}` : '';
 export const AUDIO_GATE_WORKLET_URL = `/audio-gate.worklet.js${VOICE_ASSET_QUERY}`;
 export const DESKTOP_AUDIO_SOURCE_WORKLET_URL = `/desktop-audio-source.worklet.js${VOICE_ASSET_QUERY}`;
 export const RNNOISE_ASSET_BASE = '/rnnoise/';
