@@ -237,25 +237,18 @@ async function measureJoin(
   });
 
   await page.waitForTimeout(thinkMs);
-  await page.evaluate(() => {
-    const start: unknown = Reflect.get(window, '__joinStart');
-    if (typeof start === 'function') start();
-  });
+  // Strings, like the probe they talk to: it is not part of any typed page.
+  await page.evaluate('window.__joinStart()');
   await join.click(page);
-  await page.waitForFunction(
-    () => {
-      const marks: unknown = Reflect.get(window, '__joinMarks');
-      return Boolean(
-        marks && Reflect.get(Object(marks), 'firstSoundHeard') && Reflect.get(Object(marks), 'statusConnected')
-      );
-    },
-    undefined,
-    { timeout: 60_000 }
-  );
-  const stages = await page.evaluate((): StageTimes => {
-    const marks: object = Object(Reflect.get(window, '__joinMarks'));
-    return Object.fromEntries(Object.entries<unknown>(marks).filter(([, at]) => typeof at === 'number'));
+  await page.waitForFunction('window.__joinMarks.firstSoundHeard && window.__joinMarks.statusConnected', undefined, {
+    timeout: 60_000
   });
+  const marks: unknown = JSON.parse(await page.evaluate<string>('JSON.stringify(window.__joinMarks)'));
+  const stages: StageTimes = {};
+  for (const stage of STAGES) {
+    const at: unknown = Reflect.get(Object(marks), stage);
+    if (typeof at === 'number') stages[stage] = at;
+  }
   await page.close();
   return {
     stages,
