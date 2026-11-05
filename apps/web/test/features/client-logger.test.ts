@@ -188,3 +188,66 @@ test('a failed API response is logged with the request id the server gave it', a
     ctx: { url: '/api/friends', status: 403, requestId: 'req-42' }
   });
 });
+
+test('join outcomes survive throttling and diagnostic ring churn without error markers', async () => {
+  const { calls } = stubFetch({ 'POST /api/client-logs': { body: { ok: true } } });
+  const log = await load();
+  log.reportVoiceJoinOutcome({ outcome: 'success', stage: 'connect', elapsedMs: 123 });
+  await vi.waitFor(() => expect(calls).toHaveLength(1));
+  log.reportVoiceJoinOutcome({ outcome: 'failure', stage: 'microphone', elapsedMs: 456 });
+  log.reportVoiceJoinOutcome({ outcome: 'cancel', stage: 'started', elapsedMs: 10 });
+  for (let i = 0; i < 150; i += 1) log.createLogger('room').info('noise');
+  await vi.advanceTimersByTimeAsync(31_000);
+  expect(calls).toHaveLength(2);
+  const body = parse(
+    Type.Object({
+      events: Type.Array(Type.Object({ level: Type.String(), msg: Type.String(), ctx: Type.Optional(Type.Unknown()) }))
+    }),
+    calls[1]?.body
+  );
+  expect(body.events.filter((event) => event.msg === 'voice join outcome').map((event) => event.ctx)).toEqual([
+    { outcome: 'failure', stage: 'microphone', elapsedMs: 456 },
+    { outcome: 'cancel', stage: 'started', elapsedMs: 10 }
+  ]);
+  expect(body.events.at(-1)?.level).toBe('info');
+});
+
+test('pending outcome overflow is counted and newest outcomes drain in bounded batches', async () => {
+  const bodies: string[] = [];
+  let finishFirst: (response: Response) => void = () => {};
+  vi.stubGlobal(
+    'fetch',
+    vi.fn((_url: RequestInfo | URL, init?: RequestInit) => {
+      if (typeof init?.body === 'string') bodies.push(init.body);
+      if (bodies.length === 1)
+        return new Promise<Response>((resolve) => {
+          finishFirst = resolve;
+        });
+      return Promise.resolve(new Response('{}', { status: 202 }));
+    })
+  );
+  const log = await load();
+  const logger = log.createLogger('room');
+  logger.info('old diagnostic');
+  const first = log.reportClientLogs('first');
+  for (let i = 0; i < 150; i += 1) logger.info(`new diagnostic ${i}`);
+  for (let i = 0; i < 101; i += 1) {
+    log.reportVoiceJoinOutcome({ outcome: 'cancel', stage: 'started', elapsedMs: i });
+  }
+  finishFirst(new Response('{}', { status: 202 }));
+  await first;
+  expect(log.readLogBuffer()).toHaveLength(100);
+  expect(log.readLogBuffer()[0]?.msg).toBe('new diagnostic 50');
+  await vi.advanceTimersByTimeAsync(61_000);
+  const schema = Type.Object({
+    events: Type.Array(
+      Type.Object({ msg: Type.String(), ctx: Type.Optional(Type.Record(Type.String(), Type.Unknown())) })
+    )
+  });
+  const batches = bodies.map((body) => parse(schema, JSON.parse(body)));
+  expect(batches).toHaveLength(3);
+  expect(batches.every((batch) => batch.events.length <= 100)).toBe(true);
+  expect(batches[1]?.events.at(-1)?.ctx).toEqual({ droppedJoinOutcomes: 1 });
+  const outcomes = batches.flatMap((batch) => batch.events.filter((event) => event.msg === 'voice join outcome'));
+  expect(outcomes.map((event) => event.ctx?.elapsedMs)).toEqual(Array.from({ length: 100 }, (_, i) => i + 1));
+});

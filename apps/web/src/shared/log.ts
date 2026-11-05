@@ -40,6 +40,23 @@ const isDev = ((): boolean => {
 // are already minutes old. It is a ring so a long session cannot grow it.
 const BUFFER_LIMIT = 100;
 const buffer: ClientLogRecord[] = [];
+// Join outcomes are kept apart from the diagnostic ring until sent. The cap
+// bounds memory offline; overflow is made visible in a later report.
+const joinOutcomes: ClientLogRecord[] = [];
+let droppedJoinOutcomes = 0;
+
+export function reportVoiceJoinOutcome(ctx: {
+  outcome: 'success' | 'failure' | 'cancel';
+  elapsedMs: number;
+  stage: 'started' | 'microphone' | 'token' | 'connect' | 'publish';
+}): void {
+  if (joinOutcomes.length === BUFFER_LIMIT) {
+    joinOutcomes.shift();
+    droppedJoinOutcomes += 1;
+  }
+  joinOutcomes.push({ at: Date.now(), level: 'info', ns: 'room', msg: 'voice join outcome', ctx });
+  void reportClientLogs('voice join outcomes flush', 'info');
+}
 
 // Matches CLIENT_LOG_RATE_LIMIT on the API with room to spare: a failing room
 // must not turn one user's bad network into a flood of reports.
@@ -118,25 +135,29 @@ export function clearLogBuffer(): void {
   buffer.length = 0;
 }
 
-// Sends what the page has seen so far. Called when something actually failed —
-// not on a timer — so the log stream carries reports, not telemetry.
-export async function reportClientLogs(reason: string): Promise<boolean> {
-  if (!browser || !intakeAvailable || buffer.length === 0) return false;
+// Sends diagnostics and pending join outcomes through the bounded intake.
+export async function reportClientLogs(reason: string, level: LogLevel = 'error'): Promise<boolean> {
+  if (!browser || !intakeAvailable || (buffer.length === 0 && joinOutcomes.length === 0)) return false;
   const at = Date.now();
   const sinceLast = at - lastFlushAt;
   if (flushInFlight || sinceLast < FLUSH_INTERVAL_MS) {
     heldReport ??= setTimeout(
       () => {
         heldReport = null;
-        void reportClientLogs(reason);
+        void reportClientLogs(reason, level);
       },
       flushInFlight ? FLUSH_INTERVAL_MS : FLUSH_INTERVAL_MS - sinceLast
     );
     return false;
   }
 
-  const events = buffer.slice();
-  events.push({ at, level: 'error', ns: 'report', msg: reason });
+  const outcomes = joinOutcomes.slice(0, BUFFER_LIMIT - 1);
+  const diagnostics = buffer.slice(-(BUFFER_LIMIT - 1 - outcomes.length));
+  // slice(-0) returns the whole array.
+  if (outcomes.length === BUFFER_LIMIT - 1) diagnostics.length = 0;
+  const dropped = droppedJoinOutcomes;
+  const events = [...outcomes, ...diagnostics];
+  events.push({ at, level, ns: 'report', msg: reason, ...(dropped ? { ctx: { droppedJoinOutcomes: dropped } } : {}) });
 
   flushInFlight = (async () => {
     const controller = new AbortController();
@@ -157,7 +178,18 @@ export async function reportClientLogs(reason: string): Promise<boolean> {
       // since, not a second copy of what the log stream already holds. Only
       // the records this report sent are removed: anything logged while the
       // request was in flight belongs to the next one.
-      if (response.ok) buffer.splice(0, events.length - 1);
+      if (response.ok) {
+        for (const event of diagnostics) {
+          const index = buffer.indexOf(event);
+          if (index !== -1) buffer.splice(index, 1);
+        }
+        for (const event of outcomes) {
+          const index = joinOutcomes.indexOf(event);
+          if (index !== -1) joinOutcomes.splice(index, 1);
+        }
+        droppedJoinOutcomes -= dropped;
+        if (joinOutcomes.length) void reportClientLogs('voice join outcomes flush', 'info');
+      }
       // A report that fails must never surface to the user or break the flow
       // that was already going wrong.
     } catch {
