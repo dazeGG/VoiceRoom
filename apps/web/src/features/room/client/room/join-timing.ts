@@ -10,6 +10,15 @@ let startedAt: number | null = null;
 let stages: Partial<JoinTiming> = {};
 let finished: JoinTiming | null = null;
 
+/** Last completed milestone, not the duration of an individual request. */
+export function lastJoinStage(): 'started' | 'microphone' | 'token' | 'connect' | 'publish' {
+  if (stages.publishMs !== undefined) return 'publish';
+  if (stages.connectMs !== undefined) return 'connect';
+  if (stages.tokenMs !== undefined) return 'token';
+  if (stages.microphoneMs !== undefined) return 'microphone';
+  return 'started';
+}
+
 export function startJoinTiming(): void {
   startedAt = performance.now();
   stages = {};
