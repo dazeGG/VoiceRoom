@@ -85,6 +85,9 @@ export function useDmThread(isOpen: (peerId: string) => boolean) {
     // delivered; the later, preview-less copy must not wipe it.
     const known = messages.value.find((existing) => existing.id === incoming.id);
     const knownPreview = known ? toRaw(known).linkPreview : undefined;
+    // A new message has no reactions yet; an edit keeps those it had. Either way
+    // the reaction store has nothing to ask the server about.
+    incoming = { ...incoming, reactions: incoming.reactions ?? known?.reactions ?? [] };
     history.upsert(knownPreview && !incoming.linkPreview ? { ...incoming, linkPreview: knownPreview } : incoming);
   }
 

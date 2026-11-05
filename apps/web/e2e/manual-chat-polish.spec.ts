@@ -4,7 +4,7 @@ import {
   MessageContent,
   PostRoomMessageBody,
   type ReactionSet,
-  type ReactionSummaries,
+  type ReactionBatch,
   type RoomMessageAnswer
 } from '@voice-room/shared/contracts/messages';
 import type { InboxPage } from '@voice-room/shared/contracts/notifications';
@@ -236,7 +236,7 @@ test('manual polish keeps the newest mention query, emits login-bound segments, 
   });
   await page.route('**/api/reactions/**', (route) => {
     if (route.request().method() === 'GET') {
-      const json: ReactionSummaries = { ok: true, summaries: [] };
+      const json: ReactionBatch = { ok: true, messages: {} };
       return route.fulfill({ json });
     }
     const json: ReactionSet = { ok: true, summary: { emoji: '👍', count: 1, reactedByMe: true, revision: '1' } };

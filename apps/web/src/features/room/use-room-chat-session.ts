@@ -59,6 +59,10 @@ export interface RoomChatHost {
   };
 }
 
+// A message that has only just been written has no reactions yet, and every
+// reaction after this reaches the store as a realtime event: nothing to ask about.
+const asNewMessage = (message: ChatMessage): ChatMessage => ({ ...message, reactions: message.reactions ?? [] });
+
 export function useRoomChatSession(host: RoomChatHost) {
   const sessionStore = useSessionStore();
   const roomPins = useRoomPinsStore();
@@ -84,7 +88,7 @@ export function useRoomChatSession(host: RoomChatHost) {
           idempotencyKey
         }),
       onSent: (message) => {
-        if (timeline.add(message) && host.visible()) host.onRead();
+        if (timeline.add(asNewMessage(message)) && host.visible()) host.onRead();
       }
     })
   );
@@ -171,7 +175,7 @@ export function useRoomChatSession(host: RoomChatHost) {
           return;
         }
         case 'room.chat.message':
-          receive(chatMessageFromRoomMessage(event.payload.message));
+          receive(asNewMessage(chatMessageFromRoomMessage(event.payload.message)));
           return;
         default:
           return;

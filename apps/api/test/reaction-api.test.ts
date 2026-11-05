@@ -31,6 +31,9 @@ function repository(): ReactionRepository {
       revision += 1n;
       return { changed: true, revision: String(revision) };
     },
+    async listSummariesForMessages() {
+      return new Map();
+    },
     async getSummary({ userId }) {
       return {
         emoji: '😀',
@@ -54,6 +57,7 @@ function service(overrides: Partial<Parameters<typeof createReactionService>[0]>
       if (conversation.type === 'dm') return viewer?.id === 'account' && conversation.id === 'peer';
       return conversation.id === 'room' && Boolean(viewer?.id);
     },
+    listVisible: async () => [],
     publish: () => false,
     ...overrides
   });

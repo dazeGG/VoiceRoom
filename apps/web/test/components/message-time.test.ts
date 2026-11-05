@@ -56,7 +56,7 @@ test('the room chat writes a message time on the 24-hour clock in an English bro
     'GET /api/rooms/room/chat': { body: { ok: true, roomId: 'room', messages: [message] } },
     'GET /api/rooms/room/pins': { body: { ok: true, pins: [], count: 0 } },
     'POST /api/rooms/room/read': { body: { ok: true } },
-    'GET /api/reactions/room/room/m1': { body: { ok: true, summaries: [] } }
+    'GET /api/reactions/room/room?ids=m1': { body: { ok: true, messages: {} } }
   });
   const pinia = createPinia();
   setActivePinia(pinia);

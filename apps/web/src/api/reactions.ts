@@ -1,8 +1,8 @@
 import type { ConversationRef } from '@voice-room/shared/contracts/realtime';
 import {
+  ReactionBatch,
   ReactionBody,
   ReactionSet,
-  ReactionSummaries,
   ReactorPage,
   type ReactionSummary,
   type ReactorList
@@ -15,11 +15,13 @@ function reactionUrl(conversation: ReactionConversation, messageId: string): str
   return `/api/reactions/${conversation.type}/${encodeURIComponent(conversation.id)}/${encodeURIComponent(messageId)}`;
 }
 
-export async function fetchReactionSummaries(
+/** The reactions of many messages in one request; a message without any is absent. */
+export async function fetchReactionBatch(
   conversation: ReactionConversation,
-  messageId: string
-): Promise<ReactionSummary[]> {
-  return (await api.get(reactionUrl(conversation, messageId), ReactionSummaries)).summaries;
+  messageIds: readonly string[]
+): Promise<Record<string, ReactionSummary[]>> {
+  const url = `/api/reactions/${conversation.type}/${encodeURIComponent(conversation.id)}?ids=${messageIds.map(encodeURIComponent).join(',')}`;
+  return (await api.get(url, ReactionBatch)).messages;
 }
 
 export async function setReactionDesired(

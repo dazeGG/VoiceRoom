@@ -319,6 +319,18 @@ export const ReactionParams = Type.Object({
 export const ReactionSummaries = Ok({ summaries: Type.Array(ReactionSummary) });
 export type ReactionSummaries = Static<typeof ReactionSummaries>;
 
+/** How many messages one request may ask reactions for. */
+export const MAX_REACTION_BATCH = 100;
+
+export const ReactionBatchParams = Type.Object({ type: Type.String(), conversationId: Type.String() });
+
+/** Comma-separated message ids. */
+export const ReactionBatchQuery = Type.Object({ ids: Type.String({ maxLength: 4096 }) });
+
+/** By message id; a message the viewer may not see, or one without reactions, is absent. */
+export const ReactionBatch = Ok({ messages: Type.Record(Type.String(), Type.Array(ReactionSummary)) });
+export type ReactionBatch = Static<typeof ReactionBatch>;
+
 /** Sets the viewer's reaction on or off; replaying the same state changes nothing. */
 export const ReactionBody = Type.Object({ emoji: Type.Optional(Type.String()), active: Type.Optional(Type.Boolean()) });
 export const ReactionSet = Ok({ summary: ReactionSummary });

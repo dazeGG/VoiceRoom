@@ -207,20 +207,18 @@ test('a reader at the newest message stays on it when loading artwork grows the 
   expect(scroll.scrollTop).toBe(100);
 });
 
-test("an open thread asks for each message's reactions once, however the answers come back", async () => {
+test("an open thread asks for its messages' reactions once, in one request", async () => {
   const lobby = useLobbyStore(pinia);
   await open(lobby, ada, [message('m1', 'me', 'раз'), message('m2', 'ada', 'два'), message('m3', 'me', 'три')]);
   const { calls } = stubFetch({
-    '/api/reactions/dm/ada/m1': { body: { ok: true, summaries: [] } },
-    '/api/reactions/dm/ada/m2': { body: { ok: true, summaries: [] } },
-    '/api/reactions/dm/ada/m3': { status: 500, body: { ok: false, error: 'boom' } }
+    '/api/reactions/dm/ada?ids=m1,m2,m3': { body: { ok: true, messages: {} } }
   });
   mount(lobby);
   await screen.findByText('три');
   await new Promise((resolve) => setTimeout(resolve, 300));
 
   const asked = calls.filter((call) => call.url.startsWith('/api/reactions/')).map((call) => call.url);
-  expect(asked.sort()).toEqual(['/api/reactions/dm/ada/m1', '/api/reactions/dm/ada/m2', '/api/reactions/dm/ada/m3']);
+  expect(asked).toEqual(['/api/reactions/dm/ada?ids=m1,m2,m3']);
 });
 
 test('a sent message empties the field at once, shows dimmed, and a failed one waits in its thread to be retried', async () => {

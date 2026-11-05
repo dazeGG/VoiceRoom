@@ -38,8 +38,9 @@ export function createReactionsModule(deps: ReactionsModuleDeps) {
       conversation?.id ?? ''
     ]
   });
+  const repository = createReactionRepository({ client: deps.pool });
   const service = createReactionService({
-    repository: createReactionRepository({ client: deps.pool }),
+    repository,
     cursorCodec: deps.cursorCodec,
     // Guests read the reactions of any existing room; members read or react
     // where the room's chat rules let them; a DM is visible to its two users.
@@ -54,6 +55,16 @@ export function createReactionsModule(deps: ReactionsModuleDeps) {
       }
       if (!viewer?.id) return false;
       return deps.directMessageVisible(viewer.id, conversation.id, messageId);
+    },
+    listVisible: async ({ conversation, messageIds, viewer }) => {
+      if (conversation.type === 'room') {
+        const allowed = viewer?.id
+          ? await deps.canReadRoom(conversation.id, viewer.id)
+          : await deps.roomExists(conversation.id);
+        return allowed ? repository.listRoomMessageIds(conversation.id, messageIds) : [];
+      }
+      if (!viewer?.id) return [];
+      return repository.listDirectMessageIds(viewer.id, conversation.id, messageIds);
     },
     publish: realtime.publish
   });
