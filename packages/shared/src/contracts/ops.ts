@@ -31,6 +31,19 @@ export const DesktopRelease = Ok({
 });
 export type DesktopRelease = Static<typeof DesktopRelease>;
 
+/** One page's measure from a browser, summed by the server into a histogram and not stored. */
+export const ClientVital = Type.Object({
+  name: Type.Union([
+    Type.Literal('CLS'),
+    Type.Literal('FCP'),
+    Type.Literal('INP'),
+    Type.Literal('LCP'),
+    Type.Literal('TTFB')
+  ]),
+  value: Type.Number({ minimum: 0, maximum: 600_000 })
+});
+export type ClientVital = Static<typeof ClientVital>;
+
 export const ClientLogsAccepted = Ok({
   accepted: Type.Number(),
   dropped: Type.Number(),

@@ -684,6 +684,7 @@ export interface VoiceSessions {
   guest_name: string | null;
   id: Generated<string>;
   ip_key: string | null;
+  join_timing: Json | null;
   joined_at: Timestamp;
   left_at: Timestamp;
   location: string | null;

@@ -69,6 +69,8 @@ export async function loadLiveKitHarness(
     requestToken?: () => Promise<{ token: string; url?: string; urls?: string[] }>;
     /** LiveKit URLs whose connect() fails. */
     failingUrls?: string[];
+    /** Runs as a room connects: fills in who is there, or holds its publishing back. */
+    onConnect?: (room: { remoteParticipants: Map<string, unknown>; publishGate: Promise<unknown> }) => void;
     /** What the raw-microphone silence check answers. */
     inputSilent?: () => Promise<boolean>;
     /** Whether a recovery epoch is still current. */
@@ -105,9 +107,11 @@ export async function loadLiveKitHarness(
     disconnected = false;
     readonly published: Array<{ track: unknown; options: Record<string, unknown> }> = [];
     readonly unpublished: unknown[] = [];
+    publishGate: Promise<unknown> = Promise.resolve();
     readonly localParticipant = {
       trackPublications: new Map<string, unknown>(),
       publishTrack: async (track: unknown, publishOptions: Record<string, unknown>) => {
+        await this.publishGate;
         this.published.push({ track, options: publishOptions });
         return {
           track,
@@ -128,6 +132,7 @@ export async function loadLiveKitHarness(
       if (failingUrls.has(url)) throw new Error(`cannot reach ${url}`);
       this.connectedUrl = url;
       this.connectOptions = connectOptions;
+      options.onConnect?.(this);
     }
     on(event: string, handler: (...args: unknown[]) => void) {
       this.listeners.set(event, [...(this.listeners.get(event) ?? []), handler]);

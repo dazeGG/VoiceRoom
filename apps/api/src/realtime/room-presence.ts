@@ -153,7 +153,8 @@ export function createRoomPresence(deps: RoomPresenceDeps) {
       joinedAt: peer.joinedAt,
       leftAt,
       ...(peer.voice?.minutes.length ? { minutes: [...peer.voice.minutes] } : {}),
-      ...(peer.voice?.events.length ? { events: [...peer.voice.events] } : {})
+      ...(peer.voice?.events.length ? { events: [...peer.voice.events] } : {}),
+      ...(peer.voice?.joinTiming ? { joinTiming: peer.voice.joinTiming } : {})
     };
   }
 

@@ -5,10 +5,18 @@
 import type { TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
 import type { FastifyInstance } from 'fastify';
 import { Failure } from '@voice-room/shared/contracts/http';
-import { ClientLogsAccepted, DesktopRelease, Health, PowChallenge } from '@voice-room/shared/contracts/ops';
+import { Type } from 'typebox';
+import {
+  ClientLogsAccepted,
+  ClientVital,
+  DesktopRelease,
+  Health,
+  PowChallenge
+} from '@voice-room/shared/contracts/ops';
 import type { ApiContext } from '../../app/context.ts';
 import { failure } from '../../platform/http/http-kit.ts';
 import { LOG_EVENTS } from '../../lib/log-events.ts';
+import { recordWebVital } from '../../lib/metrics.ts';
 import { CLIENT_LOG_LIMITS, normalizeClientLogBatch } from '../../lib/client-log-intake.ts';
 import type { DesktopReleaseService } from './desktop-release.service.ts';
 import type { RateCheck } from '../../lib/rate-limit.ts';
@@ -21,6 +29,7 @@ export interface OpsRouteDeps {
   powDifficulty: number;
   powTtlMs: number;
   clientLogs: { enabled: boolean; limiter: RateCheck };
+  clientVitals: RateCheck;
   desktopRelease: DesktopReleaseService;
 }
 
@@ -65,6 +74,20 @@ export function registerOpsRoutes(root: FastifyInstance, ctx: ApiContext, deps: 
           .code(502)
           .send(failure('Не удалось получить данные о релизе', { code: 'desktop_release_unavailable' }));
       return reply.header('Cache-Control', result.cacheControl).send({ ok: true as const, ...result.release });
+    }
+  );
+
+  // How fast pages open for real visitors: a histogram per measure, no visitor
+  // in it. A browser sends these as it leaves a page, so nobody reads the answer.
+  app.post(
+    '/api/client-vitals',
+    { schema: { body: ClientVital, response: { 204: Type.Null(), 429: Type.Null() } } },
+    async (request, reply) => {
+      if (!deps.clientVitals.check(`client-vitals:${ctx.clientIp(request.raw)}`).allowed) {
+        return reply.code(429).send(null);
+      }
+      recordWebVital(request.body.name, request.body.value);
+      return reply.code(204).send(null);
     }
   );
 

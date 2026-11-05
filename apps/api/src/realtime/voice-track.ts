@@ -6,7 +6,7 @@
 // panel shows live, and every stay sums its polls into minutes, written with
 // the stay when it ends (voice_session_samples).
 
-import type { ClientCommands, CpuPoll } from '@voice-room/shared/contracts/realtime';
+import type { ClientCommands, CpuPoll, JoinTiming } from '@voice-room/shared/contracts/realtime';
 import { CPU_PRESSURES, type CpuPressure } from '@voice-room/shared/contracts/rooms';
 import {
   VOICE_WINDOW_POLLS,
@@ -57,6 +57,8 @@ export interface PeerVoice {
   minutes: VoiceMinuteSample[];
   /** What its seat did, oldest first. */
   events: StayEvent[];
+  /** How its join went, once its client has said. */
+  joinTiming?: JoinTiming | undefined;
   /** The pressure its computer last reported; null where its client cannot tell. */
   cpuPressure: CpuPressure | null;
   /** Its call switched to the lighter noise suppression. */
@@ -66,7 +68,7 @@ export interface PeerVoice {
 }
 
 /** What the runtime needs of a room and its peers. */
-interface VoicePeer {
+export interface VoicePeer {
   id: string;
   voice?: PeerVoice | undefined;
 }
@@ -239,10 +241,11 @@ function reportOf(peer: VoicePeer & { voice: PeerVoice }, inRoom: (peerId: strin
 export function noteVoiceReport<Peer extends VoicePeer>(
   peers: ReadonlyMap<string, Peer>,
   peer: Peer,
-  poll: Pick<VoicePoll, 'rttMs' | 'jitterBufferMs' | 'uplink' | 'transport' | 'heard' | 'mic' | 'cpu'>,
+  poll: Pick<VoicePoll, 'rttMs' | 'jitterBufferMs' | 'uplink' | 'transport' | 'heard' | 'mic' | 'cpu' | 'joinTiming'>,
   at: number
 ): VoiceChange<Peer>[] {
   const voice = (peer.voice ??= emptyVoice());
+  if (poll.joinTiming) voice.joinTiming = poll.joinTiming;
   const minute = minuteOf(voice, at);
 
   // A speaker the poll does not name sent nothing since the previous one, and

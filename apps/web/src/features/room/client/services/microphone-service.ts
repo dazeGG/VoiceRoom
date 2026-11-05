@@ -12,6 +12,9 @@ import {
   NOISE_MODES,
   NOISE_MODE_STORAGE_KEY,
   RNNOISE_ASSET_BASE,
+  RNNOISE_MODULE_URL,
+  RNNOISE_WASM_URL,
+  RNNOISE_WORKLET_URL,
   type NoiseMode
 } from '../core/config';
 import { useRoomDeviceUiStore } from '@/features/room/room-device-ui.store';
@@ -417,15 +420,22 @@ async function createRnnoiseNode(context: AudioContext): Promise<AudioNode> {
   await RNNoiseNode.register(
     context,
     loadAssets({
-      moduleSrc: `${RNNOISE_ASSET_BASE}rnnoise.wasm`,
-      scriptSrc: `${RNNOISE_ASSET_BASE}rnnoise.worklet.js`
+      moduleSrc: RNNOISE_WASM_URL,
+      scriptSrc: RNNOISE_WORKLET_URL
     })
   );
   return new RNNoiseNode(context);
 }
 
+function importRnnoiseModule(): Promise<unknown> {
+  // The dev server adds ?import to any address it cannot read as a .mjs file, then
+  // refuses a file of public/ asked for that way and covers the page with an error.
+  if (import.meta.env.DEV) return import(/* @vite-ignore */ `${RNNOISE_ASSET_BASE}rnnoise.mjs`);
+  return import(/* @vite-ignore */ RNNOISE_MODULE_URL);
+}
+
 function loadRnnoiseModule(): Promise<RnnoiseModule> {
-  rnnoiseModulePromise ||= import(/* @vite-ignore */ `${RNNOISE_ASSET_BASE}rnnoise.mjs`).then((module: unknown) => {
+  rnnoiseModulePromise ||= importRnnoiseModule().then((module: unknown) => {
     if (!isRnnoiseModule(module)) throw new Error('RNNoise module has an unexpected shape');
     return module;
   });

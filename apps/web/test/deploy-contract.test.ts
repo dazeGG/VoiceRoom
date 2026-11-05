@@ -1,12 +1,13 @@
 import { onTestFinished, test, vi } from 'vitest';
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, readdirSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { build } from 'vite';
+import { brotliDecompressSync } from 'node:zlib';
+import { build, createServer } from 'vite';
 
-import { metaPolicy, versionFile } from '../scripts/deploy-contract.ts';
+import { metaPolicy, versionFile, voiceAssetVersion } from '../scripts/deploy-contract.ts';
 import { buildHeaderPolicy, readMetaPolicy } from '../scripts/emit-caddy-csp.ts';
 
 const webRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -34,6 +35,8 @@ test('a production build keeps the deployment contract', { timeout: 60_000 }, as
   // `$&` and `$'` are replacement patterns in String.replace; they must reach the page as written.
   const livekitDomain = "lk$&x$'y.example.com";
   vi.stubEnv('LIVEKIT_DOMAIN', livekitDomain);
+  // What the image's build runs with; Vitest's own 'test' would leave import.meta.env.PROD false.
+  vi.stubEnv('NODE_ENV', 'production');
   onTestFinished(() => {
     vi.unstubAllEnvs();
   });
@@ -65,6 +68,26 @@ test('a production build keeps the deployment contract', { timeout: 60_000 }, as
       .join('\n');
     assert.ok(bundle.includes(String(version.version)), 'the bundle carries the build id of version.json');
 
+    // Fonts are named by content, so the year-long cache of that directory holds for them.
+    assert.ok(
+      immutable.some((file) => /^onest-cyrillic-.+.woff2$/.test(file)),
+      'a hashed font'
+    );
+    assert.ok(!readdirSync(outDir).includes('fonts'), 'no font under a fixed name');
+    // The audio files keep fixed names; their addresses carry a content hash.
+    const audioVersion = voiceAssetVersion(join(webRoot, 'public'));
+    assert.ok(bundle.includes(`?v=${audioVersion}`), 'the bundle carries the audio files version');
+
+    // The page has something to show before its code arrives, and the app mounts over it.
+    assert.match(html, /<div id="app"><div class="boot-splash"/);
+    // The largest files come compressed ahead, at a strength too slow for each request.
+    const entry = immutable.find((file) => /^index-.+\.js$/.test(file));
+    assert.ok(entry && immutable.includes(`${entry}.br`) && immutable.includes(`${entry}.gz`), 'a compressed entry');
+    const entryPath = join(outDir, '_app', 'immutable', entry);
+    assert.deepEqual(brotliDecompressSync(readFileSync(`${entryPath}.br`)), readFileSync(entryPath));
+    assert.ok(statSync(`${entryPath}.br`).size < statSync(`${entryPath}.gz`).size);
+    assert.ok(readdirSync(join(outDir, 'rnnoise')).includes('rnnoise.wasm.br'));
+
     // Web push: one self-contained module at the root, as SvelteKit emitted it.
     const serviceWorker = readFileSync(join(outDir, 'service-worker.js'), 'utf8');
     assert.ok(serviceWorker.includes('showNotification'));
@@ -74,5 +97,24 @@ test('a production build keeps the deployment contract', { timeout: 60_000 }, as
     assert.ok(readdirSync(join(outDir, 'rnnoise')).includes('rnnoise.wasm'));
   } finally {
     rmSync(outDir, { recursive: true, force: true });
+  }
+});
+
+test('the dev server leaves the address of the RNNoise module alone', { timeout: 60_000 }, async () => {
+  // With ?import added it refuses a file of public/ and covers the page with an error overlay.
+  const server = await createServer({
+    root: webRoot,
+    logLevel: 'silent',
+    appType: 'custom',
+    server: { middlewareMode: true, hmr: false, ws: false },
+    optimizeDeps: { noDiscovery: true, include: [] }
+  });
+  try {
+    const module = await server.transformRequest('/src/features/room/client/services/microphone-service.ts');
+    assert.ok(module, 'the module transforms');
+    // Left as written: it ends in .mjs, so nothing is added to it.
+    assert.match(module.code, /^\s*`\$\{RNNOISE_ASSET_BASE\}rnnoise\.mjs`\s*$/m);
+  } finally {
+    await server.close();
   }
 });

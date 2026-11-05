@@ -131,7 +131,9 @@ export function readApiConfig(env: Env = process.env) {
     LIVEKIT_TOKEN_TTL_SECONDS: int('LIVEKIT_TOKEN_TTL_SECONDS', 600, 60),
     LIVEKIT_GATE_CREDENTIAL_TTL_SECONDS: int('LIVEKIT_GATE_CREDENTIAL_TTL_SECONDS', 21600, 60),
     LIVEKIT_ROSTER_WAIT_MS: int('LIVEKIT_ROSTER_WAIT_MS', 5000, 0),
-    ROSTER_POLL_INTERVAL_MS: 50,
+    // The realtime join is already on its way when the token request arrives, so
+    // this wait is short; a Map lookup every 5 ms costs nothing and every join waits on it.
+    ROSTER_POLL_INTERVAL_MS: 5,
     LIVEKIT_GATE_PUBLIC_URL: gatePublicUrl,
     // The LiveKit URL the CSP admits: the public gate, else the SFU itself.
     LIVEKIT_CSP_URL: cleanLiveKitUrl(gatePublicUrl || env.LIVEKIT_URL || ''),
@@ -196,6 +198,8 @@ export function readApiConfig(env: Env = process.env) {
     CLIENT_LOG_INTAKE_ENABLED: readEnvBool('CLIENT_LOG_INTAKE_ENABLED', false, env),
     CLIENT_LOG_RATE_LIMIT: int('CLIENT_LOG_RATE_LIMIT', 6, 0),
     CLIENT_LOG_RATE_WINDOW_MS: int('CLIENT_LOG_RATE_WINDOW_MS', 60000, 1000),
+    CLIENT_VITALS_RATE_LIMIT: int('CLIENT_VITALS_RATE_LIMIT', 120, 0),
+    CLIENT_VITALS_RATE_WINDOW_MS: int('CLIENT_VITALS_RATE_WINDOW_MS', 60000, 1000),
     // One account cannot pin an unbounded number of keep-alive sockets.
     MAX_REALTIME_STREAMS_PER_USER: int('MAX_REALTIME_STREAMS_PER_USER', 8, 1),
     MAX_GUEST_STREAMS_PER_IP: int('MAX_GUEST_STREAMS_PER_IP', 8, 1),
