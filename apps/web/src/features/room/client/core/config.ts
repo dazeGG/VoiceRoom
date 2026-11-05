@@ -12,12 +12,13 @@ export const PREVIOUS_GATE_MAX_AMPLITUDE = 0.18;
 export const PREVIOUS_GATE_MIN_AMPLITUDE = 0.006;
 // Caddy caches a versioned URL for a year: without it every join asked the
 // server about each of these files in turn, one round trip after another.
-const VOICE_ASSET_QUERY = import.meta.env.PROD ? `?v=${import.meta.env.VITE_VOICE_ASSET_VERSION}` : '';
+export const VOICE_ASSET_QUERY = import.meta.env.PROD ? `?v=${import.meta.env.VITE_VOICE_ASSET_VERSION}` : '';
 export const AUDIO_GATE_WORKLET_URL = `/audio-gate.worklet.js${VOICE_ASSET_QUERY}`;
 export const DESKTOP_AUDIO_SOURCE_WORKLET_URL = `/desktop-audio-source.worklet.js${VOICE_ASSET_QUERY}`;
-export const RNNOISE_MODULE_URL = `/rnnoise/rnnoise.mjs${VOICE_ASSET_QUERY}`;
-export const RNNOISE_WASM_URL = `/rnnoise/rnnoise.wasm${VOICE_ASSET_QUERY}`;
-export const RNNOISE_WORKLET_URL = `/rnnoise/rnnoise.worklet.js${VOICE_ASSET_QUERY}`;
+export const RNNOISE_ASSET_BASE = '/rnnoise/';
+export const RNNOISE_MODULE_URL = `${RNNOISE_ASSET_BASE}rnnoise.mjs${VOICE_ASSET_QUERY}`;
+export const RNNOISE_WASM_URL = `${RNNOISE_ASSET_BASE}rnnoise.wasm${VOICE_ASSET_QUERY}`;
+export const RNNOISE_WORKLET_URL = `${RNNOISE_ASSET_BASE}rnnoise.worklet.js${VOICE_ASSET_QUERY}`;
 /** What opening the microphone loads, one file after another, unless it is already in the cache. */
 export const MICROPHONE_ASSET_URLS = [
   RNNOISE_MODULE_URL,
