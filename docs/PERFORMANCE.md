@@ -90,3 +90,10 @@ FROM pg_stat_statements ORDER BY total_exec_time DESC LIMIT 20;
 `/api/metrics` has `voice_room_api_http_latency_seconds` (a histogram by method and
 route) and `voice_room_web_vital` (what browsers measured of the pages they opened,
 in milliseconds, CLS in thousandths). Both start over when the API restarts.
+
+Voice joins also send a best-effort `voice join outcome` client-log event on success,
+failure or cancellation. Its elapsed time covers the whole attempt; the stage is
+the last completed milestone, not a request duration. This requires client-log
+intake to be enabled and reachable. Offline attempts, a closed page, or a full
+100-outcome pending queue can lose events; queue overflow is counted in the next
+delivered report. These events are separate from completed voice sessions.

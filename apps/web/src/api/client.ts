@@ -75,11 +75,12 @@ export function isJsonObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
 
-async function readBody(response: Response): Promise<Record<string, unknown> | null> {
+async function readBody(response: Response, signal?: AbortSignal): Promise<Record<string, unknown> | null> {
   try {
     const body: unknown = await response.json();
     return isJsonObject(body) ? body : null;
-  } catch {
+  } catch (error) {
+    if (signal?.aborted || (error instanceof DOMException && error.name === 'AbortError')) throw error;
     return null;
   }
 }
@@ -141,7 +142,7 @@ export async function request<Schema extends TSchema>(
     if (signal?.aborted || (error instanceof DOMException && error.name === 'AbortError')) throw error;
     throw new ApiError(ERROR_TEXTS.unavailable, 0, { code: 'unavailable' });
   }
-  const payload = await readBody(response);
+  const payload = await readBody(response, signal);
   if (!response.ok) {
     logFailure(url, response);
     throw new ApiError(failureMessage(payload, fallback), response.status, payload ?? {});

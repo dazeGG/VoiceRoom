@@ -6,7 +6,7 @@ import { state } from '../core/room-runtime.store';
 import { showToast } from '../ui/toast';
 import { ApiError } from '@/api/client';
 import { checkRoomExists, roomCheckIsFresh } from '../net/api';
-import { finishJoinTiming, markJoinStage, startJoinTiming } from './join-timing';
+import { finishJoinTiming, lastJoinStage, markJoinStage, startJoinTiming } from './join-timing';
 import { postState } from './presence';
 import { UserFacingError, wait } from '../core/utils';
 import { rotateStoredPeerSession } from '../core/session';
@@ -86,7 +86,7 @@ import {
   startRoomRecovery
 } from '../recovery/room-recovery';
 
-import { createLogger, errorContext } from '@/shared/log';
+import { createLogger, errorContext, reportVoiceJoinOutcome } from '@/shared/log';
 
 const log = createLogger('room');
 
@@ -94,9 +94,13 @@ let voiceJoinSent = false;
 let stopVideoVisibilitySync: (() => void) | null = null;
 let joinAttemptGeneration = 0;
 let activeJoinAttempt: Promise<void> | null = null;
+let finishJoinTelemetry: ((outcome: 'failure' | 'cancel') => void) | null = null;
 
 const handleVoiceEvent = createVoiceEventHandler({
-  leaveRoom: () => leaveRoom(),
+  leaveRoom: () => {
+    finishJoinTelemetry?.('failure');
+    leaveRoom();
+  },
   showModeration: (reason) => showRoomModerationScreen(reason),
   showNotFound: () => showRoomNotFound()
 });
@@ -155,6 +159,7 @@ export function showRoomEntryFailure(): void {
 }
 
 export function showRoomNotFound(): void {
+  finishJoinTelemetry?.('failure');
   leaveRoom();
   usePageStore().screen = 'not-found';
   document.title = 'Комната не найдена · VoiceRoom';
@@ -162,6 +167,7 @@ export function showRoomNotFound(): void {
 }
 
 function showRoomModerationScreen(reason: 'banned' | 'kicked'): void {
+  finishJoinTelemetry?.('failure');
   leaveRoom();
   const nextSession = rotateStoredPeerSession(state.roomId);
   state.peerId = nextSession.peerId;
@@ -199,6 +205,16 @@ export async function joinRoom(event?: Event): Promise<void> {
 
 async function performJoinRoom(generation: number): Promise<void> {
   const isCurrent = (): boolean => isCurrentJoinAttempt(generation);
+  const startedAt = performance.now();
+  let reported = false;
+  const reportOutcome = (outcome: 'success' | 'failure' | 'cancel'): void => {
+    if (reported) return;
+    reported = true;
+    reportVoiceJoinOutcome({ outcome, elapsedMs: Math.round(performance.now() - startedAt), stage: lastJoinStage() });
+    if (finishJoinTelemetry === finishPending) finishJoinTelemetry = null;
+  };
+  const finishPending = (outcome: 'failure' | 'cancel'): void => reportOutcome(outcome);
+  finishJoinTelemetry = finishPending;
 
   startJoinTiming();
   state.connecting = true;
@@ -237,22 +253,25 @@ async function performJoinRoom(generation: number): Promise<void> {
     }
     if (!isCurrent() || !exists) {
       void discardMicrophone();
-      if (isCurrent()) showRoomNotFound();
+      if (isCurrent()) {
+        reportOutcome('failure');
+        showRoomNotFound();
+      }
       return;
     }
     const microphoneCapture = await openingMicrophone;
-    markJoinStage('microphoneMs');
     if (!isCurrent()) {
       if (microphoneCapture) stopMicrophoneCapture(microphoneCapture);
       return;
     }
+    markJoinStage('microphoneMs');
     if (microphoneCapture) {
       setLocalMicrophoneCapture(microphoneCapture);
       watchLocalMicrophone();
     } else {
       state.microphoneMissing = true;
     }
-    await refreshDevices();
+    await refreshDevices().catch((error: unknown) => log.warn('device list failed', errorContext(error)));
     if (!isCurrent()) return;
 
     const name = getDisplayName();
@@ -306,10 +325,14 @@ async function performJoinRoom(generation: number): Promise<void> {
     setServerConnectionStatus('connecting');
 
     const connected = await connectLiveKitRoom(name, isCurrent);
-    if (!connected || !isCurrent()) return;
+    if (!connected || !isCurrent()) {
+      if (isCurrent()) reportOutcome('failure');
+      return;
+    }
     notifyLiveKitReconciled();
     state.joined = true;
     finishJoinTiming();
+    reportOutcome('success');
     useVoiceSessionStore().setConnectedVoiceRoom(state.roomId);
     void syncDesktopGlobalHotkeys(true);
     useVoiceSessionStore().setVoiceSessionTiming({ joinedAt: state.self?.joinedAt ?? Date.now() });
@@ -351,6 +374,7 @@ async function performJoinRoom(generation: number): Promise<void> {
       // token and LiveKit work self-disposes through the generation predicate.
       return;
     }
+    reportOutcome('failure');
     log.error('room action failed', errorContext(error));
     const banned = error instanceof ApiError && error.code === 'room_banned';
     if (!banned) showToast(formatJoinError(error));
@@ -395,6 +419,7 @@ function formatJoinError(error: unknown): string {
 }
 
 export function leaveRoom(): void {
+  finishJoinTelemetry?.('cancel');
   joinAttemptGeneration += 1;
   cancelRoomRecovery();
   void syncDesktopGlobalHotkeys(false);

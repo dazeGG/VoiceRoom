@@ -1,5 +1,6 @@
 import { LiveKitAdmission, LiveKitTokenBody } from '@voice-room/shared/contracts/admission';
-import { api } from '@/api/client';
+import { api, ApiError } from '@/api/client';
+import { ERROR_TEXTS } from '@/api/error-texts';
 import { fetchRoomStatus } from '@/api/rooms';
 import { preloadRuntimeConfig, resolveLiveKitUrls } from '@/platform/runtime-config';
 import { state } from '../core/room-runtime.store';
@@ -15,7 +16,13 @@ export async function requestLiveKitToken(input: {
 }): Promise<LiveKitCredentials> {
   // The address list comes from a second request; it goes out beside the token, not after it.
   preloadRuntimeConfig();
-  const admission = await api.post('/api/livekit-token', LiveKitAdmission, input, { bodySchema: LiveKitTokenBody });
+  const signal = AbortSignal.timeout(10_000);
+  const admission = await api
+    .post('/api/livekit-token', LiveKitAdmission, input, { bodySchema: LiveKitTokenBody, signal })
+    .catch((error: unknown) => {
+      if (signal.aborted) throw new ApiError(ERROR_TEXTS.unavailable, 0, { code: 'unavailable' });
+      throw error;
+    });
   return { ...admission, urls: await resolveLiveKitUrls(admission.url) };
 }
 

@@ -119,10 +119,9 @@ Message bodies, room chat content and attachment contents are never logged.
 ## Browser logs
 
 The room client keeps the last 100 records in memory (`apps/web/src/shared/log.ts`).
-Nothing is sent on a timer: the buffer is posted to `POST /api/client-logs` only
-when something actually failed — the room client failing to start, the recovery
-state machine reaching its terminal `failed` phase, or the realtime socket coming
-back after the server was out of reach for 30 seconds or more. Reports are
+The buffer is posted to `POST /api/client-logs` on failures and terminal voice
+join outcomes, including successful and cancelled joins. See
+[`PERFORMANCE.md`](./PERFORMANCE.md) for outcome coverage and delivery limits. Reports are
 throttled to one per 30 seconds per page: a report held back goes out when the
 window ends, and a report that never got out does not use up the window.
 

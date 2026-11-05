@@ -36,7 +36,7 @@ test('the LiveKit address list is asked for while the token request is still out
   const asked: string[] = [];
   let answerToken: () => void = () => {};
   const tokenAnswered = new Promise<void>((resolve) => (answerToken = resolve));
-  vi.stubGlobal('fetch', async (input: RequestInfo | URL) => {
+  const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
     const url = input instanceof Request ? input.url : String(input);
     if (url.endsWith('/runtime-config.json')) {
       asked.push('config');
@@ -46,6 +46,7 @@ test('the LiveKit address list is asked for while the token request is still out
     await tokenAnswered;
     return new Response(JSON.stringify(ADMISSION), { headers: { 'content-type': 'application/json' } });
   });
+  vi.stubGlobal('fetch', fetchMock);
 
   const credentials = requestLiveKitToken(JOIN);
   await vi.waitFor(() => expect(asked).toContain('token'));
@@ -100,4 +101,38 @@ test('a room check fills the top bar, and a missing room is just absent', async 
   expect(await checkRoomExists('room-a')).toBe(true);
   expect([state.roomName, state.roomAvatarUrl, state.roomIsStatic]).toEqual(['Кухня', '', true]);
   expect(await checkRoomExists('gone')).toBe(false);
+});
+
+test.each(['fetch', 'body'])('token timeout during %s is retryable unavailable', async (phase) => {
+  const controller = new AbortController();
+  const timeout = vi.spyOn(AbortSignal, 'timeout').mockReturnValueOnce(controller.signal);
+  const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = input instanceof Request ? input.url : input.toString();
+    if (url.endsWith('/runtime-config.json')) return new Response('', { status: 404 });
+    const signal = init?.signal;
+    if (!signal) throw new Error('missing request signal');
+    const pending = () =>
+      new Promise<never>((_resolve, reject) => {
+        if (signal.aborted) reject(new DOMException('aborted', 'AbortError'));
+        else signal.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')));
+      });
+    if (phase === 'fetch') return pending();
+    const response = new Response('{}');
+    Object.defineProperty(response, 'json', { value: pending });
+    return response;
+  });
+  vi.stubGlobal('fetch', fetchMock);
+  const result = requestLiveKitToken(JOIN);
+  const rejection = expect(result).rejects.toMatchObject({ code: 'unavailable', status: 0 });
+  await vi.waitFor(() =>
+    expect(
+      fetchMock.mock.calls.some(([input]) =>
+        (input instanceof Request ? input.url : input.toString()).includes('livekit-token')
+      )
+    ).toBe(true)
+  );
+  expect(timeout).toHaveBeenCalledWith(10_000);
+  controller.abort(new DOMException('timeout', 'TimeoutError'));
+  await rejection;
+  vi.restoreAllMocks();
 });

@@ -22,6 +22,10 @@ vi.mock('@/features/room/client/ui/devices', async (importOriginal) => ({
   refreshDevices: vi.fn(async () => {})
 }));
 vi.mock('@/features/room/client/ui/toast', () => ({ showToast: vi.fn() }));
+vi.mock('@/shared/log', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  reportVoiceJoinOutcome: vi.fn()
+}));
 vi.mock('@/features/room/client/services/microphone-service', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   openLocalMicrophone: () => {
@@ -77,6 +81,26 @@ test('the microphone opens while the room check is still on its way', async () =
   await vi.waitFor(() => expect(microphone.opened).toBe(1));
   expect(roomChecks()).toBe(0);
   room.leaveRoom();
+});
+
+test('a cancelled old microphone cannot mark the next attempt or report twice', async () => {
+  const { room } = await loadRoom({ '/api/rooms/abc123': ROOM });
+  const { reportVoiceJoinOutcome } = await import('@/shared/log');
+  const first = room.joinRoom();
+  await vi.waitFor(() => expect(microphone.opened).toBe(1));
+  const answerFirst = microphone.answer;
+  room.leaveRoom();
+  const second = room.joinRoom();
+  await vi.waitFor(() => expect(microphone.opened).toBe(2));
+  answerFirst?.(null);
+  await first;
+  room.leaveRoom();
+  microphone.answer?.(null);
+  await second;
+  expect(vi.mocked(reportVoiceJoinOutcome).mock.calls.map(([event]) => [event.outcome, event.stage])).toEqual([
+    ['cancel', 'started'],
+    ['cancel', 'started']
+  ]);
 });
 
 test('a room that is gone closes the microphone the check ran beside', async () => {
