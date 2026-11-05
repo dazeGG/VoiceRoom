@@ -159,8 +159,16 @@ export function registerMediaRoutes(root: FastifyInstance, ctx: ApiContext, deps
       if (!id) return reply;
       const opened = await visibility.open({ attachmentId: id, variant: request.params.variant, viewerId });
       const disposition = request.query.download === '1' ? 'attachment' : 'inline';
+      // A variant never changes once made. The browser keeps it but asks each
+      // time, so a viewer who lost access or a deleted image still gets the 404
+      // above, and an unchanged image costs a round trip instead of a download.
+      const etag = `"${id}-${request.params.variant}"`;
+      reply.header('Cache-Control', 'private, no-cache').header('ETag', etag);
+      if (request.headers['if-none-match'] === etag) {
+        opened.stream.destroy();
+        return reply.code(304).send();
+      }
       return reply
-        .header('Cache-Control', 'private, no-store')
         .header('Content-Disposition', `${disposition}; filename="image.${opened.extension}"`)
         .header('Content-Length', String(opened.bytes))
         .type(opened.mimeType)
