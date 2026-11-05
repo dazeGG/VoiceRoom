@@ -1,0 +1,28 @@
+// What index.html shows between the first paint and the app mounting over it:
+// without it a visitor on a slow line looks at an empty page while the code loads.
+.boot-splash {
+  display: grid;
+  place-items: center;
+  min-height: 100dvh;
+  background: var(--vr-bg);
+}
+
+.boot-splash__mark {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: var(--vr-surface-3);
+  animation: boot-splash-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes boot-splash-pulse {
+  50% {
+    opacity: 0.45;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .boot-splash__mark {
+    animation: none;
+  }
+}

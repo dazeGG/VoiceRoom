@@ -98,13 +98,19 @@ import /etc/caddy/turn.d/*.site
   # index.html, so the client reloads instead of running HTML as a script.
   handle /_app/immutable/* {
     root * /srv/archive
-    file_server
+    file_server {
+      precompressed br gzip
+    }
   }
 
+  # The build's .br and .gz (precompressPlugin) when there are any; encode above
+  # compresses the rest on the fly.
   handle {
     root * /srv/web
     try_files {path} /index.html
-    file_server
+    file_server {
+      precompressed br gzip
+    }
   }
 }
 

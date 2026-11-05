@@ -5,6 +5,7 @@ import { defineConfig } from 'vitest/config';
 import {
   buildVersion,
   cspMetaPlugin,
+  precompressPlugin,
   serviceWorkerPlugin,
   versionFilePlugin,
   voiceAssetVersion
@@ -31,7 +32,7 @@ const API_PROXY = {
 const APP_VERSION = buildVersion();
 
 export default defineConfig({
-  plugins: [vue(), cspMetaPlugin(), versionFilePlugin(APP_VERSION), serviceWorkerPlugin()],
+  plugins: [vue(), cspMetaPlugin(), versionFilePlugin(APP_VERSION), serviceWorkerPlugin(), precompressPlugin()],
   define: {
     'import.meta.env.VITE_APP_VERSION': JSON.stringify(APP_VERSION),
     'import.meta.env.VITE_VOICE_ASSET_VERSION': JSON.stringify(

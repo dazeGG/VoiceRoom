@@ -5,8 +5,9 @@
 // to /_app/immutable/ through build.assetsDir in vite.config.ts.
 
 import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { extname, join, resolve } from 'node:path';
+import { brotliCompressSync, constants, gzipSync } from 'node:zlib';
 import { build, type Plugin } from 'vite';
 
 type Env = Record<string, string | undefined>;
@@ -139,6 +140,44 @@ export function voiceAssetVersion(publicDir: string): string {
   const hash = createHash('sha256');
   for (const file of VOICE_ASSET_FILES) hash.update(readFileSync(resolve(publicDir, file)));
   return hash.digest('hex').slice(0, 12);
+}
+
+const COMPRESSED_TYPES = new Set(['.css', '.html', '.js', '.json', '.mjs', '.wasm']);
+// Thousands of tiny files: Caddy compresses them on the fly, and few are ever asked for.
+const NOT_COMPRESSED_DIRS = new Set(['emoji']);
+const MIN_COMPRESSED_BYTES = 1024;
+
+function compressTree(directory: string): void {
+  for (const name of readdirSync(directory)) {
+    const path = join(directory, name);
+    if (statSync(path).isDirectory()) {
+      if (!NOT_COMPRESSED_DIRS.has(name)) compressTree(path);
+      continue;
+    }
+    if (!COMPRESSED_TYPES.has(extname(name))) continue;
+    const source = readFileSync(path);
+    if (source.length < MIN_COMPRESSED_BYTES) continue;
+    writeFileSync(
+      `${path}.br`,
+      brotliCompressSync(source, { params: { [constants.BROTLI_PARAM_QUALITY]: constants.BROTLI_MAX_QUALITY } })
+    );
+    writeFileSync(`${path}.gz`, gzipSync(source, { level: constants.Z_BEST_COMPRESSION }));
+  }
+}
+
+/** Writes .br and .gz next to the build's files, at a strength too slow to spend on every request (Caddyfile). */
+export function precompressPlugin(): Plugin {
+  let outDir = '';
+  return {
+    name: 'voiceroom-precompress',
+    apply: 'build',
+    configResolved(config) {
+      outDir = resolve(config.root, config.build.outDir);
+    },
+    closeBundle() {
+      compressTree(outDir);
+    }
+  };
 }
 
 export function versionFilePlugin(version = buildVersion()): Plugin {

@@ -20,11 +20,13 @@ export const dockerAvailable =
 
 export async function startCaddyEdge({
   env = {},
-  files = {}
+  files = {},
+  binaryFiles = {}
 }: {
   env?: Record<string, string>;
   /** Files of the web root by path, next to index.html. */
   files?: Record<string, string>;
+  binaryFiles?: Record<string, Uint8Array>;
 } = {}): Promise<string> {
   const name = `voiceroom-edge-${randomUUID()}`;
   // The image generates this snippet from its own build; any valid policy
@@ -37,7 +39,7 @@ export async function startCaddyEdge({
   // A web page for the SPA fallback, so an unhandled path would answer 200.
   const webRoot = mkdtempSync(path.join(os.tmpdir(), 'voiceroom-web-'));
   writeFileSync(path.join(webRoot, 'index.html'), '<!doctype html><html><body>web</body></html>');
-  for (const [file, content] of Object.entries(files)) {
+  for (const [file, content] of Object.entries({ ...files, ...binaryFiles })) {
     mkdirSync(path.dirname(path.join(webRoot, file)), { recursive: true });
     writeFileSync(path.join(webRoot, file), content);
   }

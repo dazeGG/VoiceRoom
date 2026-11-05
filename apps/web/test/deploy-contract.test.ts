@@ -1,9 +1,10 @@
 import { onTestFinished, test, vi } from 'vitest';
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, readdirSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { brotliDecompressSync } from 'node:zlib';
 import { build } from 'vite';
 
 import { metaPolicy, versionFile, voiceAssetVersion } from '../scripts/deploy-contract.ts';
@@ -76,6 +77,17 @@ test('a production build keeps the deployment contract', { timeout: 60_000 }, as
     // The audio files keep fixed names; their addresses carry a content hash.
     const audioVersion = voiceAssetVersion(join(webRoot, 'public'));
     assert.ok(bundle.includes(`?v=${audioVersion}`), 'the bundle carries the audio files version');
+
+    // The page has something to show before its code arrives, and the app mounts over it.
+    assert.match(html, /<div id="app"><div class="boot-splash"/);
+    // The largest files come compressed ahead, at a strength too slow for each request.
+    const entry = immutable.find((file) => /^index-.+\.js$/.test(file));
+    assert.ok(entry && immutable.includes(`${entry}.br`) && immutable.includes(`${entry}.gz`), 'a compressed entry');
+    const entryPath = join(outDir, '_app', 'immutable', entry);
+    assert.deepEqual(brotliDecompressSync(readFileSync(`${entryPath}.br`)), readFileSync(entryPath));
+    assert.ok(statSync(`${entryPath}.br`).size < statSync(`${entryPath}.gz`).size);
+    assert.ok(readdirSync(join(outDir, 'rnnoise')).includes('rnnoise.wasm.br'));
+    assert.ok(!readdirSync(join(outDir, 'emoji')).some((file) => file.endsWith('.br')), 'emoji compress on the fly');
 
     // Web push: one self-contained module at the root, as SvelteKit emitted it.
     const serviceWorker = readFileSync(join(outDir, 'service-worker.js'), 'utf8');
