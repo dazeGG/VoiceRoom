@@ -6,6 +6,7 @@ import { isActiveCandidatePair, readRtcStats, type RtcStat, type RtcStatsSource 
 import { isRecord } from '@voice-room/shared/guards';
 import type { CpuPoll, HeardPoll } from '@voice-room/shared/contracts/realtime';
 import { reportVoicePoll } from '@/entities/room/room-realtime';
+import { takeJoinTiming } from './join-timing';
 import {
   isCpuRelieved,
   recordLoadCounts,
@@ -80,6 +81,7 @@ function postVoicePoll(inbound: InboundCounts, outbound: OutboundCounts, load: L
   const report = (ms: number | null) => (ms === null ? null : Math.min(MAX_REPORTED_MS, Math.max(0, ms)));
   const mic = takeMicPoll();
   const cpu = cpuPoll(load);
+  const joinTiming = takeJoinTiming();
   reportVoicePoll({
     roomId: state.roomId,
     peerId: state.peerId,
@@ -90,7 +92,8 @@ function postVoicePoll(inbound: InboundCounts, outbound: OutboundCounts, load: L
     transport: state.localNetwork.transport,
     heard: inbound.heard,
     ...(mic ? { mic } : {}),
-    ...(cpu ? { cpu } : {})
+    ...(cpu ? { cpu } : {}),
+    ...(joinTiming ? { joinTiming } : {})
   });
 }
 

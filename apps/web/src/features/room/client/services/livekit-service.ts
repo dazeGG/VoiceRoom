@@ -19,6 +19,7 @@ import type { ReplacementOutcome } from '../recovery/realtime-recovery';
 import { LiveKitReconcileGeneration } from '../recovery/livekit-reconcile-generation';
 import { recordReconnect } from '../room/call-quality';
 
+import { markJoinStage } from '../room/join-timing';
 import { isMicrophonePublication } from './livekit/publication-kinds';
 
 // The LiveKit side of a call. Other room modules import from here; the files
@@ -96,9 +97,11 @@ export async function connectLiveKitRoom(name: string, isCurrent: () => boolean 
 
   const credentials = await requestLiveKitCredentials(name, isCurrent);
   if (!isCurrent()) return false;
+  markJoinStage('tokenMs');
 
   const room = await connectLiveKitWithFallback(credentials, isCurrent);
   if (!room || !isCurrent()) return false;
+  markJoinStage('connectMs');
 
   state.livekitRoom = room;
   const eventsBound = await bindLiveKitRoomEvents(room, isCurrent);
@@ -124,6 +127,7 @@ export async function connectLiveKitRoom(name: string, isCurrent: () => boolean 
         await disconnectLiveKitRoomInstance(room);
         return false;
       }
+      markJoinStage('publishMs');
     } catch (error) {
       if (!isCurrent() || state.livekitRoom !== room) {
         await disconnectLiveKitRoomInstance(room);

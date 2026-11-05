@@ -6,6 +6,7 @@ import { state } from '../core/room-runtime.store';
 import { showToast } from '../ui/toast';
 import { ApiError } from '@/api/client';
 import { checkRoomExists, roomCheckIsFresh } from '../net/api';
+import { finishJoinTiming, markJoinStage, startJoinTiming } from './join-timing';
 import { postState } from './presence';
 import { UserFacingError, wait } from '../core/utils';
 import { rotateStoredPeerSession } from '../core/session';
@@ -199,6 +200,7 @@ export async function joinRoom(event?: Event): Promise<void> {
 async function performJoinRoom(generation: number): Promise<void> {
   const isCurrent = (): boolean => isCurrentJoinAttempt(generation);
 
+  startJoinTiming();
   state.connecting = true;
   state.localConnectionQuality = 'unknown';
   state.localPingMs = null;
@@ -239,6 +241,7 @@ async function performJoinRoom(generation: number): Promise<void> {
       return;
     }
     const microphoneCapture = await openingMicrophone;
+    markJoinStage('microphoneMs');
     if (!isCurrent()) {
       if (microphoneCapture) stopMicrophoneCapture(microphoneCapture);
       return;
@@ -306,6 +309,7 @@ async function performJoinRoom(generation: number): Promise<void> {
     if (!connected || !isCurrent()) return;
     notifyLiveKitReconciled();
     state.joined = true;
+    finishJoinTiming();
     useVoiceSessionStore().setConnectedVoiceRoom(state.roomId);
     void syncDesktopGlobalHotkeys(true);
     useVoiceSessionStore().setVoiceSessionTiming({ joinedAt: state.self?.joinedAt ?? Date.now() });

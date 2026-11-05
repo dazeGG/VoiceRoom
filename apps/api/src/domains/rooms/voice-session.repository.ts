@@ -12,7 +12,7 @@ import { sql } from 'kysely';
 import type pg from 'pg';
 import type { ClientKind } from '@voice-room/shared/contracts/admin';
 import type { CpuPressure, VoiceCause } from '@voice-room/shared/contracts/rooms';
-import type { VoiceTransport } from '@voice-room/shared/contracts/realtime';
+import type { JoinTiming, VoiceTransport } from '@voice-room/shared/contracts/realtime';
 import type { HeardCounts } from '@voice-room/shared/voice-quality';
 import { kyselyOn } from '../../platform/db/kysely.ts';
 
@@ -80,6 +80,8 @@ export type FinishedVoiceSession = {
   /** Its voice, minute by minute; none when it sent no stats. */
   minutes?: readonly VoiceMinuteSample[];
   events?: readonly StayEvent[];
+  /** How its join went; absent when its client did not say. */
+  joinTiming?: JoinTiming | undefined;
 };
 
 /** What a stay keeps of its address: its keyed hash (lib/ip-key.ts) and its city. */
@@ -116,7 +118,8 @@ export function createVoiceSessionRepository({
             browser: session.browser || null,
             ip_key: origins[index]?.ipKey ?? null,
             joined_at: new Date(session.joinedAt),
-            left_at: new Date(Math.max(session.leftAt, session.joinedAt))
+            left_at: new Date(Math.max(session.leftAt, session.joinedAt)),
+            join_timing: session.joinTiming ? JSON.stringify(session.joinTiming) : null
           }))
         )
         .execute();

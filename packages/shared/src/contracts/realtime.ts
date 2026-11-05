@@ -148,6 +148,22 @@ export const CpuPoll = Type.Object({
 });
 export type CpuPoll = Static<typeof CpuPoll>;
 
+const JoinMs = Type.Integer({ minimum: 0, maximum: 600_000 });
+
+/**
+ * How one join went, in milliseconds since it started: when the microphone was
+ * open, the token came, the voice server connected and the microphone was
+ * published. Kept with the stay, whose minutes say its round trip.
+ */
+export const JoinTiming = Type.Object({
+  microphoneMs: JoinMs,
+  tokenMs: JoinMs,
+  connectMs: JoinMs,
+  publishMs: JoinMs,
+  totalMs: JoinMs
+});
+export type JoinTiming = Static<typeof JoinTiming>;
+
 /**
  * One stats poll of a peer in voice: what it heard of each speaker since the
  * previous poll, its own uplink and its round trip. The server judges the room
@@ -163,7 +179,9 @@ export const VoicePoll = Type.Object({
   transport: Nullable(VoiceTransport),
   heard: Type.Array(HeardPoll, { maxItems: 64 }),
   mic: Type.Optional(MicPoll),
-  cpu: Type.Optional(CpuPoll)
+  cpu: Type.Optional(CpuPoll),
+  /** On the first poll after a join. */
+  joinTiming: Type.Optional(JoinTiming)
 });
 export type VoicePoll = Static<typeof VoicePoll>;
 
