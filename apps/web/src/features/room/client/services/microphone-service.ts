@@ -427,7 +427,9 @@ async function createRnnoiseNode(context: AudioContext): Promise<AudioNode> {
 }
 
 function loadRnnoiseModule(): Promise<RnnoiseModule> {
-  rnnoiseModulePromise ||= import(/* @vite-ignore */ RNNOISE_MODULE_URL).then((module: unknown) => {
+  // A template literal on purpose: for a bare variable the dev server adds ?import
+  // to the address, and refuses a file of public/ asked for that way.
+  rnnoiseModulePromise ||= import(/* @vite-ignore */ `${RNNOISE_MODULE_URL}`).then((module: unknown) => {
     if (!isRnnoiseModule(module)) throw new Error('RNNoise module has an unexpected shape');
     return module;
   });

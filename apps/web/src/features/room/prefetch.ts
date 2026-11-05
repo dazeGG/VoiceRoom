@@ -14,9 +14,6 @@ export function prefetchRoom(): void {
   loadRoomPage().catch(ignore);
   import('./client/main').catch(ignore);
   loadLiveKitClient().catch(ignore);
-  // Only a build: the dev server takes a fetched /rnnoise/rnnoise.mjs for an
-  // import from source and covers the page with its error overlay.
-  if (import.meta.env.DEV) return;
   import('./client/core/config')
     .then(({ MICROPHONE_ASSET_URLS }) => {
       for (const url of MICROPHONE_ASSET_URLS) fetch(url).catch(ignore);

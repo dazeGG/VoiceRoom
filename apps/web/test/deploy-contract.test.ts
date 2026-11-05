@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { brotliDecompressSync } from 'node:zlib';
-import { build } from 'vite';
+import { build, createServer } from 'vite';
 
 import { metaPolicy, versionFile, voiceAssetVersion } from '../scripts/deploy-contract.ts';
 import { buildHeaderPolicy, readMetaPolicy } from '../scripts/emit-caddy-csp.ts';
@@ -87,7 +87,6 @@ test('a production build keeps the deployment contract', { timeout: 60_000 }, as
     assert.deepEqual(brotliDecompressSync(readFileSync(`${entryPath}.br`)), readFileSync(entryPath));
     assert.ok(statSync(`${entryPath}.br`).size < statSync(`${entryPath}.gz`).size);
     assert.ok(readdirSync(join(outDir, 'rnnoise')).includes('rnnoise.wasm.br'));
-    assert.ok(!readdirSync(join(outDir, 'emoji')).some((file) => file.endsWith('.br')), 'emoji compress on the fly');
 
     // Web push: one self-contained module at the root, as SvelteKit emitted it.
     const serviceWorker = readFileSync(join(outDir, 'service-worker.js'), 'utf8');
@@ -98,5 +97,23 @@ test('a production build keeps the deployment contract', { timeout: 60_000 }, as
     assert.ok(readdirSync(join(outDir, 'rnnoise')).includes('rnnoise.wasm'));
   } finally {
     rmSync(outDir, { recursive: true, force: true });
+  }
+});
+
+test('the dev server leaves the address of the RNNoise module alone', { timeout: 60_000 }, async () => {
+  // With ?import added it refuses a file of public/ and covers the page with an error overlay.
+  const server = await createServer({
+    root: webRoot,
+    logLevel: 'silent',
+    appType: 'custom',
+    server: { middlewareMode: true, hmr: false, ws: false },
+    optimizeDeps: { noDiscovery: true, include: [] }
+  });
+  try {
+    const module = await server.transformRequest('/src/features/room/client/services/microphone-service.ts');
+    assert.ok(module, 'the module transforms');
+    assert.doesNotMatch(module.code, /__vite__injectQuery/);
+  } finally {
+    await server.close();
   }
 });

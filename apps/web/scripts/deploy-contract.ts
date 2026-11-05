@@ -142,16 +142,15 @@ export function voiceAssetVersion(publicDir: string): string {
   return hash.digest('hex').slice(0, 12);
 }
 
+// Not .svg: the emoji are thousands of tiny files, which Caddy compresses on the fly.
 const COMPRESSED_TYPES = new Set(['.css', '.html', '.js', '.json', '.mjs', '.wasm']);
-// Thousands of tiny files: Caddy compresses them on the fly, and few are ever asked for.
-const NOT_COMPRESSED_DIRS = new Set(['emoji']);
 const MIN_COMPRESSED_BYTES = 1024;
 
 function compressTree(directory: string): void {
   for (const name of readdirSync(directory)) {
     const path = join(directory, name);
     if (statSync(path).isDirectory()) {
-      if (!NOT_COMPRESSED_DIRS.has(name)) compressTree(path);
+      compressTree(path);
       continue;
     }
     if (!COMPRESSED_TYPES.has(extname(name))) continue;
