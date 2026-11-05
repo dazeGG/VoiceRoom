@@ -13,6 +13,7 @@ vi.mock('@/features/room/client/ui/devices', async (importOriginal) => ({
   refreshDevices: vi.fn(async () => {})
 }));
 vi.mock('@/features/room/client/ui/toast', () => ({ showToast: vi.fn() }));
+vi.mock('@/features/room/prefetch', () => ({ prefetchRoom: vi.fn() }));
 
 async function load(routes: Record<string, Reply>) {
   vi.resetModules();
@@ -63,7 +64,7 @@ test('a signed-in account enters under its name, saves the room to its list and 
   expect(localStorage.getItem('voice-room:name')).toBe('Аня');
   await vi.waitFor(() => expect(app.shell.roomsChanged).toHaveBeenCalledWith('abc123'));
   const { useRoomSettingsStore } = await import('@/features/room/room-settings.store');
-  expect(useRoomSettingsStore().isOwner).toBe(true);
+  await vi.waitFor(() => expect(useRoomSettingsStore().isOwner).toBe(true));
 });
 
 test('a temporary room is not offered to the account list: only permanent rooms can be kept', async () => {

@@ -5,8 +5,10 @@ import { addRoomByCode, fetchMe, fetchOwnedRooms } from '@/api/auth';
 import { displayNameOf } from '@/shared/utils/display-name';
 import { useSessionStore } from '@/features/auth/session.store';
 import { createLogger, errorContext } from '@/shared/log';
+import { whenIdle } from '@/shared/utils/idle';
+import { prefetchRoom } from '../../prefetch';
 import { useRoomSettingsStore } from '../../room-settings.store';
-import { getRoomShell } from '../core/embed';
+import { getRoomShell, isRoomEmbedded } from '../core/embed';
 import { state } from '../core/room-runtime.store';
 import { persistName, requestGuestNameForRoom } from '../ui/names';
 import { showToast } from '../ui/toast';
@@ -29,27 +31,33 @@ async function autoSaveRoomForAuthenticatedUser(roomId: string): Promise<void> {
   }
 }
 
+// Settings/delete UI is owner-only; the lobby's room list is the only place
+// "owner" is known client-side, so cross-check it here. Nothing in a join needs
+// the answer, so the join does not wait a round trip for it.
+async function resolveRoomOwnership(roomId: string): Promise<void> {
+  try {
+    const owned = await fetchOwnedRooms();
+    if (state.roomId !== roomId) return;
+    useRoomSettingsStore().isOwner = owned.some((room) => room.roomId === roomId && room.relationship === 'owner');
+  } catch (ownedError) {
+    log.warn('failed to resolve room ownership', errorContext(ownedError));
+  }
+}
+
 /** Who enters the room: the signed-in account, a named guest, or nobody (a failed check). */
 export async function resolveRoomEntryName(): Promise<RoomEntryGateResult> {
   // Room links intentionally verify the account directly instead of using the
   // home session loader: this route has no lobby session UI, and an auth-check
   // failure must stop entry instead of silently treating the user as anonymous.
+  // Inside the lobby the session is already known and shown; the token request
+  // checks it on the server either way.
   try {
-    const user = await fetchMe();
+    const user = (isRoomEmbedded() && useSessionStore().user) || (await fetchMe());
     if (user) {
       useSessionStore().setUser(user);
       persistName(displayNameOf(user));
       void autoSaveRoomForAuthenticatedUser(state.roomId);
-      // Settings/delete UI is owner-only; the lobby's room list is the only
-      // place "owner" is known client-side, so cross-check it here.
-      try {
-        const owned = await fetchOwnedRooms();
-        useRoomSettingsStore().isOwner = owned.some(
-          (room) => room.roomId === state.roomId && room.relationship === 'owner'
-        );
-      } catch (ownedError) {
-        log.warn('failed to resolve room ownership', errorContext(ownedError));
-      }
+      void resolveRoomOwnership(state.roomId);
       return 'authenticated';
     }
   } catch (error) {
@@ -59,7 +67,11 @@ export async function resolveRoomEntryName(): Promise<RoomEntryGateResult> {
   }
 
   try {
-    await requestGuestNameForRoom();
+    const asked = requestGuestNameForRoom();
+    // The call's code loads while the guest types: not earlier, because running
+    // LiveKit on the way here would hold back the very form they are waiting for.
+    whenIdle(prefetchRoom);
+    await asked;
     return 'anonymous';
   } catch (error) {
     log.warn('guest name request cancelled', errorContext(error));

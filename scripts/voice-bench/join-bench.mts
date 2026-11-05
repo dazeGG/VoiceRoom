@@ -10,6 +10,7 @@
 // container whose line is shaped with tc netem (docs/PERFORMANCE.md).
 //
 // Settings: BASE_URL, RUNS (5), LABEL (shown in the results), CPU_SLOWDOWN (1),
+// THINK_MS (2000, the pause on the form before the click),
 // RESULTS (a JSON file to write), WARM_ONLY=1 (skip the empty-cache runs),
 // TRUST_SPKI (key hashes of a test stand's certificates), FLOW=account (a
 // signed-in user entering from the lobby; registers an account and makes the
@@ -18,13 +19,15 @@
 import { writeFileSync } from 'node:fs';
 import { chromium, type Browser, type BrowserContext, type Page } from '@playwright/test';
 
-const roomId = process.argv[2];
+const roomId = process.argv[2] ?? '';
 if (!roomId) throw new Error('usage: node scripts/voice-bench/join-bench.mts <roomId>');
 const baseUrl = process.env.BASE_URL || 'https://voiceroom.internal';
 const runs = Number(process.env.RUNS || 5);
 const label = process.env.LABEL || 'run';
 const cpuSlowdown = Number(process.env.CPU_SLOWDOWN || 1);
 const PASSWORD = 'bench-password-123';
+/** How long a person looks at the form before the click that joins. */
+const thinkMs = Number(process.env.THINK_MS || 2000);
 
 // Stages a join goes through, in the order the table prints them.
 const STAGES = [
@@ -232,6 +235,7 @@ async function measureJoin(
     return { paint: paint ? Math.round(paint.startTime) : null, bytes, hits };
   });
 
+  await page.waitForTimeout(thinkMs);
   await page.evaluate(() => Reflect.get(window, '__joinStart')());
   await join.click(page);
   await page.waitForFunction(

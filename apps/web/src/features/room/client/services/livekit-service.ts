@@ -107,6 +107,10 @@ export async function connectLiveKitRoom(name: string, isCurrent: () => boolean 
     return false;
   }
 
+  // The others are heard from here on, not after this client's own microphone
+  // has finished publishing; that takes round trips of its own.
+  syncLiveKitParticipants(room);
+
   // Without a microphone the call is joined to listen: nothing to publish.
   const stream = state.localStream;
   if (stream) {
