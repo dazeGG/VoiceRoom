@@ -13,7 +13,6 @@ vi.mock('@/features/room/client/ui/devices', async (importOriginal) => ({
   refreshDevices: vi.fn(async () => {})
 }));
 vi.mock('@/features/room/client/ui/toast', () => ({ showToast: vi.fn() }));
-vi.mock('@/features/room/prefetch', () => ({ prefetchRoom: vi.fn() }));
 
 async function load(routes: Record<string, Reply>) {
   vi.resetModules();

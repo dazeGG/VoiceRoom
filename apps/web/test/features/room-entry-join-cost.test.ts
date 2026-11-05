@@ -1,14 +1,12 @@
 // Who enters a room, without costing the join round trips it does not need:
 // inside the lobby the session is already known, and nothing in a join needs the
-// ownership answer. The call's code loads while a guest types a name.
+// ownership answer.
 
 import { createPinia, setActivePinia } from 'pinia';
 import { expect, test, vi } from 'vitest';
 import { lobbyRoom } from '../fixtures/answers';
 import { stubFetch, type Reply } from '../fixtures/fetch';
 import { authUser } from '../fixtures/users';
-
-vi.mock('@/features/room/prefetch', () => ({ prefetchRoom: vi.fn() }));
 
 async function load(routes: Record<string, Reply>, { embedded = false } = {}) {
   vi.resetModules();
@@ -19,11 +17,9 @@ async function load(routes: Record<string, Reply>, { embedded = false } = {}) {
   const { state } = await import('@/features/room/client/core/room-runtime.store');
   const { useSessionStore } = await import('@/features/auth/session.store');
   const { useRoomSettingsStore } = await import('@/features/room/room-settings.store');
-  const { useGuestNameUiStore } = await import('@/features/room/guest-name-ui.store');
-  const { prefetchRoom } = await import('@/features/room/prefetch');
   embed.setRoomEmbedded(embedded);
   Object.assign(state, { roomId: 'abc123', roomIsStatic: false });
-  return { entry, calls, fetchMock, useSessionStore, useRoomSettingsStore, useGuestNameUiStore, prefetchRoom };
+  return { entry, calls, fetchMock, useSessionStore, useRoomSettingsStore };
 }
 
 test('inside the lobby the known session is not fetched again', async () => {
@@ -66,21 +62,4 @@ test('the entry does not wait for the ownership answer, which arrives on its own
     })
   );
   await vi.waitFor(() => expect(useRoomSettingsStore().isOwner).toBe(true));
-});
-
-test('the call code starts loading only once the guest form is up', async () => {
-  const idle: Array<() => void> = [];
-  vi.stubGlobal('requestIdleCallback', (task: () => void) => idle.push(task));
-  const { entry, useGuestNameUiStore, prefetchRoom } = await load({
-    '/api/auth/me': { body: { ok: true, user: null } }
-  });
-  vi.mocked(prefetchRoom).mockClear();
-
-  void entry.resolveRoomEntryName();
-  await vi.waitFor(() => expect(useGuestNameUiStore().open).toBe(true));
-  expect(prefetchRoom).not.toHaveBeenCalled();
-
-  await vi.waitFor(() => expect(idle.length).toBeGreaterThan(0));
-  idle.forEach((task) => task());
-  expect(prefetchRoom).toHaveBeenCalledTimes(1);
 });

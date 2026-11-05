@@ -5,8 +5,6 @@ import { addRoomByCode, fetchMe, fetchOwnedRooms } from '@/api/auth';
 import { displayNameOf } from '@/shared/utils/display-name';
 import { useSessionStore } from '@/features/auth/session.store';
 import { createLogger, errorContext } from '@/shared/log';
-import { whenIdle } from '@/shared/utils/idle';
-import { prefetchRoom } from '../../prefetch';
 import { useRoomSettingsStore } from '../../room-settings.store';
 import { getRoomShell, isRoomEmbedded } from '../core/embed';
 import { state } from '../core/room-runtime.store';
@@ -67,11 +65,7 @@ export async function resolveRoomEntryName(): Promise<RoomEntryGateResult> {
   }
 
   try {
-    const asked = requestGuestNameForRoom();
-    // The call's code loads while the guest types: not earlier, because running
-    // LiveKit on the way here would hold back the very form they are waiting for.
-    whenIdle(prefetchRoom);
-    await asked;
+    await requestGuestNameForRoom();
     return 'anonymous';
   } catch (error) {
     log.warn('guest name request cancelled', errorContext(error));
