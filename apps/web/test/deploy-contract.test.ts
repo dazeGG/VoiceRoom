@@ -6,7 +6,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { build } from 'vite';
 
-import { metaPolicy, versionFile } from '../scripts/deploy-contract.ts';
+import { metaPolicy, versionFile, voiceAssetVersion } from '../scripts/deploy-contract.ts';
 import { buildHeaderPolicy, readMetaPolicy } from '../scripts/emit-caddy-csp.ts';
 
 const webRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -34,6 +34,8 @@ test('a production build keeps the deployment contract', { timeout: 60_000 }, as
   // `$&` and `$'` are replacement patterns in String.replace; they must reach the page as written.
   const livekitDomain = "lk$&x$'y.example.com";
   vi.stubEnv('LIVEKIT_DOMAIN', livekitDomain);
+  // What the image's build runs with; Vitest's own 'test' would leave import.meta.env.PROD false.
+  vi.stubEnv('NODE_ENV', 'production');
   onTestFinished(() => {
     vi.unstubAllEnvs();
   });
@@ -64,6 +66,16 @@ test('a production build keeps the deployment contract', { timeout: 60_000 }, as
       .map((file) => readFileSync(join(outDir, '_app', 'immutable', file), 'utf8'))
       .join('\n');
     assert.ok(bundle.includes(String(version.version)), 'the bundle carries the build id of version.json');
+
+    // Fonts are named by content, so the year-long cache of that directory holds for them.
+    assert.ok(
+      immutable.some((file) => /^onest-cyrillic-.+.woff2$/.test(file)),
+      'a hashed font'
+    );
+    assert.ok(!readdirSync(outDir).includes('fonts'), 'no font under a fixed name');
+    // The audio files keep fixed names; their addresses carry a content hash.
+    const audioVersion = voiceAssetVersion(join(webRoot, 'public'));
+    assert.ok(bundle.includes(`?v=${audioVersion}`), 'the bundle carries the audio files version');
 
     // Web push: one self-contained module at the root, as SvelteKit emitted it.
     const serviceWorker = readFileSync(join(outDir, 'service-worker.js'), 'utf8');

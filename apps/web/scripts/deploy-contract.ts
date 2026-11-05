@@ -4,6 +4,8 @@
 // and show the update notice, and /service-worker.js for web push. Assets go
 // to /_app/immutable/ through build.assetsDir in vite.config.ts.
 
+import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { build, type Plugin } from 'vite';
 
@@ -119,6 +121,24 @@ export function versionFile(version: string): string {
 /** The build id: SvelteKit's default, the build time. vite.config.ts computes it once for the bundle and the file. */
 export function buildVersion(): string {
   return Date.now().toString();
+}
+
+// The audio files joining a call needs. They keep fixed names under public/
+// (the worklet loader and RNNoise address them by URL), so their URLs carry this
+// instead of a hashed name, and Caddy caches a versioned URL for a year.
+const VOICE_ASSET_FILES = [
+  'audio-gate.worklet.js',
+  'desktop-audio-source.worklet.js',
+  'rnnoise/rnnoise.mjs',
+  'rnnoise/rnnoise.wasm',
+  'rnnoise/rnnoise.worklet.js'
+];
+
+/** Changes only when one of the files does, so a release does not make every visitor download them again. */
+export function voiceAssetVersion(publicDir: string): string {
+  const hash = createHash('sha256');
+  for (const file of VOICE_ASSET_FILES) hash.update(readFileSync(resolve(publicDir, file)));
+  return hash.digest('hex').slice(0, 12);
 }
 
 export function versionFilePlugin(version = buildVersion()): Plugin {

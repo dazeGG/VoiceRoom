@@ -10,8 +10,21 @@ export const GATE_THRESHOLD_MIN_DB = -100;
 export const GATE_ON_DEFAULT_DB = -40;
 export const PREVIOUS_GATE_MAX_AMPLITUDE = 0.18;
 export const PREVIOUS_GATE_MIN_AMPLITUDE = 0.006;
-export const AUDIO_GATE_WORKLET_URL = '/audio-gate.worklet.js';
-export const DESKTOP_AUDIO_SOURCE_WORKLET_URL = '/desktop-audio-source.worklet.js';
+// Caddy caches a versioned URL for a year: without it every join asked the
+// server about each of these files in turn, one round trip after another.
+const VOICE_ASSET_QUERY = import.meta.env.PROD ? `?v=${import.meta.env.VITE_VOICE_ASSET_VERSION}` : '';
+export const AUDIO_GATE_WORKLET_URL = `/audio-gate.worklet.js${VOICE_ASSET_QUERY}`;
+export const DESKTOP_AUDIO_SOURCE_WORKLET_URL = `/desktop-audio-source.worklet.js${VOICE_ASSET_QUERY}`;
+export const RNNOISE_MODULE_URL = `/rnnoise/rnnoise.mjs${VOICE_ASSET_QUERY}`;
+export const RNNOISE_WASM_URL = `/rnnoise/rnnoise.wasm${VOICE_ASSET_QUERY}`;
+export const RNNOISE_WORKLET_URL = `/rnnoise/rnnoise.worklet.js${VOICE_ASSET_QUERY}`;
+/** What opening the microphone loads, one file after another, unless it is already in the cache. */
+export const MICROPHONE_ASSET_URLS = [
+  RNNOISE_MODULE_URL,
+  RNNOISE_WASM_URL,
+  RNNOISE_WORKLET_URL,
+  AUDIO_GATE_WORKLET_URL
+];
 export const GATE_ATTACK_MS = 8;
 export const GATE_CLOSE_RATIO = 0.65;
 export const GATE_DETECTOR_ATTACK_MS = 4;
@@ -86,7 +99,6 @@ export const NOISE_MODES: Record<NoiseMode, NoiseModeOption> = {
   }
 };
 
-export const RNNOISE_ASSET_BASE = '/rnnoise/';
 export const DEFAULT_SCREEN_QUALITY_ID = 'balanced';
 export const DEFAULT_SCREEN_FPS_ID: ScreenFpsId = '30';
 export const DEFAULT_SCREEN_PROFILE_ID = `${DEFAULT_SCREEN_QUALITY_ID}-${DEFAULT_SCREEN_FPS_ID}`;

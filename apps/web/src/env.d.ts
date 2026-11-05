@@ -11,4 +11,6 @@ declare module '*.vue' {
 interface ImportMetaEnv {
   /** The build id, the same one /_app/version.json carries (vite.config.ts). */
   readonly VITE_APP_VERSION: string;
+  /** Content hash of the audio files under public/ (scripts/deploy-contract.ts). */
+  readonly VITE_VOICE_ASSET_VERSION: string;
 }

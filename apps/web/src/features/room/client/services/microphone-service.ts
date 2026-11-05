@@ -11,7 +11,9 @@ import {
   GATE_THRESHOLD_MIN_DB,
   NOISE_MODES,
   NOISE_MODE_STORAGE_KEY,
-  RNNOISE_ASSET_BASE,
+  RNNOISE_MODULE_URL,
+  RNNOISE_WASM_URL,
+  RNNOISE_WORKLET_URL,
   type NoiseMode
 } from '../core/config';
 import { useRoomDeviceUiStore } from '@/features/room/room-device-ui.store';
@@ -417,15 +419,15 @@ async function createRnnoiseNode(context: AudioContext): Promise<AudioNode> {
   await RNNoiseNode.register(
     context,
     loadAssets({
-      moduleSrc: `${RNNOISE_ASSET_BASE}rnnoise.wasm`,
-      scriptSrc: `${RNNOISE_ASSET_BASE}rnnoise.worklet.js`
+      moduleSrc: RNNOISE_WASM_URL,
+      scriptSrc: RNNOISE_WORKLET_URL
     })
   );
   return new RNNoiseNode(context);
 }
 
 function loadRnnoiseModule(): Promise<RnnoiseModule> {
-  rnnoiseModulePromise ||= import(/* @vite-ignore */ `${RNNOISE_ASSET_BASE}rnnoise.mjs`).then((module: unknown) => {
+  rnnoiseModulePromise ||= import(/* @vite-ignore */ RNNOISE_MODULE_URL).then((module: unknown) => {
     if (!isRnnoiseModule(module)) throw new Error('RNNoise module has an unexpected shape');
     return module;
   });

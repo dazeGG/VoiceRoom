@@ -2,7 +2,13 @@ import { fileURLToPath } from 'node:url';
 import vue from '@vitejs/plugin-vue';
 import { defineConfig } from 'vitest/config';
 
-import { buildVersion, cspMetaPlugin, serviceWorkerPlugin, versionFilePlugin } from './scripts/deploy-contract.ts';
+import {
+  buildVersion,
+  cspMetaPlugin,
+  serviceWorkerPlugin,
+  versionFilePlugin,
+  voiceAssetVersion
+} from './scripts/deploy-contract.ts';
 
 const API_TARGET = process.env.VITE_DEV_API_TARGET || 'http://localhost:3000';
 const DEV_HOST = process.env.VITE_DEV_HOST || '127.0.0.1';
@@ -26,7 +32,12 @@ const APP_VERSION = buildVersion();
 
 export default defineConfig({
   plugins: [vue(), cspMetaPlugin(), versionFilePlugin(APP_VERSION), serviceWorkerPlugin()],
-  define: { 'import.meta.env.VITE_APP_VERSION': JSON.stringify(APP_VERSION) },
+  define: {
+    'import.meta.env.VITE_APP_VERSION': JSON.stringify(APP_VERSION),
+    'import.meta.env.VITE_VOICE_ASSET_VERSION': JSON.stringify(
+      voiceAssetVersion(fileURLToPath(new URL('./public', import.meta.url)))
+    )
+  },
   resolve: {
     alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) }
   },
