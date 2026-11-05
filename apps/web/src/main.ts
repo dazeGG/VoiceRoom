@@ -3,6 +3,8 @@ import { createApp } from 'vue';
 
 import App from './App.vue';
 import { createAppRouter, loadFailedPagesInFull } from './router';
+import { startWebVitals } from './platform/web-vitals';
+import { whenIdle } from './shared/utils/idle';
 import { installBodyClasses } from './stores/page.store';
 import './styles/main.scss';
 
@@ -18,3 +20,4 @@ loadFailedPagesInFull(router);
 // block screen of a route it may open. It mounts also when that route failed.
 const mount = () => app.mount('#app');
 void router.isReady().then(mount, mount);
+whenIdle(() => void startWebVitals().catch(() => {}));

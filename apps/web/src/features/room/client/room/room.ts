@@ -5,7 +5,8 @@ import { useVoiceSessionStore } from '../../voice-session.store';
 import { state } from '../core/room-runtime.store';
 import { showToast } from '../ui/toast';
 import { ApiError } from '@/api/client';
-import { checkRoomExists } from '../net/api';
+import { checkRoomExists, roomCheckIsFresh } from '../net/api';
+import { finishJoinTiming, markJoinStage, startJoinTiming } from './join-timing';
 import { postState } from './presence';
 import { UserFacingError, wait } from '../core/utils';
 import { rotateStoredPeerSession } from '../core/session';
@@ -199,6 +200,7 @@ export async function joinRoom(event?: Event): Promise<void> {
 async function performJoinRoom(generation: number): Promise<void> {
   const isCurrent = (): boolean => isCurrentJoinAttempt(generation);
 
+  startJoinTiming();
   state.connecting = true;
   state.localConnectionQuality = 'unknown';
   state.localPingMs = null;
@@ -209,13 +211,6 @@ async function performJoinRoom(generation: number): Promise<void> {
   setVoiceConnectionStatus('idle');
 
   try {
-    const exists = await checkRoomExists(state.roomId);
-    if (!isCurrent()) return;
-    if (!exists) {
-      showRoomNotFound();
-      return;
-    }
-
     if (state.outputMuted) {
       state.micMutedBeforeOutputMute = state.muted;
       state.muted = true;
@@ -225,7 +220,28 @@ async function performJoinRoom(generation: number): Promise<void> {
     // The library downloads while the microphone opens (a permission prompt can
     // take a while), not after the token. A failure here is retried at connect.
     loadLiveKitClient().catch(() => {});
-    const microphoneCapture = await openJoinMicrophone();
+    // Side by side: every step that waits for another is one more round trip
+    // for a visitor far from the server.
+    const roomCheck = roomCheckIsFresh(state.roomId) ? Promise.resolve(true) : checkRoomExists(state.roomId);
+    const openingMicrophone = openJoinMicrophone();
+    const discardMicrophone = () =>
+      openingMicrophone.then((capture) => {
+        if (capture) stopMicrophoneCapture(capture);
+      });
+    let exists: boolean;
+    try {
+      exists = await roomCheck;
+    } catch (error) {
+      void discardMicrophone();
+      throw error;
+    }
+    if (!isCurrent() || !exists) {
+      void discardMicrophone();
+      if (isCurrent()) showRoomNotFound();
+      return;
+    }
+    const microphoneCapture = await openingMicrophone;
+    markJoinStage('microphoneMs');
     if (!isCurrent()) {
       if (microphoneCapture) stopMicrophoneCapture(microphoneCapture);
       return;
@@ -293,6 +309,7 @@ async function performJoinRoom(generation: number): Promise<void> {
     if (!connected || !isCurrent()) return;
     notifyLiveKitReconciled();
     state.joined = true;
+    finishJoinTiming();
     useVoiceSessionStore().setConnectedVoiceRoom(state.roomId);
     void syncDesktopGlobalHotkeys(true);
     useVoiceSessionStore().setVoiceSessionTiming({ joinedAt: state.self?.joinedAt ?? Date.now() });

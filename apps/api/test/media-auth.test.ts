@@ -84,10 +84,30 @@ test('G82-A02 guessed and denied reads are indistinguishable 404 with private sa
   const ok = await app.inject({ method: 'GET', url: `/api/media/attachments/${ID}/preview` });
   const denied = await app.inject({ method: 'GET', url: `/api/media/attachments/${MISSING}/preview` });
   assert.equal(ok.statusCode, 200);
-  assert.equal(ok.headers['cache-control'], 'private, no-store');
+  assert.equal(ok.headers['cache-control'], 'private, no-cache');
   assert.equal(ok.headers['content-type'], 'image/webp');
   assert.match(String(ok.headers['content-disposition']), /^inline; filename="image\.webp"$/);
   assert.equal(denied.statusCode, 404);
   assert.deepEqual(denied.json(), { ok: false, code: 'media_not_found', error: 'Attachment not found' });
   assert.ok(performance.now() - started < 500);
+
+  // An image the browser already has costs a round trip, not a download.
+  const etag = String(ok.headers.etag);
+  const kept = await app.inject({
+    method: 'GET',
+    url: `/api/media/attachments/${ID}/preview`,
+    headers: { 'if-none-match': etag }
+  });
+  assert.equal(kept.statusCode, 304);
+  assert.equal(kept.body, '');
+  assert.equal(kept.headers['cache-control'], 'private, no-cache');
+
+  // The browser always asks, so it finds out at once that access is gone.
+  visible.delete(ID);
+  const revoked = await app.inject({
+    method: 'GET',
+    url: `/api/media/attachments/${ID}/preview`,
+    headers: { 'if-none-match': etag }
+  });
+  assert.equal(revoked.statusCode, 404);
 });

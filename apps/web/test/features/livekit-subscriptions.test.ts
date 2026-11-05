@@ -208,3 +208,27 @@ test('a call without a microphone still connects, to listen, and publishes nothi
   expect(room.disconnected).toBe(false);
   expect(room.published).toEqual([]);
 });
+
+test('the others are heard before this client finishes publishing its own microphone', async () => {
+  const mic = fakePublication('microphone', { track: liveAudioTrack() });
+  const participant = fakeParticipant('peer-a', [mic.publication]);
+  let finishPublishing = () => {};
+  const lk = await loadLiveKitHarness({
+    autoResolveClient: true,
+    requestToken: async () => ({ token: 't', url: 'wss://lk' }),
+    onConnect: (room) => {
+      room.remoteParticipants.set('peer-a', participant);
+      room.publishGate = new Promise<void>((resolve) => (finishPublishing = resolve));
+    }
+  });
+  const track = { kind: 'audio', stop() {} };
+  lk.state.localStream = { getAudioTracks: () => [track], getTracks: () => [track] };
+
+  const joining = lk.service.connectLiveKitRoom('Анна');
+  await vi.waitFor(() => expect(mic.calls.subscribed.at(-1)).toBe(true));
+  expect(defined(lk.rooms[0], 'room').published).toEqual([]);
+
+  finishPublishing();
+  await expect(joining).resolves.toBe(true);
+  expect(defined(lk.rooms[0], 'room').published).toHaveLength(1);
+});

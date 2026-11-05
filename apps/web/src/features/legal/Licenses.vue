@@ -61,6 +61,15 @@ const LIBRARIES: { name: string; license: string }[] = [
       <a href="https://www.gnu.org/licenses/lgpl-3.0.html" rel="noopener" target="_blank">LGPL-3.0-or-later</a>.
     </li>
     <li>
+      <strong
+        ><a href="https://github.com/GoogleChrome/web-vitals" rel="noopener" target="_blank">web-vitals</a></strong
+      >
+      — замер скорости страниц © Google LLC. Лицензия:
+      <a href="https://github.com/GoogleChrome/web-vitals/blob/main/LICENSE" rel="noopener" target="_blank"
+        >Apache-2.0</a
+      >.
+    </li>
+    <li>
       <strong><a href="https://github.com/xiph/rnnoise" rel="noopener" target="_blank">RNNoise</a></strong> —
       шумоподавление микрофона © Xiph.Org Foundation и Mozilla; сборка для браузера © WONG Tin Chi Timothy, Dmitry
       Zlygin. Лицензии:

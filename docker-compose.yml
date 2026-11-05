@@ -12,6 +12,17 @@ services:
     logging: *logging
     image: ${POSTGRES_IMAGE:-postgres:16-alpine}
     restart: unless-stopped
+    # Which queries are slow: pg_stat_statements for the totals (one
+    # CREATE EXTENSION, docs/PERFORMANCE.md) and the log for each slow one. The
+    # log keeps a query's text but never the values bound to it.
+    command:
+      - postgres
+      - -c
+      - shared_preload_libraries=pg_stat_statements
+      - -c
+      - log_min_duration_statement=${POSTGRES_LOG_SLOWER_THAN_MS:-250}
+      - -c
+      - log_parameter_max_length=0
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-voice_room}
       POSTGRES_USER: ${POSTGRES_USER:-voice_room}

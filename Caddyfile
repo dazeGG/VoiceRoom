@@ -24,10 +24,25 @@ import /etc/caddy/turn.d/*.site
   }
 
   @immutable path /_app/immutable/* /assets/*
+  # The audio files joining a call needs: fixed names, a content hash in the query.
+  @versioned_audio {
+    path /rnnoise/* /audio-gate.worklet.js /desktop-audio-source.worklet.js
+    query v=*
+  }
+  # Emoji artwork, named by code point from a pinned package. A picker shows
+  # hundreds at a time, so asking about each one is not free; a package upgrade
+  # reaches returning visitors within this month.
+  @emoji path /emoji/*
   @web_fallback {
-    not path /api/* /_app/immutable/* /assets/*
+    not path /api/* /_app/immutable/* /assets/* /emoji/*
+    not {
+      path /rnnoise/* /audio-gate.worklet.js /desktop-audio-source.worklet.js
+      query v=*
+    }
   }
   header @immutable Cache-Control "public, max-age=31536000, immutable"
+  header @versioned_audio Cache-Control "public, max-age=31536000, immutable"
+  header @emoji Cache-Control "public, max-age=2592000"
   header @web_fallback Cache-Control "no-cache"
 
   handle /runtime-config.json {
@@ -83,13 +98,19 @@ import /etc/caddy/turn.d/*.site
   # index.html, so the client reloads instead of running HTML as a script.
   handle /_app/immutable/* {
     root * /srv/archive
-    file_server
+    file_server {
+      precompressed br gzip
+    }
   }
 
+  # The build's .br and .gz (precompressPlugin) when there are any; encode above
+  # compresses the rest on the fly.
   handle {
     root * /srv/web
     try_files {path} /index.html
-    file_server
+    file_server {
+      precompressed br gzip
+    }
   }
 }
 

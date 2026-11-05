@@ -4,6 +4,12 @@ import { LOG_EVENTS } from '../../lib/log-events.ts';
 import { createLogger } from '../../lib/logger.ts';
 import type { Logger } from '../types.ts';
 
+// Without these one stuck query holds a connection for good, and once all of
+// them are held every request waits forever instead of failing.
+const CONNECTION_WAIT_MS = 10_000;
+const STATEMENT_TIMEOUT_MS = 60_000;
+const IDLE_IN_TRANSACTION_TIMEOUT_MS = 60_000;
+
 /**
  * A PostgreSQL pool. Each process opens one, at its entrypoint, and hands it to
  * every store and repository; modules never open their own.
@@ -11,15 +17,22 @@ import type { Logger } from '../types.ts';
 function createDbPool({
   databaseUrl,
   logger = createLogger({ name: 'api' }),
-  max = 10
+  max = 10,
+  statementTimeoutMs = STATEMENT_TIMEOUT_MS,
+  connectionWaitMs = CONNECTION_WAIT_MS
 }: {
   databaseUrl: string;
   logger?: Pick<Logger, 'error'> | undefined;
   max?: number;
+  statementTimeoutMs?: number;
+  connectionWaitMs?: number;
 }): pg.Pool {
   const pool = new pg.Pool({
     connectionString: databaseUrl,
-    max
+    max,
+    connectionTimeoutMillis: connectionWaitMs,
+    statement_timeout: statementTimeoutMs,
+    idle_in_transaction_session_timeout: IDLE_IN_TRANSACTION_TIMEOUT_MS
   });
 
   pool.on('error', (error) => {
