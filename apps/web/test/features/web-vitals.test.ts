@@ -5,6 +5,9 @@ import { beforeEach, expect, test, vi } from 'vitest';
 type Report = (metric: { name: string; value: number }) => void;
 const reporters = vi.hoisted(() => new Map<string, Report>());
 
+const boundary = vi.hoisted(() => ({ blocked: false }));
+
+vi.mock('@/platform/desktop-boundary', () => ({ isRealtimeBlocked: () => boundary.blocked }));
 vi.mock('web-vitals', () => ({
   onCLS: (report: Report) => reporters.set('CLS', report),
   onFCP: (report: Report) => reporters.set('FCP', report),
@@ -13,7 +16,10 @@ vi.mock('web-vitals', () => ({
   onTTFB: (report: Report) => reporters.set('TTFB', report)
 }));
 
-beforeEach(() => reporters.clear());
+beforeEach(() => {
+  reporters.clear();
+  boundary.blocked = false;
+});
 
 async function start() {
   const { startWebVitals } = await import('@/platform/web-vitals');
@@ -54,4 +60,18 @@ test('a beacon the browser refuses falls back to a request that outlives the pag
 
   expect(fetchMock.mock.calls[0]?.[0]).toBe('/api/client-vitals');
   expect(fetchMock.mock.calls[0]?.[1].keepalive).toBe(true);
+});
+
+test('a phone on a page it may not use reports nothing', async () => {
+  const sendBeacon = vi.fn((_url: string, _body: Blob) => true);
+  vi.stubGlobal('navigator', { sendBeacon });
+  const fetchMock = vi.fn(async () => new Response(null, { status: 204 }));
+  vi.stubGlobal('fetch', fetchMock);
+  boundary.blocked = true;
+  await start();
+
+  reporters.get('LCP')?.({ name: 'LCP', value: 1000 });
+
+  expect(sendBeacon).not.toHaveBeenCalled();
+  expect(fetchMock).not.toHaveBeenCalled();
 });

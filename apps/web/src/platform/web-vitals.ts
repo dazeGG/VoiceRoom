@@ -3,10 +3,13 @@
 // is idle, so measuring does not slow what it measures.
 
 import type { Metric } from 'web-vitals';
+import { isRealtimeBlocked } from './desktop-boundary';
 
 const ENDPOINT = '/api/client-vitals';
 
 function report({ name, value }: Pick<Metric, 'name' | 'value'>): void {
+  // A phone on a page it may not use makes no API call at all.
+  if (isRealtimeBlocked()) return;
   // CLS has no unit and stays under 1; the histogram counts it in thousandths.
   const scaled = name === 'CLS' ? value * 1000 : value;
   const body = JSON.stringify({ name, value: Math.round(scaled) });
