@@ -192,7 +192,8 @@ async function signIn(browser: Browser): Promise<{ context: BrowserContext; room
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ name: 'Bench', isStatic: true })
     });
-    return created.json();
+    const body: unknown = await created.json();
+    return body;
   });
   const room: unknown = Reflect.get(Object(answer), 'roomId');
   if (typeof room !== 'string') throw new Error(`no room: ${JSON.stringify(answer)}`);
@@ -236,7 +237,10 @@ async function measureJoin(
   });
 
   await page.waitForTimeout(thinkMs);
-  await page.evaluate(() => Reflect.get(window, '__joinStart')());
+  await page.evaluate(() => {
+    const start: unknown = Reflect.get(window, '__joinStart');
+    if (typeof start === 'function') start();
+  });
   await join.click(page);
   await page.waitForFunction(
     () => {
@@ -249,8 +253,8 @@ async function measureJoin(
     { timeout: 60_000 }
   );
   const stages = await page.evaluate((): StageTimes => {
-    const marks: unknown = Reflect.get(window, '__joinMarks');
-    return Object.fromEntries(Object.entries(Object(marks)).filter(([, at]) => typeof at === 'number'));
+    const marks: object = Object(Reflect.get(window, '__joinMarks'));
+    return Object.fromEntries(Object.entries<unknown>(marks).filter(([, at]) => typeof at === 'number'));
   });
   await page.close();
   return {

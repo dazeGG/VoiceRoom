@@ -8,11 +8,14 @@ import { roomStatus } from '../fixtures/answers';
 import { stubFetch, type Reply } from '../fixtures/fetch';
 import { FakeWebSocket } from '../fixtures/fake-websocket';
 
-const microphone = vi.hoisted(() => ({
-  opened: 0,
-  stopped: [] as unknown[],
-  answer: null as ((capture: { stopped: true } | null) => void) | null
-}));
+const microphone = vi.hoisted(() => {
+  const held: { opened: number; stopped: unknown[]; answer: ((capture: { stopped: true } | null) => void) | null } = {
+    opened: 0,
+    stopped: [],
+    answer: null
+  };
+  return held;
+});
 
 vi.mock('@/features/room/client/ui/devices', async (importOriginal) => ({
   ...(await importOriginal<object>()),
