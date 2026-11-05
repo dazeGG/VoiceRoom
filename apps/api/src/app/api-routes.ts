@@ -139,6 +139,7 @@ export function registerApiRoutes(app: FastifyInstance, ctx: ApiContext, deps: A
     powDifficulty: deps.config.ROOM_CREATE_POW_DIFFICULTY,
     powTtlMs: deps.config.ROOM_CREATE_POW_TTL_MS,
     clientLogs: { enabled: deps.config.CLIENT_LOG_INTAKE_ENABLED, limiter: deps.limits.clientLogs },
+    clientVitals: deps.limits.clientVitals,
     desktopRelease: deps.domain.desktopRelease
   });
 

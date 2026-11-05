@@ -28,6 +28,7 @@ export function createRateLimits(config: ApiConfig) {
     avatarUploads: limiter(config.AVATAR_UPLOAD_RATE_LIMIT, config.AVATAR_UPLOAD_RATE_WINDOW_MS),
     pushSubscriptions: limiter(config.PUSH_SUBSCRIPTION_RATE_LIMIT, config.PUSH_SUBSCRIPTION_RATE_WINDOW_MS),
     clientLogs: limiter(config.CLIENT_LOG_RATE_LIMIT, config.CLIENT_LOG_RATE_WINDOW_MS),
+    clientVitals: limiter(config.CLIENT_VITALS_RATE_LIMIT, config.CLIENT_VITALS_RATE_WINDOW_MS),
     reports: limiter(config.REPORT_RATE_LIMIT, config.REPORT_RATE_WINDOW_MS),
     callFeedback: limiter(config.CALL_FEEDBACK_RATE_LIMIT, config.CALL_FEEDBACK_RATE_WINDOW_MS)
   };
