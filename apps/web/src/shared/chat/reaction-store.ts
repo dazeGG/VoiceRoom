@@ -1,6 +1,6 @@
 import { markRaw, ref } from 'vue';
-import type { ReactionSummary, Reactor } from '@voice-room/shared/contracts/messages';
-import { fetchReactionSummaries, fetchReactors, setReactionDesired, type ReactionConversation } from '@/api/reactions';
+import { MAX_REACTION_BATCH, type ReactionSummary, type Reactor } from '@voice-room/shared/contracts/messages';
+import { fetchReactionBatch, fetchReactors, setReactionDesired, type ReactionConversation } from '@/api/reactions';
 import { replaceReactionSnapshot } from './reaction-reconciliation';
 import { createLogger, errorContext } from '@/shared/log';
 import { uniqueBy } from '@/shared/utils/collections';
@@ -50,6 +50,11 @@ export class ReactionStore {
   private requested: Record<string, true> = {};
   // The page snapshot each message's reactions were last taken from. Plain, as above.
   private snapshots: Record<string, string> = {};
+  // Messages to ask about in the next request. A chat shows them in one go, so
+  // they go in one request: asked for one by one, a long chat took every
+  // database connection the server has and held a join up behind them.
+  private queued: string[] = [];
+  private flushing: Promise<void> | null = null;
 
   constructor() {
     markRaw(this);
@@ -175,22 +180,38 @@ export class ReactionStore {
   }
 
   /** Fetches a message's reactions once; realtime events keep them current after that. */
-  async load(messageId: string): Promise<void> {
-    if (this.requested[messageId]) return;
-    const conversation = this.conversation;
-    if (!conversation || this.isDeleted(messageId)) return;
+  load(messageId: string): Promise<void> {
+    if (this.requested[messageId]) return Promise.resolve();
+    if (!this.conversation || this.isDeleted(messageId)) return Promise.resolve();
     this.requested[messageId] = true;
     this.loadingMessages = { ...this.loadingMessages, [messageId]: true };
-    try {
-      this.replace(messageId, await fetchReactionSummaries(conversation, messageId));
-    } catch (error) {
-      // Asked again the next time the message is shown.
-      const { [messageId]: _retry, ...stillRequested } = this.requested;
-      this.requested = stillRequested;
-      log.warn('reactions did not load', errorContext(error));
-    } finally {
-      const { [messageId]: _loaded, ...stillLoading } = this.loadingMessages;
-      this.loadingMessages = stillLoading;
+    this.queued.push(messageId);
+    this.flushing ??= Promise.resolve().then(() => this.flush());
+    return this.flushing;
+  }
+
+  private async flush(): Promise<void> {
+    const messageIds = this.queued;
+    const conversation = this.conversation;
+    this.queued = [];
+    this.flushing = null;
+    if (!conversation) return;
+    for (let start = 0; start < messageIds.length; start += MAX_REACTION_BATCH) {
+      const batch = messageIds.slice(start, start + MAX_REACTION_BATCH);
+      try {
+        const answer = await fetchReactionBatch(conversation, batch);
+        // A view moved on to another conversation in the meantime has reset all this.
+        if (this.conversation !== conversation) return;
+        for (const messageId of batch) this.replace(messageId, answer[messageId] ?? []);
+      } catch (error) {
+        // Asked again the next time they are shown.
+        if (this.conversation !== conversation) return;
+        const failed = new Set(batch);
+        this.requested = Object.fromEntries(Object.entries(this.requested).filter(([id]) => !failed.has(id)));
+        log.warn('reactions did not load', errorContext(error));
+      }
+      const done = new Set(batch);
+      this.loadingMessages = Object.fromEntries(Object.entries(this.loadingMessages).filter(([id]) => !done.has(id)));
     }
   }
 

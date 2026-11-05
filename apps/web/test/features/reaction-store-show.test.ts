@@ -10,7 +10,7 @@ const thumbs = (count: number, revision: string) => ({ emoji: '👍', count, rea
 
 test('messages from a history page show their reactions without a request', async () => {
   const { calls } = stubFetch({
-    'GET /api/reactions/room/kitchen/live': { body: { ok: true, summaries: [thumbs(2, '5')] } }
+    'GET /api/reactions/room/kitchen?ids=live': { body: { ok: true, messages: { live: [thumbs(2, '5')] } } }
   });
   const store = createReactionStore();
   store.setConversation({ type: 'room', id: 'kitchen' });
@@ -26,7 +26,7 @@ test('messages from a history page show their reactions without a request', asyn
     await nextTick();
     await new Promise((resolve) => setTimeout(resolve, 0));
     await nextTick();
-    expect(calls.map((call) => call.url)).toEqual(['/api/reactions/room/kitchen/live']);
+    expect(calls.map((call) => call.url)).toEqual(['/api/reactions/room/kitchen?ids=live']);
     expect(store.forMessage('m1').map((item) => item.count)).toEqual([1]);
     expect(store.forMessage('m2')).toEqual([]);
     expect(store.forMessage('live').map((item) => item.count)).toEqual([2]);

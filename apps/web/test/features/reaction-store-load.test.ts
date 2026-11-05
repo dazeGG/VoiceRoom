@@ -9,8 +9,7 @@ import { stubFetch } from '../fixtures/fetch.ts';
 
 test('an effect that loads the shown messages fetches each one once', async () => {
   const { calls } = stubFetch({
-    'GET /api/reactions/room/kitchen/m1': { body: { ok: true, summaries: [] } },
-    'GET /api/reactions/room/kitchen/m2': { body: { ok: true, summaries: [] } }
+    'GET /api/reactions/room/kitchen?ids=m1,m2': { body: { ok: true, messages: {} } }
   });
   const store = createReactionStore();
   store.setConversation({ type: 'room', id: 'kitchen' });
@@ -27,10 +26,7 @@ test('an effect that loads the shown messages fetches each one once', async () =
       await new Promise((resolve) => setTimeout(resolve, 0));
       await nextTick();
     }
-    expect(calls.map((call) => call.url).sort()).toEqual([
-      '/api/reactions/room/kitchen/m1',
-      '/api/reactions/room/kitchen/m2'
-    ]);
+    expect(calls.map((call) => call.url)).toEqual(['/api/reactions/room/kitchen?ids=m1,m2']);
   } finally {
     scope.stop();
   }
@@ -38,14 +34,14 @@ test('an effect that loads the shown messages fetches each one once', async () =
 
 test('a failed load is tried again the next time the message is shown', async () => {
   let answer: { status: number; body: unknown } = { status: 500, body: { ok: false, error: 'x', code: 'internal' } };
-  const { calls } = stubFetch({ 'GET /api/reactions/room/kitchen/m1': () => answer });
+  const { calls } = stubFetch({ 'GET /api/reactions/room/kitchen?ids=m1': () => answer });
   const store = createReactionStore();
   store.setConversation({ type: 'room', id: 'kitchen' });
 
   await store.load('m1');
   answer = {
     status: 200,
-    body: { ok: true, summaries: [{ emoji: '👍', count: 1, reactedByMe: false, revision: '1' }] }
+    body: { ok: true, messages: { m1: [{ emoji: '👍', count: 1, reactedByMe: false, revision: '1' }] } }
   };
   await store.load('m1');
   expect(calls).toHaveLength(2);
