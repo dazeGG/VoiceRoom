@@ -59,7 +59,7 @@ test('a connected voice shows the ping, and the loss on the line only in the too
   const lossy = getConnectionStatusView();
   expect(lossy).toMatchObject({ stateName: 'connected', label: 'Голос подключен · 40 мс' });
   expect(lossy.title).toBe(
-    'Пинг до LiveKit 40 мс · потери от вас 0% · потери к вам 12% · джиттер 45 мс · через ретранслятор (UDP недоступен)'
+    'Пинг до LiveKit 40 мс · потери от вас 0% · потери к вам 12% · джиттер 45 мс · через ретранслятор'
   );
 });
 

@@ -69,6 +69,8 @@ export interface RtcStat {
   // local-candidate
   readonly candidateType: string | undefined;
   readonly protocol: string | undefined;
+  /** Endpoint-to-TURN transport, even when the mapped candidate is reported as prflx. */
+  readonly relayProtocol: string | undefined;
   // codec
   readonly mimeType: string | undefined;
   readonly mime: string | undefined;
@@ -147,6 +149,7 @@ function toRtcStat(value: unknown): RtcStat | null {
     responsesReceived: number('responsesReceived'),
     pliCount: number('pliCount'),
     protocol: string('protocol'),
+    relayProtocol: string('relayProtocol'),
     qpSum: number('qpSum'),
     qualityLimitationReason: string('qualityLimitationReason'),
     qualityLimitationSeconds: durations

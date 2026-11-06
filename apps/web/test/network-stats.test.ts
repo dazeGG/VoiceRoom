@@ -62,6 +62,65 @@ test('a relay or TCP candidate is reported as a degraded transport', async () =>
   });
 });
 
+test.each(['udp', 'tcp', 'tls'])('a prflx candidate using TURN over %s is shown as a relay', async (relayProtocol) => {
+  const { getOutboundNetworkFromStats } = await load(() => import('@/features/room/client/room/stats'));
+  const { getConnectionStatusView } = await import('@/features/room/client/ui/status');
+  const { state } = await import('@/features/room/client/core/room-runtime.store');
+  const { transport } = getOutboundNetworkFromStats(
+    report([
+      { id: 'p1', type: 'candidate-pair', state: 'succeeded', nominated: true, localCandidateId: 'l1' },
+      // Observed on production: the mapped candidate is prflx, but the endpoint still uses TURN.
+      { id: 'l1', type: 'local-candidate', candidateType: 'prflx', protocol: 'udp', relayProtocol }
+    ])
+  );
+  assert.equal(transport, 'relay');
+  state.voiceConnection = 'connected';
+  state.localPingMs = 20;
+  state.localNetwork = { inboundLossPct: null, jitterMs: null, outboundLossPct: null, transport };
+  assert.equal(getConnectionStatusView().title, 'Пинг до LiveKit 20 мс · через ретранслятор');
+});
+
+test.each([undefined, '', 'unknown', true, 1])(
+  'invalid relayProtocol %s does not turn a direct candidate into TURN',
+  async (relayProtocol) => {
+    const { getOutboundNetworkFromStats } = await load(() => import('@/features/room/client/room/stats'));
+    const pair = { id: 'p1', type: 'candidate-pair', state: 'succeeded', selected: true, localCandidateId: 'l1' };
+    for (const protocol of ['udp', 'tcp']) {
+      assert.equal(
+        getOutboundNetworkFromStats(
+          report([
+            pair,
+            {
+              id: 'l1',
+              type: 'local-candidate',
+              candidateType: 'prflx',
+              protocol,
+              relayProtocol,
+              url: 'stun:turn.example.com:3478'
+            }
+          ])
+        ).transport,
+        protocol
+      );
+    }
+  }
+);
+
+test('an unused TURN candidate does not override the selected direct route', async () => {
+  const { getOutboundNetworkFromStats } = await load(() => import('@/features/room/client/room/stats'));
+  assert.equal(
+    getOutboundNetworkFromStats(
+      report([
+        { id: 'p1', type: 'candidate-pair', state: 'succeeded', nominated: true, localCandidateId: 'l1' },
+        { id: 'l1', type: 'local-candidate', candidateType: 'host', protocol: 'udp' },
+        { id: 'p2', type: 'candidate-pair', state: 'succeeded', nominated: false, localCandidateId: 'l2' },
+        { id: 'l2', type: 'local-candidate', candidateType: 'prflx', protocol: 'udp', relayProtocol: 'tls' }
+      ])
+    ).transport,
+    'udp'
+  );
+});
+
 test('the status pill explains loss, jitter and a TCP fallback and warns on real loss', async () => {
   const status = await load(() => import('@/features/room/client/ui/status'));
   // Same module graph as status.ts, so both see one state instance.
