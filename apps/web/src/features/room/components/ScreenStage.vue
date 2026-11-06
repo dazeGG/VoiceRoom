@@ -11,11 +11,13 @@ import {
 } from '../client/ui/screen-stage-controls';
 import { handleScreenStageClick } from '../client/ui/screen-view';
 import { useScreenUiStore } from '../screen-ui.store';
+import { useScreenStartupDiagnostics } from '../use-screen-startup-diagnostics';
 
 const screenUi = useScreenUiStore();
 
 const stageEl = ref<HTMLElement | null>(null);
 const videoEl = ref<HTMLVideoElement | null>(null);
+useScreenStartupDiagnostics(videoEl);
 const volumeSliderEl = ref<HTMLInputElement | null>(null);
 
 const meta = computed(() => screenUi.getScreenMetaView());

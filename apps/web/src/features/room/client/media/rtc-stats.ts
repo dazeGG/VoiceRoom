@@ -36,11 +36,17 @@ export interface RtcStat {
   // outbound-rtp
   readonly isRemote: boolean | undefined;
   readonly bytesSent: number | undefined;
+  readonly bytesReceived: number | undefined;
   readonly encoderImplementation: string | undefined;
   readonly firCount: number | undefined;
   readonly frameHeight: number | undefined;
   readonly framesDropped: number | undefined;
   readonly framesEncoded: number | undefined;
+  readonly framesDecoded: number | undefined;
+  /** media-source video: frames supplied by capture, before encoding. */
+  readonly frames: number | undefined;
+  readonly totalEncodeTime: number | undefined;
+  readonly freezeCount: number | undefined;
   readonly framesPerSecond: number | undefined;
   readonly framesSent: number | undefined;
   readonly frameWidth: number | undefined;
@@ -108,6 +114,7 @@ function toRtcStat(value: unknown): RtcStat | null {
   return {
     availableOutgoingBitrate: number('availableOutgoingBitrate'),
     bytesSent: number('bytesSent'),
+    bytesReceived: number('bytesReceived'),
     candidateType: string('candidateType'),
     codecId: string('codecId'),
     currentRoundTripTime: number('currentRoundTripTime'),
@@ -119,6 +126,10 @@ function toRtcStat(value: unknown): RtcStat | null {
     frameWidth: number('frameWidth'),
     framesDropped: number('framesDropped'),
     framesEncoded: number('framesEncoded'),
+    framesDecoded: number('framesDecoded'),
+    frames: number('frames'),
+    totalEncodeTime: number('totalEncodeTime'),
+    freezeCount: number('freezeCount'),
     framesPerSecond: number('framesPerSecond'),
     framesReceived: number('framesReceived'),
     framesSent: number('framesSent'),

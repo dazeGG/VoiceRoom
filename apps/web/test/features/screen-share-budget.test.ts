@@ -2,11 +2,19 @@
 // lowers the quality or refuses, and a server that does not answer is no reason
 // to lose the stream.
 
-import { expect, test, vi } from 'vitest';
+import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import type { MediaGrant } from '@voice-room/shared/contracts/realtime';
 import type * as MediaGrantModule from '@/features/room/client/services/media-grant';
 
 const P = '@/features/room/client';
+beforeEach(() => {
+  vi.useFakeTimers();
+  vi.stubGlobal('RTCRtpSender', {});
+});
+afterEach(() => {
+  vi.clearAllTimers();
+  vi.useRealTimers();
+});
 
 function fakeStream() {
   const track = {
@@ -17,7 +25,7 @@ function fakeStream() {
       this.stopped = true;
     },
     addEventListener() {},
-    getSettings: () => ({ width: 1920, height: 1080 })
+    getSettings: () => ({ width: 1920, height: 1080, frameRate: 60 })
   };
   return {
     id: 'screen-stream',
@@ -28,14 +36,15 @@ function fakeStream() {
   };
 }
 
-function noStats(): { availableOutgoingBitrate: number } | null {
+function noStats(): { availableOutgoingBitrate: number; fps: number } | null {
   return null;
 }
 
 async function loadScreenShare(
   grant: MediaGrant | null,
   whileAsking: (state: { joined: boolean }) => void = () => {},
-  statsEntries: unknown[] = []
+  statsEntries: unknown[] = [],
+  statsGate: Promise<void> = Promise.resolve()
 ) {
   vi.resetModules();
   const state = {
@@ -49,17 +58,24 @@ async function loadScreenShare(
     localScreenMode: 'games',
     localScreenProfileId: 'balanced-30',
     peerId: 'peer-self1',
+    peers: new Map<string, { id: string; viewedScreenPeerId: string }>(),
     screenStarting: false,
     screenStopping: false
   };
   const stream = fakeStream();
   const showToast = vi.fn();
+  const stopDiagnostics = vi.fn();
+  const startDiagnostics = vi.fn(() => stopDiagnostics);
   // The published screen track answers the stats the monitor asks for.
   const publishLocalScreenTracks = vi.fn(async () => {
     state.localScreenPublications.set('screen', {
+      trackSid: 'TR_screen',
       source: 'screen_share',
       track: {
-        getRTCStatsReport: async () => ({ forEach: (visit: (entry: unknown) => void) => statsEntries.forEach(visit) })
+        getRTCStatsReport: async () => {
+          await statsGate;
+          return { forEach: (visit: (entry: unknown) => void) => statsEntries.forEach(visit) };
+        }
       }
     });
   });
@@ -70,6 +86,7 @@ async function loadScreenShare(
   });
 
   vi.doMock(`${P}/core/room-runtime.store`, () => ({ state }));
+  vi.doMock(`${P}/media/screen-startup-diagnostics`, () => ({ startScreenStartupDiagnostics: startDiagnostics }));
   vi.doMock(`${P}/ui/toast`, () => ({ showToast }));
   vi.doMock(`${P}/media/livekit-runtime`, () => ({
     TRACK_SOURCE: { ScreenShare: 'screen_share' },
@@ -98,7 +115,7 @@ async function loadScreenShare(
   }));
   vi.doMock(`${P}/room/participants`, () => ({ updateParticipant: () => {} }));
   vi.doMock(`${P}/core/microphone-mute`, () => ({ isMicrophoneShownMuted: () => false }));
-  vi.doMock(`${P}/../screen-ui.store`, () => ({ getActiveScreenPeer: () => null }));
+  vi.doMock(`${P}/../screen-ui.store`, () => ({ useScreenUiStore: () => ({ getActiveScreenPeer: () => null }) }));
   vi.doMock(`${P}/ui/screen-view`, () => ({
     hideScreenStage: () => {},
     openLocalStreamPreview: () => {},
@@ -111,7 +128,17 @@ async function loadScreenShare(
   }));
 
   const service = await import('@/features/room/client/services/screen-share-service');
-  return { service, state, stream, showToast, publishLocalScreenTracks, applyScreenCaptureProfile, askForMedia };
+  return {
+    service,
+    state,
+    stream,
+    showToast,
+    publishLocalScreenTracks,
+    applyScreenCaptureProfile,
+    askForMedia,
+    startDiagnostics,
+    stopDiagnostics
+  };
 }
 
 test('a busy server lowers 1080p 60 FPS to 720p at the same frame rate and says so', async () => {
@@ -212,4 +239,67 @@ test('the stream stats read the candidate pair a browser marks as selected, not 
 
   await vi.waitFor(() => expect(state.localScreenStats?.availableOutgoingBitrate).toBe(4_000_000));
   window.clearInterval(state.localScreenStatsTimer);
+});
+
+test('actual zero FPS is not replaced by the requested capture frame rate', async () => {
+  vi.stubGlobal('RTCRtpSender', {});
+  const { service, state } = await loadScreenShare(null, () => {}, [
+    { id: 'out', type: 'outbound-rtp', kind: 'video', framesPerSecond: 0 }
+  ]);
+  await service.handleScreenButtonClick();
+  await vi.waitFor(() => expect(state.localScreenStats?.fps).toBe(0));
+  service.stopLocalScreenStream();
+});
+
+test('startup diagnostics start on publication and stop immediately when leaving the call', async () => {
+  const { service, state, startDiagnostics, stopDiagnostics } = await loadScreenShare(null);
+  await service.handleScreenButtonClick();
+  expect(startDiagnostics).toHaveBeenCalledWith(
+    expect.objectContaining({
+      direction: 'send',
+      trackId: 'TR_screen',
+      profileId: 'high-60'
+    })
+  );
+  service.stopLocalScreenStream();
+  expect(stopDiagnostics).toHaveBeenCalledTimes(1);
+  expect(state.localScreenStatsTimer).toBe(0);
+  expect(state.localScreenStats).toBeNull();
+});
+
+test('a pending stats read cannot resurrect stats after the stream stops', async () => {
+  const gate = Promise.withResolvers<void>();
+  const { service, state } = await loadScreenShare(null, () => {}, [], gate.promise);
+  await service.handleScreenButtonClick();
+  service.stopLocalScreenStream();
+  gate.resolve();
+  await vi.waitFor(() => expect(state.localScreenStatsTimer).toBe(0));
+  expect(state.localScreenStats).toBeNull();
+});
+
+test('a late viewer restarts the bounded sender observation without restarting it on every poll', async () => {
+  const { service, state, startDiagnostics, stopDiagnostics } = await loadScreenShare(null);
+  await service.handleScreenButtonClick();
+  await vi.advanceTimersByTimeAsync(31_000);
+  expect(startDiagnostics).toHaveBeenCalledTimes(1);
+  state.peers.set('viewer', { id: 'viewer', viewedScreenPeerId: state.peerId });
+  await vi.advanceTimersByTimeAsync(1500);
+  expect(startDiagnostics).toHaveBeenCalledTimes(2);
+  state.peers.set('second', { id: 'second', viewedScreenPeerId: state.peerId });
+  await vi.advanceTimersByTimeAsync(3000);
+  expect(startDiagnostics).toHaveBeenCalledTimes(2);
+  service.stopLocalScreenStream();
+  expect(stopDiagnostics).toHaveBeenCalledTimes(2);
+});
+
+test('a viewer leaving does not restart the sender observation', async () => {
+  const { service, state, startDiagnostics } = await loadScreenShare(null);
+  state.peers.set('first', { id: 'first', viewedScreenPeerId: state.peerId });
+  state.peers.set('second', { id: 'second', viewedScreenPeerId: state.peerId });
+  await service.handleScreenButtonClick();
+  await vi.advanceTimersByTimeAsync(31_000);
+  state.peers.delete('first');
+  await vi.advanceTimersByTimeAsync(1500);
+  expect(startDiagnostics).toHaveBeenCalledTimes(1);
+  service.stopLocalScreenStream();
 });
