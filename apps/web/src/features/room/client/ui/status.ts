@@ -152,7 +152,7 @@ export function formatNetworkDetails(ping: string): string {
   if (outboundLossPct !== null) parts.push(`потери от вас ${outboundLossPct}%`);
   if (inboundLossPct !== null) parts.push(`потери к вам ${inboundLossPct}%`);
   if (jitterMs !== null) parts.push(`джиттер ${jitterMs} мс`);
-  if (transport === 'relay') parts.push('через ретранслятор (UDP недоступен)');
+  if (transport === 'relay') parts.push('через ретранслятор');
   else if (transport === 'tcp') parts.push('через TCP (UDP недоступен)');
   return parts.join(' · ');
 }
