@@ -21,6 +21,7 @@ import { askForMedia, describeMediaRefusal } from './media-grant';
 import { screenProfileBitrate } from '@voice-room/shared/media-budget';
 import { onDesktopScreenAudioLost, stopLocalScreenAudioCapture } from './desktop-screen-audio';
 import { isActiveCandidatePair, readRtcStats, type RtcStat } from '../media/rtc-stats';
+import { startScreenStartupDiagnostics } from '../media/screen-startup-diagnostics';
 import { isScreenVideoPublication } from './livekit/publication-kinds';
 import { updateParticipant } from '../room/participants';
 import { isMicrophoneShownMuted } from '../core/microphone-mute';
@@ -31,6 +32,11 @@ import type { ParsedScreenStats, ScreenProfile, ScreenStatsPrevious, ScreenStrea
 import { createLogger, errorContext } from '@/shared/log';
 
 const log = createLogger('room:screen-share');
+let stopStartupDiagnostics: (() => void) | undefined;
+let startupPublicationId = '';
+let startupViewers = new Set<string>();
+let startupStartedAt = 0;
+let screenStatsGeneration = 0;
 
 // The desktop app gave up restarting its stream-audio helper: the picture keeps
 // going without sound. Offer a restart, which reopens the picker.
@@ -231,6 +237,7 @@ function showScreenShareStartedToast(profile: ScreenProfile): void {
 }
 
 export function stopLocalScreenStream(): void {
+  stopLocalScreenStatsMonitor({ refresh: false });
   if (!state.localScreenStream) return;
   stopLocalScreenAudioCapture();
   stopStream(state.localScreenStream);
@@ -242,6 +249,7 @@ export function stopLocalScreenStream(): void {
 
 function startLocalScreenStatsMonitor(): void {
   stopLocalScreenStatsMonitor({ refresh: false });
+  syncLocalScreenStartupDiagnostics();
   updateLocalScreenStats().catch((error: unknown) => log.warn('screen stats unavailable', errorContext(error)));
   state.localScreenStatsTimer = window.setInterval(() => {
     updateLocalScreenStats().catch((error: unknown) => log.warn('screen stats unavailable', errorContext(error)));
@@ -250,6 +258,11 @@ function startLocalScreenStatsMonitor(): void {
 
 function stopLocalScreenStatsMonitor(options: { refresh?: boolean } = {}): void {
   const { refresh = true } = options;
+  screenStatsGeneration += 1;
+  stopStartupDiagnostics?.();
+  stopStartupDiagnostics = undefined;
+  startupPublicationId = '';
+  startupViewers = new Set();
   window.clearInterval(state.localScreenStatsTimer);
   state.localScreenStatsTimer = 0;
   state.localScreenStats = null;
@@ -257,18 +270,57 @@ function stopLocalScreenStatsMonitor(options: { refresh?: boolean } = {}): void 
   if (refresh) refreshScreenMeta(useScreenUiStore().getActiveScreenPeer());
 }
 
+function syncLocalScreenStartupDiagnostics(): void {
+  const publication = findLocalScreenVideoPublication();
+  const track = publication?.track;
+  if (!publication?.trackSid || !track) return;
+  const viewers = [...state.peers.values()]
+    .filter((peer) => peer.viewedScreenPeerId === state.peerId)
+    .map((peer) => peer.id);
+  const changedPublication = publication.trackSid !== startupPublicationId;
+  // A late viewer or a reopened stage may wake dynacast long after publication.
+  // Never replace a running 30-second observation just because another viewer joins.
+  const newViewer = viewers.some((id) => !startupViewers.has(id));
+  startupViewers = new Set(viewers);
+  if (!changedPublication && (!newViewer || Date.now() - startupStartedAt < 30_000)) return;
+  stopStartupDiagnostics?.();
+  startupPublicationId = publication.trackSid;
+  startupStartedAt = Date.now();
+  stopStartupDiagnostics = startScreenStartupDiagnostics({
+    direction: 'send',
+    trackId: publication.trackSid,
+    profileId: state.localScreenProfileId,
+    read: () => track.getRTCStatsReport(),
+    capture: () => {
+      const capture = window.__voiceRoomNativeCaptureStats?.();
+      if (!capture) return undefined;
+      return {
+        framesReceived: capture.framesReceived,
+        framesWritten: capture.framesWritten,
+        framesDroppedBackpressure:
+          (capture.framesDroppedBackpressure ?? 0) + (capture.relay?.framesDroppedBackpressure ?? 0)
+      };
+    }
+  });
+}
+
 async function updateLocalScreenStats(): Promise<void> {
-  if (!state.localScreenStream) {
+  const stream = state.localScreenStream;
+  if (!stream) {
     stopLocalScreenStatsMonitor();
     return;
   }
 
   const publication = findLocalScreenVideoPublication();
   const track = publication?.track;
+  const generation = screenStatsGeneration;
   const stats = await track?.getRTCStatsReport?.();
+  if (generation !== screenStatsGeneration || state.localScreenStream !== stream) return;
+  if (findLocalScreenVideoPublication() !== publication) return;
+  syncLocalScreenStartupDiagnostics();
   const parsed = parseLocalScreenStats(stats, state.localScreenStatsPrevious);
   const captureStats = readNativeCaptureStats(state.localScreenStatsPrevious);
-  const [mediaTrack] = state.localScreenStream.getVideoTracks();
+  const [mediaTrack] = stream.getVideoTracks();
   const settings = mediaTrack?.getSettings?.() || {};
 
   state.localScreenStats = {
@@ -284,7 +336,8 @@ async function updateLocalScreenStats(): Promise<void> {
     encoderImplementation: parsed.encoderImplementation || '',
     firCount: parsed.firCount ?? 0,
     firDelta: parsed.firDelta ?? 0,
-    fps: parsed.fps || settings.frameRate || 0,
+    // Capture settings describe the requested rate, not frames actually encoded.
+    fps: parsed.fps ?? 0,
     framesDropped: parsed.framesDropped ?? 0,
     framesDroppedDelta: parsed.framesDroppedDelta ?? 0,
     framesEncoded: parsed.framesEncoded ?? 0,
@@ -394,8 +447,7 @@ function parseLocalScreenStats(
       ? ((bytesSent - previous.bytesSent) * 8 * 1000) / elapsedMs
       : 0;
   const fps =
-    outbound.framesPerSecond ||
-    0 ||
+    outbound.framesPerSecond ??
     (previous && elapsedMs > 0 && framesEncoded >= previous.framesEncoded
       ? ((framesEncoded - previous.framesEncoded) * 1000) / elapsedMs
       : 0);

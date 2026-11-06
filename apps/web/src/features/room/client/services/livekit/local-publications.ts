@@ -13,6 +13,7 @@ import { state } from '../../core/room-runtime.store';
 import { getPreferredCameraVideoCodec, getScreenProfile, getScreenPublishVideoOptions } from '../../media/profiles';
 import { applyVideoReliefToCamera, applyVideoReliefToScreen } from '../video-relief';
 import { loadLiveKitClient } from '../../media/livekit-runtime';
+import { prepareScreenStartBitrate } from '../../media/screen-start-bitrate';
 import { isMicrophoneShownMuted } from '../../core/microphone-mute';
 import { UserFacingError } from '../../core/utils';
 
@@ -196,6 +197,8 @@ export async function publishLocalScreenTracksForRoom(
     if (publications.has(track.id)) continue;
     const videoOptions = track.kind === 'video' ? await getScreenPublishVideoOptions(profile) : null;
     if (!isCurrent()) break;
+    const publisher = room.engine?.pcManager?.publisher;
+    if (track.kind === 'video' && publisher) prepareScreenStartBitrate(publisher, track.id);
     const publication = await room.localParticipant.publishTrack(track, {
       // Shared audio is music and game sound: keep it stereo and continuous,
       // and skip RED, which would double a 192 kbps stream for little gain.
