@@ -455,7 +455,9 @@ function outboundNetwork(stats: Map<string, RtcStat>): OutboundNetwork {
         rttChecks = report.responsesReceived;
       }
       const local = report.localCandidateId === undefined ? undefined : stats.get(report.localCandidateId);
-      if (local?.candidateType === 'relay') transport = 'relay';
+      // Mapped-address discovery can relabel a TURN candidate as prflx without changing its relay transport.
+      if (local?.candidateType === 'relay' || ['udp', 'tcp', 'tls'].includes(local?.relayProtocol ?? ''))
+        transport = 'relay';
       else if (local) transport = local.protocol?.toLowerCase() === 'tcp' ? 'tcp' : 'udp';
     }
   }
