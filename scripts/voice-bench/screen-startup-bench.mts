@@ -7,12 +7,15 @@ import { fileURLToPath } from 'node:url';
 import { chromium, type Browser, type Page } from '@playwright/test';
 import { createServer } from 'vite';
 import { AccessToken, RoomServiceClient } from 'livekit-server-sdk';
-import { isRecord } from '@voice-room/shared/guards';
+import { isArray, isRecord } from '@voice-room/shared/guards';
 import { evaluateStartup, loopbackLiveKitUrl, type StartupSample } from './screen-startup-metrics.mts';
+import { evaluateSustained, screenEncodingVariant } from './screen-encoding-experiment.mts';
 
 const endpoint = loopbackLiveKitUrl(process.env.SCREEN_BENCH_URL || 'ws://127.0.0.1:17880');
 const seconds = Number(process.env.SCREEN_BENCH_SECONDS || 15);
-if (!Number.isInteger(seconds) || seconds < 5 || seconds > 120) throw new Error('SCREEN_BENCH_SECONDS: 5–120.');
+if (!Number.isInteger(seconds) || seconds < 5 || seconds > 600) throw new Error('SCREEN_BENCH_SECONDS: 5–600.');
+const variant = screenEncodingVariant(process.env.SCREEN_BENCH_VARIANT);
+const lowViewerEnabled = process.env.SCREEN_BENCH_LOW_VIEWER === '1';
 const output = process.env.RESULTS || join(tmpdir(), `voiceroom-screen-startup-${Date.now()}.json`);
 const roomName = `screen-bench-${crypto.randomUUID()}`;
 const key = process.env.SCREEN_BENCH_KEY || 'devkey';
@@ -31,12 +34,13 @@ import { getScreenProfileForMode, getScreenPublishVideoOptions } from '/src/feat
 import { prepareScreenStartBitrate } from '/src/features/room/client/media/screen-start-bitrate.ts';
 import { rgbPixelError } from ${JSON.stringify(`/@fs/${fileURLToPath(new URL('./screen-startup-metrics.mts', import.meta.url)).replaceAll('\\', '/')}`)};
 
+import { screenEncodingOptions } from '/@fs/${fileURLToPath(new URL('./screen-encoding-experiment.mts', import.meta.url)).replaceAll('\\', '/')}';
 const connections=[];
 const signaling=[];
 const benchmarkAt=performance.now();
 function senderEncodings(pc) {
   return pc.getSenders().filter(sender=>sender.track?.kind==='video').map(sender=>({
-    trackId:sender.track.id,encodings:sender.getParameters().encodings.map(({rid,active,maxBitrate,maxFramerate,scaleResolutionDownBy})=>({rid,active,maxBitrate,maxFramerate,scaleResolutionDownBy}))
+    trackId:sender.track.id,degradationPreference:sender.getParameters().degradationPreference ?? null,encodings:sender.getParameters().encodings.map(({rid,active,maxBitrate,maxFramerate,scaleResolutionDownBy})=>({rid,active,maxBitrate,maxFramerate,scaleResolutionDownBy}))
   }));
 }
 function descriptionSummary(pc,side) {
@@ -68,6 +72,7 @@ const imageCanvas=document.createElement('canvas'); imageCanvas.width=512; image
 const imageContext=imageCanvas.getContext('2d',{willReadFrequently:true});
 let caseAt = performance.now(), previous = new Map(), videoPrevious;
 const profile = getScreenProfileForMode('games');
+const publishOptions = screenEncodingOptions(await getScreenPublishVideoOptions(profile), ${JSON.stringify(variant)});
 room.on(RoomEvent.TrackSubscribed, (track, pub) => {
   if (pub.source !== Track.Source.ScreenShare) return;
   remoteTrack = track;
@@ -122,6 +127,15 @@ async function sample(direction) {
     codec: codec?.mimeType || null, renderedFps: direction === 'receive' ? renderedFps : null,
     droppedFrames:direction==='receive' ? droppedFrames : null, mae:visual?.mae ?? null, psnr:visual?.psnr ?? null,
     captureFps: source ? rate(source, 'frames', previous.get(source.id)) : null,
+    layers: streams.map(layer => ({
+      id:layer.id,rid:layer.rid ?? null,active:layer.active ?? null,
+      width:number(layer.frameWidth),height:number(layer.frameHeight),
+      fps:rate(layer,direction==='send'?'framesEncoded':'framesDecoded',previous.get(layer.id)),
+      sentFps:direction==='send'?rate(layer,'framesSent',previous.get(layer.id)):null,
+      encoder:layer.encoderImplementation ?? null,
+      codec:entries.find(entry=>entry.id===layer.codecId)?.mimeType ?? null,
+      qualityLimitationReason:layer.qualityLimitationReason ?? null
+    })),
     encodeMs: stat ? (() => { const frames=rate(stat,'framesEncoded',before), cost=rate(stat,'totalEncodeTime',before); return frames>0 && cost!==null ? cost*1000/frames : null; })() : null
   };
   previous = new Map(entries.map(s => [s.id,s]));
@@ -159,7 +173,7 @@ window.bench = {
     draw(); drawing=setInterval(draw,1000/30);
     localTrack=canvas.captureStream(30).getVideoTracks()[0]; localTrack.contentHint=profile.contentHint;
     if (!${baseline}) prepareScreenStartBitrate(room.engine.pcManager.publisher,localTrack.id);
-    publication=await room.localParticipant.publishTrack(localTrack,await getScreenPublishVideoOptions(profile));
+    publication=await room.localParticipant.publishTrack(localTrack,screenEncodingOptions(await getScreenPublishVideoOptions(profile),${JSON.stringify(variant)}));
     return publication.trackSid;
   },
   async unpublish() {
@@ -167,7 +181,7 @@ window.bench = {
     localTrack?.stop(); clearInterval(drawing); publication=undefined;
   },
   hasPublication: sid => Boolean(remotePublication(sid)),
-  begin(sid) { reset(); const pub=remotePublication(sid); if (!pub) throw new Error('Missing screen publication'); pub.setSubscribed(true); pub.setVideoQuality(VideoQuality.HIGH); },
+  begin(sid,low=false) { reset(); const pub=remotePublication(sid); if (!pub) throw new Error('Missing screen publication'); pub.setSubscribed(true); pub.setVideoQuality(low?VideoQuality.LOW:VideoQuality.HIGH); },
   pause(sid) { remotePublication(sid)?.setSubscribed(false); },
   reset, sample,
   reference(pixels) {
@@ -177,7 +191,7 @@ window.bench = {
   startHints() { return connections.flatMap(pc => (pc.localDescription?.sdp || '').match(/x-google-start-bitrate=\d+/g) || []); },
   signaling() { return {events:signaling,senders:connections.flatMap(senderEncodings)}; },
   async close() { clearInterval(drawing); localTrack?.stop(); oscillator?.stop(); await audioContext?.close(); await room.disconnect(); },
-  environment() { return {userAgent:navigator.userAgent,hardwareConcurrency:navigator.hardwareConcurrency,codecs:RTCRtpSender.getCapabilities('video')?.codecs.map(c=>c.mimeType),profile}; }
+  environment() { return {userAgent:navigator.userAgent,hardwareConcurrency:navigator.hardwareConcurrency,codecs:RTCRtpSender.getCapabilities('video')?.codecs.map(c=>c.mimeType),profile,requestedVariant:${JSON.stringify(variant)},publishOptions}; }
 };
 `;
 
@@ -193,6 +207,7 @@ interface BenchSample extends StartupSample {
   droppedFrames: number | null;
   mae: number | null;
   psnr: number | null;
+  layers: unknown[];
 }
 
 function sampleOf(value: unknown): BenchSample {
@@ -218,12 +233,13 @@ function sampleOf(value: unknown): BenchSample {
     encodeMs: numeric('encodeMs'),
     droppedFrames: numeric('droppedFrames'),
     mae: numeric('mae'),
-    psnr: numeric('psnr')
+    psnr: numeric('psnr'),
+    layers: isArray(value.layers) ? [...value.layers] : []
   };
 }
 
 async function token(identity: string): Promise<string> {
-  const access = new AccessToken(key, secret, { identity, ttl: '10m' });
+  const access = new AccessToken(key, secret, { identity, ttl: '40m' });
   access.addGrant({ room: roomName, roomJoin: true, canPublish: true, canSubscribe: true });
   return access.toJwt();
 }
@@ -263,8 +279,10 @@ let browser: Browser | undefined;
 const cases: {
   name: string;
   result: ReturnType<typeof evaluateStartup>;
+  sustained: ReturnType<typeof evaluateSustained>;
   sender: BenchSample[];
   receiver: BenchSample[];
+  lowReceiver: BenchSample[];
   startHints: unknown;
   signaling: unknown;
 }[] = [];
@@ -279,37 +297,55 @@ try {
   browser = await chromium.launch({ headless: true, args: ['--autoplay-policy=no-user-gesture-required'] });
   const publisher = await browser.newPage();
   const viewer = await browser.newPage();
-  for (const page of [publisher, viewer]) {
+  const lowViewer = lowViewerEnabled ? await browser.newPage() : undefined;
+  for (const page of [publisher, viewer, ...(lowViewer ? [lowViewer] : [])]) {
     page.on('pageerror', (error) => console.error('Benchmark page:', error.message));
     await page.goto(`http://127.0.0.1:${address.port}/__screen-bench`);
     await page.waitForFunction('Boolean(window.bench)', undefined, { timeout: 30_000 });
   }
   await call(publisher, 'connect', endpoint.href, await token('publisher'), true);
   await call(viewer, 'connect', endpoint.href, await token('viewer'));
+  if (lowViewer) await call(lowViewer, 'connect', endpoint.href, await token('low-viewer'));
   environment = await call(publisher, 'environment');
 
   async function measure(name: string, sid: unknown): Promise<void> {
     if (typeof sid !== 'string') throw new Error('Publisher returned no track SID');
     await viewer.waitForFunction(`window.bench.hasPublication(${JSON.stringify(sid)})`, undefined, { timeout: 10_000 });
+    if (lowViewer) {
+      await lowViewer.waitForFunction(`window.bench.hasPublication(${JSON.stringify(sid)})`, undefined, {
+        timeout: 10_000
+      });
+    }
     await call(viewer, 'reference', await call(publisher, 'reference'));
     await call(publisher, 'reset');
     await call(viewer, 'begin', sid);
+    if (lowViewer) {
+      await call(lowViewer, 'begin', sid, true);
+    }
     const sender: BenchSample[] = [],
-      receiver: BenchSample[] = [];
+      receiver: BenchSample[] = [],
+      lowReceiver: BenchSample[] = [];
     // Prime counter deltas; the first sample is never a fabricated 30 FPS.
     await call(publisher, 'sample', 'send');
     await call(viewer, 'sample', 'receive');
+    if (lowViewer) await call(lowViewer, 'sample', 'receive');
     for (let second = 0; second < seconds; second++) {
       await new Promise((resolve) => setTimeout(resolve, 1000));
-      const [out, incoming] = await Promise.all([call(publisher, 'sample', 'send'), call(viewer, 'sample', 'receive')]);
+      const [out, incoming, low] = await Promise.all([
+        call(publisher, 'sample', 'send'),
+        call(viewer, 'sample', 'receive'),
+        lowViewer ? call(lowViewer, 'sample', 'receive') : Promise.resolve(undefined)
+      ]);
       sender.push(sampleOf(out));
       receiver.push(sampleOf(incoming));
+      if (lowViewer) lowReceiver.push(sampleOf(low));
     }
     const result = evaluateStartup(receiver);
+    const sustained = evaluateSustained(receiver);
     const startHints = await call(publisher, 'startHints');
     const signaling = await call(publisher, 'signaling');
-    cases.push({ name, result, sender, receiver, startHints, signaling });
-    console.log(JSON.stringify({ name, ...result }));
+    cases.push({ name, result, sustained, sender, receiver, lowReceiver, startHints, signaling });
+    console.log(JSON.stringify({ name, variant, ...result, sustained }));
   }
 
   // Exercise a pre-existing audio publisher, not only a brand-new video connection.
@@ -318,14 +354,20 @@ try {
   await new Promise((resolve) => setTimeout(resolve, 3000));
   await measure('first-share-delayed-viewer', sid);
   await call(viewer, 'pause', sid);
+  if (lowViewer) await call(lowViewer, 'pause', sid);
   await new Promise((resolve) => setTimeout(resolve, 7000));
   await measure('dynacast-resume', sid);
   await call(viewer, 'pause', sid);
+  if (lowViewer) await call(lowViewer, 'pause', sid);
   await call(publisher, 'unpublish');
   await new Promise((resolve) => setTimeout(resolve, 2000));
   sid = await call(publisher, 'publish');
   await measure('republish-same-connection', sid);
-  await Promise.all([call(publisher, 'close'), call(viewer, 'close')]);
+  await Promise.all([
+    call(publisher, 'close'),
+    call(viewer, 'close'),
+    ...(lowViewer ? [call(lowViewer, 'close')] : [])
+  ]);
 } finally {
   const cleanup = await Promise.all(
     [
@@ -360,6 +402,8 @@ try {
         roomName,
         environment,
         baseline,
+        variant,
+        lowViewerEnabled,
         limitation:
           'Synthetic loopback/headless Chromium; not the desktop native capture path or a shaped Internet link. Resolution/FPS do not measure visual fidelity.',
         cases
@@ -370,4 +414,8 @@ try {
   );
   console.log(`Results: ${output}`);
 }
-if (cases.length !== 3 || cases.some((result) => result.result.status !== 'pass')) process.exitCode = 1;
+if (
+  cases.length !== 3 ||
+  cases.some((result) => result.result.status !== 'pass' || (seconds >= 35 && result.sustained.status !== 'pass'))
+)
+  process.exitCode = 1;
