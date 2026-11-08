@@ -27,7 +27,7 @@
     "check": "npm --workspace @voice-room/shared run check && npm --workspace @voice-room/api run check && npm --workspace @voice-room/web run check && npm --workspace @voice-room/admin run check && tsc -p scripts/tsconfig.json && node scripts/check-web-palette.mts && node scripts/check-web-styles.mts && node scripts/check-test-source-reads.mts && node scripts/check-type-coverage.mts && npm run lint && npm run format:check",
     "lint": "eslint . --cache --cache-location node_modules/.cache/eslint/",
     "format": "prettier --write .",
-    "format:check": "prettier --check . --log-level warn",
+    "format:check": "prettier --check . --log-level warn --cache --cache-location node_modules/.cache/prettier/",
     "lint:baseline": "eslint . --suppress-all",
     "test": "npm --workspace @voice-room/shared run test && npm --workspace @voice-room/api run test && npm --workspace @voice-room/web run test && npm --workspace @voice-room/admin run test && node --test scripts/test/*.test.mts",
     "e2e": "npm --workspace @voice-room/web run e2e",

@@ -64,3 +64,61 @@ test('a second stop in a row is let through', (t) => {
   fs.writeFileSync(path.join(root, 'scripts', 'tool.mts'), 'export const x = 1;\n');
   assert.equal(stop(root, { stop_hook_active: true }), 0);
 });
+
+// A repository whose `npm run check` succeeds and counts its own runs.
+function passingRepo(t: TestContext): { root: string; runs: () => number } {
+  const root = repo(t);
+  const script = "require('fs').appendFileSync('runs.log','x')";
+  fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({ scripts: { check: `node -e "${script}"` } }));
+  const git = (...args: string[]) => execFileSync('git', args, { cwd: root, stdio: 'ignore' });
+  git('add', '.');
+  git('-c', 'user.name=test', '-c', 'user.email=test@example.com', 'commit', '-q', '-m', 'check');
+  const log = path.join(root, 'runs.log');
+  return { root, runs: () => (fs.existsSync(log) ? fs.readFileSync(log, 'utf8').length : 0) };
+}
+
+test('a tree that already passed is not checked again', (t) => {
+  const { root, runs } = passingRepo(t);
+  fs.writeFileSync(path.join(root, 'scripts', 'tool.mts'), 'export const x = 1;\n');
+  assert.equal(stop(root), 0);
+  assert.equal(stop(root), 0);
+  assert.equal(runs(), 1);
+});
+
+test('editing a file after a pass runs the check again', (t) => {
+  const { root, runs } = passingRepo(t);
+  const file = path.join(root, 'scripts', 'tool.mts');
+  fs.writeFileSync(file, 'export const x = 1;\n');
+  assert.equal(stop(root), 0);
+  fs.writeFileSync(file, 'export const x = 2;\n');
+  assert.equal(stop(root), 0);
+  assert.equal(runs(), 2);
+});
+
+test('deleting a file after a pass runs the check again', (t) => {
+  const { root, runs } = passingRepo(t);
+  const tool = path.join(root, 'scripts', 'tool.mts');
+  const extra = path.join(root, 'scripts', 'extra.mts');
+  fs.writeFileSync(tool, 'export const x = 1;\n');
+  fs.writeFileSync(extra, 'export {};\n');
+  assert.equal(stop(root), 0);
+  fs.rmSync(extra);
+  assert.equal(stop(root), 0);
+  assert.equal(runs(), 2);
+});
+
+test('a root config edit after a pass runs the check again', (t) => {
+  const { root, runs } = passingRepo(t);
+  fs.writeFileSync(path.join(root, 'scripts', 'tool.mts'), 'export const x = 1;\n');
+  assert.equal(stop(root), 0);
+  fs.writeFileSync(path.join(root, 'tsconfig.json'), '{}\n');
+  assert.equal(stop(root), 0);
+  assert.equal(runs(), 2);
+});
+
+test('a failed check is never remembered as passed', (t) => {
+  const root = repo(t);
+  fs.writeFileSync(path.join(root, 'scripts', 'tool.mts'), 'export const x = 1;\n');
+  assert.equal(stop(root), 2);
+  assert.equal(stop(root), 2);
+});
