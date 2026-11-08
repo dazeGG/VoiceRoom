@@ -21,7 +21,8 @@ import { askForMedia, describeMediaRefusal } from './media-grant';
 import { screenProfileBitrate } from '@voice-room/shared/media-budget';
 import { onDesktopScreenAudioLost, stopLocalScreenAudioCapture } from './desktop-screen-audio';
 import { isActiveCandidatePair, readRtcStats, type RtcStat } from '../media/rtc-stats';
-import { startScreenStartupDiagnostics } from '../media/screen-startup-diagnostics';
+import { startScreenStartupDiagnostics, type CaptureCounters } from '../media/screen-startup-diagnostics';
+import { startScreenSustainedDiagnostics } from '../media/screen-sustained-diagnostics';
 import { isScreenVideoPublication } from './livekit/publication-kinds';
 import { updateParticipant } from '../room/participants';
 import { isMicrophoneShownMuted } from '../core/microphone-mute';
@@ -34,6 +35,9 @@ import { createLogger, errorContext } from '@/shared/log';
 const log = createLogger('room:screen-share');
 let stopStartupDiagnostics: (() => void) | undefined;
 let startupPublicationId = '';
+// Sustained observation is per publication; a new viewer never restarts it.
+let stopSustainedDiagnostics: (() => void) | undefined;
+let sustainedPublicationId = '';
 let startupViewers = new Set<string>();
 let startupStartedAt = 0;
 let screenStatsGeneration = 0;
@@ -262,6 +266,9 @@ function stopLocalScreenStatsMonitor(options: { refresh?: boolean } = {}): void 
   stopStartupDiagnostics?.();
   stopStartupDiagnostics = undefined;
   startupPublicationId = '';
+  stopSustainedDiagnostics?.();
+  stopSustainedDiagnostics = undefined;
+  sustainedPublicationId = '';
   startupViewers = new Set();
   window.clearInterval(state.localScreenStatsTimer);
   state.localScreenStatsTimer = 0;
@@ -277,6 +284,17 @@ function syncLocalScreenStartupDiagnostics(): void {
   const viewers = [...state.peers.values()]
     .filter((peer) => peer.viewedScreenPeerId === state.peerId)
     .map((peer) => peer.id);
+  if (publication.trackSid !== sustainedPublicationId) {
+    stopSustainedDiagnostics?.();
+    sustainedPublicationId = publication.trackSid;
+    stopSustainedDiagnostics = startScreenSustainedDiagnostics({
+      direction: 'send',
+      trackId: publication.trackSid,
+      profileId: state.localScreenProfileId,
+      read: () => track.getRTCStatsReport(),
+      capture: readNativeCaptureCounters
+    });
+  }
   const changedPublication = publication.trackSid !== startupPublicationId;
   // A late viewer or a reopened stage may wake dynacast long after publication.
   // Never replace a running 30-second observation just because another viewer joins.
@@ -291,17 +309,21 @@ function syncLocalScreenStartupDiagnostics(): void {
     trackId: publication.trackSid,
     profileId: state.localScreenProfileId,
     read: () => track.getRTCStatsReport(),
-    capture: () => {
-      const capture = window.__voiceRoomNativeCaptureStats?.();
-      if (!capture) return undefined;
-      return {
-        framesReceived: capture.framesReceived,
-        framesWritten: capture.framesWritten,
-        framesDroppedBackpressure:
-          (capture.framesDroppedBackpressure ?? 0) + (capture.relay?.framesDroppedBackpressure ?? 0)
-      };
-    }
+    capture: readNativeCaptureCounters
   });
+}
+
+function readNativeCaptureCounters(): CaptureCounters | undefined {
+  const capture = window.__voiceRoomNativeCaptureStats?.();
+  if (!capture) return undefined;
+  return {
+    framesReceived: capture.framesReceived,
+    framesWritten: capture.framesWritten,
+    relayPausedMs: capture.relay?.helperPausedMs,
+    pipeline: capture.relay?.pipeline,
+    framesDroppedBackpressure:
+      (capture.framesDroppedBackpressure ?? 0) + (capture.relay?.framesDroppedBackpressure ?? 0)
+  };
 }
 
 async function updateLocalScreenStats(): Promise<void> {

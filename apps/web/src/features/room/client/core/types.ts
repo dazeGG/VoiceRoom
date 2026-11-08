@@ -315,6 +315,21 @@ declare global {
         framesInFlight?: number;
         framesParsed?: number;
         framesPosted?: number;
+        helperPausedMs?: number;
+        pipeline?: {
+          seq: number;
+          backend: 'wgc' | 'dxgi';
+          acquired: number;
+          pacingSkips: number;
+          pausedSkips: number;
+          written: number;
+          accumulated?: number;
+          sumMapUs: number;
+          sumWriteUs: number;
+          maxGapUs: number;
+          maxMapUs: number;
+          maxWriteUs: number;
+        };
         restarts?: number;
       } | null;
       sessionId?: string;
