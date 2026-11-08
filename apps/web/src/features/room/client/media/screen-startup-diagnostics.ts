@@ -4,11 +4,30 @@ import { isActiveCandidatePair, readRtcStats, type RtcStat, type RtcStatsSource 
 const log = createLogger('room:screen-startup');
 const WINDOW_MS = 30_000;
 const SAMPLE_MS = 1000;
+const PIPELINE_RECORD_LIMIT = 16;
 
-interface CaptureCounters {
+/** Cumulative since helper start, except the max*Us fields (about the last 2 s). */
+export interface PipelineCounters {
+  seq: number;
+  backend: string;
+  acquired: number;
+  pacingSkips: number;
+  pausedSkips: number;
+  written: number;
+  accumulated?: number | undefined;
+  sumMapUs: number;
+  sumWriteUs: number;
+  maxGapUs: number;
+  maxMapUs: number;
+  maxWriteUs: number;
+}
+
+export interface CaptureCounters {
+  pipeline?: PipelineCounters | undefined;
   framesReceived?: number | undefined;
   framesWritten?: number | undefined;
   framesDroppedBackpressure?: number | undefined;
+  relayPausedMs?: number | undefined;
 }
 
 interface PlaybackCounters {
@@ -27,7 +46,7 @@ export interface ScreenStartupDiagnosticsOptions {
   playback?: (() => PlaybackCounters | undefined) | undefined;
 }
 
-interface Snapshot {
+export interface Snapshot {
   at: number;
   stats: Map<string, RtcStat>;
   capture: CaptureCounters | undefined;
@@ -39,6 +58,9 @@ export function startScreenStartupDiagnostics(options: ScreenStartupDiagnosticsO
   const startedAt = Date.now();
   const probeId = `${options.direction}-${startedAt.toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
   const samples: LogContext[] = [];
+  // Separate records: the sender sample already uses all 18 intake keys.
+  const pipelineRecords: LogContext[] = [];
+  let previousPipeline: PipelineCounters | undefined;
   let previous: Snapshot | undefined;
   let stopped = false;
   let errors = 0;
@@ -51,7 +73,8 @@ export function startScreenStartupDiagnostics(options: ScreenStartupDiagnosticsO
     clearTimeout(deadline);
     clearTimeout(next);
     // Keep the global log ring free during sampling. At most 32 records enter it
-    // at once, each within the intake's 18-key / primitive-value limit.
+    // at once (30 samples, at most 16 pipeline records, 2 markers), each within
+    // the intake's 18-key / primitive-value limit.
     log.info('screen startup started', {
       probeId,
       startedAt,
@@ -60,6 +83,7 @@ export function startScreenStartupDiagnostics(options: ScreenStartupDiagnosticsO
       profileId: options.profileId
     });
     for (const context of samples) log.info('screen startup sample', context);
+    for (const context of pipelineRecords) log.info('screen capture pipeline', context);
     log.info('screen startup ended', {
       probeId,
       elapsedMs: Date.now() - startedAt,
@@ -68,6 +92,7 @@ export function startScreenStartupDiagnostics(options: ScreenStartupDiagnosticsO
       reason
     });
     samples.length = 0;
+    pipelineRecords.length = 0;
     previous = undefined;
     void reportClientLogs('screen startup diagnostics', 'info').catch(() => {});
   }
@@ -88,6 +113,16 @@ export function startScreenStartupDiagnostics(options: ScreenStartupDiagnosticsO
           elapsedMs: current.at - startedAt,
           ...(options.direction === 'send' ? senderSample(current, previous) : receiverSample(current, previous))
         });
+      }
+      const pipeline = current.capture?.pipeline;
+      // The relay posts every 2s while we sample every 1s: record only a new seq.
+      if (pipeline && pipeline.seq !== previousPipeline?.seq && pipelineRecords.length < PIPELINE_RECORD_LIMIT) {
+        pipelineRecords.push({
+          probeId,
+          elapsedMs: current.at - startedAt,
+          ...pipelineRecord(pipeline, previousPipeline)
+        });
+        previousPipeline = pipeline;
       }
       previous = current;
     } catch {
@@ -116,6 +151,30 @@ function delta(value: number | undefined, before: number | undefined): number | 
   return current === null || previous === null || current < previous ? null : current - previous;
 }
 
+function pipelineRecord(current: PipelineCounters, before: PipelineCounters | undefined): LogContext {
+  const written = delta(current.written, before?.written);
+  const averageMs = (sumUs: number | null) =>
+    sumUs !== null && written !== null && written > 0 ? rounded(sumUs / written / 1000) : null;
+  const ms = (us: number | undefined) => {
+    const value = finite(us);
+    return value === null ? null : rounded(value / 1000);
+  };
+  return {
+    seq: finite(current.seq),
+    backend: current.backend.slice(0, 20),
+    acquired: delta(current.acquired, before?.acquired),
+    pacingSkips: delta(current.pacingSkips, before?.pacingSkips),
+    pausedSkips: delta(current.pausedSkips, before?.pausedSkips),
+    written,
+    accumulated: delta(current.accumulated, before?.accumulated),
+    maxGapMs: ms(current.maxGapUs),
+    maxMapMs: ms(current.maxMapUs),
+    avgMapMs: averageMs(delta(current.sumMapUs, before?.sumMapUs)),
+    maxWriteMs: ms(current.maxWriteUs),
+    avgWriteMs: averageMs(delta(current.sumWriteUs, before?.sumWriteUs))
+  };
+}
+
 function perSecond(value: number | null, elapsed: number): number | null {
   return value === null || elapsed <= 0 ? null : rounded((value * 1000) / elapsed);
 }
@@ -141,7 +200,7 @@ function codecName(current: Snapshot, stat: RtcStat | undefined): string | null 
   return stat?.codecId ? (current.stats.get(stat.codecId)?.mimeType?.slice(0, 200) ?? null) : null;
 }
 
-function senderSample(current: Snapshot, previous: Snapshot | undefined): LogContext {
+export function senderSample(current: Snapshot, previous: Snapshot | undefined): LogContext {
   const stat = videoLayer(current.stats, 'outbound-rtp');
   const before = stat ? previous?.stats.get(stat.id) : undefined;
   const interval = frameInterval(current, previous, stat);
@@ -172,12 +231,15 @@ function senderSample(current: Snapshot, previous: Snapshot | undefined): LogCon
       encoded !== null && encoded > 0 && encodeSeconds !== null ? rounded((encodeSeconds * 1000) / encoded) : null,
     dropped: delta(stat?.framesDropped, before?.framesDropped),
     backpressure: delta(current.capture?.framesDroppedBackpressure, previous?.capture?.framesDroppedBackpressure),
+    // Cumulative, not a 1s delta: relay snapshots arrive only every 2 seconds.
+    // Missing on older desktops; do not mistake missing telemetry for no pause.
+    relayPausedMs: rounded(finite(current.capture?.relayPausedMs)),
     codec: codecName(current, stat),
     encoder: stat?.encoderImplementation?.slice(0, 200) ?? null
   };
 }
 
-function receiverSample(current: Snapshot, previous: Snapshot | undefined): LogContext {
+export function receiverSample(current: Snapshot, previous: Snapshot | undefined): LogContext {
   const stat = videoLayer(current.stats, 'inbound-rtp');
   const before = stat ? previous?.stats.get(stat.id) : undefined;
   const interval = frameInterval(current, previous, stat);

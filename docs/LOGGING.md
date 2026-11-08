@@ -158,7 +158,7 @@ While disabled the route answers `404`, and the browser stops trying for the
 life of the page.
 
 Intake treats every field as hostile input: the batch is capped at 100 records,
-messages at 200 characters, context at 12 primitive-valued keys, and control
+messages at 200 characters, context at 18 primitive-valued keys, and control
 characters are stripped so a caller cannot forge extra lines. Anything that
 fails validation is counted and reported once as `client.report_rejected`.
 Accounts come from the session cookie — a page cannot claim an identity.
