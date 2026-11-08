@@ -1,6 +1,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch, type Ref } from 'vue';
 import { isAppVisible, onAppVisibilityChange } from '@/platform/app-visibility';
 import { startScreenStartupDiagnostics } from './client/media/screen-startup-diagnostics';
+import { startScreenSustainedDiagnostics } from './client/media/screen-sustained-diagnostics';
 import { isScreenVideoPublication } from './client/services/livekit/publication-kinds';
 import { useScreenUiStore } from './screen-ui.store';
 
@@ -28,15 +29,20 @@ export function useScreenStartupDiagnostics(video: Ref<HTMLVideoElement | null>)
     [publication, video],
     ([source, element], _previous, onCleanup) => {
       if (!source || !element) return;
-      const stop = startScreenStartupDiagnostics({
-        direction: 'receive',
+      const observed = {
+        direction: 'receive' as const,
         trackId: source.trackSid,
         profileId: screenUi.getActiveScreenPeer()?.screenProfileId ?? '',
         // Begin before subscription completes: missing reports are not zero FPS.
         read: async () => source.track?.getRTCStatsReport(),
         playback: () => element.getVideoPlaybackQuality?.()
+      };
+      const stopStartup = startScreenStartupDiagnostics(observed);
+      const stopSustained = startScreenSustainedDiagnostics(observed);
+      onCleanup(() => {
+        stopStartup();
+        stopSustained();
       });
-      onCleanup(stop);
     },
     { immediate: true, flush: 'post' }
   );
