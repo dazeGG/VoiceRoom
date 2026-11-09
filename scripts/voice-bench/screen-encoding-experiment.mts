@@ -1,5 +1,5 @@
 import type { TrackPublishOptions } from 'livekit-client';
-import type { StartupSample } from './screen-startup-metrics.mts';
+import { evaluateStartup, type StartupSample } from './screen-startup-metrics.mts';
 
 export type ScreenEncodingVariant = 'default' | 'single-layer' | 'motion-framerate';
 
@@ -27,7 +27,10 @@ export function evaluateSustained(samples: readonly StartupSample[]): {
 } {
   const window = samples.filter((sample) => sample.elapsedMs > 5000);
   let goodObservations = 0;
-  let missing = false;
+  let missing = samples.some((sample, index) => {
+    const prior = samples[index - 1];
+    return !Number.isFinite(sample.elapsedMs) || (index > 0 && (!prior || sample.elapsedMs <= prior.elapsedMs));
+  });
   let previous: StartupSample | undefined = samples.filter((sample) => sample.elapsedMs <= 5000).at(-1);
   for (const sample of window) {
     if (
@@ -38,7 +41,7 @@ export function evaluateSustained(samples: readonly StartupSample[]): {
       sample.height === null ||
       !Number.isFinite(sample.width) ||
       !Number.isFinite(sample.height) ||
-      (!previous && sample.elapsedMs > 6800) ||
+      !previous ||
       (previous &&
         (sample.streamId !== previous.streamId ||
           sample.elapsedMs <= previous.elapsedMs ||
@@ -52,10 +55,41 @@ export function evaluateSustained(samples: readonly StartupSample[]): {
   }
   const first = window[0],
     last = window.at(-1);
-  const longEnough = window.length >= 30 && first && last && last.elapsedMs - first.elapsedMs >= 29_000;
+  const longEnough = first && last && last.elapsedMs - first.elapsedMs >= 120_000;
   return {
     status: !longEnough || missing ? 'inconclusive' : goodObservations === window.length ? 'pass' : 'degraded',
     observations: window.length,
     goodObservations
   };
+}
+
+/** Decoded FPS remains diagnostic; playback FPS alone drives both gates. */
+export interface RenderedSample extends StartupSample {
+  renderedFps: number | null;
+}
+
+export function evaluateCase(samples: readonly RenderedSample[]) {
+  const rendered = samples.map((sample) => ({ ...sample, fps: sample.renderedFps }));
+  return { result: evaluateStartup(rendered), sustained: evaluateSustained(rendered) };
+}
+
+export const expectedCases = ['first-share-delayed-viewer', 'dynacast-resume', 'republish-same-connection'] as const;
+
+export function evaluateRun(seconds: number, cases: readonly ({ name: string } & ReturnType<typeof evaluateCase>)[]) {
+  const mode = seconds >= 126 ? 'startup-and-sustained' : 'startup-only';
+  const names = cases.map((item) => item.name);
+  const complete =
+    names.length === expectedCases.length &&
+    expectedCases.every((name) => names.filter((item) => item === name).length === 1);
+  const pass =
+    complete &&
+    cases.every(
+      (item) => item.result.status === 'pass' && (mode === 'startup-only' || item.sustained.status === 'pass')
+    );
+  return {
+    mode,
+    complete,
+    status: pass ? 'pass' : 'fail',
+    sustainedProven: pass && mode === 'startup-and-sustained'
+  } as const;
 }

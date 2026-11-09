@@ -3,7 +3,9 @@ import test from 'node:test';
 import {
   evaluateStartup,
   loopbackLiveKitUrl,
+  loopbackRtcConfig,
   rgbPixelError,
+  screenBenchBrowserOptions,
   type StartupSample
 } from '../voice-bench/screen-startup-metrics.mts';
 
@@ -13,6 +15,21 @@ const good = (elapsedMs: number, streamId = 'track-1'): StartupSample => ({
   fps: 30,
   width: 1280,
   height: 720
+});
+
+test('loopback browser configuration does not use external ICE servers', () => {
+  assert.deepEqual(loopbackRtcConfig.iceServers, []);
+});
+
+test('isolated loopback flags are explicit, validated and do not alter defaults', () => {
+  const standard = { headless: true, args: ['--autoplay-policy=no-user-gesture-required'] };
+  assert.deepEqual(screenBenchBrowserOptions(undefined), standard);
+  assert.deepEqual(screenBenchBrowserOptions('0'), standard);
+  assert.deepEqual(screenBenchBrowserOptions('1'), {
+    headless: true,
+    args: [...standard.args, '--allow-loopback-in-peer-connection', '--disable-features=WebRtcHideLocalIpsWithMdns']
+  });
+  for (const invalid of ['', 'true', '2', ' 1']) assert.throws(() => screenBenchBrowserOptions(invalid));
 });
 
 test('the benchmark only accepts credential-free loopback WebSocket endpoints', () => {

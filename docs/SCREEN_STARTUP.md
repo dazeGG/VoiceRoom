@@ -6,9 +6,9 @@ The temporary Vite server imports the application's current `getScreenPublishVid
 
 Each case collects sender/receiver samples once per second for 15 seconds: encoded/decoded/rendered FPS, playback drops, dimensions, bitrate, bandwidth estimate, and encoder limitation. A fixed text/fine-line region is compared against the publisher's exact canvas pixels using RGB MAE and PSNR; the region does not move, so differing frame times do not masquerade as blur. Lower MAE/higher PSNR is better. A null PSNR together with zero MAE denotes an exact match. These visual measurements have no universal pass threshold: compare initial samples with that run's later steady samples.
 
-Passing the **resolution/FPS gate** requires three consecutive observations of at least 1280×720 and 27 decoded FPS, with the first qualifying observation within five seconds. Missing measurements, a changed RTP stream, and gaps between samples break the sequence. An incomplete sequence is inconclusive, not a pass. The process exits nonzero if any case does not pass. Sanitized signaling summaries record timing, video-section directions, codec mappings, track IDs, startup-bitrate hints and sender encodings; raw SDP, ICE credentials and candidate addresses are not retained.
+**FEATURE BRANCH / NOT YET IN DEVELOP OR PRODUCTION:** Passing the **resolution/FPS gate** requires three consecutive observations of at least 1280×720 and 27 rendered FPS, with the first qualifying observation within five seconds. Missing measurements, a changed RTP stream, and gaps between samples break the sequence. An incomplete sequence is inconclusive, not a pass. The process exits nonzero if any case does not pass. Sanitized signaling summaries record timing, video-section directions, codec mappings, track IDs, startup-bitrate hints and sender encodings; raw SDP, ICE credentials and candidate addresses are not retained.
 
-Options: `SCREEN_BENCH_URL`, `SCREEN_BENCH_KEY`, `SCREEN_BENCH_SECRET`, `SCREEN_BENCH_SECONDS` (5–600), `SCREEN_BENCH_BASELINE=1` (omit the startup repair for an A/B comparison), `SCREEN_BENCH_VARIANT` (below), and `RESULTS` (JSON output path, defaults to the OS temporary directory). Browser/room/server cleanup runs on failure too; the external SFU is not started or stopped by the script. Run baseline and repaired cases sequentially on an otherwise idle machine; concurrent builds/tests contaminate FPS measurements.
+Options: `SCREEN_BENCH_URL`, `SCREEN_BENCH_KEY`, `SCREEN_BENCH_SECRET`, `SCREEN_BENCH_SECONDS` (5–600), `SCREEN_BENCH_BASELINE=1` (omit the startup repair for an A/B comparison), `SCREEN_BENCH_VARIANT` (below), `SCREEN_BENCH_ISOLATED_LOOPBACK` (below), and `RESULTS` (JSON output path, defaults to the OS temporary directory). Browser/room/server cleanup runs on failure too; the external SFU is not started or stopped by the script. Run baseline and repaired cases sequentially on an otherwise idle machine; concurrent builds/tests contaminate FPS measurements.
 
 This is a repeatable local baseline, **not proof of Internet or desktop-game performance**. Inspect the recorded encoder implementation and compare received/rendered FPS; headless software encoding may itself be limited. Full resolution and FPS also do not prove visual fidelity: a blurry 720p frame still has 720 pixels of height. Do not claim that a real incident is fixed from this benchmark alone.
 
@@ -25,7 +25,7 @@ This is a repeatable local baseline, **not proof of Internet or desktop-game per
 Unknown values fail before creating a browser or room. Every run draws the same moving scene from frame zero. Do not combine a variant with `SCREEN_BENCH_BASELINE=1` when testing encoder layers: keep the startup repair constant. Run sequentially, repeat in reversed order, and keep the machine and background workload comparable. For example, with the disposable SFU already running, in PowerShell:
 
 ```powershell
-$env:SCREEN_BENCH_SECONDS = '60'
+$env:SCREEN_BENCH_SECONDS = '130'
 $env:SCREEN_BENCH_BASELINE = '0'
 $env:SCREEN_BENCH_LOW_VIEWER = '1'
 foreach ($variant in @('default', 'single-layer', 'motion-framerate')) {
@@ -39,7 +39,7 @@ Remove-Item Env:SCREEN_BENCH_VARIANT, Env:SCREEN_BENCH_SECONDS, Env:SCREEN_BENCH
 
 JSON records the requested variant and publication options, actual RTP layers (individual encoded/sent FPS, dimensions, codec and encoder), and actual sender encoding parameters in `signaling`. **Verify those observations before calling a result a one-versus-two H264 encoder comparison**: a requested layer can be inactive under dynacast, a browser may choose another codec, and headless Chromium does not reproduce the desktop GPU encoder. Do not sum layer FPS as if it were displayed FPS. `VOICE_ROOM_WEBRTC_HW_ENCODER=0` in the desktop application only removes its overrides; it is not a forced software-encoding mode and this harness does not change that desktop setting.
 
-The separate `sustained` assessment examines all decoded-FPS/resolution samples after the first five seconds. It requires at least 30 observations spanning at least 29 seconds, each at 720p/≥27 FPS, with no missing stats, changed RTP stream or sampling gap. A later 24/7 FPS collapse is `degraded`, not hidden by three good startup samples. Short or incomplete windows are `inconclusive`. Runs of at least 35 seconds fail the process if either the startup gate or sustained gate fails; the default 15-second run remains a startup-only gate. A passing decoded-FPS gate still requires inspection of rendered FPS, playback drops and visual error; it is not an end-to-end smoothness guarantee.
+**FEATURE BRANCH / NOT YET IN DEVELOP OR PRODUCTION:** At 126 seconds or more the benchmark selects startup-and-sustained mode; shorter runs are startup-only and cannot prove two-minute stability. All three expected named cases must pass. Sustained assessment uses actual rendered FPS and resolution for every sample after 5000 ms, requires at least 120000 ms observed first-to-last span, continuity with the prior sample, and gaps no greater than 1800 ms. Missing playback, changed streams or nonmonotonic times are inconclusive; a later collapse is not hidden by a good suffix. Use 130 seconds to allow sampling overhead, not as proof by itself. Decoded and send FPS remain diagnostics. These sampled gates do not establish every-frame cadence, capture-to-render latency, game impact or actual monitor presentation.
 
 Set `SCREEN_BENCH_LOW_VIEWER=1` to add a second viewer requesting the low layer, preventing the comparison from relying only on a high-quality viewer that lets dynacast deactivate the low encoder. Keep this option identical across variants. The JSON includes `lowViewerEnabled` and separate `lowReceiver` samples to verify its actual resolution/FPS. Unset remains the original one-viewer benchmark.
 
@@ -78,12 +78,15 @@ The optional `relayPausedMs` sender field is cumulative relay-commanded native-h
 
 ### Capture pipeline records
 
-A sender on a desktop that reports `relay.pipeline` also writes up to 16 `screen capture pipeline` records per startup window, one per new relay `seq` (the relay posts every two seconds while the sample is taken every second). They are separate from the sender sample, which already uses all 18 intake keys. Keys: `probeId`, `elapsedMs`, `seq`, `backend` (`wgc` or `dxgi`), the deltas `acquired`, `pacingSkips`, `pausedSkips`, `written`, `accumulated`, and `maxGapMs`, `maxMapMs`, `avgMapMs`, `maxWriteMs`, `avgWriteMs`.
+A sender on a desktop that reports `relay.pipeline` also writes up to 16 `screen capture pipeline` records per startup window, one per new relay `seq` (the relay posts every two seconds while the sample is taken every second). They are separate from the sender sample, which already uses all 18 intake keys. Keys: `probeId`, `elapsedMs`, `seq`, `backend` (`wgc` or `dxgi`), the deltas `acquired`, `pacingSkips`, `pausedSkips`, `written`, `accumulated`, and `maxGapMs`, `maxMapMs`, `avgMapMs`, `maxWriteMs`, `avgWriteMs`. **FEATURE BRANCH / NOT YET IN DEVELOP OR PRODUCTION:** four additional fields bring this record to 18 keys: deltas `acquireAttempts`, `acquireEmpty`, `callbackArrivals`, and `maxLockWaitMs`.
 
 The helper counters are cumulative since helper start; the record shows the delta since the previous record, so the first record has `null` deltas. A counter that went backwards (helper restart) also gives `null`, never a negative number. The `max*` values cover the interval since the previous relay post (about two seconds), so they are not deltas. Averages divide the summed time by the written frames of that delta. Times are milliseconds; the helper measures microseconds. `accumulated` exists only for DXGI; WGC reports `null`. An older desktop produces no pipeline records at all.
 
 Reading them: `pacingSkips` and `pausedSkips` are frames dropped by the FPS cap and by flow-control pause; `written` reached the pipe. `acquired` counts successful helper acquisitions; a low count can mean no new source frames (for example a static scene), or an unmeasured capture-loop stall. A gap alone proves neither a DXGI bug nor an encoder cause. `maxGapMs` includes an ongoing gap. `Map` measures elapsed synchronous Map, not the whole GPU conversion; write timing includes payload preparation, Unmap and flush (including BGRX CPU scaling), not just pipe latency. Large values identify intervals to investigate, not a proven bottleneck.
 
+**FEATURE BRANCH / NOT YET IN DEVELOP OR PRODUCTION:** Attempts count acquisition calls; empty counts no-frame returns, not errors or proof of a static source. WGC callback arrivals count callbacks before the frame lock, not unique frames; DXGI omits them. Lock wait is the maximum completed capture-path frame-lock wait in the interval, not an in-progress wait or GPU time. Missing older-helper values yield null, never fabricated zero. Internal session and restart identity and backend are compared before sequence deduplication; reset or sequence regression clears cumulative baselines, and missing pipeline clears the baseline. Identity is not logged. Legacy helpers without identity cannot expose every restart.
+
+For a controlled native-versus-Chromium comparison, use the same owned moving window and hardware, with native enabled versus `VOICE_ROOM_NATIVE_CAPTURE=0`, repeat in reverse order, and record actual backend and load. The existing own-window smoke updates every 50 ms and tests lifecycle only; it is not a 30 FPS gate. Monitor DXGI versus window WGC is not a same-source backend comparison.
 ### Sustained summaries
 
 The 30-second window hides late drops. A separate observer samples every two seconds for the whole publication and writes one `screen sustained summary` record per minute (at most 18 keys): `probeId`, `trackId`, `direction`, `elapsedMs`, `samples`, `errors`, `minFps`, `medianFps`, `lowSamples` (samples below 15 FPS), `avgBitrate`, `minHeight`. A sender adds `minCaptureFps`, `minEncodedFps`, `maxGapMs` (from the pipeline, only on desktops that report it) and `backpressure`; a viewer adds `freezes`, `lost` and `minRenderedFps`. For a sender `minFps` is the sent FPS, for a viewer the rendered FPS. Missing data stays `null`. Minima and medians ignore missing values, `samples` includes them, and `lowSamples` means below 15 FPS, not below 27. A sender observer can run without viewers; dynacast yielding zero sent FPS then does not prove bad playback.
@@ -114,7 +117,47 @@ Log flush can lag by up to five minutes; `probeId` encodes the start in base 36.
 
 ### Disposable local SFU for the isolated A/B
 
-The following was proposed after fixing container addressing; successful container startup does not prove ICE connectivity. Use only a disposable loopback server and no production accounts, rooms, microphone or screen. Stop only the container created here. Run without concurrent builds/tests, inspect JSON even on nonzero exit, repeat in reverse order with separate output files, then test `motion-framerate` independently if useful.
+**Loopback topology observation (2026-11-10):** On Docker Desktop for Windows, the published-loopback-port setup below reached signaling but could not establish an ICE connection in this environment. An alternative test used LiveKit 1.13.2 and Chromium 149 in separate task-owned containers sharing a `--network none` namespace, with no published ports and no external ICE servers. Chromium used task-local `--allow-loopback-in-peer-connection` and `--disable-features=WebRtcHideLocalIpsWithMdns`; neither flag changes the application. The default one-viewer run passed all three startup cases and one 130-second-per-case run passed the sampled rendered-FPS/resolution sustained gate, with at least 125 seconds observed per case. The short run does not itself establish stability. The isolated Linux/headless result does not establish Windows desktop capture, game impact, actual display presentation or Internet performance. Prior Docker Desktop failures remain connectivity failures, not FPS measurements.
+
+`SCREEN_BENCH_ISOLATED_LOOPBACK=1` opts the benchmark browser into exactly those two flags; unset or `0` preserves its normal browser arguments, and any other value is rejected. Use `1` **only** in a disposable, isolated network namespace: disabling mDNS host obfuscation can reveal local addresses to the SFU. The benchmark explicitly uses an empty ICE-server list in either mode. For example, from the repository root in PowerShell, with Docker Desktop running and enough disk for the pinned images and dependencies:
+
+```powershell
+$id = [guid]::NewGuid().ToString('N').Substring(0, 12)
+$volume = "screen-bench-$id"; $sfu = "screen-bench-sfu-$id"
+$prep = "screen-bench-prep-$id"; $startup = "screen-bench-start-$id"; $full = "screen-bench-full-$id"
+$image = 'mcr.microsoft.com/playwright:v1.61.1-noble'
+try {
+  docker volume create --label voiceroom.task=screen-bench $volume
+  # A read-only source mount is copied to a disposable volume; npm ci never changes host node_modules or lockfile.
+  docker run --rm --label voiceroom.task=screen-bench --mount "type=bind,source=$((Get-Location).Path),target=/src,readonly" --mount "type=volume,source=$volume,target=/work" $image bash -lc 'cd /src && tar --exclude=./.git --exclude=./.omx --exclude=node_modules --exclude=dist -cf - . | tar -xf - -C /work'
+  if ($LASTEXITCODE -ne 0) { throw 'Source copy failed' }
+  docker run --rm --network none --label voiceroom.task=screen-bench --mount "type=volume,source=$volume,target=/work" node:24.18.0-bookworm-slim sh -c 'mkdir -p /work/.node && cp -a /usr/local/. /work/.node/'
+  if ($LASTEXITCODE -ne 0) { throw 'Node copy failed' }
+  docker run --name $prep --label voiceroom.task=screen-bench --mount "type=volume,source=$volume,target=/work" $image bash -lc 'export PATH=/work/.node/bin:$PATH; cd /work; npm ci --no-audit --no-fund'
+  if ($LASTEXITCODE -ne 0) { throw 'Dependency install failed' }
+  docker run -d --name $sfu --label voiceroom.task=screen-bench --network none -e 'LIVEKIT_KEYS=devkey: secret' livekit/livekit-server:v1.13.2 --dev --bind 127.0.0.1 --node-ip 127.0.0.1 --udp-port 17882 --rtc.tcp_port 0 --rtc.enable_loopback_candidate
+  if ($LASTEXITCODE -ne 0) { throw 'SFU start failed' }
+  Start-Sleep -Seconds 3
+  foreach ($run in @(@{name=$startup; seconds=15; file='startup'}, @{name=$full; seconds=130; file='full'})) {
+    docker run --name $run.name --label voiceroom.task=screen-bench --network "container:$sfu" --mount "type=volume,source=$volume,target=/work" -e SCREEN_BENCH_URL=ws://127.0.0.1:7880 -e SCREEN_BENCH_ISOLATED_LOOPBACK=1 -e SCREEN_BENCH_SECONDS=$run.seconds -e RESULTS=/work/result.json $image bash -lc 'export PATH=/work/.node/bin:$PATH; cd /work; node scripts/voice-bench/screen-startup-bench.mts'
+    $exit = $LASTEXITCODE
+    docker cp "$($run.name):/work/result.json" "screen-bench-$id-$($run.file).json"
+    if ($LASTEXITCODE -ne 0) { throw 'Missing result JSON' }
+    $result = Get-Content -Raw "screen-bench-$id-$($run.file).json" | ConvertFrom-Json
+    Write-Host "$($run.file) exit=$exit gate=$($result.gate.status) cases=$($result.cases.Count)"
+    if ($result.cases.Count -ne 3) { throw 'Incomplete cases: inspect JSON before retrying' }
+  }
+} finally {
+  docker logs $sfu 2>&1 | Out-File "screen-bench-$id-sfu.log"
+  docker stop $sfu 2>$null
+  docker rm $startup $full $sfu $prep 2>$null
+  docker volume rm $volume 2>$null
+}
+```
+
+The image and lockfile dependencies may need downloading during preparation; measured containers have no network. SFU debug logs can contain ephemeral SDP, ICE credentials and addresses, so keep them private. Preserve failed JSON as well as passing results. The script runs the full measurement if all three startup cases exist, even when their FPS gate fails.
+
+The Windows published-loopback-port recipe below remains unverified for ICE in this environment; successful container startup does not prove ICE connectivity. Use only a disposable loopback server and no production accounts, rooms, microphone or screen. Stop only the container created here. Run without concurrent builds/tests, inspect JSON even on nonzero exit, repeat in reverse order with separate output files, then test `motion-framerate` independently if useful.
 
 ```powershell
 $container = 'voiceroom-screen-ab-' + (Get-Date -Format 'yyyyMMddHHmmss')
@@ -124,7 +167,7 @@ docker run -d --rm --name $container --label voiceroom.task=screen-encoding-ab `
   --dev --bind 0.0.0.0 --node-ip 127.0.0.1 --rtc.tcp_port 17881 `
   --udp-port 17882 --rtc.enable_loopback_candidate
 try {
-  $env:SCREEN_BENCH_SECONDS = '60'
+  $env:SCREEN_BENCH_SECONDS = '130'
   $env:SCREEN_BENCH_LOW_VIEWER = '1'
   $env:SCREEN_BENCH_BASELINE = '0'
   foreach ($variant in @('default', 'single-layer')) {

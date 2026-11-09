@@ -1,3 +1,18 @@
+/** Do not accept external ICE servers advertised by a local SFU. */
+export const loopbackRtcConfig = { iceServers: [] };
+
+/** Opt in only inside a disposable, network-isolated browser/SFU namespace. */
+export function screenBenchBrowserOptions(setting: string | undefined): { headless: true; args: string[] } {
+  if (setting !== undefined && setting !== '0' && setting !== '1') {
+    throw new Error('SCREEN_BENCH_ISOLATED_LOOPBACK must be 0, 1, or unset.');
+  }
+  const args = ['--autoplay-policy=no-user-gesture-required'];
+  if (setting === '1') {
+    args.push('--allow-loopback-in-peer-connection', '--disable-features=WebRtcHideLocalIpsWithMdns');
+  }
+  return { headless: true, args };
+}
+
 /** Only a disposable local SFU is allowed: this harness must never join production. */
 export function loopbackLiveKitUrl(input: string): URL {
   const url = new URL(input);
@@ -36,6 +51,9 @@ export function evaluateStartup(samples: readonly StartupSample[]): StartupResul
   for (const sample of samples) {
     const good =
       sample.streamId &&
+      Number.isFinite(sample.elapsedMs) &&
+      Number.isFinite(sample.width) &&
+      Number.isFinite(sample.height) &&
       Number.isFinite(sample.fps) &&
       (sample.fps ?? 0) >= 27 &&
       (sample.width ?? 0) >= 1280 &&
