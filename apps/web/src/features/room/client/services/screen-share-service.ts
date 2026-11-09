@@ -321,6 +321,8 @@ function readNativeCaptureCounters(): CaptureCounters | undefined {
     framesWritten: capture.framesWritten,
     relayPausedMs: capture.relay?.helperPausedMs,
     pipeline: capture.relay?.pipeline,
+    sessionId: capture.sessionId,
+    restarts: capture.relay?.restarts,
     framesDroppedBackpressure:
       (capture.framesDroppedBackpressure ?? 0) + (capture.relay?.framesDroppedBackpressure ?? 0)
   };

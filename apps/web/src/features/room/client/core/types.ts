@@ -320,6 +320,10 @@ declare global {
           seq: number;
           backend: 'wgc' | 'dxgi';
           acquired: number;
+          acquireAttempts?: number;
+          acquireEmpty?: number;
+          callbackArrivals?: number;
+          maxLockWaitUs?: number;
           pacingSkips: number;
           pausedSkips: number;
           written: number;
