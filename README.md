@@ -94,6 +94,13 @@ Production-стек — это `docker-compose.yml`: PostgreSQL, API, ворке
 
 Все переменные окружения, Docker, TURN, бэкапы, CI/CD и миграции описаны в [`docs/SELF_HOSTING.md`](./docs/SELF_HOSTING.md). Модель доступа и подробности про аккаунты — в [`docs/SECURITY.md`](./docs/SECURITY.md).
 
+## Документация
+
+- Архитектура и разработка: [архитектура](./docs/ARCHITECTURE.md), [Git Flow](./docs/GIT_FLOW.md), [производительность](./docs/PERFORMANCE.md), [логирование](./docs/LOGGING.md).
+- Эксплуатация и безопасность: [self-hosting](./docs/SELF_HOSTING.md), [безопасность](./docs/SECURITY.md), [LiveKit gate](./docs/LIVEKIT_GATE.md), [юридические вопросы](./docs/LEGAL.md).
+- Медиа: [запуск и диагностика трансляций](./docs/SCREEN_STARTUP.md).
+- Мобильные контракты: [удаление аккаунта](./docs/MOBILE.md#android-account-deletion-cookie-response-boundary), [жизненный цикл Ring](./docs/MOBILE.md#ring-lifecycle-for-android-v1), [жалобы пользователей](./docs/MOBILE.md#user-reporting-mobile-v1-backend-slice).
+
 ## Лицензия
 
 MIT License. Vendored RNNoise assets в `apps/web/public/rnnoise/` распространяются под собственной MIT-лицензией в `apps/web/public/rnnoise/LICENSE`. Атрибуция шрифтов, эмодзи, GeoIP и библиотек — на странице `/licenses`.

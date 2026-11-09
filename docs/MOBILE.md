@@ -1,6 +1,36 @@
-# Ring lifecycle for Android v1
+# Mobile contracts
 
-## Compatibility and meaning
+Mobile backend contracts for account deletion, Ring lifecycle, and user reports.
+
+## Android account deletion: cookie response boundary
+
+The Android client shares an OS-managed cookie jar across asynchronous HTTP
+requests. A successful deletion response can arrive after a different account
+has signed in. JavaScript cannot prevent a `Set-Cookie` clear already applied by
+that jar, so `POST /api/auth/account/deletion` omits the clearing response cookie
+when the existing shared parser recognizes a nonempty, valid Android app version.
+Browser and malformed-native user agents retain the previous clearing behavior.
+
+This is response delivery policy, not an authentication exception. Session
+resolution, password verification, rate limiting, account deletion, all-session
+revocation and token invalidation are unchanged. The Android jar may retain the
+old revoked token until the next sign-in replaces it; it no longer authenticates.
+A forged user agent does not make an unauthenticated deletion request succeed.
+
+The mobile client must still ignore stale operation results and guard HTTP 401
+session-ending side effects by authentication generation. Its release dependency
+must include this server change: JavaScript-only guards do not prevent cookie-jar
+mutation from an older backend response. No production deployment is implied.
+
+Regression coverage lives in `apps/api/test/account-deletion-http.test.ts` and
+`apps/api/test/account-domain.test.ts`: native success has no `Set-Cookie`, both
+old account tokens are unusable, a replacement account stays authenticated,
+browser/malformed-native success still clears, and user-agent spoofing cannot
+bypass session or password checks.
+
+## Ring lifecycle for Android v1
+
+### Compatibility and meaning
 
 The legacy `POST /api/rooms/:roomId/ring` still returns exactly `{ok:true}` and
 emits the existing `ring.incoming` plus room-invitation DM events. Caller voice
@@ -39,7 +69,7 @@ requests generate a new request UUID and retain their existing retry behavior.
 The configured per-pair rate window/count are enforced in PostgreSQL across API
 replicas, not an independent per-process limit. Idempotency lasts 24 hours.
 
-## Native delivery
+### Native delivery
 
 `room_rings` and `ring_delivery_outbox` are additive storage. Each API process
 runs a bounded embedded delivery runtime; database job claims fence replicas.
@@ -72,7 +102,7 @@ claim token. API shutdown stops polling and waits for its current delivery.
 In-flight network deliveries can still reorder; revision/tombstone handling and
 server revalidation are required, not inferred from fencing alone.
 
-## Deployment and rollback
+### Deployment and rollback
 
 No deployment is authorized by this source slice. Apply migration
 `20261026150100_create_room_rings` before this API, and deploy the reviewed
@@ -86,3 +116,57 @@ production down migration merely to roll back code: it discards Ring state/jobs.
 The controlled test down/up path drops only Ring tables and preserves DMs. No
 real account, production migration, token, service key or store action was used
 for local verification.
+
+## User reporting: mobile v1 backend slice
+
+### Compatibility decision
+
+`POST /api/reports` additionally accepts `{ target: { kind: 'user', userId }, reason, comment? }`.
+Its success shape remains `ReportFiled`. Message-report authorization, deduplication,
+rate limiting and resolution are unchanged. User and message filing share the same
+per-account limiter. Self-reporting returns 400 `invalid_request`; a missing or
+deleted target returns 404 `report_target_not_found`.
+
+New server-sent union values must ship one release before emission. Therefore this
+slice does **not** widen `AdminReportPage` or `AdminReportsEvent.filed.targetKind`.
+User reports have separate `AdminUserReportPage` and `UserReportResolveBody` schemas:
+
+- `GET /api/admin/user-reports` lists the oldest 200 open reports.
+- `POST /api/admin/user-reports/:reportId/resolve` accepts `reviewed` or `dismiss`.
+- Both require an authenticated staff session and `reports.review` permission.
+- The existing `admin.reports` event sends `filed: null` for user-report changes;
+  its count includes both report kinds. The current admin sidebar also polls both
+  lists, and the reports page has a dedicated user-review section.
+
+`reviewed` closes every open report of that user as `actioned`; `dismiss` closes
+them as `dismissed`. Neither deletes messages/users nor applies a sanction.
+Staff inspect the linked account and use the existing separately authorized
+account moderation tools when appropriate, then record their review decision.
+An account may be reported again after the previous reports have been closed.
+
+### Storage and retention
+
+Migration `20261026150000_create_user_reports.ts` adds a separate `user_reports`
+table and partial unique index on reporter/target while open. No existing message
+report table or data is altered. Database constraints reject self-targeting,
+unknown reasons, oversized comments and invalid open/resolved state combinations.
+
+Reporter references use `ON DELETE CASCADE`, matching existing content reports.
+Target references deliberately have no cascading foreign key: a target's deletion
+does not erase a pending moderation case. No profile snapshot is stored. Live
+profile data is read at review time; deleted/anonymized targets have blank profile
+fields and `deleted: true`. The normal account-deletion process anonymizes the
+existing user row, so the reviewer sees only the anonymized reporter identity.
+Operator legal/privacy retention decisions still require owner validation.
+
+### Deployment and rollback boundaries
+
+Deploy only under separately authorized release procedure. Apply the additive
+migration before running this API version. Older APIs continue to use only
+`content_reports`; an application rollback can leave `user_reports` intact.
+Do not run a down migration on production merely to roll back the application.
+
+The local/test down migration drops only `user_reports` (and therefore its cases),
+preserving all legacy message reports. Forward/down/reapply behavior and generated
+Kysely type equality are covered by database tests. No production migration or
+store submission is performed by this implementation slice.

@@ -1,4 +1,4 @@
-# Screen startup measurement
+# Screen streaming quality and diagnostics
 
 Run `node scripts/voice-bench/screen-startup-bench.mts` against a **disposable local LiveKit server** on `ws://127.0.0.1:17880` (development key `devkey`, secret `secret`). The script refuses non-loopback endpoints. It creates and deletes only its own uniquely named room, opens isolated headless Chromium pages, and uses a synthetic moving/text canvas: no real microphone, screen, account or production connection.
 
@@ -82,10 +82,66 @@ A sender on a desktop that reports `relay.pipeline` also writes up to 16 `screen
 
 The helper counters are cumulative since helper start; the record shows the delta since the previous record, so the first record has `null` deltas. A counter that went backwards (helper restart) also gives `null`, never a negative number. The `max*` values cover the interval since the previous relay post (about two seconds), so they are not deltas. Averages divide the summed time by the written frames of that delta. Times are milliseconds; the helper measures microseconds. `accumulated` exists only for DXGI; WGC reports `null`. An older desktop produces no pipeline records at all.
 
-Reading them: `acquired` is what the source delivered; `pacingSkips` and `pausedSkips` are frames dropped by the FPS cap and by flow-control pause; `written` reached the pipe. A low `acquired` means the source did not deliver (for example a static scene: a low FPS on a static scene is not a defect). `maxGapMs` includes a gap that is still running, so a stall is visible while it lasts. Large `maxMapMs` or `maxWriteMs` point at GPU readback or the pipe.
+Reading them: `pacingSkips` and `pausedSkips` are frames dropped by the FPS cap and by flow-control pause; `written` reached the pipe. `acquired` counts successful helper acquisitions; a low count can mean no new source frames (for example a static scene), or an unmeasured capture-loop stall. A gap alone proves neither a DXGI bug nor an encoder cause. `maxGapMs` includes an ongoing gap. `Map` measures elapsed synchronous Map, not the whole GPU conversion; write timing includes payload preparation, Unmap and flush (including BGRX CPU scaling), not just pipe latency. Large values identify intervals to investigate, not a proven bottleneck.
 
 ### Sustained summaries
 
-The 30-second window hides late drops. A separate observer samples every two seconds for the whole publication and writes one `screen sustained summary` record per minute (at most 18 keys): `probeId`, `trackId`, `direction`, `elapsedMs`, `samples`, `errors`, `minFps`, `medianFps`, `lowSamples` (samples below 15 FPS), `avgBitrate`, `minHeight`. A sender adds `minCaptureFps`, `minEncodedFps`, `maxGapMs` (from the pipeline, only on desktops that report it) and `backpressure`; a viewer adds `freezes`, `lost` and `minRenderedFps`. For a sender `minFps` is the sent FPS, for a viewer the rendered FPS. Missing data stays `null`.
+The 30-second window hides late drops. A separate observer samples every two seconds for the whole publication and writes one `screen sustained summary` record per minute (at most 18 keys): `probeId`, `trackId`, `direction`, `elapsedMs`, `samples`, `errors`, `minFps`, `medianFps`, `lowSamples` (samples below 15 FPS), `avgBitrate`, `minHeight`. A sender adds `minCaptureFps`, `minEncodedFps`, `maxGapMs` (from the pipeline, only on desktops that report it) and `backpressure`; a viewer adds `freezes`, `lost` and `minRenderedFps`. For a sender `minFps` is the sent FPS, for a viewer the rendered FPS. Missing data stays `null`. Minima and medians ignore missing values, `samples` includes them, and `lowSamples` means below 15 FPS, not below 27. A sender observer can run without viewers; dynacast yielding zero sent FPS then does not prove bad playback.
 
 Unlike the startup window, a new viewer does not restart it; it ends with the publication or when the stage closes. Records are logged and reported (`screen sustained diagnostics`) every five summaries and once more on stop, and sampling ends after 120 summaries per publication. It never changes a track, an encoding or a subscription; exceptions are only counted in `errors`.
+
+## Released state and compatibility (as of 2026-11-09)
+
+Web 2.12.15 and desktop 1.4.12 were published on November 8. The released work includes phase-preserving native pacing (55% early window and 45% minimum gap), acquisition/Map/write/pause telemetry and sustained summaries. Simulcast, codec preference and `maintain-resolution` policy remain unchanged. Desktop and web are separate releases: a website update does not deliver a native helper, and older clients need not have updated. No shared-texture bridge has been implemented. Release state is not proof of a controlled real-game improvement.
+
+The native path is WGC/DXGI texture → GPU conversion → staging/CPU readback → stdout pipe → utility relay → structured clone → renderer `VideoFrame` → track generator → WebRTC. Copies exist, but do not establish the bottleneck of any session. The queue is bounded to two in-flight frames; do not presume an unbounded backlog. Native `framesReceived` is measured after delivery to the renderer, not at WGC/DXGI input. `qualityLimitationReason=none` does not rule out CPU/GPU stalls; available bandwidth is a WebRTC estimate, not measured physical capacity.
+
+## Dated production findings, not controlled experiments
+
+- **November 7–8:** one MediaFoundation observation had capture around 19 FPS and sent around 6; other OpenH264 observations also showed low FPS, including native capture around 20–24 and later 3–7 FPS. A separate brief startup divergence was approximately 27 capture → 4 encoded FPS. These are different scenes/devices, not proof of a single encoder or capture cause. Scene motion was unknown; low FPS on static content alone is not a defect.
+- **November 9:** a 20:29 UTC dump contained 2,076 unique events, 60 startup windows (23 sender, 37 receiver; 42 complete), 158 pipeline records in 11 sender windows, and 396 sustained summaries across 20 publications, not 20 people. All reported pipeline windows used DXGI; this is not a backend comparison.
+- At 16:41 Moscow time, a 1080p30 sender and receiver ran over two minutes near 30 FPS, with zero reported freezes or lost packets; this was not controlled before/after evidence. At 18:04, an interval had average Map up to 27.49 ms, peak 77.86 ms, ten backpressure drops and about 549 ms commanded relay pause at startup; sent median was 27.8 FPS. This identifies a candidate for controlled measurement, not a universal readback bottleneck.
+- At 21:22, an interval showed zero acquired/written/skipped frames and a 2.967 s acquisition gap, followed by a 4.532 s gap with max Map 6.21 ms and max write 4.1 ms; a paired ~53 s viewer reported median rendered 6 FPS and 24 freezes. Source inactivity versus an unmeasured capture-loop stall is unresolved. At 21:30, gaps of 2.44–4.23 s coincided with a roughly 32-minute viewer observer reporting 514 freezes and 63 lost packets, with minute medians varying from 0 to 30 FPS. Do not count overlapping observers as distinct people.
+
+Log flush can lag by up to five minutes; `probeId` encodes the start in base 36. Client clocks are not synchronized: do not compute end-to-end latency from absolute sender/receiver timestamps. Missing samples are not zero, and a partial observer is not a full-duration measurement. The local encoding A/B and controlled real-game comparisons remain unproven; failed benchmark attempts with `cases: []` are not performance results.
+
+## Next experiments and acceptance gates (proposed, not an SLA)
+
+1. On the same hardware, load and continually moving game scene, compare DXGI with an alternative capture backend (including native versus Chromium where available). Test monitor and window separately, and first and late viewer, pause/resume and republish. Confirm the intended desktop helper version. For 720p30, require at least 27 **rendered** FPS within 3–5 seconds and sustained for at least two minutes; measure cadence, frame age/queue, freezes, loss and game FPS impact. Evaluate 1080p separately. A static scene is not an FPS gate. Record repetitions and failures, not just successful startup samples.
+2. Where existing records cannot distinguish no new source frames from a capture-loop stall, add only bounded, privacy-safe timeout/result and wait/lock/conversion timing instrumentation. Preserve failure evidence and compare capture, write, send and render without assuming a gap identifies DXGI or encoder causation.
+3. Run the isolated encoding variants above sequentially and in reverse order with the same low-viewer setting and startup repair. Verify actual layers, codec and encoder, and compare decoded/rendered FPS, bitrate, visual error and weak-receiver/network adaptation before any policy change. `single-layer` and `motion-framerate` are separate experiments; retain resolution priority for text. Do not globally disable hardware acceleration, frame dropping, adaptation or congestion control, or force a higher bitrate floor.
+4. Only if controlled load repeatedly establishes material readback cost, benchmark an experimental Electron 44.7.1 native shared texture → `sharedTexture` → renderer `getVideoFrame()` → existing track bridge PoC. Verify process-local handles, synchronization, formats, fallback, lifetime through `allReferencesReleased`, `VideoFrame.close()`/release, and actual copy costs including downstream hidden readback. Do not promise end-to-end zero-copy or replace the WebRTC engine on assumption.
+
+### Disposable local SFU for the isolated A/B
+
+The following was proposed after fixing container addressing; successful container startup does not prove ICE connectivity. Use only a disposable loopback server and no production accounts, rooms, microphone or screen. Stop only the container created here. Run without concurrent builds/tests, inspect JSON even on nonzero exit, repeat in reverse order with separate output files, then test `motion-framerate` independently if useful.
+
+```powershell
+$container = 'voiceroom-screen-ab-' + (Get-Date -Format 'yyyyMMddHHmmss')
+docker run -d --rm --name $container --label voiceroom.task=screen-encoding-ab `
+  -p 127.0.0.1:17880:7880 -p 127.0.0.1:17881:17881 -p 127.0.0.1:17882:17882/udp `
+  -e 'LIVEKIT_KEYS=devkey: secret' livekit/livekit-server:v1.13.2 `
+  --dev --bind 0.0.0.0 --node-ip 127.0.0.1 --rtc.tcp_port 17881 `
+  --udp-port 17882 --rtc.enable_loopback_candidate
+try {
+  $env:SCREEN_BENCH_SECONDS = '60'
+  $env:SCREEN_BENCH_LOW_VIEWER = '1'
+  $env:SCREEN_BENCH_BASELINE = '0'
+  foreach ($variant in @('default', 'single-layer')) {
+    $env:SCREEN_BENCH_VARIANT = $variant
+    $env:RESULTS = Join-Path $env:TEMP "screen-encoding-$variant.json"
+    node scripts/voice-bench/screen-startup-bench.mts
+  }
+} finally {
+  docker stop $container
+  Remove-Item Env:SCREEN_BENCH_SECONDS, Env:SCREEN_BENCH_LOW_VIEWER, Env:SCREEN_BENCH_BASELINE, Env:SCREEN_BENCH_VARIANT, Env:RESULTS -ErrorAction SilentlyContinue
+}
+```
+
+## References and limits
+
+- [Discord: How It All Goes Live (2024)](https://discord.com/blog/how-it-all-goes-live-an-overview-of-discords-streaming-technology) motivates examining the whole chain, adaptation and cadence rather than average FPS alone.
+- [Discord: Improving Go Live on AMD GPUs (2024)](https://discord.com/blog/from-blocky-to-brilliant-improving-video-quality-on-discord-go-live-on-amd-gpus) describes rate-control, frame-drop and encoder interactions: a hypothesis, not the established cause here.
+- [Electron sharedTexture v44.7.1](https://github.com/electron/electron/blob/v44.7.1/docs/api/shared-texture.md) documents the experimental API for the gated PoC.
+
+These sources do not establish Discord's current private pipeline, its exact startup bitrate, or Windows zero-copy based on another platform's results.
