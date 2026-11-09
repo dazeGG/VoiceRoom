@@ -11,6 +11,10 @@ export interface PipelineCounters {
   seq: number;
   backend: string;
   acquired: number;
+  acquireAttempts?: number | undefined;
+  acquireEmpty?: number | undefined;
+  callbackArrivals?: number | undefined;
+  maxLockWaitUs?: number | undefined;
   pacingSkips: number;
   pausedSkips: number;
   written: number;
@@ -23,6 +27,8 @@ export interface PipelineCounters {
 }
 
 export interface CaptureCounters {
+  sessionId?: string | undefined;
+  restarts?: number | undefined;
   pipeline?: PipelineCounters | undefined;
   framesReceived?: number | undefined;
   framesWritten?: number | undefined;
@@ -61,6 +67,7 @@ export function startScreenStartupDiagnostics(options: ScreenStartupDiagnosticsO
   // Separate records: the sender sample already uses all 18 intake keys.
   const pipelineRecords: LogContext[] = [];
   let previousPipeline: PipelineCounters | undefined;
+  let previousIdentity: Pick<CaptureCounters, 'sessionId' | 'restarts'> | undefined;
   let previous: Snapshot | undefined;
   let stopped = false;
   let errors = 0;
@@ -115,14 +122,37 @@ export function startScreenStartupDiagnostics(options: ScreenStartupDiagnosticsO
         });
       }
       const pipeline = current.capture?.pipeline;
-      // The relay posts every 2s while we sample every 1s: record only a new seq.
-      if (pipeline && pipeline.seq !== previousPipeline?.seq && pipelineRecords.length < PIPELINE_RECORD_LIMIT) {
-        pipelineRecords.push({
-          probeId,
-          elapsedMs: current.at - startedAt,
-          ...pipelineRecord(pipeline, previousPipeline)
-        });
-        previousPipeline = pipeline;
+      const identity = current.capture;
+      if (!pipeline) {
+        previousPipeline = undefined;
+        previousIdentity = undefined;
+      } else {
+        const changed =
+          previousPipeline &&
+          (pipeline.backend !== previousPipeline.backend ||
+            pipeline.seq < previousPipeline.seq ||
+            (identity?.sessionId !== undefined &&
+              previousIdentity?.sessionId !== undefined &&
+              identity.sessionId !== previousIdentity.sessionId) ||
+            (identity?.restarts !== undefined &&
+              previousIdentity?.restarts !== undefined &&
+              identity.restarts !== previousIdentity.restarts));
+        if (changed) previousPipeline = undefined;
+        // Compare identity before deduplicating repeated relay snapshots.
+        if (pipeline.seq !== previousPipeline?.seq) {
+          if (pipelineRecords.length < PIPELINE_RECORD_LIMIT) {
+            pipelineRecords.push({
+              probeId,
+              elapsedMs: current.at - startedAt,
+              ...pipelineRecord(pipeline, previousPipeline)
+            });
+          }
+          previousPipeline = pipeline;
+        }
+        previousIdentity = {
+          sessionId: identity?.sessionId ?? previousIdentity?.sessionId,
+          restarts: identity?.restarts ?? previousIdentity?.restarts
+        };
       }
       previous = current;
     } catch {
@@ -163,6 +193,10 @@ function pipelineRecord(current: PipelineCounters, before: PipelineCounters | un
     seq: finite(current.seq),
     backend: current.backend.slice(0, 20),
     acquired: delta(current.acquired, before?.acquired),
+    acquireAttempts: delta(current.acquireAttempts, before?.acquireAttempts),
+    acquireEmpty: delta(current.acquireEmpty, before?.acquireEmpty),
+    callbackArrivals: delta(current.callbackArrivals, before?.callbackArrivals),
+    maxLockWaitMs: ms(current.maxLockWaitUs),
     pacingSkips: delta(current.pacingSkips, before?.pacingSkips),
     pausedSkips: delta(current.pausedSkips, before?.pausedSkips),
     written,

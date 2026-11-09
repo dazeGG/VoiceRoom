@@ -8,10 +8,16 @@ import { chromium, type Browser, type Page } from '@playwright/test';
 import { createServer } from 'vite';
 import { AccessToken, RoomServiceClient } from 'livekit-server-sdk';
 import { isArray, isRecord } from '@voice-room/shared/guards';
-import { evaluateStartup, loopbackLiveKitUrl, type StartupSample } from './screen-startup-metrics.mts';
-import { evaluateSustained, screenEncodingVariant } from './screen-encoding-experiment.mts';
+import {
+  loopbackLiveKitUrl,
+  loopbackRtcConfig,
+  screenBenchBrowserOptions,
+  type StartupSample
+} from './screen-startup-metrics.mts';
+import { evaluateCase, evaluateRun, screenEncodingVariant } from './screen-encoding-experiment.mts';
 
 const endpoint = loopbackLiveKitUrl(process.env.SCREEN_BENCH_URL || 'ws://127.0.0.1:17880');
+const browserOptions = screenBenchBrowserOptions(process.env.SCREEN_BENCH_ISOLATED_LOOPBACK);
 const seconds = Number(process.env.SCREEN_BENCH_SECONDS || 15);
 if (!Number.isInteger(seconds) || seconds < 5 || seconds > 600) throw new Error('SCREEN_BENCH_SECONDS: 5–600.');
 const variant = screenEncodingVariant(process.env.SCREEN_BENCH_VARIANT);
@@ -144,7 +150,7 @@ async function sample(direction) {
 }
 window.bench = {
   async connect(url,token,withAudio=false) {
-    await room.connect(url,token,{autoSubscribe:false});
+    await room.connect(url,token,{autoSubscribe:false,rtcConfig:${JSON.stringify(loopbackRtcConfig)}});
     if (withAudio) {
       audioContext=new AudioContext(); oscillator=audioContext.createOscillator();
       const destination=audioContext.createMediaStreamDestination();
@@ -278,8 +284,8 @@ const vite = await createServer({
 let browser: Browser | undefined;
 const cases: {
   name: string;
-  result: ReturnType<typeof evaluateStartup>;
-  sustained: ReturnType<typeof evaluateSustained>;
+  result: ReturnType<typeof evaluateCase>['result'];
+  sustained: ReturnType<typeof evaluateCase>['sustained'];
   sender: BenchSample[];
   receiver: BenchSample[];
   lowReceiver: BenchSample[];
@@ -294,7 +300,7 @@ try {
   if (!address || typeof address === 'string') throw new Error('Vite did not bind a TCP port');
   await rooms.createRoom({ name: roomName, emptyTimeout: 30 });
   createdRoom = true;
-  browser = await chromium.launch({ headless: true, args: ['--autoplay-policy=no-user-gesture-required'] });
+  browser = await chromium.launch(browserOptions);
   const publisher = await browser.newPage();
   const viewer = await browser.newPage();
   const lowViewer = lowViewerEnabled ? await browser.newPage() : undefined;
@@ -340,8 +346,7 @@ try {
       receiver.push(sampleOf(incoming));
       if (lowViewer) lowReceiver.push(sampleOf(low));
     }
-    const result = evaluateStartup(receiver);
-    const sustained = evaluateSustained(receiver);
+    const { result, sustained } = evaluateCase(receiver);
     const startHints = await call(publisher, 'startHints');
     const signaling = await call(publisher, 'signaling');
     cases.push({ name, result, sustained, sender, receiver, lowReceiver, startHints, signaling });
@@ -404,8 +409,10 @@ try {
         baseline,
         variant,
         lowViewerEnabled,
+        isolatedLoopback: process.env.SCREEN_BENCH_ISOLATED_LOOPBACK === '1',
         limitation:
           'Synthetic loopback/headless Chromium; not the desktop native capture path or a shaped Internet link. Resolution/FPS do not measure visual fidelity.',
+        gate: evaluateRun(seconds, cases),
         cases
       },
       null,
@@ -414,8 +421,4 @@ try {
   );
   console.log(`Results: ${output}`);
 }
-if (
-  cases.length !== 3 ||
-  cases.some((result) => result.result.status !== 'pass' || (seconds >= 35 && result.sustained.status !== 'pass'))
-)
-  process.exitCode = 1;
+if (evaluateRun(seconds, cases).status !== 'pass') process.exitCode = 1;

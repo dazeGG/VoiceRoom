@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { startScreenStartupDiagnostics } from '@/features/room/client/media/screen-startup-diagnostics';
+import type { CaptureCounters } from '@/features/room/client/media/screen-startup-diagnostics';
 import type { LogContext } from '@/shared/log';
 
 const { info, report } = vi.hoisted(() => ({
@@ -367,5 +368,75 @@ test('invalid numeric stats stay missing, rather than becoming misleading zero o
     width: null,
     height: null,
     jitterMs: null
+  });
+});
+
+test('identity and backend resets precede seq deduplication and never leak identity', async () => {
+  let capture: CaptureCounters = {
+    sessionId: 'private-session-a',
+    restarts: 0,
+    pipeline: { ...pipeline(5, 1), acquireAttempts: 10, acquireEmpty: 2, callbackArrivals: 3, maxLockWaitUs: 1234 }
+  };
+  const stop = startScreenStartupDiagnostics({
+    direction: 'send',
+    trackId: 'TR_screen',
+    profileId: 'balanced-30',
+    read: async () => stats(),
+    capture: () => capture
+  });
+  await vi.advanceTimersByTimeAsync(0);
+  capture = {
+    ...capture,
+    pipeline: { ...pipeline(6, 2), acquireAttempts: 20, acquireEmpty: 4, callbackArrivals: 6, maxLockWaitUs: 2500 }
+  };
+  await vi.advanceTimersByTimeAsync(1000);
+  capture = { ...capture, restarts: 1, pipeline: { ...pipeline(6, 3), acquireAttempts: 30 } };
+  await vi.advanceTimersByTimeAsync(1000);
+  capture = { ...capture, sessionId: 'private-session-b', pipeline: pipeline(7, 4) };
+  await vi.advanceTimersByTimeAsync(1000);
+  capture = { ...capture, pipeline: { ...pipeline(7, 5), backend: 'wgc' } };
+  await vi.advanceTimersByTimeAsync(1000);
+  await vi.advanceTimersByTimeAsync(1000);
+  capture = { ...capture, pipeline: undefined };
+  await vi.advanceTimersByTimeAsync(1000);
+  capture = { ...capture, pipeline: pipeline(8, 6) };
+  await vi.advanceTimersByTimeAsync(1000);
+  stop();
+  const records = pipelineRecords();
+  expect(records).toHaveLength(6);
+  expect(records[1]).toMatchObject({ acquireAttempts: 10, acquireEmpty: 2, callbackArrivals: 3, maxLockWaitMs: 2.5 });
+  for (const record of records.slice(2))
+    expect(record).toMatchObject({ acquired: null, written: null, acquireEmpty: null });
+  expect(records[0]).toMatchObject({ acquireAttempts: null, maxLockWaitMs: 1.23 });
+  for (const record of records) {
+    expect(Object.keys(record)).toHaveLength(18);
+    expect(
+      Object.values(record).every((value) => value === null || ['string', 'number', 'boolean'].includes(typeof value))
+    ).toBe(true);
+  }
+  expect(JSON.stringify(info.mock.calls)).not.toContain('private-session');
+  expect(JSON.stringify(info.mock.calls)).not.toContain('restarts');
+});
+
+test('legacy optional counters remain null and decreasing sequence resets all baselines', async () => {
+  let current = pipeline(8, 1);
+  const stop = startScreenStartupDiagnostics({
+    direction: 'send',
+    trackId: 'TR_screen',
+    profileId: 'balanced-30',
+    read: async () => stats(),
+    capture: () => ({ pipeline: current })
+  });
+  await vi.advanceTimersByTimeAsync(0);
+  current = pipeline(7, 2);
+  await vi.advanceTimersByTimeAsync(1000);
+  stop();
+  expect(pipelineRecords()[1]).toMatchObject({
+    acquired: null,
+    written: null,
+    acquireAttempts: null,
+    acquireEmpty: null,
+    callbackArrivals: null,
+    maxLockWaitMs: null
   });
 });

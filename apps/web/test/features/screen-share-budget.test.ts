@@ -4,6 +4,7 @@
 
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import type { MediaGrant } from '@voice-room/shared/contracts/realtime';
+import type { startScreenStartupDiagnostics } from '@/features/room/client/media/screen-startup-diagnostics';
 import type * as MediaGrantModule from '@/features/room/client/services/media-grant';
 
 const P = '@/features/room/client';
@@ -65,7 +66,7 @@ async function loadScreenShare(
   const stream = fakeStream();
   const showToast = vi.fn();
   const stopDiagnostics = vi.fn();
-  const startDiagnostics = vi.fn(() => stopDiagnostics);
+  const startDiagnostics = vi.fn((_options: Parameters<typeof startScreenStartupDiagnostics>[0]) => stopDiagnostics);
   // The published screen track answers the stats the monitor asks for.
   const publishLocalScreenTracks = vi.fn(async () => {
     state.localScreenPublications.set('screen', {
@@ -302,4 +303,36 @@ test('a viewer leaving does not restart the sender observation', async () => {
   await vi.advanceTimersByTimeAsync(1500);
   expect(startDiagnostics).toHaveBeenCalledTimes(1);
   service.stopLocalScreenStream();
+});
+
+test('startup capture adapter forwards internal identity and tolerates legacy absence', async () => {
+  const { service, startDiagnostics } = await loadScreenShare(null);
+  const snapshot = {
+    sessionId: 'internal-session',
+    relay: {
+      restarts: 3,
+      pipeline: {
+        seq: 1,
+        backend: 'dxgi' as const,
+        acquired: 1,
+        pacingSkips: 0,
+        pausedSkips: 0,
+        written: 1,
+        sumMapUs: 0,
+        sumWriteUs: 0,
+        maxGapUs: 0,
+        maxMapUs: 0,
+        maxWriteUs: 0,
+        acquireAttempts: 2
+      }
+    }
+  };
+  window.__voiceRoomNativeCaptureStats = () => snapshot;
+  await service.handleScreenButtonClick();
+  const capture = startDiagnostics.mock.calls[0]?.[0].capture;
+  expect(capture?.()).toMatchObject({ sessionId: 'internal-session', restarts: 3, pipeline: { acquireAttempts: 2 } });
+  window.__voiceRoomNativeCaptureStats = () => ({ relay: null });
+  expect(capture?.()).toMatchObject({ sessionId: undefined, restarts: undefined, pipeline: undefined });
+  service.stopLocalScreenStream();
+  delete window.__voiceRoomNativeCaptureStats;
 });
