@@ -312,6 +312,8 @@ services:
       - caddy_config:/config
       # Web chunks of earlier releases, for tabs opened before a deploy.
       - web_archive:/srv/archive
+      # Extra sites managed on the host, imported by the Caddyfile.
+      - ./config/caddy/sites.d:/etc/caddy/sites.d:ro
 
   livekit:
     logging: *logging
