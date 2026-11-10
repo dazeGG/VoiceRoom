@@ -1,0 +1,11 @@
+---
+interface Props {
+  items: readonly string[];
+  tone?: 'yes' | 'no';
+}
+const { items, tone = 'yes' } = Astro.props;
+---
+
+<ul class:list={['checklist', { 'checklist--no': tone === 'no' }]}>
+  {items.map((item) => <li class="checklist__item">{item}</li>)}
+</ul>

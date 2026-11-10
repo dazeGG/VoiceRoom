@@ -1,0 +1,35 @@
+---
+// A table of differences: a row per question, a column per option.
+interface Props {
+  caption: string;
+  columns: readonly string[];
+  rows: readonly { label: string; cells: readonly string[] }[];
+  note?: string;
+}
+const { caption, columns, rows, note } = Astro.props;
+---
+
+<div class="compare">
+  <table class="compare__table">
+    <caption class="compare__caption">{caption}</caption>
+    <thead>
+      <tr>
+        <th scope="col"><span class="visually-hidden">Что сравниваем</span></th>
+        {columns.map((column) => <th scope="col">{column}</th>)}
+      </tr>
+    </thead>
+    <tbody>
+      {
+        rows.map((row) => (
+          <tr>
+            <th scope="row">{row.label}</th>
+            {row.cells.map((cell) => (
+              <td>{cell}</td>
+            ))}
+          </tr>
+        ))
+      }
+    </tbody>
+  </table>
+  {note && <p class="compare__note">{note}</p>}
+</div>
