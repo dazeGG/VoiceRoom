@@ -1,21 +1,28 @@
 ---
-// A table of differences: a row per question, a column per option.
+// A table of differences: a row per question, a column per option. `ours` is
+// the VoiceRoom column, which stands out; with `marks`, a «Да» or «Нет» cell
+// gets a tick or a dash beside the word.
+import Icon from './Icon.astro';
+
 interface Props {
   caption: string;
   columns: readonly string[];
   rows: readonly { label: string; cells: readonly string[] }[];
+  ours?: number;
+  marks?: boolean;
   note?: string;
 }
-const { caption, columns, rows, note } = Astro.props;
+const { caption, columns, rows, ours, marks = false, note } = Astro.props;
+const markOf = (cell: string) => (!marks ? null : cell === 'Да' ? 'yes' : cell === 'Нет' ? 'no' : null);
 ---
 
 <div class="compare">
   <table class="compare__table">
-    <caption class="compare__caption">{caption}</caption>
+    <caption class="visually-hidden">{caption}</caption>
     <thead>
       <tr>
         <th scope="col"><span class="visually-hidden">Что сравниваем</span></th>
-        {columns.map((column) => <th scope="col">{column}</th>)}
+        {columns.map((column, index) => <th scope="col" class:list={{ compare__ours: index === ours }}>{column}</th>)}
       </tr>
     </thead>
     <tbody>
@@ -23,13 +30,25 @@ const { caption, columns, rows, note } = Astro.props;
         rows.map((row) => (
           <tr>
             <th scope="row">{row.label}</th>
-            {row.cells.map((cell) => (
-              <td>{cell}</td>
-            ))}
+            {row.cells.map((cell, index) => {
+              const mark = markOf(cell);
+              return (
+                <td class:list={{ compare__ours: index === ours }}>
+                  {mark ? (
+                    <span class:list={['compare__mark', `compare__mark--${mark}`]}>
+                      <Icon name={mark === 'yes' ? 'check' : 'minus'} size={16} stroke={2.5} />
+                      {cell}
+                    </span>
+                  ) : (
+                    cell
+                  )}
+                </td>
+              );
+            })}
           </tr>
         ))
       }
     </tbody>
   </table>
-  {note && <p class="compare__note">{note}</p>}
 </div>
+{note && <p class="compare__note">{note}</p>}

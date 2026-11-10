@@ -1,7 +1,9 @@
 ---
 // Feature or scenario cards; a card with `href` is a link to its page.
+import Icon, { type IconName } from './Icon.astro';
+
 interface Props {
-  items: readonly { title: string; text: string; href?: string; link?: string }[];
+  items: readonly { title: string; text: string; icon?: IconName; href?: string; link?: string }[];
 }
 const { items } = Astro.props;
 ---
@@ -10,6 +12,11 @@ const { items } = Astro.props;
   {
     items.map((item) => (
       <li class="cards__item">
+        {item.icon && (
+          <span class="cards__icon">
+            <Icon name={item.icon} />
+          </span>
+        )}
         <h3 class="cards__title">{item.title}</h3>
         <p class="cards__text">{item.text}</p>
         {item.href && (

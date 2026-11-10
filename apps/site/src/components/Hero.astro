@@ -1,5 +1,6 @@
 ---
-// The top of a page: the one <h1>, what the page offers and the way in.
+// The top of a page: the one <h1>, what the page offers and the way in. A page
+// with a `visual` slot puts it beside the text; `center` stacks it underneath.
 interface Link {
   href: string;
   label: string;
@@ -8,21 +9,37 @@ interface Props {
   kicker: string;
   title: string;
   lead: string;
-  primary: Link;
+  primary?: Link;
   secondary?: Link;
   note?: string;
+  center?: boolean;
 }
-const { kicker, title, lead, primary, secondary, note } = Astro.props;
+const { kicker, title, lead, primary, secondary, note, center = false } = Astro.props;
+const hasVisual = Astro.slots.has('visual');
 ---
 
-<section class="hero">
-  <p class="hero__kicker"><span class="hero__dot" aria-hidden="true"></span>{kicker}</p>
-  <h1 class="hero__title">{title}</h1>
-  <p class="hero__lead">{lead}</p>
-  <div class="hero__actions">
-    <a class="site-button" href={primary.href}>{primary.label} <span aria-hidden="true">→</span></a>
-    {secondary && <a class="site-button site-button--ghost" href={secondary.href}>{secondary.label}</a>}
+<section class:list={['hero', { 'hero--center': center }]}>
+  <div class="hero__text">
+    <p class="hero__kicker"><span class="hero__dot" aria-hidden="true"></span>{kicker}</p>
+    <h1 class="hero__title">{title}</h1>
+    <p class="hero__lead">{lead}</p>
+    <div class="hero__actions">
+      {
+        primary && (
+          <a class="site-button" href={primary.href}>
+            {primary.label} <span aria-hidden="true">→</span>
+          </a>
+        )
+      }
+      {secondary && <a class="site-button site-button--ghost" href={secondary.href}>{secondary.label}</a>}
+    </div>
+    {note && <p class="hero__note">{note}</p>}
   </div>
-  {note && <p class="hero__note">{note}</p>}
-  <slot />
+  {
+    hasVisual && (
+      <div class="hero__visual">
+        <slot name="visual" />
+      </div>
+    )
+  }
 </section>

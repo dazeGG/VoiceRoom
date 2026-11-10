@@ -4,6 +4,7 @@ import Checklist from '../components/Checklist.astro';
 import CtaBand from '../components/CtaBand.astro';
 import Faq from '../components/Faq.astro';
 import Hero from '../components/Hero.astro';
+import ProductScreenshot from '../components/ProductScreenshot.astro';
 import Section from '../components/Section.astro';
 import Steps from '../components/Steps.astro';
 import Base from '../layouts/Base.astro';
@@ -11,6 +12,40 @@ import { faqJsonLd, jsonLdScript, type FaqItem } from '../seo.ts';
 import { PAGES, START_ROOM_HREF } from '../site.ts';
 
 const page = PAGES.screen;
+
+// The hero's two capture modes. Each shows an actual share received by a viewer
+// (docs/PROMO_SCREENSHOTS.md); a CSS radio switch picks one, no script.
+const shareModes = [
+  {
+    id: 'smooth',
+    label: 'Плавное видео',
+    fps: '30–60 FPS · для игр и видео',
+    tag: '30–60 FPS',
+    description: '30–60 кадров в секунду для игр, фильмов и видео. Кино можно смотреть вместе в 1080p.',
+    shot: {
+      src: '/promo/screen-share-video.png',
+      alt: 'Просмотр видео Big Buck Bunny через демонстрацию экрана VoiceRoom рядом с участниками звонка',
+      width: 1600,
+      height: 1000,
+      caption:
+        'Режим «Плавное видео» · Big Buck Bunny © 2008 Blender Foundation / www.bigbuckbunny.org · CC BY 3.0'
+    }
+  },
+  {
+    id: 'sharp',
+    label: 'Чёткая картинка',
+    fps: '5 FPS · для текста и кода',
+    tag: '5 FPS',
+    description: '5 кадров в секунду для документов и кода. Качество подстраивается под размер окна просмотра.',
+    shot: {
+      src: '/promo/screen-share-text.png',
+      alt: 'Просмотр окна редактора кода через демонстрацию экрана VoiceRoom в режиме «Чёткая картинка»',
+      width: 1600,
+      height: 1000,
+      caption: 'Режим «Чёткая картинка» · окно редактора кода · демонстрационная комната'
+    }
+  }
+] as const;
 
 const faq: FaqItem[] = [
   {
@@ -45,8 +80,61 @@ const jsonLd = jsonLdScript(faqJsonLd(faq));
     lead="Создайте комнату, отправьте ссылку и покажите экран или окно. Зрители увидят его в браузере: им не нужно ничего устанавливать и регистрироваться."
     primary={{ href: START_ROOM_HREF, label: 'Показать экран' }}
     secondary={{ href: PAGES.download.path, label: 'Приложение для компьютера' }}
-    note="Бесплатно · экран или окно · звук видео и игр"
-  />
+    note="Бесплатно · экран или окно · выбор режима в приложении для компьютера"
+  >
+    <div class="share-stage" slot="visual">
+      <div class="share-stage__screens">
+        {
+          shareModes.map((mode) => (
+            <div class="share-stage__screen" data-mode={mode.id}>
+              <ProductScreenshot
+                src={mode.shot.src}
+                alt={mode.shot.alt}
+                width={mode.shot.width}
+                height={mode.shot.height}
+                caption={mode.shot.caption}
+                priority
+              />
+              {mode.id === 'smooth' && (
+                <a class="mini__link" href="https://peach.blender.org/about/">
+                  Источник видео и лицензия CC BY 3.0
+                </a>
+              )}
+            </div>
+          ))
+        }
+      </div>
+      <fieldset class="share-stage__bar">
+        <legend class="visually-hidden">Режим демонстрации</legend>
+        <div class="segmented">
+          {
+            shareModes.map((mode) => (
+              <>
+                <input
+                  class="segmented__input visually-hidden"
+                  type="radio"
+                  name="share-mode"
+                  id={`share-mode-${mode.id}`}
+                  value={mode.id}
+                  checked={mode.id === 'sharp'}
+                />
+                <label class="segmented__option" for={`share-mode-${mode.id}`}>
+                  {mode.label}
+                </label>
+              </>
+            ))
+          }
+        </div>
+        {
+          shareModes.map((mode) => (
+            <span class="share-stage__fps" data-mode={mode.id}>
+              {mode.fps}
+            </span>
+          ))
+        }
+      </fieldset>
+    </div>
+  </Hero>
 
   <Section title="Три шага">
     <Steps
@@ -55,36 +143,58 @@ const jsonLd = jsonLdScript(faqJsonLd(faq));
         { title: 'Отправьте ссылку', text: 'Зрители откроют её в браузере и окажутся в комнате.' },
         {
           title: 'Покажите экран',
-          text: 'Нажмите демонстрацию, выберите экран или окно и режим — для движения или для текста.'
+          text: 'Нажмите демонстрацию и выберите экран или окно. В приложении можно выбрать режим — для движения или для текста.'
         }
       ]}
     />
   </Section>
 
-  <Section title="Как показывать">
+  <Section
+    title="Как показывать"
+    lead="Эти режимы выбираются в приложении для компьютера. Зрителям хватит браузера."
+  >
+    <div class="modes">
+      {
+        shareModes.map((mode) => (
+          <article class="mode">
+            <ProductScreenshot
+              src={mode.shot.src}
+              alt={mode.shot.alt}
+              width={mode.shot.width}
+              height={mode.shot.height}
+              caption={mode.shot.caption}
+            />
+            {mode.id === 'smooth' && (
+              <a class="mini__link" href="https://peach.blender.org/about/">
+                Источник видео и лицензия CC BY 3.0
+              </a>
+            )}
+            <span class="mode__tag">{mode.tag}</span>
+            <h3 class="cards__title">{mode.label}</h3>
+            <p class="cards__text">{mode.description}</p>
+          </article>
+        ))
+      }
+    </div>
     <Cards
       items={[
         {
-          title: 'Плавное видео',
-          text: '30–60 кадров в секунду для игр, фильмов и видео. Кино можно смотреть вместе в 1080p.'
-        },
-        {
-          title: 'Чёткая картинка',
-          text: '5 кадров в секунду, зато мелкий текст и код остаются читаемыми.'
-        },
-        {
+          icon: 'window',
           title: 'Экран или окно',
           text: 'Покажите весь экран или только одно окно, чтобы остальное не попало в кадр.'
         },
         {
+          icon: 'maximize',
           title: 'Большая сцена',
           text: 'Зрители смотрят стрим на большой сцене или в плитке рядом с остальными участниками.'
         },
         {
+          icon: 'video',
           title: 'Камера и голос рядом',
           text: 'Во время демонстрации можно говорить, включать камеру и писать в чат комнаты.'
         },
         {
+          icon: 'signal',
           title: 'Статус связи',
           text: 'Пинг, потери и джиттер видны в комнате, так проще понять, почему картинка подтормаживает.'
         }
@@ -97,7 +207,8 @@ const jsonLd = jsonLdScript(faqJsonLd(faq));
     lead="Передать звук видео или игры можно, но в браузере это зависит от самого браузера."
   >
     <div class="split">
-      <div class="split__column">
+      <div class="split__column split__column--accent">
+        <span class="split__label">Всегда со звуком</span>
         <h3 class="split__title">Приложение для Windows и macOS</h3>
         <Checklist
           items={[
@@ -108,12 +219,13 @@ const jsonLd = jsonLdScript(faqJsonLd(faq));
         />
       </div>
       <div class="split__column">
+        <span class="split__label">Зависит от браузера</span>
         <h3 class="split__title">Браузер</h3>
         <Checklist
           items={[
             'Chrome и Edge передают звук вкладки',
             'В Windows Chrome и Edge передают и звук всего экрана',
-            'Если звука нет, откройте комнату в Chrome или Edge или в приложении'
+            { text: 'Если звука нет, откройте комнату в Chrome или Edge или в приложении', mark: 'info' }
           ]}
         />
       </div>

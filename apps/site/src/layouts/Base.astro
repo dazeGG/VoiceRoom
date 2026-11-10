@@ -2,6 +2,7 @@
 // The frame of every page: what search engines and link previews read in <head>,
 // the menu and the footer. Pages pass their entry from site.ts.
 import '../styles/site.scss';
+import Icon from '../components/Icon.astro';
 import {
   APP_HREF,
   LEGAL_LINKS,
@@ -75,7 +76,24 @@ const current = Astro.url.pathname.replace(/\.html$/, '');
             ))
           }
         </nav>
-        <a class="site-button site-button--small" href={APP_HREF}>Открыть VoiceRoom</a>
+        <a class="site-button site-button--small" href={APP_HREF}
+          >Открыть<span class="site-header__app-name"> VoiceRoom</span></a
+        >
+        <details class="site-menu">
+          <summary class="site-menu__toggle">
+            <Icon name="menu" />
+            <span class="visually-hidden">Меню</span>
+          </summary>
+          <nav class="site-menu__drawer" aria-label="Разделы">
+            {
+              NAV_PAGES.map((item) => (
+                <a href={item.path} aria-current={current === item.path ? 'page' : undefined}>
+                  {item.nav}
+                </a>
+              ))
+            }
+          </nav>
+        </details>
       </div>
     </header>
 

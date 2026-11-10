@@ -3,7 +3,9 @@ import Cards from '../components/Cards.astro';
 import CtaBand from '../components/CtaBand.astro';
 import Checklist from '../components/Checklist.astro';
 import Faq from '../components/Faq.astro';
+import Icon from '../components/Icon.astro';
 import Hero from '../components/Hero.astro';
+import ProductScreenshot from '../components/ProductScreenshot.astro';
 import Section from '../components/Section.astro';
 import Steps from '../components/Steps.astro';
 import Base from '../layouts/Base.astro';
@@ -75,7 +77,23 @@ const jsonLd = jsonLdScript(
     primary={{ href: START_ROOM_HREF, label: 'Создать комнату' }}
     secondary={{ href: APP_HREF, label: 'У меня есть ссылка или код' }}
     note="Бесплатно · без имени и регистрации · временная комната живёт, пока в ней есть люди"
-  />
+  >
+    <ProductScreenshot
+      slot="visual"
+      src="/promo/voice-call.png"
+      alt="Голосовая комната VoiceRoom с участниками и панелью управления звонком"
+      width={1280}
+      height={800}
+      caption="Комната в браузере · демонстрационные участники"
+      priority
+      framed
+    >
+      <div class="linkcard" aria-hidden="true">
+        <span class="linkcard__label"><span class="linkcard__dot"></span>Ссылка готова</span>
+        <span class="linkcard__url">voiceroom.ru/r/код-комнаты</span>
+      </div>
+    </ProductScreenshot>
+  </Hero>
 
   <Section title="Как это работает">
     <Steps
@@ -97,38 +115,60 @@ const jsonLd = jsonLdScript(
   </Section>
 
   <Section title="Что есть в комнате">
-    <Cards
-      items={[
-        {
-          title: 'Голос с шумоподавлением',
-          text: 'RNNoise убирает фоновый шум, гейт микрофона отсекает тишину. Громкость каждого участника — от 0 до 200 %.'
-        },
-        {
-          title: 'Демонстрация экрана со звуком',
-          text: 'Экран или окно, режимы для игр и для текста. Кино и видео можно смотреть вместе в 1080p и 30 FPS.',
-          href: PAGES.screen.path,
-          link: 'Как показать экран'
-        },
-        {
-          title: 'Камера',
-          text: 'Видео в звонке, а каждый зритель получает качество под размер своей плитки.'
-        },
-        {
-          title: 'Чат комнаты',
-          text: 'Ответы, упоминания, реакции, картинки, превью ссылок и закреплённые сообщения.'
-        },
-        {
-          title: 'С телефона',
-          text: 'Комната открывается в мобильном браузере: голос, чат и просмотр чужого экрана. Приложение ставить не нужно.'
-        },
-        {
-          title: 'Приложение для компьютера',
-          text: 'Хоткеи поверх игр, оверлей с говорящими и звук стрима без эха — для Windows и macOS.',
-          href: PAGES.download.path,
-          link: 'Скачать приложение'
-        }
-      ]}
-    />
+    <div class="showcase">
+      <article class="showcase__card">
+        <div>
+          <h3 class="cards__title">Голос с шумоподавлением</h3>
+          <p class="cards__text">
+            RNNoise убирает фоновый шум, гейт микрофона отсекает тишину. Громкость каждого участника — от 0 до 200 %.
+          </p>
+        </div>
+        <ProductScreenshot
+          src="/promo/voice-mix.png"
+          alt="Настройка громкости одного участника VoiceRoom на 80 процентов во время звонка"
+          width={1280}
+          height={800}
+          caption="Громкость отдельного участника · демонстрационный звонок"
+        />
+      </article>
+      <article class="showcase__card">
+        <div>
+          <h3 class="cards__title">Чат комнаты</h3>
+          <p class="cards__text">Ответы, упоминания, реакции, картинки, превью ссылок и закреплённые сообщения.</p>
+        </div>
+        <ProductScreenshot
+          src="/promo/chat-features.png"
+          alt="Чат VoiceRoom с закреплённым сообщением, ответом, упоминанием, реакцией и превью ссылки"
+          width={1280}
+          height={800}
+          caption="Чат комнаты · демонстрационная переписка"
+        />
+      </article>
+    </div>
+    <ul class="mini">
+      <li class="mini__item">
+        <p class="mini__head"><Icon name="screen-share" />Экран со звуком</p>
+        <p class="mini__text">
+          Экран или окно, 1080p и 30 FPS. В приложении — режимы для игр и для текста.{' '}
+          <a class="mini__link" href={PAGES.screen.path}>Как показать экран <span aria-hidden="true">→</span></a>
+        </p>
+      </li>
+      <li class="mini__item">
+        <p class="mini__head"><Icon name="video" />Камера</p>
+        <p class="mini__text">Каждый зритель получает качество под размер своей плитки.</p>
+      </li>
+      <li class="mini__item">
+        <p class="mini__head"><Icon name="smartphone" />С телефона</p>
+        <p class="mini__text">Голос, чат и просмотр чужого экрана в мобильном браузере.</p>
+      </li>
+      <li class="mini__item">
+        <p class="mini__head"><Icon name="monitor" />Приложение</p>
+        <p class="mini__text">
+          Хоткеи поверх игр, оверлей и звук стрима без эха.{' '}
+          <a class="mini__link" href={PAGES.download.path}>Скачать <span aria-hidden="true">→</span></a>
+        </p>
+      </li>
+    </ul>
   </Section>
 
   <Section
@@ -137,6 +177,7 @@ const jsonLd = jsonLdScript(
   >
     <div class="split">
       <div class="split__column">
+        <span class="split__label">Без аккаунта</span>
         <h3 class="split__title">Временная</h3>
         <Checklist
           items={[
@@ -146,7 +187,8 @@ const jsonLd = jsonLdScript(
           ]}
         />
       </div>
-      <div class="split__column">
+      <div class="split__column split__column--accent">
+        <span class="split__label">С аккаунтом</span>
         <h3 class="split__title">Постоянная</h3>
         <Checklist
           items={[
@@ -164,18 +206,21 @@ const jsonLd = jsonLdScript(
     <Cards
       items={[
         {
+          icon: 'users',
           title: 'Вместо Discord для своих',
           text: 'Постоянная комната для компании друзей, в которую заходят по одной ссылке.',
           href: PAGES.discord.path,
           link: 'Чем отличается от Discord'
         },
         {
+          icon: 'screen-share',
           title: 'Показать экран другу',
           text: 'Помочь с настройками, посмотреть видео вместе или показать игру — без установки у зрителей.',
           href: PAGES.screen.path,
           link: 'Демонстрация экрана'
         },
         {
+          icon: 'gamepad',
           title: 'Голосовой чат в игре',
           text: 'Push-to-talk, хоткеи, которые работают поверх игры, и оверлей с теми, кто говорит.',
           href: PAGES.games.path,

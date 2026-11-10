@@ -40,16 +40,37 @@ const jsonLd = jsonLdScript(faqJsonLd(faq));
 
 <Base page={page} jsonLd={jsonLd}>
   <Hero
+    center
     kicker="Альтернатива Discord"
     title="Альтернатива Discord для своей компании"
     lead="VoiceRoom не пытается повторить Discord целиком. Он нужен для другого: позвать друзей в голосовую комнату одной ссылкой и через минуту уже говорить, показывать экран и играть вместе."
     primary={{ href: START_ROOM_HREF, label: 'Создать комнату' }}
     secondary={{ href: '#differences', label: 'Чем отличается' }}
     note="Бесплатно · друзьям не нужен аккаунт · в браузере и в приложении для Windows и macOS"
-  />
+  >
+    <ul class="invite-path" slot="visual" aria-label="Как позвать человека: в VoiceRoom и в Discord">
+      <li class="invite-path__row invite-path__row--ours">
+        <span class="invite-path__name">VoiceRoom</span>
+        <span class="invite-path__step">Ссылка или код</span>
+        <span class="invite-path__arrow" aria-hidden="true">→</span>
+        <span class="invite-path__step">Комната</span>
+        <span class="invite-path__end">без аккаунта</span>
+      </li>
+      <li class="invite-path__row">
+        <span class="invite-path__name">Discord</span>
+        <span class="invite-path__step">Приглашение</span>
+        <span class="invite-path__arrow" aria-hidden="true">→</span>
+        <span class="invite-path__step">Сервер</span>
+        <span class="invite-path__arrow" aria-hidden="true">→</span>
+        <span class="invite-path__step">Канал</span>
+        <span class="invite-path__end">нужен аккаунт</span>
+      </li>
+    </ul>
+  </Hero>
 
   <Section title="Кому подойдёт">
     <Checklist
+      grid
       items={[
         'Компании друзей, которая созванивается по вечерам и играет вместе',
         'Тем, кому нужен быстрый созвон: отправили ссылку — и все в комнате, без установки и регистрации',
@@ -63,30 +84,36 @@ const jsonLd = jsonLdScript(faqJsonLd(faq));
     <Cards
       items={[
         {
+          icon: 'home',
           title: 'Постоянная комната',
           text: 'Как свой голосовой канал: ссылка не меняется, история чата сохраняется, у комнаты есть название и аватарка.'
         },
         {
+          icon: 'screen-share',
           title: 'Экран и камера',
           text: 'Демонстрация экрана или окна со звуком и камера в том же звонке.',
           href: PAGES.screen.path,
           link: 'Про демонстрацию экрана'
         },
         {
+          icon: 'message',
           title: 'Чат',
           text: 'Ответы, упоминания, реакции, картинки, превью ссылок, закреплённые сообщения и личные сообщения.'
         },
         {
+          icon: 'users',
           title: 'Друзья и статусы',
           text: 'Список друзей, статусы присутствия и «Не беспокоить». Позвать друга в комнату можно одним кликом.'
         },
         {
+          icon: 'gamepad',
           title: 'Для игр',
           text: 'Push-to-talk, шумоподавление, громкость каждого участника, а в приложении — хоткеи и оверлей поверх игры.',
           href: PAGES.games.path,
           link: 'Голосовой чат для игр'
         },
         {
+          icon: 'shield',
           title: 'Модерация',
           text: 'Владелец комнаты исключает и блокирует участников, на время или навсегда, и удаляет сообщения.'
         }
@@ -98,6 +125,7 @@ const jsonLd = jsonLdScript(faqJsonLd(faq));
     <Compare
       caption="VoiceRoom и Discord: главные различия"
       columns={['VoiceRoom', 'Discord']}
+      ours={0}
       rows={[
         {
           label: 'Как позвать человека',
@@ -132,16 +160,19 @@ const jsonLd = jsonLdScript(faqJsonLd(faq));
     />
   </Section>
 
-  <Section title="Когда лучше остаться в Discord">
-    <Checklist
-      tone="no"
-      items={[
-        'Нужен сервер на сотни человек с каналами, ролями и правами доступа',
-        'Вы пользуетесь ботами, интеграциями, форумами или событиями',
-        'Вы общаетесь в основном с телефона: в VoiceRoom на телефоне доступны только комнаты, без лобби, друзей и личных сообщений'
-      ]}
-    />
-  </Section>
+  <section class="section">
+    <div class="aside-band">
+      <h2 class="section__title aside-band__title">Когда лучше остаться в Discord</h2>
+      <Checklist
+        tone="no"
+        items={[
+          'Нужен сервер на сотни человек с каналами, ролями и правами доступа',
+          'Вы пользуетесь ботами, интеграциями, форумами или событиями',
+          'Вы общаетесь в основном с телефона: в VoiceRoom на телефоне доступны только комнаты, без лобби, друзей и личных сообщений'
+        ]}
+      />
+    </div>
+  </section>
 
   <Section title="Как перейти за пять минут">
     <Steps

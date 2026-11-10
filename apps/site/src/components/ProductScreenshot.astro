@@ -1,0 +1,49 @@
+---
+// An actual interface capture (docs/PROMO_SCREENSHOTS.md): never cropped, with
+// its intrinsic size and a visible caption. `framed` sets it in a raised frame;
+// whatever the slot holds hangs off the frame's lower edge.
+interface Props {
+  src: string;
+  alt: string;
+  width: number;
+  height: number;
+  caption: string;
+  priority?: boolean;
+  compact?: boolean;
+  natural?: boolean;
+  framed?: boolean;
+}
+
+const {
+  src,
+  alt,
+  width,
+  height,
+  caption,
+  priority = false,
+  compact = false,
+  natural = false,
+  framed = false
+} = Astro.props;
+---
+
+<figure
+  class:list={[
+    'product-shot',
+    { 'product-shot--compact': compact, 'product-shot--natural': natural, 'product-shot--framed': framed }
+  ]}
+>
+  <div class="product-shot__frame">
+    <img
+      src={src}
+      alt={alt}
+      width={width}
+      height={height}
+      loading={priority ? 'eager' : 'lazy'}
+      fetchpriority={priority ? 'high' : undefined}
+      decoding="async"
+    />
+  </div>
+  <slot />
+  <figcaption>{caption}</figcaption>
+</figure>
