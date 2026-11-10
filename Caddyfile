@@ -37,7 +37,7 @@ import /etc/caddy/turn.d/*.site
     Permissions-Policy "microphone=(self), display-capture=(self), camera=(self), geolocation=(), payment=()"
   }
 
-  @immutable path /_app/immutable/* /assets/*
+  @immutable path /_app/immutable/* /assets/* /_astro/*
   # The audio files joining a call needs: fixed names, a content hash in the query.
   @versioned_audio {
     path /rnnoise/* /audio-gate.worklet.js /desktop-audio-source.worklet.js
@@ -48,7 +48,7 @@ import /etc/caddy/turn.d/*.site
   # reaches returning visitors within this month.
   @emoji path /emoji/*
   @web_fallback {
-    not path /api/* /_app/immutable/* /assets/* /emoji/*
+    not path /api/* /_app/immutable/* /assets/* /_astro/* /emoji/*
     not {
       path /rnnoise/* /audio-gate.worklet.js /desktop-audio-source.worklet.js
       query v=*
@@ -58,6 +58,30 @@ import /etc/caddy/turn.d/*.site
   header @versioned_audio Cache-Control "public, max-age=31536000, immutable"
   header @emoji Cache-Control "public, max-age=2592000"
   header @web_fallback Cache-Control "no-cache"
+
+  # The app's pages are not search results: the lobby, a room, a sign-in form.
+  # They stay crawlable (robots.txt), so a crawler sees this and leaves them out.
+  @app_private path /app /r/* /login /register
+  header @app_private X-Robots-Tag "noindex"
+  # Only the public host is indexed. Its pages name it as canonical anyway; a
+  # dev host or a self-hosted copy is kept out of search altogether.
+  @foreign_host not host {$CANONICAL_HOST:voiceroom.ru}
+  header @foreign_host X-Robots-Tag "noindex"
+
+  # `/` is the public site for a visitor. A signed-in browser (the session
+  # cookie, apps/api/src/app/config.ts SESSION_COOKIE_NAME) and the app's old
+  # links (?dm=, ?room=&message= from notifications, ?auth=) go on to the app,
+  # query kept. Any other query (utm_*, yclid, gclid) stays on the site.
+  @to_app_query {
+    path /
+    expression `{http.request.uri.query}.matches("(^|&)(dm|room|message|auth)=")`
+  }
+  @to_app_session {
+    path /
+    header_regexp Cookie `(?:^|[;\s])vr_session=[^;\s]`
+  }
+  redir @to_app_query /app?{query} 302
+  redir @to_app_session /app 302
 
   handle /runtime-config.json {
     header Content-Type "application/json; charset=utf-8"
@@ -117,13 +141,52 @@ import /etc/caddy/turn.d/*.site
     }
   }
 
-  # The build's .br and .gz (precompressPlugin) when there are any; encode above
+  # The app's addresses (apps/web/src/router.ts) answer with its page. The
+  # build's .br and .gz (precompressPlugin) when there are any; encode above
   # compresses the rest on the fly.
-  handle {
+  @app_page path /app /r/* /login /register /privacy /terms /licenses
+  handle @app_page {
     root * /srv/web
-    try_files {path} /index.html
+    rewrite * /index.html
     file_server {
       precompressed br gzip
+    }
+  }
+
+  # The public site (apps/site): `/` is its index.html, /download its download.html.
+  # Its 404 and index pages have no address of their own.
+  @site_file {
+    not path /404 /404.html /index /index.html
+    file {
+      root /srv/site
+      try_files {path} {path}.html {path}index.html
+    }
+  }
+  handle @site_file {
+    root * /srv/site
+    rewrite * {file_match.relative}
+    file_server
+  }
+
+  # Anything else is a file of the app's build (the service worker, icons,
+  # worklets) or does not exist.
+  handle {
+    root * /srv/web
+    file_server {
+      precompressed br gzip
+    }
+  }
+
+  # A missing page answers with the site's 404 page. A missing script, style,
+  # chunk or API path stays a bare 404, so the app reloads instead of running HTML.
+  handle_errors 404 {
+    @missing_page not path /api/* /_app/* /_astro/* *.js *.mjs *.css *.json *.wasm *.map *.woff2
+    handle @missing_page {
+      root * /srv/site
+      rewrite * /404.html
+      file_server {
+        status 404
+      }
     }
   }
 }

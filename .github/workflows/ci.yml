@@ -47,6 +47,9 @@ jobs:
   check:
     name: Lint, typecheck & build
     runs-on: ubuntu-latest
+    # astro check and astro build (apps/site) would otherwise send usage telemetry.
+    env:
+      ASTRO_TELEMETRY_DISABLED: 1
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
@@ -107,6 +110,7 @@ jobs:
       - run: npm ci
       - run: npm --workspace @voice-room/web run test
       - run: npm --workspace @voice-room/admin run test
+      - run: npm --workspace @voice-room/site run test
 
   voice-join:
     name: Voice room join smoke

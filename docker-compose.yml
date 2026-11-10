@@ -300,6 +300,8 @@ services:
       # SHA-256 fingerprint of the Android app's signing key for
       # /.well-known/assetlinks.json (docs/SELF_HOSTING.md); empty answers 404.
       ANDROID_RELEASE_CERT_SHA256: ${ANDROID_RELEASE_CERT_SHA256:-}
+      # The one host search engines may index; every other host answers noindex (docs/SELF_HOSTING.md).
+      CANONICAL_HOST: ${CANONICAL_HOST:-voiceroom.ru}
       # TURN/TLS on :443 for networks that block UDP and non-web ports. Needs a
       # DNS record for TURN_DOMAIN pointing at this host (docs/SELF_HOSTING.md, "TURN").
       TURN_ENABLED: ${TURN_ENABLED:-false}

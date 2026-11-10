@@ -6,6 +6,7 @@ COPY package.json package-lock.json ./
 COPY apps/api/package.json ./apps/api/package.json
 COPY apps/web/package.json ./apps/web/package.json
 COPY apps/admin/package.json ./apps/admin/package.json
+COPY apps/site/package.json ./apps/site/package.json
 COPY packages/shared/package.json ./packages/shared/package.json
 RUN npm ci
 
@@ -13,9 +14,13 @@ FROM deps AS web-build
 
 COPY apps/web ./apps/web
 COPY apps/admin ./apps/admin
+COPY apps/site ./apps/site
 COPY packages ./packages
+# The public site's build would otherwise send Astro's usage telemetry.
+ENV ASTRO_TELEMETRY_DISABLED=1
 RUN npm --workspace @voice-room/web run build \
   && npm --workspace @voice-room/admin run build \
+  && npm --workspace @voice-room/site run build \
   && node apps/web/scripts/emit-caddy-csp.ts apps/web/dist/index.html > /app/csp.caddy
 
 FROM node:24.18.0-alpine3.23 AS api
@@ -27,6 +32,7 @@ COPY package.json package-lock.json ./
 COPY apps/api/package.json ./apps/api/package.json
 COPY apps/web/package.json ./apps/web/package.json
 COPY apps/admin/package.json ./apps/admin/package.json
+COPY apps/site/package.json ./apps/site/package.json
 COPY packages/shared/package.json ./packages/shared/package.json
 RUN npm ci --omit=dev
 
@@ -62,6 +68,8 @@ COPY --chmod=0755 config/caddy/archive-assets.sh /usr/local/bin/voiceroom-archiv
 COPY --from=web-build /app/csp.caddy /etc/caddy/csp.caddy
 COPY config/caddy/admin-csp.caddy /etc/caddy/admin-csp.caddy
 COPY --from=web-build /app/apps/web/dist /srv/web
+# The public site: `/` for a visitor and the pages search engines read (Caddyfile).
+COPY --from=web-build /app/apps/site/dist /srv/site
 # The admin app, served only on ADMIN_DOMAIN behind the staff gate (Caddyfile).
 COPY --from=web-build /app/apps/admin/dist /srv/admin
 
