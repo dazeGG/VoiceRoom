@@ -266,6 +266,25 @@ node scripts/restore/restore-coordinated-snapshot.mts --snapshot /safe/archive/s
 
 Если relay через Docker-bridge не заработает (hairpin NAT до публичного IP ноды зависит от хоста), следующий шаг — `network_mode: host` для сервиса `livekit`.
 
+### Дополнительные сайты через Caddy
+
+Caddy VoiceRoom единственный слушает 80/443, поэтому чужие сайты на этом же хосте можно отдавать через него без пересборки образа. Положите `<имя>.caddy` в `config/caddy/sites.d` на хосте (в git эти файлы не попадают, деплой их не трогает). Файл подключается на верхнем уровне Caddyfile, это обычные блоки сайтов:
+
+```caddy
+app.example.com {
+  reverse_proxy my-app:8080
+}
+```
+
+DNS-запись домена должна указывать на этот хост, а контейнер-апстрим должен делить с Caddy сеть Docker, например подключиться к внешней сети `voiceroom_default`. Ошибка синтаксиса остановит Caddy, поэтому сначала проверьте, потом применяйте:
+
+```bash
+docker compose exec caddy caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+docker compose exec caddy caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile
+```
+
+Каталог смонтирован только для чтения; пока в нём нет `*.caddy`, Caddy работает как раньше.
+
 ### UDP-буферы для LiveKit
 
 Всё медиа LiveKit идёт через один UDP-сокет (`7882`). Ядро Ubuntu по умолчанию даёт сокету 212 КБ (`net.core.rmem_max`), и LiveKit пишет при старте `UDP receive buffer is too small for a production set-up`. Под нагрузкой такой буфер переполняется, и входящие пакеты стримеров пропадают ещё до SFU. Поднимите лимиты на хосте (параметры не относятся к сетевому namespace, поэтому задаются на хосте, а не в compose):
