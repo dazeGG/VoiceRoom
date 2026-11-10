@@ -17,6 +17,13 @@ import threading
 DESTINATION = Path('/var/lib/voiceroom/log-transition')
 RAW_LIMIT = 30 * 1024 * 1024
 ARCHIVE_LIMIT = 64 * 1024 * 1024
+DURABLE_OPTIONS = {
+    'syslog-address': 'unixgram:///run/systemd/journal.voiceroom/dev-log',
+    'tag': 'voiceroom/{{.Name}}/{{.ID}}',
+    'mode': 'non-blocking',
+    'max-buffer-size': '4m',
+    'cache-disabled': 'true',
+}
 STAMP = re.compile(r'^(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d+)?Z) (.*)$')
 
 
@@ -76,13 +83,14 @@ def archive(deploy_path, destination=DESTINATION, max_raw_bytes=RAW_LIMIT, max_a
         if initial_size > max_archive_bytes:
             raise ValueError('existing transition archive exceeds its total size cap')
         ids = command(['docker', 'compose', 'ps', '--all', '--quiet'], deploy_path, 65536).decode().split()
-        total_records = total_raw = containers = 0
+        total_records = total_raw = containers = durable_containers = 0
         for container_id in ids:
             if not re.fullmatch(r'[a-f0-9]{12,64}', container_id):
                 raise ValueError('unexpected Compose container identifier')
             metadata = json.loads(command([
                 'docker', 'inspect', '--format',
-                '{"id":{{json .Id}},"service":{{json (index .Config.Labels "com.docker.compose.service")}}}',
+                '{"id":{{json .Id}},"service":{{json (index .Config.Labels "com.docker.compose.service")}},'
+                '"loggingType":{{json .HostConfig.LogConfig.Type}},"loggingOptions":{{json .HostConfig.LogConfig.Config}}}',
                 container_id
             ], deploy_path, 65536))
             if not isinstance(metadata, dict):
@@ -93,6 +101,14 @@ def archive(deploy_path, destination=DESTINATION, max_raw_bytes=RAW_LIMIT, max_a
                 raise ValueError('unexpected Compose service label')
             if not isinstance(container_id, str) or not re.fullmatch(r'[a-f0-9]{64}', container_id):
                 raise ValueError('unexpected full container identifier')
+            logging_type = metadata.get('loggingType')
+            if logging_type == 'syslog' and metadata.get('loggingOptions') == DURABLE_OPTIONS:
+                # A partial rollout may already have durable containers with
+                # Docker's cache disabled. Their history is in the journal.
+                durable_containers += 1
+                continue
+            if logging_type not in ('json-file', 'local'):
+                raise ValueError('unverified log destination; transition capture must stop')
             raw = command(['docker', 'logs', '--since', cutoff, '--timestamps', container_id], deploy_path, max_raw_bytes)
             total_raw += len(raw)
             used = sum(entry.stat().st_size for entry in destination.iterdir() if entry.is_file() and not entry.is_symlink())
@@ -152,7 +168,8 @@ def archive(deploy_path, destination=DESTINATION, max_raw_bytes=RAW_LIMIT, max_a
             os.fsync(directory)
         finally:
             os.close(directory)
-        return {'containers': containers, 'records': total_records, 'rawBytes': total_raw, 'archiveBytes': size}
+        return {'containers': containers, 'durableContainers': durable_containers, 'records': total_records,
+                'rawBytes': total_raw, 'archiveBytes': size}
     finally:
         os.close(lock)
 

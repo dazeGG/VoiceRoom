@@ -134,7 +134,9 @@ main() {
   if [ "$first_logging_activation" = true ]; then
     # Capture succeeds before any old container is removed. Recheck voice after
     # capture, so its duration does not extend the idle-check/rollout gap.
-    python3 /etc/voiceroom/logging/archive-current.py "$PWD"
+    # Use the verified target release's helper so recovery fixes do not require
+    # replacing administrator-owned files during an application deployment.
+    python3 scripts/logging/archive-current.py "$PWD"
     check_logging_activation_idle
   fi
 

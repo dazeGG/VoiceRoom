@@ -260,11 +260,12 @@ test(
   }
 );
 
-function transitionFixture(t: TestContext) {
+function transitionFixture(t: TestContext, overrides: NodeJS.ProcessEnv = {}) {
   const { dir, env } = fakeCommands(t, { docker: 'exec python3 "$VR_FAKE_DOCKER" "$@"' });
   const destination = path.join(dir, 'archive');
   fs.mkdirSync(destination, { mode: 0o700 });
   const logs = path.join(dir, 'docker-output');
+  const captured = path.join(dir, 'captured-ids');
   const fakeDocker = path.join(dir, 'docker.py');
   fs.writeFileSync(
     fakeDocker,
@@ -272,10 +273,16 @@ function transitionFixture(t: TestContext) {
 from pathlib import Path
 args = sys.argv[1:]
 if args == ['compose', 'ps', '--all', '--quiet']:
+    if os.environ.get('VR_MIXED') == '1': print('b' * 64)
     print('a' * 64)
 elif args[0] == 'inspect':
-    print(json.dumps({'id': 'a' * 64, 'service': 'caddy'}))
+    durable = args[-1] == 'b' * 64
+    print(json.dumps({'id': args[-1], 'service': 'api' if durable else 'caddy',
+        'loggingType': 'syslog' if durable else os.environ.get('VR_LEGACY_DRIVER', 'json-file'),
+        'loggingOptions': json.loads(os.environ.get('VR_DURABLE_OPTIONS', '{}')) if durable else {}}))
 elif args[0] == 'logs':
+    with Path(os.environ['VR_CAPTURED_IDS']).open('a') as file: file.write(args[-1] + '\\n')
+    if args[-1] == 'b' * 64: sys.exit(88)
     assert args[1:4] == ['--since', '2026-10-27T00:00:00Z', '--timestamps']
     sys.stdout.buffer.write(Path(os.environ['VR_LOG_INPUT']).read_bytes())
     sys.exit(int(os.environ.get('VR_LOG_EXIT', '0')))
@@ -306,13 +313,76 @@ print(json.dumps(result))
         String(archiveLimit)
       ],
       {
-        env: { ...env, VR_FAKE_DOCKER: fakeDocker, VR_LOG_INPUT: logs, VR_LOG_EXIT: String(exit) },
+        env: {
+          ...env,
+          VR_FAKE_DOCKER: fakeDocker,
+          VR_LOG_INPUT: logs,
+          VR_LOG_EXIT: String(exit),
+          VR_CAPTURED_IDS: captured,
+          ...overrides
+        },
         encoding: 'utf8'
       }
     );
   };
-  return { destination, run };
+  return {
+    destination,
+    run,
+    captured: () => (fs.existsSync(captured) ? fs.readFileSync(captured, 'utf8').trim().split('\n') : [])
+  };
 }
+
+test(
+  'mixed transition skips only verified durable containers and captures remaining local logs',
+  { skip: !python || !bash || !linux },
+  async (t) => {
+    for (const legacy of ['json-file', 'local']) {
+      await t.test(legacy, (t) => {
+        const fixture = transitionFixture(t, {
+          VR_MIXED: '1',
+          VR_DURABLE_OPTIONS: JSON.stringify(options),
+          VR_LEGACY_DRIVER: legacy
+        });
+        const result = fixture.run('2026-11-09T00:00:00Z {"msg":"legacy history"}\n');
+        assert.equal(result.status, 0, result.stderr);
+        assert.deepEqual(
+          fixture.captured(),
+          ['a'.repeat(64)],
+          'cache-disabled syslog must never be queried with docker logs'
+        );
+        assert.match(result.stdout, /"durableContainers": 1/);
+        assert.deepEqual(
+          fs.readdirSync(fixture.destination).filter((name) => name.endsWith('.jsonl.gz')),
+          [`caddy-${'a'.repeat(64)}.jsonl.gz`]
+        );
+      });
+    }
+  }
+);
+
+test(
+  'transition refuses an unknown syslog sink or any unverified durable logging option',
+  { skip: !python || !bash || !linux },
+  async (t) => {
+    for (const key of Object.keys(options)) {
+      await t.test(key, (t) => {
+        const fixture = transitionFixture(t, {
+          VR_MIXED: '1',
+          VR_DURABLE_OPTIONS: JSON.stringify({ ...options, [key]: 'unexpected' })
+        });
+        const result = fixture.run('2026-11-09T00:00:00Z legacy\n');
+        assert.notEqual(result.status, 0);
+        assert.deepEqual(fixture.captured(), []);
+        assert.equal(fs.readdirSync(fixture.destination).filter((name) => name.endsWith('.jsonl.gz')).length, 0);
+      });
+    }
+    await t.test('unsupported legacy driver', (t) => {
+      const fixture = transitionFixture(t, { VR_LEGACY_DRIVER: 'journald' });
+      assert.notEqual(fixture.run('2026-11-09T00:00:00Z legacy\n').status, 0);
+      assert.deepEqual(fixture.captured(), []);
+    });
+  }
+);
 
 function rolloutFixture(t: TestContext) {
   const { dir, env } = fakeCommands(t, {
