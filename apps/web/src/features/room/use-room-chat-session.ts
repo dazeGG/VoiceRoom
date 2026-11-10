@@ -364,15 +364,18 @@ export function useRoomChatSession(host: RoomChatHost) {
   const readResync = createTrailingTask(READ_RESYNC_DELAY_MS, () => void resyncNewestRead());
 
   async function resyncNewestRead(): Promise<void> {
+    const snapshot = timeline.beginSnapshot();
     try {
       const roomId = host.roomId();
       const page = await fetchRoomChatPage(roomId, { mode: 'latest', limit: 1 });
       if (!timeline.paged || host.roomId() !== roomId) return;
-      timeline.reconcileLatest(page.messages);
+      if (!timeline.reconcileLatest(page.messages, snapshot)) return;
       await nextTick();
       await markLatestRenderedRead();
     } catch (cause) {
       log.error('failed to reconcile realtime room read cursor', errorContext(cause));
+    } finally {
+      snapshot.dispose();
     }
   }
 
