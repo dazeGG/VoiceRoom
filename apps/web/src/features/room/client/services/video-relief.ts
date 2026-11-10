@@ -2,19 +2,15 @@
 // lighter noise suppression: video gets lighter for the rest of the call,
 // silently. Our camera stops at its 360p layer, other people's cameras come in
 // at the smallest layer unless one is opened large (remote-participants.ts),
-// and our screen share sends at most 30 frames a second.
+// and our screen capture requests at most 15 frames a second.
 
 import type { LocalTrackPublication } from 'livekit-client';
 import { RELIEVED_SCREEN_FRAME_RATE } from '../core/config';
 import { state } from '../core/room-runtime.store';
 import { loadLiveKitClient } from '../media/livekit-runtime';
+import { getScreenProfile } from '../media/profiles';
 import { syncRemoteCameraDemand } from './livekit/remote-participants';
-import { createLogger, errorContext } from '@/shared/log';
-
-const log = createLogger('room:cpu');
-
-/** What the relief needs of a shared screen: its video tracks' rate and a way to cap it. */
-type ScreenCapture = { getVideoTracks(): Pick<MediaStreamTrack, 'getSettings' | 'applyConstraints'>[] };
+import { limitScreenCaptureFrameRate } from './screen-capture-service';
 
 /** Our camera publication, lighter while the call is relieved. */
 export async function applyVideoReliefToCamera(publication: LocalTrackPublication | null | undefined): Promise<void> {
@@ -24,16 +20,9 @@ export async function applyVideoReliefToCamera(publication: LocalTrackPublicatio
 }
 
 /** Our shared screen, at most RELIEVED_SCREEN_FRAME_RATE while the call is relieved. */
-export async function applyVideoReliefToScreen(stream: ScreenCapture | null | undefined): Promise<void> {
+export async function applyVideoReliefToScreen(stream: MediaStream | null | undefined): Promise<void> {
   if (!state.videoRelieved || !stream) return;
-  for (const track of stream.getVideoTracks()) {
-    const frameRate = track.getSettings().frameRate;
-    if (frameRate !== undefined && frameRate <= RELIEVED_SCREEN_FRAME_RATE) continue;
-    // A capture that cannot take the constraint (the desktop app's native one) keeps its rate.
-    await track.applyConstraints({ frameRate: { max: RELIEVED_SCREEN_FRAME_RATE } }).catch((error: unknown) => {
-      log.info('screen frame rate kept', errorContext(error));
-    });
-  }
+  await limitScreenCaptureFrameRate(stream, getScreenProfile(state.localScreenProfileId), RELIEVED_SCREEN_FRAME_RATE);
 }
 
 /** Makes the call's video lighter, once per call; the start of a call clears it (room.ts). */

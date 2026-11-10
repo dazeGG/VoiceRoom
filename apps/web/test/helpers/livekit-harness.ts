@@ -7,6 +7,7 @@ import { createPinia, setActivePinia } from 'pinia';
 import { vi } from 'vitest';
 import type { Participant } from '@/features/room/client/core/types.ts';
 import type * as LiveKitServiceModule from '@/features/room/client/services/livekit-service.ts';
+import type * as ScreenProfilesModule from '@/features/room/client/media/profiles';
 
 type Peer = Record<string, unknown> & { id: string };
 
@@ -226,11 +227,14 @@ export async function loadLiveKitHarness(
     }
   }));
   vi.doMock(`${P}/media/cues`, () => ({ clearPeerJoinCue: () => {} }));
-  vi.doMock(`${P}/media/profiles`, () => ({
-    getPreferredCameraVideoCodec: () => options.cameraCodec ?? 'h264',
-    getScreenProfile: () => ({ id: 'balanced-30' }),
-    getScreenPublishVideoOptions: () => ({})
-  }));
+  vi.doMock(`${P}/media/profiles`, async () => {
+    const actual = await vi.importActual<typeof ScreenProfilesModule>(`${P}/media/profiles`);
+    return {
+      ...actual,
+      getPreferredCameraVideoCodec: () => options.cameraCodec ?? 'h264',
+      getScreenPublishVideoOptions: () => ({})
+    };
+  });
   vi.doMock(`${P}/media/livekit-runtime`, () => ({
     TRACK_SOURCE: {
       Camera: 'camera',

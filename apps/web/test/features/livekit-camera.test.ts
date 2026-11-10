@@ -4,6 +4,7 @@
 import { afterEach, expect, test, vi } from 'vitest';
 import type { MediaGrant } from '@voice-room/shared/contracts/realtime';
 import { defined, instanceOf } from '../helpers/assert.ts';
+import { FakeMediaStream, FakeMediaStreamTrack } from '../helpers/fake-media.ts';
 import { fakeParticipant, fakePublication, flushMicrotasks, loadLiveKitHarness } from '../helpers/livekit-harness.ts';
 
 const LOW = 0;
@@ -425,31 +426,161 @@ test('a camera turned on after the call was lightened starts at 360p', async () 
   expect(setPublishingQuality).toHaveBeenCalledWith(MEDIUM);
 });
 
-test('an overloaded computer shares its screen at 30 fps at most; a capture that refuses keeps its rate', async () => {
+async function loadScreenRelief(profileId = 'balanced-30', settings: MediaTrackSettings = { frameRate: 30 }) {
   const { lk } = await loadRemoteCamera();
   const { applyVideoReliefToScreen } = await import('@/features/room/client/services/video-relief.ts');
-  const capture = (frameRate: number, refuse = false) => {
-    const applied: MediaTrackConstraints[] = [];
-    const track = {
-      getSettings: () => ({ frameRate }),
-      applyConstraints: (constraints: MediaTrackConstraints) => {
-        applied.push(constraints);
-        return refuse ? Promise.reject(new Error('OverconstrainedError')) : Promise.resolve();
-      }
-    };
-    return { applied, stream: { getVideoTracks: () => [track] } };
-  };
+  const video = new FakeMediaStreamTrack('screen-video', 'video');
+  video.contentHint = 'motion';
+  video.getSettings = () => settings;
+  const applyConstraints = vi.spyOn(video, 'applyConstraints');
+  const audio = new FakeMediaStreamTrack('screen-audio', 'audio');
+  const stream = new FakeMediaStream([video, audio]);
+  Object.assign(lk.state, { localScreenStream: stream, localScreenProfileId: profileId });
+  return { lk, applyVideoReliefToScreen, video, audio, stream, applyConstraints };
+}
 
-  const fast = capture(60);
-  await applyVideoReliefToScreen(fast.stream);
-  expect(fast.applied, 'nothing changes before the computer is overloaded').toEqual([]);
+test.each([30, 60])('screen relief lowers a %i fps capture to 15 without touching audio or mode', async (frameRate) => {
+  const settings = { frameRate, width: 1280, height: 720 };
+  const capture = await loadScreenRelief(`balanced-${frameRate}`, settings);
+  await capture.applyVideoReliefToScreen(capture.stream);
+  expect(capture.applyConstraints).not.toHaveBeenCalled();
 
-  lk.state.videoRelieved = true;
-  await applyVideoReliefToScreen(fast.stream);
-  expect(fast.applied).toEqual([{ frameRate: { max: 30 } }]);
-  const calm = capture(30);
-  await applyVideoReliefToScreen(calm.stream);
-  expect(calm.applied).toEqual([]);
-  const stubborn = capture(60, true);
-  await expect(applyVideoReliefToScreen(stubborn.stream)).resolves.toBeUndefined();
+  capture.lk.state.videoRelieved = true;
+  await capture.applyVideoReliefToScreen(capture.stream);
+  expect(capture.applyConstraints).toHaveBeenCalledExactlyOnceWith({ frameRate: { max: 15 } });
+  expect(capture.video.contentHint).toBe('motion');
+  expect(capture.video.getSettings()).toEqual(settings);
+  expect(capture.stream.getAudioTracks()).toEqual([capture.audio]);
+  expect(capture.audio.readyState).toBe('live');
+  expect(capture.lk.state.localScreenProfileId).toBe(`balanced-${frameRate}`);
+});
+
+test.each(['balanced-15', 'source-5'])(
+  'relief never raises a low selected profile %s with unknown settings',
+  async (profile) => {
+    const capture = await loadScreenRelief(profile, {});
+    const applyProfile = vi.fn(async () => ({ ok: true }));
+    vi.stubGlobal('voiceRoomDesktopCapture', { applyProfile });
+    capture.lk.state.videoRelieved = true;
+    await capture.applyVideoReliefToScreen(capture.stream);
+    expect(applyProfile).not.toHaveBeenCalled();
+    expect(capture.applyConstraints).not.toHaveBeenCalled();
+  }
+);
+
+test.each([5, 15])('relief does not raise a known %i fps capture', async (frameRate) => {
+  const capture = await loadScreenRelief('balanced-30', { frameRate });
+  capture.lk.state.videoRelieved = true;
+  await capture.applyVideoReliefToScreen(capture.stream);
+  expect(capture.applyConstraints).not.toHaveBeenCalled();
+});
+
+test('browser relief preserves existing resolution and other capture constraints', async () => {
+  const capture = await loadScreenRelief();
+  capture.video.getConstraints = () => ({
+    frameRate: { ideal: 30, max: 30 },
+    width: { max: 1280 },
+    height: { max: 720 },
+    resizeMode: 'crop-and-scale'
+  });
+  capture.lk.state.videoRelieved = true;
+  await capture.applyVideoReliefToScreen(capture.stream);
+  expect(capture.applyConstraints).toHaveBeenCalledExactlyOnceWith({
+    frameRate: { max: 15 },
+    width: { max: 1280 },
+    height: { max: 720 },
+    resizeMode: 'crop-and-scale'
+  });
+});
+
+test.each(['balanced', 'high', 'source'])(
+  'native %s-30 relief reaches the helper even with unknown generator FPS',
+  async (qualityId) => {
+    const capture = await loadScreenRelief(`${qualityId}-30`, {});
+    const applyProfile = vi.fn(async () => ({ ok: true }));
+    vi.stubGlobal('voiceRoomDesktopCapture', { applyProfile });
+    capture.lk.state.videoRelieved = true;
+    await capture.applyVideoReliefToScreen(capture.stream);
+    expect(applyProfile).toHaveBeenCalledExactlyOnceWith({ fpsId: '15', qualityId });
+    expect(capture.applyConstraints).not.toHaveBeenCalled();
+    expect(capture.video.contentHint).toBe('motion');
+    expect(capture.lk.state.localScreenProfileId).toBe(`${qualityId}-30`);
+    expect(capture.stream.getAudioTracks()).toEqual([capture.audio]);
+  }
+);
+
+test.each(['refused', 'rejected'])('native %s relief falls back to frame-rate-only constraints', async (failure) => {
+  const capture = await loadScreenRelief();
+  const applyProfile = vi.fn(async () => {
+    if (failure === 'rejected') throw new Error('helper unavailable');
+    return { ok: false };
+  });
+  vi.stubGlobal('voiceRoomDesktopCapture', { applyProfile });
+  capture.lk.state.videoRelieved = true;
+  await capture.applyVideoReliefToScreen(capture.stream);
+  expect(applyProfile).toHaveBeenCalledOnce();
+  expect(capture.applyConstraints).toHaveBeenCalledExactlyOnceWith({ frameRate: { max: 15 } });
+});
+
+test('native source-60 relief must not raise the helper resolution ceiling', async () => {
+  const capture = await loadScreenRelief('source-60', {});
+  const applyProfile = vi.fn(async () => ({ ok: true }));
+  vi.stubGlobal('voiceRoomDesktopCapture', { applyProfile });
+  capture.lk.state.videoRelieved = true;
+  await capture.applyVideoReliefToScreen(capture.stream);
+  expect(applyProfile).not.toHaveBeenCalled();
+  expect(capture.applyConstraints).toHaveBeenCalledExactlyOnceWith({ frameRate: { max: 15 } });
+});
+
+test.each(['stale', 'ended'])('%s screen relief does not reconfigure the active desktop capture', async (reason) => {
+  const capture = await loadScreenRelief();
+  const applyProfile = vi.fn(async () => ({ ok: true }));
+  vi.stubGlobal('voiceRoomDesktopCapture', { applyProfile });
+  capture.lk.state.videoRelieved = true;
+  if (reason === 'stale') capture.lk.state.localScreenStream = null;
+  else capture.video.stop();
+  await capture.applyVideoReliefToScreen(capture.stream);
+  expect(applyProfile).not.toHaveBeenCalled();
+  expect(capture.applyConstraints).not.toHaveBeenCalled();
+});
+
+test('a screen that ends while native relief is pending gets no fallback', async () => {
+  const capture = await loadScreenRelief();
+  const applyProfile = vi.fn(async () => {
+    capture.lk.state.localScreenStream = null;
+    return { ok: false };
+  });
+  vi.stubGlobal('voiceRoomDesktopCapture', { applyProfile });
+  capture.lk.state.videoRelieved = true;
+  await capture.applyVideoReliefToScreen(capture.stream);
+  expect(applyProfile).toHaveBeenCalledOnce();
+  expect(capture.applyConstraints).not.toHaveBeenCalled();
+});
+
+test('a capture refusing relief stays live without breaking the call', async () => {
+  const capture = await loadScreenRelief();
+  capture.applyConstraints.mockRejectedValue(new Error('OverconstrainedError'));
+  capture.lk.state.videoRelieved = true;
+  await expect(capture.applyVideoReliefToScreen(capture.stream)).resolves.toBeUndefined();
+  expect(capture.video.readyState).toBe('live');
+  expect(capture.audio.readyState).toBe('live');
+});
+
+test('a new screen and its republication retain relief through the real publish path', async () => {
+  const capture = await loadScreenRelief();
+  capture.lk.state.localScreenStream = null;
+  await capture.lk.service.connectLiveKitRoom('room-1');
+  capture.lk.state.videoRelieved = true;
+  capture.lk.state.localScreenStream = capture.stream;
+  await capture.lk.service.publishLocalScreenTracks();
+  expect(capture.applyConstraints).toHaveBeenCalledExactlyOnceWith({ frameRate: { max: 15 } });
+  const room = defined(capture.lk.rooms[0], 'connected room');
+  expect(room.published.map((item) => item.track)).toEqual([capture.video, capture.audio]);
+
+  await capture.lk.service.unpublishLocalScreenTracks(false);
+  capture.applyConstraints.mockClear();
+  await capture.lk.service.publishLocalScreenTracks();
+  expect(capture.applyConstraints).toHaveBeenCalledExactlyOnceWith({ frameRate: { max: 15 } });
+  expect(capture.video.readyState).toBe('live');
+  expect(capture.audio.readyState).toBe('live');
 });
