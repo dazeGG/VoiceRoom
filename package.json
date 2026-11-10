@@ -1,6 +1,6 @@
 {
   "name": "voice-room",
-  "version": "2.12.17",
+  "version": "2.12.18",
   "private": true,
   "description": "Simple link-based LiveKit voice chat with screen sharing.",
   "workspaces": [
