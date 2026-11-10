@@ -102,3 +102,34 @@ host journal described in [`LOGGING.md`](./LOGGING.md#storage-across-deployments
 For guests, `roomId` and `reportedGuestId` provide untrusted correlation hints to
 the existing voice history; the page's `clientSessionId` links related reports.
 Persistence does not recover batches the client never delivered.
+
+## Check the whole service, not only video
+
+Keep these workloads separate when measuring a change:
+
+| Workload | What to measure or preserve |
+| --- | --- |
+| Lobby and idle/hidden app | CPU time, memory growth, timers and network requests after leaving a room |
+| Voice without video | RNNoise/browser/off with the same input; capture continuity, mute/resume and push-to-talk latency |
+| Chat | Open/reopen, live add/edit/delete while history loads, older pages and reconnect resync; no lost or resurrected messages |
+| Reconnect and room changes | A delayed response from the previous session cannot update the new session; slow periodic work does not pile up |
+| Server and workers | Route latency distribution, errors, event-loop delay, DB waits, eligible queue age and recovery after dependency failures |
+
+Compare foreground and hidden states and repeat with a long conversation. A
+synthetic video benchmark says nothing about microphone DSP or the cost of a
+large chat DOM. A simulated CPU slowdown is useful, but does not replace a
+representative low-end physical device. Network delay, burst loss and reconnects
+need their own runs; lower CPU alone is not proof that users hear better audio.
+
+The persisted `system_snapshots` rows are minute-level observations. Their
+weighted HTTP average includes service requests; a percentile of those averages
+is not request p95. Use the API's route histograms for request tails and retain
+the sample count and process-start/reset boundary. Host CPU may include other
+services. PostgreSQL cumulative transaction counters likewise need a time delta,
+not comparison with the number of current users.
+
+Inspect worker job kind and attachment state before treating old rows as a
+user-visible backlog: cleanup bookkeeping for already-deleted media is not a
+pending upload. A responding health/metrics endpoint does not alone prove that
+every queue is making progress. Production inspection should remain bounded and
+read-only; run artificial overload and fault injection on an isolated stand.
