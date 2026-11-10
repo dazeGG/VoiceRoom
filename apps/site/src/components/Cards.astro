@@ -1,0 +1,23 @@
+---
+// Feature or scenario cards; a card with `href` is a link to its page.
+interface Props {
+  items: readonly { title: string; text: string; href?: string; link?: string }[];
+}
+const { items } = Astro.props;
+---
+
+<ul class="cards">
+  {
+    items.map((item) => (
+      <li class="cards__item">
+        <h3 class="cards__title">{item.title}</h3>
+        <p class="cards__text">{item.text}</p>
+        {item.href && (
+          <a class="cards__link" href={item.href}>
+            {item.link ?? 'Подробнее'} <span aria-hidden="true">→</span>
+          </a>
+        )}
+      </li>
+    ))
+  }
+</ul>

@@ -1,0 +1,138 @@
+---
+import Cards from '../components/Cards.astro';
+import CtaBand from '../components/CtaBand.astro';
+import Faq from '../components/Faq.astro';
+import Hero from '../components/Hero.astro';
+import Section from '../components/Section.astro';
+import Base from '../layouts/Base.astro';
+import { faqJsonLd, jsonLdScript, type FaqItem } from '../seo.ts';
+import { APP_HREF, PAGES, QUARANTINE_CMD, RELEASES_URL, canonicalUrl } from '../site.ts';
+
+const page = PAGES.download;
+
+const builds = [
+  { name: 'Windows', detail: 'Windows 10 и 11, 64-bit · установщик .exe' },
+  { name: 'macOS · Apple Silicon', detail: 'Mac на M-процессорах · образ .dmg' },
+  { name: 'macOS · Intel', detail: 'Mac на процессорах Intel · образ .dmg' }
+];
+
+const faq: FaqItem[] = [
+  {
+    question: 'Почему система предупреждает при установке?',
+    answer:
+      'Приложение пока не подписано сертификатом разработчика. В Windows нажмите «Подробнее» → «Выполнить в любом случае». В macOS после установки один раз выполните в Терминале команду из раздела «Установка».'
+  },
+  {
+    question: 'Есть ли версия для Linux?',
+    answer: 'Отдельного приложения нет. На Linux откройте VoiceRoom в браузере — голос, камера, экран и чат работают там же.'
+  },
+  {
+    question: 'Как приложение обновляется?',
+    answer: 'Само: новая версия скачивается и ставится автоматически.'
+  },
+  {
+    question: 'Можно ли обойтись без приложения?',
+    answer:
+      'Да. Всё основное работает в браузере. Приложение добавляет хоткеи поверх игр, оверлей, звук стрима без эха, трей и автозапуск.'
+  }
+];
+
+const jsonLd = jsonLdScript(
+  {
+    '@type': 'SoftwareApplication',
+    name: 'VoiceRoom',
+    url: canonicalUrl(page.path),
+    description: page.description,
+    applicationCategory: 'CommunicationApplication',
+    operatingSystem: 'Windows 10, Windows 11, macOS',
+    downloadUrl: RELEASES_URL,
+    inLanguage: 'ru',
+    isAccessibleForFree: true,
+    offers: { '@type': 'Offer', price: '0', priceCurrency: 'RUB' }
+  },
+  faqJsonLd(faq)
+);
+---
+
+<Base page={page} jsonLd={jsonLd}>
+  <Hero
+    kicker="VoiceRoom для компьютера"
+    title="Приложение VoiceRoom для Windows и macOS"
+    lead="Тот же VoiceRoom в собственном окне — и то, чего не может вкладка браузера: хоткеи поверх игр, оверлей, звук стрима без эха и звонок в трее."
+    primary={{ href: RELEASES_URL, label: 'Скачать с GitHub' }}
+    secondary={{ href: APP_HREF, label: 'Открыть в браузере' }}
+    note="Бесплатно · последняя версия на странице релизов"
+  >
+    <ul class="builds">
+      {
+        builds.map((build) => (
+          <li class="builds__item">
+            <span class="builds__name">{build.name}</span>
+            <span class="builds__detail">{build.detail}</span>
+          </li>
+        ))
+      }
+    </ul>
+  </Hero>
+
+  <Section title="Что даёт приложение">
+    <Cards
+      items={[
+        {
+          title: 'Хоткеи поверх игр',
+          text: 'Мьют микрофона, мьют звука и push-to-talk работают, даже когда окно не в фокусе.',
+          href: PAGES.games.path,
+          link: 'Для игр'
+        },
+        {
+          title: 'Оверлей в игре',
+          text: 'Кто в звонке, кто говорит и кто стримит — поверх игры в оконном и borderless режимах.'
+        },
+        {
+          title: 'Звук стрима без эха',
+          text: 'Демонстрация передаёт звук компьютера, но без голосов собеседников.',
+          href: PAGES.screen.path,
+          link: 'Демонстрация экрана'
+        },
+        {
+          title: 'Трей, панель задач и Dock',
+          text: 'Микрофон, звук и выход из звонка без открытия окна. На иконке — счётчик непрочитанного.'
+        },
+        {
+          title: 'Системные уведомления',
+          text: 'Клик по уведомлению открывает нужный чат. Ссылки voiceroom:// открываются сразу в приложении.'
+        },
+        {
+          title: 'Автозапуск и обновления',
+          text: 'Запуск вместе с системой, можно свёрнутым в трей. Новые версии ставятся сами.'
+        }
+      ]}
+    />
+  </Section>
+
+  <Section
+    title="Установка"
+    lead="Приложение пока не подписано, поэтому система спросит, доверяете ли вы ему."
+  >
+    <div class="split">
+      <div class="split__column">
+        <h3 class="split__title">Windows</h3>
+        <p class="split__text">
+          Запустите установщик. Если появится окно SmartScreen, нажмите «Подробнее» → «Выполнить в любом случае».
+        </p>
+      </div>
+      <div class="split__column">
+        <h3 class="split__title">macOS</h3>
+        <p class="split__text">Перетащите VoiceRoom в «Программы» и один раз выполните в Терминале:</p>
+        <pre class="code"><code>{QUARANTINE_CMD}</code></pre>
+      </div>
+    </div>
+  </Section>
+
+  <Faq items={faq} />
+
+  <CtaBand
+    title="Не хотите ничего ставить?"
+    text="Всё основное работает в браузере — создайте комнату прямо сейчас."
+  />
+</Base>

@@ -122,5 +122,5 @@ test('a guest on the landing opens the sign-in from the header in place', async 
   await userEvent.click(await screen.findByRole('link', { name: 'Войти' }, { timeout: 5000 }));
 
   expect(await screen.findByRole('dialog', { name: 'Вход' })).toBeTruthy();
-  expect(router.currentRoute.value.fullPath).toBe('/?auth=login');
+  expect(router.currentRoute.value.fullPath).toBe('/app?auth=login');
 });

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { House } from '@lucide/vue';
 import { useStartUiStore } from '@/features/room/start-ui.store';
+import { APP_HOME } from '@/shared/app-home';
 import { MascotIcon } from '@/shared/ui';
 import { iconMd } from '@/shared/ui/icons';
 import { usePageStore } from '@/stores/page.store';
@@ -25,7 +26,7 @@ const page = usePageStore();
       </p>
       <div class="not-found__actions">
         <!-- A full page load, as data-sveltekit-reload was. -->
-        <a class="not-found__home" href="/">
+        <a class="not-found__home" :href="APP_HOME">
           <House v-bind="iconMd" aria-hidden="true" />
           На стартовый экран
         </a>

@@ -1,4 +1,5 @@
 import { useSessionStore } from '@/features/auth/session.store';
+import { APP_HOME } from '@/shared/app-home';
 import { usePageStore } from '@/stores/page.store';
 import { useStartUiStore } from '../../start-ui.store';
 import { useVoiceSessionStore } from '../../voice-session.store';
@@ -555,7 +556,7 @@ export async function handleLeaveButtonClick(): Promise<void> {
   // Read before leaving: leaveRoom forgets who was in the call.
   const roomId = state.roomId;
   const guest = !isRoomEmbedded() && !useSessionStore().user;
-  // `/` is desktop-only, so leaving on a phone stays on the room page.
+  // The lobby is desktop-only, so leaving on a phone stays on the room page.
   const mobile = !getDesktopBoundaryPolicy().desktopAllowed;
   if (state.joined || state.localStream || state.connecting) {
     playPeerCue('leave');
@@ -574,7 +575,7 @@ export async function handleLeaveButtonClick(): Promise<void> {
     return;
   }
 
-  window.location.href = '/';
+  window.location.href = APP_HOME;
 }
 
 /**

@@ -1,0 +1,25 @@
+---
+// Questions as <details>: open without a script, and the same text the page's
+// FAQPage data carries (seo.ts faqJsonLd).
+import type { FaqItem } from '../seo.ts';
+import Section from './Section.astro';
+
+interface Props {
+  items: readonly FaqItem[];
+  title?: string;
+}
+const { items, title = 'Частые вопросы' } = Astro.props;
+---
+
+<Section title={title} id="faq">
+  <div class="faq">
+    {
+      items.map((item) => (
+        <details class="faq__item">
+          <summary class="faq__question">{item.question}</summary>
+          <p class="faq__answer">{item.answer}</p>
+        </details>
+      ))
+    }
+  </div>
+</Section>

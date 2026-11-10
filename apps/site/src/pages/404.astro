@@ -1,0 +1,20 @@
+---
+// Caddy answers every unknown address with this page and status 404 (Caddyfile).
+import Base from '../layouts/Base.astro';
+import { APP_HREF, NOT_FOUND_PAGE, PAGES, START_ROOM_HREF } from '../site.ts';
+---
+
+<Base page={NOT_FOUND_PAGE} noindex>
+  <section class="hero hero--center">
+    <p class="hero__kicker"><span class="hero__dot" aria-hidden="true"></span>Ошибка 404</p>
+    <h1 class="hero__title">Такой страницы нет</h1>
+    <p class="hero__lead">
+      Возможно, ссылка устарела или в ней опечатка. Ссылки на комнаты выглядят так: voiceroom.ru/r/код-комнаты.
+    </p>
+    <div class="hero__actions">
+      <a class="site-button" href={START_ROOM_HREF}>Создать комнату <span aria-hidden="true">→</span></a>
+      <a class="site-button site-button--ghost" href={PAGES.home.path}>На главную</a>
+      <a class="site-button site-button--ghost" href={APP_HREF}>Ввести код комнаты</a>
+    </div>
+  </section>
+</Base>

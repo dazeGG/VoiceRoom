@@ -1,18 +1,22 @@
 <script setup lang="ts">
-// What `/` shows, and every route the lobby keeps in the address (the admin
+// What /app shows, and every route the lobby keeps in the address (the admin
 // panel's tabs): the lobby or the landing on a desktop, a room start on a phone.
 import { onBeforeUnmount, onMounted, ref } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import { applyDesktopBoundaryToDocument } from '@/platform/desktop-boundary';
 import { ToastStack } from '@/shared/ui';
 import HomePage from './HomePage.vue';
 import MobileStartScreen from './components/MobileStartScreen.vue';
+import { takeStartRoomRequest } from './model/start-room-request';
 import { useToastsStore } from './model/toasts.store';
 
 const toasts = useToastsStore();
+// The public site's «Создать комнату» came here to make the room at once.
+const startRoom = takeStartRoomRequest(useRoute(), useRouter());
 
 const boundaryReady = ref(false);
 const desktopAllowed = ref(false);
-// A phone cannot run the lobby, but it can run a room, so `/` offers to start
+// A phone cannot run the lobby, but it can run a room, so /app offers to start
 // one instead of turning the visitor away.
 const roomClientAllowed = ref(false);
 
@@ -46,9 +50,9 @@ onBeforeUnmount(() => {
       </div>
     </main>
   </div>
-  <HomePage v-else-if="desktopAllowed" />
+  <HomePage v-else-if="desktopAllowed" :start-room="startRoom" />
   <template v-else-if="roomClientAllowed">
-    <MobileStartScreen @toast="toasts.pushToast" />
+    <MobileStartScreen :start-room="startRoom" @toast="toasts.pushToast" />
     <ToastStack :toasts="toasts.items" :on-dismiss="toasts.dismissToast" />
   </template>
   <div v-else class="app-shell">

@@ -88,7 +88,8 @@ test('the licences page carries the Twemoji and DB-IP attribution', async () => 
 });
 
 test('a phone may open the legal pages but still not the account screens', () => {
-  for (const route of ['/terms', '/privacy', '/licenses', '/', '/r/[roomId]']) expect(isMobileRoute(route)).toBe(true);
+  for (const route of ['/terms', '/privacy', '/licenses', '/app', '/r/[roomId]'])
+    expect(isMobileRoute(route)).toBe(true);
   for (const route of ['/login', '/register', '/admin/reports', null]) expect(isMobileRoute(route)).toBe(false);
 });
 

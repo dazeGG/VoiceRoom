@@ -26,7 +26,7 @@ let roomNavigation: ReturnType<typeof useRoomNavigationStore>;
 let voiceSession: ReturnType<typeof useVoiceSessionStore>;
 let navigation: ReturnType<typeof makeRouter>;
 
-function setup(path = '/') {
+function setup(path = '/app') {
   window.history.replaceState(null, '', path);
   const lobby: { mode: LobbyMode; openDm: (userId: string) => Promise<void>; showHome: () => void } = {
     mode: 'friends',
@@ -56,7 +56,7 @@ afterEach(() => {
   roomNavigation.clearEmbeddedRoom();
   roomNavigation.clearViewedRoom();
   localStorage.removeItem(ROOM_SWITCH_CONFIRM_STORAGE_KEY);
-  window.history.replaceState(null, '', '/');
+  window.history.replaceState(null, '', '/app');
   vi.restoreAllMocks();
 });
 
@@ -70,26 +70,26 @@ test('a page opened on /r/:id goes back into that room and joins its voice', () 
 });
 
 test('a ?dm= link opens that conversation and gives the bare address back', () => {
-  const { lobby, routing } = setup('/?dm=bob');
+  const { lobby, routing } = setup('/app?dm=bob');
   teardown = routing.start();
 
   expect(lobby.openDm).toHaveBeenCalledWith('bob');
-  expect(navigation.replace).toHaveBeenCalledWith('/');
+  expect(navigation.replace).toHaveBeenCalledWith('/app');
 });
 
 test('a mention link previews its room on that message without joining voice', () => {
-  const { lobby, routing } = setup('/?room=abc123&message=m1');
+  const { lobby, routing } = setup('/app?room=abc123&message=m1');
   teardown = routing.start();
 
   expect(lobby.mode).toBe('rooms');
   expect(roomNavigation.viewedRoomId).toBe('abc123');
   expect(roomNavigation.joinIntentRoomId).toBeNull();
   expect(routing.previewAnchor.value).toEqual({ roomId: 'abc123', messageId: 'm1' });
-  expect(navigation.replace).toHaveBeenCalledWith('/');
+  expect(navigation.replace).toHaveBeenCalledWith('/app');
 });
 
 test('the back button shows the room in the address, until the routing stops', () => {
-  const { lobby, routing } = setup('/');
+  const { lobby, routing } = setup('/app');
   const stop = routing.start();
 
   window.history.replaceState(null, '', '/r/xyz789');
@@ -104,7 +104,7 @@ test('the back button shows the room in the address, until the routing stops', (
 });
 
 test('entering a room with no call running goes straight in and puts the room in the address', () => {
-  const { lobby, routing } = setup('/');
+  const { lobby, routing } = setup('/app');
 
   routing.requestEnterRoom('abc123');
 
@@ -115,7 +115,7 @@ test('entering a room with no call running goes straight in and puts the room in
 });
 
 test('entering another room during a call asks first; cancelling stays, confirming switches', () => {
-  const { routing } = setup('/');
+  const { routing } = setup('/app');
   voiceSession.roomId = 'live01';
 
   routing.requestEnterRoom('abc123');
@@ -133,7 +133,7 @@ test('entering another room during a call asks first; cancelling stays, confirmi
 });
 
 test('going home closes the room on screen and shows the call room in the address', () => {
-  const { lobby, routing } = setup('/');
+  const { lobby, routing } = setup('/app');
   voiceSession.roomId = 'live01';
   routing.previewRoom('abc123');
   expect(roomNavigation.viewedRoomId).toBe('abc123');
@@ -155,5 +155,5 @@ test('a room left from its own button is dropped from the lobby and from the scr
   expect(roomNavigation.viewedRoomId).toBeNull();
   expect(roomNavigation.embeddedRoomId).toBeNull();
   expect(usePageStore().screen).toBe('start');
-  expect(navigation.replace).toHaveBeenCalledWith('/');
+  expect(navigation.replace).toHaveBeenCalledWith('/app');
 });

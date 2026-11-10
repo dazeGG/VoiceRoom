@@ -7,6 +7,7 @@ import CallFeedbackCard from '@/features/call-feedback/CallFeedbackCard.vue';
 import { useCallFeedbackStore } from '@/features/call-feedback/call-feedback.store';
 import { useLeaveScreenStore } from '@/features/room/leave-screen.store';
 import { getDesktopBoundaryPolicy } from '@/platform/desktop-boundary';
+import { APP_HOME } from '@/shared/app-home';
 import { createLogger, errorContext } from '@/shared/log';
 import { Button } from '@/shared/ui';
 
@@ -16,7 +17,7 @@ const leaveScreen = useLeaveScreenStore();
 const feedback = useCallFeedbackStore();
 
 const authMode = ref<AuthMode | null>(null);
-// `/` is desktop-only, so a phone never leaves this page on its own.
+// The lobby is desktop-only, so a phone never leaves this page on its own.
 const mobile = ref(false);
 const accountCreated = ref(false);
 const feedbackThanked = ref(false);
@@ -37,7 +38,7 @@ watch(feedbackCall, () => feedbackKey.value++);
 // next page does not ask it again.
 function goHome(): void {
   feedback.skipCallFeedback();
-  window.location.href = '/';
+  window.location.href = APP_HOME;
 }
 
 function rejoin(): void {

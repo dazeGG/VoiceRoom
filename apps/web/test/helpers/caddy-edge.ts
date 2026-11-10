@@ -18,16 +18,34 @@ export const dockerAvailable =
     encoding: 'utf8'
   }).status === 0;
 
+/** The public site's root when a test gives none: its home page and its 404 page. */
+const DEFAULT_SITE_FILES: Record<string, string> = {
+  'index.html': '<!doctype html><html><body>site</body></html>',
+  '404.html': '<!doctype html><html><body>site 404</body></html>'
+};
+
+function writeRoot(prefix: string, files: Record<string, string | Uint8Array>): string {
+  const root = mkdtempSync(path.join(os.tmpdir(), prefix));
+  for (const [file, content] of Object.entries(files)) {
+    mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
+    writeFileSync(path.join(root, file), content);
+  }
+  return root;
+}
+
 export async function startCaddyEdge({
   env = {},
   files = {},
   binaryFiles = {},
+  siteFiles = DEFAULT_SITE_FILES,
   sites = {}
 }: {
   env?: Record<string, string>;
   /** Files of the web root by path, next to index.html. */
   files?: Record<string, string>;
   binaryFiles?: Record<string, Uint8Array>;
+  /** Files of the public site's root (apps/site/dist). */
+  siteFiles?: Record<string, string>;
   /** Files of the extra-sites directory by name, e.g. 'extra.caddy'. */
   sites?: Record<string, string>;
 } = {}): Promise<string> {
@@ -39,13 +57,13 @@ export async function startCaddyEdge({
     cspSnippet,
     renderCaddySnippet(buildHeaderPolicy("default-src 'self'; script-src 'self' 'sha256-test='"))
   );
-  // A web page for the SPA fallback, so an unhandled path would answer 200.
-  const webRoot = mkdtempSync(path.join(os.tmpdir(), 'voiceroom-web-'));
-  writeFileSync(path.join(webRoot, 'index.html'), '<!doctype html><html><body>web</body></html>');
-  for (const [file, content] of Object.entries({ ...files, ...binaryFiles })) {
-    mkdirSync(path.dirname(path.join(webRoot, file)), { recursive: true });
-    writeFileSync(path.join(webRoot, file), content);
-  }
+  // The app's page, which every address of the app answers with.
+  const webRoot = writeRoot('voiceroom-web-', {
+    'index.html': '<!doctype html><html><body>web</body></html>',
+    ...files,
+    ...binaryFiles
+  });
+  const siteRoot = writeRoot('voiceroom-site-', siteFiles);
   // Extra sites the host manages; empty unless a test provides some.
   const sitesDir = mkdtempSync(path.join(os.tmpdir(), 'voiceroom-sites-'));
   for (const [file, content] of Object.entries(sites)) writeFileSync(path.join(sitesDir, file), content);
@@ -73,6 +91,8 @@ export async function startCaddyEdge({
       `${cspSnippet}:/etc/caddy/csp.caddy:ro`,
       '-v',
       `${webRoot}:/srv/web:ro`,
+      '-v',
+      `${siteRoot}:/srv/site:ro`,
       '-v',
       `${path.join(repositoryRoot, 'config/caddy/admin-csp.caddy')}:/etc/caddy/admin-csp.caddy:ro`,
       '-v',

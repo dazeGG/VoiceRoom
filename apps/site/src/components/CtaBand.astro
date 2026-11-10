@@ -1,0 +1,19 @@
+---
+import { START_ROOM_HREF } from '../site.ts';
+
+interface Props {
+  title: string;
+  text: string;
+  secondary?: { href: string; label: string };
+}
+const { title, text, secondary } = Astro.props;
+---
+
+<section class="cta-band">
+  <h2 class="cta-band__title">{title}</h2>
+  <p class="cta-band__text">{text}</p>
+  <div class="hero__actions">
+    <a class="site-button" href={START_ROOM_HREF}>Создать комнату <span aria-hidden="true">→</span></a>
+    {secondary && <a class="site-button site-button--ghost" href={secondary.href}>{secondary.label}</a>}
+  </div>
+</section>

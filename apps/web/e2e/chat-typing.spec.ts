@@ -21,13 +21,13 @@ test('a friend sees typing and emoji browsing under the message field, until the
       true
     );
 
-    await page.goto('/');
+    await page.goto('/app');
     await page.locator('.sidebar__row', { hasText: writerLogin }).first().click();
     const typing = page.locator('.dm-composer .typing-indicator');
     await expect(page.locator('.dm-view__head-status')).toBeVisible();
     await expect(typing).toHaveText('');
 
-    await writer.goto('/');
+    await writer.goto('/app');
     await writer.locator('.sidebar__row', { hasText: readerLogin }).first().click();
     const composer = writer.getByPlaceholder('Написать сообщение…');
     await composer.fill('секунду, пишу');

@@ -1,0 +1,28 @@
+---
+// The top of a page: the one <h1>, what the page offers and the way in.
+interface Link {
+  href: string;
+  label: string;
+}
+interface Props {
+  kicker: string;
+  title: string;
+  lead: string;
+  primary: Link;
+  secondary?: Link;
+  note?: string;
+}
+const { kicker, title, lead, primary, secondary, note } = Astro.props;
+---
+
+<section class="hero">
+  <p class="hero__kicker"><span class="hero__dot" aria-hidden="true"></span>{kicker}</p>
+  <h1 class="hero__title">{title}</h1>
+  <p class="hero__lead">{lead}</p>
+  <div class="hero__actions">
+    <a class="site-button" href={primary.href}>{primary.label} <span aria-hidden="true">→</span></a>
+    {secondary && <a class="site-button site-button--ghost" href={secondary.href}>{secondary.label}</a>}
+  </div>
+  {note && <p class="hero__note">{note}</p>}
+  <slot />
+</section>

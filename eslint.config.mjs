@@ -31,6 +31,8 @@ export default tseslint.config(
       '.omc/**',
       'apps/api/src/platform/db/schema.ts',
       'apps/web/public/**',
+      'apps/site/public/**',
+      'apps/site/.astro/**',
       'packages/shared/src/emoji.ts',
       'scripts/geoip/**',
       '**/*.cjs',
@@ -53,6 +55,7 @@ export default tseslint.config(
         project: [
           './apps/api/tsconfig.json',
           './apps/admin/tsconfig.json',
+          './apps/site/tsconfig.json',
           './apps/web/tsconfig.test.json',
           './packages/shared/tsconfig.test.json',
           './scripts/tsconfig.json'

@@ -29,7 +29,7 @@ beforeEach(() => {
   stubMatchMedia();
 });
 afterEach(() => {
-  window.history.replaceState(null, '', '/');
+  window.history.replaceState(null, '', '/app');
   roomClientState.roomId = '';
   roomClientState.roomName = '';
 });
@@ -95,7 +95,7 @@ test("this device's own sign-out ends the session without a second message", asy
 });
 
 test('a ?dm= link opens that conversation', async () => {
-  window.history.replaceState(null, '', '/?dm=bob');
+  window.history.replaceState(null, '', '/app?dm=bob');
   const { calls } = stubLobby();
   await renderLobby();
 
