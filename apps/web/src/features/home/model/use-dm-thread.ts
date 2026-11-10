@@ -71,11 +71,22 @@ export function useDmThread(isOpen: (peerId: string) => boolean) {
 
   /** Converges the newest page with the server after events may have been missed. */
   async function resync(peerId: string): Promise<void> {
-    const page = await fetchThreadPage(peerId, { mode: 'latest' });
-    if (!isOpen(peerId)) return;
-    const firstCreatedAt = page.messages[0]?.createdAt;
-    history.reconcileLatest(page.messages, (message) => firstCreatedAt == null || message.createdAt >= firstCreatedAt);
-    noteLatestRendered();
+    const snapshot = history.beginSnapshot();
+    try {
+      const page = await fetchThreadPage(peerId, { mode: 'latest' });
+      if (!isOpen(peerId)) return;
+      const messages = snapshot.apply(page.messages);
+      if (!messages) return;
+      const firstCreatedAt = page.messages[0]?.createdAt;
+      history.reconcileLatest(
+        messages,
+        (message) => firstCreatedAt == null || message.createdAt >= firstCreatedAt,
+        snapshot
+      );
+      noteLatestRendered();
+    } finally {
+      snapshot.dispose();
+    }
   }
 
   function loadOlder(scrollElement: HTMLElement | null): Promise<void> {
@@ -95,7 +106,7 @@ export function useDmThread(isOpen: (peerId: string) => boolean) {
   }
 
   function replace(message: DirectMessage): void {
-    history.upsert(message);
+    history.edit(message, true);
   }
 
   function remove(messageId: string): void {
@@ -133,17 +144,22 @@ export function useDmThread(isOpen: (peerId: string) => boolean) {
   let resyncPeerId = '';
   const readResync = createTrailingTask(READ_RESYNC_DELAY_MS, () => {
     const peerId = resyncPeerId;
+    const snapshot = history.beginSnapshot('cursor');
     void fetchThreadPage(peerId, { mode: 'latest', limit: 1 })
       .then((page) => {
         if (!isOpen(peerId)) return;
+        const messages = snapshot.apply(page.messages);
+        if (!messages) return;
         const firstCreatedAt = page.messages[0]?.createdAt;
         history.reconcileLatest(
-          page.messages,
-          (message) => firstCreatedAt == null || message.createdAt >= firstCreatedAt
+          messages,
+          (message) => firstCreatedAt == null || message.createdAt >= firstCreatedAt,
+          snapshot
         );
         noteLatestRendered();
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => snapshot.dispose());
   });
 
   const toggleProfile = (): void => {
