@@ -150,7 +150,7 @@ run before switching application containers. Also verify boot-unit ordering and
 that the expiry timer is active. A successful config parse is not this test.
 
 **First activation recreates every service whose logging configuration changes,
-including LiveKit and PostgreSQL. Wait for zero active voice participants.**
+including LiveKit and PostgreSQL. By default, wait for zero active voice participants.**
 Back up the deployment as usual; preserve any still-needed current-container logs
 privately before recreation:
 
@@ -172,6 +172,11 @@ The deploy script checks the installed profile before touching containers and
 rechecks the resolved services before rollout. On the first JSON-to-syslog LiveKit
 transition it requires a readable zero voice-peer count before backup, repeats the
 archive capture, then checks for zero peers again immediately before recreation.
+If the operator explicitly approves a brief call interruption, pass
+`ALLOW_LOGGING_VOICE_INTERRUPTION=1` only to that one deploy command. This skips
+only the first-activation idle checks and writes an approval marker; profile,
+preflight and archive checks still apply. Never persist this override in `.env`
+or the deployment workflow. The default is `0`; other values are rejected.
 A failed preflight, pull, archive or idle check does not run a container rollback
 when no rollout has started. Rollback keeps the host override;
 do not remove it as an application rollback step.

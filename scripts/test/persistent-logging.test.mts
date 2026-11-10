@@ -275,6 +275,7 @@ args = sys.argv[1:]
 if args == ['compose', 'ps', '--all', '--quiet']:
     if os.environ.get('VR_MIXED') == '1': print('b' * 64)
     print('a' * 64)
+    if os.environ.get('VR_TWO_LEGACY') == '1': print('c' * 64)
 elif args[0] == 'inspect':
     durable = args[-1] == 'b' * 64
     print(json.dumps({'id': args[-1], 'service': 'api' if durable else 'caddy',
@@ -283,18 +284,19 @@ elif args[0] == 'inspect':
 elif args[0] == 'logs':
     with Path(os.environ['VR_CAPTURED_IDS']).open('a') as file: file.write(args[-1] + '\\n')
     if args[-1] == 'b' * 64: sys.exit(88)
-    assert args[1:4] == ['--since', '2026-10-27T00:00:00Z', '--timestamps']
+    assert args[1:6] == ['--since', '2026-10-27T00:00:00Z', '--until', os.environ.get('VR_EXPECTED_UNTIL', '2026-11-10T00:00:00.000000Z'), '--timestamps']
     sys.stdout.buffer.write(Path(os.environ['VR_LOG_INPUT']).read_bytes())
     sys.exit(int(os.environ.get('VR_LOG_EXIT', '0')))
 else:
     sys.exit(99)
 `
   );
-  const harness = `import datetime, json, runpy, sys
+  const harness = `import datetime, json, os, runpy, sys
 from pathlib import Path
 m = runpy.run_path(sys.argv[1])
 try:
-    result = m['archive'](Path(sys.argv[2]), Path(sys.argv[3]), max_raw_bytes=int(sys.argv[4]), max_archive_bytes=int(sys.argv[5]), now=datetime.datetime(2026, 11, 10, tzinfo=datetime.timezone.utc))
+    now = datetime.datetime.fromisoformat(os.environ.get('VR_CAPTURE_NOW', '2026-11-10T00:00:00+00:00'))
+    result = m['archive'](Path(sys.argv[2]), Path(sys.argv[3]), max_raw_bytes=int(sys.argv[4]), max_archive_bytes=int(sys.argv[5]), now=now)
 except (OSError, ValueError):
     sys.exit('bounded capture failed')
 print(json.dumps(result))
@@ -388,9 +390,9 @@ function rolloutFixture(t: TestContext) {
   const { dir, env } = fakeCommands(t, {
     docker: 'exec /usr/bin/python3 "$VR_FAKE_DOCKER" "$@"',
     git: 'echo "git $*" >> "$VR_TEST_CALLS"; if [[ "$1" == rev-parse ]]; then echo previous-commit; fi',
-    bash: 'echo "bash $1" >> "$VR_TEST_CALLS"; exit 0',
+    bash: 'echo "bash $1" >> "$VR_TEST_CALLS"; if [[ "$1" == /etc/voiceroom/logging/preflight.sh ]]; then exit "${VR_PREFLIGHT_EXIT:-0}"; fi; exit 0',
     python3: 'echo archive >> "$VR_TEST_CALLS"; exit "${VR_ARCHIVE_EXIT:-0}"',
-    logger: 'exit 0',
+    logger: 'echo "logger $*" >> "$VR_TEST_CALLS"',
     flock: 'exit 0'
   });
   const calls = path.join(dir, 'calls');
@@ -451,6 +453,93 @@ else:
   const events = () => (fs.existsSync(calls) ? fs.readFileSync(calls, 'utf8').trim().split('\n') : []);
   return { dir, initialEnv, run, events };
 }
+
+test(
+  'interruption consent is strict, one-command-only and permits only first-activation idle checks to be skipped',
+  { skip: !python || !bash || !linux },
+  async (t) => {
+    for (const value of ['', 'yes', 'true', '2', '-1']) {
+      await t.test(`invalid ${JSON.stringify(value)}`, (t) => {
+        const fixture = rolloutFixture(t);
+        const result = fixture.run({ ALLOW_LOGGING_VOICE_INTERRUPTION: value });
+        assert.notEqual(result.status, 0);
+        assert.match(result.stderr, /ALLOW_LOGGING_VOICE_INTERRUPTION must be 0 or 1/);
+        assert.deepEqual(fixture.events(), []);
+        assert.equal(fs.existsSync(path.join(fixture.dir, 'deploy-backups')), false);
+      });
+    }
+    for (const driver of ['json-file', 'syslog']) {
+      await t.test(`approved ${driver}`, (t) => {
+        const fixture = rolloutFixture(t);
+        const result = fixture.run({
+          ALLOW_LOGGING_VOICE_INTERRUPTION: '1',
+          VR_DRIVER: driver,
+          VR_METRIC_FIRST: 'voice_room_api_presence_peers 2',
+          VR_METRIC_SECOND: 'voice_room_api_presence_peers 2'
+        });
+        assert.equal(result.status, 0, result.stderr);
+        assert.equal(fixture.events().includes('metric'), false);
+        assert.ok(fixture.events().includes('compose-up'));
+        assert.equal(fixture.events().includes('archive'), driver === 'json-file');
+        const approved = fixture
+          .events()
+          .some((event) => event.includes('deployment.logging_voice_interruption_approved'));
+        assert.equal(approved, driver === 'json-file');
+        if (driver === 'json-file')
+          assert.match(result.stderr, /operator explicitly approved brief voice interruption/);
+        else assert.doesNotMatch(result.stderr, /operator explicitly approved/);
+        assert.doesNotMatch(
+          fs.readFileSync(path.join(fixture.dir, '.env'), 'utf8'),
+          /ALLOW_LOGGING_VOICE_INTERRUPTION/
+        );
+      });
+    }
+  }
+);
+
+test(
+  'explicit interruption approval cannot bypass the logging profile, preflight or archive',
+  { skip: !python || !bash || !linux },
+  async (t) => {
+    for (const failure of ['profile', 'preflight', 'archive']) {
+      await t.test(failure, (t) => {
+        const fixture = rolloutFixture(t);
+        if (failure === 'profile') fs.unlinkSync(path.join(fixture.dir, 'docker-compose.override.yml'));
+        const result = fixture.run({
+          ALLOW_LOGGING_VOICE_INTERRUPTION: '1',
+          VR_METRIC_FIRST: 'voice_room_api_presence_peers 2',
+          VR_PREFLIGHT_EXIT: failure === 'preflight' ? '42' : '0',
+          VR_ARCHIVE_EXIT: failure === 'archive' ? '43' : '0'
+        });
+        assert.notEqual(result.status, 0);
+        assert.equal(fixture.events().includes('compose-up'), false);
+        assert.equal(fs.readFileSync(path.join(fixture.dir, '.env'), 'utf8'), fixture.initialEnv);
+        if (failure !== 'archive') assert.equal(fs.existsSync(path.join(fixture.dir, 'deploy-backups')), false);
+      });
+    }
+  }
+);
+
+test(
+  'every legacy container capture uses the same frozen microsecond upper time bound',
+  { skip: !python || !bash || !linux },
+  (t) => {
+    const fixture = transitionFixture(t, {
+      VR_TWO_LEGACY: '1',
+      VR_CAPTURE_NOW: '2026-11-10T00:00:00.123456+00:00',
+      VR_EXPECTED_UNTIL: '2026-11-10T00:00:00.123456Z'
+    });
+    const stamp = '2026-11-09T12:34:56.123456789Z';
+    const result = fixture.run(`${stamp} {"msg":"bounded history"}\n`);
+    assert.equal(result.status, 0, result.stderr);
+    assert.deepEqual(fixture.captured(), ['a'.repeat(64), 'c'.repeat(64)]);
+    for (const name of fs.readdirSync(fixture.destination).filter((name) => name.endsWith('.jsonl.gz'))) {
+      const file = path.join(fixture.destination, name);
+      assert.ok(gunzipSync(fs.readFileSync(file)).toString().includes(stamp));
+      assert.ok(Math.abs(fs.statSync(file).mtimeMs - Date.parse(stamp)) < 1);
+    }
+  }
+);
 
 test(
   'first logging activation refuses busy, missing, duplicated or unreadable voice metrics before backup',
