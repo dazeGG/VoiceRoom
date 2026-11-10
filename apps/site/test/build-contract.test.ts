@@ -1,14 +1,64 @@
 // The checks `astro build` runs on every page it writes (src/build-contract.ts).
 
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { test } from 'node:test';
+import { test, type TestContext } from 'node:test';
 import { buildProblems, pageProblems } from '../src/build-contract.ts';
 
 const HEAD =
   '<title>Page</title><meta name="description" content="About the page"><link rel="canonical" href="https://voiceroom.ru/page">';
+
+const ONE_PIXEL_PNG = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=',
+  'base64'
+);
+
+function promoBuild(t: TestContext, image: string, png?: Buffer): string {
+  const dir = mkdtempSync(join(tmpdir(), 'site-promo-build-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  mkdirSync(join(dir, 'promo'));
+  mkdirSync(join(dir, 'nested'));
+  writeFileSync(join(dir, 'nested', 'page.html'), `<html><head>${HEAD}</head><body>${image}</body></html>`);
+  if (png) writeFileSync(join(dir, 'promo', 'room.png'), png);
+  return dir;
+}
+
+test('built promo images resolve from the output root and match PNG dimensions', (t) => {
+  const dir = promoBuild(t, '<img src="/promo/room.png" alt="Room" width="1" height="1">', ONE_PIXEL_PNG);
+  assert.deepEqual(buildProblems(dir), []);
+});
+
+test('a missing built promo image fails the contract', (t) => {
+  const dir = promoBuild(t, '<img src="/promo/room.png" alt="Room" width="1" height="1">');
+  assert.deepEqual(buildProblems(dir), ['nested/page.html: cannot read promo PNG /promo/room.png']);
+});
+
+test('empty alt and incorrect or missing image dimensions fail the contract', (t) => {
+  const dir = promoBuild(t, '<img src="/promo/room.png" alt="  " width="2">', ONE_PIXEL_PNG);
+  assert.deepEqual(buildProblems(dir), [
+    'nested/page.html: /promo/room.png needs nonempty alt text',
+    'nested/page.html: /promo/room.png width/height must match PNG dimensions 1x1'
+  ]);
+});
+
+test('truncated and non-PNG promo files fail without crashing the build check', (t) => {
+  for (const png of [ONE_PIXEL_PNG.subarray(0, 20), Buffer.alloc(50)]) {
+    const dir = promoBuild(t, '<img src="/promo/room.png" alt="Room" width="1" height="1">', png);
+    assert.deepEqual(buildProblems(dir), ['nested/page.html: invalid PNG header for /promo/room.png']);
+  }
+});
+
+test('promo paths cannot escape their asset directory', (t) => {
+  const dir = promoBuild(t, '<img src="/promo/../room.png" alt="Room" width="1" height="1">');
+  assert.deepEqual(buildProblems(dir), ['nested/page.html: invalid promo PNG path /promo/../room.png']);
+});
+
+test('unrelated images stay outside the promo-specific contract', (t) => {
+  const dir = promoBuild(t, '<img src="/logo.svg" alt="">');
+  assert.deepEqual(buildProblems(dir), []);
+});
 
 test('a page with a title, a description, a canonical link and only external scripts passes', () => {
   const html = `<html><head>${HEAD}<script src="/desktop-redirect.js"></script><script type="module" src="/_astro/a.js"></script></head></html>`;

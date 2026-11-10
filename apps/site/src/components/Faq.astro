@@ -1,25 +1,25 @@
 ---
 // Questions as <details>: open without a script, and the same text the page's
-// FAQPage data carries (seo.ts faqJsonLd).
+// FAQPage data carries (seo.ts faqJsonLd). The first answer starts open.
 import type { FaqItem } from '../seo.ts';
-import Section from './Section.astro';
 
 interface Props {
   items: readonly FaqItem[];
   title?: string;
 }
-const { items, title = 'Частые вопросы' } = Astro.props;
+const { items, title = 'Вопросы' } = Astro.props;
 ---
 
-<Section title={title} id="faq">
+<section class="section faq-wrap" id="faq">
+  <h2 class="section__title faq-wrap__title">{title}</h2>
   <div class="faq">
     {
-      items.map((item) => (
-        <details class="faq__item">
+      items.map((item, index) => (
+        <details class="faq__item" open={index === 0}>
           <summary class="faq__question">{item.question}</summary>
           <p class="faq__answer">{item.answer}</p>
         </details>
       ))
     }
   </div>
-</Section>
+</section>

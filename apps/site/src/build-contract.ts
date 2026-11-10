@@ -6,6 +6,7 @@
 //   apps/web/scripts/emit-caddy-csp.ts), which blocks all three. JSON-LD is
 //   data, not a script, and is allowed;
 // - a title and a description, and a canonical address unless the page is noindex.
+// - promo PNGs exist in the output, have alt text and declare their actual size.
 
 import { readdirSync, readFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
@@ -86,11 +87,54 @@ function htmlFiles(directory: string): string[] {
   });
 }
 
+function promoProblems(directory: string, file: string, html: string): string[] {
+  const problems: string[] = [];
+  for (const tag of tags(html)) {
+    const src = tag.attributes.get('src') ?? '';
+    if (tag.name !== 'img' || !src.startsWith('/promo/')) continue;
+    if (!tag.attributes.get('alt')?.trim()) problems.push(`${file}: ${src} needs nonempty alt text`);
+    // Promo assets are local PNGs, never paths outside the output directory.
+    if (!/^\/promo\/[a-z0-9-]+\.png$/.test(src)) {
+      problems.push(`${file}: invalid promo PNG path ${src}`);
+      continue;
+    }
+    let png: Buffer;
+    try {
+      png = readFileSync(join(directory, src.slice(1)));
+    } catch {
+      problems.push(`${file}: cannot read promo PNG ${src}`);
+      continue;
+    }
+    if (
+      png.length < 33 ||
+      !png.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])) ||
+      png.readUInt32BE(8) !== 13 ||
+      png.toString('ascii', 12, 16) !== 'IHDR'
+    ) {
+      problems.push(`${file}: invalid PNG header for ${src}`);
+      continue;
+    }
+    const width = png.readUInt32BE(16);
+    const height = png.readUInt32BE(20);
+    if (
+      width === 0 ||
+      height === 0 ||
+      tag.attributes.get('width') !== String(width) ||
+      tag.attributes.get('height') !== String(height)
+    ) {
+      problems.push(`${file}: ${src} width/height must match PNG dimensions ${width}x${height}`);
+    }
+  }
+  return problems;
+}
+
 /** Every problem of the pages built into `directory`. */
 export function buildProblems(directory: string): string[] {
-  return htmlFiles(directory).flatMap((file) =>
-    pageProblems(relative(directory, file).split('\\').join('/'), readFileSync(file, 'utf8'))
-  );
+  return htmlFiles(directory).flatMap((file) => {
+    const name = relative(directory, file).split('\\').join('/');
+    const html = readFileSync(file, 'utf8');
+    return [...pageProblems(name, html), ...promoProblems(directory, name, html)];
+  });
 }
 
 export function buildContract(): AstroIntegration {

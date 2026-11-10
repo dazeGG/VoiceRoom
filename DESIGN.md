@@ -44,6 +44,7 @@
 - Shape/radius/elevation: 14px default interactive radius, pill only for deliberate pill affordances. Room avatars are squircle-shaped and use the neutral `--room-avatar-bg` fallback until an image is uploaded.
 - Motion: quick hover/focus transitions, no decorative motion required.
 - Imagery/iconography: simple line icons sized to the control scale.
+- Marketing screenshots: use the actual product UI with local demonstration accounts or gameplay supplied by the user for the site, never redrawn controls or private conversations. Preserve the full frame and intrinsic aspect ratio. The 2026-11-10 capture set and its limits are documented in `docs/PROMO_SCREENSHOTS.md`.
 
 ## Components
 - Existing components to reuse: shared `Button`, shared app tokens, room dock controls, Select/Popover primitives.

@@ -1,5 +1,6 @@
 ---
-// A titled block of a page; `id` makes it linkable.
+// A titled block of a page; `id` makes it linkable. The lead sits beside the
+// title on a wide screen and under it on a narrow one.
 interface Props {
   title: string;
   lead?: string;
@@ -9,7 +10,9 @@ const { title, lead, id } = Astro.props;
 ---
 
 <section class="section" id={id}>
-  <h2 class="section__title">{title}</h2>
-  {lead && <p class="section__lead">{lead}</p>}
+  <div class="section__head">
+    <h2 class="section__title">{title}</h2>
+    {lead && <p class="section__lead">{lead}</p>}
+  </div>
   <slot />
 </section>

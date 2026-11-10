@@ -13,7 +13,7 @@ const { title, text, secondary } = Astro.props;
   <h2 class="cta-band__title">{title}</h2>
   <p class="cta-band__text">{text}</p>
   <div class="hero__actions">
-    <a class="site-button" href={START_ROOM_HREF}>Создать комнату <span aria-hidden="true">→</span></a>
-    {secondary && <a class="site-button site-button--ghost" href={secondary.href}>{secondary.label}</a>}
+    <a class="site-button site-button--dark" href={START_ROOM_HREF}>Создать комнату <span aria-hidden="true">→</span></a>
+    {secondary && <a class="site-button site-button--on-accent" href={secondary.href}>{secondary.label}</a>}
   </div>
 </section>

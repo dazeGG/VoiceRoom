@@ -2,3 +2,11 @@
 interface Window {
   voiceRoomRuntime?: { isDesktop?: boolean };
 }
+
+/** Chromium's User-Agent Client Hints; other browsers have none. The download page asks for the processor. */
+interface NavigatorUAData {
+  getHighEntropyValues?: (hints: string[]) => Promise<{ architecture?: string }>;
+}
+interface Navigator {
+  userAgentData?: NavigatorUAData;
+}
