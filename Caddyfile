@@ -22,6 +22,10 @@
 
 import /etc/caddy/turn.d/*.site
 
+# Extra sites managed on the host (config/caddy/sites.d, docs/SELF_HOSTING.md);
+# empty by default.
+import /etc/caddy/sites.d/*.caddy
+
 {$DOMAIN} {
   encode zstd gzip
 

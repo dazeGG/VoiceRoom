@@ -37,7 +37,8 @@ export async function startCaddyEdge({
   env = {},
   files = {},
   binaryFiles = {},
-  siteFiles = DEFAULT_SITE_FILES
+  siteFiles = DEFAULT_SITE_FILES,
+  sites = {}
 }: {
   env?: Record<string, string>;
   /** Files of the web root by path, next to index.html. */
@@ -45,6 +46,8 @@ export async function startCaddyEdge({
   binaryFiles?: Record<string, Uint8Array>;
   /** Files of the public site's root (apps/site/dist). */
   siteFiles?: Record<string, string>;
+  /** Files of the extra-sites directory by name, e.g. 'extra.caddy'. */
+  sites?: Record<string, string>;
 } = {}): Promise<string> {
   const name = `voiceroom-edge-${randomUUID()}`;
   // The image generates this snippet from its own build; any valid policy
@@ -61,6 +64,9 @@ export async function startCaddyEdge({
     ...binaryFiles
   });
   const siteRoot = writeRoot('voiceroom-site-', siteFiles);
+  // Extra sites the host manages; empty unless a test provides some.
+  const sitesDir = mkdtempSync(path.join(os.tmpdir(), 'voiceroom-sites-'));
+  for (const [file, content] of Object.entries(sites)) writeFileSync(path.join(sitesDir, file), content);
   const run = spawnSync(
     'docker',
     [
@@ -89,6 +95,8 @@ export async function startCaddyEdge({
       `${siteRoot}:/srv/site:ro`,
       '-v',
       `${path.join(repositoryRoot, 'config/caddy/admin-csp.caddy')}:/etc/caddy/admin-csp.caddy:ro`,
+      '-v',
+      `${sitesDir}:/etc/caddy/sites.d:ro`,
       caddyImage
     ],
     { encoding: 'utf8' }

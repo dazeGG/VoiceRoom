@@ -18,6 +18,61 @@ const report = (entries: Entry[]) => ({
   forEach: (callback: (value: unknown) => void) => entries.forEach((entry) => callback(entry))
 });
 
+test.each([
+  {
+    name: 'unmeasured candidate pair falls back to RTCP',
+    candidate: { currentRoundTripTime: 0, responsesReceived: 0 },
+    expected: [65, 61]
+  },
+  {
+    name: 'measured zero remains zero',
+    candidate: { currentRoundTripTime: 0, responsesReceived: 2 },
+    expected: [0, 0]
+  },
+  { name: 'absent response counter preserves zero', candidate: { currentRoundTripTime: 0 }, expected: [0, 0] },
+  {
+    name: 'measured candidate RTT takes precedence',
+    candidate: { currentRoundTripTime: 0.08, responsesReceived: 2 },
+    expected: [80, 80]
+  }
+])('voice poll RTT: $name', async ({ candidate, expected }) => {
+  vi.useFakeTimers();
+  const polls: Array<{ rttMs: number | null }> = [];
+  vi.doMock('@/entities/room/room-realtime', () => ({
+    updateVoicePeer: () => {},
+    reportVoicePoll: (payload: { rttMs: number | null }) => polls.push(payload)
+  }));
+  const stats = await freshImport(() => import('@/features/room/client/room/stats'));
+  const { state } = await import('@/features/room/client/core/room-runtime.store');
+  // Firefox 159 on Windows: the selected pair had no responses, but RTCP did measure RTT.
+  const readings = [
+    { roundTripTime: 0.064819, roundTripTimeMeasurements: 2 },
+    { roundTripTime: 0.061096, roundTripTimeMeasurements: 5 }
+  ];
+  let pollNo = 0;
+  const track = {
+    getRTCStatsReport: async () =>
+      report([
+        { id: 'pair', type: 'candidate-pair', state: 'succeeded', selected: true, totalRoundTripTime: 0, ...candidate },
+        { id: 'remote-in', type: 'remote-inbound-rtp', kind: 'audio', ...defined(readings[pollNo], 'reading') }
+      ])
+  };
+  Object.assign(state, {
+    joined: true,
+    localMicPublication: { track },
+    peers: new Map<string, never>()
+  });
+  try {
+    stats.startPeerLatencyStats();
+    await vi.advanceTimersByTimeAsync(0);
+    pollNo = 1;
+    await vi.advanceTimersByTimeAsync(3_000);
+    expect(polls.map((poll) => poll.rttMs)).toEqual(expected);
+  } finally {
+    stats.stopPeerLatencyStats();
+  }
+});
+
 test('two polls of growing counters add up to the exact loss, concealment and round trip of the call', async () => {
   vi.useFakeTimers();
   vi.doMock('@/entities/room/room-realtime', () => ({ updateVoicePeer: () => {}, reportVoicePoll: () => {} }));
