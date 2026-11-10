@@ -314,6 +314,167 @@ print(json.dumps(result))
   return { destination, run };
 }
 
+function rolloutFixture(t: TestContext) {
+  const { dir, env } = fakeCommands(t, {
+    docker: 'exec /usr/bin/python3 "$VR_FAKE_DOCKER" "$@"',
+    git: 'echo "git $*" >> "$VR_TEST_CALLS"; if [[ "$1" == rev-parse ]]; then echo previous-commit; fi',
+    bash: 'echo "bash $1" >> "$VR_TEST_CALLS"; exit 0',
+    python3: 'echo archive >> "$VR_TEST_CALLS"; exit "${VR_ARCHIVE_EXIT:-0}"',
+    logger: 'exit 0',
+    flock: 'exit 0'
+  });
+  const calls = path.join(dir, 'calls');
+  const fakeDocker = path.join(dir, 'rollout-docker.py');
+  const initialEnv = 'VOICEROOM_API_IMAGE=old-api\nVOICEROOM_WORKER_IMAGE=old-worker\nVOICEROOM_WEB_IMAGE=old-web\n';
+  fs.writeFileSync(path.join(dir, '.env'), initialEnv);
+  fs.writeFileSync(path.join(dir, 'docker-compose.override.yml'), '# VoiceRoom managed persistent logging v1\n');
+  fs.writeFileSync(
+    fakeDocker,
+    `import os, subprocess, sys
+from pathlib import Path
+args = sys.argv[1:]
+calls = Path(os.environ['VR_TEST_CALLS'])
+def note(value):
+    with calls.open('a') as file: file.write(value + '\\n')
+if args == ['compose', 'ps', '--all', '--quiet', 'livekit']:
+    print('a' * 64)
+elif args[0] == 'inspect':
+    print(os.environ.get('VR_DRIVER', 'json-file'))
+elif args[:6] == ['compose', 'exec', '-T', 'api', 'node', '-e']:
+    note('metric')
+    counter = Path(os.environ['VR_METRIC_COUNTER'])
+    count = int(counter.read_text()) if counter.exists() else 0
+    counter.write_text(str(count + 1))
+    env = dict(os.environ)
+    env['VR_METRIC_VALUE'] = os.environ.get('VR_METRIC_FIRST' if count == 0 else 'VR_METRIC_SECOND', 'voice_room_api_presence_peers 0')
+    prelude = "globalThis.fetch = async (_url, options) => { if (!(options.signal instanceof AbortSignal)) throw new Error('timeout required'); return {ok: process.env.VR_HTTP_OK !== 'false', text: async () => process.env.VR_METRIC_VALUE}; };"
+    sys.exit(subprocess.run(['node', '-e', prelude + args[6]], env=env).returncode)
+elif args[:4] == ['compose', 'exec', '-T', 'postgres']:
+    note('database-backup')
+    print('database dump')
+elif args[0] == 'pull':
+    note('pull')
+    sys.exit(int(os.environ.get('VR_PULL_EXIT', '0')))
+elif args[:2] == ['compose', 'up']:
+    note('compose-up')
+    sys.exit(int(os.environ.get('VR_UP_EXIT', '0')))
+else:
+    note('docker ' + ' '.join(args[:3]))
+`
+  );
+  const run = (overrides: NodeJS.ProcessEnv = {}) =>
+    spawnSync(
+      '/bin/bash',
+      [path.resolve(scripts, '../cd/remote-deploy.sh'), dir, 'test-commit', 'test-api', 'test-worker', 'test-web'],
+      {
+        env: {
+          ...env,
+          REQUIRE_PERSISTENT_LOGS: '1',
+          VR_TEST_CALLS: calls,
+          VR_FAKE_DOCKER: fakeDocker,
+          VR_METRIC_COUNTER: path.join(dir, 'metric-count'),
+          ...overrides
+        },
+        encoding: 'utf8'
+      }
+    );
+  const events = () => (fs.existsSync(calls) ? fs.readFileSync(calls, 'utf8').trim().split('\n') : []);
+  return { dir, initialEnv, run, events };
+}
+
+test(
+  'first logging activation refuses busy, missing, duplicated or unreadable voice metrics before backup',
+  { skip: !python || !bash || !linux },
+  async (t) => {
+    for (const scenario of [
+      { metric: 'voice_room_api_presence_peers 1' },
+      { metric: '# no live voice count' },
+      { metric: 'voice_room_api_presence_peers 0\nvoice_room_api_presence_peers 1' },
+      { metric: 'voice_room_api_presence_peers 0', httpOk: 'false' }
+    ]) {
+      await t.test(scenario.metric, (t) => {
+        const fixture = rolloutFixture(t);
+        const result = fixture.run({ VR_METRIC_FIRST: scenario.metric, VR_HTTP_OK: scenario.httpOk ?? 'true' });
+        assert.notEqual(result.status, 0);
+        assert.match(result.stderr, /requires a verified zero voice-peer count/);
+        assert.equal(fs.existsSync(path.join(fixture.dir, 'deploy-backups')), false);
+        assert.equal(fixture.events().includes('compose-up'), false);
+        assert.equal(
+          fixture.events().some((event) => event.startsWith('git ')),
+          false
+        );
+      });
+    }
+  }
+);
+
+test(
+  'failed pull restores files without triggering first logging activation through rollback',
+  { skip: !python || !bash || !linux },
+  (t) => {
+    const fixture = rolloutFixture(t);
+    const result = fixture.run({ VR_PULL_EXIT: '17' });
+    assert.notEqual(result.status, 0);
+    assert.ok(fixture.events().includes('git checkout --quiet --detach previous-commit'));
+    assert.equal(fixture.events().includes('compose-up'), false);
+    assert.equal(fixture.events().includes('archive'), false);
+    assert.equal(fs.readFileSync(path.join(fixture.dir, '.env'), 'utf8'), fixture.initialEnv);
+  }
+);
+
+test(
+  'archive failure or a newly joined peer aborts before rollout and restores the old environment',
+  { skip: !python || !bash || !linux },
+  async (t) => {
+    for (const scenario of [{ VR_ARCHIVE_EXIT: '23' }, { VR_METRIC_SECOND: 'voice_room_api_presence_peers 2' }]) {
+      await t.test(JSON.stringify(scenario), (t) => {
+        const fixture = rolloutFixture(t);
+        const result = fixture.run(scenario);
+        assert.notEqual(result.status, 0);
+        assert.ok(fixture.events().includes('archive'));
+        assert.equal(fixture.events().includes('compose-up'), false);
+        assert.equal(fs.readFileSync(path.join(fixture.dir, '.env'), 'utf8'), fixture.initialEnv);
+      });
+    }
+  }
+);
+
+test(
+  'zero-peer first activation archives then rechecks before rollout, while later releases skip both',
+  { skip: !python || !bash || !linux },
+  async (t) => {
+    for (const driver of ['json-file', 'syslog']) {
+      await t.test(driver, (t) => {
+        const fixture = rolloutFixture(t);
+        const result = fixture.run({ VR_DRIVER: driver });
+        assert.equal(result.status, 0, result.stderr);
+        const events = fixture.events();
+        assert.equal(events.filter((event) => event === 'compose-up').length, 1);
+        if (driver === 'json-file') {
+          assert.equal(events.filter((event) => event === 'metric').length, 2);
+          assert.ok(events.indexOf('archive') < events.lastIndexOf('metric'));
+          assert.ok(events.lastIndexOf('metric') < events.indexOf('compose-up'));
+        } else {
+          assert.equal(events.includes('metric'), false);
+          assert.equal(events.includes('archive'), false);
+        }
+      });
+    }
+  }
+);
+
+test(
+  'a rollout failure still restores containers after rollout was actually attempted',
+  { skip: !python || !bash || !linux },
+  (t) => {
+    const fixture = rolloutFixture(t);
+    const result = fixture.run({ VR_DRIVER: 'syslog', VR_UP_EXIT: '24' });
+    assert.notEqual(result.status, 0);
+    assert.equal(fixture.events().filter((event) => event === 'compose-up').length, 2);
+    assert.equal(fs.readFileSync(path.join(fixture.dir, '.env'), 'utf8'), fixture.initialEnv);
+  }
+);
+
 test(
   'transition archive retains original timestamps and metadata while removing Caddy request secrets',
   { skip: !python || !bash || !linux },

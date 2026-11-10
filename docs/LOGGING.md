@@ -169,7 +169,11 @@ archives too. A capture failure or limit breach must stop first activation; it i
 not permission to discard history. Future deployments use the continuous journal,
 not this capture. Already-deleted logs cannot be recovered by this setup.
 The deploy script checks the installed profile before touching containers and
-rechecks the resolved services before rollout. Rollback keeps the host override;
+rechecks the resolved services before rollout. On the first JSON-to-syslog LiveKit
+transition it requires a readable zero voice-peer count before backup, repeats the
+archive capture, then checks for zero peers again immediately before recreation.
+A failed preflight, pull, archive or idle check does not run a container rollback
+when no rollout has started. Rollback keeps the host override;
 do not remove it as an application rollback step.
 
 ### Read a previous session
