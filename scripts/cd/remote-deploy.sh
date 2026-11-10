@@ -22,6 +22,11 @@ main() {
     0|1) ;;
     *) echo 'REQUIRE_PERSISTENT_LOGS must be 0 or 1' >&2; exit 1 ;;
   esac
+  local allow_voice_interruption=${ALLOW_LOGGING_VOICE_INTERRUPTION-0}
+  case "$allow_voice_interruption" in
+    0|1) ;;
+    *) echo 'ALLOW_LOGGING_VOICE_INTERRUPTION must be 0 or 1' >&2; exit 1 ;;
+  esac
   if [ -f docker-compose.override.yml ] && grep -qx '# VoiceRoom managed persistent logging v1' docker-compose.override.yml; then
     persistent_logs=true
     # Fail before the rollback trap or any container changes if storage is down.
@@ -43,6 +48,10 @@ main() {
   fi
   check_logging_activation_idle() {
     if [ "$first_logging_activation" != true ]; then return; fi
+    if [ "$allow_voice_interruption" = 1 ]; then
+      echo 'warning: operator explicitly approved brief voice interruption for first logging activation; idle check skipped' >&2
+      return
+    fi
     # Recreating LiveKit to change its log driver interrupts calls. The existing
     # API is the authority for active voice peers; missing/unreadable is not zero.
     docker compose exec -T api node -e '
@@ -81,6 +90,9 @@ main() {
     fi
   }
   log_deploy deployment.starting
+  if [ "$first_logging_activation" = true ] && [ "$allow_voice_interruption" = 1 ]; then
+    log_deploy deployment.logging_voice_interruption_approved
+  fi
 
   echo "== backing up .env and the database ($previous_commit -> $commit)"
   cp .env "$env_backup"

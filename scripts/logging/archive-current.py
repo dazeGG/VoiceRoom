@@ -76,9 +76,10 @@ def archive(deploy_path, destination=DESTINATION, max_raw_bytes=RAW_LIMIT, max_a
     lock = os.open(destination / '.lock', os.O_CREAT | os.O_WRONLY | os.O_NOFOLLOW, 0o640)
     try:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        now = now or datetime.datetime.now(datetime.timezone.utc)
+        now = (now or datetime.datetime.now(datetime.timezone.utc)).astimezone(datetime.timezone.utc)
         since = now - datetime.timedelta(days=14)
         cutoff = since.strftime('%Y-%m-%dT%H:%M:%SZ')
+        until = now.isoformat(timespec='microseconds').replace('+00:00', 'Z')
         initial_size = sum(entry.stat().st_size for entry in destination.iterdir() if entry.is_file() and not entry.is_symlink())
         if initial_size > max_archive_bytes:
             raise ValueError('existing transition archive exceeds its total size cap')
@@ -109,7 +110,7 @@ def archive(deploy_path, destination=DESTINATION, max_raw_bytes=RAW_LIMIT, max_a
                 continue
             if logging_type not in ('json-file', 'local'):
                 raise ValueError('unverified log destination; transition capture must stop')
-            raw = command(['docker', 'logs', '--since', cutoff, '--timestamps', container_id], deploy_path, max_raw_bytes)
+            raw = command(['docker', 'logs', '--since', cutoff, '--until', until, '--timestamps', container_id], deploy_path, max_raw_bytes)
             total_raw += len(raw)
             used = sum(entry.stat().st_size for entry in destination.iterdir() if entry.is_file() and not entry.is_symlink())
             remaining = max_archive_bytes - used
