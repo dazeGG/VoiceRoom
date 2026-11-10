@@ -382,7 +382,8 @@ function getRoundTripTimeFromStats(stats: Map<string, RtcStat>): number | null {
   let candidatePairRttMs: number | null = null;
   let remoteInboundRttMs: number | null = null;
   for (const report of stats.values()) {
-    if (isActiveCandidatePair(report) && report.currentRoundTripTime !== undefined) {
+    // No responses means this pair has not measured RTT yet; keep the RTCP fallback.
+    if (isActiveCandidatePair(report) && report.currentRoundTripTime !== undefined && report.responsesReceived !== 0) {
       candidatePairRttMs = report.currentRoundTripTime * 1000;
       continue;
     }
