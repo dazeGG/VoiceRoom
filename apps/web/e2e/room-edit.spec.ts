@@ -32,7 +32,7 @@ test('owner can rename a room, reflected in-room and in the lobby', async ({ pag
   await expect(roomHeading(page)).toHaveText(newName, { timeout: 15_000 });
 
   // Back in the lobby the card shows the new name.
-  await page.goto('/');
+  await page.goto('/app');
   const card = page.locator('.voice-home__card', { hasText: newName }).first();
   await expect(card).toBeVisible({ timeout: 15_000 });
   await expect(card.locator('.voice-home__room-name')).toHaveText(newName);

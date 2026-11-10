@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { state } from '@/features/room/client/core/room-runtime.store';
+import { APP_HOME } from '@/shared/app-home';
 import { usePageStore } from '@/stores/page.store';
 
 const page = usePageStore();
@@ -24,7 +25,7 @@ const banned = computed(() => state.moderationReason === 'banned');
       </p>
       <div class="not-found__actions">
         <!-- A full page load, as data-sveltekit-reload was. -->
-        <a class="not-found__home" href="/">На главный экран</a>
+        <a class="not-found__home" :href="APP_HOME">На главный экран</a>
       </div>
     </div>
   </main>

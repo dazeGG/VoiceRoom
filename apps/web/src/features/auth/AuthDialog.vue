@@ -6,6 +6,7 @@ import { normalizeRecoveryCode } from '@voice-room/shared/account-security';
 import { AccountFailure } from '@voice-room/shared/contracts/account';
 import { login, recoverAccount, register, restoreAccount, type AuthUser } from '@/api/auth';
 import { ApiError, failureBody } from '@/api/client';
+import { APP_HOME } from '@/shared/app-home';
 import { dayMonth } from '@/shared/utils/date-format';
 import { iconMd } from '@/shared/ui/icons';
 import { LOGIN_HINT, PASSWORD_MIN_LENGTH, blockedMessage, isValidPassword, normalizeLogin } from './account';
@@ -113,7 +114,7 @@ async function finish(user: AuthUser): Promise<boolean> {
     return true;
   }
   session.setUser(user);
-  await router.push('/');
+  await router.push(APP_HOME);
   return false;
 }
 

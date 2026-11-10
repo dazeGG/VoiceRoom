@@ -8,6 +8,7 @@ import AuthDialog from '@/features/auth/AuthDialog.vue';
 import type { AuthMode } from '@/features/auth/auth-mode';
 import { useSessionStore } from '@/features/auth/session.store';
 import { markInAppRoomNavigation } from '@/platform/open-in-app';
+import { APP_HOME } from '@/shared/app-home';
 import { lazyPage } from '@/shared/components/lazy-page';
 import LegalLinks from '@/shared/components/LegalLinks.vue';
 import Topbar from '@/shared/components/Topbar.vue';
@@ -22,7 +23,12 @@ import { usePushNotificationsStore } from './model/push-notifications.store';
 import { signOut } from './model/sign-out';
 import { useToastsStore, type ToastOptions } from './model/toasts.store';
 
-const props = withDefaults(defineProps<{ initialAuthMode?: AuthMode | null }>(), { initialAuthMode: null });
+// `startRoom`: the public site's «Создать комнату» came here. A guest gets a temporary
+// room at once; a signed-in visitor gets the lobby's new-room dialog.
+const props = withDefaults(defineProps<{ initialAuthMode?: AuthMode | null; startRoom?: boolean }>(), {
+  initialAuthMode: null,
+  startRoom: false
+});
 
 // Only a signed-in visit shows the lobby; a guest's landing does not download it.
 const LobbyPage = lazyPage(() => import('./LobbyPage.vue'));
@@ -75,9 +81,16 @@ watch(
 
 onMounted(() => {
   page.screen = 'start';
-  void session.loadSession().catch(() => {
-    authLoadError.value = true;
-  });
+  void session.loadSession().then(
+    (account) => {
+      if (!props.startRoom) return;
+      if (account) createRoomInLobby.value = true;
+      else handleCreateTemp();
+    },
+    () => {
+      authLoadError.value = true;
+    }
+  );
 });
 
 onBeforeUnmount(() => {
@@ -168,11 +181,11 @@ function showToast(message: string, options?: ToastOptions): void {
 }
 
 function closeAuthDialog(): void {
-  void router.replace('/');
+  void router.replace(APP_HOME);
 }
 
 function switchAuthMode(mode: AuthMode): void {
-  void router.replace({ path: '/', query: { auth: mode } });
+  void router.replace({ path: APP_HOME, query: { auth: mode } });
 }
 </script>
 
@@ -217,7 +230,7 @@ function switchAuthMode(mode: AuthMode): void {
     <div class="landing__container">
       <Topbar label="Новая голосовая комната">
         <nav class="landing__auth" aria-label="Аккаунт">
-          <RouterLink class="landing__login" to="/?auth=login"
+          <RouterLink class="landing__login" :to="{ path: APP_HOME, query: { auth: 'login' } }"
             >Войти <ArrowRight :size="15" aria-hidden="true"
           /></RouterLink>
         </nav>

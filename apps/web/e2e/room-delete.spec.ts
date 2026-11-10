@@ -25,7 +25,7 @@ test('owner can delete a room: redirected home, gone from list, direct URL is no
   await dialog.getByRole('button', { name: 'Удалить комнату' }).click();
   await dialog.getByRole('button', { name: 'Удалить навсегда' }).click();
 
-  // Delete redirects to the home/lobby ("/").
+  // Delete redirects to the home/lobby ("/app").
   await page.waitForURL('**/', { timeout: 15_000 });
   await expect(page.getByRole('button', { name: 'Создать комнату' })).toBeVisible({ timeout: 15_000 });
 

@@ -9,6 +9,7 @@ import ModerationCenter from '@/entities/room/components/ModerationCenter.vue';
 import RoomAvatarField from '@/entities/room/components/RoomAvatarField.vue';
 import RoomMemberList from '@/entities/room/components/RoomMemberList.vue';
 import { saveRoomAvatarChange, type RoomAvatarChange } from '@/entities/room/room-avatar-change';
+import { APP_HOME } from '@/shared/app-home';
 import { BAN_UNDO_DURATION_MS, type ModerationNoticeOptions } from '@/entities/room/room-moderation';
 import { Dialog } from '@/shared/ui';
 import { iconMd, iconSm } from '@/shared/ui/icons';
@@ -84,7 +85,7 @@ async function confirmDelete(): Promise<void> {
   roomSettingsUi.deleting = true;
   try {
     await deleteRoom(roomClientState.roomId);
-    window.location.href = '/';
+    window.location.href = APP_HOME;
   } catch (err) {
     deleting.value = false;
     roomSettingsUi.deleting = false;

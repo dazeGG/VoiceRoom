@@ -36,7 +36,7 @@ test('unsent direct message text stays with its own thread across switches and p
       expect(request.ok()).toBe(true);
     }
     await acceptIncomingRequests(page);
-    await page.goto('/');
+    await page.goto('/app');
 
     const composer = page.getByPlaceholder('Написать сообщение…');
     const openThread = async (login: string) => {
@@ -52,7 +52,7 @@ test('unsent direct message text stays with its own thread across switches and p
     await openThread(grace.login);
     await expect(composer).toHaveText('черновик для Грейс');
 
-    await page.goto('/');
+    await page.goto('/app');
     await openThread(linus.login);
     await expect(composer).toHaveText('черновик для Линуса');
 
@@ -60,7 +60,7 @@ test('unsent direct message text stays with its own thread across switches and p
     await composer.press('Enter');
     await expect(page.locator('.message-bubble--dm', { hasText: 'черновик для Линуса' }).last()).toBeVisible();
     await expect(composer).toHaveText('');
-    await page.goto('/');
+    await page.goto('/app');
     await openThread(linus.login);
     await expect(composer).toHaveText('');
     await openThread(grace.login);
@@ -86,13 +86,13 @@ test('unsent room chat text survives leaving the page and is gone once sent', as
 
   await openRoomChat();
   await composer.fill('недописанное сообщение');
-  await page.goto('/');
+  await page.goto('/app');
   await openRoomChat();
   await expect(composer).toHaveText('недописанное сообщение');
 
   await composer.press('Enter');
   await expect(page.locator('.message-bubble', { hasText: 'недописанное сообщение' }).last()).toBeVisible();
-  await page.goto('/');
+  await page.goto('/app');
   await openRoomChat();
   await expect(composer).toHaveText('');
 });

@@ -1,16 +1,17 @@
 <script setup lang="ts">
 import { ArrowRight, MessageSquare, Mic, MonitorPlay } from '@lucide/vue';
-import { ref } from 'vue';
+import { onMounted, ref } from 'vue';
 import { createRoom } from '@/api/rooms';
 import { markInAppRoomNavigation } from '@/platform/open-in-app';
 import { Button, MascotIcon } from '@/shared/ui';
 import { iconMd, iconSm } from '@/shared/ui/icons';
 
+const props = withDefaults(defineProps<{ startRoom?: boolean }>(), { startRoom: false });
 const emit = defineEmits<{ toast: [message: string] }>();
 
 const creating = ref(false);
 
-// A phone may run the room page, so `/` offers the one thing it can start:
+// A phone may run the room page, so /app offers the one thing it can start:
 // a temporary room, joined as a guest. Permanent rooms, the lobby, friends
 // and push stay behind the desktop boundary.
 async function createTempRoom(): Promise<void> {
@@ -25,6 +26,10 @@ async function createTempRoom(): Promise<void> {
     emit('toast', error instanceof Error && error.message ? error.message : 'Не удалось создать комнату');
   }
 }
+
+onMounted(() => {
+  if (props.startRoom) void createTempRoom();
+});
 </script>
 
 <template>

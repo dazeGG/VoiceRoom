@@ -1,4 +1,4 @@
-// `/` and `/r/:id` keep their page while the lobby moves the address between
+// /app and `/r/:id` keep their page while the lobby moves the address between
 // them (SvelteKit's shallow routing); a real navigation picks the page again.
 
 import { cleanup, render, screen } from '@testing-library/vue';
@@ -73,8 +73,8 @@ function back(router: Router): Promise<void> {
   });
 }
 
-test('the lobby entering a room from / keeps the home page mounted, also on the back button', async () => {
-  const router = await open('/');
+test('the lobby entering a room from /app keeps the home page mounted, also on the back button', async () => {
+  const router = await open('/app');
   expect(screen.getByText('home page')).toBeTruthy();
 
   await shallowPush(router, '/r/abc');
@@ -82,7 +82,7 @@ test('the lobby entering a room from / keeps the home page mounted, also on the 
   expect(window.location.pathname).toBe('/r/xyz');
   await back(router);
   await back(router);
-  expect(window.location.pathname).toBe('/');
+  expect(window.location.pathname).toBe('/app');
 
   expect(screen.getByText('home page')).toBeTruthy();
   expect(mounts).toEqual({ home: 1, room: 0 });
@@ -92,7 +92,7 @@ test('a room page opened by its address keeps itself when the lobby gives the ba
   const router = await open('/r/abc');
   expect(screen.getByText('room page abc')).toBeTruthy();
 
-  await shallowReplace(router, '/');
+  await shallowReplace(router, '/app');
   await shallowPush(router, '/r/xyz');
 
   expect(screen.getByText('room page abc')).toBeTruthy();
@@ -100,11 +100,11 @@ test('a room page opened by its address keeps itself when the lobby gives the ba
 });
 
 test('a real navigation between / and a room shows the page of the new address', async () => {
-  const router = await open('/');
+  const router = await open('/app');
   await router.push('/r/abc');
   expect(await screen.findByText('room page abc')).toBeTruthy();
 
-  await router.push('/');
+  await router.push('/app');
   expect(await screen.findByText('home page')).toBeTruthy();
   expect(mounts).toEqual({ home: 2, room: 1 });
 });
@@ -118,7 +118,7 @@ const IDLE_WAIT_MS = 5_000;
 
 test('the landing fetches the room code once the page is idle, before any click', async () => {
   vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
-  await open('/');
+  await open('/app');
   expect(prefetchRoom).not.toHaveBeenCalled();
   vi.advanceTimersByTime(IDLE_WAIT_MS);
   expect(prefetchRoom).toHaveBeenCalledTimes(1);
@@ -127,14 +127,14 @@ test('the landing fetches the room code once the page is idle, before any click'
 test('a phone never fetches the room code from the landing', async () => {
   vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
   device.desktop = false;
-  await open('/');
+  await open('/app');
   vi.advanceTimersByTime(IDLE_WAIT_MS);
   expect(prefetchRoom).not.toHaveBeenCalled();
 });
 
 test('leaving the page before it is idle drops the prefetch', async () => {
   vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
-  await open('/');
+  await open('/app');
   cleanup();
   vi.advanceTimersByTime(IDLE_WAIT_MS);
   expect(prefetchRoom).not.toHaveBeenCalled();

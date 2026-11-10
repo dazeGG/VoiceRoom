@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { showRoomRoute } from '@/features/room/client/room/room';
+import { APP_HOME } from '@/shared/app-home';
 import { usePageStore } from '@/stores/page.store';
 
 const page = usePageStore();
@@ -25,7 +26,7 @@ function retry(): void {
       <div class="not-found__actions">
         <button id="entryRetryButton" class="not-found__home" type="button" @click="retry">Повторить проверку</button>
         <!-- A full page load, as data-sveltekit-reload was. -->
-        <a class="not-found__home" href="/">На стартовый экран</a>
+        <a class="not-found__home" :href="APP_HOME">На стартовый экран</a>
       </div>
     </div>
   </main>

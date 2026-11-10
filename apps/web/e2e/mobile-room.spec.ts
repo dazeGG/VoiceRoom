@@ -157,13 +157,13 @@ test('a signed-in phone gets the standalone room with its account, never the lob
   }
 });
 
-test('a phone starts a temporary room from `/` and joins it as a guest', async ({ browser, baseURL }) => {
+test('a phone starts a temporary room from /app and joins it as a guest', async ({ browser, baseURL }) => {
   test.setTimeout(90_000);
   const context = await phone(browser, baseURL);
   try {
     const visitor = await context.newPage();
-    await visitor.goto('/');
-    // `/` used to be desktop-only, so a phone had no way into a call of its own.
+    await visitor.goto('/app');
+    // The app's start used to be desktop-only, so a phone had no way into a call of its own.
     await expect(visitor.getByRole('main', { name: 'Неподдерживаемое устройство' })).toHaveCount(0);
     await expect(visitor.getByRole('heading', { name: 'Голосовая комната прямо в браузере' })).toBeVisible();
 
