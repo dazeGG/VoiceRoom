@@ -49,7 +49,7 @@ test('log event codes follow the domain.event naming convention', () => {
   }
 });
 
-test('the logger redacts credentials and personal identifiers at any depth', () => {
+test('the logger redacts credentials and personal identifiers at configured paths', () => {
   const { logger, records } = captureLogger();
   logger.info(
     {
@@ -203,6 +203,48 @@ test('client log intake refuses values that could forge or inflate a record', ()
   assert.deepEqual(Object.keys(event.ctx ?? {}), ['ok']);
 });
 
+test('client log intake drops sensitive context keys regardless of case or separators', () => {
+  const keys = [
+    'Password',
+    'PASSWORD_HASH',
+    'Token',
+    'sessionToken',
+    'refresh-token',
+    'access_token',
+    'VR_GATE_CREDENTIAL',
+    'AUTHORIZATION',
+    'proxy-authorization',
+    'Cookie',
+    'Set-Cookie',
+    'RecoveryCode',
+    'recovery_codes',
+    'EMAIL',
+    'credential',
+    'apiKey',
+    'api_secret',
+    'private-key',
+    'secret',
+    'headers.Authorization',
+    'request:cookie'
+  ];
+  for (const key of keys) {
+    const [event] = normalizeClientLogBatch({
+      events: [{ ns: 'room', msg: 'probe', ctx: { [key]: 'sensitive-value', elapsedMs: 100, stage: 'connect' } }]
+    }).events;
+    assert.deepEqual(event?.ctx, { elapsedMs: 100, stage: 'connect' }, key);
+  }
+});
+
+test('discarded sensitive context does not consume the diagnostic field budget', () => {
+  const diagnostics = Object.fromEntries(
+    Array.from({ length: CLIENT_LOG_LIMITS.maxContextKeys }, (_value, index) => [`k${index}`, index])
+  );
+  const [event] = normalizeClientLogBatch({
+    events: [{ ns: 'room', msg: 'probe', ctx: { password: 'secret', access_token: 'secret', ...diagnostics } }]
+  }).events;
+  assert.deepEqual(event?.ctx, diagnostics);
+});
+
 test('client log intake rejects a namespace or session id with unexpected characters', () => {
   const batch = normalizeClientLogBatch({
     sessionId: 'web abc!',
@@ -255,6 +297,6 @@ test('client log intake strips URL queries and masks tokens before they reach th
   assert.ok(event);
   assert.equal(event.msg, 'could not connect to wss://livekit.example/rtc?…');
   assert.equal(event.ctx?.errorMessage, 'token [redacted] rejected');
-  assert.equal(event.ctx?.credential, '[redacted]');
+  assert.equal(event.ctx?.credential, undefined);
   assert.equal(event.ctx?.page, 'https://app.example/room/abc?…');
 });

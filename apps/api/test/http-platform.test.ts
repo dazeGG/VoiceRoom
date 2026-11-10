@@ -73,6 +73,17 @@ test('the request line is levelled by status, skips health checks and hashes the
   assert.equal(requestRouteLabel({ routerPath: '/legacy' }), '/legacy');
 });
 
+test('unmatched request logs never retain a raw URL or its credentials', () => {
+  const log = recordingLogger();
+  const logRequest = createRequestLog({ clientIp: () => '', hashIp: () => 'unknown' });
+  const url = '/missing/private-value?access_token=secret-token#secret-fragment';
+  logRequest(mistyped({ method: 'GET', url, log }), 404, 1);
+
+  assert.equal(log.records[0]?.route, 'unknown');
+  assert.doesNotMatch(JSON.stringify(log.records), /private-value|secret-token|secret-fragment/);
+  assert.equal(requestRouteLabel({ routeOptions: { url: '/api/rooms/:id' }, url }), '/api/rooms/:id');
+});
+
 function shutdownHarness({ closeFails = false, hang = false } = {}) {
   const calls: { exits: unknown[]; closedSockets: unknown[]; stores: number } = {
     exits: [],

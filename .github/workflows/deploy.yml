@@ -74,6 +74,7 @@ jobs:
           SSH_USER: ${{ secrets.SSH_USER }}
           SSH_KEY: ${{ secrets.SSH_KEY }}
           DEPLOY_PATH: ${{ vars.DEPLOY_PATH }}
+          REQUIRE_PERSISTENT_LOGS: ${{ inputs.environment == 'production' && '1' || '0' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -84,7 +85,7 @@ jobs:
           args="$(printf '%q ' "$DEPLOY_PATH" "$GITHUB_SHA" \
             "$IMAGE_PREFIX-api:$GITHUB_SHA" "$IMAGE_PREFIX-worker:$GITHUB_SHA" "$IMAGE_PREFIX-web:$GITHUB_SHA")"
           ssh -i "$key" -o BatchMode=yes -o StrictHostKeyChecking=yes -o IdentitiesOnly=yes \
-            "$SSH_USER@$SSH_HOST" "bash -s -- $args" < scripts/cd/remote-deploy.sh | tee "$RUNNER_TEMP/rollout.log"
+            "$SSH_USER@$SSH_HOST" "env REQUIRE_PERSISTENT_LOGS=$REQUIRE_PERSISTENT_LOGS bash -s -- $args" < scripts/cd/remote-deploy.sh | tee "$RUNNER_TEMP/rollout.log"
           # A rollout that stops early can still exit 0; only the final marker counts.
           if ! grep -qx "deployed $GITHUB_SHA" "$RUNNER_TEMP/rollout.log"; then
             echo "::error::the rollout ended without reporting 'deployed $GITHUB_SHA'"

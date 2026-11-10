@@ -31,6 +31,8 @@ apps/api/uploads/
 # Docker/Caddy local state
 caddy_data/
 caddy_config/
+# Host-installed persistent logging override must survive Git checkouts.
+/docker-compose.override.yml
 
 # Test and coverage output
 coverage/

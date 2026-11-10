@@ -44,7 +44,8 @@ test('the privacy policy names the operator, the contact and the retention perio
   // After them only counts and the time in calls are left, and the logs are capped.
   expect(text).toMatch(/в какие дни вы пользовались сервисом, — 90 дней/);
   expect(text).toMatch(/остаётся только время\s+в звонке/);
-  expect(text).toMatch(/не больше 30 МБ/);
+  expect(text).toMatch(/до 15 дней, включая время на автоматическую ротацию и очистку/);
+  expect(text).toMatch(/сохраняются при обновлении сервиса/);
   expect(screen.getAllByRole('link', { name: 'support@voiceroom.ru' })[0]?.getAttribute('href')).toBe(
     'mailto:support@voiceroom.ru'
   );

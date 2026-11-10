@@ -1,0 +1,13 @@
+[Unit]
+Description=Persistent isolated VoiceRoom journal
+Wants=systemd-journald@voiceroom.service
+After=systemd-journald@voiceroom.service
+Before=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/journalctl --namespace=voiceroom --flush
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

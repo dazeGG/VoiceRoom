@@ -12,7 +12,9 @@ export function requestRouteLabel(request: {
   routerPath?: string;
   url?: string;
 }): string {
-  return request.routeOptions?.url || request.routerPath || request.url || 'unknown';
+  // Only framework-owned route templates are safe. An unmatched raw URL can
+  // contain credentials in either its path or query, and has unbounded labels.
+  return request.routeOptions?.url || request.routerPath || 'unknown';
 }
 
 export function createRequestLog({

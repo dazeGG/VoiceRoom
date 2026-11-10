@@ -198,6 +198,12 @@ npm --workspace @voice-room/api run db:rollback
 
 ## Docker
 
+Production diagnostics must outlive containers. Install and verify the isolated,
+bounded host journal profile in [`LOGGING.md`](./LOGGING.md#storage-across-deployments)
+before activating the production retention policy. It survives deploys/rollbacks;
+the portable JSON-log fallback below does not. First activation also recreates
+LiveKit, so schedule it with no active calls. No Docker daemon restart is needed.
+
 Production compose запускает образы `api`, `worker` и `web` из одного Dockerfile:
 
 - `postgres` — PostgreSQL с volume `postgres_data` и healthcheck;

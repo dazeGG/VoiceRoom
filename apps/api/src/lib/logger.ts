@@ -9,9 +9,9 @@ const SERVICE_VERSION: string = packageJson.version;
 
 type Env = NodeJS.ProcessEnv;
 
-// Values that must never reach a log sink, whatever nests them. Redaction is
-// applied by pino at serialization time so an accidental `log.info({ req })`
-// cannot leak a cookie or a bearer token through a path nobody reviewed.
+// Known sensitive fields are removed by pino at serialization time. Wildcards
+// cover one nesting level, not arbitrary objects; call sites must still avoid
+// logging raw requests, credentials or unreviewed error/context payloads.
 const REDACTED_PATHS: readonly string[] = Object.freeze([
   'password',
   'passwordHash',
