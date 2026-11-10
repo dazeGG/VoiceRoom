@@ -25,6 +25,8 @@ import { createLogger, errorContext } from '@/shared/log';
 const log = createLogger('room:stats');
 
 let peerLatencyTimer = 0;
+let pollGeneration = 0;
+let pendingPoll: (() => boolean) | null = null;
 
 export function startPeerLatencyStats(): void {
   if (peerLatencyTimer) return;
@@ -38,6 +40,8 @@ export function startPeerLatencyStats(): void {
 export function stopPeerLatencyStats(): void {
   if (peerLatencyTimer) window.clearInterval(peerLatencyTimer);
   peerLatencyTimer = 0;
+  pollGeneration += 1;
+  pendingPoll = null;
   previousInbound = new Map();
   previousOutbound = null;
   previousChecks = null;
@@ -48,19 +52,42 @@ export function stopPeerLatencyStats(): void {
 }
 
 async function updatePeerLatencyStats(): Promise<void> {
-  if (!state.joined) return;
+  if (!state.joined || pendingPoll?.()) return;
 
-  const outbound = await updateLocalLiveKitLatency();
-  const inbound = await updateInboundAudioStats();
-  const video = await readVideoStrain();
-  const load = await readDesktopLoad();
-  if (!state.joined) return;
-  const sample = { ...state.localNetwork, rttMs: state.localPingMs };
-  recordNetworkSample(sample);
-  recordPollCounts({ ...inbound, ...outbound });
-  noteCallStrain({ ...inbound, ...video });
-  recordLoadCounts(load);
-  postVoicePoll(inbound, outbound, load);
+  const generation = pollGeneration;
+  const { roomId, peerId, sessionToken, livekitRoom, localMicPublication } = state;
+  const publication = localMicPublication || findLocalMicrophonePublication() || findFirstLocalPublication();
+  const track = publication?.track;
+  const isCurrent = () =>
+    generation === pollGeneration &&
+    state.joined &&
+    state.roomId === roomId &&
+    state.peerId === peerId &&
+    state.sessionToken === sessionToken &&
+    state.livekitRoom === livekitRoom &&
+    state.localMicPublication === localMicPublication &&
+    (state.localMicPublication || findLocalMicrophonePublication() || findFirstLocalPublication()) === publication &&
+    publication?.track === track;
+  // A replaced room or sender may start polling even if its old read never settles.
+  pendingPoll = isCurrent;
+  try {
+    const outbound = await updateLocalLiveKitLatency(isCurrent);
+    if (!isCurrent()) return;
+    const inbound = await updateInboundAudioStats(isCurrent);
+    if (!isCurrent()) return;
+    const video = await readVideoStrain(isCurrent);
+    if (!isCurrent()) return;
+    const load = await readDesktopLoad(isCurrent);
+    if (!isCurrent()) return;
+    const sample = { ...state.localNetwork, rttMs: state.localPingMs };
+    recordNetworkSample(sample);
+    recordPollCounts({ ...inbound, ...outbound });
+    noteCallStrain({ ...inbound, ...video });
+    recordLoadCounts(load);
+    postVoicePoll(inbound, outbound, load);
+  } finally {
+    if (pendingPoll === isCurrent) pendingPoll = null;
+  }
 }
 
 // The longest round trip a poll reports; past it the link is gone anyway.
@@ -157,7 +184,7 @@ type OutboundCounts = Pick<PollCounts, 'outboundPackets' | 'outboundLost' | 'rtt
 /** The growth of a counter since the last reading; a counter that went back (a new stream) starts over from zero. */
 const growth = (now: number, before: number) => (now >= before ? now - before : now);
 
-async function updateInboundAudioStats(): Promise<InboundCounts> {
+async function updateInboundAudioStats(isCurrent: () => boolean): Promise<InboundCounts> {
   const counts: InboundCounts = {
     inboundPackets: 0,
     inboundLost: 0,
@@ -179,6 +206,7 @@ async function updateInboundAudioStats(): Promise<InboundCounts> {
       const voice = isMicrophonePublication(publication);
       const track = publication.track;
       const stats = readRtcStats(await track?.getRTCStatsReport?.().catch(() => undefined));
+      if (!isCurrent()) return counts;
       for (const report of stats.values()) {
         if (report.type !== 'inbound-rtp' || report.kind !== 'audio') continue;
         const reading: InboundReading = {
@@ -253,7 +281,7 @@ let previousVideo = new Map<string, VideoReading>();
  * only while the system is busy, other people's frames that arrived and those
  * dropped, with their packets and the lost ones. No video, no stats read.
  */
-async function readVideoStrain(): Promise<VideoCounts> {
+async function readVideoStrain(isCurrent: () => boolean): Promise<VideoCounts> {
   const counts: VideoCounts = {
     encodeSeconds: 0,
     encodeCpuSeconds: 0,
@@ -278,6 +306,7 @@ async function readVideoStrain(): Promise<VideoCounts> {
   const current = new Map<string, VideoReading>();
   for (const track of tracks) {
     const stats = readRtcStats(await track?.getRTCStatsReport?.().catch(() => undefined));
+    if (!isCurrent()) return counts;
     for (const report of stats.values()) {
       if (report.kind !== 'video' || (report.type !== 'outbound-rtp' && report.type !== 'inbound-rtp')) continue;
       const reading: VideoReading = {
@@ -333,11 +362,11 @@ function toLoadReading(value: unknown): LoadCounts | null {
  * VoiceRoom's processes apart from the whole computer. The first reading only
  * sets the baseline; outside the app, or with an older app, nothing is read.
  */
-async function readDesktopLoad(): Promise<LoadCounts> {
+async function readDesktopLoad(isCurrent: () => boolean): Promise<LoadCounts> {
   const bridge = window.voiceRoomDesktopLoad;
   if (typeof bridge?.read !== 'function') return NO_LOAD;
   const reading = toLoadReading(await bridge.read().catch(() => null));
-  if (!reading) return NO_LOAD;
+  if (!isCurrent() || !reading) return NO_LOAD;
   const before = previousLoad;
   previousLoad = reading;
   if (
@@ -357,10 +386,11 @@ async function readDesktopLoad(): Promise<LoadCounts> {
 
 const NO_OUTBOUND: OutboundCounts = { outboundPackets: 0, outboundLost: 0, rttSeconds: 0, rttChecks: 0 };
 
-async function updateLocalLiveKitLatency(): Promise<OutboundCounts> {
+async function updateLocalLiveKitLatency(isCurrent: () => boolean): Promise<OutboundCounts> {
   try {
     const publication = state.localMicPublication || findLocalMicrophonePublication() || findFirstLocalPublication();
     const stats = readRtcStats(await publication?.track?.getRTCStatsReport?.());
+    if (!isCurrent()) return NO_OUTBOUND;
     noteMicSend(readMicSend(stats));
     const rttMs = getRoundTripTimeFromStats(stats);
     if (rttMs !== null) {
