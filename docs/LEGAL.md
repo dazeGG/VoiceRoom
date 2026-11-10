@@ -80,7 +80,10 @@ retention period, change it there too.
   уведомлений» removes the message text, not the sender's name in the title.- Deleted direct messages stay in the database as soft-deleted rows; only room
   messages are purged 30 days after deletion. The policy promises the purge for
   room messages only.
-- Container logs have no rotation configured in `docker-compose.yml`, so the
-  policy states no log retention period.
+- The production logging profile must be installed before shipping the journal
+  retention policy: a separate persistent namespace, hourly rotate/vacuum timer,
+  and no Docker dual-log cache. The portable Compose fallback is size-capped but
+  has no time-based expiry; it does not implement the production policy. See
+  `LOGGING.md` for installation, verification and delivery limits.
 - There is no account-level platform ban; restricting a violator's access is a
   manual database operation today.

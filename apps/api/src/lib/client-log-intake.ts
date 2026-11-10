@@ -31,6 +31,29 @@ export type ClientLogEvent = {
 };
 const NAMESPACE_PATTERN = /^[A-Za-z0-9:._-]+$/;
 const SESSION_ID_PATTERN = /^[A-Za-z0-9._-]+$/;
+// The public intake accepts flat diagnostic context, not credentials. Filter
+// here rather than depending on the logger's case-sensitive redaction paths.
+const SENSITIVE_CONTEXT_KEYS = new Set([
+  'password',
+  'passwordhash',
+  'token',
+  'sessiontoken',
+  'refreshtoken',
+  'accesstoken',
+  'vrgatecredential',
+  'authorization',
+  'proxyauthorization',
+  'cookie',
+  'setcookie',
+  'recoverycode',
+  'recoverycodes',
+  'email',
+  'credential',
+  'apikey',
+  'apisecret',
+  'privatekey',
+  'secret'
+]);
 
 // Browser errors quote URLs, and URLs here carry secrets in their query: the
 // LiveKit connect URL holds both the JWT and the gate credential. Queries and
@@ -85,6 +108,7 @@ function cleanContext(value: unknown): ClientLogContext | undefined {
     if (keys >= CLIENT_LOG_LIMITS.maxContextKeys) break;
     const key = cleanText(rawKey, CLIENT_LOG_LIMITS.maxContextKeyChars);
     if (!key || !NAMESPACE_PATTERN.test(key)) continue;
+    if (key.split(/[.:]/).some((part) => SENSITIVE_CONTEXT_KEYS.has(part.replace(/[-_]/g, '').toLowerCase()))) continue;
     if (typeof rawValue === 'string') context[key] = cleanText(rawValue, CLIENT_LOG_LIMITS.maxContextValueChars);
     else if (typeof rawValue === 'number') context[key] = Number.isFinite(rawValue) ? rawValue : 0;
     else if (typeof rawValue === 'boolean' || rawValue === null) context[key] = rawValue;

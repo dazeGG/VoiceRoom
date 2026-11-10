@@ -1,0 +1,50 @@
+# VoiceRoom managed persistent logging v1
+# Installed outside Git as docker-compose.override.yml; survives release rollback.
+# !override requires Docker Compose 2.24.4 or newer.
+x-persistent-logging: &persistent-logging
+  driver: syslog
+  options:
+    syslog-address: unixgram:///run/systemd/journal.voiceroom/dev-log
+    tag: "voiceroom/{{.Name}}/{{.ID}}"
+    mode: non-blocking
+    max-buffer-size: 4m
+    # The journal owns retention. A Docker cache has no age limit.
+    cache-disabled: "true"
+
+services:
+  postgres:
+    logging: !override
+      <<: *persistent-logging
+  migrate:
+    logging: !override
+      <<: *persistent-logging
+  media-init:
+    logging: !override
+      <<: *persistent-logging
+  api:
+    logging: !override
+      <<: *persistent-logging
+  message-delivery:
+    logging: !override
+      <<: *persistent-logging
+  notification-delivery:
+    logging: !override
+      <<: *persistent-logging
+  media-processing:
+    logging: !override
+      <<: *persistent-logging
+  media-maintenance:
+    logging: !override
+      <<: *persistent-logging
+  media-reconciliation:
+    logging: !override
+      <<: *persistent-logging
+  caddy:
+    logging: !override
+      <<: *persistent-logging
+  livekit:
+    logging: !override
+      <<: *persistent-logging
+  livekit-gate:
+    logging: !override
+      <<: *persistent-logging

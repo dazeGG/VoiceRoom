@@ -88,7 +88,12 @@ jobs:
       - run: npm ci
       - run: npm --workspace @voice-room/shared run test
       - run: npm --workspace @voice-room/api run test
-      - run: node --test scripts/test/*.test.mts
+      - name: Script tests and real Caddy log-redaction regression
+        env:
+          CADDY_TEST_IMAGE: caddy:2.11.4-alpine
+        run: |
+          docker pull "$CADDY_TEST_IMAGE"
+          node --test scripts/test/*.test.mts
 
   test-web:
     name: Web tests

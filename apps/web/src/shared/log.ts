@@ -49,6 +49,9 @@ export function reportVoiceJoinOutcome(ctx: {
   outcome: 'success' | 'failure' | 'cancel';
   elapsedMs: number;
   stage: 'started' | 'microphone' | 'token' | 'connect' | 'publish';
+  roomId?: string;
+  /** Client-reported correlation only, never an authenticated identity. */
+  reportedGuestId?: string;
 }): void {
   if (joinOutcomes.length === BUFFER_LIMIT) {
     joinOutcomes.shift();

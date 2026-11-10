@@ -6,8 +6,9 @@ this document covers how to find out why.
 
 ## Shape
 
-Every record is a single JSON line written by pino, from the API, the workers and
-the LiveKit auth gate alike.
+Application records are single JSON lines written by pino, from the API, the
+workers and the LiveKit auth gate alike. Caddy, LiveKit and PostgreSQL keep their
+native formats in the same production journal.
 
 ```json
 {
@@ -72,15 +73,152 @@ Health checks (`/api/healthz`) are deliberately absent from the request log.
 
 ## Redaction
 
-Passwords, session and recovery tokens, e-mail addresses, `authorization`,
-`cookie` and `set-cookie` are removed by pino at serialization time, at any
-nesting depth. This is enforced, not a convention: an accidental
-`log.info({ req })` cannot leak a cookie.
+Pino removes configured sensitive fields and known request-header paths at
+serialization time. This is **not arbitrary-depth redaction**: review new nested
+objects and error messages before logging them. The public client intake drops
+sensitive context keys and masks URL queries, JWTs and gate credentials. HTTP
+request logs use route templates (or `unknown`), never an unmatched raw URL.
+Caddy's runtime formatter removes request URI, headers and client-address fields
+from proxy errors. Free-form error text and third-party logs still require review;
+these protections are not a universal secret detector.
 
-Client addresses are logged only as `ipHash`, salted per process. It correlates
-records inside one incident window and nothing beyond it.
+Application HTTP request logs represent client addresses as `ipHash`, salted per
+process. It correlates records inside one incident window and nothing beyond it.
+Native third-party diagnostics, including LiveKit, can contain address information;
+the host journal must therefore remain private and expire automatically.
 
 Message bodies, room chat content and attachment contents are never logged.
+
+## Storage across deployments
+
+The portable `docker-compose.yml` fallback uses container-owned JSON logs capped
+at 3 × 10 MB. **Deleting/replacing a container deletes that history.** Size limits
+alone do not provide time-based expiry.
+
+Production uses the opt-in host profile in `config/logging`: Docker's native
+syslog driver sends all service streams to the isolated `voiceroom` systemd journal
+namespace. There is no collector, public log endpoint or new application dependency.
+The persistent store is `/var/log/journal/<machine-id>.voiceroom/`, independent of
+application containers and Git checkouts. The ordinary host journal is untouched.
+
+- Target retention: **14 days**, with hourly rotation and an hourly namespace-only
+  vacuum timer; the public policy allows **15 days** for file-granular cleanup.
+- Journal storage budget: **512 MiB**, 16 MiB files, 2 GiB free-space reserve.
+  Active files/metadata make this a journal budget, not a byte-perfect directory cap.
+  Size pressure can shorten the retained history. Do not promise 14 days under
+  arbitrary traffic.
+- Per-container delivery buffer: **4 MiB, non-blocking**. A full buffer, receiver
+  outage or rate limiting can lose records; diagnostics must not stall calls.
+  The journal sync interval is 30 seconds, not a synchronous durable commit per line.
+- Docker's separate log cache is disabled to avoid an independently retained copy.
+  **`docker compose logs`, `docker logs` and `npm run logs` do not read this profile.**
+  Use the journal reader below, including after the original container is removed.
+- The syslog tag is `voiceroom/<container-name>/<container-id>`. Pino records also
+  retain `service` and `version`; deployment markers name old/new Git commits.
+- Access is restricted to host administrators/journal readers. Do not expose logs
+  through Caddy, commit exports, or put raw log contents into public issues.
+
+### Install and activate
+
+Requires a Linux systemd host with journal namespaces (production uses systemd
+249), Python 3, Docker and Compose **2.24.4+**. The `!override` replaces the complete
+logging block; simply merging `driver` would leave incompatible JSON-driver options.
+
+```bash
+# Read the installer first. It requires root and never recreates application containers.
+sudo bash scripts/logging/install.sh /home/daze/VoiceRoom --reader daze
+```
+
+`--reader` is explicit: it grants that operator membership in `systemd-journal`,
+which can read other host journals too. Reconnect SSH to pick up membership. Omit
+the option to keep journal reads root-only. The installer refuses an unrelated
+existing override. It installs a marked, ignored `docker-compose.override.yml`
+on the host so normal deployment, manual Compose operations and rollback to an
+older commit all retain the same logging sink. Explicit `-f` configurations do
+not automatically load this override.
+
+```bash
+bash /etc/voiceroom/logging/preflight.sh /home/daze/VoiceRoom
+# Use an already-present trusted image, with /bin/sh and printf:
+python3 /etc/voiceroom/logging/smoke.py --image alpine:3.23
+```
+
+Check the smoke test's actual evidence: records from two removed containers,
+their different IDs, and a >4 KiB JSON record must remain readable only in the
+VoiceRoom namespace. The optional journal-restart check requires root and should
+run before switching application containers. Also verify boot-unit ordering and
+that the expiry timer is active. A successful config parse is not this test.
+
+**First activation recreates every service whose logging configuration changes,
+including LiveKit and PostgreSQL. By default, wait for zero active voice participants.**
+Back up the deployment as usual; preserve any still-needed current-container logs
+privately before recreation:
+
+```bash
+# Run before the first recreation, after setup and a fresh journal-reader login.
+python3 /etc/voiceroom/logging/archive-current.py /home/daze/VoiceRoom
+```
+
+This one-time transition capture reads only existing containers and the preceding
+14 days. It writes private gzip JSONL files to `/var/lib/voiceroom/log-transition`,
+bounded to 30 MiB of source output per container and 64 MiB total archive storage.
+It retains original timestamps and container/service identity; known sensitive
+Caddy request fields are removed. Each file's age starts at its **oldest original
+record**, not the date it was copied. The hourly retention service expires these
+archives too. A capture failure or limit breach must stop first activation; it is
+not permission to discard history. Future deployments use the continuous journal,
+not this capture. Already-deleted logs cannot be recovered by this setup.
+The deploy script checks the installed profile before touching containers and
+rechecks the resolved services before rollout. On the first JSON-to-syslog LiveKit
+transition it requires a readable zero voice-peer count before backup, repeats the
+archive capture, then checks for zero peers again immediately before recreation.
+If the operator explicitly approves a brief call interruption, pass
+`ALLOW_LOGGING_VOICE_INTERRUPTION=1` only to that one deploy command. This skips
+only the first-activation idle checks and writes an approval marker; profile,
+preflight and archive checks still apply. Never persist this override in `.env`
+or the deployment workflow. The default is `0`; other values are rejected.
+A failed preflight, pull, archive or idle check does not run a container rollback
+when no rollout has started. Rollback keeps the host override;
+do not remove it as an application rollback step.
+
+### Read a previous session
+
+```bash
+# Includes prior container generations and prior boots; not restricted to current boot.
+bash /etc/voiceroom/logging/read.sh \
+  --since '2026-11-09 16:45:00 UTC' --until '2026-11-09 17:00:00 UTC'
+
+# Journal JSON wraps the original log line in MESSAGE.
+bash /etc/voiceroom/logging/read.sh --since '24 hours ago' \
+  | jq -r '.MESSAGE' | jq -R 'fromjson? | select(.evt == "client.report" and .msg == "voice join outcome")'
+
+# Namespace size / cleanup health (requires journal/system-service access):
+journalctl --namespace=voiceroom --disk-usage
+systemctl status voiceroom-log-retention.timer
+```
+
+The reader uses `--all` so long JSON fields are not rendered as `null`. Its default
+is the last 24 hours, at most 5,000 records: narrow the interval or raise `--lines`
+when investigating a busy period. Preserve journal timestamps, original client
+`at`, `clientSessionId`, container tag and application version in private incident
+notes. Client clocks can differ from server clocks; `at` is not proof of ordering.
+
+Guest voice outcomes include `ctx.reportedGuestId` and `ctx.roomId`, captured at
+attempt start. The guest ID is the **existing** browser guest ID also used in voice
+history, not a new identifier. Use it with room/time to locate the DB stay; use
+`clientSessionId` to find the page's other delivered reports. These client-supplied
+fields are **untrusted correlation hints, never authentication**. Signed-in account
+identity remains server-resolved. No attempt reaches history merely because it was
+started: offline/crashed clients can still fail to deliver their diagnostic batch.
+
+Transition files use `{at, service, containerId, line}` rather than journal fields:
+read them with `gzip -cd /var/lib/voiceroom/log-transition/<file>.jsonl.gz` and filter
+locally. They are not copied into the journal with a fresh timestamp.
+
+Implementation references: [Docker syslog](https://docs.docker.com/engine/logging/drivers/syslog/),
+[delivery modes](https://docs.docker.com/engine/logging/configure/),
+[systemd 249 namespaces](https://www.freedesktop.org/software/systemd/man/249/systemd-journald.service.html),
+[retention semantics](https://www.freedesktop.org/software/systemd/man/249/journald.conf.html).
 
 ## What is instrumented
 

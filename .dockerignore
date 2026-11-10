@@ -17,4 +17,5 @@ work
 deploy
 caddy_data
 caddy_config
+docker-compose.override.yml
 dist

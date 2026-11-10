@@ -1,0 +1,10 @@
+[Unit]
+Description=Expire VoiceRoom diagnostics even when the application is idle
+
+[Timer]
+OnCalendar=hourly
+AccuracySec=1min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

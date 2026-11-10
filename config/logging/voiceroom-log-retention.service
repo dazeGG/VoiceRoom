@@ -1,0 +1,12 @@
+[Unit]
+Description=Rotate and expire only VoiceRoom diagnostic logs
+# Archive expiry must still run when the journal bootstrap is unavailable.
+Wants=voiceroom-logging.service
+After=voiceroom-logging.service
+
+[Service]
+Type=oneshot
+# Failed or interrupted staging never extends the lifetime of captured old records.
+ExecStartPre=/usr/bin/find /var/lib/voiceroom/log-transition -maxdepth 1 -type f -name .pending-*.jsonl.gz -mmin +60 -delete
+ExecStartPre=/usr/bin/find /var/lib/voiceroom/log-transition -maxdepth 1 -type f -name *.jsonl.gz -mmin +20160 -delete
+ExecStart=/usr/bin/journalctl --namespace=voiceroom --rotate --vacuum-time=14d --vacuum-size=512M
