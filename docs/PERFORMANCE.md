@@ -97,3 +97,8 @@ the last completed milestone, not a request duration. This requires client-log
 intake to be enabled and reachable. Offline attempts, a closed page, or a full
 100-outcome pending queue can lose events; queue overflow is counted in the next
 delivered report. These events are separate from completed voice sessions.
+Delivered events survive production container replacement through the persistent
+host journal described in [`LOGGING.md`](./LOGGING.md#storage-across-deployments).
+For guests, `roomId` and `reportedGuestId` provide untrusted correlation hints to
+the existing voice history; the page's `clientSessionId` links related reports.
+Persistence does not recover batches the client never delivered.

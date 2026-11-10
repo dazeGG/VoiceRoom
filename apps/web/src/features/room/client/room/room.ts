@@ -206,11 +206,21 @@ export async function joinRoom(event?: Event): Promise<void> {
 async function performJoinRoom(generation: number): Promise<void> {
   const isCurrent = (): boolean => isCurrentJoinAttempt(generation);
   const startedAt = performance.now();
+  // Keep the original attempt's context if navigation or sign-in changes while
+  // the microphone/network is pending. Reuse the guest id already sent on joins.
+  const roomId = state.roomId;
+  const reportedGuestId = useSessionStore().user ? '' : guestBrowserId();
   let reported = false;
   const reportOutcome = (outcome: 'success' | 'failure' | 'cancel'): void => {
     if (reported) return;
     reported = true;
-    reportVoiceJoinOutcome({ outcome, elapsedMs: Math.round(performance.now() - startedAt), stage: lastJoinStage() });
+    reportVoiceJoinOutcome({
+      outcome,
+      elapsedMs: Math.round(performance.now() - startedAt),
+      stage: lastJoinStage(),
+      roomId,
+      ...(reportedGuestId ? { reportedGuestId } : {})
+    });
     if (finishJoinTelemetry === finishPending) finishJoinTelemetry = null;
   };
   const finishPending = (outcome: 'failure' | 'cancel'): void => reportOutcome(outcome);

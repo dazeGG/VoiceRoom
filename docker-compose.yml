@@ -1,6 +1,5 @@
-# Every container's log is capped (json-file, 3 files of 10 MB), so what the
-# logs hold, IP keys in API records and shortened addresses in LiveKit's,
-# lasts days to a few weeks rather than until the container is recreated.
+# Portable fallback: bounded, but these logs disappear with their containers.
+# Production installs the host-owned persistent logging override; see docs/LOGGING.md.
 x-logging: &logging
   driver: json-file
   options:

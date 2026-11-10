@@ -194,7 +194,13 @@ test('join outcomes survive throttling and diagnostic ring churn without error m
   const log = await load();
   log.reportVoiceJoinOutcome({ outcome: 'success', stage: 'connect', elapsedMs: 123 });
   await vi.waitFor(() => expect(calls).toHaveLength(1));
-  log.reportVoiceJoinOutcome({ outcome: 'failure', stage: 'microphone', elapsedMs: 456 });
+  log.reportVoiceJoinOutcome({
+    outcome: 'failure',
+    stage: 'microphone',
+    elapsedMs: 456,
+    roomId: 'abc123',
+    reportedGuestId: '11111111-1111-4111-8111-111111111111'
+  });
   log.reportVoiceJoinOutcome({ outcome: 'cancel', stage: 'started', elapsedMs: 10 });
   for (let i = 0; i < 150; i += 1) log.createLogger('room').info('noise');
   await vi.advanceTimersByTimeAsync(31_000);
@@ -206,7 +212,13 @@ test('join outcomes survive throttling and diagnostic ring churn without error m
     calls[1]?.body
   );
   expect(body.events.filter((event) => event.msg === 'voice join outcome').map((event) => event.ctx)).toEqual([
-    { outcome: 'failure', stage: 'microphone', elapsedMs: 456 },
+    {
+      outcome: 'failure',
+      stage: 'microphone',
+      elapsedMs: 456,
+      roomId: 'abc123',
+      reportedGuestId: '11111111-1111-4111-8111-111111111111'
+    },
     { outcome: 'cancel', stage: 'started', elapsedMs: 10 }
   ]);
   expect(body.events.at(-1)?.level).toBe('info');

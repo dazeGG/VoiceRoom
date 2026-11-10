@@ -7,6 +7,7 @@ import { beforeEach, expect, test, vi } from 'vitest';
 import { roomStatus } from '../fixtures/answers';
 import { stubFetch, type Reply } from '../fixtures/fetch';
 import { FakeWebSocket } from '../fixtures/fake-websocket';
+import { authUser } from '../fixtures/users';
 
 const microphone = vi.hoisted(() => {
   const held: { opened: number; stopped: unknown[]; answer: ((capture: { stopped: true } | null) => void) | null } = {
@@ -107,18 +108,66 @@ test('a room that is gone closes the microphone the check ran beside', async () 
   const { room, state, usePageStore } = await loadRoom({
     '/api/rooms/abc123': { status: 404, body: { ok: false, error: 'Комната не найдена', code: 'room_not_found' } }
   });
+  const { reportVoiceJoinOutcome } = await import('@/shared/log');
+  const { guestBrowserId } = await import('@/entities/room/guest-id');
+  const reportedGuestId = guestBrowserId();
 
   const joining = room.joinRoom();
   await vi.waitFor(() => expect(microphone.opened).toBe(1));
   await joining;
   expect(usePageStore().screen).toBe('not-found');
   expect(state.joined).toBe(false);
+  expect(vi.mocked(reportVoiceJoinOutcome).mock.calls.at(-1)?.[0]).toMatchObject({
+    outcome: 'failure',
+    roomId: 'abc123',
+    reportedGuestId
+  });
 
   // Permission is granted only after the answer: the capture is stopped, not kept.
   const capture = { stopped: true as const };
   microphone.answer?.(capture);
   await vi.waitFor(() => expect(microphone.stopped).toContain(capture));
   expect(state.localStream).toBeFalsy();
+});
+
+test('a cancelled join keeps the room and guest identity captured before asynchronous work', async () => {
+  const { room, state } = await loadRoom({ '/api/rooms/abc123': ROOM });
+  const { reportVoiceJoinOutcome } = await import('@/shared/log');
+  const originalGuestId = '11111111-1111-4111-8111-111111111111';
+  localStorage.setItem('voice-room:guest-id', originalGuestId);
+
+  const joining = room.joinRoom();
+  await vi.waitFor(() => expect(microphone.opened).toBe(1));
+  state.roomId = 'other-room';
+  localStorage.setItem('voice-room:guest-id', '22222222-2222-4222-8222-222222222222');
+  room.leaveRoom();
+  microphone.answer?.(null);
+  await joining;
+
+  expect(vi.mocked(reportVoiceJoinOutcome).mock.calls.at(-1)?.[0]).toMatchObject({
+    outcome: 'cancel',
+    roomId: 'abc123',
+    reportedGuestId: originalGuestId
+  });
+});
+
+test('a signed-in join does not report a guest identity even if the account later signs out', async () => {
+  const { room } = await loadRoom({ '/api/rooms/abc123': ROOM });
+  const { reportVoiceJoinOutcome } = await import('@/shared/log');
+  const { useSessionStore } = await import('@/features/auth/session.store');
+  useSessionStore().setUser(authUser());
+
+  const joining = room.joinRoom();
+  await vi.waitFor(() => expect(microphone.opened).toBe(1));
+  useSessionStore().setUser(null);
+  room.leaveRoom();
+  microphone.answer?.(null);
+  await joining;
+
+  const outcome = vi.mocked(reportVoiceJoinOutcome).mock.calls.at(-1)?.[0];
+  expect(outcome).toMatchObject({ outcome: 'cancel', roomId: 'abc123' });
+  expect(outcome).not.toHaveProperty('reportedGuestId');
+  expect(outcome).not.toHaveProperty('userId');
 });
 
 test('a join right after the room page checked the room does not ask again', async () => {
