@@ -9,11 +9,15 @@ import { beforeEach, expect, test, vi } from 'vitest';
 import type { PlatformPolicy } from '@voice-room/shared/platform-class';
 import App from '../../src/App.vue';
 import { useAppUpdateStore } from '../../src/features/app-update/app-update.store.ts';
+import { useCallActivityStore } from '../../src/shared/call-activity.store.ts';
 import { createAppRouter } from '../../src/router.ts';
 import type * as DesktopBoundary from '../../src/platform/desktop-boundary.ts';
 import { stubFetch } from '../fixtures/fetch.ts';
 
 const platform = vi.hoisted(() => ({ desktop: true }));
+const captureTelemetry = vi.hoisted(() => ({ noteWakeUnlock: vi.fn() }));
+
+vi.mock('../../src/features/room/client/room/capture-diagnostics.ts', () => captureTelemetry);
 
 vi.mock('../../src/platform/desktop-boundary.ts', async (importOriginal) => {
   const original = await importOriginal<typeof DesktopBoundary>();
@@ -30,6 +34,7 @@ let fetched: ReturnType<typeof stubFetch>;
 
 beforeEach(() => {
   platform.desktop = true;
+  captureTelemetry.noteWakeUnlock.mockClear();
   fetched = stubFetch({ 'GET /api/badges': { body: { ok: true, badges: [] } } });
 });
 
@@ -85,4 +90,22 @@ test('a desktop gets the update notice once a new build is seen', async () => {
 
   useAppUpdateStore(pinia).configure({ webUpdated: true });
   expect(await screen.findByText('Доступно обновление')).toBeTruthy();
+});
+
+test('the existing desktop wake hook forwards capture diagnostics only during a call', async () => {
+  let wake = (_payload: unknown): void => {};
+  vi.stubGlobal('voiceRoomDesktopSystem', {
+    onWake(listener: (payload: unknown) => void) {
+      wake = listener;
+      return () => {};
+    }
+  });
+  const { pinia } = await openApp('/licenses');
+  wake({ reason: 'resume' });
+  await Promise.resolve();
+  expect(captureTelemetry.noteWakeUnlock).not.toHaveBeenCalled();
+
+  useCallActivityStore(pinia).active = true;
+  wake({ reason: 'unlock-screen' });
+  await vi.waitFor(() => expect(captureTelemetry.noteWakeUnlock).toHaveBeenCalledWith('unlock-screen'));
 });

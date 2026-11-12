@@ -155,6 +155,31 @@ test('a report the throttle held back goes out once when the window ends', async
   expect(calls).toHaveLength(2);
 });
 
+test('a successful recovery requests its own held upload after session metadata already flushed', async () => {
+  const { calls } = stubFetch({ 'POST /api/client-logs': { body: { ok: true } } });
+  const [log, diagnostics] = await freshImport(() =>
+    Promise.all([import('../../src/shared/log.ts'), import('@/features/room/client/room/capture-diagnostics')])
+  );
+  diagnostics.startCaptureDiagnostics();
+  await vi.advanceTimersByTimeAsync(0);
+  expect(calls).toHaveLength(1);
+  diagnostics.noteCaptureRecovery({
+    generation: 1,
+    attempt: 1,
+    reason: 'watchdog',
+    action: 'reopen',
+    outcome: 'applied',
+    durationMs: 500,
+    actualMode: 'rnnoise',
+    progress: 'capture_progress_restored',
+    evidence: 'encoder_feed'
+  });
+  expect(log.readLogBuffer().some((record) => record.msg === 'capture_recovery')).toBe(true);
+  await vi.advanceTimersByTimeAsync(30_000);
+  expect(calls).toHaveLength(2);
+  diagnostics.stopCaptureDiagnostics();
+});
+
 test('uncaught errors and rejected promises are captured', async () => {
   const log = await load();
   log.installGlobalErrorCapture();

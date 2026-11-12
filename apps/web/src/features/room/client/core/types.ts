@@ -379,6 +379,7 @@ declare global {
     voiceRoomRuntime?: {
       isDesktop?: boolean;
       platform?: string;
+      version?: string;
     };
     voiceRoomWindow?: {
       setFullscreen: (fullscreen: boolean) => Promise<boolean>;
