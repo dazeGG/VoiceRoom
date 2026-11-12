@@ -31,6 +31,7 @@ import {
   notifyLiveKitReconciled,
   notifyLiveKitReconnecting,
   requestLiveKitReplacement,
+  roomRecoverySettled,
   setRoomRecoveryLiveKitAdapter
 } from '../recovery/room-recovery';
 import type { ReplacementOutcome } from '../recovery/realtime-recovery';
@@ -103,6 +104,7 @@ import {
 
 const liveKitReconcileGenerations = new WeakMap<Room, LiveKitReconcileGeneration>();
 const pendingInPlaceMicrophones = new WeakMap<Room, Promise<MicrophoneActionOutcome>>();
+const followedInPlaceMicrophones = new WeakSet<Promise<MicrophoneActionOutcome>>();
 
 function reconcileGenerationFor(room: Room): LiveKitReconcileGeneration {
   const existing = liveKitReconcileGenerations.get(room);
@@ -150,21 +152,22 @@ export async function connectLiveKitRoom(
   const stream = pendingMicrophone?.stream ?? state.localStream;
   if (stream) {
     try {
-      let joinOutcome: MicrophoneActionOutcome = 'applied';
-      let published = pendingMicrophone
+      const joinResult = pendingMicrophone
         ? await publishMicrophoneForJoin(
             room,
             pendingMicrophone,
             () => isCurrent() && state.livekitRoom === room && isMicrophoneCaptureLive(pendingMicrophone)
-          ).then((result) => {
-            joinOutcome = result.outcome;
-            return result.publication;
-          })
-        : await publishLocalMicrophoneForRoom(
-            room,
-            stream,
-            () => isCurrent() && state.livekitRoom === room && state.localStream === stream
-          );
+          )
+        : {
+            outcome: 'applied' as const,
+            publication: await publishLocalMicrophoneForRoom(
+              room,
+              stream,
+              () => isCurrent() && state.livekitRoom === room && state.localStream === stream
+            )
+          };
+      let joinOutcome: MicrophoneActionOutcome = joinResult.outcome;
+      let published = joinResult.publication;
       if (!isCurrent() || state.livekitRoom !== room) {
         await disconnectLiveKitRoomInstance(room);
         return false;
@@ -569,11 +572,23 @@ async function recoverLiveKitRoom(
  * be made, the call goes on listen-only and says so.
  */
 async function followInPlaceMicrophone(room: Room, microphone: Promise<MicrophoneActionOutcome>): Promise<void> {
+  // Repeated reconnects share one republish; one follower decides for it.
+  if (followedInPlaceMicrophones.has(microphone)) return;
+  followedInPlaceMicrophones.add(microphone);
   if ((await microphone) !== 'failed') return;
   const unpublished = () =>
     state.joined && state.livekitRoom === room && Boolean(state.localStream) && !state.localMicPublication;
   if (!unpublished()) return;
-  const replaced = requestLiveKitReplacement();
+  let replaced = requestLiveKitReplacement();
+  if (!replaced) {
+    // A recovery already under way may carry the microphone over to a new room.
+    const settled = roomRecoverySettled();
+    if (settled) {
+      await settled;
+      if (!unpublished()) return;
+      replaced = requestLiveKitReplacement();
+    }
+  }
   if (replaced) await replaced;
   if (!unpublished()) return;
   dropUnpublishedMicrophone('Микрофон не переподключился: вы в комнате без микрофона');

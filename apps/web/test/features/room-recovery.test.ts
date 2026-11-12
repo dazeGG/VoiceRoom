@@ -201,3 +201,19 @@ test('an automatic timeout invalidates only its optional epoch before a late sna
   await vi.advanceTimersByTimeAsync(0);
   expect(attemptFreshReplacement).toHaveBeenCalledOnce();
 });
+
+test('a running recovery can be waited for, and there is nothing to wait for without one', async () => {
+  expect(recovery.roomRecoverySettled(), 'no call').toBeNull();
+  const { unsubscribe } = healthyCall({ ok: true });
+  expect(recovery.roomRecoverySettled(), 'a healthy call').toBeNull();
+  recovery.notifyLiveKitDisconnected();
+  const settled = recovery.roomRecoverySettled();
+  expect(settled).not.toBeNull();
+  let over = false;
+  void settled?.then(() => (over = true));
+  await Promise.resolve();
+  expect(over, 'still recovering').toBe(false);
+  snapshot();
+  await vi.waitFor(() => expect(over).toBe(true));
+  unsubscribe();
+});

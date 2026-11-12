@@ -51,6 +51,22 @@ export function subscribeRoomRecoveryTransitions(handler: (event: RecoveryTransi
   return () => transitionHandlers.delete(handler);
 }
 
+/** Resolves once the recovery under way is over (healthy, failed or cancelled); null when none is running. */
+export function roomRecoverySettled(): Promise<void> | null {
+  const current = controller;
+  if (!current) return null;
+  const isOver = (phase: RecoveryTransition['phase']) =>
+    phase === 'idle' || phase === 'healthy' || phase === 'failed' || phase === 'cancelled';
+  if (isOver(current.getSnapshot().phase)) return null;
+  return new Promise((resolve) => {
+    const unsubscribe = subscribeRoomRecoveryTransitions(({ phase }) => {
+      if (!isOver(phase)) return;
+      unsubscribe();
+      resolve();
+    });
+  });
+}
+
 export function setRoomRecoveryLiveKitAdapter(adapter: RoomRecoveryLiveKitAdapter | null): void {
   liveKitAdapter = adapter;
 }

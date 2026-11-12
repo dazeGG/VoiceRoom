@@ -1154,14 +1154,20 @@ function detachEndedMicrophone(loss: NonNullable<typeof pendingRawLoss>): void {
     });
 }
 
-/** A failed replace either left the call microphone in place or cost the call its microphone. */
+/**
+ * A failed replace either left the call microphone in place or cost the call its
+ * microphone. A loss is always said, even when a newer choice made this action
+ * obsolete: that choice cannot apply to a microphone that is gone. A plain failure
+ * of an obsolete action says nothing.
+ */
 function reportUnappliedReplacement(
   previousStream: MediaStream | null,
   failureMessage: string,
-  lostMessage: string
+  lostMessage: string,
+  current: boolean
 ): void {
-  if (!previousStream || state.localStream) {
-    showToast(failureMessage);
+  if (!previousStream || !state.joined || state.localStream) {
+    if (current) showToast(failureMessage);
     return;
   }
   refreshMicrophoneLevelMeter(GATE_THRESHOLD_MIN_DB);
@@ -1208,8 +1214,8 @@ async function replaceMicrophoneCapture(
     if (!isCurrent() || !room) return 'stale';
     const result = await mutateCandidate(room, publication, nextCapture, isCurrent, deadline);
     if (result.outcome !== 'applied' || !result.publication) {
-      if ((result.outcome === 'failed' || result.outcome === 'timed_out') && version === actionVersion)
-        reportUnappliedReplacement(previousCapture.stream, failureMessage, lostMessage);
+      if (result.outcome === 'failed' || result.outcome === 'timed_out')
+        reportUnappliedReplacement(previousCapture.stream, failureMessage, lostMessage, version === actionVersion);
       return result.outcome;
     }
 
@@ -1265,6 +1271,7 @@ export function reopenMicrophone(): Promise<boolean> {
   recordMicDrop();
   return runAutomaticReopen('watchdog', {
     failureMessage: 'Микрофон перестал работать: выберите его заново',
+    lostMessage: 'Микрофон перестал работать: вы в комнате без микрофона',
     refreshDeviceList: false,
     successMessage: 'Микрофон переподключен'
   });
@@ -1284,6 +1291,7 @@ async function runAutomaticReopen(
 export function reopenMicrophoneAfterOwnedResumeFailure(): Promise<boolean> {
   return runAutomaticReopen('owned_resume_failure', {
     failureMessage: 'Микрофон перестал работать: выберите его заново',
+    lostMessage: 'Микрофон перестал работать: вы в комнате без микрофона',
     refreshDeviceList: false,
     successMessage: 'Микрофон переподключен'
   });

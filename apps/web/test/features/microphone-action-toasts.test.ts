@@ -168,3 +168,20 @@ test('a permission prompt answered after the deadline says to try again', async 
   expect(await attaching).toBe('timed_out');
   expect(toasts()).toEqual(['Микрофон не ответил вовремя: попробуйте ещё раз']);
 });
+
+test('a newer choice queued behind a switch that cost the call its microphone does not hide that loss', async () => {
+  vi.useFakeTimers();
+  inCallWithMicrophone(() => new Promise(() => {}));
+  captureWork.open.mockResolvedValueOnce(capture('new'));
+  useRoomDeviceUiStore().microphoneId = 'mic-b';
+  const switching = devices.switchMicrophone();
+  await vi.advanceTimersByTimeAsync(100);
+  useRoomDeviceUiStore().noiseMode = 'off';
+  const noise = devices.switchNoiseMode();
+  await vi.advanceTimersByTimeAsync(10_001);
+  expect(await switching).toBe(false);
+  await vi.advanceTimersByTimeAsync(25_000);
+  await noise;
+  expect(state.microphoneMissing).toBe(true);
+  expect(toasts()).toEqual(['Не удалось переключить микрофон: вы в комнате без микрофона']);
+});

@@ -87,6 +87,8 @@ export async function loadLiveKitHarness(
     recoveryEpochCurrent?: (epoch: number) => boolean;
     /** Answers a request for a new LiveKit connection; null when none can start. */
     requestReplacement?: () => Promise<boolean> | null;
+    /** Resolves when a running recovery is over; null when none is running. */
+    recoverySettled?: () => Promise<void> | null;
     /** The codec this browser would send a camera in. */
     cameraCodec?: 'h264' | 'vp8';
   } = {}
@@ -312,6 +314,7 @@ export async function loadLiveKitHarness(
       recovery.replacementRequests += 1;
       return options.requestReplacement?.() ?? null;
     },
+    roomRecoverySettled: () => options.recoverySettled?.() ?? null,
     setRoomRecoveryLiveKitAdapter: () => {},
     subscribeRoomRecoveryTransitions: () => () => {}
   }));

@@ -854,3 +854,55 @@ test('a join whose microphone publication LiveKit refuses names the refusal, not
   expect(lk.state.microphoneMissing).toBe(true);
   expect(lk.toasts).toEqual(['Не удалось подключить микрофон: вы в комнате без микрофона']);
 });
+
+async function reconnectWithHeldMicrophone(options: Parameters<typeof loadLiveKitHarness>[0]) {
+  const { lk } = await inCall({ requestToken: async () => ({ token: 't', url: 'wss://lk.example' }), ...options });
+  await expect(lk.service.attemptFreshLiveKitReplacement({ epoch: 1, attempt: 1 })).resolves.toEqual({ ok: true });
+  const standing = lk.rooms[0];
+  if (!standing) throw new Error('standing room missing');
+  standing.localParticipant.trackPublications.clear();
+  lk.state.localMicPublication = null;
+  const republish = Promise.withResolvers<void>();
+  republish.promise.catch(() => {});
+  Object.assign(standing, { publishGate: republish.promise });
+  standing.emit('Reconnected');
+  await vi.waitFor(() => expect(lk.recovery.reconciled).toBe(1));
+  return { lk, standing, rejectRepublish: () => republish.reject(new Error('negotiation timed out')) };
+}
+
+test('a second reconnect during a failing republish leaves the microphone to the replacement the first one asked for', async () => {
+  const replacement = Promise.withResolvers<boolean>();
+  let requests = 0;
+  const { lk, standing, rejectRepublish } = await reconnectWithHeldMicrophone({
+    // While the first replacement runs the controller is not healthy and refuses another.
+    requestReplacement: () => (++requests === 1 ? replacement.promise : null)
+  });
+  standing.emit('Reconnecting');
+  standing.emit('Reconnected');
+  await vi.waitFor(() => expect(lk.recovery.reconciled).toBe(2));
+  rejectRepublish();
+  await vi.waitFor(() => expect(lk.recovery.replacementRequests).toBe(1));
+  for (let index = 0; index < 20; index += 1) await Promise.resolve();
+  expect(lk.recovery.replacementRequests).toBe(1);
+  expect(lk.state.localStream).toBe(micStream);
+  expect(lk.toasts).toEqual([]);
+  replacement.resolve(false);
+  await vi.waitFor(() => expect(lk.state.microphoneMissing).toBe(true));
+  expect(lk.toasts).toEqual(['Микрофон не переподключился: вы в комнате без микрофона']);
+});
+
+test('a failing republish during a recovery already under way waits for it instead of dropping the microphone', async () => {
+  const recovery = Promise.withResolvers<void>();
+  const { lk, rejectRepublish } = await reconnectWithHeldMicrophone({ recoverySettled: () => recovery.promise });
+  rejectRepublish();
+  await vi.waitFor(() => expect(lk.recovery.replacementRequests).toBe(1));
+  for (let index = 0; index < 20; index += 1) await Promise.resolve();
+  expect(lk.state.localStream).toBe(micStream);
+  // The running recovery replaced the room and carried the microphone over.
+  Object.assign(lk.state, { livekitRoom: { marker: 'recovered-room' }, localMicPublication: { marker: 'carried' } });
+  recovery.resolve();
+  for (let index = 0; index < 20; index += 1) await Promise.resolve();
+  expect(lk.state.localStream).toBe(micStream);
+  expect(lk.state.microphoneMissing).not.toBe(true);
+  expect(lk.toasts).toEqual([]);
+});
