@@ -37,6 +37,10 @@ export const VOICE_EVENTS_MAX = 200;
 const MINUTE_MS = 60_000;
 /** Fewer measured polls than this say nothing of a delay: it settles over the first seconds of a call. */
 const DELAY_MIN_POLLS = 3;
+// RTCP may publish a real round trip only every 4–7 s. Three real samples
+// need a wider window, while the last-receipt limit still expires stale RTT.
+const RTT_LAST_RECEIPT_MS = 9000;
+const RTT_SAMPLE_AGE_MS = 20_000;
 /** A poll covers three seconds, so one heard this soon after a microphone changed can hold the change. */
 const MIC_SETTLE_MS = 4000;
 
@@ -45,7 +49,7 @@ export interface PeerVoice {
   /** When its latest poll came; null for a speaker known only from its listeners. */
   reportedAt: number | null;
   /** The last VOICE_WINDOW_POLLS polls' round trip and jitter buffer, the latest last. */
-  rttPolls: (number | null)[];
+  rttPolls: { value: number; at: number }[];
   jitterBufferPolls: (number | null)[];
   /** Per speaker, the counts of the last VOICE_WINDOW_POLLS polls, the latest last. */
   heard: Map<string, HeardCounts[]>;
@@ -156,6 +160,16 @@ function settled(polls: readonly (number | null)[], minPolls: number): number | 
   return measured[Math.floor((measured.length - 1) / 2)] ?? null;
 }
 
+function settledRtt(voice: PeerVoice, at: number): number | null {
+  const latest = voice.rttPolls.at(-1);
+  if (latest && at - latest.at >= RTT_LAST_RECEIPT_MS) voice.rttPolls = [];
+  else voice.rttPolls = voice.rttPolls.filter((sample) => at - sample.at < RTT_SAMPLE_AGE_MS);
+  return settled(
+    voice.rttPolls.map((sample) => sample.value),
+    DELAY_MIN_POLLS
+  );
+}
+
 /**
  * A speaker's microphone went on or off within the poll. LiveKit stops forwarding
  * a muted microphone, and its listeners' receivers make up its last moment, with
@@ -210,7 +224,11 @@ function addCounts(total: HeardCounts, counts: HeardCounts): HeardCounts {
 }
 
 /** The listener's report as judgeVoice reads it, over the speakers still in the room. */
-function reportOf(peer: VoicePeer & { voice: PeerVoice }, inRoom: (peerId: string) => boolean): VoiceReport {
+function reportOf(
+  peer: VoicePeer & { voice: PeerVoice },
+  inRoom: (peerId: string) => boolean,
+  at: number
+): VoiceReport {
   const { voice } = peer;
   const uplink = voice.uplink.reduce(
     (total, poll) => ({ packets: total.packets + poll.packets, lost: total.lost + poll.lost }),
@@ -221,7 +239,7 @@ function reportOf(peer: VoicePeer & { voice: PeerVoice }, inRoom: (peerId: strin
   );
   return {
     peerId: peer.id,
-    rttMs: settled(voice.rttPolls, DELAY_MIN_POLLS),
+    rttMs: settledRtt(voice, at),
     jitterBufferMs: settled(voice.jitterBufferPolls, 1),
     uplinkLossPct: uplink.packets > 0 ? (uplink.lost / uplink.packets) * 100 : null,
     heard: [...voice.heard]
@@ -241,7 +259,10 @@ function reportOf(peer: VoicePeer & { voice: PeerVoice }, inRoom: (peerId: strin
 export function noteVoiceReport<Peer extends VoicePeer>(
   peers: ReadonlyMap<string, Peer>,
   peer: Peer,
-  poll: Pick<VoicePoll, 'rttMs' | 'jitterBufferMs' | 'uplink' | 'transport' | 'heard' | 'mic' | 'cpu' | 'joinTiming'>,
+  poll: Pick<
+    VoicePoll,
+    'rttMs' | 'rttUnchanged' | 'jitterBufferMs' | 'uplink' | 'transport' | 'heard' | 'mic' | 'cpu' | 'joinTiming'
+  >,
   at: number
 ): VoiceChange<Peer>[] {
   const voice = (peer.voice ??= emptyVoice());
@@ -278,8 +299,13 @@ export function noteVoiceReport<Peer extends VoicePeer>(
 
   voice.uplink.push({ ...poll.uplink });
   keepLast(voice.uplink);
-  voice.rttPolls.push(poll.rttMs);
-  keepLast(voice.rttPolls);
+  // An explicit unknown resets settlement; unchanged merely ages real samples.
+  settledRtt(voice, at);
+  if (poll.rttMs === null && poll.rttUnchanged !== true) voice.rttPolls = [];
+  else if (poll.rttMs !== null) {
+    voice.rttPolls.push({ value: poll.rttMs, at });
+    keepLast(voice.rttPolls);
+  }
   voice.jitterBufferPolls.push(poll.jitterBufferMs);
   keepLast(voice.jitterBufferPolls);
   voice.reportedAt = at;
@@ -315,12 +341,17 @@ export function noteVoiceReport<Peer extends VoicePeer>(
 }
 
 /** Judges the room from the fresh polls of its peers; answers the peers whose verdict changed. */
-function judgeRoom<Peer extends VoicePeer>(peers: ReadonlyMap<string, Peer>, at: number): VoiceChange<Peer>[] {
+function judgeRoom<Peer extends VoicePeer>(
+  peers: ReadonlyMap<string, Peer>,
+  at: number,
+  notify = true
+): VoiceChange<Peer>[] {
   const reports: VoiceReport[] = [];
   for (const peer of peers.values()) {
     const voice = peer.voice;
+    if (voice) settledRtt(voice, at);
     if (voice?.reportedAt == null || at - voice.reportedAt > VOICE_REPORT_STALE_MS) continue;
-    reports.push(reportOf({ id: peer.id, voice }, (peerId) => peers.has(peerId)));
+    reports.push(reportOf({ id: peer.id, voice }, (peerId) => peers.has(peerId), at));
   }
   const verdicts = judgeVoice(reports);
   const changes: VoiceChange<Peer>[] = [];
@@ -329,6 +360,7 @@ function judgeRoom<Peer extends VoicePeer>(peers: ReadonlyMap<string, Peer>, at:
     if (!peer.voice && !verdict) continue;
     const voice = (peer.voice ??= emptyVoice());
     voice.verdict = verdict;
+    if (!notify) continue;
     if (sameVerdict(voice.told, verdict)) continue;
     voice.told = verdict;
     changes.push({ peer, verdict });
@@ -336,9 +368,14 @@ function judgeRoom<Peer extends VoicePeer>(peers: ReadonlyMap<string, Peer>, at:
   return changes;
 }
 
+/** Re-evaluate at the query clock: receipt/sample expiry must precede an admin read too. */
+export function refreshVoice<Peer extends VoicePeer>(peers: ReadonlyMap<string, Peer>, at: number): void {
+  judgeRoom(peers, at, false);
+}
+
 /** A rejoining peer keeps its minutes; its new socket is told the verdict afresh. */
 export function rejoinedVoice(voice: PeerVoice | undefined): PeerVoice | undefined {
-  return voice && { ...voice, told: undefined };
+  return voice && { ...voice, rttPolls: [], told: undefined };
 }
 
 /** The verdict on a peer's voice now; null while nothing was heard from or by it. */

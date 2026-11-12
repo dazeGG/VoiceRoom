@@ -22,7 +22,7 @@ import type { AdminCallFeedbackEntry, RoomCallDetail } from '@voice-room/shared/
 import type { PresencePeer } from '../rooms/room-views.ts';
 import type { DescribeAddress } from '../rooms/voice-session.repository.ts';
 import { avatarColorForPeerId } from '../rooms/avatar-color.ts';
-import { currentVoice, VOICE_REPORT_STALE_MS } from '../../realtime/voice-track.ts';
+import { currentVoice, refreshVoice, VOICE_REPORT_STALE_MS } from '../../realtime/voice-track.ts';
 import type { StayEvent } from '../rooms/voice-session.repository.ts';
 import { FEEDBACK_AFTER_CALL_MS, minuteOfSample, type AdminRoomsRepository } from './admin-rooms.repository.ts';
 import { callEvents } from './call-events.ts';
@@ -109,6 +109,7 @@ export function createAdminRoomsService(deps: AdminRoomsServiceDeps) {
     );
 
     const rooms = occupied.map((room): LiveRoom => {
+      refreshVoice(room.peers, now());
       const peers = [...room.peers.values()]
         .map((peer): LiveRoomPeer => ({
           peerId: peer.id,
