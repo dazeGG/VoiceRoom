@@ -129,6 +129,22 @@ test('a good call is logged with its exact averages and nothing is reported', ()
   expect(Object.keys(summary.context)).toHaveLength(18);
 });
 
+test('call RTT prefers check-weighted totals, while unknown samples add nothing', () => {
+  startCallQuality(0);
+  recordNetworkSample({ inboundLossPct: null, outboundLossPct: null, jitterMs: null, rttMs: 100, transport: null });
+  recordNetworkSample({ inboundLossPct: null, outboundLossPct: null, jitterMs: null, rttMs: null, transport: null });
+  recordNetworkSample({ inboundLossPct: null, outboundLossPct: null, jitterMs: null, rttMs: 200, transport: null });
+  recordPollCounts(poll({ rttSeconds: 0.1, rttChecks: 1 }));
+  recordPollCounts(poll({ rttSeconds: 0.6, rttChecks: 3 }));
+  const stats = defined(finishCallQuality(QUALITY_MIN_CALL_MS), 'call quality').stats;
+  expect(stats.rttAvgMs).toBe(175); // four checks, not two UI samples averaging 150
+  expect(stats.rttMaxMs).toBe(200);
+  startCallQuality(0);
+  recordNetworkSample({ inboundLossPct: null, outboundLossPct: null, jitterMs: null, rttMs: null, transport: null });
+  recordPollCounts(poll({ rttSeconds: 0, rttChecks: 0 }));
+  expect(defined(finishCallQuality(QUALITY_MIN_CALL_MS), 'unknown RTT').stats.rttAvgMs).toBeNull();
+});
+
 test('averages count every packet and sample of the call, so a silent poll weighs what it carried', () => {
   startCallQuality(0);
   // A long stretch of speech with no loss, then a silent poll with its one lost packet out of eight.

@@ -42,6 +42,82 @@ test('upstream loss counters and a UDP transport come from the publisher stats, 
   });
 });
 
+test('fresh RTT selection rejects unmeasured candidate zero and cached observations', async () => {
+  const { selectFreshRoundTripTime } = await load(() => import('@/features/room/client/room/stats'));
+  const { readRtcStats } = await import('@/features/room/client/media/rtc-stats');
+  const publication = {};
+  const sample = (timestamp: number, pairRtt: number, responses?: number) =>
+    readRtcStats(
+      report([
+        {
+          id: 'pair',
+          type: 'candidate-pair',
+          state: 'succeeded',
+          selected: true,
+          timestamp,
+          currentRoundTripTime: pairRtt,
+          responsesReceived: responses
+        },
+        { id: 'rtcp', type: 'remote-inbound-rtp', timestamp, roundTripTime: 0.1 }
+      ])
+    );
+  assert.equal(selectFreshRoundTripTime(sample(1000, 0), 'room', publication, 0), null, 'identity baseline');
+  assert.equal(selectFreshRoundTripTime(sample(2000, 0), 'room', publication, 1000), 100, 'RTCP fallback');
+  assert.equal(selectFreshRoundTripTime(sample(2000, 0), 'room', publication, 2000), null, 'unchanged is unknown');
+  assert.equal(
+    selectFreshRoundTripTime(sample(3000, 0, 0), 'room', publication, 3000),
+    100,
+    'zero responses falls back'
+  );
+  assert.equal(selectFreshRoundTripTime(sample(4000, 0, 1), 'room', publication, 4000), null, 'pair source baseline');
+  assert.equal(selectFreshRoundTripTime(sample(5000, 0, 2), 'room', publication, 5000), 0, 'measured zero');
+  assert.equal(selectFreshRoundTripTime(sample(6000, 0, 2), 'room', publication, 6000), null, 'counter must advance');
+});
+
+test('pair/publication identity and invalid decoder fields force an unknown baseline', async () => {
+  const { selectFreshRoundTripTime } = await load(() => import('@/features/room/client/room/stats'));
+  const { readRtcStats } = await import('@/features/room/client/media/rtc-stats');
+  const publication = {};
+  const pair = (id: string, responsesReceived: number, timestamp: number, currentRoundTripTime: number) =>
+    readRtcStats(
+      report([
+        {
+          id,
+          type: 'candidate-pair',
+          state: 'succeeded',
+          selected: true,
+          responsesReceived,
+          timestamp,
+          currentRoundTripTime,
+          totalRoundTripTime: responsesReceived / 10
+        }
+      ])
+    );
+  assert.equal(selectFreshRoundTripTime(pair('one', 1, 1000, 0.1), 'room', publication, 0), null);
+  assert.equal(selectFreshRoundTripTime(pair('one', 2, 2000, 0.1), 'room', publication, 1000), 100);
+  assert.equal(selectFreshRoundTripTime(pair('two', 100, 3000, 0.2), 'room', publication, 2000), null);
+  assert.equal(selectFreshRoundTripTime(pair('two', 101, 4000, 0.2), 'room', publication, 3000), 200);
+  assert.equal(selectFreshRoundTripTime(pair('two', 102, 5000, 0.2), 'room', {}, 4000), null);
+  assert.equal(selectFreshRoundTripTime(pair('two', 103, 6000, 0.2), 'other-room', publication, 5000), null);
+  const invalid = readRtcStats(
+    report([
+      {
+        id: 'invalid',
+        type: 'candidate-pair',
+        timestamp: Infinity,
+        responsesReceived: -1,
+        currentRoundTripTime: NaN,
+        totalRoundTripTime: -1
+      }
+    ])
+  );
+  const decoded = invalid.get('invalid');
+  assert.deepEqual(
+    [decoded?.timestamp, decoded?.responsesReceived, decoded?.currentRoundTripTime, decoded?.totalRoundTripTime],
+    [undefined, undefined, undefined, undefined]
+  );
+});
+
 test('a relay or TCP candidate is reported as a degraded transport', async () => {
   const { getOutboundNetworkFromStats } = await load(() => import('@/features/room/client/room/stats'));
   const pair = { id: 'p1', type: 'candidate-pair', state: 'succeeded', selected: true, localCandidateId: 'l1' };
