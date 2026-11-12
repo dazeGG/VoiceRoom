@@ -9,10 +9,12 @@ import {
 import { cancelCaptureProgressObservation } from '../room/mic-send';
 import {
   discardPublishedJoinMicrophone,
+  dropUnpublishedMicrophone,
   getMicrophoneIntentRevision,
   isOwnedMicrophonePublishPending,
   publishMicrophoneForJoin,
-  publishMicrophoneForReplacementRoom
+  publishMicrophoneForReplacementRoom,
+  type MicrophoneActionOutcome
 } from '../ui/devices';
 import { useStartUiStore } from '@/features/room/start-ui.store';
 import { state } from '../core/room-runtime.store';
@@ -28,6 +30,7 @@ import {
   notifyLiveKitDisconnected,
   notifyLiveKitReconciled,
   notifyLiveKitReconnecting,
+  requestLiveKitReplacement,
   setRoomRecoveryLiveKitAdapter
 } from '../recovery/room-recovery';
 import type { ReplacementOutcome } from '../recovery/realtime-recovery';
@@ -99,7 +102,7 @@ import {
 } from './livekit/remote-participants';
 
 const liveKitReconcileGenerations = new WeakMap<Room, LiveKitReconcileGeneration>();
-const pendingInPlaceMicrophones = new WeakMap<Room, Promise<void>>();
+const pendingInPlaceMicrophones = new WeakMap<Room, Promise<MicrophoneActionOutcome>>();
 
 function reconcileGenerationFor(room: Room): LiveKitReconcileGeneration {
   const existing = liveKitReconcileGenerations.get(room);
@@ -107,6 +110,14 @@ function reconcileGenerationFor(room: Room): LiveKitReconcileGeneration {
   const generation = new LiveKitReconcileGeneration();
   liveKitReconcileGenerations.set(room, generation);
   return generation;
+}
+
+/** Why the call was joined without the microphone prepared for it. */
+function joinMicrophoneLostMessage(outcome: MicrophoneActionOutcome): string {
+  if (outcome === 'timed_out') return 'Микрофон не ответил вовремя: вы в комнате без микрофона';
+  if (outcome === 'busy' || outcome === 'coalesced')
+    return 'Микрофон ещё занят прошлой операцией: вы в комнате без микрофона';
+  return 'Не удалось подключить микрофон: вы в комнате без микрофона';
 }
 
 export async function connectLiveKitRoom(
@@ -139,12 +150,16 @@ export async function connectLiveKitRoom(
   const stream = pendingMicrophone?.stream ?? state.localStream;
   if (stream) {
     try {
+      let joinOutcome: MicrophoneActionOutcome = 'applied';
       let published = pendingMicrophone
         ? await publishMicrophoneForJoin(
             room,
             pendingMicrophone,
             () => isCurrent() && state.livekitRoom === room && isMicrophoneCaptureLive(pendingMicrophone)
-          )
+          ).then((result) => {
+            joinOutcome = result.outcome;
+            return result.publication;
+          })
         : await publishLocalMicrophoneForRoom(
             room,
             stream,
@@ -161,6 +176,7 @@ export async function connectLiveKitRoom(
           return false;
         }
         published = null;
+        joinOutcome = 'failed';
       }
       if (!published) {
         if (!pendingMicrophone) {
@@ -169,7 +185,7 @@ export async function connectLiveKitRoom(
         }
         stopMicrophoneCapture(pendingMicrophone);
         state.microphoneMissing = true;
-        showToast('Микрофон не ответил вовремя: вы в комнате без микрофона', { duration: 8000 });
+        showToast(joinMicrophoneLostMessage(joinOutcome), { duration: 8000 });
       }
       if (pendingMicrophone && published) {
         state.localMicPublication = published;
@@ -345,8 +361,10 @@ async function bindLiveKitRoomEvents(room: Room, isCurrent: () => boolean): Prom
     const generation = reconcileGeneration.capture();
     if (state.joined || state.connecting) setVoiceConnectionStatus('connected');
     recoverLiveKitRoom(room, current)
-      .then((reconciled) => {
-        if (reconciled && current() && reconcileGeneration.isCurrent(generation)) notifyLiveKitReconciled();
+      .then(({ reconciled, microphone }) => {
+        if (!reconciled || !current() || !reconcileGeneration.isCurrent(generation)) return;
+        notifyLiveKitReconciled();
+        if (microphone) void followInPlaceMicrophone(room, microphone);
       })
       .catch(() => logLiveKitTransition('warn', { event: 'in_place_reconcile', result: 'failed' }));
   });
@@ -508,33 +526,55 @@ async function republishLocalCamera(room: Room, isCurrent: () => boolean): Promi
 async function recoverLiveKitRoom(
   room: Room,
   isCurrent: () => boolean = () => state.livekitRoom === room
-): Promise<boolean> {
+): Promise<{ reconciled: boolean; microphone: Promise<MicrophoneActionOutcome> | null }> {
   // A reconnect is a new transport epoch. A screen SID that exhausted its
   // bounded retry budget on the previous connection must be eligible again;
   // otherwise a transient outage longer than the retry window can strand the
   // publication until the sender republishes it with a new SID.
   clearAllScreenSubscriptionRetries();
-  if (!isCurrent()) return false;
+  if (!isCurrent()) return { reconciled: false, microphone: null };
   syncLiveKitParticipants(room);
   retryDemandedScreenSubscriptions(room);
   // The microphone has a separate mutation owner. Its mute or SDK publish may
   // never settle; room-wide recovery must progress without cancelling that
   // owner or starting another microphone operation on repeated reconnects.
-  if (!pendingInPlaceMicrophones.has(room)) {
+  let microphone = pendingInPlaceMicrophones.get(room) ?? null;
+  if (!microphone) {
     const task = ensureLocalMicrophonePublished(room)
-      .then(() => {})
-      .catch(() => logLiveKitTransition('warn', { event: 'microphone_reconcile', result: 'failed' }))
+      .catch((): MicrophoneActionOutcome => 'failed')
+      .then((outcome) => {
+        if (outcome === 'failed') logLiveKitTransition('warn', { event: 'microphone_reconcile', result: 'failed' });
+        return outcome;
+      })
       .finally(() => {
         if (pendingInPlaceMicrophones.get(room) === task) pendingInPlaceMicrophones.delete(room);
       });
     pendingInPlaceMicrophones.set(room, task);
+    microphone = task;
   }
-  if (!isCurrent()) return false;
+  const failed = { reconciled: false, microphone: null };
+  if (!isCurrent()) return failed;
   await ensureLocalScreenPublished(room, isCurrent);
-  if (!isCurrent()) return false;
+  if (!isCurrent()) return failed;
   await republishLocalCamera(room, isCurrent);
-  if (!isCurrent()) return false;
+  if (!isCurrent()) return failed;
   syncLiveKitVoiceSubscriptions();
   syncRemoteAudioPlayback();
-  return true;
+  return { reconciled: true, microphone };
+}
+
+/**
+ * The room is reconciled, but its microphone publication failed: nobody hears
+ * the live-looking microphone. A new connection publishes it again; if none can
+ * be made, the call goes on listen-only and says so.
+ */
+async function followInPlaceMicrophone(room: Room, microphone: Promise<MicrophoneActionOutcome>): Promise<void> {
+  if ((await microphone) !== 'failed') return;
+  const unpublished = () =>
+    state.joined && state.livekitRoom === room && Boolean(state.localStream) && !state.localMicPublication;
+  if (!unpublished()) return;
+  const replaced = requestLiveKitReplacement();
+  if (replaced) await replaced;
+  if (!unpublished()) return;
+  dropUnpublishedMicrophone('Микрофон не переподключился: вы в комнате без микрофона');
 }

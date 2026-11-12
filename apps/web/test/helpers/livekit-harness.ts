@@ -30,7 +30,7 @@ export interface LiveKitHarness {
   detachedScreens: string[];
   retries: { scheduled: Array<{ key: string }>; cleared: number; clearedAll: number };
   audio: { ensured: Array<{ peerId: string }>; playbackSyncs: number };
-  recovery: { reconciled: number };
+  recovery: { reconciled: number; replacementRequests: number };
   /** Every toast the service showed, in order. */
   toasts: string[];
   voiceStatuses: string[];
@@ -85,6 +85,8 @@ export async function loadLiveKitHarness(
     inputSilent?: () => Promise<boolean>;
     /** Whether a recovery epoch is still current. */
     recoveryEpochCurrent?: (epoch: number) => boolean;
+    /** Answers a request for a new LiveKit connection; null when none can start. */
+    requestReplacement?: () => Promise<boolean> | null;
     /** The codec this browser would send a camera in. */
     cameraCodec?: 'h264' | 'vp8';
   } = {}
@@ -106,7 +108,7 @@ export async function loadLiveKitHarness(
   const detachedScreens: string[] = [];
   const retries: LiveKitHarness['retries'] = { scheduled: [], cleared: 0, clearedAll: 0 };
   const audio: LiveKitHarness['audio'] = { ensured: [], playbackSyncs: 0 };
-  const recovery = { reconciled: 0 };
+  const recovery = { reconciled: 0, replacementRequests: 0 };
   const toasts: string[] = [];
   const voiceStatuses: string[] = [];
   const rooms: FakeRoom[] = [];
@@ -306,6 +308,10 @@ export async function loadLiveKitHarness(
       recovery.reconciled += 1;
     },
     notifyLiveKitReconnecting: () => {},
+    requestLiveKitReplacement: () => {
+      recovery.replacementRequests += 1;
+      return options.requestReplacement?.() ?? null;
+    },
     setRoomRecoveryLiveKitAdapter: () => {},
     subscribeRoomRecoveryTransitions: () => () => {}
   }));

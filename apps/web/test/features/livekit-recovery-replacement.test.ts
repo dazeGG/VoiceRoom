@@ -212,7 +212,7 @@ test('a current join reports listen-only when its prepared microphone cannot pub
 
   await expect(lk.service.connectLiveKitRoom('Анна', () => true, capture)).resolves.toBe(true);
   expect(lk.state.microphoneMissing).toBe(true);
-  expect(lk.toasts).toEqual(['Микрофон не ответил вовремя: вы в комнате без микрофона']);
+  expect(lk.toasts).toEqual(['Не удалось подключить микрофон: вы в комнате без микрофона']);
 });
 
 test('a prepared raw microphone ending during the token wait joins listen-only without publishing', async () => {
@@ -787,4 +787,70 @@ test('with the real recovery controller, an asked replacement takes over; a refu
   expect(lk.state.livekitRoom).toBe(lk.rooms[0]);
   expect(hearsEvents(lk, lk.rooms[0]), 'the earlier epoch is long gone').toBe(true);
   recovery.cancel();
+});
+
+type Harness = Awaited<ReturnType<typeof loadLiveKitHarness>>;
+
+async function reconnectWithRejectedMicrophone(replaceWith?: (lk: Harness) => Promise<boolean>) {
+  let harness: Harness | null = null;
+  const { lk } = await inCall({
+    requestToken: async () => ({ token: 't', url: 'wss://lk.example' }),
+    requestReplacement: () => (harness && replaceWith ? replaceWith(harness) : null)
+  });
+  harness = lk;
+  await expect(lk.service.attemptFreshLiveKitReplacement({ epoch: 1, attempt: 1 })).resolves.toEqual({ ok: true });
+  const standing = lk.rooms[0];
+  if (!standing) throw new Error('standing room missing');
+  // The SDK lost the microphone publication in the reconnect, and publishing it again fails.
+  standing.localParticipant.trackPublications.clear();
+  lk.state.localMicPublication = null;
+  const rejected = Promise.reject(new Error('negotiation timed out'));
+  rejected.catch(() => {});
+  Object.assign(standing, { publishGate: rejected });
+  standing.emit('Reconnected');
+  await vi.waitFor(() => expect(lk.recovery.reconciled).toBe(1));
+  return lk;
+}
+
+test('a reconnect whose microphone cannot be published again says so instead of showing a live microphone', async () => {
+  const lk = await reconnectWithRejectedMicrophone();
+  await vi.waitFor(() => expect(lk.state.microphoneMissing).toBe(true));
+  expect(lk.recovery.replacementRequests).toBe(1);
+  expect(lk.state.localStream).toBeNull();
+  expect(lk.toasts).toContain('Микрофон не переподключился: вы в комнате без микрофона');
+  expect(micTrack.readyState).toBe('ended');
+});
+
+test('a reconnect whose microphone cannot be published again asks for a new connection that carries it', async () => {
+  const lk = await reconnectWithRejectedMicrophone(
+    async (harness) => 'ok' in (await harness.service.attemptFreshLiveKitReplacement({ epoch: 2, attempt: 1 }))
+  );
+  await vi.waitFor(() => expect(lk.state.livekitRoom).toBe(lk.rooms[1]));
+  expect(lk.recovery.replacementRequests).toBe(1);
+  expect(lk.rooms[1]?.published.map((entry) => entry.track)).toContain(micTrack);
+  expect(lk.state.localStream).toBe(micStream);
+  expect(lk.state.microphoneMissing).not.toBe(true);
+  expect(lk.toasts).toEqual([]);
+});
+
+test('a join whose microphone publication LiveKit refuses names the refusal, not a timeout', async () => {
+  const lk = await loadLiveKitHarness({
+    autoResolveClient: true,
+    requestToken: async () => ({ token: 't', url: 'wss://lk.example' }),
+    onPublish: () => Promise.reject(new Error('insufficient permissions'))
+  });
+  lk.state.localScreenPublications = new Map<string, unknown>();
+  const capture = {
+    barrier: true,
+    processor: null,
+    rawStream: new FakeMediaStream([new FakeMediaStreamTrack('raw-refused', 'audio')]),
+    stream: new FakeMediaStream([new FakeMediaStreamTrack('output-refused', 'audio')])
+  };
+  const microphone = await import('@/features/room/client/services/microphone-service');
+  vi.spyOn(microphone, 'openLocalMicrophone').mockResolvedValueOnce(capture);
+  const devices = await import('@/features/room/client/ui/devices');
+  expect(await devices.acquireMicrophoneForJoin(() => true)).toBe(capture);
+  await expect(lk.service.connectLiveKitRoom('Анна', () => true, capture)).resolves.toBe(true);
+  expect(lk.state.microphoneMissing).toBe(true);
+  expect(lk.toasts).toEqual(['Не удалось подключить микрофон: вы в комнате без микрофона']);
 });

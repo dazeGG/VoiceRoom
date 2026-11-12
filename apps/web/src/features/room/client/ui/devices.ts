@@ -503,6 +503,8 @@ interface SwitchMicrophoneOptions {
   refreshDeviceList?: boolean;
   successMessage?: string | ((capture: MicrophoneCapture) => string);
   modeOverride?: NoiseMode;
+  /** Said when the failed action also cost the call its microphone. */
+  lostMessage?: string;
 }
 
 /** The user picked a microphone in the dock: save it and move the call to it. */
@@ -687,10 +689,12 @@ export async function publishMicrophoneForJoin(
   room: Room,
   capture: MicrophoneCapture,
   isCurrent: () => boolean
-): Promise<LocalTrackPublication | null> {
-  if (pendingJoinCapture !== capture || mutationSlot || !isCurrent() || !isMicrophoneCaptureLive(capture)) {
-    if (pendingJoinCapture === capture && !isMicrophoneCaptureLive(capture)) disposePendingJoinCapture();
-    return null;
+): Promise<{ outcome: MicrophoneActionOutcome; publication: LocalTrackPublication | null }> {
+  if (mutationSlot) return { outcome: 'busy', publication: null };
+  if (pendingJoinCapture !== capture || !isCurrent()) return { outcome: 'stale', publication: null };
+  if (!isMicrophoneCaptureLive(capture)) {
+    disposePendingJoinCapture();
+    return { outcome: 'failed', publication: null };
   }
   const result = await mutateCandidate(
     room,
@@ -702,7 +706,9 @@ export async function publishMicrophoneForJoin(
   // Only this join's capture: a newer join may have prepared its own meanwhile.
   if (result.outcome === 'applied') clearPendingJoinCapture(capture);
   else if (pendingJoinCapture === capture) disposePendingJoinCapture();
-  return result.outcome === 'applied' ? result.publication : null;
+  return result.outcome === 'applied' && result.publication
+    ? { outcome: 'applied', publication: result.publication }
+    : { outcome: result.outcome === 'applied' ? 'failed' : result.outcome, publication: null };
 }
 
 /** A raw source can end in the microtask between publication and join commit. Keep its cleanup under the SDK owner. */
@@ -779,6 +785,29 @@ export async function ensureCurrentMicrophonePublication(expectedRoom?: Room): P
   }
 }
 
+/**
+ * The room could not take the committed microphone back and no new connection
+ * carried it: the call goes on listen-only, said so, instead of a live microphone
+ * button nobody hears. Leaves it alone while another owner is still working on it.
+ */
+export function dropUnpublishedMicrophone(message: string): boolean {
+  if (!state.joined || !state.localStream || state.localMicPublication) return false;
+  if (currentAction || captureSlot || mutationSlot) return false;
+  const capture = getLocalMicrophoneCapture();
+  setMicrophoneCaptureEnabled(capture, false);
+  stopMicrophoneCapture(capture);
+  state.localStream = null;
+  state.localRawStream = null;
+  state.micProcessor = null;
+  state.microphoneMissing = true;
+  refreshMicrophoneLevelMeter(GATE_THRESHOLD_MIN_DB);
+  void syncMicrophoneControlsSoon().catch((error: unknown) =>
+    log.warn('microphone controls refresh failed', errorContext(error))
+  );
+  showToast(message, { duration: 8000 });
+  return true;
+}
+
 /** A candidate LiveKit room may publish the committed track only under the same mutation slot. */
 export async function publishMicrophoneForReplacementRoom(
   room: Room,
@@ -811,6 +840,8 @@ export function attachMicrophone(options: { automatic?: boolean } = {}): Promise
   return attachMicrophoneOutcome(options).then((outcome) => outcome === 'applied');
 }
 
+const ATTACH_TIMED_OUT_MESSAGE = 'Микрофон не ответил вовремя: попробуйте ещё раз';
+
 export async function attachMicrophoneOutcome(options: { automatic?: boolean } = {}): Promise<MicrophoneActionOutcome> {
   if (!state.joined || state.localStream) return 'stale';
   if (currentAction) return 'coalesced';
@@ -826,13 +857,22 @@ export async function attachMicrophoneOutcome(options: { automatic?: boolean } =
   let capture: MicrophoneCapture | null = null;
   try {
     const acquired = await acquireCandidate(isCurrent, deadline);
-    if (acquired === 'timed_out') return 'timed_out';
+    if (acquired === 'timed_out') {
+      if (!options.automatic && version === actionVersion) showToast(ATTACH_TIMED_OUT_MESSAGE);
+      return 'timed_out';
+    }
     capture = acquired;
     if (!isCurrent()) return 'stale';
     if (!room) return 'stale';
     state.muted = true;
     const result = await mutateCandidate(room, null, capture, isCurrent, deadline);
-    if (result.outcome !== 'applied' || !result.publication) return result.outcome;
+    if (result.outcome !== 'applied' || !result.publication) {
+      if (!options.automatic && version === actionVersion) {
+        if (result.outcome === 'timed_out') showToast(ATTACH_TIMED_OUT_MESSAGE);
+        if (result.outcome === 'failed') showToast('Не удалось подключить микрофон');
+      }
+      return result.outcome;
+    }
     state.microphoneMissing = false;
     state.localMicPublication = result.publication;
     setLocalMicrophoneCapture(capture);
@@ -843,6 +883,8 @@ export async function attachMicrophoneOutcome(options: { automatic?: boolean } =
     showToast(options.automatic ? 'Микрофон найден: включите его кнопкой микрофона' : 'Микрофон подключен');
     return 'applied';
   } catch (error) {
+    // A left call or a newer choice made this attempt obsolete: nothing to report.
+    if (!isCurrent()) return 'stale';
     log.warn('microphone still unavailable', errorContext(error));
     if (!options.automatic) showToast(describeMicrophoneError(error));
     return 'failed';
@@ -1056,6 +1098,7 @@ function reconsiderEndedCurrentMicrophone(): boolean {
   if (canAdmitAutomaticMicrophoneAction()) {
     void runAutomaticReopen('raw_ended', {
       failureMessage: 'Микрофон отключился: вы в комнате без микрофона',
+      lostMessage: 'Микрофон отключился: вы в комнате без микрофона',
       successMessage: 'Микрофон переподключен'
     }).then(() => {
       rawLossInFlight = false;
@@ -1111,6 +1154,23 @@ function detachEndedMicrophone(loss: NonNullable<typeof pendingRawLoss>): void {
     });
 }
 
+/** A failed replace either left the call microphone in place or cost the call its microphone. */
+function reportUnappliedReplacement(
+  previousStream: MediaStream | null,
+  failureMessage: string,
+  lostMessage: string
+): void {
+  if (!previousStream || state.localStream) {
+    showToast(failureMessage);
+    return;
+  }
+  refreshMicrophoneLevelMeter(GATE_THRESHOLD_MIN_DB);
+  void syncMicrophoneControlsSoon().catch((error: unknown) =>
+    log.warn('microphone controls refresh failed', errorContext(error))
+  );
+  showToast(lostMessage, { duration: 8000 });
+}
+
 async function replaceMicrophoneCapture(
   options: SwitchMicrophoneOptions,
   retainManualOwner = false
@@ -1118,7 +1178,8 @@ async function replaceMicrophoneCapture(
   const {
     failureMessage = 'Не удалось переключить микрофон',
     refreshDeviceList = true,
-    successMessage = 'Микрофон переключен'
+    successMessage = 'Микрофон переключен',
+    lostMessage = `${failureMessage}: вы в комнате без микрофона`
   } = options;
   if (!state.joined || !state.localStream) return 'stale';
   if (currentAction) return 'coalesced';
@@ -1139,11 +1200,18 @@ async function replaceMicrophoneCapture(
     state.localStream === previousCapture.stream;
   try {
     const acquired = await acquireCandidate(isCurrent, deadline, options.modeOverride);
-    if (acquired === 'timed_out') return 'timed_out';
+    if (acquired === 'timed_out') {
+      if (version === actionVersion) showToast(failureMessage);
+      return 'timed_out';
+    }
     nextCapture = acquired;
     if (!isCurrent() || !room) return 'stale';
     const result = await mutateCandidate(room, publication, nextCapture, isCurrent, deadline);
-    if (result.outcome !== 'applied' || !result.publication) return result.outcome;
+    if (result.outcome !== 'applied' || !result.publication) {
+      if ((result.outcome === 'failed' || result.outcome === 'timed_out') && version === actionVersion)
+        reportUnappliedReplacement(previousCapture.stream, failureMessage, lostMessage);
+      return result.outcome;
+    }
 
     state.localMicPublication = result.publication;
     setLocalMicrophoneCapture(nextCapture);

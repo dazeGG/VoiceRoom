@@ -226,7 +226,7 @@ test('a prepared join capture survives a 12s network connect, then publishes wit
   const room = Object.assign(new Room(), {
     localParticipant: { publishTrack: vi.fn(async () => publication), unpublishTrack: vi.fn(async () => {}) }
   });
-  expect(await publishMicrophoneForJoin(room, capture, () => true)).toBe(publication);
+  expect((await publishMicrophoneForJoin(room, capture, () => true)).publication).toBe(publication);
   expect(captureWork.stop).not.toHaveBeenCalled();
   invalidateMicrophoneActions();
   expect(captureWork.stop).not.toHaveBeenCalled();
@@ -253,7 +253,7 @@ test('prepared join capture with ended raw input is never submitted to SDK publi
       trackPublications: new Map<string, unknown>()
     }
   });
-  expect(await publishMicrophoneForJoin(room, capture, () => true)).toBeNull();
+  expect((await publishMicrophoneForJoin(room, capture, () => true)).publication).toBeNull();
   expect(publishTrack).not.toHaveBeenCalled();
   expect(captureWork.stop).toHaveBeenCalledWith(capture);
 });
@@ -287,7 +287,7 @@ test('raw input ending during SDK publish quarantines the late join publication'
   await vi.waitFor(() => expect(publishTrack).toHaveBeenCalledOnce());
   raw.stop();
   finishPublish();
-  expect(await publishing).toBeNull();
+  expect((await publishing).publication).toBeNull();
   expect(unpublishTrack).toHaveBeenCalledOnce();
   expect(captureWork.stop).toHaveBeenCalledWith(capture);
 });
@@ -318,7 +318,7 @@ test('late join cleanup keeps the page-wide SDK slot until exact unpublish settl
       trackPublications: new Map<string, unknown>()
     }
   });
-  const published = await publishMicrophoneForJoin(room, capture, () => true);
+  const { publication: published } = await publishMicrophoneForJoin(room, capture, () => true);
   expect(published).not.toBeNull();
   if (!published) return;
   raw.stop();
@@ -368,7 +368,7 @@ test('late join cleanup times out to the caller but retains the unresolved SDK s
       trackPublications: new Map<string, unknown>()
     }
   });
-  const published = await publishMicrophoneForJoin(room, capture, () => true);
+  const { publication: published } = await publishMicrophoneForJoin(room, capture, () => true);
   expect(published).not.toBeNull();
   if (!published) return;
   raw.stop();
@@ -1149,7 +1149,7 @@ test("an old join's publish timing out after leave and rejoin leaves the new cal
   expect(await acquireMicrophoneForJoin(() => true)).toBe(second);
   captureWork.stop.mockClear();
   await vi.advanceTimersByTimeAsync(10_000);
-  expect(await oldPublish).toBeNull();
+  expect((await oldPublish).publication).toBeNull();
   expect(captureWork.stop, 'the prepared microphone of the new join survives').not.toHaveBeenCalledWith(second);
 
   const outputTrack = defined(second.stream?.getAudioTracks()[0], 'new output track');
@@ -1166,7 +1166,7 @@ test("an old join's publish timing out after leave and rejoin leaves the new cal
     }
   });
   state.livekitRoom = newRoom;
-  expect(await publishMicrophoneForJoin(newRoom, second, () => true)).toBe(publication);
+  expect((await publishMicrophoneForJoin(newRoom, second, () => true)).publication).toBe(publication);
   setLocalMicrophoneCapture(second);
   Object.assign(state, { joined: true, microphoneMissing: false });
   await vi.advanceTimersByTimeAsync(10_000);
