@@ -29,6 +29,7 @@ export default tseslint.config(
       '**/dist/**',
       'coverage/**',
       '.omc/**',
+      '.omx/**',
       'apps/api/src/platform/db/schema.ts',
       'apps/web/public/**',
       'apps/site/public/**',
