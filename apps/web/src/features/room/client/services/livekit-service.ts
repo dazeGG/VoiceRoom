@@ -1,4 +1,19 @@
 import type { LocalTrackPublication, Room } from 'livekit-client';
+import type { MicrophoneCapture } from '../core/types';
+import {
+  getLocalMicrophoneCapture,
+  isMicrophoneCaptureLive,
+  setLocalMicrophoneCapture,
+  stopMicrophoneCapture
+} from './microphone-service';
+import { cancelCaptureProgressObservation } from '../room/mic-send';
+import {
+  discardPublishedJoinMicrophone,
+  getMicrophoneIntentRevision,
+  isOwnedMicrophonePublishPending,
+  publishMicrophoneForJoin,
+  publishMicrophoneForReplacementRoom
+} from '../ui/devices';
 import { useStartUiStore } from '@/features/room/start-ui.store';
 import { state } from '../core/room-runtime.store';
 import { setVoiceConnectionStatus } from '../ui/status';
@@ -60,6 +75,7 @@ import {
   safeLiveKitCode
 } from './livekit/transport';
 import {
+  MicrophonePublicationCleanupError,
   disposeCandidatePublications,
   ensureLocalCameraPublished,
   ensureLocalMicrophonePublished,
@@ -83,6 +99,7 @@ import {
 } from './livekit/remote-participants';
 
 const liveKitReconcileGenerations = new WeakMap<Room, LiveKitReconcileGeneration>();
+const pendingInPlaceMicrophones = new WeakMap<Room, Promise<void>>();
 
 function reconcileGenerationFor(room: Room): LiveKitReconcileGeneration {
   const existing = liveKitReconcileGenerations.get(room);
@@ -92,7 +109,11 @@ function reconcileGenerationFor(room: Room): LiveKitReconcileGeneration {
   return generation;
 }
 
-export async function connectLiveKitRoom(name: string, isCurrent: () => boolean = () => true): Promise<boolean> {
+export async function connectLiveKitRoom(
+  name: string,
+  isCurrent: () => boolean = () => true,
+  pendingMicrophone: MicrophoneCapture | null = null
+): Promise<boolean> {
   setVoiceConnectionStatus('connecting');
 
   const credentials = await requestLiveKitCredentials(name, isCurrent);
@@ -115,25 +136,60 @@ export async function connectLiveKitRoom(name: string, isCurrent: () => boolean 
   syncLiveKitParticipants(room);
 
   // Without a microphone the call is joined to listen: nothing to publish.
-  const stream = state.localStream;
+  const stream = pendingMicrophone?.stream ?? state.localStream;
   if (stream) {
     try {
-      const published = await publishLocalMicrophoneForRoom(
-        room,
-        stream,
-        () => isCurrent() && state.livekitRoom === room && state.localStream === stream
-      );
-      if (!published) {
+      let published = pendingMicrophone
+        ? await publishMicrophoneForJoin(
+            room,
+            pendingMicrophone,
+            () => isCurrent() && state.livekitRoom === room && isMicrophoneCaptureLive(pendingMicrophone)
+          )
+        : await publishLocalMicrophoneForRoom(
+            room,
+            stream,
+            () => isCurrent() && state.livekitRoom === room && state.localStream === stream
+          );
+      if (!isCurrent() || state.livekitRoom !== room) {
         await disconnectLiveKitRoomInstance(room);
         return false;
       }
-      markJoinStage('publishMs');
+      if (pendingMicrophone && published && !isMicrophoneCaptureLive(pendingMicrophone)) {
+        await discardPublishedJoinMicrophone(room, published, pendingMicrophone);
+        if (!isCurrent() || state.livekitRoom !== room) {
+          await disconnectLiveKitRoomInstance(room);
+          return false;
+        }
+        published = null;
+      }
+      if (!published) {
+        if (!pendingMicrophone) {
+          await disconnectLiveKitRoomInstance(room);
+          return false;
+        }
+        stopMicrophoneCapture(pendingMicrophone);
+        state.microphoneMissing = true;
+        showToast('Микрофон не ответил вовремя: вы в комнате без микрофона', { duration: 8000 });
+      }
+      if (pendingMicrophone && published) {
+        state.localMicPublication = published;
+        setLocalMicrophoneCapture(pendingMicrophone);
+      }
+      if (published) markJoinStage('publishMs');
     } catch (error) {
       if (!isCurrent() || state.livekitRoom !== room) {
         await disconnectLiveKitRoomInstance(room);
         return false;
       }
-      throw error;
+      if (!pendingMicrophone) throw error;
+      if (error instanceof MicrophonePublicationCleanupError) {
+        stopMicrophoneCapture(pendingMicrophone);
+        await disconnectLiveKitRoomInstance(room);
+        return false;
+      }
+      stopMicrophoneCapture(pendingMicrophone);
+      state.microphoneMissing = true;
+      showToast('Не удалось подключить микрофон: вы в комнате без микрофона', { duration: 8000 });
     }
   }
 
@@ -156,10 +212,12 @@ export async function attemptFreshLiveKitReplacement({
 }): Promise<ReplacementOutcome> {
   const oldRoom = state.livekitRoom;
   const microphoneStream = state.localStream;
+  const microphoneCapture = getLocalMicrophoneCapture();
   const screenStream = state.localScreenStream;
   const roomId = state.roomId;
   const peerId = state.peerId;
   const sessionToken = state.sessionToken;
+  const microphoneIntentRevision = getMicrophoneIntentRevision();
   const screenTrackIds =
     screenStream
       ?.getTracks()
@@ -204,14 +262,24 @@ export async function attemptFreshLiveKitReplacement({
     }
 
     if (microphoneStream) {
-      microphonePublication = await publishLocalMicrophoneForRoom(candidate, microphoneStream, isCurrent, false);
+      const microphoneResult = await publishMicrophoneForReplacementRoom(candidate, microphoneStream, isCurrent);
+      microphonePublication = microphoneResult.publication;
+      if (microphoneResult.outcome === 'busy') {
+        await disconnectLiveKitRoomInstance(candidate);
+        return { retryable: true, code: 'transport_error' };
+      }
     }
     if ((microphoneStream && !microphonePublication) || !isCurrent()) {
       await disconnectLiveKitRoomInstance(candidate);
       return { retryable: true, code: 'transport_error' };
     }
     screenPublications = await publishLocalScreenTracksForRoom(candidate, screenStream, isCurrent);
-    if (!isCurrent()) {
+    if (
+      !isCurrent() ||
+      getMicrophoneIntentRevision() !== microphoneIntentRevision ||
+      (microphoneStream &&
+        (state.localRawStream !== microphoneCapture.rawStream || !isMicrophoneCaptureLive(microphoneCapture)))
+    ) {
       await disposeCandidatePublications(candidate, screenPublications);
       await disconnectLiveKitRoomInstance(candidate);
       return { retryable: true, code: 'transport_error' };
@@ -220,6 +288,7 @@ export async function attemptFreshLiveKitReplacement({
     // Commit the fully reconciled candidate as one state transition. Until this
     // point its guarded event handlers cannot mutate shared room state.
     committed = true;
+    cancelCaptureProgressObservation();
     state.livekitRoom = candidate;
     state.localMicPublication = microphonePublication;
     state.localScreenPublications = screenPublications;
@@ -276,8 +345,8 @@ async function bindLiveKitRoomEvents(room: Room, isCurrent: () => boolean): Prom
     const generation = reconcileGeneration.capture();
     if (state.joined || state.connecting) setVoiceConnectionStatus('connected');
     recoverLiveKitRoom(room, current)
-      .then(() => {
-        if (current() && reconcileGeneration.isCurrent(generation)) notifyLiveKitReconciled();
+      .then((reconciled) => {
+        if (reconciled && current() && reconcileGeneration.isCurrent(generation)) notifyLiveKitReconciled();
       })
       .catch(() => logLiveKitTransition('warn', { event: 'in_place_reconcile', result: 'failed' }));
   });
@@ -312,14 +381,16 @@ async function bindLiveKitRoomEvents(room: Room, isCurrent: () => boolean): Prom
   room.on(RoomEvent.LocalTrackPublished, (publication) => {
     if (!current()) return;
     if (!isMicrophonePublication(publication)) return;
+    if (isOwnedMicrophonePublishPending(room)) return;
     state.localMicPublication = publication;
     setVoiceConnectionStatus('connected');
   });
   room.on(RoomEvent.LocalTrackUnpublished, (publication) => {
     if (!current()) return;
     if (!isMicrophonePublication(publication)) return;
+    if (state.localMicPublication !== publication) return;
     state.localMicPublication = null;
-    if (state.joined) setVoiceConnectionStatus('reconnecting');
+    if (state.joined && !state.microphoneMissing) setVoiceConnectionStatus('reconnecting');
   });
   room.on(RoomEvent.TrackSubscriptionFailed, (...args) => {
     if (!current()) return;
@@ -437,21 +508,33 @@ async function republishLocalCamera(room: Room, isCurrent: () => boolean): Promi
 async function recoverLiveKitRoom(
   room: Room,
   isCurrent: () => boolean = () => state.livekitRoom === room
-): Promise<void> {
+): Promise<boolean> {
   // A reconnect is a new transport epoch. A screen SID that exhausted its
   // bounded retry budget on the previous connection must be eligible again;
   // otherwise a transient outage longer than the retry window can strand the
   // publication until the sender republishes it with a new SID.
   clearAllScreenSubscriptionRetries();
-  if (!isCurrent()) return;
+  if (!isCurrent()) return false;
   syncLiveKitParticipants(room);
   retryDemandedScreenSubscriptions(room);
-  await ensureLocalMicrophonePublished();
-  if (!isCurrent()) return;
+  // The microphone has a separate mutation owner. Its mute or SDK publish may
+  // never settle; room-wide recovery must progress without cancelling that
+  // owner or starting another microphone operation on repeated reconnects.
+  if (!pendingInPlaceMicrophones.has(room)) {
+    const task = ensureLocalMicrophonePublished(room)
+      .then(() => {})
+      .catch(() => logLiveKitTransition('warn', { event: 'microphone_reconcile', result: 'failed' }))
+      .finally(() => {
+        if (pendingInPlaceMicrophones.get(room) === task) pendingInPlaceMicrophones.delete(room);
+      });
+    pendingInPlaceMicrophones.set(room, task);
+  }
+  if (!isCurrent()) return false;
   await ensureLocalScreenPublished(room, isCurrent);
-  if (!isCurrent()) return;
+  if (!isCurrent()) return false;
   await republishLocalCamera(room, isCurrent);
-  if (!isCurrent()) return;
+  if (!isCurrent()) return false;
   syncLiveKitVoiceSubscriptions();
   syncRemoteAudioPlayback();
+  return true;
 }

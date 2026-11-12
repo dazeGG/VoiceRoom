@@ -19,6 +19,9 @@ import { UserFacingError } from '../../core/utils';
 
 import { isCameraPublication, isMicrophonePublication } from './publication-kinds';
 
+/** A stale published track could not be detached; callers must retain quarantine. */
+export class MicrophonePublicationCleanupError extends Error {}
+
 export async function publishLocalMicrophone(): Promise<void> {
   const room = state.livekitRoom;
   const stream = state.localStream;
@@ -45,16 +48,28 @@ export async function publishLocalMicrophoneForRoom(
     red: true,
     source: Track.Source.Microphone
   });
+  const unpublish = async () => {
+    try {
+      await room.localParticipant.unpublishTrack(publication.track ?? track, false);
+    } catch (error) {
+      throw new MicrophonePublicationCleanupError('Stale microphone publication cleanup failed', { cause: error });
+    }
+  };
   if (!isCurrent()) {
-    await room.localParticipant.unpublishTrack(publication.track ?? track, false).catch(() => {});
+    await unpublish();
+    return null;
+  }
+  try {
+    await syncMicrophonePublicationMuted(publication);
+  } catch (error) {
+    await unpublish();
+    throw error;
+  }
+  if (!isCurrent()) {
+    await unpublish();
     return null;
   }
   if (commit) state.localMicPublication = publication;
-  await syncMicrophonePublicationMuted(publication);
-  if (!isCurrent()) {
-    await room.localParticipant.unpublishTrack(publication.track ?? track, false).catch(() => {});
-    return null;
-  }
   return publication;
 }
 
@@ -75,7 +90,23 @@ export async function unpublishLocalMicrophone(stopOnUnpublish = false): Promise
  */
 export async function replaceLocalMicrophoneTrack(track: MediaStreamTrack): Promise<boolean> {
   const publication = state.localMicPublication;
-  if (!state.livekitRoom || !publication?.track) return false;
+  const room = state.livekitRoom;
+  if (!room || !publication) return false;
+  return replaceLocalMicrophoneTrackForPublication(
+    room,
+    publication,
+    track,
+    () => state.livekitRoom === room && state.localMicPublication === publication
+  );
+}
+
+export async function replaceLocalMicrophoneTrackForPublication(
+  room: Room,
+  publication: LocalTrackPublication,
+  track: MediaStreamTrack,
+  isCurrent: () => boolean
+): Promise<boolean> {
+  if (!publication.track || !isCurrent()) return false;
   await publication.track.replaceTrack(track, true);
   return true;
 }
@@ -257,17 +288,11 @@ export async function unpublishLocalScreenTracks(stopOnUnpublish = false): Promi
   );
 }
 
-export async function ensureLocalMicrophonePublished(): Promise<void> {
-  const existingPublication = findLocalMicrophonePublication();
-  if (existingPublication) {
-    state.localMicPublication = existingPublication;
-    await syncLocalMicrophonePublicationMuted();
-    return;
-  }
-
-  if (state.livekitRoom && state.localStream) {
-    await publishLocalMicrophone();
-  }
+export async function ensureLocalMicrophonePublished(
+  room: Room
+): Promise<'applied' | 'failed' | 'stale' | 'timed_out' | 'busy' | 'coalesced'> {
+  const { ensureCurrentMicrophonePublication } = await import('../../ui/devices');
+  return ensureCurrentMicrophonePublication(room);
 }
 
 export async function ensureLocalScreenPublished(room: Room, isCurrent: () => boolean): Promise<void> {

@@ -3,7 +3,17 @@
 // raised and reported, ordinary transitions stay quiet.
 
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
+import { createPinia, setActivePinia } from 'pinia';
 import type { ReplacementOutcome } from '@/features/room/client/recovery/realtime-recovery';
+import { state } from '@/features/room/client/core/room-runtime.store';
+import { createInitialRoomState } from '@/features/room/client/model/room-state';
+import {
+  invalidateMicrophoneActions,
+  requestAutomaticMicrophoneConnectionReplacement,
+  setMicrophoneRecoveryObserver,
+  startMicrophoneCall,
+  type MicrophoneRecoveryEvent
+} from '@/features/room/client/ui/devices';
 
 vi.mock('@/entities/room/room-realtime', () => ({
   requestActiveVoiceResync: vi.fn(() => true),
@@ -21,6 +31,9 @@ beforeEach(() => vi.mocked(reportClientLogs).mockClear());
 afterEach(() => {
   recovery.cancelRoomRecovery();
   recovery.setRoomRecoveryLiveKitAdapter(null);
+  invalidateMicrophoneActions();
+  setMicrophoneRecoveryObserver(null);
+  vi.useRealTimers();
 });
 
 async function loseLiveKitWithSnapshot(outcome: ReplacementOutcome) {
@@ -155,4 +168,36 @@ test('a connection that reconnected by itself is not answered as replaced', asyn
   await expect(replacing).resolves.toBe(false);
   expect(attemptFreshReplacement).not.toHaveBeenCalled();
   unsubscribe();
+});
+
+test('an automatic timeout invalidates only its optional epoch before a late snapshot', async () => {
+  vi.useFakeTimers();
+  setActivePinia(createPinia());
+  Object.assign(state, createInitialRoomState(), { joined: true, muted: false, outputMuted: false });
+  startMicrophoneCall();
+  const terminal = vi.fn<(event: MicrophoneRecoveryEvent) => void>();
+  setMicrophoneRecoveryObserver(terminal);
+  const attemptFreshReplacement = vi.fn(async () => ({ ok: true as const }));
+  recovery.setRoomRecoveryLiveKitAdapter({ attemptFreshReplacement });
+  recovery.startRoomRecovery(1, true);
+  recovery.notifyLiveKitReconciled();
+  snapshot();
+
+  const replacing = requestAutomaticMicrophoneConnectionReplacement(
+    recovery.requestLiveKitReplacement,
+    recovery.abandonOptionalLiveKitReplacement
+  );
+  expect(replacing).not.toBeNull();
+  await vi.advanceTimersByTimeAsync(10_000);
+  await expect(replacing).resolves.toBe(false);
+  expect(terminal).toHaveBeenCalledOnce();
+  expect(terminal.mock.calls[0]?.[0].outcome).toBe('timed_out');
+  snapshot(); // A response to the optional request cannot start a fresh SDK attempt.
+  await vi.advanceTimersByTimeAsync(0);
+  expect(attemptFreshReplacement).not.toHaveBeenCalled();
+
+  recovery.notifyLiveKitDisconnected(); // Mandatory recovery remains available.
+  snapshot();
+  await vi.advanceTimersByTimeAsync(0);
+  expect(attemptFreshReplacement).toHaveBeenCalledOnce();
 });

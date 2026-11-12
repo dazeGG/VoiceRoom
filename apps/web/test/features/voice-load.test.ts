@@ -33,7 +33,7 @@ import { defined, instanceOf } from '../helpers/assert';
 import { FakeMediaStream } from '../helpers/fake-media';
 
 const reopenMicrophone = vi.hoisted(() => vi.fn(async () => true));
-vi.mock('@/features/room/client/ui/devices', () => ({ reopenMicrophone }));
+vi.mock('@/features/room/client/ui/devices', () => ({ reopenMicrophoneAfterOwnedResumeFailure: reopenMicrophone }));
 
 beforeEach(() => {
   Object.assign(state, createInitialRoomState());
@@ -265,7 +265,8 @@ function useCapture(): FakeAudioContext {
     node: context.createGain(),
     destination: context.createMediaStreamDestination(),
     nodes: [],
-    setGain: () => {}
+    setGain: () => {},
+    setHardZero: () => {}
   };
   state.micProcessor = [processor];
   return instanceOf(context, FakeAudioContext, 'the capture context');

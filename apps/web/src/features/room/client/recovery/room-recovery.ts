@@ -18,6 +18,7 @@ export type RoomRecoveryLiveKitAdapter = {
 let controller: RealtimeRecoveryController | null = null;
 let liveKitAdapter: RoomRecoveryLiveKitAdapter | null = null;
 const transitionHandlers = new Set<(event: RecoveryTransition) => void>();
+const optionalRequests = new WeakMap<Promise<boolean>, { controller: RealtimeRecoveryController; epoch: number }>();
 
 // The recovery state machine already emits a flat record of primitives per
 // transition, which is exactly the trail needed to tell a brief blip from a
@@ -132,9 +133,20 @@ export function requestLiveKitReplacement(): Promise<boolean> | null {
     unsubscribe();
     answer(!gaveUp);
   });
-  if (current.requestLiveKitReplacement()) return replaced;
+  if (current.requestLiveKitReplacement()) {
+    optionalRequests.set(replaced, { controller: current, epoch: current.getSnapshot().epoch });
+    return replaced;
+  }
   unsubscribe();
   return null;
+}
+
+/** A timed-out microphone action cannot leave its optional replacement alive. */
+export function abandonOptionalLiveKitReplacement(request: Promise<boolean>): boolean {
+  const owner = optionalRequests.get(request);
+  if (!owner || controller !== owner.controller) return false;
+  optionalRequests.delete(request);
+  return owner.controller.abandonOptionalReplacement(owner.epoch);
 }
 
 export function isCurrentRoomRecoveryEpoch(epoch: number): boolean {

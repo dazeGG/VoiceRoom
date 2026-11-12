@@ -24,6 +24,8 @@ import { showToast } from '../ui/toast';
 import { disconnectAudioNode, stopStream } from '../core/utils';
 import { isRecord } from '@voice-room/shared/guards';
 import { isMicrophoneShownMuted } from '../core/microphone-mute';
+import { cancelCaptureProgressObservation } from '../room/mic-send';
+import { noteOwnedProcessingTransition } from '../room/capture-diagnostics';
 import type { MicProcessor, MicrophoneCapture } from '../core/types';
 
 import { createLogger, errorContext } from '@/shared/log';
@@ -91,7 +93,10 @@ export function setNoiseMode(mode: unknown): void {
   writeStorage(NOISE_MODE_STORAGE_KEY, state.noiseMode);
 }
 
-async function openMicrophone(mode: NoiseMode = state.noiseMode): Promise<MediaStream> {
+async function openMicrophone(
+  mode: NoiseMode = state.noiseMode,
+  isCurrent: () => boolean = () => true
+): Promise<MediaStream> {
   if (!navigator.mediaDevices?.getUserMedia) {
     throw new Error('Браузер не дал доступ к микрофону. Нужен HTTPS или localhost.');
   }
@@ -109,7 +114,13 @@ async function openMicrophone(mode: NoiseMode = state.noiseMode): Promise<MediaS
     video: false
   });
   try {
-    return await navigator.mediaDevices.getUserMedia(constraints(deviceId));
+    const stream = await navigator.mediaDevices.getUserMedia(constraints(deviceId));
+    for (const track of stream.getAudioTracks()) track.enabled = false;
+    if (!isCurrent()) {
+      stopStream(stream);
+      throw new Error('Microphone action is stale');
+    }
+    return stream;
   } catch (error) {
     // A stored device that was unplugged (or re-enumerated by the OS) must not
     // leave the user without a microphone: open the system default instead.
@@ -117,10 +128,17 @@ async function openMicrophone(mode: NoiseMode = state.noiseMode): Promise<MediaS
     if (!deviceId || (name !== 'OverconstrainedError' && name !== 'NotFoundError')) throw error;
     log.warn('stored microphone unavailable, opening the default', errorContext(error));
     const stream = await navigator.mediaDevices.getUserMedia(constraints(''));
+    for (const track of stream.getAudioTracks()) track.enabled = false;
+    if (!isCurrent()) {
+      stopStream(stream);
+      throw new Error('Microphone action is stale', { cause: error });
+    }
     showToast('Выбранный микрофон недоступен, включен микрофон по умолчанию');
     return stream;
   }
 }
+
+let rnnoiseFailedOnPage = false;
 
 /**
  * Builds the whole capture chain — RNNoise, the gate and the input gain — in
@@ -128,33 +146,62 @@ async function openMicrophone(mode: NoiseMode = state.noiseMode): Promise<MediaS
  * own buffering, so the former chain of up to three contexts cost tens of
  * milliseconds of mouth-to-ear latency for nothing.
  */
-export async function openLocalMicrophone(): Promise<MicrophoneCapture> {
-  const mode = state.noiseMode;
-  const rawStream = await openMicrophone(mode);
+export async function openLocalMicrophone(
+  isCurrent: () => boolean = () => true,
+  requestedMode: NoiseMode = state.noiseMode
+): Promise<MicrophoneCapture> {
+  // The saved choice stays RNNoise; once it failed on this page, the browser's
+  // own suppression is used directly instead of failing and toasting again.
+  const mode = requestedMode === 'rnnoise' && rnnoiseFailedOnPage ? 'browser' : requestedMode;
+  const rawStream = await openMicrophone(mode, isCurrent);
 
-  if (mode !== 'rnnoise') return buildCapturePipeline(rawStream, mode);
+  if (mode !== 'rnnoise') return buildCapturePipeline(rawStream, mode, isCurrent);
 
   try {
-    return await buildCapturePipeline(rawStream, 'rnnoise');
+    return await buildCapturePipeline(rawStream, 'rnnoise', isCurrent);
   } catch (error) {
+    if (!isCurrent()) throw error;
     log.warn('RNNoise unavailable', errorContext(error));
     stopStream(rawStream);
-    setNoiseMode('browser');
+    rnnoiseFailedOnPage = true;
     showToast('RNNoise недоступен, включен браузерный шумодав');
-    return buildCapturePipeline(await openMicrophone('browser'), 'browser');
+    return buildCapturePipeline(await openMicrophone('browser', isCurrent), 'browser', isCurrent);
   }
 }
 
-async function buildCapturePipeline(rawStream: MediaStream, mode: NoiseMode): Promise<MicrophoneCapture> {
+async function buildCapturePipeline(
+  rawStream: MediaStream,
+  mode: NoiseMode,
+  isCurrent: () => boolean
+): Promise<MicrophoneCapture> {
   const context = createProcessingAudioContext();
+  let destination: MediaStreamAudioDestinationNode | null = null;
+  const processors: MicProcessor[] = [];
+  const capture: MicrophoneCapture = {
+    barrier: true,
+    mode,
+    processor: processors,
+    rawStream,
+    stream: null
+  };
   try {
     const source = context.createMediaStreamSource(rawStream);
-    const destination = context.createMediaStreamDestination();
-    const processors: MicProcessor[] = [];
+    destination = context.createMediaStreamDestination();
+    capture.stream = destination.stream;
+    // Construct the last signal-bearing stage at exact zero before any graph edge.
+    const inputGain = createInputGainStage(context, destination, source);
     let tail: AudioNode = source;
 
     if (mode === 'rnnoise') {
-      const rnnoise = await createRnnoiseNode(context);
+      const rnnoise = await createRnnoiseNode(context, (node) => {
+        const onError = () => {
+          capture.processorFailed = true;
+          if (committedCapture !== capture || capture.barrier || state.localStream !== capture.stream) return;
+          void import('../ui/devices').then((devices) => devices.fallbackRnnoiseAfterProcessorError(capture));
+        };
+        node.addEventListener('processorerror', onError);
+        capture.removeProcessorErrorListener = () => node.removeEventListener('processorerror', onError);
+      });
       tail.connect(rnnoise);
       tail = rnnoise;
       processors.push({ context, destination, node: rnnoise, source, type: 'rnnoise' });
@@ -174,26 +221,24 @@ async function buildCapturePipeline(rawStream: MediaStream, mode: NoiseMode): Pr
       processors.push({ context, destination, node: silenceFloor, source, type: 'silence-floor' });
     }
 
-    processors.push(createInputGainStage(context, tail, destination, source));
+    tail.connect(inputGain.node);
+    processors.push(inputGain);
     await context.resume();
+    if (!isCurrent()) throw new Error('Microphone action is stale');
 
-    const [inputTrack] = rawStream.getAudioTracks();
     const [outputTrack] = destination.stream.getAudioTracks();
     if (!outputTrack) throw new Error('Обработка микрофона не вернула аудио-трек');
-    outputTrack.enabled = inputTrack?.enabled ?? true;
+    outputTrack.enabled = false;
     if ('contentHint' in outputTrack) outputTrack.contentHint = 'speech';
 
-    return {
-      mode,
-      processor: processors,
-      rawStream,
-      stream: destination.stream
-    };
+    return capture;
   } catch (error) {
+    capture.removeProcessorErrorListener?.();
     context.close().catch(() => {});
+    if (destination) stopStream(destination.stream);
     // The RNNoise caller owns the raw stream: it closes it before reopening
     // the microphone for the browser fallback.
-    if (mode !== 'rnnoise') stopStream(rawStream);
+    stopStream(rawStream);
     throw error;
   }
 }
@@ -206,7 +251,6 @@ async function buildCapturePipeline(rawStream: MediaStream, mode: NoiseMode): Pr
  */
 function createInputGainStage(
   context: AudioContext,
-  input: AudioNode,
   destination: MediaStreamAudioDestinationNode,
   source: MediaStreamAudioSourceNode
 ): MicProcessor {
@@ -228,10 +272,19 @@ function createInputGainStage(
     limited = needsLimiter;
   };
 
-  const initial = state.microphoneVolume / 100;
-  gain.gain.value = initial;
-  input.connect(gain);
-  route(initial);
+  gain.gain.cancelScheduledValues(context.currentTime);
+  gain.gain.setValueAtTime(0, context.currentTime);
+  route(0);
+
+  const holdGain = (now: number): void => {
+    if (typeof gain.gain.cancelAndHoldAtTime === 'function') {
+      gain.gain.cancelAndHoldAtTime(now);
+      return;
+    }
+    const current = gain.gain.value;
+    gain.gain.cancelScheduledValues(now);
+    gain.gain.setValueAtTime(current, now);
+  };
 
   return {
     context,
@@ -241,8 +294,13 @@ function createInputGainStage(
     setGain: (value: number) => {
       const now = context.currentTime;
       route(value);
-      gain.gain.cancelScheduledValues(now);
+      holdGain(now);
       gain.gain.setTargetAtTime(value, now, 0.01);
+    },
+    setHardZero: () => {
+      const now = context.currentTime;
+      holdGain(now);
+      gain.gain.setValueAtTime(0, now);
     },
     source,
     type: 'input-gain'
@@ -255,7 +313,14 @@ export function setMicrophoneVolume(volume: number): number {
   useRoomDeviceUiStore().microphoneVolume = nextVolume;
   const gain = nextVolume / 100;
   for (const processor of getMicrophoneProcessors(state.micProcessor)) {
-    if (processor.type === 'input-gain') processor.setGain(gain);
+    if (
+      processor.type === 'input-gain' &&
+      state.localStream &&
+      !state.muted &&
+      !state.outputMuted &&
+      (state.microphoneMode !== 'push-to-talk' || state.pushToTalkActive)
+    )
+      processor.setGain(gain);
   }
   return nextVolume;
 }
@@ -412,7 +477,7 @@ function getGateSmoothingCoefficient(milliseconds: number, sampleRate: number): 
   return 1 - Math.exp(-1 / (duration * sampleRate));
 }
 
-async function createRnnoiseNode(context: AudioContext): Promise<AudioNode> {
+async function createRnnoiseNode(context: AudioContext, onCreated: (node: AudioNode) => void): Promise<AudioNode> {
   if (!window.AudioWorkletNode || !context.audioWorklet) {
     throw new Error('AudioWorklet недоступен');
   }
@@ -424,7 +489,9 @@ async function createRnnoiseNode(context: AudioContext): Promise<AudioNode> {
       scriptSrc: RNNOISE_WORKLET_URL
     })
   );
-  return new RNNoiseNode(context);
+  const node = new RNNoiseNode(context);
+  onCreated(node);
+  return node;
 }
 
 function importRnnoiseModule(): Promise<unknown> {
@@ -466,6 +533,7 @@ export function describeMicrophoneError(error: unknown): string {
 }
 
 export function getLocalMicrophoneCapture(): MicrophoneCapture {
+  if (committedCapture?.stream && committedCapture.stream === state.localStream) return committedCapture;
   return {
     processor: state.micProcessor,
     rawStream: state.localRawStream,
@@ -473,12 +541,47 @@ export function getLocalMicrophoneCapture(): MicrophoneCapture {
   };
 }
 
+/** Muting disables tracks without ending them; only terminal source/output loss rejects a prepared capture. */
+export function isMicrophoneCaptureLive(capture: MicrophoneCapture): boolean {
+  const raw = capture.rawStream?.getAudioTracks()[0];
+  const output = capture.stream?.getAudioTracks()[0];
+  return raw?.readyState === 'live' && output?.readyState === 'live';
+}
+
+/** Scalar, device-id-free facts about the committed capture for existing stats polls. */
+export function getMicrophoneCaptureDiagnostics(): {
+  contextState: string | null;
+  desiredMode: NoiseMode;
+  actualMode: NoiseMode | null;
+  rawState: string | null;
+  rawMuted: boolean | null;
+  rawEnabled: boolean | null;
+  outputState: string | null;
+} {
+  const raw = state.localRawStream?.getAudioTracks()[0];
+  const output = state.localStream?.getAudioTracks()[0];
+  return {
+    contextState: state.micProcessor?.[0]?.context.state ?? null,
+    desiredMode: state.noiseMode,
+    actualMode: committedCapture?.stream === state.localStream ? (committedCapture.mode ?? null) : null,
+    rawState: raw?.readyState ?? null,
+    rawMuted: raw?.muted ?? null,
+    rawEnabled: raw?.enabled ?? null,
+    outputState: output?.readyState ?? null
+  };
+}
+
+let committedCapture: MicrophoneCapture | null = null;
+
 export function setLocalMicrophoneCapture(capture: MicrophoneCapture): void {
+  cancelCaptureProgressObservation();
+  committedCapture = capture;
   state.localStream = capture.stream;
   state.localRawStream = capture.rawStream;
   state.micProcessor = capture.processor;
   useRoomDeviceUiStore().microphoneVolume = state.microphoneVolume;
-  setMicrophoneCaptureEnabled(capture, !state.muted);
+  capture.barrier = false;
+  setMicrophoneCaptureEnabled(capture, !state.muted && !state.outputMuted);
   syncMicrophoneProcessing();
 }
 
@@ -518,6 +621,7 @@ export function syncMicrophoneProcessing(): void {
     processingSuspendTimer = 0;
     if (state.micProcessor !== processor || !isMicrophoneProcessingIdle() || context.state !== 'running') return;
     suspendedContexts.add(context);
+    noteOwnedProcessingTransition('suspended');
     context.suspend().catch((error: unknown) => log.warn('microphone processing suspend failed', errorContext(error)));
   }, PROCESSING_SUSPEND_DELAY_MS);
 }
@@ -525,24 +629,45 @@ export function syncMicrophoneProcessing(): void {
 function resumeMicrophoneProcessing(processor: MicrophoneCapture['processor'], context: AudioContext): void {
   suspendedContexts.delete(context);
   // Resolves after any suspend still in flight, so a quick unmute wins.
+  noteOwnedProcessingTransition('running');
   context.resume().catch((error: unknown) => log.warn('microphone processing resume failed', errorContext(error)));
   window.setTimeout(() => {
     if (state.micProcessor !== processor || isMicrophoneProcessingIdle() || context.state === 'running') return;
     log.warn('microphone processing did not resume', { contextState: context.state });
     void import('../ui/devices')
-      .then((devices) => devices.reopenMicrophone())
+      .then((devices) => devices.reopenMicrophoneAfterOwnedResumeFailure())
       .catch((error: unknown) => log.warn('microphone reopen failed', errorContext(error)));
   }, PROCESSING_RESUME_CHECK_MS);
 }
 
 export function setMicrophoneCaptureEnabled(capture: MicrophoneCapture, enabled: boolean): void {
+  const permitted =
+    enabled &&
+    !capture.barrier &&
+    !state.outputMuted &&
+    (state.microphoneMode !== 'push-to-talk' || state.pushToTalkActive);
+  for (const stage of getMicrophoneProcessors(capture.processor)) {
+    if (stage.type === 'input-gain') {
+      if (permitted) stage.setGain(state.microphoneVolume / 100);
+      else stage.setHardZero();
+    }
+  }
   const tracks = new Set([...(capture.stream?.getAudioTracks() || []), ...(capture.rawStream?.getAudioTracks() || [])]);
   for (const track of tracks) {
-    track.enabled = enabled;
+    track.enabled = permitted;
+  }
+  if (permitted && capture.processorFailed && committedCapture === capture) {
+    void import('../ui/devices').then((devices) => devices.fallbackRnnoiseAfterProcessorError(capture));
   }
 }
 
 export function stopMicrophoneCapture(capture: MicrophoneCapture): void {
+  capture.removeProcessorErrorListener?.();
+  delete capture.removeProcessorErrorListener;
+  delete capture.processorFailed;
+  capture.removeRawEndedListener?.();
+  delete capture.removeRawEndedListener;
+  if (committedCapture?.stream && committedCapture.stream === capture.stream) committedCapture = null;
   const processors = getMicrophoneProcessors(capture.processor);
   const contexts = new Set<AudioContext>();
   for (const processor of processors) {

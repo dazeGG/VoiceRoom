@@ -29,9 +29,11 @@ export interface LiveKitHarness {
   screenAttachments: Array<{ peer: Peer; stream: unknown }>;
   detachedScreens: string[];
   retries: { scheduled: Array<{ key: string }>; cleared: number; clearedAll: number };
-  audio: { ensured: Array<{ peerId: string }> };
+  audio: { ensured: Array<{ peerId: string }>; playbackSyncs: number };
+  recovery: { reconciled: number };
   /** Every toast the service showed, in order. */
   toasts: string[];
+  voiceStatuses: string[];
   /** A refusal from the API as the real client raises it. */
   refusal(message: string, code: string, status?: number): Error;
   /**
@@ -50,6 +52,8 @@ export interface LiveKitHarness {
     disconnected: boolean;
     published: Array<{ track: unknown; options: Record<string, unknown> }>;
     unpublished: unknown[];
+    localParticipant: { trackPublications: Map<string, unknown> };
+    remoteParticipants: Map<string, unknown>;
     /** Calls the handlers bound to a RoomEvent, as LiveKit does. */
     emit(event: string, ...args: unknown[]): void;
     /** The server ends the session: unless told otherwise, LiveKit stops the tracks the room published. */
@@ -71,6 +75,12 @@ export async function loadLiveKitHarness(
     failingUrls?: string[];
     /** Runs as a room connects: fills in who is there, or holds its publishing back. */
     onConnect?: (room: { remoteParticipants: Map<string, unknown>; publishGate: Promise<unknown> }) => void;
+    /** Holds one selected publication without blocking the microphone published before it. */
+    onPublish?: (track: unknown) => Promise<void>;
+    /** Holds exact SDK cleanup to verify a stale join cannot affect a newer call. */
+    onUnpublish?: (track: unknown) => Promise<void>;
+    /** Isolate control-sync presence only in the raw-loss service test that invokes it. */
+    stubPresence?: boolean;
     /** What the raw-microphone silence check answers. */
     inputSilent?: () => Promise<boolean>;
     /** Whether a recovery epoch is still current. */
@@ -95,8 +105,10 @@ export async function loadLiveKitHarness(
   const screenAttachments: LiveKitHarness['screenAttachments'] = [];
   const detachedScreens: string[] = [];
   const retries: LiveKitHarness['retries'] = { scheduled: [], cleared: 0, clearedAll: 0 };
-  const audio: LiveKitHarness['audio'] = { ensured: [] };
+  const audio: LiveKitHarness['audio'] = { ensured: [], playbackSyncs: 0 };
+  const recovery = { reconciled: 0 };
   const toasts: string[] = [];
+  const voiceStatuses: string[] = [];
   const rooms: FakeRoom[] = [];
   const failingUrls = new Set<string>(options.failingUrls ?? []);
   class FakeRoom {
@@ -112,6 +124,7 @@ export async function loadLiveKitHarness(
       trackPublications: new Map<string, unknown>(),
       publishTrack: async (track: unknown, publishOptions: Record<string, unknown>) => {
         await this.publishGate;
+        await options.onPublish?.(track);
         this.published.push({ track, options: publishOptions });
         return {
           track,
@@ -122,6 +135,7 @@ export async function loadLiveKitHarness(
         };
       },
       unpublishTrack: async (track: unknown) => {
+        await options.onUnpublish?.(track);
         this.unpublished.push(track);
       }
     };
@@ -180,7 +194,15 @@ export async function loadLiveKitHarness(
 
   vi.doMock('@/features/room/start-ui.store', () => ({ useStartUiStore: () => ({}) }));
   vi.doMock(`${P}/core/room-runtime.store`, () => ({ state }));
-  vi.doMock(`${P}/ui/status`, () => ({ setVoiceConnectionStatus: () => {} }));
+  // Only the raw-loss service test needs a networkless presence edge. Camera
+  // tests use their own room-realtime mock to verify real presence payloads.
+  if (options.stubPresence) vi.doMock(`${P}/room/presence`, () => ({ postState: vi.fn(async () => {}) }));
+  else vi.doUnmock(`${P}/room/presence`);
+  vi.doMock(`${P}/ui/status`, () => ({
+    setVoiceConnectionStatus: (status: string) => {
+      voiceStatuses.push(status);
+    }
+  }));
   vi.doMock(`${P}/ui/toast`, () => ({
     showToast: (message: string) => {
       toasts.push(message);
@@ -195,7 +217,9 @@ export async function loadLiveKitHarness(
   }));
   vi.doMock(`${P}/services/media-playback-service`, () => ({
     queueAudioUnlock: () => {},
-    syncRemoteAudioPlayback: () => {}
+    syncRemoteAudioPlayback: () => {
+      audio.playbackSyncs += 1;
+    }
   }));
   vi.doMock(`${P}/media/cues`, () => ({ clearPeerJoinCue: () => {} }));
   vi.doMock(`${P}/media/profiles`, () => ({
@@ -278,7 +302,9 @@ export async function loadLiveKitHarness(
   vi.doMock(`${P}/recovery/room-recovery`, () => ({
     isCurrentRoomRecoveryEpoch: (epoch: number) => options.recoveryEpochCurrent?.(epoch) ?? true,
     notifyLiveKitDisconnected: () => {},
-    notifyLiveKitReconciled: () => {},
+    notifyLiveKitReconciled: () => {
+      recovery.reconciled += 1;
+    },
     notifyLiveKitReconnecting: () => {},
     setRoomRecoveryLiveKitAdapter: () => {},
     subscribeRoomRecoveryTransitions: () => () => {}
@@ -316,7 +342,9 @@ export async function loadLiveKitHarness(
     detachedScreens,
     retries,
     audio,
+    recovery,
     toasts,
+    voiceStatuses,
     refusal: (message, code, status = 0) => new ApiError(message, status, { code }),
     syncParticipant: (participant) => {
       const room = (state.livekitRoom ??= {});

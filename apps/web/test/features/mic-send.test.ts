@@ -12,6 +12,7 @@ import {
   canRecoverMic,
   createMicSendTracker,
   noteMicSend,
+  observeCaptureProgress,
   startMicSendWatch,
   stopMicSendWatch,
   takeMicPoll,
@@ -76,6 +77,60 @@ test('only a full window of missing sound is a stall', () => {
   tracker.note(next(1));
   const stalls = [0, 0, 0, 0, 0].map(() => tracker.note(next(0))?.stalled);
   expect(stalls).toEqual([false, false, false, false, true]);
+});
+
+test('capture progress is reported only after a full eligible encoder-feed window', () => {
+  const complete = vi.fn();
+  const next = capture();
+  observeCaptureProgress(complete, () => true);
+  noteMicSend(next(1));
+  for (let index = 0; index < 4; index += 1) noteMicSend(next(1));
+  expect(complete).not.toHaveBeenCalled();
+  noteMicSend(next(1));
+  expect(complete).toHaveBeenCalledExactlyOnceWith(true);
+});
+
+test('paused capture cannot verify progress and times out unverified', () => {
+  vi.useFakeTimers();
+  const complete = vi.fn();
+  const next = capture();
+  observeCaptureProgress(complete, () => true);
+  noteMicSend(next(1));
+  for (let index = 0; index < 5; index += 1) noteMicSend({ ...next(1), upstreamPaused: true });
+  expect(complete).not.toHaveBeenCalled();
+  vi.advanceTimersByTime(30_000);
+  expect(complete).toHaveBeenCalledExactlyOnceWith(false);
+});
+
+test.each(['cancel', 'timeout'] as const)('a stale capture completes once as unverified on %s', async (ending) => {
+  vi.useFakeTimers();
+  const progress = await freshImport(() => import('@/features/room/client/room/mic-send'));
+  const complete = vi.fn();
+  progress.observeCaptureProgress(complete, () => false);
+  expect(() => {
+    if (ending === 'cancel') progress.cancelCaptureProgressObservation();
+    else vi.advanceTimersByTime(30_000);
+  }).not.toThrow();
+  expect(complete).toHaveBeenCalledExactlyOnceWith(false);
+  progress.cancelCaptureProgressObservation();
+  vi.advanceTimersByTime(30_000);
+  expect(complete).toHaveBeenCalledOnce();
+});
+
+test('a publication-only identity change cannot restore the previous action progress', async () => {
+  vi.useFakeTimers();
+  const progress = await freshImport(() => import('@/features/room/client/room/mic-send'));
+  const publication = {};
+  let currentPublication = publication;
+  const complete = vi.fn();
+  const next = capture();
+  progress.observeCaptureProgress(complete, () => currentPublication === publication);
+  progress.noteMicSend(next(1));
+  currentPublication = {};
+  for (let index = 0; index < 6; index += 1) progress.noteMicSend(next(1));
+  expect(complete).toHaveBeenCalledExactlyOnceWith(false);
+  vi.advanceTimersByTime(30_000);
+  expect(complete).toHaveBeenCalledOnce();
 });
 
 test('a short blip, however deep, stays under the line of the window', () => {
