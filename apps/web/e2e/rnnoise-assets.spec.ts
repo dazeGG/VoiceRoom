@@ -93,7 +93,7 @@ test('old/new page-version queries load old/new worklets with actual pinned load
   assert.equal(sha256(oldWorklet), expectedOld);
   assert.equal(sha256(newWorklet), expectedNew);
   assert.equal(sha256(loader), 'ed30ea3f71c9e4c43498afc8fe442e8165ca94df3eaf3ddbf4e83d4581ce4256');
-  assert.equal(sha256(wasm), 'd35096e542660d140c5fca130c3789ee48baef124d186e69f536efcaf6c1cf94');
+  assert.equal(sha256(wasm), '351f743afb945c14f74ff636e243cad4eb0e9da95a79a58883cf3f6de8008090');
   const fixture = await startServingRoot();
   try {
     for (const pageVersion of ['old', 'new']) {

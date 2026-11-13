@@ -123,3 +123,72 @@ test('old and new worklets share the pinned WASM ABI; only new bytes fix empty i
     assert.equal(processor.process([[input]], [[output]]), false);
   }
 });
+
+// The shipped WASM, driven through its ABI one 128-sample quantum at a time.
+function shippedWasm() {
+  const instance = new WebAssembly.Instance(new WebAssembly.Module(readFileSync(wasmPath)));
+  const memory = instance.exports.memory;
+  if (!(memory instanceof WebAssembly.Memory)) throw new Error('rnnoise.wasm exports no memory');
+  const call = (name: string, ...args: number[]): number => {
+    const fn = instance.exports[name];
+    if (typeof fn !== 'function') throw new Error(`rnnoise.wasm exports no ${name}`);
+    return Number(Reflect.apply(fn, undefined, args));
+  };
+  return { memory, call };
+}
+
+function runQuanta(input: Float32Array) {
+  const { memory, call } = shippedWasm();
+  const state = call('newState');
+  const output = new Float32Array(input.length);
+  const produced: boolean[] = [];
+  for (let at = 0; at < input.length; at += 128) {
+    new Float32Array(memory.buffer).set(input.subarray(at, at + 128), call('getInput', state) / 4);
+    const out = call('pipe', state, 128) / 4;
+    produced.push(out !== 0);
+    if (out) output.set(new Float32Array(memory.buffer).subarray(out, out + 128), at);
+  }
+  call('deleteState', state);
+  return { output, produced };
+}
+
+// A voiced, speech-like signal the model passes: harmonics of a pitch gliding
+// between 100 and 250 Hz (a fixed pitch would repeat the correlation peak).
+function voicedGlide(seconds: number): Float32Array {
+  const signal = new Float32Array(Math.floor((seconds * 48_000) / 128) * 128);
+  let phase = 0;
+  for (let i = 0; i < signal.length; i++) {
+    const t = i / 48_000;
+    phase += (2 * Math.PI * (175 + 75 * Math.sin(2 * Math.PI * 0.7 * t))) / 48_000;
+    let sample = 0;
+    for (let h = 1; h <= 20; h++) sample += Math.sin(h * phase + h) / h;
+    signal[i] = 0.15 * (0.5 + 0.5 * Math.sin(2 * Math.PI * 3 * t)) * sample;
+  }
+  return signal;
+}
+
+test('shipped WASM answers every quantum from the first one', () => {
+  let seed = 7;
+  const noise = new Float32Array(2000 * 128).map(() => {
+    seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+    return (seed / 2 ** 32 - 0.5) * 0.2;
+  });
+  const { produced } = runQuanta(noise);
+  assert.equal(produced.indexOf(false), -1);
+});
+
+test('shipped WASM delays speech by 1408 samples (29.3 ms)', () => {
+  const input = voicedGlide(4);
+  const { output } = runQuanta(input);
+  let lag = 0;
+  let best = -Infinity;
+  for (let candidate = 0; candidate <= 3000; candidate++) {
+    let sum = 0;
+    for (let i = 24_000; i < 72_000; i++) sum += (input[i] ?? 0) * (output[i + candidate] ?? 0);
+    if (sum > best) {
+      best = sum;
+      lag = candidate;
+    }
+  }
+  assert.ok(Math.abs(lag - 1408) <= 2, `measured lag ${lag}`);
+});
