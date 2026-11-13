@@ -37,6 +37,8 @@ const AREAS: ReadonlyArray<{ folder: string; project: string; ignore?: readonly 
   { folder: 'apps/admin/src', project: '../tsconfig.json' },
   { folder: 'apps/admin/test', project: '../tsconfig.json' },
   { folder: 'apps/admin', project: 'tsconfig.json', ignore: ['src/**', 'test/**'] },
+  // The public site's modules, tests and config (.astro pages are checked by astro check).
+  { folder: 'apps/site', project: 'tsconfig.json', ignore: ['public/**', 'dist/**', '.astro/**'] },
   // The emoji corpus is byte-pinned (G07) and stays as it is.
   { folder: 'packages/shared/src', project: '../tsconfig.test.json', ignore: ['emoji.ts'] },
   { folder: 'packages/shared/test', project: '../tsconfig.test.json' },

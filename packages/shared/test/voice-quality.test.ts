@@ -193,6 +193,18 @@ test('a listener who hears most speakers breaking up is the one hearing badly', 
   );
 });
 
+test('one listener with a bad line leaves everyone it hears green', () => {
+  const rows = [
+    report('a', [heard('b'), heard('c'), heard('d')]),
+    report('b', [heard('a'), heard('c'), heard('d')]),
+    report('c', [heard('a'), heard('b'), heard('d')]),
+    report('d', [heard('a', BROKEN), heard('b', BROKEN), heard('c', BROKEN)])
+  ];
+  const expected = { a: good, b: good, c: good, d: { level: 'bad', cause: 'hears_badly' } };
+  assert.deepEqual(verdicts(rows), expected);
+  assert.deepEqual(verdicts([...rows].reverse()), expected, 'report order is immaterial');
+});
+
 test('a pair that sounds bad while both sound fine elsewhere is what that listener hears', () => {
   assert.deepEqual(
     verdicts([
@@ -205,10 +217,18 @@ test('a pair that sounds bad while both sound fine elsewhere is what that listen
 });
 
 test("between two people the speaker's own line decides whose side the gaps are on", () => {
-  const listenerHears = (uplinkLossPct: number) =>
+  const listenerHears = (uplinkLossPct: number | null) =>
     verdicts([report('a', [heard('b', { ...NOISY, lossPct: 10 })]), report('b', [heard('a')], { uplinkLossPct })]);
   assert.deepEqual(listenerHears(8), { a: good, b: { level: 'unstable', cause: 'heard_badly' } });
   assert.deepEqual(listenerHears(1), { a: { level: 'unstable', cause: 'hears_badly' }, b: good });
+  assert.deepEqual(listenerHears(null), { a: { level: 'unstable', cause: 'hears_badly' }, b: good }, 'uplink unknown');
+});
+
+test('between two people gaps without loss are on the listener side, whatever the report order', () => {
+  const rows = [report('a', [heard('b', { concealedPct: 30.9 })]), report('b', [heard('a')])];
+  const expected = { a: { level: 'bad', cause: 'hears_badly' }, b: good };
+  assert.deepEqual(verdicts(rows), expected);
+  assert.deepEqual(verdicts([...rows].reverse()), expected);
 });
 
 test('a speaker who sends no reports is still judged by its listeners', () => {
@@ -238,4 +258,30 @@ test('the worse trouble names the cause, and being heard badly comes before the 
   assert.deepEqual(room(NOISY).a, { level: 'unstable', cause: 'heard_badly' });
   assert.deepEqual(room(BROKEN).a, { level: 'bad', cause: 'heard_badly' });
   assert.deepEqual(room({}).a, { level: 'unstable', cause: 'delay' });
+});
+
+test('the speaker most listeners hear breaking up is blamed, whatever its own uplink and the report order', () => {
+  const rows = [
+    report('a', [heard('b', { ...BROKEN, lossPct: 10 }), heard('c')]),
+    report('b', [heard('a'), heard('c')], { uplinkLossPct: 0 }),
+    report('c', [heard('a'), heard('b', BROKEN)])
+  ];
+  const expected = { a: good, b: { level: 'bad', cause: 'heard_badly' }, c: good };
+  assert.deepEqual(verdicts(rows), expected);
+  assert.deepEqual(verdicts([...rows].reverse()), expected);
+});
+
+test('both sides of a pattern are blamed, and hearing badly comes before the delay', () => {
+  const rows = [
+    report('a', [heard('b', NOISY), heard('c', NOISY)], { rttMs: 700 }),
+    report('b', [heard('a'), heard('c')]),
+    report('c', [heard('a'), heard('b', NOISY)])
+  ];
+  const expected = {
+    a: { level: 'unstable', cause: 'hears_badly' },
+    b: { level: 'unstable', cause: 'heard_badly' },
+    c: good
+  };
+  assert.deepEqual(verdicts(rows), expected);
+  assert.deepEqual(verdicts([...rows].reverse()), expected);
 });

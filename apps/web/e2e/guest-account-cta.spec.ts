@@ -79,7 +79,7 @@ test('a guest leaving a permanent room is offered an account that keeps the room
     await screen.getByRole('button', { name: 'Создать аккаунт' }).click();
 
     const login = uniqueLogin('leaveguest');
-    await Promise.all([guest.waitForURL((url) => url.pathname === '/'), fillRegistration(guest, login)]);
+    await Promise.all([guest.waitForURL((url) => url.pathname === '/app'), fillRegistration(guest, login)]);
     await expect(guest.locator('.voice-home__card', { hasText: roomName }).first()).toBeVisible({ timeout: 15_000 });
   } finally {
     await guest.context().close();

@@ -172,6 +172,8 @@ export type JoinTiming = Static<typeof JoinTiming>;
 export const VoicePoll = Type.Object({
   ...VoiceTarget.properties,
   rttMs: PollMs,
+  /** Null with this hint means the same RTT source has not produced a new measurement yet. */
+  rttUnchanged: Type.Optional(Type.Literal(true)),
   /** The average time a played sample waited in the jitter buffer over the poll. */
   jitterBufferMs: PollMs,
   /** Audio packets sent, and those the server reported it never got. */

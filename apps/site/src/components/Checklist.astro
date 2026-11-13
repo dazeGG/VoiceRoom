@@ -1,0 +1,28 @@
+---
+// A list with a mark per line: a tick, a cross for what does not fit, or an
+// "i" for a hint. `grid` lays the lines out as tiles.
+import Icon from './Icon.astro';
+
+type Mark = 'yes' | 'no' | 'info';
+interface Props {
+  items: readonly (string | { text: string; mark: Mark })[];
+  tone?: 'yes' | 'no';
+  grid?: boolean;
+}
+const { items, tone = 'yes', grid = false } = Astro.props;
+const ICON = { yes: 'check', no: 'x', info: 'info' } as const;
+const lines = items.map((item) => (typeof item === 'string' ? { text: item, mark: tone as Mark } : item));
+---
+
+<ul class:list={['checklist', { 'checklist--grid': grid }]}>
+  {
+    lines.map((line) => (
+      <li class="checklist__item">
+        <span class:list={['checklist__mark', `checklist__mark--${line.mark}`]}>
+          <Icon name={ICON[line.mark]} size={12} stroke={3} />
+        </span>
+        <span>{line.text}</span>
+      </li>
+    ))
+  }
+</ul>

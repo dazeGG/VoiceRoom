@@ -1,0 +1,20 @@
+---
+interface Props {
+  items: readonly { title: string; text: string }[];
+}
+const { items } = Astro.props;
+---
+
+<ol class="steps">
+  {
+    items.map((item, index) => (
+      <li class="steps__item">
+        <span class="steps__number" aria-hidden="true">
+          {String(index + 1).padStart(2, '0')}
+        </span>
+        <h3 class="steps__title">{item.title}</h3>
+        <p class="steps__text">{item.text}</p>
+      </li>
+    ))
+  }
+</ol>

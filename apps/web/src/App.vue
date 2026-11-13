@@ -80,7 +80,15 @@ onMounted(() => {
   // The realtime module loads lazily: pages without a socket never need it.
   cleanups.push(
     bindDesktopSystem({
-      onWake: () => void import('@/api/realtime').then((realtime) => realtime.getAppRealtime().probeLiveness())
+      onWake: (reason) => {
+        void import('@/api/realtime').then((realtime) => realtime.getAppRealtime().probeLiveness());
+        if (callActivity.active) {
+          // Optional diagnostics must not interfere with the existing wake recovery.
+          void import('@/features/room/client/room/capture-diagnostics')
+            .then((diagnostics) => diagnostics.noteWakeUnlock(reason))
+            .catch(() => undefined);
+        }
+      }
     })
   );
   // Emoji drawn as artwork copy as their characters anywhere in the app.

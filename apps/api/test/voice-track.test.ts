@@ -10,6 +10,7 @@ import {
   noteMicChange,
   noteStayEvent,
   noteVoiceReport,
+  refreshVoice,
   rejoinedVoice,
   VOICE_EVENTS_MAX,
   VOICE_REPORT_STALE_MS,
@@ -34,8 +35,12 @@ const heard = (peerId: string, concealedPct = 0, lost = 0) => {
   const concealedSamples = Math.round((150 * 960 * concealedPct) / 100);
   return { peerId, packets: 150, lost, concealedSamples, gaps: Math.round(concealedSamples / 2400) };
 };
-const poll = (streams: ReturnType<typeof heard>[], extra: { uplinkLost?: number; rttMs?: number | null } = {}) => ({
+const poll = (
+  streams: ReturnType<typeof heard>[],
+  extra: { uplinkLost?: number; rttMs?: number | null; rttUnchanged?: true } = {}
+) => ({
   rttMs: extra.rttMs === undefined ? 40 : extra.rttMs,
+  ...(extra.rttUnchanged ? { rttUnchanged: true as const } : {}),
   jitterBufferMs: 30,
   uplink: { packets: 150, lost: extra.uplinkLost ?? 0 },
   transport: 'udp' as const,
@@ -230,9 +235,9 @@ test('a delay is read from most of the latest polls, so one spike of the round t
   round(900);
   assert.deepEqual(verdictOfA(), { level: 'good', cause: null }, 'two of the latest five');
   round(900);
-  assert.deepEqual(verdictOfA(), { level: 'unstable', cause: 'delay' }, 'three of the latest five');
+  assert.deepEqual(verdictOfA(), { level: 'unstable', cause: 'delay' }, 'three high receipts fit the wider window');
   round(40);
-  assert.deepEqual(verdictOfA(), { level: 'good', cause: null }, 'the oldest of the three has left the five');
+  assert.deepEqual(verdictOfA(), { level: 'good', cause: null }, 'the oldest high receipt falls out of the window');
 });
 
 test('the first polls of a call say nothing of its delay', () => {
@@ -245,6 +250,102 @@ test('the first polls of a call say nothing of its delay', () => {
   noteVoiceReport(peers, peer(peers, 'b'), poll([heard('a')]), T + 6000);
   noteVoiceReport(peers, peer(peers, 'a'), poll([heard('b')], { rttMs: 900 }), T + 6100);
   assert.deepEqual(peer(peers, 'a').voice?.verdict, { level: 'unstable', cause: 'delay' }, 'three polls measured');
+});
+
+test('RTT receipts settle from three, null clears, and exact age limits exclude stale samples', () => {
+  const peers = room('a', 'b');
+  const send = (id: string, rttMs: number | null, at: number) =>
+    noteVoiceReport(peers, peer(peers, id), poll([heard(id === 'a' ? 'b' : 'a')], { rttMs }), at);
+  for (const at of [T + 1000, T + 4000, T + 7000]) send('a', 1000, at);
+  for (const at of [T + 1000, T + 4000, T + 7000]) send('b', 40, at + 100);
+  assert.equal(peer(peers, 'a').voice?.verdict?.cause, 'delay');
+  send('a', null, T + 12_900);
+  send('b', 40, T + 18_800);
+  assert.notEqual(peer(peers, 'a').voice?.verdict?.cause, 'delay');
+  assert.equal(peer(peers, 'a').voice?.rttPolls.length, 0);
+});
+
+test('sparse RTCP receipts settle across unchanged polls without counting them as samples', () => {
+  const peers = room('a', 'b');
+  const send = (id: string, at: number, rttMs: number | null, rttUnchanged = false) =>
+    noteVoiceReport(
+      peers,
+      peer(peers, id),
+      poll([heard(id === 'a' ? 'b' : 'a')], { rttMs, ...(rttUnchanged ? { rttUnchanged: true } : {}) }),
+      T + at
+    );
+  for (const at of [0, 6000, 12_000]) {
+    send('a', at, 1000);
+    send('b', at, 40);
+    const counted = peer(peers, 'a').voice?.minutes.reduce((sum, minute) => sum + minute.rttPolls, 0);
+    send('a', at + 3000, null, true);
+    send('b', at + 3000, null, true);
+    assert.equal(
+      peer(peers, 'a').voice?.minutes.reduce((sum, minute) => sum + minute.rttPolls, 0),
+      counted
+    );
+  }
+  assert.deepEqual(
+    peer(peers, 'a').voice?.rttPolls.map((sample) => sample.at - T),
+    [0, 6000, 12_000]
+  );
+  assert.equal(peer(peers, 'a').voice?.verdict?.cause, 'delay');
+  send('a', 20_999, null, true);
+  assert.equal(peer(peers, 'a').voice?.rttPolls.length, 2, 'old samples still expire on unchanged polls');
+  send('a', 21_000, null, true);
+  assert.equal(peer(peers, 'a').voice?.rttPolls.length, 0, 'unchanged reports do not extend last real receipt');
+  send('a', 24_000, 900, true);
+  assert.deepEqual(
+    peer(peers, 'a').voice?.rttPolls.map((sample) => sample.value),
+    [900],
+    'numeric still counts when marked'
+  );
+});
+
+test('RTT sample age 20s and last-receipt age 9s have distinct exact boundaries', () => {
+  const peers = room('a', 'b');
+  for (const at of [1000, 8000, 15_000]) {
+    noteVoiceReport(peers, peer(peers, 'a'), poll([heard('b')], { rttMs: 1000 }), T + at);
+    noteVoiceReport(peers, peer(peers, 'b'), poll([heard('a')], { rttMs: 40 }), T + at);
+  }
+  refreshVoice(peers, T + 20_999);
+  assert.equal(peer(peers, 'a').voice?.verdict?.cause, 'delay');
+  refreshVoice(peers, T + 21_000);
+  assert.notEqual(peer(peers, 'a').voice?.verdict?.cause, 'delay');
+  assert.equal(peer(peers, 'a').voice?.rttPolls.length, 2);
+  refreshVoice(peers, T + 24_000);
+  assert.equal(peer(peers, 'a').voice?.rttPolls.length, 0);
+
+  const clustered = room('a', 'b');
+  for (const at of [7000, 7500, 8000]) {
+    noteVoiceReport(clustered, peer(clustered, 'a'), poll([heard('b')], { rttMs: 1000 }), T + at);
+    noteVoiceReport(clustered, peer(clustered, 'b'), poll([heard('a')], { rttMs: 40 }), T + at);
+  }
+  refreshVoice(clustered, T + 16_999);
+  assert.equal(peer(clustered, 'a').voice?.verdict?.cause, 'delay');
+  refreshVoice(clustered, T + 17_000);
+  assert.equal(peer(clustered, 'a').voice?.rttPolls.length, 0);
+  assert.notEqual(peer(clustered, 'a').voice?.verdict?.cause, 'delay');
+});
+
+test('null and rejoin require three new RTT receipts before delay can return', () => {
+  const peers = room('a', 'b');
+  const send = (at: number, value: number | null) => {
+    noteVoiceReport(peers, peer(peers, 'a'), poll([heard('b')], { rttMs: value }), T + at);
+    noteVoiceReport(peers, peer(peers, 'b'), poll([heard('a')], { rttMs: 40 }), T + at);
+  };
+  for (const at of [0, 3300, 6600]) send(at, 1000);
+  assert.equal(peer(peers, 'a').voice?.verdict?.cause, 'delay');
+  send(9000, null);
+  assert.notEqual(peer(peers, 'a').voice?.verdict?.cause, 'delay');
+  send(9900, 1000);
+  send(12_900, 1000);
+  assert.notEqual(peer(peers, 'a').voice?.verdict?.cause, 'delay');
+  send(15_900, 1000);
+  assert.equal(peer(peers, 'a').voice?.verdict?.cause, 'delay');
+  const freshSeat = rejoinedVoice(peer(peers, 'a').voice);
+  peers.set('a', { id: 'a', voice: freshSeat });
+  assert.equal(freshSeat?.rttPolls.length, 0);
 });
 
 test('a minute sums how the microphone reached its encoder, and a poll without it adds nothing', () => {

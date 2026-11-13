@@ -99,6 +99,9 @@ test('a stats poll names the voice session and carries counts only; its verdict 
     });
   assert.equal(poll().ok, true);
   assert.equal(poll({ rttMs: null, transport: null, heard: [] }).ok, true, 'alone in the room, before ICE settles');
+  assert.equal(poll({ rttMs: null, rttUnchanged: true }).ok, true, 'new clients can skip an unchanged sample');
+  assert.equal(poll({ rttMs: null, rttUnchanged: false }).ok, false);
+  assert.equal(poll({ rttMs: -1, rttUnchanged: true }).ok, false, 'the hint never bypasses RTT validation');
   assert.equal(poll({ heard: [{ ...stream, lost: -1 }] }).ok, false);
   assert.equal(poll({ heard: [{ ...stream, gaps: 0.5 }] }).ok, false);
   assert.equal(poll({ heard: Array.from({ length: 65 }, () => stream) }).ok, false);

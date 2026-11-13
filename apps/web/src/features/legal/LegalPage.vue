@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// The frame of a public legal page: a way back to the app, the document
+// The frame of a public legal page: a way back to the site, the document
 // title with its effective date, the other documents, and the text.
 import { ArrowLeft } from '@lucide/vue';
 import { computed, onBeforeUnmount, onMounted, watchEffect } from 'vue';
@@ -34,9 +34,8 @@ onBeforeUnmount(() => {
 <template>
   <div class="legal-page">
     <header class="legal-page__header">
-      <RouterLink class="legal-page__back" to="/"
-        ><ArrowLeft :size="16" aria-hidden="true" />{{ LEGAL.service }}</RouterLink
-      >
+      <!-- A page load: Caddy decides between the public site and the app (Caddyfile). -->
+      <a class="legal-page__back" href="/"><ArrowLeft :size="16" aria-hidden="true" />{{ LEGAL.service }}</a>
       <nav class="legal-page__nav" aria-label="Документы">
         <RouterLink
           v-for="document in LEGAL_DOCUMENTS"

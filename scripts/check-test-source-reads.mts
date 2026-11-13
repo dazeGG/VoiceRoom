@@ -14,7 +14,14 @@ import { Value } from 'typebox/value';
 
 const repoRoot = resolve(import.meta.dirname, '..');
 const BASELINE_PATH = resolve(repoRoot, 'config/test-source-reads.json');
-const TREES = ['apps/api/test', 'apps/admin/test', 'apps/web/test', 'packages/shared/test', 'scripts/test'];
+const TREES = [
+  'apps/api/test',
+  'apps/admin/test',
+  'apps/site/test',
+  'apps/web/test',
+  'packages/shared/test',
+  'scripts/test'
+];
 
 const CODE_PATH = /(['"`])([^'"`\n]*\.(?:ts|tsx|mts|cts|vue|js|mjs|cjs)|src|[^'"`\n]*\bsrc\/[^'"`\n]*)\1/g;
 const CODE_EXTENSION = /\.(?:ts|tsx|mts|cts|vue|js|mjs|cjs)$/;

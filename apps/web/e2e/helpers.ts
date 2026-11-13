@@ -70,7 +70,7 @@ function authDialog(page: Page, name: 'Вход' | 'Создать аккаун�
 }
 
 // Register a fresh account through the UI. On success the app redirects to
-// the lobby ("/"), where the create-room button is visible.
+// the lobby ("/app"), where the create-room button is visible.
 export async function registerViaUi(page: Page, login: string): Promise<void> {
   await page.goto('/register');
   const dialog = authDialog(page, 'Создать аккаунт');
@@ -79,7 +79,7 @@ export async function registerViaUi(page: Page, login: string): Promise<void> {
   await dialog.getByLabel('Пароль', { exact: true }).fill(PASSWORD);
   await dialog.getByLabel('Повторите пароль').fill(PASSWORD);
   await Promise.all([
-    page.waitForURL((url) => url.pathname === '/' && url.search === ''),
+    page.waitForURL((url) => url.pathname === '/app' && url.search === ''),
     dialog.getByRole('button', { name: 'Создать аккаунт', exact: true }).click()
   ]);
   // Lobby create button confirms we landed authenticated.
@@ -95,7 +95,7 @@ export async function loginViaUi(page: Page, login: string): Promise<void> {
   await dialog.getByLabel('Логин').fill(login);
   await dialog.getByLabel('Пароль', { exact: true }).fill(PASSWORD);
   await Promise.all([
-    page.waitForURL((url) => url.pathname === '/' && url.search === ''),
+    page.waitForURL((url) => url.pathname === '/app' && url.search === ''),
     dialog.getByRole('button', { name: 'Войти', exact: true }).click()
   ]);
   await expect(page.getByRole('button', { name: 'Создать комнату' })).toBeVisible({ timeout: 15_000 });
@@ -120,7 +120,7 @@ export async function createPermanentRoom(page: Page, name: string): Promise<str
   const created = parse(RoomCreated, answer);
   await expect(dialog).toBeHidden({ timeout: 15_000 });
 
-  await page.goto('/');
+  await page.goto('/app');
   await expect(page.getByRole('button', { name: 'Создать комнату' })).toBeVisible({ timeout: 15_000 });
   const card = page.locator('.voice-home__card', { hasText: name }).first();
   await expect(card).toBeVisible({ timeout: 15_000 });

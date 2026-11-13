@@ -104,6 +104,7 @@ GitHub-аналог GitLab CI/CD variables находится здесь:
 | `PORT` | `3000` | API port. |
 | `SOCKET_PATH` | empty | Unix socket вместо TCP, если нужен. |
 | `API_METRICS_ALLOWED_REMOTE` | `127.0.0.1` | Caddy allowlist для публичного пути `/api/metrics`; задайте адрес или диапазон, с которого собираются метрики, иначе endpoint закрыт снаружи. Несколько адресов — через пробел. |
+| `CANONICAL_HOST` | `voiceroom.ru` | Единственный хост, который поисковикам можно индексировать. На любом другом хосте (dev-стенд, своя копия) Caddy добавляет ко всем ответам `X-Robots-Tag: noindex`. Публичный сайт (`apps/site`) указывает canonical-адреса на `https://voiceroom.ru`; своей копии, которую нужно индексировать, задайте здесь свой домен и поменяйте `SITE_ORIGIN` в `apps/site/src/site.ts`. |
 | `ANDROID_RELEASE_CERT_SHA256` | пусто | SHA-256 отпечаток ключа подписи Android-приложения (`AA:BB:…`, 32 байта, верхний регистр, через двоеточие; только шестнадцатеричные цифры и двоеточия, иначе Caddy не загрузит конфиг). Caddy отдаёт по нему `/.well-known/assetlinks.json` для пакета `voiceroom.app`, и ссылки `https://<DOMAIN>/r/<id>` открываются в приложении. Пусто или неверный формат — 404. На dev-стенде указывают отпечаток отладочного ключа: `FA:C6:17:45:DC:09:03:78:6F:B9:ED:E6:2A:96:2B:39:9F:73:48:F0:BB:6F:89:9B:83:32:66:75:91:03:3B:9C`. |
 | `DESKTOP_RELEASE_REPO` | `dazeGG/VoiceRoomDesktop` | Repo для latest desktop release. |
 | `DESKTOP_RELEASE_CACHE_MS` | `600000` | Cache TTL для desktop release metadata. |

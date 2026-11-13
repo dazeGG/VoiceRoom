@@ -18,13 +18,20 @@ import {
 import { currentCpuPressure, isSystemBusy, noteCallStrain, type StrainCounts } from './call-strain';
 import { createLossWindow } from './loss-window';
 import { noteMicSend, takeMicPoll, type MicReading } from './mic-send';
-import { getMicrophoneProcessors, isMicrophoneProcessingIdle } from '../services/microphone-service';
+import {
+  getMicrophoneCaptureDiagnostics,
+  getMicrophoneProcessors,
+  isMicrophoneProcessingIdle
+} from '../services/microphone-service';
+import { noteCaptureHealth } from './capture-diagnostics';
 
 import { createLogger, errorContext } from '@/shared/log';
 
 const log = createLogger('room:stats');
 
 let peerLatencyTimer = 0;
+let pollGeneration = 0;
+let pendingPoll: (() => boolean) | null = null;
 
 export function startPeerLatencyStats(): void {
   if (peerLatencyTimer) return;
@@ -38,9 +45,20 @@ export function startPeerLatencyStats(): void {
 export function stopPeerLatencyStats(): void {
   if (peerLatencyTimer) window.clearInterval(peerLatencyTimer);
   peerLatencyTimer = 0;
+  pollGeneration += 1;
+  pendingPoll = null;
   previousInbound = new Map();
   previousOutbound = null;
   previousChecks = null;
+  previousRtt = null;
+  lastFreshRtt = null;
+  reportedRttMs = null;
+  rttUnchanged = false;
+  state.localPingMs = null;
+  lastMicSourceAvailable = false;
+  lastMicUpstreamPaused = null;
+  lastStatsReadMs = 0;
+  lastStatsReceivedAt = null;
   previousVideo = new Map();
   previousLoad = null;
   inboundLoss.reset();
@@ -48,23 +66,50 @@ export function stopPeerLatencyStats(): void {
 }
 
 async function updatePeerLatencyStats(): Promise<void> {
-  if (!state.joined) return;
+  if (!state.joined || pendingPoll?.()) return;
 
-  const outbound = await updateLocalLiveKitLatency();
-  const inbound = await updateInboundAudioStats();
-  const video = await readVideoStrain();
-  const load = await readDesktopLoad();
-  if (!state.joined) return;
-  const sample = { ...state.localNetwork, rttMs: state.localPingMs };
-  recordNetworkSample(sample);
-  recordPollCounts({ ...inbound, ...outbound });
-  noteCallStrain({ ...inbound, ...video });
-  recordLoadCounts(load);
-  postVoicePoll(inbound, outbound, load);
+  const generation = pollGeneration;
+  const { roomId, peerId, sessionToken, livekitRoom, localMicPublication } = state;
+  const publication = localMicPublication || findLocalMicrophonePublication() || findFirstLocalPublication();
+  const track = publication?.track;
+  const isCurrent = () =>
+    generation === pollGeneration &&
+    state.joined &&
+    state.roomId === roomId &&
+    state.peerId === peerId &&
+    state.sessionToken === sessionToken &&
+    state.livekitRoom === livekitRoom &&
+    state.localMicPublication === localMicPublication &&
+    (state.localMicPublication || findLocalMicrophonePublication() || findFirstLocalPublication()) === publication &&
+    publication?.track === track;
+  // A replaced room or sender may start polling even if its old read never settles.
+  pendingPoll = isCurrent;
+  try {
+    const outbound = await updateLocalLiveKitLatency(isCurrent);
+    if (!isCurrent()) return;
+    const inbound = await updateInboundAudioStats(isCurrent);
+    if (!isCurrent()) return;
+    const video = await readVideoStrain(isCurrent);
+    if (!isCurrent()) return;
+    const load = await readDesktopLoad(isCurrent);
+    if (!isCurrent()) return;
+    const sample = { ...state.localNetwork, rttMs: reportedRttMs };
+    recordNetworkSample(sample);
+    recordPollCounts({ ...inbound, ...outbound });
+    noteCallStrain({ ...inbound, ...video });
+    recordLoadCounts(load);
+    postVoicePoll(inbound, outbound, load);
+  } finally {
+    if (pendingPoll === isCurrent) pendingPoll = null;
+  }
 }
 
 // The longest round trip a poll reports; past it the link is gone anyway.
 const MAX_REPORTED_MS = 600_000;
+let lastMicSourceAvailable = false;
+let lastMicUpstreamPaused: boolean | null = null;
+let lastStatsReadMs = 0;
+let lastStatsReceivedAt: number | null = null;
 
 /** How the computer did over the poll, for the admin panel's call page; nothing where the client can tell nothing. */
 function cpuPoll(load: LoadCounts): CpuPoll | null {
@@ -80,13 +125,32 @@ function cpuPoll(load: LoadCounts): CpuPoll | null {
 function postVoicePoll(inbound: InboundCounts, outbound: OutboundCounts, load: LoadCounts): void {
   const report = (ms: number | null) => (ms === null ? null : Math.min(MAX_REPORTED_MS, Math.max(0, ms)));
   const mic = takeMicPoll();
+  const capture = getMicrophoneCaptureDiagnostics();
+  noteCaptureHealth({
+    generation: pollGeneration,
+    expectedMs: mic?.expectedMs ?? 0,
+    deliveredMs: mic?.deliveredMs ?? 0,
+    contextMs: mic?.contextMs ?? 0,
+    ...capture,
+    intent:
+      state.microphoneMode === 'push-to-talk' && state.muted && !state.outputMuted
+        ? 'ptt-idle'
+        : state.muted || state.outputMuted
+          ? 'owned-mute'
+          : 'active',
+    upstreamPaused: lastMicUpstreamPaused,
+    sourceAvailable: lastMicSourceAvailable,
+    statsReadMs: lastStatsReadMs,
+    ageMs: lastStatsReceivedAt === null ? null : Math.max(0, performance.now() - lastStatsReceivedAt)
+  });
   const cpu = cpuPoll(load);
   const joinTiming = takeJoinTiming();
   reportVoicePoll({
     roomId: state.roomId,
     peerId: state.peerId,
     sessionToken: state.sessionToken,
-    rttMs: report(state.localPingMs),
+    rttMs: report(reportedRttMs),
+    ...(rttUnchanged ? { rttUnchanged: true } : {}),
     jitterBufferMs: report(inbound.jitterBufferMs),
     uplink: { packets: outbound.outboundPackets, lost: outbound.outboundLost },
     transport: state.localNetwork.transport,
@@ -139,7 +203,7 @@ interface InboundReading {
 }
 let previousInbound = new Map<string, InboundReading>();
 let previousOutbound: { lost: number; sent: number } | null = null;
-let previousChecks: { seconds: number; checks: number } | null = null;
+let previousChecks: { seconds: number; checks: number; identity: string; publication: unknown } | null = null;
 const inboundLoss = createLossWindow();
 const outboundLoss = createLossWindow();
 
@@ -157,7 +221,7 @@ type OutboundCounts = Pick<PollCounts, 'outboundPackets' | 'outboundLost' | 'rtt
 /** The growth of a counter since the last reading; a counter that went back (a new stream) starts over from zero. */
 const growth = (now: number, before: number) => (now >= before ? now - before : now);
 
-async function updateInboundAudioStats(): Promise<InboundCounts> {
+async function updateInboundAudioStats(isCurrent: () => boolean): Promise<InboundCounts> {
   const counts: InboundCounts = {
     inboundPackets: 0,
     inboundLost: 0,
@@ -179,6 +243,7 @@ async function updateInboundAudioStats(): Promise<InboundCounts> {
       const voice = isMicrophonePublication(publication);
       const track = publication.track;
       const stats = readRtcStats(await track?.getRTCStatsReport?.().catch(() => undefined));
+      if (!isCurrent()) return counts;
       for (const report of stats.values()) {
         if (report.type !== 'inbound-rtp' || report.kind !== 'audio') continue;
         const reading: InboundReading = {
@@ -253,7 +318,7 @@ let previousVideo = new Map<string, VideoReading>();
  * only while the system is busy, other people's frames that arrived and those
  * dropped, with their packets and the lost ones. No video, no stats read.
  */
-async function readVideoStrain(): Promise<VideoCounts> {
+async function readVideoStrain(isCurrent: () => boolean): Promise<VideoCounts> {
   const counts: VideoCounts = {
     encodeSeconds: 0,
     encodeCpuSeconds: 0,
@@ -278,6 +343,7 @@ async function readVideoStrain(): Promise<VideoCounts> {
   const current = new Map<string, VideoReading>();
   for (const track of tracks) {
     const stats = readRtcStats(await track?.getRTCStatsReport?.().catch(() => undefined));
+    if (!isCurrent()) return counts;
     for (const report of stats.values()) {
       if (report.kind !== 'video' || (report.type !== 'outbound-rtp' && report.type !== 'inbound-rtp')) continue;
       const reading: VideoReading = {
@@ -333,11 +399,11 @@ function toLoadReading(value: unknown): LoadCounts | null {
  * VoiceRoom's processes apart from the whole computer. The first reading only
  * sets the baseline; outside the app, or with an older app, nothing is read.
  */
-async function readDesktopLoad(): Promise<LoadCounts> {
+async function readDesktopLoad(isCurrent: () => boolean): Promise<LoadCounts> {
   const bridge = window.voiceRoomDesktopLoad;
   if (typeof bridge?.read !== 'function') return NO_LOAD;
   const reading = toLoadReading(await bridge.read().catch(() => null));
-  if (!reading) return NO_LOAD;
+  if (!isCurrent() || !reading) return NO_LOAD;
   const before = previousLoad;
   previousLoad = reading;
   if (
@@ -357,43 +423,137 @@ async function readDesktopLoad(): Promise<LoadCounts> {
 
 const NO_OUTBOUND: OutboundCounts = { outboundPackets: 0, outboundLost: 0, rttSeconds: 0, rttChecks: 0 };
 
-async function updateLocalLiveKitLatency(): Promise<OutboundCounts> {
+async function updateLocalLiveKitLatency(isCurrent: () => boolean): Promise<OutboundCounts> {
   try {
     const publication = state.localMicPublication || findLocalMicrophonePublication() || findFirstLocalPublication();
+    const readStarted = performance.now();
     const stats = readRtcStats(await publication?.track?.getRTCStatsReport?.());
+    if (!isCurrent()) return NO_OUTBOUND;
+    lastStatsReadMs = Math.max(0, Math.round(performance.now() - readStarted));
+    lastStatsReceivedAt = performance.now();
+    lastMicSourceAvailable = [...stats.values()].some(
+      (report) => report.type === 'media-source' && report.kind === 'audio'
+    );
+    lastMicUpstreamPaused = publication?.track ? publication.track.isUpstreamPaused === true : null;
     noteMicSend(readMicSend(stats));
-    const rttMs = getRoundTripTimeFromStats(stats);
-    if (rttMs !== null) {
-      state.localPingMs = Math.max(0, Math.round(rttMs));
-    }
+    const rtt = observeRoundTripTime(stats, state.roomId, publication);
+    reportedRttMs = rtt.kind === 'fresh' ? Math.round(rtt.valueMs) : null;
+    rttUnchanged = rtt.kind === 'unchanged';
+    state.localPingMs = lastFreshRtt === null ? null : Math.round(lastFreshRtt.valueMs);
     const outbound = outboundNetwork(stats);
     const packets = noteOutboundPackets(outbound.packetsLost, outbound.packetsSent);
     state.localNetwork.outboundLossPct = outboundLoss.add(packets.lost, packets.sent);
     state.localNetwork.transport = outbound.transport;
-    const checks = noteChecks(outbound.rttSeconds, outbound.rttChecks);
+    const pairId = [...stats.values()].find(isActiveCandidatePair)?.id ?? null;
+    const checks = noteChecks(outbound.rttSeconds, outbound.rttChecks, `${state.roomId}:${pairId}`, publication);
     return { outboundPackets: packets.sent, outboundLost: packets.lost, ...checks };
   } catch (error) {
+    if (!isCurrent()) return NO_OUTBOUND;
+    state.localPingMs = null;
+    reportedRttMs = null;
+    rttUnchanged = false;
+    lastFreshRtt = null;
+    previousRtt = null;
+    lastMicSourceAvailable = false;
+    lastMicUpstreamPaused = null;
+    lastStatsReceivedAt = null;
     log.warn('liveKit latency unavailable', errorContext(error));
     return NO_OUTBOUND;
   }
 }
 
-function getRoundTripTimeFromStats(stats: Map<string, RtcStat>): number | null {
-  let candidatePairRttMs: number | null = null;
-  let remoteInboundRttMs: number | null = null;
-  for (const report of stats.values()) {
-    // No responses means this pair has not measured RTT yet; keep the RTCP fallback.
-    if (isActiveCandidatePair(report) && report.currentRoundTripTime !== undefined && report.responsesReceived !== 0) {
-      candidatePairRttMs = report.currentRoundTripTime * 1000;
-      continue;
-    }
+interface RttObservation {
+  identity: string;
+  valueMs: number;
+  timestamp: number | undefined;
+  counter: number | undefined;
+}
+let previousRtt: (RttObservation & { roomId: string; publication: unknown; observedAt: number }) | null = null;
+let lastFreshRtt: { valueMs: number; at: number } | null = null;
+let reportedRttMs: number | null = null;
+let rttUnchanged = false;
+const RTT_LAST_RECEIPT_MS = 9000;
 
-    if (remoteInboundRttMs === null && report.type === 'remote-inbound-rtp' && report.roundTripTime !== undefined) {
-      remoteInboundRttMs = report.roundTripTime * 1000;
-    }
+type RttReading = { kind: 'fresh'; valueMs: number } | { kind: 'unchanged' } | { kind: 'invalid' };
+
+/** Only a new measurement is a fresh ping. Counter-less reports have observation-only timestamp confidence. */
+export function selectFreshRoundTripTime(
+  stats: Map<string, RtcStat>,
+  roomId: string,
+  publication: unknown,
+  now = performance.now()
+): number | null {
+  const reading = observeRoundTripTime(stats, roomId, publication, now);
+  return reading.kind === 'fresh' ? reading.valueMs : null;
+}
+
+function observeRoundTripTime(
+  stats: Map<string, RtcStat>,
+  roomId: string,
+  publication: unknown,
+  now = performance.now()
+): RttReading {
+  const candidate = [...stats.values()].find(isActiveCandidatePair);
+  const remote = [...stats.values()].find(
+    (report) => report.type === 'remote-inbound-rtp' && report.roundTripTime !== undefined
+  );
+  const value = candidate?.currentRoundTripTime;
+  const candidateMeasured =
+    value !== undefined &&
+    value <= MAX_REPORTED_MS / 1000 &&
+    (candidate?.responsesReceived !== undefined ? candidate.responsesReceived > 0 : value > 0);
+  const source = candidateMeasured ? candidate : remote;
+  const seconds = source === candidate ? value : remote?.roundTripTime;
+  if (!source || seconds === undefined || seconds > MAX_REPORTED_MS / 1000) {
+    previousRtt = null;
+    lastFreshRtt = null;
+    return { kind: 'invalid' };
   }
-
-  return candidatePairRttMs ?? remoteInboundRttMs;
+  const observation: RttObservation = {
+    identity: `${candidate?.id ?? 'none'}:${source.type}:${source.id}`,
+    valueMs: seconds * 1000,
+    timestamp: source.timestamp,
+    counter: source === candidate ? source.responsesReceived : source.roundTripTimeMeasurements
+  };
+  const before = previousRtt;
+  previousRtt = { ...observation, roomId, publication, observedAt: now };
+  if (
+    !before ||
+    before.roomId !== roomId ||
+    before.publication !== publication ||
+    before.identity !== observation.identity
+  ) {
+    lastFreshRtt = null;
+    return { kind: 'invalid' };
+  }
+  if (now < before.observedAt) {
+    lastFreshRtt = null;
+    return { kind: 'invalid' };
+  }
+  if (observation.counter !== undefined) {
+    if (before.counter === undefined || observation.counter < before.counter) {
+      lastFreshRtt = null;
+      return { kind: 'invalid' };
+    }
+    if (observation.counter === before.counter) {
+      if (lastFreshRtt && now - lastFreshRtt.at < RTT_LAST_RECEIPT_MS) return { kind: 'unchanged' };
+      lastFreshRtt = null;
+      return { kind: 'invalid' };
+    }
+  } else if (
+    observation.timestamp === undefined ||
+    before.timestamp === undefined ||
+    observation.timestamp < before.timestamp
+  ) {
+    lastFreshRtt = null;
+    return { kind: 'invalid' };
+  } else if (observation.timestamp === before.timestamp) {
+    if (lastFreshRtt && now - lastFreshRtt.at < RTT_LAST_RECEIPT_MS) return { kind: 'unchanged' };
+    lastFreshRtt = null;
+    return { kind: 'invalid' };
+  }
+  lastFreshRtt = { valueMs: observation.valueMs, at: now };
+  return { kind: 'fresh', valueMs: observation.valueMs };
 }
 
 /** The poll's own upstream packets from the cumulative counters; the first reading only sets the baseline. */
@@ -407,11 +567,23 @@ function noteOutboundPackets(packetsLost: number | null, packetsSent: number | n
 }
 
 /** The poll's own connection checks; a new pair (an ICE restart) starts a new baseline. */
-function noteChecks(seconds: number | null, checks: number | null): Pick<PollCounts, 'rttSeconds' | 'rttChecks'> {
+function noteChecks(
+  seconds: number | null,
+  checks: number | null,
+  identity: string,
+  publication: unknown
+): Pick<PollCounts, 'rttSeconds' | 'rttChecks'> {
   if (seconds === null || checks === null) return { rttSeconds: 0, rttChecks: 0 };
   const before = previousChecks;
-  previousChecks = { seconds, checks };
-  if (!before || checks < before.checks || seconds < before.seconds) return { rttSeconds: 0, rttChecks: 0 };
+  previousChecks = { seconds, checks, identity, publication };
+  if (
+    !before ||
+    before.identity !== identity ||
+    before.publication !== publication ||
+    checks <= before.checks ||
+    seconds < before.seconds
+  )
+    return { rttSeconds: 0, rttChecks: 0 };
   return { rttSeconds: seconds - before.seconds, rttChecks: checks - before.checks };
 }
 

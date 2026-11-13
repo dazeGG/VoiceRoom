@@ -1,0 +1,41 @@
+---
+// Caddy answers every unknown address with this page and status 404 (Caddyfile).
+// Most people land here from a mistyped room link, so the page asks for the code.
+import Base from '../layouts/Base.astro';
+import { APP_HREF, NOT_FOUND_PAGE, PAGES, START_ROOM_HREF } from '../site.ts';
+---
+
+<Base page={NOT_FOUND_PAGE} noindex>
+  <section class="not-found">
+    <p class="hero__kicker not-found__kicker"><span class="hero__dot" aria-hidden="true"></span>Ошибка 404</p>
+    <h1 class="not-found__title">Такой страницы нет</h1>
+    <p class="not-found__lead">
+      Возможно, ссылка устарела или в ней опечатка. Если вас позвали в комнату — введите код или вставьте ссылку.
+    </p>
+    <form class="join" action={APP_HREF} method="get" data-join-room>
+      <label class="join__label" for="room-code">Код или ссылка комнаты</label>
+      <div class="join__row">
+        <input
+          id="room-code"
+          class="join__input"
+          type="text"
+          inputmode="url"
+          placeholder="код-комнаты"
+          autocomplete="off"
+          autocapitalize="off"
+          spellcheck="false"
+        />
+        <button class="join__submit" type="submit">Войти</button>
+      </div>
+      <p class="join__hint">Ссылки на комнаты выглядят так: <code>voiceroom.ru/r/код-комнаты</code></p>
+    </form>
+    <div class="not-found__more">
+      <a class="site-button site-button--ghost" href={START_ROOM_HREF}>Создать новую комнату</a>
+      <a class="not-found__home" href={PAGES.home.path}>На главную</a>
+    </div>
+  </section>
+</Base>
+
+<script>
+  import '../scripts/join-room.ts';
+</script>

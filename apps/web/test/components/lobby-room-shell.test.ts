@@ -28,7 +28,7 @@ beforeEach(() => {
   stubMatchMedia();
 });
 afterEach(() => {
-  window.history.replaceState(null, '', '/');
+  window.history.replaceState(null, '', '/app');
 });
 
 const invite = {
@@ -102,7 +102,7 @@ test('leaving the room the lobby shows closes it and gives the address back', as
 
   await vi.waitFor(() => expect(screen.queryByRole('region', { name: 'Комната abc123' })).toBeNull());
   expect(usePageStore(pinia).screen).toBe('start');
-  expect(replace).toHaveBeenCalledWith('/');
+  expect(replace).toHaveBeenCalledWith('/app');
 });
 
 test('a room that changes refreshes the lobby room list', async () => {
@@ -119,7 +119,7 @@ test('a room that changes refreshes the lobby room list', async () => {
 });
 
 test('accepting a room invitation in a DM opens that room', async () => {
-  window.history.replaceState(null, '', '/?dm=bob');
+  window.history.replaceState(null, '', '/app?dm=bob');
   stubLobby();
   const { router } = await renderLobby();
   const push = spyOnPush(router);

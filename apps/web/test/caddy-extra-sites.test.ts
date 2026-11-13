@@ -12,7 +12,8 @@ test(
   { skip: !dockerAvailable, timeout: 60_000 },
   async () => {
     const origin = await startCaddyEdge();
-    const response = await fetch(`${origin}/`);
+    // The app (/app); `/` is the public site (caddy-public-site.test.ts).
+    const response = await fetch(`${origin}/app`);
     assert.equal(response.status, 200);
     assert.match(await response.text(), /web/);
   }
@@ -38,7 +39,7 @@ test(
         .end();
     });
     assert.equal(extra, 'extra');
-    const main = await fetch(`${origin}/`);
+    const main = await fetch(`${origin}/app`);
     assert.match(await main.text(), /web/);
   }
 );

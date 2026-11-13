@@ -1,6 +1,6 @@
 {
   "name": "@voice-room/shared",
-  "version": "2.12.19",
+  "version": "2.12.20",
   "private": true,
   "type": "module",
   "exports": {
@@ -24,6 +24,7 @@
     "./emoji": "./src/emoji.ts",
     "./runtime-config": "./src/runtime-config.ts",
     "./platform-class": "./src/platform-class.ts",
+    "./app-home": "./src/app-home.ts",
     "./visual-identity": "./src/visual-identity.ts",
     "./emoji-groups": "./src/emoji-groups.ts",
     "./emoji-skin-tones": "./src/emoji-skin-tones.ts",

@@ -82,6 +82,7 @@ declare global {
     voiceRoomRuntime?: {
       isDesktop?: boolean;
       platform?: string;
+      version?: string;
     };
   }
 }

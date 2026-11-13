@@ -1,0 +1,200 @@
+---
+import Cards from '../components/Cards.astro';
+import CtaBand from '../components/CtaBand.astro';
+import Faq from '../components/Faq.astro';
+import Icon from '../components/Icon.astro';
+import ProductScreenshot from '../components/ProductScreenshot.astro';
+import Hero from '../components/Hero.astro';
+import Section from '../components/Section.astro';
+import Base from '../layouts/Base.astro';
+import { DESKTOP_BUILDS, staticMeta } from '../desktop-download.ts';
+import { faqJsonLd, jsonLdScript, type FaqItem } from '../seo.ts';
+import { APP_HREF, PAGES, QUARANTINE_CMD, RELEASES_URL, canonicalUrl } from '../site.ts';
+
+const page = PAGES.download;
+
+const faq: FaqItem[] = [
+  {
+    question: 'Почему система предупреждает при установке?',
+    answer:
+      'Приложение пока не подписано сертификатом разработчика. В Windows нажмите «Подробнее» → «Выполнить в любом случае». В macOS после установки один раз выполните в Терминале команду из раздела «Установка».'
+  },
+  {
+    question: 'Есть ли версия для Linux?',
+    answer: 'Отдельного приложения нет. На Linux откройте VoiceRoom в браузере — голос, камера, экран и чат работают там же.'
+  },
+  {
+    question: 'Как приложение обновляется?',
+    answer: 'Само: новая версия скачивается и ставится автоматически.'
+  },
+  {
+    question: 'Можно ли обойтись без приложения?',
+    answer:
+      'Да. Всё основное работает в браузере. Приложение добавляет хоткеи поверх игр, оверлей, звук стрима без эха, трей и автозапуск.'
+  }
+];
+
+const jsonLd = jsonLdScript(
+  {
+    '@type': 'SoftwareApplication',
+    name: 'VoiceRoom',
+    url: canonicalUrl(page.path),
+    description: page.description,
+    applicationCategory: 'CommunicationApplication',
+    operatingSystem: 'Windows 10, Windows 11, macOS',
+    downloadUrl: RELEASES_URL,
+    inLanguage: 'ru',
+    isAccessibleForFree: true,
+    offers: { '@type': 'Offer', price: '0', priceCurrency: 'RUB' }
+  },
+  faqJsonLd(faq)
+);
+---
+
+<Base page={page} jsonLd={jsonLd}>
+  <Hero
+    kicker="VoiceRoom для компьютера"
+    title="Приложение VoiceRoom для Windows и macOS"
+    lead="Тот же VoiceRoom в собственном окне — и то, чего не может вкладка браузера: хоткеи поверх игр, оверлей, звук стрима без эха и звонок в трее."
+    secondary={{ href: APP_HREF, label: 'Открыть в браузере' }}
+    note="Бесплатно · обновляется само"
+  >
+    <div class="download" slot="visual" data-download-picker>
+      <fieldset class="download__systems">
+        <legend class="download__label">Выберите систему</legend>
+        <div class="download__tabs">
+          {
+            DESKTOP_BUILDS.map((build, index) => (
+              <>
+                <input
+                  class="download__input visually-hidden"
+                  type="radio"
+                  name="desktop-build"
+                  id={`build-${build.id}`}
+                  value={build.id}
+                  checked={index === 0}
+                />
+                <label class="download__tab" for={`build-${build.id}`}>
+                  {build.os}
+                  <small>{build.cpu}</small>
+                </label>
+              </>
+            ))
+          }
+        </div>
+      </fieldset>
+      {
+        DESKTOP_BUILDS.map((build) => (
+          <div class="download__build" data-build={build.id}>
+            <a class="site-button download__button" href={RELEASES_URL} data-build-link>
+              <Icon name="download" size={18} stroke={2} />
+              {build.cta}
+            </a>
+            <p class="download__meta">
+              <span data-build-meta>{staticMeta(build)}</span>
+              <span class="download__auto" data-build-auto hidden>
+                <Icon name="check" size={12} stroke={3} />
+                Подходит для этого компьютера
+              </span>
+            </p>
+          </div>
+        ))
+      }
+      <p class="download__foot">
+        <span>
+          Linux — <a href={APP_HREF}>в браузере</a>
+        </span>
+        <a href={RELEASES_URL}>Все версии на GitHub</a>
+      </p>
+    </div>
+  </Hero>
+
+  <ProductScreenshot
+    src="/promo/desktop-app.png"
+    alt="Окно приложения VoiceRoom для компьютера с подключённым групповым звонком"
+    width={1600}
+    height={800}
+    caption="Приложение VoiceRoom для компьютера · демонстрационный звонок"
+    framed
+  />
+
+  <Section title="Что даёт приложение">
+    <Cards
+      items={[
+        {
+          icon: 'keyboard',
+          title: 'Хоткеи поверх игр',
+          text: 'Мьют микрофона, мьют звука и push-to-talk работают, даже когда окно не в фокусе.',
+          href: PAGES.games.path,
+          link: 'Для игр'
+        },
+        {
+          icon: 'layers',
+          title: 'Оверлей в игре',
+          text: 'Кто в звонке, кто говорит и кто стримит — поверх игры в оконном и borderless режимах.'
+        },
+        {
+          icon: 'volume',
+          title: 'Звук стрима без эха',
+          text: 'Демонстрация передаёт звук компьютера, но без голосов собеседников.',
+          href: PAGES.screen.path,
+          link: 'Демонстрация экрана'
+        },
+        {
+          icon: 'tray',
+          title: 'Трей, панель задач и Dock',
+          text: 'Микрофон, звук и выход из звонка без открытия окна. На иконке — счётчик непрочитанного.'
+        },
+        {
+          icon: 'bell',
+          title: 'Системные уведомления',
+          text: 'Клик по уведомлению открывает нужный чат. Ссылки voiceroom:// открываются сразу в приложении.'
+        },
+        {
+          icon: 'refresh',
+          title: 'Автозапуск и обновления',
+          text: 'Запуск вместе с системой, можно свёрнутым в трей. Новые версии ставятся сами.'
+        }
+      ]}
+    />
+  </Section>
+
+  <Section title="Установка" lead="Приложение пока не подписано, поэтому система спросит, доверяете ли вы ему.">
+    <div class="split">
+      <div class="split__column">
+        <h3 class="split__title">Windows</h3>
+        <p class="split__text">
+          Запустите установщик. Если появится окно SmartScreen, нажмите <b>«Подробнее»</b> → <b
+            >«Выполнить в любом случае»</b
+          >.
+        </p>
+      </div>
+      <div class="split__column">
+        <h3 class="split__title">macOS</h3>
+        <p class="split__text">Перетащите VoiceRoom в «Программы» и один раз выполните в Терминале:</p>
+        <div class="command">
+          <pre class="command__text"><code>{QUARANTINE_CMD}</code></pre>
+          <button
+            type="button"
+            class="command__copy"
+            data-copy={QUARANTINE_CMD}
+            aria-describedby="copy-command-status"
+            hidden>Скопировать</button
+          >
+        </div>
+        <p id="copy-command-status" class="split__text" role="status"></p>
+      </div>
+    </div>
+  </Section>
+
+  <Faq items={faq} />
+
+  <CtaBand
+    title="Не хотите ничего ставить?"
+    text="Всё основное работает в браузере — создайте комнату прямо сейчас."
+  />
+</Base>
+
+<script>
+  import '../scripts/download.ts';
+</script>

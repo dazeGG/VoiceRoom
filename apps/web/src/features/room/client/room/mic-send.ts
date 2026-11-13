@@ -110,6 +110,66 @@ export function canRecoverMic(): boolean {
 
 // The call's watch: one tracker, the way up the ladder and what the next poll reports.
 const tracker = createMicSendTracker();
+let progressObservation: {
+  before: MicReading | null;
+  isCurrent: () => boolean;
+  window: ReturnType<typeof createRatioWindow>;
+  polls: number;
+  finish: (restored: boolean) => void;
+  timer: ReturnType<typeof setTimeout>;
+} | null = null;
+
+export function observeCaptureProgress(finish: (restored: boolean) => void, isCurrent: () => boolean): void {
+  cancelCaptureProgressObservation();
+  const timer = setTimeout(() => completeProgressObservation(false), 30_000);
+  progressObservation = { before: null, isCurrent, window: createRatioWindow(MIN_WINDOW_MS), polls: 0, finish, timer };
+}
+
+function completeProgressObservation(restored: boolean): void {
+  const observation = progressObservation;
+  if (!observation) return;
+  progressObservation = null;
+  clearTimeout(observation.timer);
+  observation.finish(restored && observation.isCurrent());
+}
+
+export function cancelCaptureProgressObservation(): void {
+  completeProgressObservation(false);
+}
+
+function noteProgressObservation(reading: MicReading | null): void {
+  const observation = progressObservation;
+  if (!observation) return;
+  if (!observation.isCurrent()) {
+    completeProgressObservation(false);
+    return;
+  }
+  if (!reading || reading.upstreamPaused) {
+    observation.before = null;
+    observation.window.reset();
+    observation.polls = 0;
+    return;
+  }
+  const before = observation.before;
+  observation.before = reading;
+  if (!before) return;
+  const expected = reading.atMs - before.atMs;
+  const delivered = (reading.deliveredSeconds - before.deliveredSeconds) * 1000;
+  if (
+    expected <= 0 ||
+    expected > MIC_POLL_MAX_GAP_MS ||
+    delivered < 0 ||
+    reading.contextSeconds < before.contextSeconds
+  ) {
+    observation.window.reset();
+    observation.polls = 0;
+    return;
+  }
+  const missing = observation.window.add(Math.max(0, expected - delivered), expected);
+  observation.polls += 1;
+  if (observation.polls >= LOSS_WINDOW_POLLS && missing !== null && missing < MIC_MISSING_STALLED_PCT)
+    completeProgressObservation(true);
+}
 let actions: MicRecoveryActions | null = null;
 let recovering = false;
 let recoveryRun = 0;
@@ -141,6 +201,7 @@ export function startMicSendWatch(recoveryActions: MicRecoveryActions): void {
 }
 
 export function stopMicSendWatch(): void {
+  cancelCaptureProgressObservation();
   clearWatch();
   actions = null;
 }
@@ -210,6 +271,7 @@ function recover(poll: MicSendPoll, reading: MicReading): void {
 
 /** The poll's reading; null while the sound is meant to stop (muted, reconnecting). */
 export function noteMicSend(reading: MicReading | null): void {
+  noteProgressObservation(reading);
   if (!actions) return;
   if (reading && reading.deliveredSeconds > 0) lastDeliveredSeconds = reading.deliveredSeconds;
   // Nothing counted yet in this call: a browser that does not count, or one that has not begun to.

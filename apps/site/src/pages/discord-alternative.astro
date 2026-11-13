@@ -1,0 +1,203 @@
+---
+import Cards from '../components/Cards.astro';
+import Checklist from '../components/Checklist.astro';
+import Compare from '../components/Compare.astro';
+import CtaBand from '../components/CtaBand.astro';
+import Faq from '../components/Faq.astro';
+import Hero from '../components/Hero.astro';
+import Section from '../components/Section.astro';
+import Steps from '../components/Steps.astro';
+import Base from '../layouts/Base.astro';
+import { faqJsonLd, jsonLdScript, type FaqItem } from '../seo.ts';
+import { PAGES, START_ROOM_HREF } from '../site.ts';
+
+const page = PAGES.discord;
+
+const faq: FaqItem[] = [
+  {
+    question: 'VoiceRoom — это копия Discord?',
+    answer:
+      'Нет. VoiceRoom не повторяет серверы, каналы и ботов. Это голосовые комнаты по ссылке для небольшой компании: голос, экран, камера и чат без лишней настройки.'
+  },
+  {
+    question: 'Нужен ли друзьям аккаунт?',
+    answer:
+      'Нет. Во временную и в постоянную комнату заходят по ссылке или коду без регистрации. Аккаунт нужен тому, кто заводит постоянную комнату, а также для друзей и личных сообщений.'
+  },
+  {
+    question: 'Можно ли перенести сервер из Discord?',
+    answer:
+      'Импорта нет. Создайте постоянную комнату и отправьте ссылку на неё в общий чат — это занимает пару минут.'
+  },
+  {
+    question: 'Сколько стоит VoiceRoom?',
+    answer: 'VoiceRoom бесплатный.'
+  }
+];
+
+const jsonLd = jsonLdScript(faqJsonLd(faq));
+---
+
+<Base page={page} jsonLd={jsonLd}>
+  <Hero
+    center
+    kicker="Альтернатива Discord"
+    title="Альтернатива Discord для своей компании"
+    lead="VoiceRoom не пытается повторить Discord целиком. Он нужен для другого: позвать друзей в голосовую комнату одной ссылкой и через минуту уже говорить, показывать экран и играть вместе."
+    primary={{ href: START_ROOM_HREF, label: 'Создать комнату' }}
+    secondary={{ href: '#differences', label: 'Чем отличается' }}
+    note="Бесплатно · друзьям не нужен аккаунт · в браузере и в приложении для Windows и macOS"
+  >
+    <ul class="invite-path" slot="visual" aria-label="Как позвать человека: в VoiceRoom и в Discord">
+      <li class="invite-path__row invite-path__row--ours">
+        <span class="invite-path__name">VoiceRoom</span>
+        <span class="invite-path__step">Ссылка или код</span>
+        <span class="invite-path__arrow" aria-hidden="true">→</span>
+        <span class="invite-path__step">Комната</span>
+        <span class="invite-path__end">без аккаунта</span>
+      </li>
+      <li class="invite-path__row">
+        <span class="invite-path__name">Discord</span>
+        <span class="invite-path__step">Приглашение</span>
+        <span class="invite-path__arrow" aria-hidden="true">→</span>
+        <span class="invite-path__step">Сервер</span>
+        <span class="invite-path__arrow" aria-hidden="true">→</span>
+        <span class="invite-path__step">Канал</span>
+        <span class="invite-path__end">нужен аккаунт</span>
+      </li>
+    </ul>
+  </Hero>
+
+  <Section title="Кому подойдёт">
+    <Checklist
+      grid
+      items={[
+        'Компании друзей, которая созванивается по вечерам и играет вместе',
+        'Тем, кому нужен быстрый созвон: отправили ссылку — и все в комнате, без установки и регистрации',
+        'Если у кого-то из друзей нет аккаунта в Discord и заводить его он не хочет',
+        'Если Discord у вас работает с перебоями, а поговорить нужно сейчас'
+      ]}
+    />
+  </Section>
+
+  <Section title="Что будет привычным">
+    <Cards
+      items={[
+        {
+          icon: 'home',
+          title: 'Постоянная комната',
+          text: 'Как свой голосовой канал: ссылка не меняется, история чата сохраняется, у комнаты есть название и аватарка.'
+        },
+        {
+          icon: 'screen-share',
+          title: 'Экран и камера',
+          text: 'Демонстрация экрана или окна со звуком и камера в том же звонке.',
+          href: PAGES.screen.path,
+          link: 'Про демонстрацию экрана'
+        },
+        {
+          icon: 'message',
+          title: 'Чат',
+          text: 'Ответы, упоминания, реакции, картинки, превью ссылок, закреплённые сообщения и личные сообщения.'
+        },
+        {
+          icon: 'users',
+          title: 'Друзья и статусы',
+          text: 'Список друзей, статусы присутствия и «Не беспокоить». Позвать друга в комнату можно одним кликом.'
+        },
+        {
+          icon: 'gamepad',
+          title: 'Для игр',
+          text: 'Push-to-talk, шумоподавление, громкость каждого участника, а в приложении — хоткеи и оверлей поверх игры.',
+          href: PAGES.games.path,
+          link: 'Голосовой чат для игр'
+        },
+        {
+          icon: 'shield',
+          title: 'Модерация',
+          text: 'Владелец комнаты исключает и блокирует участников, на время или навсегда, и удаляет сообщения.'
+        }
+      ]}
+    />
+  </Section>
+
+  <Section title="Чем отличается от Discord" id="differences">
+    <Compare
+      caption="VoiceRoom и Discord: главные различия"
+      columns={['VoiceRoom', 'Discord']}
+      ours={0}
+      rows={[
+        {
+          label: 'Как позвать человека',
+          cells: ['Ссылка или короткий код комнаты', 'Приглашение на сервер, затем нужный канал']
+        },
+        {
+          label: 'Аккаунт у приглашённого',
+          cells: ['Не нужен', 'Нужен']
+        },
+        {
+          label: 'Как всё устроено',
+          cells: ['Отдельные комнаты, у каждой свой чат', 'Серверы с каналами, категориями и ролями']
+        },
+        {
+          label: 'Что установить',
+          cells: ['Ничего: работает в браузере. Приложение для Windows и macOS — по желанию', 'Есть браузерная версия и приложения']
+        },
+        {
+          label: 'Боты и интеграции',
+          cells: ['Нет', 'Большой выбор ботов и интеграций']
+        },
+        {
+          label: 'Размер сообщества',
+          cells: ['Небольшие компании', 'От пары друзей до сообществ на тысячи человек']
+        },
+        {
+          label: 'Цена',
+          cells: ['Бесплатно', 'Бесплатно, есть платная подписка Nitro']
+        }
+      ]}
+      note="Сравнение составлено в ноябре 2026 года. Возможности Discord могли измениться — сверяйтесь с его сайтом."
+    />
+  </Section>
+
+  <section class="section">
+    <div class="aside-band">
+      <h2 class="section__title aside-band__title">Когда лучше остаться в Discord</h2>
+      <Checklist
+        tone="no"
+        items={[
+          'Нужен сервер на сотни человек с каналами, ролями и правами доступа',
+          'Вы пользуетесь ботами, интеграциями, форумами или событиями',
+          'Вы общаетесь в основном с телефона: в VoiceRoom на телефоне доступны только комнаты, без лобби, друзей и личных сообщений'
+        ]}
+      />
+    </div>
+  </section>
+
+  <Section title="Как перейти за пять минут">
+    <Steps
+      items={[
+        {
+          title: 'Заведите постоянную комнату',
+          text: 'Зарегистрируйтесь и создайте комнату. Ссылка на неё не изменится.'
+        },
+        {
+          title: 'Отправьте ссылку друзьям',
+          text: 'В любой мессенджер или общий чат. Они зайдут без регистрации.'
+        },
+        {
+          title: 'Поставьте приложение',
+          text: 'Если играете: хоткеи поверх игры, оверлей и звук стрима без эха есть в приложении для Windows и macOS.'
+        }
+      ]}
+    />
+  </Section>
+
+  <Faq items={faq} />
+
+  <CtaBand
+    title="Попробуйте прямо сейчас"
+    text="Временная комната создаётся без регистрации. Понравится — заведите постоянную."
+    secondary={{ href: PAGES.download.path, label: 'Скачать приложение' }}
+  />
+</Base>

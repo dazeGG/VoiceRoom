@@ -47,6 +47,9 @@ jobs:
   check:
     name: Lint, typecheck & build
     runs-on: ubuntu-latest
+    # astro check and astro build (apps/site) would otherwise send usage telemetry.
+    env:
+      ASTRO_TELEMETRY_DISABLED: 1
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
@@ -107,6 +110,7 @@ jobs:
       - run: npm ci
       - run: npm --workspace @voice-room/web run test
       - run: npm --workspace @voice-room/admin run test
+      - run: npm --workspace @voice-room/site run test
 
   voice-join:
     name: Voice room join smoke
@@ -124,7 +128,7 @@ jobs:
       - name: Start production-like voice stack
         run: docker compose -f docker-compose.ci.yml up -d --build --wait --wait-timeout 180
       - name: Join voice and verify chat behavior through production-like services
-        run: npm --workspace @voice-room/web run e2e -- e2e/room-voice.spec.ts e2e/chat-image-paste.spec.ts e2e/manual-chat-polish.spec.ts e2e/chat-drafts.spec.ts e2e/chat-typing.spec.ts e2e/guest-account-cta.spec.ts e2e/mobile-room.spec.ts --project=chromium --retries=0
+        run: npm --workspace @voice-room/web run e2e -- e2e/room-voice.spec.ts e2e/rnnoise-assets.spec.ts e2e/microphone-recovery.spec.ts e2e/chat-image-paste.spec.ts e2e/manual-chat-polish.spec.ts e2e/chat-drafts.spec.ts e2e/chat-typing.spec.ts e2e/guest-account-cta.spec.ts e2e/mobile-room.spec.ts --project=chromium --retries=0
       # No teardown step: a hosted runner is discarded after the job together
       # with its containers and volumes.
       - name: Capture voice stack diagnostics

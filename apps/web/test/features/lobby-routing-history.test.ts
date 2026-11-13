@@ -19,7 +19,7 @@ let voiceSession: ReturnType<typeof useVoiceSessionStore>;
 let stop = (): void => {};
 
 async function openAt(...paths: string[]) {
-  window.history.replaceState(null, '', '/');
+  window.history.replaceState(null, '', '/app');
   router = createRouter({
     history: createWebHistory(),
     routes: [{ path: '/:pathMatch(.*)*', component: { render: () => null } }]
@@ -66,12 +66,12 @@ afterEach(() => {
   stop = () => {};
   voiceSession.roomId = null;
   localStorage.removeItem(ROOM_SWITCH_CONFIRM_STORAGE_KEY);
-  window.history.replaceState(null, '', '/');
+  window.history.replaceState(null, '', '/app');
   vi.restoreAllMocks();
 });
 
 test('the back button home during a call keeps the call room in the address', async () => {
-  const routing = await openAt('/');
+  const routing = await openAt('/app');
   routing.requestEnterRoom('abc123');
   await settlesOn('/r/abc123');
   voiceSession.roomId = 'abc123';
@@ -83,7 +83,7 @@ test('the back button home during a call keeps the call room in the address', as
 });
 
 test('the back button to the previous room after a switch keeps the room the call moved to', async () => {
-  const routing = await openAt('/');
+  const routing = await openAt('/app');
   routing.requestEnterRoom('abc123');
   await settlesOn('/r/abc123');
   voiceSession.roomId = 'abc123';
@@ -99,7 +99,7 @@ test('the back button to the previous room after a switch keeps the room the cal
 });
 
 test('the back button out of the lobby goes to that page', async () => {
-  await openAt('/login', '/');
+  await openAt('/login', '/app');
 
   await back();
 
@@ -107,7 +107,7 @@ test('the back button out of the lobby goes to that page', async () => {
 });
 
 test('entering a room puts it in the address before the room mounts', async () => {
-  const routing = await openAt('/');
+  const routing = await openAt('/app');
   routing.requestEnterRoom('abc123');
   // The room client and the room chat read their room from the address.
   expect(window.location.pathname).toBe('/r/abc123');

@@ -37,9 +37,19 @@ interface MicStageBase {
 export type MicProcessor =
   | (MicStageBase & { type: 'rnnoise' | 'silence-floor' })
   | (MicStageBase & { type: 'gate'; setThreshold: (threshold: number) => void })
-  | (MicStageBase & { type: 'input-gain'; nodes: AudioNode[]; setGain: (gain: number) => void });
+  | (MicStageBase & {
+      type: 'input-gain';
+      nodes: AudioNode[];
+      setGain: (gain: number) => void;
+      setHardZero: () => void;
+    });
 
 export interface MicrophoneCapture {
+  /** Candidate capture cannot carry signal until its publication is confirmed. */
+  barrier?: boolean;
+  removeProcessorErrorListener?: () => void;
+  processorFailed?: boolean;
+  removeRawEndedListener?: () => void;
   mode?: NoiseMode;
   processor: MicProcessor[] | null;
   rawStream: MediaStream | null;
@@ -379,6 +389,7 @@ declare global {
     voiceRoomRuntime?: {
       isDesktop?: boolean;
       platform?: string;
+      version?: string;
     };
     voiceRoomWindow?: {
       setFullscreen: (fullscreen: boolean) => Promise<boolean>;

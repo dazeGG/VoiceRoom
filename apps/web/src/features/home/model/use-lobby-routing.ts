@@ -14,6 +14,7 @@ import {
   readOpenInAppSignals,
   shouldOfferOpenInApp
 } from '@/platform/open-in-app';
+import { APP_HOME } from '@/shared/app-home';
 import { usePageStore } from '@/stores/page.store';
 import { extractRoomId } from '@/shared/utils/room';
 import { shallowPush, shallowReplace } from '@/shared/utils/shallow-routing';
@@ -88,7 +89,7 @@ export function useLobbyRouting(lobby: RoutingLobby, rooms: RoutingRooms, router
     const initialParams = new URLSearchParams(window.location.search);
     const initialDmId = initialParams.get('dm');
     if (!initialRoomId && initialDmId) {
-      replaceState('/');
+      replaceState(APP_HOME);
       void lobby.openDm(initialDmId);
     }
     // A mention link — from the bell or from a push — lands here rather than on
@@ -96,7 +97,7 @@ export function useLobbyRouting(lobby: RoutingLobby, rooms: RoutingRooms, router
     const linkedRoomId = initialParams.get('room');
     const linkedMessageId = initialParams.get('message');
     if (!initialRoomId && linkedRoomId && linkedMessageId) {
-      replaceState('/');
+      replaceState(APP_HOME);
       openRoomMessage(linkedRoomId, linkedMessageId);
     }
 
@@ -216,7 +217,7 @@ export function useLobbyRouting(lobby: RoutingLobby, rooms: RoutingRooms, router
   }
 
   function replaceUrlWithActiveVoiceRoom(roomId: string | null = navigation.getActiveVoiceRoomId()): void {
-    const target = roomId ? roomPath(roomId) : '/';
+    const target = roomId ? roomPath(roomId) : APP_HOME;
     if (`${window.location.pathname}${window.location.search}` === target) return;
     replaceState(target);
   }
@@ -246,7 +247,7 @@ export function useLobbyRouting(lobby: RoutingLobby, rooms: RoutingRooms, router
     const roomId = extractRoomId(window.location.pathname);
     // The back button out of the lobby (to /login, /privacy, ...): that page
     // takes over, and rewriting its entry would swallow the move.
-    if (!roomId && window.location.pathname !== '/') return;
+    if (!roomId && window.location.pathname !== APP_HOME) return;
     if (roomId) {
       navigation.setViewedRoomFromRoute(roomId);
       lobby.mode = 'rooms';

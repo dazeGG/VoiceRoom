@@ -1,0 +1,240 @@
+---
+import Cards from '../components/Cards.astro';
+import CtaBand from '../components/CtaBand.astro';
+import Checklist from '../components/Checklist.astro';
+import Faq from '../components/Faq.astro';
+import Icon from '../components/Icon.astro';
+import Hero from '../components/Hero.astro';
+import ProductScreenshot from '../components/ProductScreenshot.astro';
+import Section from '../components/Section.astro';
+import Steps from '../components/Steps.astro';
+import Base from '../layouts/Base.astro';
+import { faqJsonLd, jsonLdScript, type FaqItem } from '../seo.ts';
+import { APP_HREF, PAGES, SITE_ORIGIN, SOURCE_URL, START_ROOM_HREF, canonicalUrl } from '../site.ts';
+
+const page = PAGES.home;
+
+const faq: FaqItem[] = [
+  {
+    question: 'Что такое VoiceRoom?',
+    answer:
+      'Сервис голосовых комнат по ссылке. В комнате можно говорить, показывать экран со звуком, включать камеру и переписываться в чате — в браузере или в приложении для Windows и macOS.'
+  },
+  {
+    question: 'Нужна ли регистрация?',
+    answer:
+      'Нет. Создать временную комнату и зайти в чужую по ссылке или коду можно без имени и регистрации. Аккаунт нужен, чтобы завести постоянную комнату, друзей и личные сообщения.'
+  },
+  {
+    question: 'Сколько это стоит?',
+    answer: 'Нисколько: VoiceRoom бесплатный.'
+  },
+  {
+    question: 'Работает ли VoiceRoom на телефоне?',
+    answer:
+      'Да, в мобильном браузере: можно создать комнату, говорить, писать в чат и смотреть чужой экран. Лобби с постоянными комнатами, друзья и личные сообщения пока доступны на компьютере.'
+  },
+  {
+    question: 'Записываются ли разговоры?',
+    answer:
+      'Нет. VoiceRoom сам ничего не записывает. Записывать звонки без согласия участников запрещено правилами сервиса.'
+  },
+  {
+    question: 'Для какой компании подходит VoiceRoom?',
+    answer:
+      'Для небольших компаний: друзей, напарников по игре, коллег на быстрый созвон. Для сообществ на сотни человек с каналами, ролями и ботами лучше подойдёт Discord.'
+  },
+  {
+    question: 'Можно ли развернуть VoiceRoom у себя?',
+    answer:
+      'Да. Код открыт под лицензией MIT, голос и видео идут через собственный сервер LiveKit. Инструкция по развёртыванию лежит в репозитории проекта.'
+  }
+];
+
+const jsonLd = jsonLdScript(
+  {
+    '@type': 'WebApplication',
+    '@id': `${SITE_ORIGIN}/#app`,
+    name: 'VoiceRoom',
+    url: canonicalUrl(page.path),
+    description: page.description,
+    applicationCategory: 'CommunicationApplication',
+    operatingSystem: 'Web, Windows, macOS',
+    inLanguage: 'ru',
+    isAccessibleForFree: true,
+    offers: { '@type': 'Offer', price: '0', priceCurrency: 'RUB' },
+    sameAs: [SOURCE_URL]
+  },
+  faqJsonLd(faq)
+);
+---
+
+<Base page={page} jsonLd={jsonLd} desktopRedirect>
+  <Hero
+    kicker="Голосовые комнаты для своих"
+    title="Созвон по ссылке без регистрации"
+    lead="Создайте комнату и отправьте ссылку друзьям. Говорите, включайте камеру и показывайте экран прямо в браузере. Аккаунт нужен, только чтобы завести постоянную комнату."
+    primary={{ href: START_ROOM_HREF, label: 'Создать комнату' }}
+    secondary={{ href: APP_HREF, label: 'У меня есть ссылка или код' }}
+    note="Бесплатно · без имени и регистрации · временная комната живёт, пока в ней есть люди"
+  >
+    <ProductScreenshot
+      slot="visual"
+      src="/promo/voice-call.png"
+      alt="Голосовая комната VoiceRoom с участниками и панелью управления звонком"
+      width={1280}
+      height={800}
+      caption="Комната в браузере · демонстрационные участники"
+      priority
+      framed
+    >
+      <div class="linkcard" aria-hidden="true">
+        <span class="linkcard__label"><span class="linkcard__dot"></span>Ссылка готова</span>
+        <span class="linkcard__url">voiceroom.ru/r/код-комнаты</span>
+      </div>
+    </ProductScreenshot>
+  </Hero>
+
+  <Section title="Как это работает">
+    <Steps
+      items={[
+        {
+          title: 'Создайте комнату',
+          text: 'Один клик — без имени и пароля. Ссылка и короткий код появятся сразу.'
+        },
+        {
+          title: 'Отправьте ссылку',
+          text: 'В любой мессенджер. Друзьям не нужен аккаунт: они откроют ссылку и окажутся в той же комнате.'
+        },
+        {
+          title: 'Говорите',
+          text: 'Голос, камера, демонстрация экрана и чат — в одной комнате, в браузере или в приложении.'
+        }
+      ]}
+    />
+  </Section>
+
+  <Section title="Что есть в комнате">
+    <div class="showcase">
+      <article class="showcase__card">
+        <div>
+          <h3 class="cards__title">Голос с шумоподавлением</h3>
+          <p class="cards__text">
+            RNNoise убирает фоновый шум, гейт микрофона отсекает тишину. Громкость каждого участника — от 0 до 200 %.
+          </p>
+        </div>
+        <ProductScreenshot
+          src="/promo/voice-mix.png"
+          alt="Настройка громкости одного участника VoiceRoom на 80 процентов во время звонка"
+          width={1280}
+          height={800}
+          caption="Громкость отдельного участника · демонстрационный звонок"
+        />
+      </article>
+      <article class="showcase__card">
+        <div>
+          <h3 class="cards__title">Чат комнаты</h3>
+          <p class="cards__text">Ответы, упоминания, реакции, картинки, превью ссылок и закреплённые сообщения.</p>
+        </div>
+        <ProductScreenshot
+          src="/promo/chat-features.png"
+          alt="Чат VoiceRoom с закреплённым сообщением, ответом, упоминанием, реакцией и превью ссылки"
+          width={1280}
+          height={800}
+          caption="Чат комнаты · демонстрационная переписка"
+        />
+      </article>
+    </div>
+    <ul class="mini">
+      <li class="mini__item">
+        <p class="mini__head"><Icon name="screen-share" />Экран со звуком</p>
+        <p class="mini__text">
+          Экран или окно, 1080p и 30 FPS. В приложении — режимы для игр и для текста.{' '}
+          <a class="mini__link" href={PAGES.screen.path}>Как показать экран <span aria-hidden="true">→</span></a>
+        </p>
+      </li>
+      <li class="mini__item">
+        <p class="mini__head"><Icon name="video" />Камера</p>
+        <p class="mini__text">Каждый зритель получает качество под размер своей плитки.</p>
+      </li>
+      <li class="mini__item">
+        <p class="mini__head"><Icon name="smartphone" />С телефона</p>
+        <p class="mini__text">Голос, чат и просмотр чужого экрана в мобильном браузере.</p>
+      </li>
+      <li class="mini__item">
+        <p class="mini__head"><Icon name="monitor" />Приложение</p>
+        <p class="mini__text">
+          Хоткеи поверх игр, оверлей и звук стрима без эха.{' '}
+          <a class="mini__link" href={PAGES.download.path}>Скачать <span aria-hidden="true">→</span></a>
+        </p>
+      </li>
+    </ul>
+  </Section>
+
+  <Section
+    title="Временная или постоянная комната"
+    lead="Для разового созвона хватит временной комнаты. Если созваниваетесь с одними и теми же людьми, заведите постоянную."
+  >
+    <div class="split">
+      <div class="split__column">
+        <span class="split__label">Без аккаунта</span>
+        <h3 class="split__title">Временная</h3>
+        <Checklist
+          items={[
+            'Создаётся без имени и регистрации',
+            'Ссылка и код появляются сразу',
+            'Живёт, пока в ней есть люди, и удаляется, когда все вышли'
+          ]}
+        />
+      </div>
+      <div class="split__column split__column--accent">
+        <span class="split__label">С аккаунтом</span>
+        <h3 class="split__title">Постоянная</h3>
+        <Checklist
+          items={[
+            'Нужен аккаунт создателю, гости заходят по ссылке без регистрации',
+            'Ссылка не меняется, история чата сохраняется',
+            'Название, эмодзи и аватарка комнаты',
+            'Владелец исключает и блокирует участников и удаляет сообщения'
+          ]}
+        />
+      </div>
+    </div>
+  </Section>
+
+  <Section title="Для чего подходит">
+    <Cards
+      items={[
+        {
+          icon: 'users',
+          title: 'Вместо Discord для своих',
+          text: 'Постоянная комната для компании друзей, в которую заходят по одной ссылке.',
+          href: PAGES.discord.path,
+          link: 'Чем отличается от Discord'
+        },
+        {
+          icon: 'screen-share',
+          title: 'Показать экран другу',
+          text: 'Помочь с настройками, посмотреть видео вместе или показать игру — без установки у зрителей.',
+          href: PAGES.screen.path,
+          link: 'Демонстрация экрана'
+        },
+        {
+          icon: 'gamepad',
+          title: 'Голосовой чат в игре',
+          text: 'Push-to-talk, хоткеи, которые работают поверх игры, и оверлей с теми, кто говорит.',
+          href: PAGES.games.path,
+          link: 'Для игр'
+        }
+      ]}
+    />
+  </Section>
+
+  <Faq items={faq} />
+
+  <CtaBand
+    title="Комната готова за секунду"
+    text="Создайте комнату и отправьте ссылку — регистрироваться не нужно."
+    secondary={{ href: PAGES.download.path, label: 'Приложение для компьютера' }}
+  />
+</Base>

@@ -11,6 +11,7 @@ import {
   type RouterHistory
 } from 'vue-router';
 import { isShallowEntry } from '@/shared/utils/shallow-routing';
+import { APP_HOME } from './shared/app-home';
 import MainRoute from './pages/MainRoute.vue';
 
 declare module 'vue-router' {
@@ -21,8 +22,11 @@ declare module 'vue-router' {
 }
 
 export const routes: RouteRecordRaw[] = [
-  // `/` and `/r/:roomId` share one component so the lobby's address changes keep it (MainRoute.vue).
-  { path: '/', component: MainRoute, meta: { routeId: '/' } },
+  // `/` is the public site; the app starts at /app (app-home.ts). A navigation
+  // here to `/` (an old link, a notification's route) lands there with its query.
+  { path: '/', redirect: (to) => ({ path: APP_HOME, query: to.query, hash: to.hash }), meta: { routeId: '/' } },
+  // /app and `/r/:roomId` share one component so the lobby's address changes keep it (MainRoute.vue).
+  { path: APP_HOME, component: MainRoute, meta: { routeId: APP_HOME } },
   { path: '/r/:roomId', component: MainRoute, meta: { routeId: '/r/[roomId]' } },
   { path: '/login', component: () => import('./pages/LoginPage.vue'), meta: { routeId: '/login' } },
   { path: '/register', component: () => import('./pages/RegisterPage.vue'), meta: { routeId: '/register' } },

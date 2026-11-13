@@ -1,0 +1,25 @@
+---
+// Questions as <details>: open without a script, and the same text the page's
+// FAQPage data carries (seo.ts faqJsonLd). The first answer starts open.
+import type { FaqItem } from '../seo.ts';
+
+interface Props {
+  items: readonly FaqItem[];
+  title?: string;
+}
+const { items, title = 'Вопросы' } = Astro.props;
+---
+
+<section class="section faq-wrap" id="faq">
+  <h2 class="section__title faq-wrap__title">{title}</h2>
+  <div class="faq">
+    {
+      items.map((item, index) => (
+        <details class="faq__item" open={index === 0}>
+          <summary class="faq__question">{item.question}</summary>
+          <p class="faq__answer">{item.answer}</p>
+        </details>
+      ))
+    }
+  </div>
+</section>
