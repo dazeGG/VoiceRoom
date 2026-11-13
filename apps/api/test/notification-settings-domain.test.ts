@@ -16,6 +16,7 @@ import { registerNotificationSettingsRoutes } from '../src/domains/notifications
 import { AJV_OPTIONS, registerHttpKit } from '../src/platform/http/http-kit.ts';
 import type { ApiContext } from '../src/app/context.ts';
 import { Failure } from '@voice-room/shared/contracts/http';
+import { PushRegistrationConflict, PushRegistrationSuccess } from '@voice-room/shared/contracts/push-registration';
 import { checked } from './helpers/checked.ts';
 import { mistyped } from './helpers/mistyped.ts';
 
@@ -84,9 +85,14 @@ function harness({
   const service = createNotificationSettingsService({
     preferences: () => store,
     pushes: () => ({
-      async upsert(input) {
+      async register(input) {
         calls.upserts.push(input);
-        return upserted;
+        return upserted
+          ? {
+              status: 'subscribed',
+              registration: { protocol: 1, locale: 'ru', version: '11111111-1111-4111-8111-111111111111' }
+            }
+          : { status: 'conflict' };
       },
       async remove(input) {
         calls.removed.push(input);
@@ -165,6 +171,22 @@ test('push subscribe and unsubscribe', async () => {
 
 const PRIVATE = notificationPreferences({ privateNotifications: true });
 
+test('web registration serializes extended success and conflict state', async (t) => {
+  const payload = { subscription: SUBSCRIPTION, localeState: { protocol: 1, locale: 'en', expectedVersion: null } };
+  const success = await call(routeApp(t).app, 'POST', '/api/push/subscriptions', payload);
+  assert.equal(success.status, 201);
+  checked(PushRegistrationSuccess, success.body);
+  const registration = { protocol: 1 as const, locale: 'fr' as const, version: '11111111-1111-4111-8111-111111111111' };
+  const conflict = await call(
+    routeApp(t, { subscribe: { status: 'locale_conflict', registration } }).app,
+    'POST',
+    '/api/push/subscriptions',
+    payload
+  );
+  assert.equal(conflict.status, 409);
+  assert.deepEqual(checked(PushRegistrationConflict, conflict.body).registration, registration);
+});
+
 /** What each service method the routes call resolves to. */
 type Outcomes = {
   [Method in Exclude<keyof NotificationSettingsService, 'pushConfig'>]: Awaited<
@@ -204,7 +226,10 @@ function routeApp(
       setDoNotDisturb: record('setDoNotDisturb', updated),
       setPresenceStatus: record('setPresenceStatus', updated),
       pushConfig: () => ({ enabled: true, vapidPublicKey: 'vapid' }),
-      subscribe: record('subscribe', { status: 'subscribed' }),
+      subscribe: record('subscribe', {
+        status: 'subscribed',
+        registration: { protocol: 1, locale: 'ru', version: '11111111-1111-4111-8111-111111111111' }
+      }),
       unsubscribe: record('unsubscribe', { status: 'removed' })
     })
   );

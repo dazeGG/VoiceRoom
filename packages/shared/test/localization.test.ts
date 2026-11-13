@@ -36,4 +36,16 @@ test('notification copy localizes per recipient while preserving names/content a
   assert.deepEqual(localizeNotificationPayload({ body: 'legacy', copy: { body: { key: 'unknown' } } }, 'fr'), {
     body: 'legacy'
   });
+  assert.deepEqual(
+    localizeNotificationPayload(
+      {
+        body: 'legacy invitation',
+        copy: {
+          body: { key: 'roomInvitation', args: { room: 'Élodie 🐈' } }
+        }
+      },
+      'fr'
+    ),
+    { body: 'Invitation au salon « Élodie 🐈 »' }
+  );
 });

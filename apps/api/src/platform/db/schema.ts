@@ -93,8 +93,10 @@ export interface DeviceTokens {
   created_at: Generated<Timestamp>;
   id: string;
   last_seen_at: Generated<Timestamp>;
+  locale: Generated<string>;
   notification_channels: Generated<string[]>;
   provider: string;
+  registration_version: Generated<string>;
   session_id: string;
   token: string;
   user_id: string;

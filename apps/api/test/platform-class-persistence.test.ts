@@ -194,7 +194,10 @@ test(
         metadata: { ...signals, retained: `row-${index}` }
       });
       assert.equal(stored?.platformClass, classifyPlatform(signals));
-      assert.deepEqual(stored?.metadata, { retained: `row-${index}` });
+      const { locale, registrationVersion, ...metadata } = stored?.metadata ?? {};
+      assert.deepEqual(metadata, { retained: `row-${index}` });
+      assert.equal(locale, 'ru');
+      assert.equal(typeof registrationVersion, 'string');
     }
   }
 );

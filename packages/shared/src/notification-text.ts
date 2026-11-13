@@ -17,7 +17,9 @@ const TEXT_KEYS = [
   'ringTitle',
   'ringRoom',
   'ringJoin',
-  'ringPrivate'
+  'ringPrivate',
+  'roomInvitation',
+  'roomInvitationUnnamed'
 ] as const;
 export type NotificationTextKey = (typeof TEXT_KEYS)[number];
 export type NotificationText = {
@@ -44,7 +46,9 @@ const texts: Record<AppLocale, Texts> = {
     ringTitle: ({ actor }) => `${actor || 'Друг'} зовёт вас`,
     ringRoom: ({ room = '' }) => `Комната «${room}»`,
     ringJoin: () => 'Присоединиться к комнате',
-    ringPrivate: () => 'Вас зовут в голосовую комнату.'
+    ringPrivate: () => 'Вас зовут в голосовую комнату.',
+    roomInvitation: ({ room = '' }) => `Приглашение в комнату «${room}»`,
+    roomInvitationUnnamed: () => 'Приглашение в комнату'
   },
   en: {
     newMessage: () => 'New message',
@@ -62,7 +66,9 @@ const texts: Record<AppLocale, Texts> = {
     ringTitle: ({ actor }) => `${actor || 'A friend'} is inviting you`,
     ringRoom: ({ room = '' }) => `Room “${room}”`,
     ringJoin: () => 'Join the room',
-    ringPrivate: () => 'You are invited to a voice room.'
+    ringPrivate: () => 'You are invited to a voice room.',
+    roomInvitation: ({ room = '' }) => `Invitation to room “${room}”`,
+    roomInvitationUnnamed: () => 'Room invitation'
   },
   fr: {
     newMessage: () => 'Nouveau message',
@@ -80,7 +86,9 @@ const texts: Record<AppLocale, Texts> = {
     ringTitle: ({ actor }) => `${actor || 'Un ami'} vous invite`,
     ringRoom: ({ room = '' }) => `Salon « ${room} »`,
     ringJoin: () => 'Rejoindre le salon',
-    ringPrivate: () => 'Vous êtes invité dans un salon vocal.'
+    ringPrivate: () => 'Vous êtes invité dans un salon vocal.',
+    roomInvitation: ({ room = '' }) => `Invitation au salon « ${room} »`,
+    roomInvitationUnnamed: () => 'Invitation à un salon'
   }
 };
 

@@ -3,8 +3,9 @@
 
 import type { TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
 import type { FastifyInstance } from 'fastify';
-import { DeviceTokenBody } from '@voice-room/shared/contracts/devices';
+import { DeviceRegistrationBody, DeviceTokenBody } from '@voice-room/shared/contracts/devices';
 import { Done, Failure } from '@voice-room/shared/contracts/http';
+import { PushRegistrationSuccess, PushRegistrationConflict } from '@voice-room/shared/contracts/push-registration';
 import { requireSession, type ApiContext } from '../../app/context.ts';
 import { failure, sendRateLimited } from '../../platform/http/http-kit.ts';
 import type { DeviceTokenService } from './device-token.service.ts';
@@ -16,7 +17,12 @@ export function registerDeviceTokenRoutes(root: FastifyInstance, ctx: ApiContext
 
   app.post(
     '/api/push/devices',
-    { schema: { body: DeviceTokenBody, response: { 201: Done, '4xx': Failure, 503: Failure } } },
+    {
+      schema: {
+        body: DeviceRegistrationBody,
+        response: { 201: PushRegistrationSuccess, 409: PushRegistrationConflict, '4xx': Failure, 503: Failure }
+      }
+    },
     async (request, reply) => {
       const { user, session } = await requireSession(ctx, request);
       const result = await devices.register({
@@ -25,7 +31,8 @@ export function registerDeviceTokenRoutes(root: FastifyInstance, ctx: ApiContext
         provider: request.body.provider,
         token: request.body.token,
         notificationChannels: request.body.notificationChannels ?? [],
-        userAgent: String(request.headers['user-agent'] || '')
+        userAgent: String(request.headers['user-agent'] || ''),
+        ...(request.body.localeState ? { localeState: request.body.localeState } : {})
       });
       switch (result.status) {
         // Answered here, not thrown: the error handler turns every 5xx into internal_error.
@@ -34,7 +41,14 @@ export function registerDeviceTokenRoutes(root: FastifyInstance, ctx: ApiContext
         case 'rate_limited':
           return sendRateLimited(reply, { ...TOO_MANY, retryAfterSeconds: result.retryAfterSeconds });
         case 'registered':
-          return reply.code(201).send({ ok: true as const });
+          return reply.code(201).send({ ok: true as const, registration: result.registration });
+        case 'locale_conflict':
+          return reply.code(409).send({
+            ok: false as const,
+            error: 'Push registration changed',
+            code: 'push_registration_conflict' as const,
+            registration: result.registration
+          });
       }
     }
   );

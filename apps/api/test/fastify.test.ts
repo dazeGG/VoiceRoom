@@ -229,9 +229,12 @@ test('push subscription routes require auth and validate subscription payloads',
       }
     },
     pushes: {
-      async upsert(input) {
+      async register(input) {
         writes.push(input);
-        return { id: 'subscription-1' };
+        return {
+          status: 'subscribed',
+          registration: { protocol: 1, locale: 'ru', version: '11111111-1111-4111-8111-111111111111' }
+        };
       },
       async remove(input) {
         removals.push(input);

@@ -7,9 +7,10 @@ import { DEVICE_TOKEN_PATTERN, type DevicePushProvider } from '@voice-room/share
 import type { RateCheck } from '../../lib/rate-limit.ts';
 import { DomainError } from '../../platform/http/domain-error.ts';
 import type { DeviceTokenRepository } from './device-token.repository.ts';
+import type { PushLocaleIntent, PushRegistrationState } from '@voice-room/shared/contracts/push-registration';
 
 export interface DeviceTokenServiceDeps {
-  tokens(): Pick<DeviceTokenRepository, 'upsert' | 'remove'>;
+  tokens(): Pick<DeviceTokenRepository, 'register' | 'remove'>;
   /** Whether the server can deliver to the app at all. */
   enabled(): boolean;
   /** Shared with the web push subscriptions' limit, under its own key. */
@@ -31,7 +32,8 @@ export function createDeviceTokenService(deps: DeviceTokenServiceDeps) {
       provider,
       token,
       userAgent,
-      notificationChannels = []
+      notificationChannels = [],
+      localeState
     }: {
       userId: string;
       sessionId: string;
@@ -39,7 +41,13 @@ export function createDeviceTokenService(deps: DeviceTokenServiceDeps) {
       token: string;
       userAgent: string;
       notificationChannels?: readonly string[];
-    }): Promise<{ status: 'disabled' } | RateLimited | { status: 'registered' }> {
+      localeState?: PushLocaleIntent;
+    }): Promise<
+      | { status: 'disabled' }
+      | RateLimited
+      | { status: 'registered'; registration: PushRegistrationState }
+      | { status: 'locale_conflict'; registration: PushRegistrationState | null }
+    > {
       if (!deps.enabled()) return { status: 'disabled' };
       // A push SDK's token is one word of printable ASCII; anything else was
       // mangled on the way, and could outgrow the index or the push.
@@ -47,8 +55,17 @@ export function createDeviceTokenService(deps: DeviceTokenServiceDeps) {
       const limited = rateLimited(userId);
       if (limited) return limited;
       const appVersion = parseAndroidAppVersion(userAgent) || null;
-      await deps.tokens().upsert({ userId, sessionId, provider, token, appVersion, notificationChannels });
-      return { status: 'registered' };
+      const result = await deps.tokens().register({
+        userId,
+        sessionId,
+        provider,
+        token,
+        appVersion,
+        notificationChannels,
+        ...(localeState ? { localeState } : {})
+      });
+      if (result.status === 'invalid_session') throw new DomainError('authentication_required', 401, 'Session ended');
+      return result;
     },
 
     async unregister({

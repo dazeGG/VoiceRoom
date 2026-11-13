@@ -5,6 +5,7 @@ import { sql } from 'kysely';
 import type { Database } from './kysely.ts';
 
 export const lockKeys = {
+  pushTarget: (provider: string, target: string) => `voice-room:push-target:${provider}:${target}`,
   // Every ban writer takes this before roomBans (always admission first), so a ban and the
   // membership write for the same room wait for each other.
   admission: (roomId: string) => `voice-room:admission:${roomId}`,

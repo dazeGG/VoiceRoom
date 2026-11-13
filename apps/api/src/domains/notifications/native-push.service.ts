@@ -14,6 +14,7 @@ import { buildRuStoreMessage, type RuStorePushClient, type RuStoreSendResult } f
 import type { RuStorePushConfig } from '../../app/config.ts';
 import type { DeviceTokenRepository } from './device-token.repository.ts';
 import { localPushFailure } from './push-fanout.ts';
+import { localizeNotificationPayload } from '@voice-room/shared/notification-text';
 
 type SendResult = { enabled: boolean; sent: number; removed: number };
 type NativePushLogger = {
@@ -99,10 +100,10 @@ export function createNativePushService({
     const unauthorized: RuStoreSendResult[] = [];
     const failures: Error[] = [];
     await Promise.all(
-      live.map(async ({ token, notificationChannels }) => {
+      live.map(async ({ token, notificationChannels, locale }) => {
         const message = buildRuStoreMessage({
           token,
-          payload: push,
+          payload: pushPayloadOf(localizeNotificationPayload(payload, locale)),
           nativeData,
           ttlSeconds: ttl,
           notificationChannels: notificationChannels ?? []

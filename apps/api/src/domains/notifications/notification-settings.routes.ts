@@ -20,6 +20,8 @@ import type { ApiContext } from '../../app/context.ts';
 import { failure, optionalJsonBody } from '../../platform/http/http-kit.ts';
 import { cleanUuid } from '../messaging/message-input.ts';
 import type { MutationResult, NotificationSettingsService } from './notification-settings.service.ts';
+import { Type } from 'typebox';
+import { PushRegistrationSuccess, PushRegistrationConflict } from '@voice-room/shared/contracts/push-registration';
 
 const answers = <Success>(success: Success) => ({ 200: success, '4xx': Failure, 503: Failure });
 const INVALID_TARGET = failure('Invalid notification target', { code: 'invalid_notification_target' });
@@ -172,7 +174,14 @@ export function registerNotificationSettingsRoutes(
     '/api/push/subscriptions',
     {
       preValidation: optionalJsonBody,
-      schema: { body: SubscribeBody, response: { ...answers(Done), 201: Done } }
+      schema: {
+        body: SubscribeBody,
+        response: {
+          ...answers(Done),
+          201: PushRegistrationSuccess,
+          409: Type.Union([PushRegistrationConflict, Failure])
+        }
+      }
     },
     async (request, reply) => {
       const user = await signedIn(request, reply);
@@ -180,7 +189,8 @@ export function registerNotificationSettingsRoutes(
       const result = await settings.subscribe(
         user.id,
         request.body.subscription,
-        String(request.headers['user-agent'] || '')
+        String(request.headers['user-agent'] || ''),
+        request.body.localeState
       );
       switch (result.status) {
         case 'disabled':
@@ -194,7 +204,14 @@ export function registerNotificationSettingsRoutes(
             .code(409)
             .send(failure('Push endpoint belongs to another subscription', { code: 'push_endpoint_conflict' }));
         case 'subscribed':
-          return reply.code(201).send({ ok: true as const });
+          return reply.code(201).send({ ok: true as const, registration: result.registration });
+        case 'locale_conflict':
+          return reply.code(409).send({
+            ok: false as const,
+            error: 'Push registration changed',
+            code: 'push_registration_conflict' as const,
+            registration: result.registration
+          });
       }
     }
   );
