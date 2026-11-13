@@ -4,6 +4,7 @@
 
 import type { InboxItem, InboxPage, NotificationLevel, NotificationReason } from './contracts/notifications.ts';
 import { isArray, isOneOf, isRecord, pageInfoOf, trimmedText } from './guards.ts';
+import type { NotificationCopy } from './notification-text.ts';
 
 const NOTIFICATION_CONTRACT_VERSION = 1 as const;
 export const NOTIFICATION_DEFAULT_LIMIT = 50 as const;
@@ -13,6 +14,9 @@ export const NOTIFICATION_REASONS: readonly NotificationReason[] = Object.freeze
 
 /** What a Web Push carries: every API push sends it, the service worker reads it. */
 export type PushPayload = {
+  /** Internal semantic copy, rendered by each provider after choosing its target. */
+  copy?: NotificationCopy | undefined;
+  notificationPrivate?: boolean | undefined;
   title?: string | undefined;
   body?: string | undefined;
   tag?: string | undefined;

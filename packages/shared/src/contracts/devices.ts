@@ -3,6 +3,7 @@
 // after every sign-in; the token belongs to that session and goes away with it.
 
 import { Type, type Static } from 'typebox';
+import { PushLocaleIntent } from './push-registration.ts';
 
 /** Push services a token can come from. FCM and HMS join this list when the app ships outside RuStore. */
 export const DEVICE_PUSH_PROVIDERS = ['rustore'] as const;
@@ -33,3 +34,9 @@ export const DeviceTokenBody = Type.Object({
   )
 });
 export type DeviceTokenBody = Static<typeof DeviceTokenBody>;
+
+export const DeviceRegistrationBody = Type.Object({
+  ...DeviceTokenBody.properties,
+  localeState: Type.Optional(PushLocaleIntent)
+});
+export type DeviceRegistrationBody = Static<typeof DeviceRegistrationBody>;
