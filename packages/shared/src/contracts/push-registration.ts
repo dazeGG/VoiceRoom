@@ -2,7 +2,9 @@ import { Type, type Static } from 'typebox';
 import { Ok } from './http.ts';
 
 export const AppLocale = Type.Union([Type.Literal('ru'), Type.Literal('en'), Type.Literal('fr')]);
-const Version = Type.String({ format: 'uuid' });
+const Version = Type.String({
+  pattern: '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
+});
 
 export const PushLocaleIntent = Type.Object({
   protocol: Type.Literal(1),

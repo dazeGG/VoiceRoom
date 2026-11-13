@@ -32,7 +32,8 @@ export type PushPayload = {
 /** The mention/reply push the notification outbox queues. */
 export type ProviderPayload = Required<
   Pick<PushPayload, 'notificationId' | 'revision' | 'dedupeKey' | 'title' | 'body' | 'url'>
-> & { contractVersion: 1 };
+> &
+  Pick<PushPayload, 'copy' | 'notificationPrivate'> & { contractVersion: 1 };
 
 // Rows carry what the database driver returns (a Date, an ISO string or a number).
 function epochMillis(value: unknown): number | null {
@@ -128,6 +129,11 @@ export function buildProviderPayload(
     revision: notification.revision,
     dedupeKey: `${notification.id}:${notification.revision}`,
     title: 'VoiceRoom',
+    copy: {
+      ...(!notification.body ? { body: { key: 'newNotification' as const } } : {}),
+      privateBody: { key: 'privateNotification' }
+    },
+    notificationPrivate: privateNotifications,
     body: privateNotifications
       ? 'Откройте VoiceRoom, чтобы посмотреть уведомление.'
       : notification.body || 'У вас новое уведомление',
