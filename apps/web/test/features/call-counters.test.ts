@@ -22,18 +22,22 @@ test.each([
   {
     name: 'unmeasured candidate pair falls back to RTCP',
     candidate: { currentRoundTripTime: 0, responsesReceived: 0 },
-    expected: [65, 61]
+    expected: [null, 61]
   },
   {
     name: 'measured zero remains zero',
     candidate: { currentRoundTripTime: 0, responsesReceived: 2 },
-    expected: [0, 0]
+    expected: [null, 0]
   },
-  { name: 'absent response counter preserves zero', candidate: { currentRoundTripTime: 0 }, expected: [0, 0] },
+  {
+    name: 'zero without a response counter falls back to measured RTCP',
+    candidate: { currentRoundTripTime: 0 },
+    expected: [null, 61]
+  },
   {
     name: 'measured candidate RTT takes precedence',
     candidate: { currentRoundTripTime: 0.08, responsesReceived: 2 },
-    expected: [80, 80]
+    expected: [null, 80]
   }
 ])('voice poll RTT: $name', async ({ candidate, expected }) => {
   vi.useFakeTimers();
@@ -50,10 +54,20 @@ test.each([
     { roundTripTime: 0.061096, roundTripTimeMeasurements: 5 }
   ];
   let pollNo = 0;
+  const responses = 'responsesReceived' in candidate ? candidate.responsesReceived : undefined;
   const track = {
     getRTCStatsReport: async () =>
       report([
-        { id: 'pair', type: 'candidate-pair', state: 'succeeded', selected: true, totalRoundTripTime: 0, ...candidate },
+        {
+          id: 'pair',
+          type: 'candidate-pair',
+          state: 'succeeded',
+          selected: true,
+          totalRoundTripTime: 0,
+          ...candidate,
+          timestamp: pollNo * 3000,
+          responsesReceived: typeof responses === 'number' && responses > 0 ? responses + pollNo : responses
+        },
         { id: 'remote-in', type: 'remote-inbound-rtp', kind: 'audio', ...defined(readings[pollNo], 'reading') }
       ])
   };
@@ -189,7 +203,15 @@ test("each poll tells the server what this tab heard of every speaker's micropho
       report([
         { id: 'out-1', type: 'outbound-rtp', kind: 'audio', packetsSent: 150 * (pollNo + 1) },
         { id: 'rin-1', type: 'remote-inbound-rtp', kind: 'audio', packetsLost: 3 * pollNo },
-        { id: 'pair', type: 'candidate-pair', state: 'succeeded', nominated: true, currentRoundTripTime: 0.08 }
+        {
+          id: 'pair',
+          type: 'candidate-pair',
+          state: 'succeeded',
+          nominated: true,
+          currentRoundTripTime: 0.08,
+          timestamp: pollNo * 3000,
+          responsesReceived: pollNo + 1
+        }
       ])
   };
   const publications = new Map([

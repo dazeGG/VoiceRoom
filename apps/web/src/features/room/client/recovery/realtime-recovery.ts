@@ -368,6 +368,13 @@ export class RealtimeRecoveryController {
     return true;
   }
 
+  /** Abandon only the exact optional request whose own deadline expired. */
+  abandonOptionalReplacement(epoch: number): boolean {
+    if (!this.isCurrent(epoch) || !this.optionalReplacement) return false;
+    this.keepStandingConnection('timed_out', {});
+    return true;
+  }
+
   networkOffline(): void {
     if (!this.active || !this.isNetworkOnline) return;
     this.isNetworkOnline = false;

@@ -1,6 +1,7 @@
 import { onTestFinished, test, vi } from 'vitest';
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, readdirSync, rmSync, statSync } from 'node:fs';
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -28,6 +29,33 @@ test('the meta policy quotes keywords, not schemes, and leaves out what a meta t
 
 test('version.json has the shape SvelteKit writes, so open tabs of either build can read it', () => {
   assert.deepEqual(JSON.parse(versionFile('1793024058890')), { version: '1793024058890' });
+});
+
+test('generated RNNoise worklet is reproducible and changes the cache-busting voice asset version', () => {
+  execFileSync(process.execPath, [join(webRoot, 'scripts/build-rnnoise-worklet.ts'), '--check']);
+  const publicDir = mkdtempSync(join(tmpdir(), 'voice-assets-'));
+  try {
+    mkdirSync(join(publicDir, 'rnnoise'));
+    for (const file of [
+      'audio-gate.worklet.js',
+      'desktop-audio-source.worklet.js',
+      'rnnoise/rnnoise.mjs',
+      'rnnoise/rnnoise.wasm',
+      'rnnoise/rnnoise.worklet.js'
+    ]) {
+      copyFileSync(join(webRoot, 'public', file), join(publicDir, file));
+    }
+    const newVersion = voiceAssetVersion(publicDir);
+    copyFileSync(
+      join(webRoot, 'test/fixtures/rnnoise-old.worklet.js.txt'),
+      join(publicDir, 'rnnoise/rnnoise.worklet.js')
+    );
+    const oldVersion = voiceAssetVersion(publicDir);
+    assert.notEqual(newVersion, oldVersion);
+    assert.equal(newVersion, voiceAssetVersion(join(webRoot, 'public')));
+  } finally {
+    rmSync(publicDir, { recursive: true, force: true });
+  }
 });
 
 test('a production build keeps the deployment contract', { timeout: 60_000 }, async () => {

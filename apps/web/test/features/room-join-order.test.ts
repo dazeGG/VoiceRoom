@@ -82,9 +82,12 @@ test('the microphone opens while the room check is still on its way', async () =
   await vi.waitFor(() => expect(microphone.opened).toBe(1));
   expect(roomChecks()).toBe(0);
   room.leaveRoom();
+  microphone.answer?.(null);
+  await Promise.resolve();
+  await Promise.resolve();
 });
 
-test('a cancelled old microphone cannot mark the next attempt or report twice', async () => {
+test('a cancelled old unresolved microphone keeps the next join listen-only without a second GUM', async () => {
   const { room } = await loadRoom({ '/api/rooms/abc123': ROOM });
   const { reportVoiceJoinOutcome } = await import('@/shared/log');
   const first = room.joinRoom();
@@ -92,11 +95,10 @@ test('a cancelled old microphone cannot mark the next attempt or report twice', 
   const answerFirst = microphone.answer;
   room.leaveRoom();
   const second = room.joinRoom();
-  await vi.waitFor(() => expect(microphone.opened).toBe(2));
+  expect(microphone.opened).toBe(1);
+  room.leaveRoom();
   answerFirst?.(null);
   await first;
-  room.leaveRoom();
-  microphone.answer?.(null);
   await second;
   expect(vi.mocked(reportVoiceJoinOutcome).mock.calls.map(([event]) => [event.outcome, event.stage])).toEqual([
     ['cancel', 'started'],

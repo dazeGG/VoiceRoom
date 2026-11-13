@@ -5,6 +5,7 @@ import { beforeEach, expect, test } from 'vitest';
 import { state } from '@/features/room/client/core/room-runtime.store';
 import { createInitialRoomState } from '@/features/room/client/model/room-state';
 import { createVoiceEventHandler } from '@/features/room/client/room/voice-events';
+import { getConnectionStatusView } from '@/features/room/client/ui/status';
 
 const handle = createVoiceEventHandler({ leaveRoom: () => {}, showModeration: () => {}, showNotFound: () => {} });
 const verdict = (peerId: string, level: 'good' | 'unstable' | 'bad' | null, cause: 'heard_badly' | null) =>
@@ -24,4 +25,13 @@ test("the room keeps the server's verdict on its own voice, and nothing known cl
 
   await verdict('peer-self-1', null, null);
   expect(state.voiceQuality).toBeNull();
+});
+
+test('a bad verdict with null cause stays degraded without inventing a side', async () => {
+  state.voiceConnection = 'connected';
+  await verdict('peer-self-1', 'bad', null);
+  expect(getConnectionStatusView().stateName).toBe('error');
+  expect(getConnectionStatusView().label).toContain('Плохая связь');
+  expect(getConnectionStatusView().label).not.toContain('вас плохо слышно');
+  expect(getConnectionStatusView().label).not.toContain('собеседников плохо слышно');
 });

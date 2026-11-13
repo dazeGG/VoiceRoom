@@ -69,6 +69,7 @@ export interface RtcStat {
   /** Seconds summed over every check of the pair, and how many there were. */
   readonly totalRoundTripTime: number | undefined;
   readonly responsesReceived: number | undefined;
+  readonly roundTripTimeMeasurements: number | undefined;
   readonly localCandidateId: string | undefined;
   readonly availableOutgoingBitrate: number | undefined;
   readonly estimatedOutgoingBitrate: number | undefined;
@@ -99,7 +100,15 @@ function toRtcStat(value: unknown): RtcStat | null {
   if (!isRecord(value) || typeof value.id !== 'string') return null;
   const number = (key: string): number | undefined => {
     const field = value[key];
-    return typeof field === 'number' ? field : undefined;
+    return typeof field === 'number' && Number.isFinite(field) ? field : undefined;
+  };
+  const nonnegative = (key: string): number | undefined => {
+    const field = number(key);
+    return field !== undefined && field >= 0 ? field : undefined;
+  };
+  const counter = (key: string): number | undefined => {
+    const field = nonnegative(key);
+    return field !== undefined && Number.isSafeInteger(field) ? field : undefined;
   };
   const string = (key: string): string | undefined => {
     const field = value[key];
@@ -117,7 +126,7 @@ function toRtcStat(value: unknown): RtcStat | null {
     bytesReceived: number('bytesReceived'),
     candidateType: string('candidateType'),
     codecId: string('codecId'),
-    currentRoundTripTime: number('currentRoundTripTime'),
+    currentRoundTripTime: nonnegative('currentRoundTripTime'),
     encoderImplementation: string('encoderImplementation'),
     estimatedOutgoingBitrate: number('estimatedOutgoingBitrate'),
     firCount: number('firCount'),
@@ -156,8 +165,9 @@ function toRtcStat(value: unknown): RtcStat | null {
     concealmentEvents: number('concealmentEvents'),
     jitterBufferDelay: number('jitterBufferDelay'),
     jitterBufferEmittedCount: number('jitterBufferEmittedCount'),
-    totalRoundTripTime: number('totalRoundTripTime'),
-    responsesReceived: number('responsesReceived'),
+    totalRoundTripTime: nonnegative('totalRoundTripTime'),
+    responsesReceived: counter('responsesReceived'),
+    roundTripTimeMeasurements: counter('roundTripTimeMeasurements'),
     pliCount: number('pliCount'),
     protocol: string('protocol'),
     relayProtocol: string('relayProtocol'),
@@ -167,10 +177,10 @@ function toRtcStat(value: unknown): RtcStat | null {
       ? Object.values(durations).reduce<number>((sum, field) => sum + durationSeconds(field), 0)
       : undefined,
     qualityLimitationCpuSeconds: durations ? durationSeconds(durations.cpu) : undefined,
-    roundTripTime: number('roundTripTime'),
+    roundTripTime: nonnegative('roundTripTime'),
     selected: boolean('selected'),
     state: string('state'),
-    timestamp: number('timestamp'),
+    timestamp: nonnegative('timestamp'),
     type: string('type') ?? ''
   };
 }

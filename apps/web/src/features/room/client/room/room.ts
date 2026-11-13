@@ -31,8 +31,7 @@ import { onAppVisibilityChange } from '@/platform/app-visibility';
 import {
   describeMicrophoneError,
   getLocalMicrophoneCapture,
-  openLocalMicrophone,
-  setLocalMicrophoneCapture,
+  getMicrophoneCaptureDiagnostics,
   stopMicrophoneCapture
 } from '../services/microphone-service';
 import { attachMeter, startMeters, stopMeters } from '../media/meters';
@@ -48,6 +47,14 @@ import {
   closeCameraPopover,
   closeOutputPopover,
   refreshDevices,
+  acquireMicrophoneForJoin,
+  disposePreparedMicrophoneForJoin,
+  canAdmitAutomaticMicrophoneAction,
+  invalidateMicrophoneActions,
+  startMicrophoneCall,
+  setMicrophoneRecoveryObserver,
+  getMicrophoneCallGeneration,
+  requestAutomaticMicrophoneConnectionReplacement,
   refreshMicrophoneLevelMeter,
   relieveNoiseSuppression,
   reopenMicrophone,
@@ -56,6 +63,12 @@ import {
 import { startCpuPressureWatch, stopCpuPressureWatch } from '../services/cpu-pressure';
 import { noteCpuPressure, startCallStrainWatch, stopCallStrainWatch } from './call-strain';
 import { canRecoverMic, startMicSendWatch, stopMicSendWatch } from './mic-send';
+import {
+  noteCaptureRecovery,
+  noteProcessingRelief,
+  startCaptureDiagnostics,
+  stopCaptureDiagnostics
+} from './capture-diagnostics';
 import {
   finishCallQuality,
   type CallQualitySummary,
@@ -79,6 +92,7 @@ import { isMicrophoneShownMuted } from '../core/microphone-mute';
 import type { MicrophoneCapture } from '../core/types';
 import {
   cancelRoomRecovery,
+  abandonOptionalLiveKitReplacement,
   notifyRoomAppConnection,
   notifyRoomNetworkOffline,
   notifyRoomNetworkOnline,
@@ -206,6 +220,7 @@ export async function joinRoom(event?: Event): Promise<void> {
 
 async function performJoinRoom(generation: number): Promise<void> {
   const isCurrent = (): boolean => isCurrentJoinAttempt(generation);
+  let pendingMicrophoneCapture: MicrophoneCapture | null = null;
   const startedAt = performance.now();
   // Keep the original attempt's context if navigation or sign-in changes while
   // the microphone/network is pending. Reuse the guest id already sent on joins.
@@ -250,10 +265,10 @@ async function performJoinRoom(generation: number): Promise<void> {
     // Side by side: every step that waits for another is one more round trip
     // for a visitor far from the server.
     const roomCheck = roomCheckIsFresh(state.roomId) ? Promise.resolve(true) : checkRoomExists(state.roomId);
-    const openingMicrophone = openJoinMicrophone();
+    const openingMicrophone = openJoinMicrophone(isCurrent);
     const discardMicrophone = () =>
       openingMicrophone.then((capture) => {
-        if (capture) stopMicrophoneCapture(capture);
+        if (capture) disposePreparedMicrophoneForJoin(capture);
       });
     let exists: boolean;
     try {
@@ -271,15 +286,12 @@ async function performJoinRoom(generation: number): Promise<void> {
       return;
     }
     const microphoneCapture = await openingMicrophone;
+    pendingMicrophoneCapture = microphoneCapture;
     if (!isCurrent()) {
-      if (microphoneCapture) stopMicrophoneCapture(microphoneCapture);
       return;
     }
     markJoinStage('microphoneMs');
-    if (microphoneCapture) {
-      setLocalMicrophoneCapture(microphoneCapture);
-      watchLocalMicrophone();
-    } else {
+    if (!microphoneCapture) {
       state.microphoneMissing = true;
     }
     await refreshDevices().catch((error: unknown) => log.warn('device list failed', errorContext(error)));
@@ -297,7 +309,6 @@ async function performJoinRoom(generation: number): Promise<void> {
       avatarColorKey: useSessionStore().user?.avatarColorKey || '',
       avatarUrl: useSessionStore().user?.avatarUrl || ''
     });
-    attachMeter(state.self, state.localStream);
     updatePeerStatus(state.self);
 
     ensureAppRealtimeConnected();
@@ -335,13 +346,19 @@ async function performJoinRoom(generation: number): Promise<void> {
     voiceJoinSent = true;
     setServerConnectionStatus('connecting');
 
-    const connected = await connectLiveKitRoom(name, isCurrent);
+    const connected = await connectLiveKitRoom(name, isCurrent, microphoneCapture);
     if (!connected || !isCurrent()) {
+      if (microphoneCapture && state.localStream === microphoneCapture.stream) stopLocalStream();
       if (isCurrent()) reportOutcome('failure');
       return;
     }
+    if (microphoneCapture && state.localStream === microphoneCapture.stream) watchLocalMicrophone();
+    attachMeter(state.self, state.localStream);
     notifyLiveKitReconciled();
     state.joined = true;
+    startMicrophoneCall();
+    startCaptureDiagnostics();
+    setMicrophoneRecoveryObserver(noteCaptureRecovery);
     finishJoinTiming();
     reportOutcome('success');
     useVoiceSessionStore().setConnectedVoiceRoom(state.roomId);
@@ -362,15 +379,47 @@ async function performJoinRoom(generation: number): Promise<void> {
     // Relief comes from the call showing strain (call-strain.ts), not from a busy system alone.
     startCallStrainWatch(() => {
       // The noise suppression and, silently, the video (video-relief.ts).
+      const reliefGeneration = getMicrophoneCallGeneration();
+      const reliefRoomId = state.roomId;
+      const reliefSessionToken = state.sessionToken;
+      const reliefCurrent = () =>
+        state.joined &&
+        getMicrophoneCallGeneration() === reliefGeneration &&
+        state.roomId === reliefRoomId &&
+        state.sessionToken === reliefSessionToken;
+      const noiseStarted = performance.now();
       void relieveNoiseSuppression().then((switched) => {
+        if (!reliefCurrent()) return;
         if (switched) recordCpuRelief();
+        const capture = getMicrophoneCaptureDiagnostics();
+        noteProcessingRelief({
+          generation: reliefGeneration,
+          kind: 'noise',
+          outcome: switched ? 'applied' : 'failed',
+          requestedMode: 'browser',
+          actualMode: capture.actualMode,
+          durationMs: performance.now() - noiseStarted
+        });
       });
-      void relieveVideo().then(() => recordCpuRelief());
+      const videoStarted = performance.now();
+      void relieveVideo().then(() => {
+        if (!reliefCurrent()) return;
+        recordCpuRelief();
+        noteProcessingRelief({
+          generation: reliefGeneration,
+          kind: 'video',
+          outcome: state.videoRelieved ? 'applied' : 'not_applied',
+          requestedMode: null,
+          actualMode: getMicrophoneCaptureDiagnostics().actualMode,
+          durationMs: performance.now() - videoStarted
+        });
+      });
     });
     startMicSendWatch({
       reopen: reopenMicrophone,
-      replace: requestLiveKitReplacement,
-      canRecover: canRecoverMic
+      replace: () =>
+        requestAutomaticMicrophoneConnectionReplacement(requestLiveKitReplacement, abandonOptionalLiveKitReplacement),
+      canRecover: () => canRecoverMic() && canAdmitAutomaticMicrophoneAction()
     });
     startCpuPressureWatch({
       onState: (pressure) => {
@@ -403,6 +452,8 @@ async function performJoinRoom(generation: number): Promise<void> {
     stopLocalStream();
     if (banned) showRoomModerationScreen('banned');
   } finally {
+    if (pendingMicrophoneCapture && state.localStream !== pendingMicrophoneCapture.stream)
+      disposePreparedMicrophoneForJoin(pendingMicrophoneCapture);
     if (isCurrent()) state.connecting = false;
   }
 }
@@ -411,12 +462,16 @@ async function performJoinRoom(generation: number): Promise<void> {
  * A missing or refused microphone does not keep anyone out of the call: they
  * join to listen, and the microphone button or a plugged-in device adds it.
  */
-async function openJoinMicrophone(): Promise<MicrophoneCapture | null> {
+async function openJoinMicrophone(isCurrent: () => boolean): Promise<MicrophoneCapture | null> {
   try {
-    return await openLocalMicrophone();
+    return await acquireMicrophoneForJoin(
+      isCurrent,
+      () => showToast('Микрофон не ответил вовремя: вы в комнате без микрофона', { duration: 8000 }),
+      () => showToast('Микрофон ещё занят прошлой операцией: вы в комнате без микрофона', { duration: 8000 })
+    );
   } catch (error) {
     log.warn('joining without a microphone', errorContext(error));
-    showToast(`${describeMicrophoneError(error)}: вы в комнате без микрофона`, { duration: 8000 });
+    if (isCurrent()) showToast(`${describeMicrophoneError(error)}: вы в комнате без микрофона`, { duration: 8000 });
     return null;
   }
 }
@@ -430,6 +485,9 @@ function formatJoinError(error: unknown): string {
 }
 
 export function leaveRoom(): void {
+  invalidateMicrophoneActions();
+  setMicrophoneRecoveryObserver(null);
+  stopCaptureDiagnostics();
   finishJoinTelemetry?.('cancel');
   joinAttemptGeneration += 1;
   cancelRoomRecovery();
