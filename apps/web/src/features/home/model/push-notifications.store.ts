@@ -27,6 +27,17 @@ async function getRegistration(): Promise<ServiceWorkerRegistration | null> {
   return navigator.serviceWorker.register('/service-worker.js', { type: 'module' });
 }
 
+// Keep rejected I/O values unknown instead of PromiseRejectedResult.reason's any.
+async function settle<T>(
+  operation: Promise<T>
+): Promise<{ status: 'fulfilled'; value: T } | { status: 'rejected'; reason: unknown }> {
+  try {
+    return { status: 'fulfilled', value: await operation };
+  } catch (reason) {
+    return { status: 'rejected', reason };
+  }
+}
+
 export const usePushNotificationsStore = defineStore('push-notifications', () => {
   const locale = useLocaleStore();
   const pushNotifications = reactive<{
@@ -112,7 +123,10 @@ export const usePushNotificationsStore = defineStore('push-notifications', () =>
     try {
       // Inspect the browser target even when config fails, so a replaced endpoint
       // cannot inherit confirmation from the subscription previously registered.
-      const [configResult, registrationResult] = await Promise.allSettled([fetchPushConfig(), getRegistration()]);
+      const [configResult, registrationResult] = await Promise.all([
+        settle(fetchPushConfig()),
+        settle(getRegistration())
+      ]);
       if (!current()) return;
       if (registrationResult.status === 'fulfilled') {
         registration = registrationResult.value;
