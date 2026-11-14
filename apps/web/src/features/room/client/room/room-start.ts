@@ -1,6 +1,7 @@
 // The start screen's actions: create a room or open one by its code. Both
 // navigate to the room's page, which then checks entry and joins.
 
+import { t } from '@/shared/i18n';
 import { createRoom } from '@/api/rooms';
 import { markInAppRoomNavigation } from '@/platform/open-in-app';
 import { createLogger, errorContext } from '@/shared/log';
@@ -21,7 +22,7 @@ export async function createRoomFromStart(): Promise<void> {
     openRoom(await createRoom());
   } catch (error) {
     log.error('room action failed', errorContext(error));
-    showToast(errorMessage(error) || 'Не удалось создать комнату');
+    showToast(errorMessage(error) || t('Не удалось создать комнату'));
   } finally {
     startUi.createRoomLoading = false;
   }
@@ -33,7 +34,7 @@ export function joinRoomByCode(): void {
 
   const roomId = extractRoomId(startUi.roomCode);
   if (!roomId) {
-    showToast('Введите код комнаты');
+    showToast(t('Введите код комнаты'));
     return;
   }
 

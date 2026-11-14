@@ -5,6 +5,9 @@
 import { sql } from 'kysely';
 import type pg from 'pg';
 import type { DevicePushProvider } from '@voice-room/shared/contracts/devices';
+import type { PushLocaleIntent, PushRegistrationState } from '@voice-room/shared/contracts/push-registration';
+import { resolveLocale, type AppLocale } from '@voice-room/shared/localization';
+import { lockKeys, lockXact } from '../../platform/db/locks.ts';
 import { kyselyOn } from '../../platform/db/kysely.ts';
 import { createRowId } from '../../platform/db/ids.ts';
 
@@ -14,21 +17,21 @@ export type DeviceTokenTarget = {
   token: string;
   appVersion: string | null;
   notificationChannels?: readonly string[];
+  locale?: AppLocale;
 };
 
 function createDeviceTokenRepository({ pool, maxTokensPerUser = 10 }: { pool: pg.Pool; maxTokensPerUser?: number }) {
   const db = kyselyOn(pool);
   const tokenLimit = Math.max(1, Math.floor(Number(maxTokensPerUser) || 10));
 
-  // Each account keeps its most recently seen tokens up to the limit; the one
-  // just registered always stays.
-  async function upsert({
+  async function register({
     userId,
     sessionId,
     provider,
     token,
     appVersion,
-    notificationChannels = []
+    notificationChannels = [],
+    localeState
   }: {
     userId: string;
     sessionId: string;
@@ -36,30 +39,65 @@ function createDeviceTokenRepository({ pool, maxTokensPerUser = 10 }: { pool: pg
     token: string;
     appVersion: string | null;
     notificationChannels?: readonly string[];
-  }): Promise<void> {
-    await db.transaction().execute(async (trx) => {
+    localeState?: PushLocaleIntent;
+  }): Promise<
+    | { status: 'registered'; registration: PushRegistrationState }
+    | { status: 'locale_conflict'; registration: PushRegistrationState | null }
+    | { status: 'invalid_session' }
+  > {
+    return db.transaction().execute(async (trx) => {
       await trx.selectFrom('users').select('id').where('id', '=', userId).forUpdate().execute();
-      await trx
-        .insertInto('device_tokens')
-        .values({
-          id: createRowId(),
-          user_id: userId,
-          session_id: sessionId,
-          provider,
-          token,
-          app_version: appVersion,
-          notification_channels: [...notificationChannels]
-        })
-        .onConflict((oc) =>
-          oc.columns(['provider', 'token']).doUpdateSet((eb) => ({
-            user_id: eb.ref('excluded.user_id'),
-            session_id: eb.ref('excluded.session_id'),
-            app_version: eb.ref('excluded.app_version'),
-            notification_channels: eb.ref('excluded.notification_channels'),
-            last_seen_at: sql<Date>`current_timestamp`
-          }))
-        )
-        .execute();
+      const session = await trx
+        .selectFrom('sessions')
+        .select('id')
+        .where('id', '=', sessionId)
+        .where('user_id', '=', userId)
+        .where('expires_at', '>', new Date())
+        .forKeyShare()
+        .executeTakeFirst();
+      if (!session) return { status: 'invalid_session' };
+      await lockXact(trx, lockKeys.pushTarget(provider, token));
+      const current = await trx
+        .selectFrom('device_tokens')
+        .selectAll()
+        .where('provider', '=', provider)
+        .where('token', '=', token)
+        .forUpdate()
+        .executeTakeFirst();
+      const state: PushRegistrationState | null = current
+        ? { protocol: 1, locale: resolveLocale([], current.locale), version: current.registration_version }
+        : null;
+      if (
+        localeState &&
+        localeState.expectedVersion !== state?.version &&
+        !(localeState.expectedVersion === null && !state)
+      ) {
+        return { status: 'locale_conflict', registration: state };
+      }
+      const locale = localeState?.locale ?? state?.locale ?? 'ru';
+      const changed =
+        !current ||
+        current.user_id !== userId ||
+        current.session_id !== sessionId ||
+        current.app_version !== appVersion ||
+        current.locale !== locale ||
+        JSON.stringify(current.notification_channels) !== JSON.stringify(notificationChannels);
+      const version = changed ? createRowId() : (state?.version ?? createRowId());
+      const values = {
+        user_id: userId,
+        session_id: sessionId,
+        app_version: appVersion,
+        notification_channels: [...notificationChannels],
+        locale,
+        registration_version: version,
+        last_seen_at: sql<Date>`current_timestamp`
+      };
+      if (current) await trx.updateTable('device_tokens').set(values).where('id', '=', current.id).execute();
+      else
+        await trx
+          .insertInto('device_tokens')
+          .values({ id: createRowId(), provider, token, ...values })
+          .execute();
       await trx
         .deleteFrom('device_tokens')
         .where('id', 'in', (eb) =>
@@ -73,7 +111,12 @@ function createDeviceTokenRepository({ pool, maxTokensPerUser = 10 }: { pool: pg
             .offset(tokenLimit)
         )
         .execute();
+      return { status: 'registered', registration: { protocol: 1, locale, version } };
     });
+  }
+
+  async function upsert(input: Parameters<typeof register>[0]): Promise<void> {
+    await register(input);
   }
 
   /** Removes the caller's own token; false when the caller had no such token. */
@@ -109,7 +152,8 @@ function createDeviceTokenRepository({ pool, maxTokensPerUser = 10 }: { pool: pg
         'device_tokens.provider',
         'device_tokens.token',
         'device_tokens.app_version',
-        'device_tokens.notification_channels'
+        'device_tokens.notification_channels',
+        'device_tokens.locale'
       ])
       .where('device_tokens.user_id', '=', userId)
       .where('sessions.expires_at', '>', new Date(now))
@@ -120,11 +164,12 @@ function createDeviceTokenRepository({ pool, maxTokensPerUser = 10 }: { pool: pg
       provider: row.provider,
       token: row.token,
       appVersion: row.app_version,
-      notificationChannels: row.notification_channels
+      notificationChannels: row.notification_channels,
+      locale: resolveLocale([], row.locale)
     }));
   }
 
-  return { listByUserId, remove, removeToken, upsert };
+  return { listByUserId, remove, removeToken, upsert, register };
 }
 
 export type DeviceTokenRepository = ReturnType<typeof createDeviceTokenRepository>;

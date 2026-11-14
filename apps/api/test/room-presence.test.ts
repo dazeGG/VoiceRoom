@@ -322,12 +322,19 @@ test('a seat that leaves is recorded as one finished stay; an account keeps its 
   const sink = sessionSink();
   const { presence } = harness({ sessions: sink.sessions, now: () => 5000 });
   const room = presence.room('r1');
-  room.peers.set('ada', { id: 'ada', accountUserId: 'user-ada', joinedAt: 1000, transport: transport('ta') });
+  room.peers.set('ada', {
+    id: 'ada',
+    accountUserId: 'user-ada',
+    clientId: 'a1111111-1111-4111-8111-111111111111',
+    joinedAt: 1000,
+    transport: transport('ta')
+  });
   room.peers.set('guest', {
     id: 'guest',
     accountUserId: '',
     name: 'Петя',
     guestId: '6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b',
+    clientId: '6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b',
     client: 'browser',
     os: 'Windows',
     browser: 'Chrome',
@@ -346,15 +353,25 @@ test('a seat that leaves is recorded as one finished stay; an account keeps its 
   await presence.recordOpenSessions();
   // A guest's stay carries its name, browser id, device and address (for the
   // repository to key; the address is never stored).
-  const none = { guestName: null, guestId: null, client: null, os: '', browser: '', ip: '' };
+  const none = { guestName: null, guestId: null, clientId: null, client: null, os: '', browser: '', ip: '' };
   assert.deepEqual(sink.recorded, [
-    [{ roomId: 'r1', userId: 'user-ada', ...none, joinedAt: 1000, leftAt: 5000 }],
+    [
+      {
+        roomId: 'r1',
+        userId: 'user-ada',
+        ...none,
+        clientId: 'a1111111-1111-4111-8111-111111111111',
+        joinedAt: 1000,
+        leftAt: 5000
+      }
+    ],
     [
       {
         roomId: 'r1',
         userId: null,
         guestName: 'Петя',
         guestId: '6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b',
+        clientId: '6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b',
         client: 'browser',
         os: 'Windows',
         browser: 'Chrome',
@@ -376,7 +393,7 @@ test('stopping records every stay still in voice once; a leave after that is not
   await presence.recordOpenSessions();
   presence.closePeer('r1', 'a', 'ta');
   await presence.recordOpenSessions();
-  const none = { guestName: null, guestId: null, client: null, os: '', browser: '', ip: '' };
+  const none = { guestName: null, guestId: null, clientId: null, client: null, os: '', browser: '', ip: '' };
   assert.deepEqual(sink.recorded, [
     [
       { roomId: 'r1', userId: 'user-a', ...none, joinedAt: 1000, leftAt: 9000 },

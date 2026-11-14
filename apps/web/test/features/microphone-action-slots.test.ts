@@ -31,6 +31,9 @@ import {
 import { ensureLocalMicrophonePublished } from '@/features/room/client/services/livekit/local-publications';
 import { defined } from '../helpers/assert';
 
+// Microphone ownership tests isolate the unrelated application realtime edge.
+vi.mock('@/features/room/client/room/presence', () => ({ postState: vi.fn(async () => {}) }));
+
 vi.mock('@/features/room/client/media/livekit-runtime', () => ({
   TRACK_SOURCE: { Microphone: 'microphone' },
   loadLiveKitClient: async () => ({ Track: { Source: { Microphone: 'microphone' } } })

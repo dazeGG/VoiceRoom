@@ -148,6 +148,7 @@ export const ERROR_CODES = [
   'invalid_push_subscription',
   'invalid_push_endpoint',
   'push_endpoint_conflict',
+  'push_registration_conflict',
   'push_rate_limited',
   'invalid_device_token',
 

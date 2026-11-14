@@ -2,6 +2,7 @@
 // snapshot, peers joining, leaving and changing, moderation, and the room
 // itself changing or going away.
 
+import { t } from '@/shared/i18n';
 import { reactive } from 'vue';
 import { errorText } from '@/api/error-texts';
 import { getAppRealtime, type RealtimeEvent } from '@/api/realtime';
@@ -83,7 +84,7 @@ export function createVoiceEventHandler(room: {
         room.showModeration('banned');
         return;
       }
-      showToast(errorText(event.payload.code) ?? 'Ошибка realtime-соединения');
+      showToast(errorText(event.payload.code) ?? t('Ошибка realtime-соединения'));
       if (
         event.payload.code === 'invalid_session' ||
         event.payload.code === 'join_failed' ||
@@ -138,13 +139,13 @@ export function createVoiceEventHandler(room: {
     }
 
     if (event.type === 'room.full') {
-      showToast(`Комната заполнена: максимум ${event.payload.maxRoomPeers}`);
+      showToast(t('Комната заполнена: максимум {p0}', { p0: event.payload.maxRoomPeers }));
       leaveRoom();
       return;
     }
 
     if (event.type === 'server.full') {
-      showToast('Сервер сейчас заполнен. Попробуйте зайти через пару минут');
+      showToast(t('Сервер сейчас заполнен. Попробуйте зайти через пару минут'));
       leaveRoom();
       return;
     }

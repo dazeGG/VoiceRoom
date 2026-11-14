@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // The compose field of one thread. It is mounted per thread, so the unsent
 // text it brings back and stores belongs to that thread alone.
+import { t } from '@/shared/i18n';
 import { ArrowUp } from '@lucide/vue';
 import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
 import type { DirectMessage } from '@/api/dm';
@@ -117,7 +118,7 @@ function insertEmoji(emoji: string): void {
         :target="{
           messageId: replyTarget.id,
           deleted: false,
-          author: { id: replyTarget.senderId, name: replyTarget.senderId === selfId ? 'Вы' : peerName },
+          author: { id: replyTarget.senderId, name: replyTarget.senderId === selfId ? t('Вы') : peerName },
           text: replyTarget.body
         }"
         :on-jump="(messageId: string) => emit('jump', messageId)"
@@ -134,7 +135,7 @@ function insertEmoji(emoji: string): void {
           ref="input"
           v-model="draftText"
           class="dm-composer__input"
-          placeholder="Написать сообщение…"
+          :placeholder="t('Написать сообщение…')"
           @keydown="onKeydown"
           @input="onInput"
         />
@@ -142,8 +143,8 @@ function insertEmoji(emoji: string): void {
         <button
           class="dm-composer__send"
           type="submit"
-          aria-label="Отправить"
-          title="Отправить"
+          :aria-label="t('Отправить')"
+          :title="t('Отправить')"
           :disabled="!(draftText.trim() || media?.canSend)"
           @click="void submit()"
         >

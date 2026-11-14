@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '@/shared/i18n';
 import { computed, ref } from 'vue';
 import { Copy, Ellipsis, Reply } from '@lucide/vue';
 import { iconSm } from '@/shared/ui/icons';
@@ -29,7 +30,7 @@ const pickerOpen = ref(false);
     class="message-hover-actions"
     :class="{ 'message-hover-actions--overlay-open': pickerOpen }"
     role="toolbar"
-    aria-label="Действия с сообщением"
+    :aria-label="t('Действия с сообщением')"
   >
     <ReactionPicker
       v-if="reactionStore && userId"
@@ -49,8 +50,8 @@ const pickerOpen = ref(false);
       v-if="onReply"
       class="message-hover-actions__button"
       type="button"
-      aria-label="Ответить"
-      title="Ответить"
+      :aria-label="t('Ответить')"
+      :title="t('Ответить')"
       @click="onReply"
     >
       <Reply v-bind="iconSm" aria-hidden="true" />
@@ -58,8 +59,8 @@ const pickerOpen = ref(false);
     <button
       class="message-hover-actions__button"
       type="button"
-      aria-label="Копировать текст"
-      title="Копировать текст"
+      :aria-label="t('Копировать текст')"
+      :title="t('Копировать текст')"
       @click="emit('copy')"
     >
       <Copy v-bind="iconSm" aria-hidden="true" />
@@ -67,8 +68,8 @@ const pickerOpen = ref(false);
     <button
       class="message-hover-actions__button"
       type="button"
-      aria-label="Больше действий"
-      title="Больше действий"
+      :aria-label="t('Больше действий')"
+      :title="t('Больше действий')"
       @click="emit('more', $event)"
     >
       <Ellipsis v-bind="iconSm" aria-hidden="true" />

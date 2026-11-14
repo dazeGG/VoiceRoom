@@ -1,9 +1,12 @@
+import { t } from '@/shared/i18n';
+import { useLocalizedText } from '@/shared/i18n/localized-text';
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
 
 export const useStartUiStore = defineStore('start-ui', () => {
   const nameInput = ref('');
-  const savedNameStatus = ref('Имя не сохранено');
+  const savedNameStatus = useLocalizedText();
+  savedNameStatus.value = () => t('Имя не сохранено');
   const savedNameState = ref<'empty' | 'saved' | 'dirty'>('empty');
   const createRoomLoading = ref(false);
   const roomCode = ref('');
@@ -12,6 +15,9 @@ export const useStartUiStore = defineStore('start-ui', () => {
   return {
     nameInput,
     savedNameStatus,
+    setSavedNameStatus: (source: () => string): void => {
+      savedNameStatus.value = source;
+    },
     savedNameState,
     createRoomLoading,
     roomCode,
@@ -25,10 +31,10 @@ export function getNameStatusView(
   savedName: string
 ): { text: string; state: 'empty' | 'saved' | 'dirty' } {
   if (savedName && currentName === savedName) {
-    return { text: `Сохранено: ${savedName}`, state: 'saved' };
+    return { text: t('Сохранено: {p0}', { p0: savedName }), state: 'saved' };
   }
   if (savedName && currentName && currentName !== savedName) {
-    return { text: 'Новое имя еще не сохранено', state: 'dirty' };
+    return { text: t('Новое имя еще не сохранено'), state: 'dirty' };
   }
-  return { text: 'Имя не сохранено', state: 'empty' };
+  return { text: t('Имя не сохранено'), state: 'empty' };
 }

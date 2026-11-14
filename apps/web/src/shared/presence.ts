@@ -1,3 +1,4 @@
+import { t } from '@/shared/i18n';
 import type { PresenceStatus } from '@voice-room/shared/contracts/users';
 import { isPresenceStatus } from '@voice-room/shared/validation';
 
@@ -19,12 +20,12 @@ export function effectivePresenceStatus(
 export function presenceStatusLabel(status: PresenceStatus): string {
   switch (status) {
     case 'away':
-      return 'Отошёл';
+      return t('Отошёл');
     case 'dnd':
-      return 'Не беспокоить';
+      return t('Не беспокоить');
     case 'offline':
-      return 'Не в сети';
+      return t('Не в сети');
     default:
-      return 'В сети';
+      return t('В сети');
   }
 }

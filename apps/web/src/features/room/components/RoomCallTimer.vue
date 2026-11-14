@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '@/shared/i18n';
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useVoiceSessionStore } from '../voice-session.store';
 
@@ -39,8 +40,8 @@ const elapsed = computed(() => formatElapsed(voiceSession.roomActiveSince));
     <span v-if="props.separator" class="room-call-timer__separator" aria-hidden="true">·</span>
     <span
       :class="['room-call-timer', `room-call-timer--${props.variant}`]"
-      title="Длительность звонка в комнате"
-      :aria-label="`Длительность звонка ${elapsed}`"
+      :title="t('Длительность звонка в комнате')"
+      :aria-label="t('Длительность звонка {p0}', { p0: elapsed })"
       >{{ elapsed }}</span
     >
   </template>

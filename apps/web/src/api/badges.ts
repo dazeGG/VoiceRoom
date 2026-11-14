@@ -1,5 +1,6 @@
 // The accounts that carry a mark, for the name everywhere they appear.
 
+import { t } from '@/shared/i18n';
 import { BadgeList } from '@voice-room/shared/contracts/users';
 import { setAccountBadges } from '@/shared/badges';
 import { api } from './client';
@@ -7,7 +8,7 @@ import { api } from './client';
 /** Loads the marks; a failure leaves names without them rather than failing anything. */
 export async function loadAccountBadges(): Promise<void> {
   try {
-    setAccountBadges((await api.get('/api/badges', BadgeList, { fallback: 'Не удалось загрузить отметки' })).badges);
+    setAccountBadges((await api.get('/api/badges', BadgeList, { fallback: t('Не удалось загрузить отметки') })).badges);
   } catch {
     // Names simply show without a mark until the next load.
   }

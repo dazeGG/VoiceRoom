@@ -1,3 +1,4 @@
+import { t } from '@/shared/i18n';
 import { putBan, unban, type Ban, type ModerationDuration } from '@/api/moderation';
 import { kickRoomPeer } from '@/api/rooms';
 import { newId } from '@/shared/new-id';
@@ -16,10 +17,42 @@ export type ModerationNoticeOptions = {
 export type ModerationNotice = (message: string, options?: ModerationNoticeOptions) => void;
 
 export const BAN_DURATIONS: ReadonlyArray<{ value: ModerationDuration; label: string; phrase: string }> = [
-  { value: '1h', label: '1 час', phrase: 'на 1 час' },
-  { value: '1d', label: '1 день', phrase: 'на 1 день' },
-  { value: '7d', label: '7 дней', phrase: 'на 7 дней' },
-  { value: 'permanent', label: 'Навсегда', phrase: 'навсегда' }
+  {
+    value: '1h',
+    get label() {
+      return t('1 час');
+    },
+    get phrase() {
+      return t('на 1 час');
+    }
+  },
+  {
+    value: '1d',
+    get label() {
+      return t('1 день');
+    },
+    get phrase() {
+      return t('на 1 день');
+    }
+  },
+  {
+    value: '7d',
+    get label() {
+      return t('7 дней');
+    },
+    get phrase() {
+      return t('на 7 дней');
+    }
+  },
+  {
+    value: 'permanent',
+    get label() {
+      return t('Навсегда');
+    },
+    get phrase() {
+      return t('навсегда');
+    }
+  }
 ];
 
 export const BAN_UNDO_DURATION_MS = 6000;
@@ -31,12 +64,12 @@ function errorMessage(cause: unknown, fallback: string): string {
 export function banSubjectName(ban: Ban): string {
   const profile = ban.subject.profile;
   if (profile) return displayNameOf(profile);
-  return ban.subject.kind === 'guest' ? 'Гость' : 'Участник';
+  return ban.subject.kind === 'guest' ? t('Гость') : t('Участник');
 }
 
 export function banExpiryLabel(ban: Ban): string {
-  if (ban.expiresAt == null) return 'Навсегда';
-  return `До ${dateTime(ban.expiresAt)}`;
+  if (ban.expiresAt == null) return t('Навсегда');
+  return t('До {p0}', { p0: dateTime(ban.expiresAt) });
 }
 
 /** Takes a person out of the live call; they can come back by the link. */
@@ -47,10 +80,10 @@ export async function kickRoomMember(
 ): Promise<boolean> {
   try {
     await kickRoomPeer(roomId, member.peerId);
-    notify(`${member.name} выгнан из комнаты`, { description: 'Сможет вернуться по ссылке' });
+    notify(t('{p0} выгнан из комнаты', { p0: member.name }), { description: t('Сможет вернуться по ссылке') });
     return true;
   } catch (cause) {
-    notify(errorMessage(cause, 'Не удалось выгнать участника'), { variant: 'error' });
+    notify(errorMessage(cause, t('Не удалось выгнать участника')), { variant: 'error' });
     return false;
   }
 }
@@ -64,12 +97,12 @@ export async function banRoomMember(
   const phrase = BAN_DURATIONS.find((option) => option.value === duration)?.phrase ?? '';
   try {
     const ban = await putBan(roomId, { userId: member.userId, guestIp: null, duration, reason: '' }, newId());
-    notify(`${member.name} заблокирован ${phrase}`.trim(), {
-      undo: { label: 'Отменить', run: () => void liftRoomBan(roomId, ban, notify, 'Блокировка отменена') }
+    notify(t('{p0} заблокирован {p1}', { p0: member.name, p1: phrase }).trim(), {
+      undo: { label: t('Отменить'), run: () => void liftRoomBan(roomId, ban, notify, t('Блокировка отменена')) }
     });
     return ban;
   } catch (cause) {
-    notify(errorMessage(cause, 'Не удалось заблокировать участника'), { variant: 'error' });
+    notify(errorMessage(cause, t('Не удалось заблокировать участника')), { variant: 'error' });
     return null;
   }
 }
@@ -78,14 +111,14 @@ export async function liftRoomBan(
   roomId: string,
   ban: Ban,
   notify: ModerationNotice,
-  message = `${banSubjectName(ban)} разблокирован`
+  message = t('{p0} разблокирован', { p0: banSubjectName(ban) })
 ): Promise<boolean> {
   try {
     await unban(roomId, ban.id);
     notify(message);
     return true;
   } catch (cause) {
-    notify(errorMessage(cause, 'Не удалось снять блокировку'), { variant: 'error' });
+    notify(errorMessage(cause, t('Не удалось снять блокировку')), { variant: 'error' });
     return false;
   }
 }

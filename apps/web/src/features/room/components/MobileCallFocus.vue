@@ -1,5 +1,6 @@
 <script setup lang="ts">
 // One person big and everyone else in a strip below, me first on its left.
+import { t } from '@/shared/i18n';
 import { PinOff } from '@lucide/vue';
 import { computed } from 'vue';
 import type { Participant } from '@/features/room/client/core/types';
@@ -24,7 +25,7 @@ const fits = computed(() => props.strip.length + (props.self ? 1 : 0) <= STRIP_F
         <MobileCameraFlip v-if="big.isLocal && big.cameraStream" />
         <button class="mobile-call-focus__unpin" type="button" @click="mobileCall.unpin">
           <PinOff :size="20" aria-hidden="true" />
-          <span>Открепить</span>
+          <span>{{ t('Открепить') }}</span>
         </button>
       </div>
     </div>

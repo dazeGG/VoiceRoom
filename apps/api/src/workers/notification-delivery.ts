@@ -118,6 +118,7 @@ function createNotificationDeliveryWorker({
             ...job,
             payload: {
               ...payload,
+              ...(payload.copy ? { notificationPrivate: Boolean(current.private_notifications) } : {}),
               body: current.private_notifications ? 'Откройте VoiceRoom, чтобы посмотреть уведомление.' : payload.body
             }
           });

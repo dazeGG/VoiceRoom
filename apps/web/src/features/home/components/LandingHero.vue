@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '@/shared/i18n';
 import { ArrowRight } from '@lucide/vue';
 import { START_FEATURES } from '@/shared/start-features';
 import { Button } from '@/shared/ui';
@@ -20,16 +21,19 @@ function onRoomCodeKeydown(event: KeyboardEvent): void {
 
 <template>
   <section class="landing-hero" aria-labelledby="landingTitle">
-    <p class="landing-hero__kicker"><span class="landing-hero__kicker-dot"></span>Комната по ссылке за секунду</p>
-    <h1 id="landingTitle" class="landing-hero__title">Голосовые комнаты для своих</h1>
+    <p class="landing-hero__kicker">
+      <span class="landing-hero__kicker-dot"></span>{{ t('Комната по ссылке за секунду') }}
+    </p>
+    <h1 id="landingTitle" class="landing-hero__title">{{ t('Голосовые комнаты для своих') }}</h1>
     <p class="landing-hero__lead">
-      Нажмите — и вы уже в комнате. Код и ссылка появятся сразу. Аккаунт нужен, только чтобы сохранять комнаты.
+      {{
+        t('Нажмите — и вы уже в комнате. Код и ссылка появятся сразу. Аккаунт нужен, только чтобы сохранять комнаты.')
+      }}
     </p>
 
     <div class="landing-hero__cta-row">
       <Button variant="primary" size="xl" :disabled="creatingTemp" @click="emit('createTemp')">
-        <span v-if="creatingTemp" class="home-spinner" aria-hidden="true"></span>
-        Создать комнату
+        <span v-if="creatingTemp" class="home-spinner" aria-hidden="true"></span> {{ t('Создать комнату') }}
         <ArrowRight v-bind="iconMd" aria-hidden="true" />
       </Button>
 
@@ -40,8 +44,8 @@ function onRoomCodeKeydown(event: KeyboardEvent): void {
           class="landing-hero__join-input"
           type="search"
           name="room-search"
-          placeholder="Код комнаты"
-          aria-label="Код комнаты"
+          :placeholder="t('Код комнаты')"
+          :aria-label="t('Код комнаты')"
           maxlength="120"
           autocapitalize="off"
           autocomplete="off"
@@ -51,11 +55,11 @@ function onRoomCodeKeydown(event: KeyboardEvent): void {
           data-bwignore
           @keydown="onRoomCodeKeydown"
         />
-        <button class="landing-hero__join-btn" type="submit" :disabled="joining">Войти</button>
+        <button class="landing-hero__join-btn" type="submit" :disabled="joining">{{ t('Войти в комнату') }}</button>
       </form>
     </div>
 
-    <p class="landing-hero__disclaimer">Без имени и регистрации · комната живёт, пока в ней есть люди</p>
+    <p class="landing-hero__disclaimer">{{ t('Без имени и регистрации · комната живёт, пока в ней есть люди') }}</p>
 
     <LandingFeatureGrid :items="START_FEATURES" />
   </section>

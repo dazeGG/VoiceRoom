@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '@/shared/i18n';
 import { BellOff, ChevronDown } from '@lucide/vue';
 import type { RoomRelationship } from '@voice-room/shared/contracts/rooms';
 import { computed } from 'vue';
@@ -60,7 +61,7 @@ const roomMuted = computed(() => props.showNotificationControls && preferences.i
   <Popover
     :placement="placement"
     role="menu"
-    aria-label="Меню комнаты"
+    :aria-label="t('Меню комнаты')"
     panel-class="room-menu__popover"
     :keep-content-mounted="keepContentMounted"
   >
@@ -80,8 +81,8 @@ const roomMuted = computed(() => props.showNotificationControls && preferences.i
             v-if="roomMuted"
             class="room-menu__notifications-muted"
             role="img"
-            aria-label="Уведомления отключены"
-            title="Уведомления отключены"
+            :aria-label="t('Уведомления отключены')"
+            :title="t('Уведомления отключены')"
           >
             <BellOff v-bind="iconSm" aria-hidden="true" />
           </span>
@@ -105,8 +106,8 @@ const roomMuted = computed(() => props.showNotificationControls && preferences.i
           v-if="roomMuted"
           class="room-menu__notifications-muted"
           role="img"
-          aria-label="Уведомления отключены"
-          title="Уведомления отключены"
+          :aria-label="t('Уведомления отключены')"
+          :title="t('Уведомления отключены')"
         >
           <BellOff v-bind="iconSm" aria-hidden="true" />
         </span>

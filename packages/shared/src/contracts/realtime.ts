@@ -10,7 +10,7 @@ import { Type, type Static, type TSchema } from 'typebox';
 import { LoginAlert } from './account.ts';
 import { AdminReportsEvent } from './admin.ts';
 import { Nullable } from './http.ts';
-import { DirectMessage, PinnedMessage, ReactionSummary, RoomMessage } from './messages.ts';
+import { DirectMessage, DirectMessageInvite, PinnedMessage, ReactionSummary, RoomMessage } from './messages.ts';
 import { NotificationPreferences } from './notifications.ts';
 import { CpuPressure, LobbyRoom, NetworkLevel, PublicPeer, RoomRelationship, VoiceCause } from './rooms.ts';
 import { PublicUser } from './users.ts';
@@ -231,7 +231,15 @@ export const ClientCommandFrames = {
   /** `guestId` is the browser's lasting guest id (see normalizeGuestId); the API keeps it only for guests. */
   'room.join': Frame(
     'room.join',
-    Type.Object({ ...VoiceTarget.properties, name: Type.String(), guestId: Type.Optional(Type.String()) })
+    Type.Object({
+      ...VoiceTarget.properties,
+      name: Type.String(),
+      guestId: Type.Optional(Type.String()),
+      /** Random browser/application installation id, independent of the signed-in account. */
+      clientId: Type.Optional(
+        Type.String({ pattern: '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$' })
+      )
+    })
   ),
   'room.leave': Frame('room.leave', VoiceTarget),
   'room.peer.update': Frame('room.peer.update', Type.Object({ ...VoiceTarget.properties, patch: PeerPatch })),
@@ -273,7 +281,9 @@ export type NotificationActor = Static<typeof NotificationActor>;
 export const NotificationMessageBrief = Type.Object({
   id: Type.String(),
   body: Type.String(),
-  createdAt: Type.Number()
+  createdAt: Type.Number(),
+  /** App-generated invitation copy is rendered locally instead of translating its stored body. */
+  invite: Type.Optional(DirectMessageInvite)
 });
 export type NotificationMessageBrief = Static<typeof NotificationMessageBrief>;
 

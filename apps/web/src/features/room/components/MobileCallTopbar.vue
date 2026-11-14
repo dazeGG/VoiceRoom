@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '@/shared/i18n';
 import { LayoutGrid, MessageSquare, Users } from '@lucide/vue';
 import { computed } from 'vue';
 import { isRecord } from '@voice-room/shared/guards';
@@ -21,7 +22,7 @@ const voiceSession = useVoiceSessionStore();
 
 const heading = computed(() => roomClientState.roomName || roomClientState.roomId);
 const unread = computed(() => panels.getRoomUnreadCount());
-const viewLabel = computed(() => (mobileCall.view === 'grid' ? 'Фокус на говорящем' : 'Сетка'));
+const viewLabel = computed(() => (mobileCall.view === 'grid' ? t('Фокус на говорящем') : t('Сетка')));
 
 // A phone shares the room through its own sheet (messengers, AirDrop); where
 // there is none the link goes to the clipboard.
@@ -38,9 +39,9 @@ async function invite(): Promise<void> {
   }
   try {
     await copyText(url);
-    showToast('Ссылка скопирована');
+    showToast(t('Ссылка скопирована'));
   } catch {
-    showToast('Не удалось скопировать');
+    showToast(t('Не удалось скопировать'));
   }
 }
 
@@ -54,7 +55,7 @@ function handleInviteClick(): void {
     <button
       class="mobile-call-topbar__room"
       type="button"
-      :aria-label="`Пригласить в «${heading}»`"
+      :aria-label="t('Пригласить в «{p0}»', { p0: heading })"
       @click="handleInviteClick"
     >
       <Avatar
@@ -69,11 +70,11 @@ function handleInviteClick(): void {
         <span class="mobile-call-topbar__meta">
           <RoomCallTimer />
           <span v-if="voiceSession.roomActiveSince" class="mobile-call-topbar__dot" aria-hidden="true">·</span>
-          <span>{{ participantsUi.getParticipantCount() }} в звонке</span>
+          <span>{{ participantsUi.getParticipantCount() }} {{ t('в звонке') }}</span>
         </span>
       </span>
     </button>
-    <div class="room-panel-tabs mobile-call-topbar__actions" role="group" aria-label="Звонок">
+    <div class="room-panel-tabs mobile-call-topbar__actions" role="group" :aria-label="t('Звонок')">
       <button
         v-if="!duo"
         type="button"
@@ -101,7 +102,7 @@ function handleInviteClick(): void {
       <button
         type="button"
         class="room-panel-tabs__tab"
-        aria-label="Чат"
+        :aria-label="t('Чат')"
         :aria-pressed="panels.isRoomPanelOpen('chat')"
         @click="panels.toggleRoomPanel('chat')"
       >
@@ -111,7 +112,7 @@ function handleInviteClick(): void {
       <button
         type="button"
         class="room-panel-tabs__tab"
-        aria-label="Участники"
+        :aria-label="t('Участники')"
         :aria-pressed="panels.isRoomPanelOpen('participants')"
         @click="panels.toggleRoomPanel('participants')"
       >

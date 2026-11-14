@@ -302,7 +302,8 @@ export const useLobbyStore = defineStore('lobby', () => {
       id: message.id,
       body: message.body,
       createdAt: message.createdAt,
-      fromMe: message.senderId === selfId
+      fromMe: message.senderId === selfId,
+      ...(message.invite ? { invite: message.invite } : {})
     };
   }
 
@@ -311,7 +312,11 @@ export const useLobbyStore = defineStore('lobby', () => {
     const peerId = message.senderId === selfId ? message.recipientId : message.senderId;
     const friend = findFriend(peerId);
     if (friend?.lastMessage?.id === message.id) {
-      friend.lastMessage = { ...friend.lastMessage, body: message.body };
+      const invite = message.invite === undefined ? friend.lastMessage.invite : message.invite;
+      const latest = { ...friend.lastMessage, body: message.body };
+      if (invite) latest.invite = invite;
+      else delete latest.invite;
+      friend.lastMessage = latest;
     }
   }
 

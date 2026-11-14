@@ -1,6 +1,7 @@
 // The server's media budget as the room sees it: ask before a screen share or
 // a camera starts, and word a refusal for the person.
 
+import { t } from '@/shared/i18n';
 import type { MediaGrant, MediaKind } from '@voice-room/shared/contracts/realtime';
 import { requestMediaGrant } from '@/entities/room/room-realtime';
 import { state } from '../core/room-runtime.store';
@@ -20,8 +21,10 @@ export function askForMedia(kind: MediaKind, profileId?: string): Promise<MediaG
 
 export function describeMediaRefusal(refusal: MediaRefusal): string {
   if (refusal.reason === 'room_screens_full') {
-    return `В комнате не больше ${refusal.maxRoomScreens} демонстраций одновременно. Дождитесь, пока одна закончится`;
+    return t('В комнате не больше {p0} демонстраций одновременно. Дождитесь, пока одна закончится', {
+      p0: refusal.maxRoomScreens
+    });
   }
-  const what = refusal.kind === 'camera' ? 'камера недоступна' : 'демонстрация недоступна';
-  return `Сервер сейчас загружен, ${what}. Попробуйте через пару минут`;
+  const what = refusal.kind === 'camera' ? t('камера недоступна') : t('демонстрация недоступна');
+  return t('Сервер сейчас загружен, {p0}. Попробуйте через пару минут', { p0: what });
 }

@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { useLocalizedText, currentErrorMessage } from '@/shared/i18n/localized-text';
+
+import { t } from '@/shared/i18n';
 import { computed, ref, watchEffect } from 'vue';
 import { fetchAccountDeletionPreview, requestAccountDeletion, type AccountDeletionPreview } from '@/api/auth';
 import { useSessionStore } from '@/features/auth/session.store';
@@ -20,7 +23,7 @@ const preview = ref<AccountDeletionPreview | null>(null);
 const password = ref('');
 const understood = ref(false);
 const deleting = ref(false);
-const error = ref('');
+const error = useLocalizedText();
 
 const graceDays = computed(() => preview.value?.graceDays ?? 7);
 
@@ -37,7 +40,10 @@ watchEffect((onCleanup) => {
     })
     .catch((cause: unknown) => {
       if (!cancelled)
-        error.value = cause instanceof Error && cause.message ? cause.message : 'Не удалось подготовить удаление';
+        error.value = () =>
+          cause instanceof Error && currentErrorMessage(cause)
+            ? currentErrorMessage(cause)
+            : t('Не удалось подготовить удаление');
     });
   onCleanup(() => {
     cancelled = true;
@@ -54,10 +60,16 @@ async function confirmDeletion(): Promise<void> {
     const { deletionScheduledFor } = await requestAccountDeletion(password.value);
     password.value = '';
     session.clearSession();
-    emit('toast', `Аккаунт будет удалён ${dayMonth(deletionScheduledFor)}. Передумали — просто войдите снова`);
+    emit(
+      'toast',
+      t('Аккаунт будет удалён {p0}. Передумали — просто войдите снова', { p0: dayMonth(deletionScheduledFor) })
+    );
   } catch (cause) {
     session.expectSessionEnd(false);
-    error.value = cause instanceof Error && cause.message ? cause.message : 'Не удалось удалить аккаунт';
+    error.value = () =>
+      cause instanceof Error && currentErrorMessage(cause)
+        ? currentErrorMessage(cause)
+        : t('Не удалось удалить аккаунт');
   } finally {
     deleting.value = false;
   }
@@ -67,32 +79,36 @@ async function confirmDeletion(): Promise<void> {
 <template>
   <Dialog
     :open="open"
-    title="Удалить аккаунт"
+    :title="t('Удалить аккаунт')"
     :on-close="() => emit('close')"
     :width="500"
     initial-focus="#deleteAccountPassword"
   >
     <form class="delete-account" @submit.prevent="confirmDeletion">
       <p class="delete-account__text">
-        Аккаунт сразу скроется, а все сеансы завершатся. До {{ dayMonth(Date.now() + graceDays * DAY_MS) }} его можно
-        восстановить, просто войдя с паролем. После этого удаление окончательное:
+        {{ t('Аккаунт сразу скроется, а все сеансы завершатся. До') }} {{ dayMonth(Date.now() + graceDays * DAY_MS) }}
+        {{ t('его можно восстановить, просто войдя с паролем. После этого удаление окончательное:') }}
       </p>
       <ul class="delete-account__list">
-        <li>друзья, заявки, блокировки, настройки и коды восстановления удалятся;</li>
-        <li>ваши сообщения останутся у собеседников от имени «Удалённый аккаунт»;</li>
-        <li>занять этот логин снова будет нельзя.</li>
+        <li>{{ t('друзья, заявки, блокировки, настройки и коды восстановления удалятся;') }}</li>
+        <li>{{ t('ваши сообщения останутся у собеседников от имени «Удалённый аккаунт»;') }}</li>
+        <li>{{ t('занять этот логин снова будет нельзя.') }}</li>
       </ul>
 
       <div v-if="preview && preview.rooms.length > 0" class="delete-account__rooms">
-        <span class="settings__field-label">Ваши постоянные комнаты через {{ graceDays }} дней</span>
+        <span class="settings__field-label"
+          >{{ t('Ваши постоянные комнаты через') }} {{ graceDays }} {{ t('дней') }}</span
+        >
         <div v-for="room in preview.rooms" :key="room.roomId" class="delete-account__room">
-          <strong class="delete-account__room-name"><EmojiText :text="room.name || 'Комната без названия'" /></strong>
+          <strong class="delete-account__room-name"
+            ><EmojiText :text="room.name || t('Комната без названия')"
+          /></strong>
           <small class="delete-account__room-fate">
             <EmojiText
               :text="
                 room.heir
-                  ? `перейдёт к ${displayNameOf(room.heir)} — самому давнему участнику`
-                  : 'удалится: других участников нет'
+                  ? t('перейдёт к {p0} — самому давнему участнику', { p0: displayNameOf(room.heir) })
+                  : t('удалится: других участников нет')
               "
             />
           </small>
@@ -100,7 +116,7 @@ async function confirmDeletion(): Promise<void> {
       </div>
 
       <div>
-        <label class="settings__field-label" for="deleteAccountPassword">Текущий пароль</label>
+        <label class="settings__field-label" for="deleteAccountPassword">{{ t('Текущий пароль') }}</label>
         <input
           id="deleteAccountPassword"
           v-model="password"
@@ -113,15 +129,15 @@ async function confirmDeletion(): Promise<void> {
 
       <label class="delete-account__confirm">
         <input v-model="understood" type="checkbox" />
-        <span>Я понимаю, что через {{ graceDays }} дней аккаунт удалится навсегда</span>
+        <span>{{ t('Я понимаю, что через') }} {{ graceDays }} {{ t('дней аккаунт удалится навсегда') }}</span>
       </label>
 
       <p v-if="error" class="delete-account__error" role="alert">{{ error }}</p>
 
       <div class="home-dialog__actions">
-        <Button variant="ghost" type="button" @click="emit('close')">Отмена</Button>
+        <Button variant="ghost" type="button" @click="emit('close')">{{ t('Отмена') }}</Button>
         <button class="delete-account__submit" type="submit" :disabled="deleting || !understood || !password">
-          {{ deleting ? 'Удаляем…' : 'Удалить аккаунт' }}
+          {{ deleting ? t('Удаляем…') : t('Удалить аккаунт') }}
         </button>
       </div>
     </form>

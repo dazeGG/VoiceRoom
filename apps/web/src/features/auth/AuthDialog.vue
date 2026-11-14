@@ -1,4 +1,8 @@
 <script setup lang="ts">
+import { useLocalizedText, currentErrorMessage } from '@/shared/i18n/localized-text';
+
+import { t } from '@/shared/i18n';
+import LanguageControl from '@/shared/i18n/LanguageControl.vue';
 import { CircleAlert, X } from '@lucide/vue';
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
@@ -29,26 +33,32 @@ const emit = defineEmits<{ close: [] }>();
 
 const COPY: Record<AuthMode, { title: string; subtitle: string; submit: string; submitting: string; failure: string }> =
   {
-    login: {
-      title: 'Вход',
-      subtitle: 'Продолжите с сохранёнными комнатами и именем.',
-      submit: 'Войти',
-      submitting: 'Входим…',
-      failure: 'Не удалось войти'
+    get login() {
+      return {
+        title: t('Вход'),
+        subtitle: t('Продолжите с сохранёнными комнатами и именем.'),
+        submit: t('Войти'),
+        submitting: t('Входим…'),
+        failure: t('Не удалось войти')
+      };
     },
-    register: {
-      title: 'Создать аккаунт',
-      subtitle: 'Сохраняйте комнаты, историю и своё имя.',
-      submit: 'Создать аккаунт',
-      submitting: 'Создаём…',
-      failure: 'Не удалось создать аккаунт'
+    get register() {
+      return {
+        title: t('Создать аккаунт'),
+        subtitle: t('Сохраняйте комнаты, историю и своё имя.'),
+        submit: t('Создать аккаунт'),
+        submitting: t('Создаём…'),
+        failure: t('Не удалось создать аккаунт')
+      };
     },
-    recover: {
-      title: 'Восстановить доступ',
-      subtitle: 'Введите логин, один из кодов восстановления и новый пароль. Код сработает только один раз.',
-      submit: 'Сменить пароль и войти',
-      submitting: 'Восстанавливаем…',
-      failure: 'Не удалось восстановить доступ'
+    get recover() {
+      return {
+        title: t('Восстановить доступ'),
+        subtitle: t('Введите логин, один из кодов восстановления и новый пароль. Код сработает только один раз.'),
+        submit: t('Сменить пароль и войти'),
+        submitting: t('Восстанавливаем…'),
+        failure: t('Не удалось восстановить доступ')
+      };
     }
   };
 
@@ -62,7 +72,7 @@ const displayName = ref('');
 const recoveryCode = ref('');
 const password = ref('');
 const passwordConfirm = ref('');
-const error = ref('');
+const error = useLocalizedText();
 const submitting = ref(false);
 // Set when the account signing in is waiting to be deleted: the dialog offers
 // to restore it instead of an error.
@@ -96,13 +106,13 @@ function switchMode(nextMode: AuthMode): void {
 }
 
 function validate(): string {
-  if (isRegister.value && !normalizeLogin(loginValue.value)) return `Логин: ${LOGIN_HINT}`;
-  if (isRecover.value && !normalizeLogin(loginValue.value)) return 'Введите логин аккаунта';
+  if (isRegister.value && !normalizeLogin(loginValue.value)) return t('Логин: {p0}', { p0: t(LOGIN_HINT) });
+  if (isRecover.value && !normalizeLogin(loginValue.value)) return t('Введите логин аккаунта');
   if (isRecover.value && !normalizeRecoveryCode(recoveryCode.value))
-    return 'Код восстановления — 16 символов, например ABCD-EFGH-JKMN-PQRS';
+    return t('Код восстановления — 16 символов, например ABCD-EFGH-JKMN-PQRS');
   if (!isLogin.value && !isValidPassword(password.value))
-    return `Пароль должен быть не короче ${PASSWORD_MIN_LENGTH} символов`;
-  if (!isLogin.value && password.value !== passwordConfirm.value) return 'Пароли не совпадают';
+    return t('Пароль должен быть не короче {p0} символов', { p0: PASSWORD_MIN_LENGTH });
+  if (!isLogin.value && password.value !== passwordConfirm.value) return t('Пароли не совпадают');
   return '';
 }
 
@@ -121,7 +131,7 @@ async function finish(user: AuthUser): Promise<boolean> {
 async function handleSubmit(): Promise<void> {
   if (submitting.value) return;
 
-  error.value = validate();
+  error.value = () => validate();
   if (error.value) return;
 
   submitting.value = true;
@@ -147,14 +157,15 @@ async function handleSubmit(): Promise<void> {
     }
   } catch (cause) {
     if (cause instanceof ApiError && cause.code === 'account_blocked') {
-      error.value = blockedMessage(failureBody(cause, AccountFailure) ?? {});
+      error.value = () => blockedMessage(failureBody(cause, AccountFailure) ?? {});
       return;
     }
     if (isLogin.value && cause instanceof ApiError && cause.code === 'account_deletion_pending') {
       pendingDeletionAt.value = failureBody(cause, AccountFailure)?.deletionScheduledFor || null;
       return;
     }
-    error.value = cause instanceof Error && cause.message ? cause.message : copy.value.failure;
+    error.value = () =>
+      cause instanceof Error && currentErrorMessage(cause) ? currentErrorMessage(cause) : copy.value.failure;
   } finally {
     if (!leaving) submitting.value = false;
   }
@@ -170,12 +181,12 @@ async function restorePendingAccount(): Promise<void> {
     pendingDeletionAt.value = null;
     leaving = await finish(user);
   } catch (cause) {
-    error.value =
+    error.value = () =>
       cause instanceof ApiError && cause.code === 'account_blocked'
         ? blockedMessage(failureBody(cause, AccountFailure) ?? {})
-        : cause instanceof Error && cause.message
-          ? cause.message
-          : 'Не удалось восстановить аккаунт';
+        : cause instanceof Error && currentErrorMessage(cause)
+          ? currentErrorMessage(cause)
+          : t('Не удалось восстановить аккаунт');
   } finally {
     if (!leaving) submitting.value = false;
   }
@@ -191,13 +202,13 @@ async function restorePendingAccount(): Promise<void> {
     @cancel.prevent="handleCancel"
   >
     <div class="auth-dialog__panel">
-      <button class="auth-dialog__close" type="button" aria-label="Закрыть" @click="emit('close')">
+      <button class="auth-dialog__close" type="button" :aria-label="t('Закрыть')" @click="emit('close')">
         <X v-bind="iconMd" aria-hidden="true" />
       </button>
 
       <div class="auth-dialog__heading">
         <span class="auth-dialog__mark" aria-hidden="true"></span>
-        <p class="auth-dialog__kicker">Ваши комнаты всегда рядом</p>
+        <p class="auth-dialog__kicker">{{ t('Ваши комнаты всегда рядом') }}</p>
         <h1 id="authDialogTitle" class="auth-dialog__title">{{ copy.title }}</h1>
         <p class="auth-dialog__subtitle">{{ copy.subtitle }}</p>
       </div>
@@ -208,14 +219,17 @@ async function restorePendingAccount(): Promise<void> {
         </p>
 
         <div v-if="isLogin && pendingDeletionAt !== null" class="auth-dialog__restore" role="status">
-          <p>Этот аккаунт ожидает удаления — оно произойдёт {{ dayMonth(pendingDeletionAt) }}. Восстановить его?</p>
+          <p>
+            {{ t('Этот аккаунт ожидает удаления — оно произойдёт') }} {{ dayMonth(pendingDeletionAt)
+            }}{{ t('. Восстановить его?') }}
+          </p>
           <button class="auth-dialog__submit" type="button" :disabled="submitting" @click="restorePendingAccount()">
-            Восстановить аккаунт
+            {{ t('Восстановить аккаунт') }}
           </button>
         </div>
 
         <div class="auth-dialog__field">
-          <label class="auth-dialog__label" for="authLoginInput">Логин</label>
+          <label class="auth-dialog__label" for="authLoginInput">{{ t('Логин') }}</label>
           <input
             id="authLoginInput"
             ref="loginInput"
@@ -225,14 +239,14 @@ async function restorePendingAccount(): Promise<void> {
             autocapitalize="off"
             autocomplete="username"
             spellcheck="false"
-            placeholder="Ваш логин"
+            :placeholder="t('Ваш логин')"
             required
           />
         </div>
 
         <div v-if="isRegister" class="auth-dialog__field">
           <label class="auth-dialog__label" for="authDisplayNameInput">
-            Отображаемое имя <span class="auth-dialog__label-soft">· необязательно</span>
+            {{ t('Отображаемое имя') }} <span class="auth-dialog__label-soft">{{ t('· необязательно') }}</span>
           </label>
           <input
             id="authDisplayNameInput"
@@ -240,12 +254,12 @@ async function restorePendingAccount(): Promise<void> {
             class="auth-dialog__input"
             maxlength="40"
             autocomplete="nickname"
-            placeholder="Как вас будут видеть в комнате"
+            :placeholder="t('Как вас будут видеть в комнате')"
           />
         </div>
 
         <div v-if="isRecover" class="auth-dialog__field">
-          <label class="auth-dialog__label" for="authRecoveryCodeInput">Код восстановления</label>
+          <label class="auth-dialog__label" for="authRecoveryCodeInput">{{ t('Код восстановления') }}</label>
           <input
             id="authRecoveryCodeInput"
             v-model="recoveryCode"
@@ -260,32 +274,36 @@ async function restorePendingAccount(): Promise<void> {
         </div>
 
         <div class="auth-dialog__field">
-          <label class="auth-dialog__label" for="authPasswordInput">{{ isRecover ? 'Новый пароль' : 'Пароль' }}</label>
+          <label class="auth-dialog__label" for="authPasswordInput">{{
+            isRecover ? t('Новый пароль') : t('Пароль')
+          }}</label>
           <PasswordField
             id="authPasswordInput"
             v-model="password"
             :autocomplete="isLogin ? 'current-password' : 'new-password'"
-            :placeholder="isLogin ? 'Ваш пароль' : 'Минимум 8 символов'"
+            :placeholder="isLogin ? t('Ваш пароль') : t('Минимум 8 символов')"
           />
           <button v-if="isLogin" type="button" class="auth-dialog__forgot" @click="switchMode('recover')">
-            Забыли пароль?
+            {{ t('Забыли пароль?') }}
           </button>
         </div>
 
         <div v-if="!isLogin" class="auth-dialog__field">
-          <label class="auth-dialog__label" for="authPasswordConfirmInput">Повторите пароль</label>
+          <label class="auth-dialog__label" for="authPasswordConfirmInput">{{ t('Повторите пароль') }}</label>
           <PasswordField
             id="authPasswordConfirmInput"
             v-model="passwordConfirm"
             autocomplete="new-password"
-            placeholder="Ещё раз"
+            :placeholder="t('Ещё раз')"
           />
         </div>
 
         <p v-if="isRegister" class="auth-dialog__consent">
-          Нажимая «{{ copy.submit }}», вы подтверждаете, что вам исполнилось 14 лет, принимаете
-          <a href="/terms" target="_blank" rel="noopener">Пользовательское соглашение</a> и ознакомились с
-          <a href="/privacy" target="_blank" rel="noopener">Политикой обработки персональных данных</a>.
+          {{ t('Нажимая «') }}{{ copy.submit }}{{ t('», вы подтверждаете, что вам исполнилось 14 лет, принимаете') }}
+          <a href="/terms" target="_blank" rel="noopener">{{ t('Пользовательское соглашение') }}</a>
+          {{ t('и ознакомились с') }}
+          <a href="/privacy" target="_blank" rel="noopener">{{ t('Политикой обработки персональных данных') }}</a
+          >.
         </p>
 
         <button class="auth-dialog__submit" type="submit" :disabled="submitting || !session.loaded">
@@ -298,13 +316,18 @@ async function restorePendingAccount(): Promise<void> {
       </form>
 
       <p v-if="isLogin" class="auth-dialog__foot">
-        Нет аккаунта?
-        <button type="button" class="auth-dialog__link" @click="switchMode('register')">Зарегистрироваться</button>
+        {{ t('Нет аккаунта?') }}
+        <button type="button" class="auth-dialog__link" @click="switchMode('register')">
+          {{ t('Зарегистрироваться') }}
+        </button>
       </p>
       <p v-else class="auth-dialog__foot">
-        {{ isRecover ? 'Вспомнили пароль?' : 'Уже есть аккаунт?' }}
-        <button type="button" class="auth-dialog__link" @click="switchMode('login')">Войти</button>
+        {{ isRecover ? t('Вспомнили пароль?') : t('Уже есть аккаунт?') }}
+        <button type="button" class="auth-dialog__link" @click="switchMode('login')">{{ t('Войти') }}</button>
       </p>
+      <div class="auth-dialog__language">
+        <LanguageControl />
+      </div>
     </div>
   </dialog>
 </template>

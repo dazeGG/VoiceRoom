@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '@/shared/i18n';
 import { DoorOpen } from '@lucide/vue';
 import type { DirectMessageInvite } from '@/api/dm';
 import EmojiText from '@/shared/chat/EmojiText.vue';
@@ -24,9 +25,11 @@ const emit = defineEmits<{ respond: [action: 'accept' | 'decline'] }>();
     </div>
     <div v-if="inviteAnswerable(invite, fromMe)" class="dm-invite__actions">
       <button type="button" class="dm-invite__dismiss" :disabled="busy" @click="emit('respond', 'decline')">
-        Не сейчас
+        {{ t('Не сейчас') }}
       </button>
-      <button type="button" class="dm-invite__join" :disabled="busy" @click="emit('respond', 'accept')">Войти</button>
+      <button type="button" class="dm-invite__join" :disabled="busy" @click="emit('respond', 'accept')">
+        {{ t('Войти в комнату') }}
+      </button>
     </div>
   </article>
 </template>

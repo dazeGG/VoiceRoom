@@ -85,6 +85,10 @@ export function createFriendsService(deps: FriendsDeps) {
       title: type === 'friend.accepted' ? 'Заявка принята' : 'Новая заявка в друзья',
       body: actor.displayName || actor.login || 'VoiceRoom',
       privateBody: 'Откройте VoiceRoom, чтобы посмотреть событие.',
+      copy: {
+        title: { key: type === 'friend.accepted' ? 'friendAcceptedTitle' : 'friendRequestTitle' },
+        privateBody: { key: 'privateEvent' }
+      },
       tag: type,
       dedupeKey,
       url: '/'

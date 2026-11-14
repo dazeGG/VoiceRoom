@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '@/shared/i18n';
 import { MonitorDown, UserPlus, X } from '@lucide/vue';
 import { computed, onMounted, ref } from 'vue';
 import AuthDialog from '@/features/auth/AuthDialog.vue';
@@ -44,25 +45,25 @@ const cta = computed(() =>
 const copy = computed(() => {
   if (cta.value === 'app') {
     return {
-      label: 'Скачать приложение',
-      title: 'В приложении звонок удобнее',
-      text: 'Оверлей поверх игр, горячие клавиши и push-to-talk',
-      action: 'Скачать'
+      label: t('Скачать приложение'),
+      title: t('В приложении звонок удобнее'),
+      text: t('Оверлей поверх игр, горячие клавиши и push-to-talk'),
+      action: t('Скачать')
     };
   }
   if (roomClientState.roomIsStatic) {
     return {
-      label: 'Создать аккаунт',
-      title: 'Сохраните эту комнату за собой',
-      text: 'С аккаунтом она останется в списке — вернётесь без ссылки',
-      action: 'Создать аккаунт'
+      label: t('Создать аккаунт'),
+      title: t('Сохраните эту комнату за собой'),
+      text: t('С аккаунтом она останется в списке — вернётесь без ссылки'),
+      action: t('Создать аккаунт')
     };
   }
   return {
-    label: 'Создать аккаунт',
-    title: 'Заберите этот звонок с собой',
-    text: 'Свои комнаты, друзья и личные сообщения — в одном аккаунте',
-    action: 'Создать аккаунт'
+    label: t('Создать аккаунт'),
+    title: t('Заберите этот звонок с собой'),
+    text: t('Свои комнаты, друзья и личные сообщения — в одном аккаунте'),
+    action: t('Создать аккаунт')
   };
 });
 
@@ -93,7 +94,7 @@ function accept(): void {
       <button
         class="room-cta-slot__close"
         type="button"
-        aria-label="Скрыть до следующего захода"
+        :aria-label="t('Скрыть до следующего захода')"
         @click="dismissed = true"
       >
         <X v-bind="iconSm" aria-hidden="true" />
@@ -101,7 +102,7 @@ function accept(): void {
     </aside>
     <!-- A mobile browser suspends the microphone when it leaves the foreground. -->
     <p v-if="mobile && roomClientState.joined" class="room-cta-slot__hint" role="note">
-      Звонок идёт, пока браузер открыт и экран включён
+      {{ t('Звонок идёт, пока браузер открыт и экран включён') }}
     </p>
   </div>
 

@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { useLocalizedText, currentErrorMessage } from '@/shared/i18n/localized-text';
+
+import { t } from '@/shared/i18n';
 import { Copy, Download } from '@lucide/vue';
 import { ref, watch } from 'vue';
 import { generateRecoveryCodes, type RecoveryCodesStatus } from '@/api/auth';
@@ -21,7 +24,7 @@ const password = ref('');
 const codes = ref<string[]>([]);
 const saved = ref(false);
 const generating = ref(false);
-const error = ref('');
+const error = useLocalizedText();
 
 watch(
   () => props.open,
@@ -45,7 +48,7 @@ function close(): void {
 async function generate(): Promise<void> {
   if (generating.value) return;
   if (!password.value) {
-    error.value = 'Введите текущий пароль';
+    error.value = () => t('Введите текущий пароль');
     return;
   }
   generating.value = true;
@@ -56,7 +59,8 @@ async function generate(): Promise<void> {
     codes.value = result.codes;
     emit('generated', result.recoveryCodes);
   } catch (cause) {
-    error.value = cause instanceof Error && cause.message ? cause.message : 'Не удалось создать коды';
+    error.value = () =>
+      cause instanceof Error && currentErrorMessage(cause) ? currentErrorMessage(cause) : t('Не удалось создать коды');
   } finally {
     generating.value = false;
   }
@@ -65,9 +69,9 @@ async function generate(): Promise<void> {
 async function copyCodes(): Promise<void> {
   try {
     await navigator.clipboard.writeText(codes.value.join('\n'));
-    emit('toast', 'Коды скопированы');
+    emit('toast', t('Коды скопированы'));
   } catch {
-    emit('toast', 'Не удалось скопировать коды', { variant: 'error' });
+    emit('toast', t('Не удалось скопировать коды'), { variant: 'error' });
   }
 }
 
@@ -89,20 +93,24 @@ function downloadCodes(): void {
   <!-- Opened from the settings modal, whose overlay sits at z-index 60 (_recovery-codes.scss lifts this one). -->
   <Dialog
     :open="open"
-    :title="codes.length > 0 ? 'Сохраните коды восстановления' : 'Коды восстановления'"
+    :title="codes.length > 0 ? t('Сохраните коды восстановления') : t('Коды восстановления')"
     :on-close="close"
     :width="480"
     :initial-focus="codes.length > 0 ? '.recovery-dialog__codes' : '#recoveryPasswordInput'"
   >
     <form v-if="codes.length === 0" class="recovery-dialog recovery-dialog__form" @submit.prevent="generate">
       <p class="recovery-dialog__text">
-        Если вы забудете пароль, войти можно будет по логину и одному из десяти кодов. Каждый код срабатывает один раз.
+        {{
+          t(
+            'Если вы забудете пароль, войти можно будет по логину и одному из десяти кодов. Каждый код срабатывает один раз.'
+          )
+        }}
       </p>
       <p v-if="replacing" class="recovery-dialog__warning">
-        Новые коды заменят старые — старые сразу перестанут работать.
+        {{ t('Новые коды заменят старые — старые сразу перестанут работать.') }}
       </p>
       <div>
-        <label class="settings__field-label" for="recoveryPasswordInput">Текущий пароль</label>
+        <label class="settings__field-label" for="recoveryPasswordInput">{{ t('Текущий пароль') }}</label>
         <input
           id="recoveryPasswordInput"
           v-model="password"
@@ -114,15 +122,17 @@ function downloadCodes(): void {
       </div>
       <p v-if="error" class="recovery-dialog__error" role="alert">{{ error }}</p>
       <div class="home-dialog__actions">
-        <Button variant="ghost" type="button" @click="close">Отмена</Button>
+        <Button variant="ghost" type="button" @click="close">{{ t('Отмена') }}</Button>
         <Button variant="primary" type="submit" :disabled="generating">
-          {{ generating ? 'Создаём…' : 'Создать коды' }}
+          {{ generating ? t('Создаём…') : t('Создать коды') }}
         </Button>
       </div>
     </form>
     <div v-else class="recovery-dialog">
       <p class="recovery-dialog__text">
-        Коды показываются только сейчас. Сохраните их там, где не потеряете: в менеджере паролей или на бумаге.
+        {{
+          t('Коды показываются только сейчас. Сохраните их там, где не потеряете: в менеджере паролей или на бумаге.')
+        }}
       </p>
       <ol class="recovery-dialog__codes" tabindex="-1">
         <li v-for="code in codes" :key="code">
@@ -131,20 +141,18 @@ function downloadCodes(): void {
       </ol>
       <div class="recovery-dialog__tools">
         <Button variant="ghost" type="button" @click="copyCodes">
-          <template #icon><Copy v-bind="iconSm" aria-hidden="true" /></template>
-          Скопировать
+          <template #icon><Copy v-bind="iconSm" aria-hidden="true" /></template> {{ t('Скопировать') }}
         </Button>
         <Button variant="ghost" type="button" @click="downloadCodes">
-          <template #icon><Download v-bind="iconSm" aria-hidden="true" /></template>
-          Скачать .txt
+          <template #icon><Download v-bind="iconSm" aria-hidden="true" /></template> {{ t('Скачать .txt') }}
         </Button>
       </div>
       <label class="recovery-dialog__confirm">
         <input v-model="saved" type="checkbox" />
-        <span>Я сохранил коды</span>
+        <span>{{ t('Я сохранил коды') }}</span>
       </label>
       <div class="home-dialog__actions">
-        <Button variant="primary" type="button" :disabled="!saved" @click="close">Готово</Button>
+        <Button variant="primary" type="button" :disabled="!saved" @click="close">{{ t('Готово') }}</Button>
       </div>
     </div>
   </Dialog>

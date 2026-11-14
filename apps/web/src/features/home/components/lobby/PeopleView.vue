@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { getLocale, t } from '@/shared/i18n';
 import { Check, ChevronLeft, Copy, X } from '@lucide/vue';
 import { computed, ref } from 'vue';
 import type { AuthUser } from '@/api/auth';
@@ -26,13 +27,13 @@ const outgoing = computed(() => lobby.requests.outgoing);
 function statusMessage(status: string): string {
   switch (status) {
     case 'accepted':
-      return 'Теперь вы друзья';
+      return t('Теперь вы друзья');
     case 'already_friends':
-      return 'Вы уже друзья';
+      return t('Вы уже друзья');
     case 'already_sent':
-      return 'Заявка уже отправлена';
+      return t('Заявка уже отправлена');
     default:
-      return 'Заявка отправлена';
+      return t('Заявка отправлена');
   }
 }
 
@@ -45,7 +46,7 @@ async function sendByLogin(): Promise<void> {
     emit('toast', statusMessage(status));
     query.value = '';
   } catch (error) {
-    emit('toast', error instanceof Error && error.message ? error.message : 'Не удалось отправить заявку');
+    emit('toast', error instanceof Error && error.message ? error.message : t('Не удалось отправить заявку'));
   } finally {
     sending.value = false;
   }
@@ -75,35 +76,29 @@ async function run(id: string, action: () => Promise<void>, ok: string): Promise
     await action();
     emit('toast', ok);
   } catch (error) {
-    emit('toast', error instanceof Error && error.message ? error.message : 'Не удалось выполнить действие');
+    emit('toast', error instanceof Error && error.message ? error.message : t('Не удалось выполнить действие'));
   } finally {
     busy.value = { ...busy.value, [id]: false };
   }
 }
 
 function mutualLabel(count: number): string {
-  if (count === 0) return 'нет общих друзей';
-  const mod10 = count % 10;
-  const mod100 = count % 100;
-  const word =
-    mod10 === 1 && mod100 !== 11
-      ? 'общий друг'
-      : mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)
-        ? 'общих друга'
-        : 'общих друзей';
-  return `${count} ${word}`;
+  if (count === 0) return t('нет общих друзей');
+  const category = new Intl.PluralRules(getLocale()).select(count);
+  if (category === 'one') return t('{p0} общий друг', { p0: count });
+  if (getLocale() === 'ru' && category === 'few') return t('{p0} общих друга', { p0: count });
+  return t('{p0} общих друзей', { p0: count });
 }
 </script>
 
 <template>
   <div class="people-view">
     <button class="people-view__back" type="button" @click="emit('home')">
-      <ChevronLeft v-bind="iconSm" aria-hidden="true" />
-      На главную
+      <ChevronLeft v-bind="iconSm" aria-hidden="true" /> {{ t('На главную') }}
     </button>
-    <div class="people-view__title">Друзья и заявки</div>
+    <div class="people-view__title">{{ t('Друзья и заявки') }}</div>
 
-    <div class="people-view__label people-view__label--add">Добавить друга</div>
+    <div class="people-view__label people-view__label--add">{{ t('Добавить друга') }}</div>
     <div class="people-view__add-bar">
       <label class="people-view__add-field">
         <span class="people-view__add-at">@</span>
@@ -111,8 +106,8 @@ function mutualLabel(count: number): string {
           v-model="query"
           class="people-view__add-input"
           type="text"
-          placeholder="логин друга"
-          aria-label="Логин друга"
+          :placeholder="t('логин друга')"
+          :aria-label="t('Логин друга')"
           autocapitalize="off"
           autocomplete="off"
           spellcheck="false"
@@ -124,25 +119,25 @@ function mutualLabel(count: number): string {
         size="lg"
         :disabled="sending || !query.trim()"
         @click="sendByLogin"
-        >Отправить заявку</Button
+        >{{ t('Отправить заявку') }}</Button
       >
     </div>
     <div class="people-view__hint">
-      Ваш логин <code>@{{ user.login }}</code>
+      {{ t('Ваш логин') }} <code>@{{ user.login }}</code>
       <button class="people-view__copy" type="button" @click="copyLogin">
         <Copy v-bind="iconXs" aria-hidden="true" />
-        {{ copied ? 'скопировано' : 'копировать' }}
+        {{ copied ? t('скопировано') : t('копировать') }}
       </button>
-      — поделитесь им, чтобы вас нашли.
+      {{ t('— поделитесь им, чтобы вас нашли.') }}
     </div>
 
-    <div class="people-view__label people-view__label--requests">Заявки</div>
+    <div class="people-view__label people-view__label--requests">{{ t('Заявки') }}</div>
     <div class="people-view__columns">
       <div>
         <div class="people-view__column-label">
-          Входящие <span class="people-view__count">{{ incoming.length }}</span>
+          {{ t('Входящие') }} <span class="people-view__count">{{ incoming.length }}</span>
         </div>
-        <p v-if="incoming.length === 0" class="people-view__empty">Новых заявок нет.</p>
+        <p v-if="incoming.length === 0" class="people-view__empty">{{ t('Новых заявок нет.') }}</p>
         <template v-else>
           <div
             v-for="request in incoming"
@@ -165,18 +160,18 @@ function mutualLabel(count: number): string {
               <button
                 class="people-view__request-button people-view__request-button--accept"
                 type="button"
-                title="Принять"
+                :title="t('Принять')"
                 :disabled="busy[request.id]"
-                @click="run(request.id, () => lobby.acceptRequest(request.id), 'Заявка принята')"
+                @click="run(request.id, () => lobby.acceptRequest(request.id), t('Заявка принята'))"
               >
                 <Check v-bind="iconMd" aria-hidden="true" />
               </button>
               <button
                 class="people-view__request-button people-view__request-button--decline"
                 type="button"
-                title="Отклонить"
+                :title="t('Отклонить')"
                 :disabled="busy[request.id]"
-                @click="run(request.id, () => lobby.declineRequest(request.id), 'Заявка отклонена')"
+                @click="run(request.id, () => lobby.declineRequest(request.id), t('Заявка отклонена'))"
               >
                 <X v-bind="iconSm" aria-hidden="true" />
               </button>
@@ -187,9 +182,9 @@ function mutualLabel(count: number): string {
 
       <div>
         <div class="people-view__column-label">
-          Исходящие <span class="people-view__count">{{ outgoing.length }}</span>
+          {{ t('Исходящие') }} <span class="people-view__count">{{ outgoing.length }}</span>
         </div>
-        <p v-if="outgoing.length === 0" class="people-view__empty">Вы пока никому не отправляли заявки.</p>
+        <p v-if="outgoing.length === 0" class="people-view__empty">{{ t('Вы пока никому не отправляли заявки.') }}</p>
         <template v-else>
           <div v-for="request in outgoing" :key="request.id" class="people-view__request">
             <Avatar
@@ -203,15 +198,15 @@ function mutualLabel(count: number): string {
               <div class="people-view__request-name"><EmojiText :text="displayNameOf(request.user)" /></div>
               <div class="people-view__request-handle">@{{ request.user.login }}</div>
               <div class="people-view__request-pending">
-                <span class="people-view__request-pending-dot"></span>заявка отправлена · ждём ответа
+                <span class="people-view__request-pending-dot"></span>{{ t('заявка отправлена · ждём ответа') }}
               </div>
             </div>
             <Button
               variant="outline"
               class="ui-button--compact"
               :disabled="busy[request.id]"
-              @click="run(request.id, () => lobby.cancelRequest(request.id), 'Заявка отменена')"
-              >Отменить</Button
+              @click="run(request.id, () => lobby.cancelRequest(request.id), t('Заявка отменена'))"
+              >{{ t('Отменить') }}</Button
             >
           </div>
         </template>

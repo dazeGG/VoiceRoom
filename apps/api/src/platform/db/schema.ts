@@ -93,8 +93,10 @@ export interface DeviceTokens {
   created_at: Generated<Timestamp>;
   id: string;
   last_seen_at: Generated<Timestamp>;
+  locale: Generated<string>;
   notification_channels: Generated<string[]>;
   provider: string;
+  registration_version: Generated<string>;
   session_id: string;
   token: string;
   user_id: string;
@@ -680,6 +682,7 @@ export interface VoiceroomMigrationGuard {
 export interface VoiceSessions {
   browser: string | null;
   client: string | null;
+  client_id: string | null;
   guest_id: string | null;
   guest_name: string | null;
   id: Generated<string>;

@@ -1,3 +1,5 @@
+import { t } from '@/shared/i18n';
+import { currentErrorMessage } from '@/shared/i18n/localized-text';
 import { markRaw, ref } from 'vue';
 import { MAX_REACTION_BATCH, type ReactionSummary, type Reactor } from '@voice-room/shared/contracts/messages';
 import { fetchReactionBatch, fetchReactors, setReactionDesired, type ReactionConversation } from '@/api/reactions';
@@ -255,7 +257,9 @@ export class ReactionStore {
         const restored = {
           ...current,
           pending: false,
-          error: error instanceof Error ? error.message : 'Не удалось изменить реакцию'
+          get error() {
+            return error instanceof Error ? currentErrorMessage(error) : t('Не удалось изменить реакцию');
+          }
         };
         if (latestIndex >= 0) latest[latestIndex] = restored;
         else latest.push(restored);
@@ -317,7 +321,9 @@ export class ReactionStore {
         [key]: {
           ...current,
           loading: false,
-          error: error instanceof Error ? error.message : 'Не удалось загрузить список'
+          get error() {
+            return error instanceof Error ? currentErrorMessage(error) : t('Не удалось загрузить список');
+          }
         }
       };
     }

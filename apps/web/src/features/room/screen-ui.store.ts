@@ -1,3 +1,4 @@
+import { t } from '@/shared/i18n';
 import { defineStore } from 'pinia';
 import { computed, ref, shallowRef } from 'vue';
 import { state } from './client/core/room-runtime.store';
@@ -115,7 +116,7 @@ export const useScreenUiStore = defineStore('screen-ui', () => {
     const viewers = getScreenViewers(participant.id);
 
     return {
-      title: participant.isLocal ? 'Ваш стрим' : `Стрим ${participant.name}`,
+      title: participant.isLocal ? t('Ваш стрим') : t('Стрим {p0}', { p0: participant.name }),
       qualityLabel,
       fpsLabel,
       showQuality: Boolean(qualityLabel),
@@ -139,7 +140,7 @@ export const useScreenUiStore = defineStore('screen-ui', () => {
       maxPercent: 200,
       valuePercent,
       muted,
-      ariaLabel: muted ? 'Включить звук стрима' : 'Выключить звук стрима'
+      ariaLabel: muted ? t('Включить звук стрима') : t('Выключить звук стрима')
     };
   }
 
@@ -148,7 +149,7 @@ export const useScreenUiStore = defineStore('screen-ui', () => {
     const fullscreen = state.screenFullscreen;
     return {
       fullscreen,
-      ariaLabel: fullscreen ? 'Выйти из полноэкранного режима' : 'Открыть стрим на весь экран'
+      ariaLabel: fullscreen ? t('Выйти из полноэкранного режима') : t('Открыть стрим на весь экран')
     };
   }
 

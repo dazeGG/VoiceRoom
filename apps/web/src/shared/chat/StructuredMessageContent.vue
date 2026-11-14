@@ -5,6 +5,7 @@
 // it stays plain text rather than offering an action that leads nowhere.
 // Text segments find their links the way plain chat text does: a message is
 // sent as one text segment, so a typed link is only found here.
+import { t } from '@/shared/i18n';
 import type { RoomMessageContentV1 } from '@voice-room/shared/room-message-content';
 import ChatText from '@/shared/components/ChatText.vue';
 
@@ -38,7 +39,7 @@ function mentionLabel(label: string): string {
           class="structured-message__mention structured-message__mention--button"
           type="button"
           :data-user-id="segment.userId"
-          :aria-label="`Открыть профиль ${mentionLabel(segment.label)}`"
+          :aria-label="t('Открыть профиль {p0}', { p0: mentionLabel(segment.label) })"
           @click="onmention?.(segment.userId, segment.label, $event)"
         >
           {{ mentionLabel(segment.label) }}</button

@@ -5,10 +5,16 @@ import { LOG_EVENTS } from './log-events.ts';
 import { createLogger } from './logger.ts';
 import { readPushConfig, type PushConfig } from '../app/config.ts';
 import { fieldOf } from '../platform/record.ts';
+import { localizeNotificationPayload } from '@voice-room/shared/notification-text';
 
 type Env = NodeJS.ProcessEnv;
 type PushLogger = { warn(...args: unknown[]): void };
-type StoredSubscription = { endpoint: string; keys: { p256dh: string; auth: string }; platformClass?: string };
+type StoredSubscription = {
+  endpoint: string;
+  keys: { p256dh: string; auth: string };
+  platformClass?: string;
+  metadata?: Record<string, unknown>;
+};
 
 export interface PushSubscriptionStore {
   listByUserId(userId: string): Promise<StoredSubscription[]>;
@@ -131,7 +137,7 @@ function createPushService({
         try {
           await client.sendNotification(
             { endpoint, keys: subscription.keys },
-            JSON.stringify(payload),
+            JSON.stringify(localizeNotificationPayload(payload, subscription.metadata?.locale)),
             typeof ttl === 'number' && Number.isFinite(ttl) ? { TTL: Math.max(0, Math.floor(ttl)) } : undefined
           );
           sent += 1;

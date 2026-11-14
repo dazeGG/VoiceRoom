@@ -1,6 +1,9 @@
 <script setup lang="ts">
 // Active bans of one room, shown as the «Блокировки» section of the room
 // settings. Bans are placed from a member's menu; this list only lifts them.
+import { useLocalizedText, currentErrorMessage } from '@/shared/i18n/localized-text';
+
+import { t } from '@/shared/i18n';
 import { Ban, Clock } from '@lucide/vue';
 import type { Ban as RoomBan } from '@voice-room/shared/contracts/moderation';
 import { onMounted, ref } from 'vue';
@@ -16,7 +19,7 @@ const bans = ref<RoomBan[]>([]);
 const nextCursor = ref<string>();
 const loading = ref(true);
 const loadingMore = ref(false);
-const error = ref('');
+const error = useLocalizedText();
 const liftingId = ref('');
 
 async function load(reset = false): Promise<void> {
@@ -30,7 +33,7 @@ async function load(reset = false): Promise<void> {
       : [...bans.value, ...page.bans.filter((ban) => !bans.value.some((item) => item.id === ban.id))];
     nextCursor.value = page.pageInfo.nextCursor;
   } catch (cause) {
-    error.value = cause instanceof Error ? cause.message : 'Не удалось загрузить блокировки';
+    error.value = () => (cause instanceof Error ? currentErrorMessage(cause) : t('Не удалось загрузить блокировки'));
   } finally {
     loading.value = false;
     loadingMore.value = false;
@@ -57,25 +60,28 @@ onMounted(() => {
   <section class="room-bans" aria-labelledby="room-bans-title" :aria-busy="loading">
     <header class="room-bans__head">
       <h3 id="room-bans-title" class="room-bans__title">
-        Блокировки<span v-if="!loading && !error" class="room-bans__count"
-          >{{ bans.length }}{{ nextCursor ? '+' : '' }}</span
-        >
+        {{ t('Блокировки')
+        }}<span v-if="!loading && !error" class="room-bans__count">{{ bans.length }}{{ nextCursor ? '+' : '' }}</span>
       </h3>
       <p class="room-bans__hint">
-        Заблокированные не могут зайти в комнату. Заблокировать участника можно через меню «⋯» во вкладке «Участники».
+        {{
+          t(
+            'Заблокированные не могут зайти в комнату. Заблокировать участника можно через меню «⋯» во вкладке «Участники».'
+          )
+        }}
       </p>
     </header>
 
     <div v-if="error" class="room-bans__error" role="alert">
       <span>{{ error }}</span>
-      <button type="button" @click="load(true)">Повторить</button>
+      <button type="button" @click="load(true)">{{ t('Повторить') }}</button>
     </div>
 
-    <p v-if="loading" class="room-bans__loading" aria-live="polite">Загружаем…</p>
+    <p v-if="loading" class="room-bans__loading" aria-live="polite">{{ t('Загружаем…') }}</p>
     <div v-else-if="bans.length === 0 && !error" class="room-bans__empty">
       <span class="room-bans__empty-icon" aria-hidden="true"><Ban v-bind="iconMd" /></span>
-      <strong class="room-bans__empty-title">Активных блокировок нет</strong>
-      <span>Здесь появятся участники, которых вы заблокируете.</span>
+      <strong class="room-bans__empty-title">{{ t('Активных блокировок нет') }}</strong>
+      <span>{{ t('Здесь появятся участники, которых вы заблокируете.') }}</span>
     </div>
     <template v-else-if="bans.length > 0">
       <ul class="room-bans__list">
@@ -99,16 +105,16 @@ onMounted(() => {
           <button
             class="settings__unblock-button room-ban__unblock"
             type="button"
-            :aria-label="`Снять блокировку ${banSubjectName(ban)}`"
+            :aria-label="t('Снять блокировку {p0}', { p0: banSubjectName(ban) })"
             :disabled="liftingId === ban.id"
             @click="lift(ban)"
           >
-            {{ liftingId === ban.id ? 'Снимаем…' : 'Разблокировать' }}
+            {{ liftingId === ban.id ? t('Снимаем…') : t('Разблокировать') }}
           </button>
         </li>
       </ul>
       <button v-if="nextCursor" class="room-bans__more" type="button" :disabled="loadingMore" @click="load(false)">
-        {{ loadingMore ? 'Загружаем…' : 'Показать ещё' }}
+        {{ loadingMore ? t('Загружаем…') : t('Показать ещё') }}
       </button>
     </template>
   </section>

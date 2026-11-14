@@ -1,3 +1,4 @@
+import { t } from '@/shared/i18n';
 import { DEFAULT_SCREEN_PROFILE_ID, SCREEN_QUALITY_OPTIONS } from '../core/config';
 import { state } from '../core/room-runtime.store';
 import { showToast } from '../ui/toast';
@@ -61,7 +62,7 @@ export async function openScreenShare(profile: ScreenProfile): Promise<ScreenSha
   }
 
   if (isDesktopApp()) {
-    throw new Error('Desktop-оболочка не загрузила модуль выбора экрана. Перезапустите приложение из новой сборки.');
+    throw new Error(t('Desktop-оболочка не загрузила модуль выбора экрана. Перезапустите приложение из новой сборки.'));
   }
 
   return {
@@ -84,7 +85,7 @@ function isDesktopApp(): boolean {
 
 async function openBrowserScreenShare(profile: ScreenProfile): Promise<MediaStream> {
   if (!navigator.mediaDevices?.getDisplayMedia) {
-    throw new Error('Браузер не поддерживает демонстрацию экрана. Нужен HTTPS или localhost.');
+    throw new Error(t('Браузер не поддерживает демонстрацию экрана. Нужен HTTPS или localhost.'));
   }
 
   let stream: MediaStream;
@@ -160,7 +161,7 @@ function createScreenVideoConstraints(profile: ScreenProfile): DisplayMediaStrea
 
 async function openDesktopScreenShare(profile: ScreenProfile): Promise<ScreenShareCapture> {
   if (!navigator.mediaDevices?.getDisplayMedia && !navigator.mediaDevices?.getUserMedia) {
-    throw new Error('Desktop-оболочка не дала доступ к захвату экрана.');
+    throw new Error(t('Desktop-оболочка не дала доступ к захвату экрана.'));
   }
 
   const selection = await selectDesktopCaptureSource();
@@ -183,7 +184,7 @@ async function openDesktopScreenShare(profile: ScreenProfile): Promise<ScreenSha
       state.localScreenAudioCapture = audioCapture;
     } catch (error) {
       log.warn('native desktop audio capture failed, continuing without stream audio', errorContext(error));
-      showToast('Стрим запущен без звука: безопасный системный звук недоступен', {
+      showToast(t('Стрим запущен без звука: безопасный системный звук недоступен'), {
         duration: 9000,
         variant: 'error'
       });
@@ -195,7 +196,7 @@ async function openDesktopScreenShare(profile: ScreenProfile): Promise<ScreenSha
 
   if (isDesktopApp()) {
     stream = await openDesktopStream(source.id, selectedProfile, { audio: false, audioMode: 'safe-system' });
-    showToast('Стрим запущен без звука: в этой сборке нет безопасного системного звука', {
+    showToast(t('Стрим запущен без звука: в этой сборке нет безопасного системного звука'), {
       duration: 9000,
       variant: 'error'
     });
@@ -236,14 +237,14 @@ async function openDesktopScreenShareWithPicker(profile: ScreenProfile): Promise
 
 async function openDesktopCapturePicker(profile: ScreenProfile): Promise<DesktopPickerSelection> {
   const bridge = window.voiceRoomDesktopCapture;
-  if (!bridge?.openPicker) throw new Error('Desktop-оболочка не поддерживает выбор источника экрана.');
+  if (!bridge?.openPicker) throw new Error(t('Desktop-оболочка не поддерживает выбор источника экрана.'));
   const selection = await bridge.openPicker({
     fpsId: state.localScreenFpsId || profile.fpsId,
     qualityId: state.localScreenQualityId || profile.qualityId,
     streamAudioEnabled: true
   });
 
-  if (!selection) throw createAbortError('Выбор источника отменен');
+  if (!selection) throw createAbortError(t('Выбор источника отменен'));
   return selection;
 }
 
@@ -263,7 +264,7 @@ async function openStagedDesktopScreenShare(profile: ScreenProfile, withAudio: b
   if (!withAudio) return stream;
 
   if (!hasNativeDesktopSafeAudio()) {
-    showToast('Стрим запущен без звука: в этой сборке нет безопасного системного звука', {
+    showToast(t('Стрим запущен без звука: в этой сборке нет безопасного системного звука'), {
       duration: 9000,
       variant: 'error'
     });
@@ -276,7 +277,7 @@ async function openStagedDesktopScreenShare(profile: ScreenProfile, withAudio: b
     state.localScreenAudioCapture = audioCapture;
   } catch (error) {
     log.warn('native desktop audio capture failed, continuing without stream audio', errorContext(error));
-    showToast('Стрим запущен без звука: безопасный системный звук недоступен', {
+    showToast(t('Стрим запущен без звука: безопасный системный звук недоступен'), {
       duration: 9000,
       variant: 'error'
     });
@@ -287,7 +288,7 @@ async function openStagedDesktopScreenShare(profile: ScreenProfile, withAudio: b
 
 async function openStagedDesktopDisplayMedia(profile: ScreenProfile): Promise<MediaStream> {
   if (!navigator.mediaDevices?.getDisplayMedia) {
-    throw new Error('Desktop-оболочка не поддерживает staged display media capture.');
+    throw new Error(t('Desktop-оболочка не поддерживает staged display media capture.'));
   }
 
   const video: MediaTrackConstraints = {
@@ -328,7 +329,7 @@ async function openDesktopStream(
   }
 
   if (errors.length) throw createDesktopCaptureError(errors);
-  throw new Error('Desktop-оболочка не поддерживает захват экрана в этой сборке.');
+  throw new Error(t('Desktop-оболочка не поддерживает захват экрана в этой сборке.'));
 }
 
 function mergeDesktopCaptureErrors(...errors: unknown[]): DesktopCaptureError {
@@ -355,9 +356,13 @@ function formatDesktopCaptureError(attemptDetails: CaptureAttemptDetail[]): stri
   const attempts = attemptDetails.map(formatCaptureAttemptError).join('\n');
 
   return [
-    'Не удалось запустить демонстрацию экрана.',
-    `Среда: desktop ${platform}, getDisplayMedia=${displayMedia}, getUserMedia=${userMedia}.`,
-    'Попытки:',
+    t('Не удалось запустить демонстрацию экрана.'),
+    t('Среда: desktop {p0}, getDisplayMedia={p1}, getUserMedia={p2}.', {
+      p0: platform,
+      p1: displayMedia,
+      p2: userMedia
+    }),
+    t('Попытки:'),
     attempts
   ].join('\n');
 }
@@ -412,11 +417,11 @@ async function openDesktopDisplayMediaStream(
   profile: ScreenProfile = getScreenProfile(DEFAULT_SCREEN_PROFILE_ID)
 ): Promise<MediaStream> {
   if (!navigator.mediaDevices?.getDisplayMedia) {
-    throw new Error('Desktop-оболочка не поддерживает display media capture.');
+    throw new Error(t('Desktop-оболочка не поддерживает display media capture.'));
   }
 
   if (!window.voiceRoomDesktopCapture?.selectSource) {
-    throw new Error('Desktop-оболочка не дала доступ к выбору источника экрана.');
+    throw new Error(t('Desktop-оболочка не дала доступ к выбору источника экрана.'));
   }
 
   await window.voiceRoomDesktopCapture.selectSource(
@@ -461,10 +466,10 @@ function createDesktopMediaConstraints(
 
 async function selectDesktopCaptureSource(): Promise<ScreenSourceSelection> {
   const bridge = window.voiceRoomDesktopCapture;
-  if (!bridge?.getSources) throw new Error('Desktop-оболочка не отдаёт список источников экрана.');
+  if (!bridge?.getSources) throw new Error(t('Desktop-оболочка не отдаёт список источников экрана.'));
   const sources = await bridge.getSources();
   if (!sources.length) {
-    throw new Error('Нет доступных источников экрана');
+    throw new Error(t('Нет доступных источников экрана'));
   }
 
   return showScreenSourcePicker(sources);

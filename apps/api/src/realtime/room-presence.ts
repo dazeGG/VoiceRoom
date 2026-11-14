@@ -146,6 +146,7 @@ export function createRoomPresence(deps: RoomPresenceDeps) {
       userId,
       guestName: userId ? null : peer.name || null,
       guestId: userId ? null : peer.guestId || null,
+      clientId: peer.clientId || null,
       client: peer.client ?? null,
       os: peer.os ?? '',
       browser: peer.browser ?? '',

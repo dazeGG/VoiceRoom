@@ -3,6 +3,8 @@
 // window, since paged history is account-only. Both keep the same list, so the
 // chat view adds, edits and removes messages without knowing which it has.
 
+import { useLocalizedText, currentErrorMessage } from '@/shared/i18n/localized-text';
+import { t } from '@/shared/i18n';
 import { ref } from 'vue';
 import { plainSnapshot } from '@/shared/utils/plain-snapshot';
 import { ApiError } from '@/api/client';
@@ -25,7 +27,7 @@ export function useRoomChatTimeline() {
   const loading = ref(true);
   const loadingOlder = ref(false);
   const hasMoreBefore = ref(false);
-  const error = ref('');
+  const error = useLocalizedText();
   /** Paged history (an account) rather than the recent window (a guest). */
   const paged = ref(false);
 
@@ -53,7 +55,7 @@ export function useRoomChatTimeline() {
       loading.value = state.loading;
       loadingOlder.value = state.loadingOlder;
       hasMoreBefore.value = state.hasMoreBefore;
-      error.value = state.error;
+      error.value = () => state.error;
     }
   });
 
@@ -101,7 +103,7 @@ export function useRoomChatTimeline() {
       return true;
     } catch (cause) {
       if (signal?.aborted || request !== recentRequest) return false;
-      error.value = cause instanceof Error ? cause.message : 'Не удалось загрузить чат';
+      error.value = () => (cause instanceof Error ? currentErrorMessage(cause) : t('Не удалось загрузить чат'));
       return false;
     } finally {
       snapshot.dispose();
@@ -209,6 +211,9 @@ export function useRoomChatTimeline() {
     loadingOlder,
     hasMoreBefore,
     error,
+    setError: (source: () => string): void => {
+      error.value = source;
+    },
     paged,
     has,
     open,

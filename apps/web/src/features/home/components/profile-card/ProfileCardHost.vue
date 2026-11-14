@@ -2,6 +2,7 @@
 // Binds the presentational ProfileCard to the account's social graph and the
 // shared open/close store. The lobby mounts it, inside the context that
 // provides that graph; without one every person is a stranger.
+import { t } from '@/shared/i18n';
 import { computed, ref } from 'vue';
 import { useProfileCardUiStore } from '@/entities/profile-card/profile-card-ui.store';
 import { useSessionStore } from '@/features/auth/session.store';
@@ -50,7 +51,7 @@ function message(): void {
   void run(async () => {
     social.showFriends();
     await social.openDm(userId);
-  }, 'Не удалось открыть личные сообщения');
+  }, t('Не удалось открыть личные сообщения'));
 }
 
 function addFriend(): void {
@@ -58,8 +59,8 @@ function addFriend(): void {
   if (!userId) return;
   void run(async () => {
     const result = await social.addFriend(userId);
-    emit('toast', result.status === 'accepted' ? 'Теперь вы друзья' : 'Заявка в друзья отправлена');
-  }, 'Не удалось отправить заявку в друзья');
+    emit('toast', result.status === 'accepted' ? t('Теперь вы друзья') : t('Заявка в друзья отправлена'));
+  }, t('Не удалось отправить заявку в друзья'));
 }
 
 function acceptRequest(): void {
@@ -67,18 +68,18 @@ function acceptRequest(): void {
   if (!userId) return;
   void run(async () => {
     await social.acceptRequest(userId);
-    emit('toast', 'Заявка принята');
-  }, 'Не удалось принять заявку');
+    emit('toast', t('Заявка принята'));
+  }, t('Не удалось принять заявку'));
 }
 
 function dropFriend(): void {
   const userId = person.value?.userId;
   if (!userId) return;
-  const name = person.value?.name ?? 'Пользователь';
+  const name = person.value?.name ?? t('Пользователь');
   void run(async () => {
     await social.removeFriend(userId);
-    emit('toast', `${name} удалён из друзей`);
-  }, 'Не удалось удалить друга');
+    emit('toast', t('{p0} удалён из друзей', { p0: name }));
+  }, t('Не удалось удалить друга'));
 }
 </script>
 
@@ -88,7 +89,7 @@ function dropFriend(): void {
     :open="profileCardUi.open"
     :x="profileCardUi.x"
     :y="profileCardUi.y"
-    v-bind="{ ariaLabel: `Профиль ${person.name}` }"
+    v-bind="{ ariaLabel: t('Профиль {p0}', { p0: person.name }) }"
     :restore-focus="profileCardUi.restoreFocus"
     role="dialog"
     :padded="false"

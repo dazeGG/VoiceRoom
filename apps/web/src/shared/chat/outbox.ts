@@ -1,3 +1,5 @@
+import { t } from '@/shared/i18n';
+import { currentErrorMessage } from '@/shared/i18n/localized-text';
 import { shallowRef } from 'vue';
 import { newId } from '../new-id';
 
@@ -75,7 +77,8 @@ export class Outbox<Payload, Message> {
         } catch (error) {
           this.#set(next.localId, {
             state: 'failed',
-            error: error instanceof Error && error.message ? error.message : 'Не удалось отправить'
+            error: () =>
+              error instanceof Error && error.message ? currentErrorMessage(error) : t('Не удалось отправить')
           });
         }
       }
@@ -84,7 +87,18 @@ export class Outbox<Payload, Message> {
     }
   }
 
-  #set(localId: string, change: Partial<Outgoing<Payload>>): void {
-    this.items = this.items.map((entry) => (entry.localId === localId ? { ...entry, ...change } : entry));
+  #set(localId: string, change: Omit<Partial<Outgoing<Payload>>, 'error'> & { error?: string | (() => string) }): void {
+    const { error, ...fields } = change;
+    this.items = this.items.map((entry) =>
+      entry.localId === localId
+        ? {
+            ...entry,
+            ...fields,
+            get error() {
+              return typeof error === 'function' ? error() : (error ?? entry.error);
+            }
+          }
+        : entry
+    );
   }
 }

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '@/shared/i18n';
 import { User } from '@lucide/vue';
 import { computed, onMounted, ref } from 'vue';
 import type { AuthUser } from '@/api/auth';
@@ -49,7 +50,7 @@ const drop = new AttachmentDrop({
   <div
     class="dm-view"
     role="region"
-    aria-label="Личные сообщения"
+    :aria-label="t('Личные сообщения')"
     @dragenter="drop.enter"
     @dragover="drop.over"
     @dragleave="drop.leave"

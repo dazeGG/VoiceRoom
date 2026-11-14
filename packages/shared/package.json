@@ -1,9 +1,12 @@
 {
   "name": "@voice-room/shared",
-  "version": "2.12.20",
+  "version": "2.13.0",
   "private": true,
   "type": "module",
   "exports": {
+    "./localization": "./src/localization.ts",
+    "./notification-text": "./src/notification-text.ts",
+    "./contracts/push-registration": "./src/contracts/push-registration.ts",
     "./validation": "./src/validation.ts",
     "./guards": "./src/guards.ts",
     "./messaging-history": "./src/messaging-history.ts",

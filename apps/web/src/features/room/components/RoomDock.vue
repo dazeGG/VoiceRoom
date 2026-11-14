@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '@/shared/i18n';
 import {
   ChevronDown,
   HeadphoneOff,
@@ -97,14 +98,14 @@ function exitScreenView(): void {
 </script>
 
 <template>
-  <div class="room-dock" aria-label="Управление голосом">
+  <div class="room-dock" :aria-label="t('Управление голосом')">
     <div class="room-dock__shell">
       <div class="room-dock__cluster">
         <Popover
           v-model:open="roomDeviceUi.devicePopoverOpen"
           placement="top-end"
           role="dialog"
-          aria-label="Настройки микрофона"
+          :aria-label="t('Настройки микрофона')"
           root-class="room-dock__anchor"
           panel-class="room-dock__device-popover"
           keep-content-mounted
@@ -152,7 +153,7 @@ function exitScreenView(): void {
                 type="button"
                 :aria-expanded="open"
                 :aria-controls="panelId"
-                aria-label="Выбрать микрофон"
+                :aria-label="t('Выбрать микрофон')"
                 @click="toggleDevicePopover($event, toggle)"
               >
                 <ChevronDown />
@@ -162,11 +163,11 @@ function exitScreenView(): void {
 
           <template #content>
             <label class="room-dock__field">
-              <span>Микрофон</span>
+              <span>{{ t('Микрофон') }}</span>
               <Select
                 v-model="roomDeviceUi.microphoneId"
                 :options="roomDeviceUi.microphoneOptions"
-                label="Микрофон"
+                :label="t('Микрофон')"
                 variant="dock"
                 flip
                 @value-change="void switchMicrophone()"
@@ -174,7 +175,7 @@ function exitScreenView(): void {
             </label>
             <div class="room-dock__field">
               <div class="room-dock__volume-head">
-                <span>Громкость микрофона</span>
+                <span>{{ t('Громкость микрофона') }}</span>
                 <output>{{ Math.round(roomDeviceUi.microphoneVolume) }}%</output>
               </div>
               <Slider
@@ -183,17 +184,17 @@ function exitScreenView(): void {
                 :max="200"
                 :step="1"
                 :default-value="100"
-                aria-label="Громкость микрофона"
+                :aria-label="t('Громкость микрофона')"
                 :aria-value-text="`${Math.round(roomDeviceUi.microphoneVolume)}%`"
                 @value-change="setMicrophoneVolume"
               />
             </div>
             <label class="room-dock__field">
-              <span>Шумоподавление</span>
+              <span>{{ t('Шумоподавление') }}</span>
               <Select
                 v-model="roomDeviceUi.noiseMode"
                 :options="NOISE_MODE_SELECT_OPTIONS"
-                label="Шумоподавление"
+                :label="t('Шумоподавление')"
                 variant="dock"
                 flip
                 @value-change="void switchNoiseMode()"
@@ -201,13 +202,13 @@ function exitScreenView(): void {
             </label>
             <div class="room-dock__field">
               <div class="room-dock__gate-head">
-                <span>Гейт</span>
+                <span>{{ t('Гейт') }}</span>
                 <button
                   class="room-dock__gate-switch"
                   type="button"
                   role="switch"
                   :aria-checked="gate.gateOn"
-                  aria-label="Шумовой гейт"
+                  :aria-label="t('Шумовой гейт')"
                   @click="toggleGate"
                 >
                   <span class="room-dock__gate-switch-knob" aria-hidden="true"></span>
@@ -221,7 +222,7 @@ function exitScreenView(): void {
                   :step="1"
                   :disabled="!gate.markerActive"
                   :show-fill="false"
-                  aria-label="Порог гейта в децибелах"
+                  :aria-label="t('Порог гейта в децибелах')"
                   :aria-value-text="gate.thresholdLabel"
                   @value-change="updateGateThresholdFromSlider"
                 >
@@ -247,7 +248,7 @@ function exitScreenView(): void {
           v-model:open="roomDeviceUi.outputPopoverOpen"
           placement="top-end"
           role="dialog"
-          aria-label="Настройки динамика"
+          :aria-label="t('Настройки динамика')"
           root-class="room-dock__anchor"
           panel-class="room-dock__device-popover"
           keep-content-mounted
@@ -277,7 +278,7 @@ function exitScreenView(): void {
                 type="button"
                 :aria-expanded="open"
                 :aria-controls="panelId"
-                aria-label="Выбрать динамик"
+                :aria-label="t('Выбрать динамик')"
                 @click="toggleOutputPopover($event, toggle)"
               >
                 <ChevronDown />
@@ -287,11 +288,11 @@ function exitScreenView(): void {
 
           <template #content>
             <label class="room-dock__field">
-              <span>Динамик</span>
+              <span>{{ t('Динамик') }}</span>
               <Select
                 v-model="roomDeviceUi.outputDeviceId"
                 :options="roomDeviceUi.outputOptions"
-                label="Динамик"
+                :label="t('Динамик')"
                 variant="dock"
                 flip
                 :disabled="roomDeviceUi.outputDisabled"
@@ -307,7 +308,7 @@ function exitScreenView(): void {
           v-model:open="roomDeviceUi.cameraPopoverOpen"
           placement="top-end"
           role="dialog"
-          aria-label="Настройки камеры"
+          :aria-label="t('Настройки камеры')"
           root-class="room-dock__anchor"
           panel-class="room-dock__device-popover"
           keep-content-mounted
@@ -338,7 +339,7 @@ function exitScreenView(): void {
                 type="button"
                 :aria-expanded="open"
                 :aria-controls="panelId"
-                aria-label="Выбрать камеру"
+                :aria-label="t('Выбрать камеру')"
                 @click="toggleCameraPopover"
               >
                 <ChevronDown />
@@ -348,11 +349,11 @@ function exitScreenView(): void {
 
           <template #content>
             <label class="room-dock__field">
-              <span>Камера</span>
+              <span>{{ t('Камера') }}</span>
               <Select
                 v-model="roomDeviceUi.cameraId"
                 :options="roomDeviceUi.cameraOptions"
-                label="Камера"
+                :label="t('Камера')"
                 variant="dock"
                 flip
                 @value-change="void switchCamera(roomDeviceUi.cameraId)"
@@ -388,7 +389,7 @@ function exitScreenView(): void {
         <div
           :class="['room-dock__connection', `room-dock__connection--${connection.stateName}`]"
           role="status"
-          :aria-label="connection.label || 'Связь'"
+          :aria-label="connection.label || t('Связь')"
         >
           <span class="room-dock__bar" aria-hidden="true"></span>
           <span class="room-dock__bar" aria-hidden="true"></span>
@@ -399,7 +400,7 @@ function exitScreenView(): void {
           role="tooltip"
         >
           <span class="room-dock__connection-dot" aria-hidden="true"></span>
-          <span class="room-dock__connection-label">{{ connection.label || 'Связь' }}</span>
+          <span class="room-dock__connection-label">{{ connection.label || t('Связь') }}</span>
         </span>
       </div>
 
@@ -407,7 +408,7 @@ function exitScreenView(): void {
         id="leaveButton"
         class="room-dock__button room-dock__button--leave"
         type="button"
-        aria-label="Покинуть звонок"
+        :aria-label="t('Покинуть звонок')"
         :hidden="screenUi.hideLeaveButton"
         @click="handleLeaveButtonClick"
       >
@@ -417,7 +418,7 @@ function exitScreenView(): void {
         id="screenExitButton"
         class="room-dock__button room-dock__button--screen-exit"
         type="button"
-        aria-label="Выйти со стрима"
+        :aria-label="t('Выйти со стрима')"
         :hidden="!screenUi.showScreenExit"
         @click="exitScreenView"
       >

@@ -5,7 +5,7 @@
 // one room; one day's timeline shows the calls on a line; each seat says what
 // its role may know of where it came from.
 
-import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useState } from 'react';
 import { afterEach, expect, test, vi } from 'vitest';
@@ -492,6 +492,8 @@ test('a role that is not told where people came from sees only what the server s
   });
   renderAs(<RoomsPage onOpenCall={vi.fn()} onOpenAccount={vi.fn()} />, 'moderator');
 
+  expect(screen.queryByRole('form', { name: 'Фильтры участников звонков' })).toBeNull();
+
   const people = await openLiveRoom('Кухня');
   expect(within(people).getByText('Петя')).toBeTruthy();
   expect(within(people).queryByText(/ip·/)).toBeNull();
@@ -732,4 +734,138 @@ test("a room picked elsewhere while the day's timeline is on screen narrows the 
   // The pick starts afresh, like any other narrowing: the call picked before closes.
   await screen.findByRole('list', { name: 'Звонки за день' });
   expect(screen.queryByRole('region', { name: 'Кухня · 00:30–01:15' })).toBeNull();
+});
+
+const CLIENT_ID = '6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b';
+const IP_KEY = 'fedcba9876543210';
+
+async function applyOriginFilters(clientId = CLIENT_ID, ipKey = IP_KEY) {
+  fireEvent.change(screen.getByRole('textbox', { name: 'ID браузера / приложения' }), { target: { value: clientId } });
+  fireEvent.change(screen.getByRole('textbox', { name: 'Ключ IP' }), { target: { value: ipKey } });
+  await userEvent.click(screen.getByRole('button', { name: 'Применить' }));
+}
+
+test('full client and IP filters reset pagination, remain on later pages and clear together', async () => {
+  const calls = stubApi({
+    'GET /api/admin/rooms': live([]),
+    'GET /api/admin/rooms/calls': (url) =>
+      history([call('c-page', [stay('s-page')])], url.searchParams.has('after') ? null : NEXT_PAGE)
+  });
+  renderAs(<RoomsPage onOpenCall={vi.fn()} onOpenAccount={vi.fn()} />);
+  await userEvent.click(await screen.findByRole('button', { name: 'Дальше' }));
+  await screen.findByText('Страница 2');
+
+  await applyOriginFilters(CLIENT_ID.toUpperCase(), IP_KEY.toUpperCase());
+  await waitFor(() => expect(callRequests(calls).at(-1)?.url.searchParams.get('clientId')).toBe(CLIENT_ID));
+  expect(callRequests(calls).at(-1)?.url.searchParams.get('ipKey')).toBe(IP_KEY);
+  expect(callRequests(calls).at(-1)?.url.searchParams.has('after')).toBe(false);
+  await screen.findByText('Страница 1');
+  expect(screen.getByTitle(`Фильтр ID браузера / приложения: ${CLIENT_ID}`)).toBeTruthy();
+  expect(screen.getByTitle(`Фильтр ключа IP: ${IP_KEY}`)).toBeTruthy();
+  await userEvent.click(screen.getByRole('button', { name: 'Дальше' }));
+  await screen.findByText('Страница 2');
+  const paged = callRequests(calls).at(-1)?.url.searchParams;
+  expect(paged?.get('after')).toBe(NEXT_PAGE);
+  expect(paged?.get('clientId')).toBe(CLIENT_ID);
+  expect(paged?.get('ipKey')).toBe(IP_KEY);
+
+  await userEvent.click(screen.getByRole('button', { name: 'Сбросить фильтры' }));
+  await waitFor(() => expect(callRequests(calls).at(-1)?.url.searchParams.has('clientId')).toBe(false));
+  expect(callRequests(calls).at(-1)?.url.searchParams.has('ipKey')).toBe(false);
+  expect(callRequests(calls).at(-1)?.url.searchParams.has('after')).toBe(false);
+  expect(screen.getByRole<HTMLInputElement>('textbox', { name: 'Ключ IP' }).value).toBe('');
+  expect(screen.queryByTitle(`Фильтр ID браузера / приложения: ${CLIENT_ID}`)).toBeNull();
+});
+
+test('filters survive room narrowing, timeline and day changes, matching both IDs on one live peer', async () => {
+  const base = kitchen();
+  const first = base.peers[0];
+  const second = base.peers[1];
+  if (!first || !second) throw new Error('two peers required');
+  const matches = {
+    ...base,
+    roomId: 'matches',
+    name: 'Подходит',
+    peers: [{ ...first, clientId: CLIENT_ID, ipKey: IP_KEY }]
+  };
+  const split = {
+    ...base,
+    roomId: 'split',
+    name: 'Разные участники',
+    peers: [
+      { ...first, clientId: CLIENT_ID, ipKey: '0123456789abcdef' },
+      { ...second, guestId: null, clientId: '11111111-1111-4111-8111-111111111111', ipKey: IP_KEY }
+    ]
+  };
+  const calls = stubApi({
+    'GET /api/admin/rooms': live([matches, split]),
+    'GET /api/admin/rooms/calls': history([])
+  });
+  renderAs(<RoomsPage onOpenCall={vi.fn()} onOpenAccount={vi.fn()} />);
+  await screen.findByText('Завершённых звонков пока нет');
+  await applyOriginFilters();
+  await userEvent.click(screen.getByRole('radio', { name: 'Лента дня' }));
+  const timeline = await screen.findByRole('list', { name: 'Звонки за день' });
+  expect(within(timeline).getByText('Подходит')).toBeTruthy();
+  expect(within(timeline).queryByText('Разные участники')).toBeNull();
+  expect(within(timeline).getAllByRole('button', { name: /^Идёт с / })).toHaveLength(1);
+  const params = () => callRequests(calls).at(-1)?.url.searchParams;
+  expect(params()?.get('clientId')).toBe(CLIENT_ID);
+  expect(params()?.get('ipKey')).toBe(IP_KEY);
+  expect(params()?.has('from')).toBe(true);
+  await userEvent.click(screen.getByRole('button', { name: 'Предыдущий день' }));
+  await screen.findByText('В этот день звонков не было');
+  expect(params()?.get('clientId')).toBe(CLIENT_ID);
+  expect(params()?.get('ipKey')).toBe(IP_KEY);
+  await userEvent.click(within(liveTable()).getByRole('button', { name: 'История звонков: Подходит' }));
+  await waitFor(() => expect(params()?.get('roomId')).toBe('matches'));
+  expect(params()?.get('clientId')).toBe(CLIENT_ID);
+  await userEvent.click(screen.getByRole('radio', { name: 'Звонки' }));
+  await screen.findByText('Завершённых звонков пока нет');
+  expect(params()?.get('clientId')).toBe(CLIENT_ID);
+  expect(params()?.has('from')).toBe(false);
+});
+
+test('full application and address identifiers can be selected for copying', async () => {
+  const room = kitchen();
+  const peer = room.peers[0];
+  if (!peer) throw new Error('peer required');
+  stubApi({
+    'GET /api/admin/rooms': live([{ ...room, peers: [{ ...peer, clientId: CLIENT_ID, ipKey: IP_KEY }] }]),
+    'GET /api/admin/rooms/calls': history([])
+  });
+  renderAs(<RoomsPage onOpenCall={vi.fn()} onOpenAccount={vi.fn()} />);
+  const people = await openLiveRoom('Кухня');
+  const client = within(people).getByRole<HTMLInputElement>('textbox', { name: 'ID браузера / приложения' });
+  const address = within(people).getByRole<HTMLInputElement>('textbox', { name: 'Ключ адреса' });
+  expect(client.value).toBe(CLIENT_ID);
+  expect(address.value).toBe(IP_KEY);
+  await userEvent.click(client);
+  expect(client.selectionStart).toBe(0);
+  expect(client.selectionEnd).toBe(CLIENT_ID.length);
+  expect(client.readOnly).toBe(true);
+  expect(screen.getByRole('list', { name: 'В звонке: Кухня' })).toBeTruthy();
+});
+
+test('clearing a filter drops its late response and keeps the newer unfiltered calls', async () => {
+  let release: (reply: Reply) => void = () => {};
+  const pending = new Promise<Reply>((resolve) => {
+    release = resolve;
+  });
+  const calls = stubApi({
+    'GET /api/admin/rooms': live([]),
+    'GET /api/admin/rooms/calls': (url) => (url.searchParams.has('clientId') ? pending : history([]))
+  });
+  renderAs(<RoomsPage onOpenCall={vi.fn()} onOpenAccount={vi.fn()} />);
+  await screen.findByText('Завершённых звонков пока нет');
+  await applyOriginFilters(CLIENT_ID, '');
+  await waitFor(() => expect(callRequests(calls).at(-1)?.url.searchParams.get('clientId')).toBe(CLIENT_ID));
+  await userEvent.click(screen.getByRole('button', { name: 'Сбросить фильтры' }));
+  await waitFor(() => expect(callRequests(calls).at(-1)?.url.searchParams.has('clientId')).toBe(false));
+  await act(async () => {
+    release(history([call('c-late', [stay('s-late', { roomName: 'Устаревшая комната' })])]));
+    await pending;
+  });
+  expect(screen.queryByText('Устаревшая комната')).toBeNull();
+  expect(screen.getByText('Завершённых звонков пока нет')).toBeTruthy();
 });

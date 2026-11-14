@@ -3,6 +3,7 @@
 // and how long ago — and offers exactly one bulk action. "К первому
 // непрочитанному" is gone: every unread row is already one click away, and
 // the two buttons together overflowed the header into a horizontal scrollbar.
+import { t } from '@/shared/i18n';
 import { Bell, Check, CircleAlert, X } from '@lucide/vue';
 import { onBeforeUnmount, onMounted } from 'vue';
 import type { InboxItem, NotificationReason } from '@voice-room/shared/contracts/notifications';
@@ -24,8 +25,12 @@ const props = defineProps<{
 const emit = defineEmits<{ open: [item: InboxItem] }>();
 
 const REASON_LABELS: Record<NotificationReason, string> = {
-  mention: 'Упоминание',
-  reply: 'Ответ'
+  get mention() {
+    return t('Упоминание');
+  },
+  get reply() {
+    return t('Ответ');
+  }
 };
 
 const SKELETON_WIDTHS = [72, 58, 84, 64];
@@ -61,7 +66,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onWindowKeydown));
   <section class="notification-inbox" aria-labelledby="notification-inbox-title">
     <header class="notification-inbox__head">
       <h2 id="notification-inbox-title" class="notification-inbox__title">
-        Уведомления
+        {{ t('Уведомления') }}
         <span v-if="inbox.unreadCount" class="notification-inbox__count">{{ inbox.unreadCount }}</span>
       </h2>
       <div class="notification-inbox__tools">
@@ -69,20 +74,26 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onWindowKeydown));
           v-if="inbox.unreadCount"
           class="notification-inbox__read-all"
           type="button"
-          title="Отметить все прочитанными"
+          :title="t('Отметить все прочитанными')"
           @click="void inbox.markAllRead()"
         >
           <Check v-bind="iconSm" aria-hidden="true" />
-          <span>Прочитать все</span>
+          <span>{{ t('Прочитать все') }}</span>
         </button>
-        <button v-if="onClose" class="notification-inbox__dismiss" type="button" aria-label="Закрыть" @click="onClose">
+        <button
+          v-if="onClose"
+          class="notification-inbox__dismiss"
+          type="button"
+          :aria-label="t('Закрыть')"
+          @click="onClose"
+        >
           <X v-bind="iconSm" aria-hidden="true" />
         </button>
       </div>
     </header>
 
     <div aria-live="polite" class="notification-inbox__live">
-      {{ inbox.loading ? 'Загрузка уведомлений' : `${inbox.unreadCount} непрочитанных` }}
+      {{ inbox.loading ? t('Загрузка уведомлений') : t('{p0} непрочитанных', { p0: inbox.unreadCount }) }}
     </div>
 
     <div class="notification-inbox__body">
@@ -91,7 +102,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onWindowKeydown));
           ><CircleAlert :size="20" aria-hidden="true"
         /></span>
         <p role="alert">{{ inbox.error }}</p>
-        <button class="notification-inbox__retry" type="button" @click="void inbox.load()">Повторить</button>
+        <button class="notification-inbox__retry" type="button" @click="void inbox.load()">{{ t('Повторить') }}</button>
       </div>
       <div v-else-if="inbox.loading && inbox.items.length === 0" class="notification-inbox__skeleton">
         <div
@@ -106,11 +117,11 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onWindowKeydown));
             <span class="notification-inbox__skeleton-line notification-inbox__skeleton-line--short"></span>
           </span>
         </div>
-        <p>Загружаем…</p>
+        <p>{{ t('Загружаем…') }}</p>
       </div>
       <div v-else-if="inbox.items.length === 0" class="notification-inbox__state">
         <span class="notification-inbox__glyph"><Bell :size="20" aria-hidden="true" /></span>
-        <p>Новых уведомлений нет</p>
+        <p>{{ t('Новых уведомлений нет') }}</p>
       </div>
       <template v-else>
         <ul class="notification-inbox__list">
@@ -126,7 +137,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onWindowKeydown));
                 <strong
                   class="notification-inbox__message"
                   :class="{ 'notification-inbox__message--retracted': Boolean(item.retractedAt) }"
-                  ><EmojiText :text="item.retractedAt ? 'Сообщение недоступно' : item.body || 'Новое уведомление'"
+                  ><EmojiText
+                    :text="item.retractedAt ? t('Сообщение недоступно') : item.body || t('Новое уведомление')"
                 /></strong>
                 <small class="notification-inbox__meta">
                   <span class="notification-inbox__reason">{{ reasonLabel(item.reasons) }}</span>
@@ -149,7 +161,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onWindowKeydown));
           :disabled="inbox.loading"
           @click="void inbox.load(true)"
         >
-          {{ inbox.loading ? 'Загружаем…' : 'Показать ещё' }}
+          {{ inbox.loading ? t('Загружаем…') : t('Показать ещё') }}
         </button>
       </template>
     </div>

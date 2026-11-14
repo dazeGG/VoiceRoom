@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '@/shared/i18n';
 import { HeadphoneOff, Headphones, Mic, MicOff, PhoneOff } from '@lucide/vue';
 import { computed } from 'vue';
 import RoomCallTimer from '@/features/room/components/RoomCallTimer.vue';
@@ -9,11 +10,11 @@ import type { ActiveVoice } from '../../model/active-voice';
 
 const props = defineProps<{ voice: ActiveVoice }>();
 
-const openLabel = computed(() => `Открыть комнату ${props.voice.roomName || 'активного голоса'}`);
+const openLabel = computed(() => t('Открыть комнату {p0}', { p0: props.voice.roomName || t('активного голоса') }));
 </script>
 
 <template>
-  <div class="voice-call-widget" aria-label="Активный голос">
+  <div class="voice-call-widget" :aria-label="t('Активный голос')">
     <button
       class="voice-call-widget__head"
       type="button"
@@ -33,7 +34,7 @@ const openLabel = computed(() => `Открыть комнату ${props.voice.ro
         <div class="voice-call-widget__room-name" :title="voice.roomName"><EmojiText :text="voice.roomName" /></div>
         <div class="voice-call-widget__status">
           <span class="voice-call-widget__live-dot"></span>
-          <span class="voice-call-widget__live-label">Подключено</span>
+          <span class="voice-call-widget__live-label">{{ t('Подключено') }}</span>
           <RoomCallTimer variant="sidebar" separator />
         </div>
       </div>
@@ -43,8 +44,8 @@ const openLabel = computed(() => `Открыть комнату ${props.voice.ro
       <button
         class="voice-call-widget__button"
         type="button"
-        :title="voice.muted ? 'Включить микрофон' : 'Выключить микрофон'"
-        :aria-label="voice.muted ? 'Включить микрофон' : 'Выключить микрофон'"
+        :title="voice.muted ? t('Включить микрофон') : t('Выключить микрофон')"
+        :aria-label="voice.muted ? t('Включить микрофон') : t('Выключить микрофон')"
         :aria-pressed="voice.muted"
         @click="voice.toggleMic"
       >
@@ -55,8 +56,8 @@ const openLabel = computed(() => `Открыть комнату ${props.voice.ro
       <button
         class="voice-call-widget__button"
         type="button"
-        :title="voice.deafened ? 'Включить звук' : 'Заглушить звук'"
-        :aria-label="voice.deafened ? 'Включить звук' : 'Заглушить звук'"
+        :title="voice.deafened ? t('Включить звук') : t('Заглушить звук')"
+        :aria-label="voice.deafened ? t('Включить звук') : t('Заглушить звук')"
         :aria-pressed="voice.deafened"
         @click="voice.toggleDeafen"
       >
@@ -67,8 +68,8 @@ const openLabel = computed(() => `Открыть комнату ${props.voice.ro
       <button
         class="voice-call-widget__button voice-call-widget__button--leave"
         type="button"
-        title="Выйти"
-        aria-label="Выйти из голосовой комнаты"
+        :title="t('Выйти')"
+        :aria-label="t('Выйти из голосовой комнаты')"
         @click="voice.leave"
       >
         <PhoneOff v-bind="iconMd" aria-hidden="true" />

@@ -2,6 +2,7 @@
 // Edits one sent message in place: Enter saves, Escape or Отмена leaves it
 // as it was. Shared by the room and direct chats; `variant` picks the
 // surrounding chat's look.
+import { t } from '@/shared/i18n';
 import { onMounted, ref } from 'vue';
 import type { ComposerHandle } from './composer-handle';
 import EmojiComposer from './EmojiComposer.vue';
@@ -63,13 +64,13 @@ async function save(): Promise<void> {
       v-model="text"
       class="message-editor__input"
       :maxlength="maxlength"
-      aria-label="Текст сообщения"
+      :aria-label="t('Текст сообщения')"
       :disabled="saving"
       @keydown="onKeydown"
     />
     <div class="message-editor__actions">
-      <button type="button" :disabled="saving" @click="emit('close')">Отмена</button>
-      <button type="button" :disabled="saving || !text.trim()" @click="save">Сохранить</button>
+      <button type="button" :disabled="saving" @click="emit('close')">{{ t('Отмена') }}</button>
+      <button type="button" :disabled="saving || !text.trim()" @click="save">{{ t('Сохранить') }}</button>
     </div>
   </div>
 </template>

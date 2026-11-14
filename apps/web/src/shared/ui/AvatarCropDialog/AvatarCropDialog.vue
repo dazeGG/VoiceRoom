@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { useLocalizedText, currentErrorMessage } from '@/shared/i18n/localized-text';
+
+import { t } from '@/shared/i18n';
 import { Check, X } from '@lucide/vue';
 import { deriveAvatarAccent, dominantAvatarColor } from '@voice-room/shared/avatar-accent';
 import { DialogContent, DialogPortal, DialogRoot, DialogTitle } from 'reka-ui';
@@ -23,7 +26,7 @@ const zoom = ref(1);
 const offsetX = ref(0);
 const offsetY = ref(0);
 const previewUrl = ref('');
-const error = ref('');
+const error = useLocalizedText();
 const saving = ref(false);
 const dragging = ref(false);
 const dragPointerId = ref<number | null>(null);
@@ -57,12 +60,12 @@ watch(
         queueMicrotask(draw);
       };
       next.onerror = () => {
-        if (!cancelled) error.value = 'Не удалось прочитать изображение';
+        if (!cancelled) error.value = () => t('Не удалось прочитать изображение');
       };
       next.src = reader.result;
     };
     reader.onerror = () => {
-      if (!cancelled) error.value = 'Не удалось прочитать файл';
+      if (!cancelled) error.value = () => t('Не удалось прочитать файл');
     };
     reader.readAsDataURL(nextFile);
     onCleanup(() => {
@@ -153,7 +156,7 @@ function endDrag(event: PointerEvent): void {
 function exportBlob(): Promise<Blob> {
   return new Promise((resolve, reject) => {
     if (!canvas.value || !image.value) {
-      reject(new Error('Выберите изображение'));
+      reject(new Error(t('Выберите изображение')));
       return;
     }
     const output = document.createElement('canvas');
@@ -161,12 +164,12 @@ function exportBlob(): Promise<Blob> {
     output.height = 256;
     const context = context2d(output);
     if (!context) {
-      reject(new Error('Canvas недоступен'));
+      reject(new Error(t('Canvas недоступен')));
       return;
     }
     context.drawImage(canvas.value, 0, 0, 256, 256);
     output.toBlob(
-      (blob) => (blob ? resolve(blob) : reject(new Error('Не удалось подготовить изображение'))),
+      (blob) => (blob ? resolve(blob) : reject(new Error(t('Не удалось подготовить изображение')))),
       'image/webp',
       0.88
     );
@@ -180,7 +183,8 @@ async function save(): Promise<void> {
   try {
     await props.onSave(await exportBlob());
   } catch (err) {
-    error.value = err instanceof Error && err.message ? err.message : 'Не удалось сохранить аватар';
+    error.value = () =>
+      err instanceof Error && currentErrorMessage(err) ? currentErrorMessage(err) : t('Не удалось сохранить аватар');
   } finally {
     saving.value = false;
   }
@@ -222,12 +226,12 @@ function onOpenAutoFocus(event: Event): void {
           <header class="avatar-crop__head">
             <div>
               <DialogTitle as="h2" class="avatar-crop__title">{{ title }}</DialogTitle>
-              <p class="avatar-crop__hint">Перетащите изображение, масштабируйте ползунком или колесом</p>
+              <p class="avatar-crop__hint">{{ t('Перетащите изображение, масштабируйте ползунком или колесом') }}</p>
             </div>
             <button
               class="avatar-crop__close"
               type="button"
-              aria-label="Закрыть"
+              :aria-label="t('Закрыть')"
               :disabled="saving"
               data-dialog-initial-focus
               @click="onClose"
@@ -250,7 +254,7 @@ function onOpenAutoFocus(event: Event): void {
                   class="avatar-crop__canvas"
                   width="512"
                   height="512"
-                  aria-label="Область кадрирования"
+                  :aria-label="t('Область кадрирования')"
                   @pointerdown="onPointerDown"
                   @pointermove="onPointerMove"
                   @pointerup="endDrag"
@@ -259,7 +263,7 @@ function onOpenAutoFocus(event: Event): void {
                 ></canvas>
               </div>
               <label class="avatar-crop__zoom">
-                <span>Масштаб</span>
+                <span>{{ t('Масштаб') }}</span>
                 <input
                   v-model.number="zoom"
                   class="avatar-crop__zoom-input"
@@ -267,35 +271,35 @@ function onOpenAutoFocus(event: Event): void {
                   min="1"
                   max="3"
                   step="0.01"
-                  aria-label="Масштаб изображения"
+                  :aria-label="t('Масштаб изображения')"
                 />
               </label>
             </section>
 
-            <aside class="avatar-crop__preview" aria-label="Предпросмотр">
-              <span class="avatar-crop__preview-label">Предпросмотр</span>
+            <aside class="avatar-crop__preview" :aria-label="t('Предпросмотр')">
+              <span class="avatar-crop__preview-label">{{ t('Предпросмотр') }}</span>
               <template v-if="kind === 'user'">
                 <div
                   class="avatar-crop__tile"
                   :style="{ '--preview-accent': accent.background, '--preview-shadow': accent.shadow }"
                 >
                   <Avatar :name="name" :src="previewUrl" :size="76" />
-                  <strong class="avatar-crop__name"><EmojiText :text="name || 'Ваш профиль'" /></strong>
-                  <span class="avatar-crop__caption">плитка разговора</span>
+                  <strong class="avatar-crop__name"><EmojiText :text="name || t('Ваш профиль')" /></strong>
+                  <span class="avatar-crop__caption">{{ t('плитка разговора') }}</span>
                 </div>
                 <div class="avatar-crop__card">
                   <Avatar :name="name" :src="previewUrl" :size="34" online show-dot ring="var(--vr-surface)" />
                   <div class="avatar-crop__card-text">
-                    <strong class="avatar-crop__name"><EmojiText :text="name || 'Ваш профиль'" /></strong
-                    ><span class="avatar-crop__caption">в сети</span>
+                    <strong class="avatar-crop__name"><EmojiText :text="name || t('Ваш профиль')" /></strong
+                    ><span class="avatar-crop__caption">{{ t('в сети') }}</span>
                   </div>
                 </div>
               </template>
               <div v-else class="avatar-crop__card">
                 <Avatar :name="name" :src="previewUrl" shape="squircle" :size="48" background="var(--vr-surface-3)" />
                 <div class="avatar-crop__card-text">
-                  <strong class="avatar-crop__name"><EmojiText :text="name || 'Комната'" /></strong
-                  ><span class="avatar-crop__caption">карточка лобби</span>
+                  <strong class="avatar-crop__name"><EmojiText :text="name || t('Комната')" /></strong
+                  ><span class="avatar-crop__caption">{{ t('карточка лобби') }}</span>
                 </div>
               </div>
             </aside>
@@ -303,10 +307,11 @@ function onOpenAutoFocus(event: Event): void {
 
           <p v-if="error" class="avatar-crop__error" role="alert">{{ error }}</p>
           <footer class="avatar-crop__actions">
-            <button class="avatar-crop__cancel" type="button" :disabled="saving" @click="onClose">Отмена</button>
+            <button class="avatar-crop__cancel" type="button" :disabled="saving" @click="onClose">
+              {{ t('Отмена') }}
+            </button>
             <button class="avatar-crop__save" type="button" :disabled="saving || !image" @click="save">
-              <Check :size="17" aria-hidden="true" />
-              Готово
+              <Check :size="17" aria-hidden="true" /> {{ t('Готово') }}
             </button>
           </footer>
         </DialogContent>

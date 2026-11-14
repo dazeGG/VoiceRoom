@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '@/shared/i18n';
 import { Maximize, Minimize, Volume2, VolumeX } from '@lucide/vue';
 import { computed, ref, watch, watchEffect } from 'vue';
 import EmojiText from '@/shared/chat/EmojiText.vue';
@@ -57,7 +58,7 @@ watch(
     :hidden="!screenUi.stageVisible"
     role="button"
     tabindex="-1"
-    aria-label="Закрыть просмотр экрана"
+    :aria-label="t('Закрыть просмотр экрана')"
     @click="handleScreenStageClick"
     @keydown="
       (event: KeyboardEvent) => {
@@ -74,7 +75,7 @@ watch(
   >
     <video id="screenVideo" ref="videoEl" class="screen-stage__video" autoplay playsinline></video>
     <div id="screenPlaceholder" class="screen-placeholder" :hidden="!screenUi.showPlaceholder">
-      Подключение к экрану
+      {{ t('Подключение к экрану') }}
     </div>
 
     <div v-if="meta" id="screenMeta" class="screen-meta">
@@ -86,13 +87,13 @@ watch(
       <span v-if="meta.showFps" id="screenMetaFps" class="screen-meta__detail">{{ meta.fpsLabel }}</span>
       <span v-if="meta.showSepViewers" id="screenMetaSepViewers" class="screen-meta__sep" aria-hidden="true">·</span>
       <span id="screenMetaViewers" class="screen-meta__detail screen-meta__viewers">
-        <template v-if="meta.viewerAvatars.length === 0">Смотрят: 0</template>
+        <template v-if="meta.viewerAvatars.length === 0">{{ t('Смотрят: 0') }}</template>
         <AvatarStack
           v-else
           :items="meta.viewerAvatars"
           :max-avatars="null"
           :size="22"
-          aria-label="Смотрят стрим"
+          :aria-label="t('Смотрят стрим')"
           class="screen-meta__avatar-stack"
         />
       </span>
@@ -128,7 +129,7 @@ watch(
               min="0"
               :max="volume.maxPercent"
               :value="volume.valuePercent"
-              aria-label="Громкость стрима"
+              :aria-label="t('Громкость стрима')"
               @input="updateScreenVolumeFromSlider()"
             />
           </div>

@@ -1,6 +1,7 @@
-// One random id per browser, kept across visits and sent with every voice join,
-// so the admin panel can tell one guest's stays from another's behind the same
-// address. The API keeps it only for guests; it says nothing about the person.
+// One random id per browser or desktop profile, kept across visits and sent
+// with every voice join, including signed-in accounts. Reuse the existing
+// guest key so upgrading does not change the profile's identity. This is a
+// client-controlled correlation hint, never a credential or hardware id.
 
 import { normalizeGuestId } from '@voice-room/shared/validation';
 

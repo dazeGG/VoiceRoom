@@ -2,6 +2,7 @@
 // What apps/web's routes/+layout.svelte did around every page: the device
 // boundary, the deploy check and its update notice, the call feedback question,
 // and the app-wide listeners (theme, desktop system, emoji copy).
+import { t } from '@/shared/i18n';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { RouterView, useRoute, useRouter } from 'vue-router';
 import { loadAccountBadges } from '@/api/badges';
@@ -124,10 +125,10 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <main v-if="!boundaryReady" class="device-boundary" aria-label="Проверка устройства" aria-busy="true">
+  <main v-if="!boundaryReady" class="device-boundary" :aria-label="t('Проверка устройства')" aria-busy="true">
     <section class="device-boundary__card">
-      <p class="device-boundary__text">Проверяем устройство</p>
-      <h1 class="device-boundary__title">VoiceRoom запускается</h1>
+      <p class="device-boundary__text">{{ t('Проверяем устройство') }}</p>
+      <h1 class="device-boundary__title">{{ t('VoiceRoom запускается') }}</h1>
     </section>
   </main>
   <template v-else-if="allowed">
@@ -136,12 +137,12 @@ onBeforeUnmount(() => {
     <!-- The leave screen asks the question itself, as the bottom of its own window. -->
     <CallFeedbackPrompt :hidden="callActivity.active || leaveScreen.open" />
   </template>
-  <main v-else class="device-boundary" aria-label="Неподдерживаемое устройство" aria-live="polite">
+  <main v-else class="device-boundary" :aria-label="t('Неподдерживаемое устройство')" aria-live="polite">
     <section class="device-boundary__card">
-      <p class="device-boundary__text">Desktop only</p>
-      <h1 class="device-boundary__title">Откройте VoiceRoom на компьютере</h1>
+      <p class="device-boundary__text">{{ t('Только для компьютера') }}</p>
+      <h1 class="device-boundary__title">{{ t('Откройте VoiceRoom на компьютере') }}</h1>
       <p class="device-boundary__text">
-        Мобильный клиент не запускает сессию, realtime, голос, медиа или push-уведомления.
+        {{ t('Мобильный клиент не запускает сессию, realtime, голос, медиа или push-уведомления.') }}
       </p>
     </section>
   </main>

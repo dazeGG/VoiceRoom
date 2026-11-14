@@ -25,6 +25,8 @@ export interface PresencePeer {
   browser?: string | undefined;
   /** A guest's lasting browser id (normalizeGuestId); empty for an account. */
   guestId?: string | undefined;
+  /** Random browser/application installation id for both accounts and guests. */
+  clientId?: string | undefined;
   deafened?: boolean;
   gateGuestPrincipalId?: string | null;
   ip?: string | undefined;

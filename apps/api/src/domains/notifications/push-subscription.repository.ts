@@ -6,8 +6,18 @@ import { createRowId } from '../../platform/db/ids.ts';
 import type { PushSubscriptions } from '../../platform/db/schema.ts';
 import { classifyPlatform, PLATFORM_CLASSES } from '@voice-room/shared/platform-class';
 import type { PlatformClass } from '@voice-room/shared/platform-class';
+import type { PushLocaleIntent, PushRegistrationState } from '@voice-room/shared/contracts/push-registration';
+import { resolveLocale } from '@voice-room/shared/localization';
+import { lockKeys, lockXact } from '../../platform/db/locks.ts';
 
 type Metadata = Record<string, unknown>;
+export function subscriptionRegistration(record: PushSubscriptionRecord): PushRegistrationState {
+  return {
+    protocol: 1,
+    locale: resolveLocale([], record.metadata.locale),
+    version: typeof record.metadata.registrationVersion === 'string' ? record.metadata.registrationVersion : record.id
+  };
+}
 export type PushSubscriptionRecord = {
   id: string;
   userId: string;
@@ -51,12 +61,17 @@ function sanitizeMetadata(metadata: unknown): Metadata {
 
   const sanitized: Metadata = {};
   for (const [key, value] of Object.entries(metadata)) {
-    if (PLATFORM_SIGNAL_METADATA_KEYS.has(key)) continue;
+    if (PLATFORM_SIGNAL_METADATA_KEYS.has(key) || key === 'locale' || key === 'registrationVersion') continue;
     if (value === null || typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
       sanitized[key] = value;
     }
   }
   return sanitized;
+}
+
+function sameMetadata(left: Metadata, right: Metadata): boolean {
+  const ordered = (value: Metadata) => Object.entries(value).sort(([a], [b]) => a.localeCompare(b));
+  return JSON.stringify(ordered(left)) === JSON.stringify(ordered(right));
 }
 
 function normalizePlatformClass(value: unknown): PlatformClass {
@@ -89,59 +104,78 @@ function createPushSubscriptionRepository({
 
   // An endpoint moves to another user only when that user proves the same keys;
   // each user keeps their newest subscriptions up to the limit.
-  async function upsert({
+  async function register({
     userId,
     subscription,
-    metadata = {}
+    metadata = {},
+    localeState
   }: {
     userId: string;
     subscription?: { endpoint?: unknown; keys?: { p256dh?: unknown; auth?: unknown } } | null;
     metadata?: Metadata;
-  }): Promise<PushSubscriptionRecord | null> {
+    localeState?: PushLocaleIntent;
+  }): Promise<
+    | { status: 'subscribed'; subscription: PushSubscriptionRecord; registration: PushRegistrationState }
+    | { status: 'locale_conflict'; registration: PushRegistrationState | null }
+    | { status: 'conflict' }
+  > {
     const endpoint = text(subscription?.endpoint);
     const p256dh = text(subscription?.keys?.p256dh);
     const auth = text(subscription?.keys?.auth);
-    if (!userId || !endpoint || !p256dh || !auth) return null;
+    if (!userId || !endpoint || !p256dh || !auth) return { status: 'conflict' };
     const platformClass = resolvePlatformClass(metadata);
     const safeMetadata = sanitizeMetadata(metadata);
     return db.transaction().execute(async (trx) => {
       await trx.selectFrom('users').select('id').where('id', '=', userId).forUpdate().execute();
-      const stored = await trx
-        .insertInto('push_subscriptions')
-        .values({
-          id: createRowId(),
-          user_id: userId,
-          endpoint,
-          p256dh,
-          auth,
-          created_at: sql<Date>`current_timestamp`,
-          metadata: JSON.stringify(safeMetadata),
-          platform_class: platformClass
-        })
-        .onConflict((oc) =>
-          oc
-            .column('endpoint')
-            .doUpdateSet((eb) => ({
-              user_id: eb.ref('excluded.user_id'),
-              p256dh: eb.ref('excluded.p256dh'),
-              auth: eb.ref('excluded.auth'),
-              created_at: sql<Date>`current_timestamp`,
-              metadata: eb.ref('excluded.metadata'),
-              platform_class: eb.ref('excluded.platform_class')
-            }))
-            .where((eb) =>
-              eb.or([
-                eb('push_subscriptions.user_id', '=', eb.ref('excluded.user_id')),
-                eb.and([
-                  eb('push_subscriptions.p256dh', '=', eb.ref('excluded.p256dh')),
-                  eb('push_subscriptions.auth', '=', eb.ref('excluded.auth'))
-                ])
-              ])
-            )
-        )
-        .returningAll()
+      await lockXact(trx, lockKeys.pushTarget('web', endpoint));
+      const current = await trx
+        .selectFrom('push_subscriptions')
+        .selectAll()
+        .where('endpoint', '=', endpoint)
+        .forUpdate()
         .executeTakeFirst();
-      if (!stored) return null;
+      if (current && current.user_id !== userId && (current.p256dh !== p256dh || current.auth !== auth)) {
+        return { status: 'conflict' };
+      }
+      const previous = current ? mapSubscription(current) : null;
+      const state = previous ? subscriptionRegistration(previous) : null;
+      if (
+        localeState &&
+        localeState.expectedVersion !== state?.version &&
+        !(localeState.expectedVersion === null && !state)
+      ) {
+        return { status: 'locale_conflict', registration: state };
+      }
+      const locale = localeState?.locale ?? state?.locale ?? 'ru';
+      const changed =
+        !current ||
+        current.user_id !== userId ||
+        current.p256dh !== p256dh ||
+        current.auth !== auth ||
+        current.platform_class !== platformClass ||
+        state?.locale !== locale ||
+        !sameMetadata(sanitizeMetadata(previous?.metadata), safeMetadata);
+      const version = changed ? createRowId() : (state?.version ?? createRowId());
+      const values = {
+        user_id: userId,
+        p256dh,
+        auth,
+        created_at: sql<Date>`current_timestamp`,
+        metadata: JSON.stringify({ ...safeMetadata, locale, registrationVersion: version }),
+        platform_class: platformClass
+      };
+      const stored = current
+        ? await trx
+            .updateTable('push_subscriptions')
+            .set(values)
+            .where('id', '=', current.id)
+            .returningAll()
+            .executeTakeFirstOrThrow()
+        : await trx
+            .insertInto('push_subscriptions')
+            .values({ id: createRowId(), endpoint, ...values })
+            .returningAll()
+            .executeTakeFirstOrThrow();
       await trx
         .deleteFrom('push_subscriptions')
         .where('id', 'in', (eb) =>
@@ -155,8 +189,17 @@ function createPushSubscriptionRepository({
             .offset(subscriptionLimit)
         )
         .execute();
-      return mapSubscription(stored);
+      return {
+        status: 'subscribed',
+        subscription: mapSubscription(stored),
+        registration: { protocol: 1, locale, version }
+      };
     });
+  }
+
+  async function upsert(input: Parameters<typeof register>[0]): Promise<PushSubscriptionRecord | null> {
+    const result = await register(input);
+    return result.status === 'subscribed' ? result.subscription : null;
   }
 
   async function remove({ userId, endpoint }: { userId: string; endpoint: unknown }): Promise<boolean> {
@@ -190,7 +233,7 @@ function createPushSubscriptionRepository({
       .execute();
   }
 
-  return { listByUserId, markSuccess, remove, removeByEndpoint, upsert };
+  return { listByUserId, markSuccess, remove, removeByEndpoint, upsert, register };
 }
 
 export type PushSubscriptionRepository = ReturnType<typeof createPushSubscriptionRepository>;

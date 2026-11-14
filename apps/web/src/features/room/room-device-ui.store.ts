@@ -1,11 +1,22 @@
+import { t } from '@/shared/i18n';
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
 import { GATE_THRESHOLD_MIN_DB } from './client/core/config';
 import type { SelectOption } from '@/shared/ui/Select/types';
 
 export const NOISE_MODE_SELECT_OPTIONS: SelectOption[] = [
-  { value: 'off', label: 'Выкл' },
-  { value: 'browser', label: 'Браузерный' },
+  {
+    value: 'off',
+    get label() {
+      return t('Выкл');
+    }
+  },
+  {
+    value: 'browser',
+    get label() {
+      return t('Браузерный');
+    }
+  },
   { value: 'rnnoise', label: 'RNNoise' }
 ];
 
@@ -14,9 +25,9 @@ export const useRoomDeviceUiStore = defineStore('room-device-ui', () => {
   const outputDeviceId = ref('');
   const cameraId = ref('');
   const noiseMode = ref('off');
-  const microphoneOptions = ref<SelectOption[]>([{ value: '', label: 'Системный' }]);
-  const outputOptions = ref<SelectOption[]>([{ value: '', label: 'Системный' }]);
-  const cameraOptions = ref<SelectOption[]>([{ value: '', label: 'Системная' }]);
+  const microphoneOptions = ref<SelectOption[]>([{ value: '', label: t('Системный') }]);
+  const outputOptions = ref<SelectOption[]>([{ value: '', label: t('Системный') }]);
+  const cameraOptions = ref<SelectOption[]>([{ value: '', label: t('Системная') }]);
   const outputDisabled = ref(false);
   const devicePopoverOpen = ref(false);
   const outputPopoverOpen = ref(false);

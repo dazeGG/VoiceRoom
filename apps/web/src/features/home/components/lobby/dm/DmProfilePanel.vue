@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '@/shared/i18n';
 import { Bell, BellOff, UserMinus, X } from '@lucide/vue';
 import { computed, ref } from 'vue';
 import type { PublicUser } from '@/api/friends';
@@ -36,7 +37,7 @@ async function toggleMute(): Promise<void> {
 <template>
   <div class="dm-profile">
     <div class="dm-profile__cover" :style="{ '--profile-cover-accent': peer.avatarAccent || undefined }">
-      <button class="dm-profile__close" type="button" aria-label="Закрыть" @click="lobby.closeProfile">
+      <button class="dm-profile__close" type="button" :aria-label="t('Закрыть')" @click="lobby.closeProfile">
         <X v-bind="iconSm" aria-hidden="true" />
       </button>
     </div>
@@ -59,18 +60,18 @@ async function toggleMute(): Promise<void> {
       <div class="dm-profile__stats">
         <div class="dm-profile__stat">
           <div class="dm-profile__stat-num">{{ messageCount }}</div>
-          <div class="dm-profile__stat-label">сообщений</div>
+          <div class="dm-profile__stat-label">{{ t('сообщений') }}</div>
         </div>
         <div class="dm-profile__stat">
-          <div class="dm-profile__stat-num">{{ online ? 'в сети' : '—' }}</div>
-          <div class="dm-profile__stat-label">статус</div>
+          <div class="dm-profile__stat-num">{{ online ? t('в сети') : '—' }}</div>
+          <div class="dm-profile__stat-label">{{ t('статус') }}</div>
         </div>
       </div>
 
       <button class="dm-profile__action" type="button" :disabled="muteSaving" @click="toggleMute">
         <BellOff v-if="muted" v-bind="iconMd" aria-hidden="true" />
         <Bell v-else v-bind="iconMd" aria-hidden="true" />
-        <span>{{ muted ? 'Уведомления выключены' : 'Выключить уведомления' }}</span>
+        <span>{{ muted ? t('Уведомления выключены') : t('Выключить уведомления') }}</span>
       </button>
       <button
         class="dm-profile__action dm-profile__action--danger"
@@ -78,7 +79,7 @@ async function toggleMute(): Promise<void> {
         @click="void lobby.removeFriend(peer.id)"
       >
         <UserMinus v-bind="iconMd" aria-hidden="true" />
-        <span>Удалить из друзей</span>
+        <span>{{ t('Удалить из друзей') }}</span>
       </button>
     </div>
   </div>

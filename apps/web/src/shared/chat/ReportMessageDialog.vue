@@ -1,6 +1,9 @@
 <script setup lang="ts">
 // Reporting a room or direct message to the service operator. The reason is
 // required, the comment is optional; the operator sees the message itself.
+import { useLocalizedText, currentErrorMessage } from '@/shared/i18n/localized-text';
+
+import { t } from '@/shared/i18n';
 import { ref } from 'vue';
 import { REPORT_COMMENT_MAX_LENGTH } from '@voice-room/shared/contracts/reports';
 import { fileReport, type ReportReason, type ReportTarget } from '@/api/reports';
@@ -14,16 +17,36 @@ const emit = defineEmits<{
 }>();
 
 const REASONS: { value: ReportReason; label: string }[] = [
-  { value: 'spam', label: 'Спам или реклама' },
-  { value: 'abuse', label: 'Оскорбления, травля или угрозы' },
-  { value: 'illegal', label: 'Запрещённый законом контент' },
-  { value: 'other', label: 'Другое' }
+  {
+    value: 'spam',
+    get label() {
+      return t('Спам или реклама');
+    }
+  },
+  {
+    value: 'abuse',
+    get label() {
+      return t('Оскорбления, травля или угрозы');
+    }
+  },
+  {
+    value: 'illegal',
+    get label() {
+      return t('Запрещённый законом контент');
+    }
+  },
+  {
+    value: 'other',
+    get label() {
+      return t('Другое');
+    }
+  }
 ];
 
 const reason = ref<ReportReason | null>(null);
 const comment = ref('');
 const sending = ref(false);
-const error = ref('');
+const error = useLocalizedText();
 
 async function submit(): Promise<void> {
   if (!reason.value || sending.value) return;
@@ -32,10 +55,13 @@ async function submit(): Promise<void> {
   try {
     const note = comment.value.trim();
     const status = await fileReport({ target, reason: reason.value, ...(note ? { comment: note } : {}) });
-    emit('reported', status === 'filed' ? 'Жалоба отправлена, спасибо' : 'Вы уже пожаловались на это сообщение');
+    emit('reported', status === 'filed' ? t('Жалоба отправлена, спасибо') : t('Вы уже пожаловались на это сообщение'));
     emit('close');
   } catch (cause) {
-    error.value = cause instanceof Error && cause.message ? cause.message : 'Не удалось отправить жалобу';
+    error.value = () =>
+      cause instanceof Error && currentErrorMessage(cause)
+        ? currentErrorMessage(cause)
+        : t('Не удалось отправить жалобу');
   } finally {
     sending.value = false;
   }
@@ -45,14 +71,14 @@ async function submit(): Promise<void> {
 <template>
   <Dialog
     open
-    title="Пожаловаться на сообщение"
+    :title="t('Пожаловаться на сообщение')"
     :on-close="() => emit('close')"
     :width="460"
     initial-focus="[name=report-reason]"
   >
     <form class="report-dialog" @submit.prevent="submit">
       <fieldset class="report-dialog__reasons">
-        <legend class="report-dialog__label">Что не так с сообщением?</legend>
+        <legend class="report-dialog__label">{{ t('Что не так с сообщением?') }}</legend>
         <label
           v-for="option in REASONS"
           :key="option.value"
@@ -73,7 +99,7 @@ async function submit(): Promise<void> {
 
       <div>
         <label class="report-dialog__label" for="reportComment"
-          >Комментарий <span class="report-dialog__soft">· необязательно</span></label
+          >{{ t('Комментарий') }} <span class="report-dialog__soft">{{ t('· необязательно') }}</span></label
         >
         <textarea
           id="reportComment"
@@ -81,20 +107,20 @@ async function submit(): Promise<void> {
           class="report-dialog__comment"
           rows="3"
           :maxlength="REPORT_COMMENT_MAX_LENGTH"
-          placeholder="Что ещё стоит знать модератору"
+          :placeholder="t('Что ещё стоит знать модератору')"
         ></textarea>
       </div>
 
       <p class="report-dialog__note">
-        Жалобу рассмотрит администратор сервиса. Автор сообщения не узнает, кто пожаловался.
+        {{ t('Жалобу рассмотрит администратор сервиса. Автор сообщения не узнает, кто пожаловался.') }}
       </p>
 
       <p v-if="error" class="report-dialog__error" role="alert">{{ error }}</p>
 
       <div class="report-dialog__actions">
-        <Button variant="ghost" type="button" @click="emit('close')">Отмена</Button>
+        <Button variant="ghost" type="button" @click="emit('close')">{{ t('Отмена') }}</Button>
         <Button variant="danger" type="submit" :disabled="!reason || sending">
-          {{ sending ? 'Отправляем…' : 'Отправить жалобу' }}
+          {{ sending ? t('Отправляем…') : t('Отправить жалобу') }}
         </Button>
       </div>
     </form>

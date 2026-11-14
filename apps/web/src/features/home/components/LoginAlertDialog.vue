@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '@/shared/i18n';
 import { MonitorSmartphone } from '@lucide/vue';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import {
@@ -93,7 +94,7 @@ async function answer(resolution: 'confirmed' | 'denied'): Promise<void> {
       secured.value = result;
     }
   } catch (error) {
-    emit('toast', error instanceof Error && error.message ? error.message : 'Не удалось ответить', {
+    emit('toast', error instanceof Error && error.message ? error.message : t('Не удалось ответить'), {
       variant: 'error'
     });
   } finally {
@@ -117,33 +118,40 @@ function close(): void {
 
 <template>
   <!-- A security question outranks every other dialog in the lobby (_login-alert.scss lifts it). -->
-  <Dialog :open="open" :title="secured ? 'Защитите аккаунт' : 'Новый вход в аккаунт'" :on-close="close" :width="440">
+  <Dialog
+    :open="open"
+    :title="secured ? t('Защитите аккаунт') : t('Новый вход в аккаунт')"
+    :on-close="close"
+    :width="440"
+  >
     <div class="login-alert">
       <template v-if="secured">
         <p class="login-alert__text">
           {{
             secured.sessionEnded
-              ? 'Сеанс на том устройстве завершён — там аккаунт больше не открыт.'
-              : 'Сеанс на том устройстве уже был завершён.'
+              ? t('Сеанс на том устройстве завершён — там аккаунт больше не открыт.')
+              : t('Сеанс на том устройстве уже был завершён.')
           }}
-          Если это были не вы, кто-то мог узнать ваш пароль.
+          {{ t('Если это были не вы, кто-то мог узнать ваш пароль.') }}
         </p>
         <div class="login-alert__actions login-alert__actions--stack">
           <button class="login-alert__button login-alert__button--danger" type="button" @click="secure('password')">
-            Сменить пароль
+            {{ t('Сменить пароль') }}
           </button>
           <button
             class="login-alert__button login-alert__button--ghost"
             type="button"
             @click="secure('recovery-codes')"
           >
-            {{ secured.recoveryCodes.remaining > 0 ? 'Обновить коды восстановления' : 'Создать коды восстановления' }}
+            {{
+              secured.recoveryCodes.remaining > 0 ? t('Обновить коды восстановления') : t('Создать коды восстановления')
+            }}
           </button>
-          <button class="login-alert__later" type="button" @click="secured = null">Позже</button>
+          <button class="login-alert__later" type="button" @click="secured = null">{{ t('Позже') }}</button>
         </div>
       </template>
       <template v-else-if="current">
-        <p class="login-alert__text">{{ loginAlertHeadline(current) }}. Это были вы?</p>
+        <p class="login-alert__text">{{ loginAlertHeadline(current) }}{{ t('. Это были вы?') }}</p>
         <div class="login-alert__device">
           <span class="login-alert__icon" aria-hidden="true"><MonitorSmartphone v-bind="iconMd" /></span>
           <div>
@@ -158,7 +166,7 @@ function close(): void {
             :disabled="answering"
             @click="void answer('denied')"
           >
-            Это не я
+            {{ t('Это не я') }}
           </button>
           <button
             class="login-alert__button login-alert__button--safe"
@@ -166,7 +174,7 @@ function close(): void {
             :disabled="answering"
             @click="void answer('confirmed')"
           >
-            Это я
+            {{ t('Это я') }}
           </button>
         </div>
       </template>

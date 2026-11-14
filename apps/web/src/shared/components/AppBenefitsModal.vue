@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '@/shared/i18n';
 import { onMounted, ref } from 'vue';
 import { createDesktopDownload } from '@/platform/desktop-download';
 import { Button, Dialog } from '@/shared/ui';
@@ -9,10 +10,38 @@ defineProps<{ open: boolean }>();
 const emit = defineEmits<{ close: [] }>();
 
 const BENEFITS = [
-  { title: 'Оверлей поверх игр', text: 'Видно, кто говорит, не сворачивая игру.' },
-  { title: 'Горячие клавиши и Push-to-talk', text: 'Микрофон и звук с клавиатуры, даже когда окно не в фокусе.' },
-  { title: 'Запуск вместе с системой', text: 'Приложение уже открыто, когда друзья зовут в комнату.' },
-  { title: 'Уведомления на рабочем столе', text: 'Сообщения и звонки не теряются во вкладках браузера.' }
+  {
+    get title() {
+      return t('Оверлей поверх игр');
+    },
+    get text() {
+      return t('Видно, кто говорит, не сворачивая игру.');
+    }
+  },
+  {
+    get title() {
+      return t('Горячие клавиши и Push-to-talk');
+    },
+    get text() {
+      return t('Микрофон и звук с клавиатуры, даже когда окно не в фокусе.');
+    }
+  },
+  {
+    get title() {
+      return t('Запуск вместе с системой');
+    },
+    get text() {
+      return t('Приложение уже открыто, когда друзья зовут в комнату.');
+    }
+  },
+  {
+    get title() {
+      return t('Уведомления на рабочем столе');
+    },
+    get text() {
+      return t('Сообщения и звонки не теряются во вкладках браузера.');
+    }
+  }
 ];
 
 let startDownload: (() => Promise<void>) | null = null;
@@ -35,7 +64,7 @@ async function download(): Promise<void> {
 </script>
 
 <template>
-  <Dialog :open="open" title="VoiceRoom на компьютере" :on-close="() => emit('close')" :width="460">
+  <Dialog :open="open" :title="t('VoiceRoom на компьютере')" :on-close="() => emit('close')" :width="460">
     <ul class="app-benefits">
       <li v-for="benefit in BENEFITS" :key="benefit.title" class="app-benefits__item">
         <strong class="app-benefits__title">{{ benefit.title }}</strong>
@@ -43,8 +72,10 @@ async function download(): Promise<void> {
       </li>
     </ul>
     <div class="app-benefits__actions">
-      <Button variant="primary" type="button" :disabled="downloading" @click="download">Скачать приложение</Button>
-      <Button variant="ghost" type="button" @click="emit('close')">Не сейчас</Button>
+      <Button variant="primary" type="button" :disabled="downloading" @click="download">{{
+        t('Скачать приложение')
+      }}</Button>
+      <Button variant="ghost" type="button" @click="emit('close')">{{ t('Не сейчас') }}</Button>
     </div>
   </Dialog>
 </template>

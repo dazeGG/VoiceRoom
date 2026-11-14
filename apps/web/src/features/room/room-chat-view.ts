@@ -2,6 +2,7 @@
 // within a day the bursts of one author (under five minutes apart) share one
 // avatar, name and time. Pure, so the layout rules are tested without a DOM.
 
+import { t } from '@/shared/i18n';
 import type { PublicPeer } from '@voice-room/shared/contracts/rooms';
 import type { ChatMessage } from '@/api/rooms';
 import { formatChatDayLabel, isSameDay } from '@/shared/utils/chat-date';
@@ -39,7 +40,7 @@ export function buildChatDays(items: ChatMessage[], isOwn: (message: ChatMessage
       result.push(day);
     }
 
-    const author = message.name || 'Гость';
+    const author = message.name || t('Гость');
     const last = day.groups.at(-1);
     const sameAuthor = last && last.peerId === message.peerId && last.name === author;
     const close = last && message.createdAt - (last.messages.at(-1)?.createdAt ?? 0) < BURST_GAP_MS;

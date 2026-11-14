@@ -3,6 +3,7 @@
 // Right-click menu shared by the room chat and DMs. Quick reactions sit at the
 // top so the most common action needs no submenu; everything else is a normal
 // menu row. Which rows appear is decided by the caller through the flags.
+import { t } from '@/shared/i18n';
 import { computed, onBeforeUnmount, onMounted } from 'vue';
 import { Copy, Download, Flag, Image as ImageIcon, Pencil, Pin, PinOff, Reply, SmilePlus, Trash2 } from '@lucide/vue';
 import { ContextMenu, PopoverDivider, PopoverMenuItem } from '@/shared/ui';
@@ -64,7 +65,7 @@ const menuProps = computed(() => ({
   open: props.open,
   x: props.x,
   y: props.y,
-  ariaLabel: 'Действия с сообщением'
+  ariaLabel: t('Действия с сообщением')
 }));
 
 function pick(action: (() => void) | undefined, close: () => void): void {
@@ -105,7 +106,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', handleShortcut));
     <template #default="{ close }">
       <div class="message-menu">
         <template v-if="canReact && quickReactions.length > 0">
-          <div class="message-menu__reactions" role="group" aria-label="Быстрые реакции">
+          <div class="message-menu__reactions" role="group" :aria-label="t('Быстрые реакции')">
             <button
               v-for="emoji in quickReactions"
               :key="emoji"
@@ -114,8 +115,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', handleShortcut));
               type="button"
               role="menuitem"
               :disabled="busy"
-              :aria-label="`Реакция ${emoji}`"
-              :title="`Реакция ${emoji}`"
+              :aria-label="t('Реакция {p0}', { p0: emoji })"
+              :title="t('Реакция {p0}', { p0: emoji })"
               @click="
                 onReact?.(emoji);
                 close();
@@ -128,8 +129,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', handleShortcut));
               type="button"
               role="menuitem"
               :disabled="busy"
-              aria-label="Поставить реакцию"
-              title="Поставить реакцию"
+              :aria-label="t('Поставить реакцию')"
+              :title="t('Поставить реакцию')"
               @click="
                 (event: MouseEvent) => {
                   const anchor = event.currentTarget;
@@ -145,17 +146,17 @@ onBeforeUnmount(() => window.removeEventListener('keydown', handleShortcut));
           <PopoverDivider />
         </template>
 
-        <PopoverMenuItem v-if="onReply" label="Ответить" :disabled="busy" @click="pick(onReply, close)">
+        <PopoverMenuItem v-if="onReply" :label="t('Ответить')" :disabled="busy" @click="pick(onReply, close)">
           <template #icon><Reply v-bind="iconMd" aria-hidden="true" /></template>
         </PopoverMenuItem>
 
-        <PopoverMenuItem label="Скопировать текст" :disabled="busy" @click="pick(onCopy, close)">
+        <PopoverMenuItem :label="t('Скопировать текст')" :disabled="busy" @click="pick(onCopy, close)">
           <template #icon><Copy v-bind="iconMd" aria-hidden="true" /></template>
         </PopoverMenuItem>
 
         <PopoverMenuItem
           v-if="onCopyImage"
-          label="Скопировать изображение"
+          :label="t('Скопировать изображение')"
           :disabled="busy"
           @click="pick(onCopyImage, close)"
         >
@@ -164,7 +165,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', handleShortcut));
 
         <PopoverMenuItem
           v-if="onDownloadImage"
-          label="Скачать изображение"
+          :label="t('Скачать изображение')"
           :disabled="busy"
           @click="pick(onDownloadImage, close)"
         >
@@ -175,7 +176,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', handleShortcut));
 
         <PopoverMenuItem
           v-if="canPin"
-          :label="pinned ? 'Открепить' : 'Закрепить в комнате'"
+          :label="pinned ? t('Открепить') : t('Закрепить в комнате')"
           :disabled="busy"
           @click="pick(onTogglePin, close)"
         >
@@ -185,7 +186,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', handleShortcut));
           </template>
         </PopoverMenuItem>
 
-        <PopoverMenuItem v-if="canEdit" label="Изменить" hint="E" :disabled="busy" @click="pick(onEdit, close)">
+        <PopoverMenuItem v-if="canEdit" :label="t('Изменить')" hint="E" :disabled="busy" @click="pick(onEdit, close)">
           <template #icon><Pencil v-bind="iconMd" aria-hidden="true" /></template>
         </PopoverMenuItem>
 
@@ -194,7 +195,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', handleShortcut));
 
         <PopoverMenuItem
           v-if="onReport"
-          label="Пожаловаться"
+          :label="t('Пожаловаться')"
           variant="danger"
           :disabled="busy"
           @click="
@@ -207,7 +208,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', handleShortcut));
 
         <PopoverMenuItem
           v-if="canDelete"
-          label="Удалить"
+          :label="t('Удалить')"
           hint="⌫"
           variant="danger"
           :disabled="busy"

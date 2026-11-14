@@ -1,6 +1,7 @@
 // Who is entering a room: a room link checks the account directly (and saves
 // the room to it), and otherwise asks a guest for a name.
 
+import { t } from '@/shared/i18n';
 import { addRoomByCode, fetchMe, fetchOwnedRooms } from '@/api/auth';
 import { displayNameOf } from '@/shared/utils/display-name';
 import { useSessionStore } from '@/features/auth/session.store';
@@ -60,7 +61,7 @@ export async function resolveRoomEntryName(): Promise<RoomEntryGateResult> {
     }
   } catch (error) {
     log.error('failed to check room entry session', errorContext(error));
-    showToast('Не удалось проверить аккаунт. Попробуйте обновить страницу.');
+    showToast(t('Не удалось проверить аккаунт. Попробуйте обновить страницу.'));
     return 'failure';
   }
 

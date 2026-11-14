@@ -3,6 +3,7 @@
 // dialog, a corner button removes it, and nothing reaches the server until the
 // settings are saved. Mount it per opening (and per room) to start from what
 // is saved.
+import { t } from '@/shared/i18n';
 import { Camera, X } from '@lucide/vue';
 import { computed, onBeforeUnmount, ref, shallowRef } from 'vue';
 import { Avatar, AvatarCropDialog } from '@/shared/ui';
@@ -38,7 +39,7 @@ const previewUrl = ref('');
 const shownUrl = computed(() =>
   change.value.kind === 'upload' ? previewUrl.value : change.value.kind === 'remove' ? null : props.savedUrl
 );
-const editLabel = computed(() => (shownUrl.value ? 'Изменить аватар комнаты' : 'Загрузить аватар комнаты'));
+const editLabel = computed(() => (shownUrl.value ? t('Изменить аватар комнаты') : t('Загрузить аватар комнаты')));
 
 onBeforeUnmount(() => {
   if (previewUrl.value) URL.revokeObjectURL(previewUrl.value);
@@ -51,11 +52,11 @@ function pick(event: Event): void {
   target.value = '';
   if (!selected) return;
   if (!selected.type.startsWith('image/')) {
-    emit('error', 'Выберите изображение JPEG, PNG или WebP');
+    emit('error', t('Выберите изображение JPEG, PNG или WebP'));
     return;
   }
   if (selected.size > MAX_IMAGE_BYTES) {
-    emit('error', 'Изображение должно быть меньше 5 МБ');
+    emit('error', t('Изображение должно быть меньше 5 МБ'));
     return;
   }
   file.value = selected;
@@ -107,8 +108,8 @@ function closeCrop(): void {
       class="room-avatar-field__remove"
       type="button"
       :disabled="disabled"
-      aria-label="Удалить аватар комнаты"
-      title="Удалить аватар комнаты"
+      :aria-label="t('Удалить аватар комнаты')"
+      :title="t('Удалить аватар комнаты')"
       @click="remove"
     >
       <X v-bind="iconSm" aria-hidden="true" />
@@ -121,7 +122,7 @@ function closeCrop(): void {
     :name="name"
     shape="squircle"
     kind="room"
-    title="Аватар комнаты"
+    :title="t('Аватар комнаты')"
     :on-close="closeCrop"
     :on-save="cropped"
   />

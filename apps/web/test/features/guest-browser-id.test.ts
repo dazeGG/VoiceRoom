@@ -60,3 +60,35 @@ test('a value in storage that is not an id is replaced', async () => {
   expect(id).not.toBe('');
   expect(localStorage.getItem('voice-room:guest-id')).toBe(id);
 });
+
+test('account and guest joins share the existing profile id without changing credentials', async () => {
+  const id = 'b9eadc0a-7504-4d93-bd0c-b29827642c4a';
+  localStorage.setItem('voice-room:guest-id', id);
+  const realtime = await loadRoomRealtime();
+  realtime.joinVoiceRoom({ roomId: 'porch', peerId: 'account-peer', sessionToken: 'a'.repeat(32), name: 'Аня' });
+  expect(sent.at(-1)).toEqual({
+    type: 'room.join',
+    payload: {
+      roomId: 'porch',
+      peerId: 'account-peer',
+      sessionToken: 'a'.repeat(32),
+      name: 'Аня',
+      guestId: id,
+      clientId: id
+    }
+  });
+  expect(join(realtime)).toMatchObject({ guestId: id, clientId: id, peerId: 'peer-guest-1' });
+  expect(localStorage.getItem('voice-room:guest-id')).toBe(id);
+});
+
+test('unavailable storage does not block a voice join or fabricate a stable id', async () => {
+  const get = vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+    throw new Error('Storage unavailable');
+  });
+  try {
+    const payload = join(await loadRoomRealtime());
+    expect(payload).toEqual({ roomId: 'porch', peerId: 'peer-guest-1', sessionToken: 'g'.repeat(32), name: 'Петя' });
+  } finally {
+    get.mockRestore();
+  }
+});

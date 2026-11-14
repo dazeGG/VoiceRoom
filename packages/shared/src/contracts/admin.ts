@@ -490,6 +490,8 @@ export const LiveRoomPeer = Type.Object({
   ...DeviceInfo,
   /** The lasting id of a guest's browser; null for an account or a guest that sent none. */
   guestId: Nullable(Type.String()),
+  /** Random browser/application installation id; absent on older APIs. */
+  clientId: Type.Optional(Nullable(Type.String())),
   ...NetworkOrigin,
   /**
    * The server's verdict on the peer's voice, the one its own room screen
@@ -672,6 +674,8 @@ export const RoomStay = Type.Object({
   /** The name a guest gave; null for an account and for stays recorded before guests' names were kept. */
   guestName: Nullable(Type.String()),
   guestId: Nullable(Type.String()),
+  /** Random browser/application installation id, independent of the account. */
+  clientId: Type.Optional(Nullable(Type.String())),
   /**
    * The client, device and origin of the socket that held the seat. Null for stays
    * recorded before they were kept; the guest fields and the origin are cleared
@@ -710,6 +714,8 @@ export const ROOM_CALLS_PAGE_SIZE = 20;
 export const RoomCallsQuery = Type.Object({
   roomId: Type.Optional(Type.String({ minLength: 1, maxLength: 64 })),
   accountId: Type.Optional(Type.String({ minLength: 1, maxLength: 64 })),
+  clientId: Type.Optional(Type.String({ pattern: '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' })),
+  ipKey: Type.Optional(Type.String({ pattern: '^[0-9a-f]{16}$' })),
   after: Type.Optional(HistoryCursor),
   from: Type.Optional(MillisString),
   to: Type.Optional(MillisString)

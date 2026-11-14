@@ -1,3 +1,4 @@
+import { t } from '@/shared/i18n';
 import type { SelectOption } from '@/shared/ui/Select/types';
 
 // Chrome on Windows lists two aliases next to the real devices: "default"
@@ -26,5 +27,5 @@ export function listPhysicalDevices(devices: MediaDeviceInfo[], kind: MediaDevic
  */
 export function withSavedDeviceMissing(options: SelectOption[], savedId: string): SelectOption[] {
   if (!savedId || options.length < 2 || options.some((option) => option.value === savedId)) return options;
-  return [...options, { value: savedId, label: 'Устройство недоступно' }];
+  return [...options, { value: savedId, label: t('Устройство недоступно') }];
 }

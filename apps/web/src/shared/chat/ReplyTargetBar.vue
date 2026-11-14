@@ -5,6 +5,7 @@
 // rather than a stray card floating above it. The quote is a jump target, and
 // cancelling is an icon so the row reads as part of the composer instead of a
 // form with a stray text button.
+import { t } from '@/shared/i18n';
 import { X } from '@lucide/vue';
 import ReplyPreview from './ReplyPreview.vue';
 import type { ReplyTarget } from './reply-store';
@@ -22,7 +23,7 @@ const emit = defineEmits<{ cancel: [] }>();
 
 <template>
   <div class="reply-target">
-    <span class="reply-target__label">В ответ</span>
+    <span class="reply-target__label">{{ t('В ответ') }}</span>
     <ReplyPreview
       :preview="target"
       :interactive="Boolean(props.onJump) && !target.deleted"
@@ -31,8 +32,8 @@ const emit = defineEmits<{ cancel: [] }>();
     <button
       class="reply-target__cancel"
       type="button"
-      aria-label="Отменить ответ"
-      title="Отменить ответ"
+      :aria-label="t('Отменить ответ')"
+      :title="t('Отменить ответ')"
       @click="emit('cancel')"
     >
       <X :size="16" aria-hidden="true" />

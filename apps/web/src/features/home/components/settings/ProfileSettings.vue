@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '@/shared/i18n';
 import { Pencil, X } from '@lucide/vue';
 import { computed, ref, type UnwrapNestedRefs } from 'vue';
 import type { AuthUser } from '@/api/auth';
@@ -27,7 +28,7 @@ const avatarInput = ref<HTMLInputElement>();
 
 const label = computed(() => (props.user ? displayNameOf(props.user) : ''));
 const avatarSrc = computed(() => props.draft.shownAvatar(props.user));
-const avatarAction = computed(() => (props.user?.avatarUrl ? 'Изменить аватар' : 'Загрузить аватар'));
+const avatarAction = computed(() => (props.user?.avatarUrl ? t('Изменить аватар') : t('Загрузить аватар')));
 
 function onAvatarFile(event: Event): void {
   const input = event.currentTarget;
@@ -41,10 +42,10 @@ function onAvatarFile(event: Event): void {
 
 async function save(): Promise<void> {
   try {
-    if (await props.draft.save(props.user)) emit('toast', 'Изменения сохранены');
+    if (await props.draft.save(props.user)) emit('toast', t('Изменения сохранены'));
     emit('close');
   } catch (error) {
-    emit('toast', error instanceof Error && error.message ? error.message : 'Не удалось сохранить');
+    emit('toast', error instanceof Error && error.message ? error.message : t('Не удалось сохранить'));
   }
 }
 </script>
@@ -82,8 +83,8 @@ async function save(): Promise<void> {
         v-if="avatarSrc"
         type="button"
         class="settings__avatar-remove"
-        aria-label="Удалить аватар"
-        title="Удалить аватар"
+        :aria-label="t('Удалить аватар')"
+        :title="t('Удалить аватар')"
         @click="draft.removeAvatar"
       >
         <X v-bind="iconSm" aria-hidden="true" />
@@ -97,16 +98,17 @@ async function save(): Promise<void> {
 
   <div class="settings__fields">
     <label>
-      <span class="settings__field-label">Имя</span>
+      <span class="settings__field-label">{{ t('Имя') }}</span>
       <input v-model="name" class="settings__input" maxlength="40" autocomplete="nickname" />
     </label>
   </div>
 
   <div class="settings__actions">
-    <button class="settings__cancel" type="button" :disabled="draft.saving" @click="emit('close')">Отмена</button>
+    <button class="settings__cancel" type="button" :disabled="draft.saving" @click="emit('close')">
+      {{ t('Отмена') }}
+    </button>
     <button class="settings__save" type="button" :disabled="draft.saving" @click="save">
-      <span v-if="draft.saving" class="home-spinner" aria-hidden="true"></span>
-      Сохранить
+      <span v-if="draft.saving" class="home-spinner" aria-hidden="true"></span> {{ t('Сохранить') }}
     </button>
   </div>
 
@@ -116,7 +118,7 @@ async function save(): Promise<void> {
     :name="label"
     shape="circle"
     kind="user"
-    title="Аватар профиля"
+    :title="t('Аватар профиля')"
     :on-close="draft.cancelCrop"
     :on-save="async (blob: Blob) => draft.setAvatar(blob)"
   />

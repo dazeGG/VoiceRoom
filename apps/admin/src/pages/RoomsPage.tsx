@@ -23,6 +23,7 @@ import type { CallRef } from '../tabs.ts';
 import { Button, Empty, Panel, Pill, Segment, Stat, Stats } from '../ui/index.tsx';
 import { Section, useSectionState } from '../ui/Section.tsx';
 import { CallList } from './rooms/CallList.tsx';
+import { CallFilters, type CallOriginFilters } from './rooms/CallFilters.tsx';
 import { CallPeople } from './rooms/CallPeople.tsx';
 import { DayPicker, shiftDay, startOfDay } from './rooms/DayPicker.tsx';
 import { DayTimeline } from './rooms/DayTimeline.tsx';
@@ -54,6 +55,7 @@ function toggled(set: ReadonlySet<string>, value: string): Set<string> {
 
 /** What the history asks for: a view, one room or all, and in the list a page. */
 interface HistoryQuery {
+  filters: CallOriginFilters;
   view: HistoryView;
   room: HistoryRoom | null;
   // The cursor each page opens with, the first one's empty; the API pages by
@@ -68,15 +70,29 @@ interface HistoryQuery {
 type HistoryAnswer =
   | {
       view: 'calls';
+      filters: CallOriginFilters;
       room: HistoryRoom | null;
       keepDays: number;
       calls: RoomCall[];
       cursors: (string | undefined)[];
       index: number;
     }
-  | { view: 'timeline'; room: HistoryRoom | null; keepDays: number; calls: RoomCall[]; dayStart: number };
+  | {
+      view: 'timeline';
+      filters: CallOriginFilters;
+      room: HistoryRoom | null;
+      keepDays: number;
+      calls: RoomCall[];
+      dayStart: number;
+    };
 
-const firstPage = (view: HistoryView, room: HistoryRoom | null, dayStart = startOfToday()): HistoryQuery => ({
+const firstPage = (
+  view: HistoryView,
+  room: HistoryRoom | null,
+  dayStart = startOfToday(),
+  filters: CallOriginFilters = {}
+): HistoryQuery => ({
+  filters,
   view,
   room,
   cursors: [undefined],
@@ -84,17 +100,17 @@ const firstPage = (view: HistoryView, room: HistoryRoom | null, dayStart = start
   dayStart
 });
 
-async function fetchHistory({ view, room, cursors, index, dayStart }: HistoryQuery): Promise<HistoryAnswer> {
+async function fetchHistory({ view, room, cursors, index, dayStart, filters }: HistoryQuery): Promise<HistoryAnswer> {
   if (view === 'calls') {
     const after = index > 0 ? cursors[index] : undefined;
-    const query: RoomCallsQuery = { ...(room ? { roomId: room.id } : {}), ...(after ? { after } : {}) };
+    const query: RoomCallsQuery = { ...filters, ...(room ? { roomId: room.id } : {}), ...(after ? { after } : {}) };
     const page = await fetchRoomCalls(query);
     const next = [...cursors.slice(0, index + 1), ...(page.next ? [page.next] : [])];
-    return { view, room, keepDays: page.keepDays, calls: page.calls, cursors: next, index };
+    return { view, filters, room, keepDays: page.keepDays, calls: page.calls, cursors: next, index };
   }
   // Every call of the day, following the pages.
   const from = dayStart;
-  const span = { from: String(from), to: String(shiftDay(from, 1)), ...(room ? { roomId: room.id } : {}) };
+  const span = { ...filters, from: String(from), to: String(shiftDay(from, 1)), ...(room ? { roomId: room.id } : {}) };
   const calls: RoomCall[] = [];
   let after: string | null = null;
   let keepDays = 0;
@@ -105,7 +121,7 @@ async function fetchHistory({ view, room, cursors, index, dayStart }: HistoryQue
     after = answer.next;
     if (!after) break;
   }
-  return { view, room, keepDays, calls, dayStart: from };
+  return { view, filters, room, keepDays, calls, dayStart: from };
 }
 
 export function RoomsPage({
@@ -165,6 +181,7 @@ export function RoomsPage({
 
   // --- today's numbers, for those who may read them --------------------------
   const canStats = useCan('stats.view');
+  const canOrigin = useCan('origin.view');
   const today = useAdminResource(() => (canStats ? fetchOverview() : Promise.resolve(null)), [canStats], {
     failureText: 'Не удалось загрузить обзор',
     refreshMs: SLOW_REFRESH_MS
@@ -189,6 +206,7 @@ export function RoomsPage({
   function showCallsPage(index: number): void {
     if (callsPage) {
       setHistoryQuery({
+        filters: callsPage.filters,
         view: 'calls',
         room: callsPage.room,
         cursors: callsPage.cursors,
@@ -201,19 +219,19 @@ export function RoomsPage({
   /** Narrows the history (in the view on screen) to a room, or widens it to all. */
   function showRoomHistory(room: HistoryRoom | null, scroll = false): void {
     setPicked(null);
-    setHistoryQuery(firstPage(view, room, historyQuery.dayStart));
+    setHistoryQuery(firstPage(view, room, historyQuery.dayStart, historyQuery.filters));
     if (room) historyFold.setOpen(true);
     if (scroll) historySection.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
   }
 
   function changeView(next: HistoryView): void {
     setPicked(null);
-    setHistoryQuery(firstPage(next, historyRoom, historyQuery.dayStart));
+    setHistoryQuery(firstPage(next, historyRoom, historyQuery.dayStart, historyQuery.filters));
   }
 
   function showDay(dayStart: number): void {
     setPicked(null);
-    setHistoryQuery(firstPage('timeline', historyRoom, dayStart));
+    setHistoryQuery(firstPage('timeline', historyRoom, dayStart, historyQuery.filters));
   }
 
   // The top bar's refresh asks for the rooms now and the history on screen again.
@@ -235,7 +253,7 @@ export function RoomsPage({
     setSeenFocusRoom(focusRoom);
     if (focusRoom) {
       setPicked(null);
-      setHistoryQuery(firstPage(view, focusRoom, historyQuery.dayStart));
+      setHistoryQuery(firstPage(view, focusRoom, historyQuery.dayStart, historyQuery.filters));
     }
   }
   const { setOpen: openHistoryFold } = historyFold;
@@ -262,6 +280,17 @@ export function RoomsPage({
   const hasNextPage = callsPage ? callsPage.cursors.length > callsPage.index + 1 : false;
   const pickedCall = day?.calls.find((call) => call.id === picked) ?? null;
   const dayIsToday = day ? day.dayStart === startOfDay(now) : true;
+  const timelineLive = dayIsToday
+    ? (rooms ?? []).filter(
+        (room) =>
+          (!historyRoom || room.roomId === historyRoom.id) &&
+          room.peers.some(
+            (peer) =>
+              (!day?.filters.clientId || (peer.clientId ?? peer.guestId) === day.filters.clientId) &&
+              (!day?.filters.ipKey || peer.ipKey === day.filters.ipKey)
+          )
+      )
+    : [];
   const loadingHistory = (
     <Panel>
       <p className="ui-empty" aria-busy="true">
@@ -389,6 +418,14 @@ export function RoomsPage({
         sectionRef={historySection}
         summary={
           <>
+            {canOrigin && shown?.filters.clientId ? (
+              <Pill title={`Фильтр ID браузера / приложения: ${shown.filters.clientId}`}>
+                ID #{shown.filters.clientId.slice(0, 6)}
+              </Pill>
+            ) : null}
+            {canOrigin && shown?.filters.ipKey ? (
+              <Pill title={`Фильтр ключа IP: ${shown.filters.ipKey}`}>IP · {shown.filters.ipKey.slice(0, 6)}</Pill>
+            ) : null}
             {historyRoom ? (
               <button type="button" className="rooms-filter" onClick={() => showRoomHistory(null)}>
                 {historyRoom.name || historyRoom.id}
@@ -424,6 +461,15 @@ export function RoomsPage({
           </>
         }
       >
+        {canOrigin ? (
+          <CallFilters
+            filters={historyQuery.filters}
+            onChange={(filters) => {
+              setPicked(null);
+              setHistoryQuery(firstPage(view, historyQuery.room, historyQuery.dayStart, filters));
+            }}
+          />
+        ) : null}
         {history.failure && !(view === 'calls' ? callsPage : day) ? (
           <Notice failure={history.failure} onRetry={() => showRoomHistory(historyRoom)} />
         ) : !shown ? (
@@ -484,21 +530,14 @@ export function RoomsPage({
             ) : (
               <>
                 <Panel flush>
-                  {!day || (day.calls.length === 0 && !(dayIsToday && (rooms ?? []).length)) ? (
+                  {!day || (day.calls.length === 0 && !timelineLive.length) ? (
                     <Empty>{dayIsToday ? 'Сегодня звонков не было' : 'В этот день звонков не было'}</Empty>
                   ) : (
                     <DayTimeline
                       dayStart={day.dayStart}
                       now={now}
                       calls={day.calls}
-                      live={
-                        // The calls going on now belong to today's line only.
-                        !dayIsToday
-                          ? []
-                          : historyRoom
-                            ? (rooms ?? []).filter((room) => room.roomId === historyRoom.id)
-                            : (rooms ?? [])
-                      }
+                      live={timelineLive}
                       selectedId={picked}
                       onSelect={(call) => setPicked(call.id === picked ? null : call.id)}
                       onOpenLive={openLiveRoom}

@@ -68,7 +68,7 @@ export function mapPublicUser(row: UserRow) {
 
 // Room invitations ride inside a regular direct message's metadata so they
 // live in the shared thread history without any schema change.
-function mapInvite(metadata: Metadata | null | undefined): DirectMessageInvite | null {
+export function mapInvite(metadata: Metadata | null | undefined): DirectMessageInvite | null {
   if (!metadata || metadata.kind !== 'room-invite') return null;
   const status = metadata.status;
   return {

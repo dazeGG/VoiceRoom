@@ -1,5 +1,6 @@
 // Direct (one-to-one) messages. Mirrors the /api/dm/:userId routes.
 
+import { t } from '@/shared/i18n';
 import {
   DirectHistoryPage,
   DirectMessageAnswer,
@@ -64,7 +65,7 @@ export async function fetchThreadPage(
   if (request.cursor) params.set('cursor', request.cursor);
   const page = await api.get(`/api/dm/${encodeURIComponent(userId)}/history?${params}`, DirectHistoryPage, {
     signal: request.signal,
-    fallback: 'Не удалось загрузить переписку'
+    fallback: t('Не удалось загрузить переписку')
   });
   return { ...page, messages: page.messages.map(directMessageFromHistory) };
 }

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '@/shared/i18n';
 import { Ban, Check, LogOut, MessageSquare, MicOff, User, UserMinus, UserPlus, Volume2, VolumeX } from '@lucide/vue';
 import { computed, ref, watch } from 'vue';
 import { banRoomPeer, kickRoomPeer, setRoomPeerServerMute, undoRoomBan } from '@/api/rooms';
@@ -111,7 +112,7 @@ function openDirectMessage(): void {
   act(async () => {
     social.showFriends();
     await social.openDm(accountUserId);
-  }, 'Не удалось открыть личные сообщения');
+  }, t('Не удалось открыть личные сообщения'));
 }
 
 function sendFriendRequest(): void {
@@ -120,7 +121,7 @@ function sendFriendRequest(): void {
   act(async () => {
     const result = await social.addFriend(accountUserId);
     showToast(friendRequestToast(result.status));
-  }, 'Не удалось отправить заявку в друзья');
+  }, t('Не удалось отправить заявку в друзья'));
 }
 
 function acceptFriendRequest(): void {
@@ -128,18 +129,18 @@ function acceptFriendRequest(): void {
   if (!accountUserId) return;
   act(async () => {
     await social.acceptRequest(accountUserId);
-    showToast('Заявка принята');
-  }, 'Не удалось принять заявку в друзья');
+    showToast(t('Заявка принята'));
+  }, t('Не удалось принять заявку в друзья'));
 }
 
 function dropFriend(): void {
   const accountUserId = peer.value?.accountUserId;
-  const name = peer.value?.name ?? 'Пользователь';
+  const name = peer.value?.name ?? t('Пользователь');
   if (!accountUserId) return;
   act(async () => {
     await social.removeFriend(accountUserId);
-    showToast(`${name} удалён из друзей`);
-  }, 'Не удалось удалить из друзей');
+    showToast(t('{p0} удалён из друзей', { p0: name }));
+  }, t('Не удалось удалить из друзей'));
 }
 
 function toggleServerMute(): void {
@@ -149,8 +150,8 @@ function toggleServerMute(): void {
   const next = !peer.value.serverMuted;
   act(async () => {
     await setRoomPeerServerMute(roomState.roomId, peerId, next);
-    showToast(next ? `Микрофон ${name} выключен` : `Микрофон ${name} включён`);
-  }, 'Не удалось изменить микрофон участника');
+    showToast(next ? t('Микрофон {p0} выключен', { p0: name }) : t('Микрофон {p0} включён', { p0: name }));
+  }, t('Не удалось изменить микрофон участника'));
 }
 
 function kickParticipant(): void {
@@ -159,8 +160,8 @@ function kickParticipant(): void {
   const name = peer.value.name;
   act(async () => {
     await kickRoomPeer(roomState.roomId, peerId);
-    showToast(`${name} исключён из комнаты`);
-  }, 'Не удалось исключить участника');
+    showToast(t('{p0} исключён из комнаты', { p0: name }));
+  }, t('Не удалось исключить участника'));
 }
 
 function banParticipant(): void {
@@ -169,32 +170,32 @@ function banParticipant(): void {
   const peerName = peer.value.name;
   act(async () => {
     const banId = await banRoomPeer(roomState.roomId, peerId);
-    showToast(`${peerName} заблокирован`, {
-      actionLabel: 'Отменить',
+    showToast(t('{p0} заблокирован', { p0: peerName }), {
+      actionLabel: t('Отменить'),
       duration: 10000,
       action: async () => {
         try {
           await undoRoomBan(roomState.roomId, banId);
-          showToast('Блокировка отменена');
+          showToast(t('Блокировка отменена'));
         } catch (error) {
-          showToast(errorToastMessage(error, 'Не удалось отменить блокировку'), { variant: 'error' });
+          showToast(errorToastMessage(error, t('Не удалось отменить блокировку')), { variant: 'error' });
         }
       }
     });
-  }, 'Не удалось заблокировать участника');
+  }, t('Не удалось заблокировать участника'));
 }
 
 function friendRequestToast(status: 'sent' | 'accepted' | 'already_sent' | 'already_friends'): string {
   switch (status) {
     case 'accepted':
-      return 'Теперь вы друзья';
+      return t('Теперь вы друзья');
     case 'already_friends':
-      return 'Уже в друзьях';
+      return t('Уже в друзьях');
     case 'already_sent':
-      return 'Заявка уже отправлена';
+      return t('Заявка уже отправлена');
     case 'sent':
     default:
-      return 'Заявка в друзья отправлена';
+      return t('Заявка в друзья отправлена');
   }
 }
 </script>
@@ -205,27 +206,27 @@ function friendRequestToast(status: 'sent' | 'accepted' | 'already_sent' | 'alre
     :open="participantContextMenu.open"
     :x="participantContextMenu.x"
     :y="participantContextMenu.y"
-    v-bind="{ ariaLabel: `Действия для ${peer.name}` }"
+    v-bind="{ ariaLabel: t('Действия для {p0}', { p0: peer.name }) }"
     :restore-focus="participantContextMenu.restoreFocus"
     role="dialog"
     @close="participantContextMenu.closeParticipantContextMenu('', false)"
   >
     <div class="participant-menu" :data-peer-id="peer.id">
-      <PopoverMenuLabel :text="showAudioControls ? 'Плитка в сетке' : 'Участник'" />
+      <PopoverMenuLabel :text="showAudioControls ? t('Плитка в сетке') : t('Участник')" />
 
-      <PopoverMenuItem v-if="peer.accountUserId" role="button" label="Профиль" @click="showProfile">
+      <PopoverMenuItem v-if="peer.accountUserId" role="button" :label="t('Профиль')" @click="showProfile">
         <template #icon><User v-bind="iconMd" aria-hidden="true" /></template>
       </PopoverMenuItem>
 
       <template v-if="canUseSocialActions">
-        <PopoverMenuItem role="button" label="Написать" @click="openDirectMessage">
+        <PopoverMenuItem role="button" :label="t('Написать')" @click="openDirectMessage">
           <template #icon><MessageSquare v-bind="iconMd" aria-hidden="true" /></template>
         </PopoverMenuItem>
 
         <PopoverMenuItem
           v-if="relationship === 'friend'"
           role="button"
-          label="Удалить из друзей"
+          :label="t('Удалить из друзей')"
           variant="danger"
           @click="dropFriend"
         >
@@ -234,7 +235,7 @@ function friendRequestToast(status: 'sent' | 'accepted' | 'already_sent' | 'alre
         <PopoverMenuItem
           v-else-if="relationship === 'incoming'"
           role="button"
-          label="Принять заявку"
+          :label="t('Принять заявку')"
           variant="friendly"
           @click="acceptFriendRequest"
         >
@@ -243,18 +244,24 @@ function friendRequestToast(status: 'sent' | 'accepted' | 'already_sent' | 'alre
         <PopoverMenuItem
           v-else-if="relationship === 'outgoing'"
           role="button"
-          label="Заявка отправлена"
+          :label="t('Заявка отправлена')"
           variant="friendly"
           disabled
         >
           <template #icon><UserPlus v-bind="iconMd" aria-hidden="true" /></template>
         </PopoverMenuItem>
-        <PopoverMenuItem v-else role="button" label="Добавить в друзья" variant="friendly" @click="sendFriendRequest">
+        <PopoverMenuItem
+          v-else
+          role="button"
+          :label="t('Добавить в друзья')"
+          variant="friendly"
+          @click="sendFriendRequest"
+        >
           <template #icon><UserPlus v-bind="iconMd" aria-hidden="true" /></template>
         </PopoverMenuItem>
       </template>
       <p v-else-if="!peer.accountUserId" class="participant-menu__note">
-        Гость: доступны только локальные настройки звука.
+        {{ t('Гость: доступны только локальные настройки звука.') }}
       </p>
 
       <template v-if="showAudioControls">
@@ -264,7 +271,7 @@ function friendRequestToast(status: 'sent' | 'accepted' | 'already_sent' | 'alre
           <div class="participant-menu__volume-head">
             <span class="participant-menu__volume-label">
               <Volume2 v-bind="iconSm" aria-hidden="true" />
-              <span>Громкость</span>
+              <span>{{ t('Громкость') }}</span>
             </span>
             <output class="participant-menu__volume-value">{{ volumeLabel }}</output>
           </div>
@@ -276,7 +283,7 @@ function friendRequestToast(status: 'sent' | 'accepted' | 'already_sent' | 'alre
             :default-value="100"
             snap
             :snap-threshold="6"
-            :aria-label="`Громкость ${peer.name}`"
+            :aria-label="t('Громкость {p0}', { p0: peer.name })"
             :aria-value-text="volumeLabel"
             @value-change="setVolume"
           />
@@ -284,7 +291,7 @@ function friendRequestToast(status: 'sent' | 'accepted' | 'already_sent' | 'alre
 
         <PopoverMenuItem
           role="button"
-          :label="localMuted ? 'Включить для меня' : 'Заглушить для меня'"
+          :label="localMuted ? t('Включить для меня') : t('Заглушить для меня')"
           :variant="localMuted ? 'accent' : 'default'"
           @click="toggleLocalMute"
         >
@@ -294,12 +301,12 @@ function friendRequestToast(status: 'sent' | 'accepted' | 'already_sent' | 'alre
 
       <template v-if="canModerate">
         <PopoverDivider />
-        <PopoverMenuLabel text="Модерация" />
+        <PopoverMenuLabel :text="t('Модерация')" />
 
         <PopoverMenuItem
           v-if="showAudioControls"
           role="button"
-          :label="peer.serverMuted ? 'Включить микрофон' : 'Выключить микрофон'"
+          :label="peer.serverMuted ? t('Включить микрофон') : t('Выключить микрофон')"
           :disabled="moderating"
           @click="toggleServerMute"
         >
@@ -308,7 +315,7 @@ function friendRequestToast(status: 'sent' | 'accepted' | 'already_sent' | 'alre
 
         <PopoverMenuItem
           role="button"
-          label="Исключить из комнаты"
+          :label="t('Исключить из комнаты')"
           variant="danger"
           :disabled="moderating"
           @click="kickParticipant"
@@ -317,7 +324,7 @@ function friendRequestToast(status: 'sent' | 'accepted' | 'already_sent' | 'alre
         </PopoverMenuItem>
         <PopoverMenuItem
           role="button"
-          label="Заблокировать в комнате"
+          :label="t('Заблокировать в комнате')"
           variant="danger"
           :disabled="moderating"
           @click="banParticipant"

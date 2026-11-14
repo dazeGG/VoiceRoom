@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '@/shared/i18n';
 import { Check, MessageSquare, UserMinus, UserPlus } from '@lucide/vue';
 import { computed } from 'vue';
 import { AccountBadge, Avatar, Button, Ellipsis } from '@/shared/ui';
@@ -46,34 +47,32 @@ const friendsSinceLabel = computed(() => {
       </span>
 
       <span v-if="friendsSinceLabel" class="profile-card__since">
-        <span class="profile-card__since-label">Знакомы с</span>
+        <span class="profile-card__since-label">{{ t('Знакомы с') }}</span>
         <span class="profile-card__since-value">{{ friendsSinceLabel }}</span>
       </span>
 
       <!-- Identity only for 'self': social actions against your own account are invalid. -->
       <template v-if="relationship === 'self'" />
       <p v-else-if="relationship === 'unavailable'" class="profile-card__note">
-        Гость комнаты — профиль и дружба недоступны.
+        {{ t('Гость комнаты — профиль и дружба недоступны.') }}
       </p>
-      <p v-else-if="relationship === 'outgoing'" class="profile-card__note">Заявка в друзья уже отправлена.</p>
+      <p v-else-if="relationship === 'outgoing'" class="profile-card__note">
+        {{ t('Заявка в друзья уже отправлена.') }}
+      </p>
       <div v-else class="profile-card__actions">
         <template v-if="relationship === 'friend'">
           <Button variant="primary" :disabled="busy" @click="onMessage?.()">
-            <template #icon><MessageSquare v-bind="iconSm" aria-hidden="true" /></template>
-            Написать
+            <template #icon><MessageSquare v-bind="iconSm" aria-hidden="true" /></template> {{ t('Написать') }}
           </Button>
           <Button variant="danger-ghost" :disabled="busy" @click="onRemoveFriend?.()">
-            <template #icon><UserMinus v-bind="iconSm" aria-hidden="true" /></template>
-            Удалить из друзей
+            <template #icon><UserMinus v-bind="iconSm" aria-hidden="true" /></template> {{ t('Удалить из друзей') }}
           </Button>
         </template>
         <Button v-else-if="relationship === 'incoming'" variant="primary" :disabled="busy" @click="onAcceptRequest?.()">
-          <template #icon><Check v-bind="iconSm" aria-hidden="true" /></template>
-          Принять заявку
+          <template #icon><Check v-bind="iconSm" aria-hidden="true" /></template> {{ t('Принять заявку') }}
         </Button>
         <Button v-else variant="soft" :disabled="busy" @click="onAddFriend?.()">
-          <template #icon><UserPlus v-bind="iconSm" aria-hidden="true" /></template>
-          Добавить в друзья
+          <template #icon><UserPlus v-bind="iconSm" aria-hidden="true" /></template> {{ t('Добавить в друзья') }}
         </Button>
       </div>
     </div>

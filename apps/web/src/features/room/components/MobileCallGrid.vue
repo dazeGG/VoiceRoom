@@ -2,6 +2,7 @@
 // Everyone at once, filling the screen: rows of equal height, the tiles of a
 // row sharing its width. With no camera on the tiles keep the room stage's
 // 16:9 shape instead. Past nine people the grid pages sideways.
+import { t } from '@/shared/i18n';
 import { computed, ref } from 'vue';
 import type { Participant } from '@/features/room/client/core/types';
 import { useMobileCallUiStore } from '@/features/room/mobile-call-ui.store';
@@ -56,7 +57,7 @@ function tapTile(participant: Participant): void {
         :key="index"
         class="mobile-call-grid__page"
         role="group"
-        :aria-label="`Страница ${index + 1}`"
+        :aria-label="t('Страница {p0}', { p0: index + 1 })"
         :style="{ gridTemplateRows: `repeat(${rows.length}, ${voiceOnly ? 'auto' : 'minmax(0, 1fr)'})` }"
       >
         <!-- One flat list keyed by person: moving to another row keeps the tile and its video. -->
@@ -78,7 +79,7 @@ function tapTile(participant: Participant): void {
       v-if="pages.length > 1"
       class="mobile-call-grid__dots"
       role="group"
-      aria-label="Страницы"
+      :aria-label="t('Страницы')"
       :inert="!mobileCall.chromeVisible"
     >
       <button
@@ -86,7 +87,7 @@ function tapTile(participant: Participant): void {
         :key="index"
         type="button"
         class="mobile-call-grid__dot"
-        :aria-label="`Страница ${index + 1}`"
+        :aria-label="t('Страница {p0}', { p0: index + 1 })"
         :aria-current="index === currentPage ? 'page' : undefined"
         @click="goToPage(index)"
       ></button>

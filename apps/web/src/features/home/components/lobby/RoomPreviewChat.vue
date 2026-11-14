@@ -2,6 +2,7 @@
 // The lobby preview renders the same chat the room rail does: the only
 // difference is that this viewer has not joined voice, so they post as their
 // account instead of through a room peer session.
+import { t } from '@/shared/i18n';
 import type { AuthUser } from '@/api/auth';
 import RoomChatPanel from '@/features/room/components/RoomChatPanel.vue';
 import { displayNameOf } from '@/shared/utils/display-name';
@@ -32,7 +33,7 @@ function resolveDisplayName(): string {
     :peer-id="`auth-${user.id}`"
     :resolve-display-name="resolveDisplayName"
     root-class="room-preview__chat"
-    aria-label="Чат комнаты"
+    :aria-label="t('Чат комнаты')"
     :around-message-id="aroundMessageId"
     :can-moderate="canModerate"
     :participant-count="participantCount"

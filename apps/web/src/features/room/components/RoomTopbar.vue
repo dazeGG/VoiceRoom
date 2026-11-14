@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '@/shared/i18n';
 import { Link, MessageSquare, UserPlus, Users } from '@lucide/vue';
 import { computed } from 'vue';
 import Topbar from '@/shared/components/Topbar.vue';
@@ -47,9 +48,9 @@ const participantsActive = computed(() => roomUi.chatOpen && roomUi.activePanel 
 async function copyInviteLink(close: () => void): Promise<void> {
   try {
     await copyText(`${window.location.origin}/r/${encodeURIComponent(roomClientState.roomId)}`);
-    showToast('Ссылка скопирована');
+    showToast(t('Ссылка скопирована'));
   } catch {
-    showToast('Не удалось скопировать');
+    showToast(t('Не удалось скопировать'));
   }
   close();
 }
@@ -60,8 +61,8 @@ function notifyRoomsChanged(): void {
 </script>
 
 <template>
-  <Topbar label="Новая голосовая комната" reload>
-    <div class="room-topbar__heading" aria-label="Комната" :hidden="page.screen !== 'room'">
+  <Topbar :label="t('Новая голосовая комната')" reload show-language>
+    <div class="room-topbar__heading" :aria-label="t('Комната')" :hidden="page.screen !== 'room'">
       <div class="room-topbar__heading-main">
         <RoomMenu
           :room-id="roomClientState.roomId"
@@ -97,7 +98,7 @@ function notifyRoomsChanged(): void {
         <Popover
           placement="bottom-end"
           role="menu"
-          aria-label="Пригласить в комнату"
+          :aria-label="t('Пригласить в комнату')"
           panel-class="room-topbar__invite-popover"
         >
           <template #trigger="{ open, toggle, panelId }">
@@ -107,20 +108,20 @@ function notifyRoomsChanged(): void {
               aria-haspopup="menu"
               :aria-expanded="open"
               :aria-controls="panelId"
-              title="Пригласить"
+              :title="t('Пригласить')"
               @click="toggle"
             >
               <UserPlus v-bind="iconSm" aria-hidden="true" />
-              <span class="room-topbar__invite-label">Пригласить</span>
+              <span class="room-topbar__invite-label">{{ t('Пригласить') }}</span>
             </button>
           </template>
           <template #content="{ close }">
-            <PopoverMenuItem label="Скопировать ссылку" @click="void copyInviteLink(close)">
+            <PopoverMenuItem :label="t('Скопировать ссылку')" @click="void copyInviteLink(close)">
               <template #icon><Link v-bind="iconMd" aria-hidden="true" /></template>
             </PopoverMenuItem>
             <template v-if="roomClientState.self?.accountUserId">
               <PopoverDivider />
-              <PopoverMenuLabel text="Позвать друга" />
+              <PopoverMenuLabel :text="t('Позвать друга')" />
               <RoomInviteFriendList
                 :friends="social.friends()"
                 :room-id="roomClientState.roomId"
@@ -131,13 +132,17 @@ function notifyRoomsChanged(): void {
             </template>
           </template>
         </Popover>
-        <div class="room-panel-tabs room-panel-tabs--topbar" role="group" aria-label="Открыть раздел панели комнаты">
+        <div
+          class="room-panel-tabs room-panel-tabs--topbar"
+          role="group"
+          :aria-label="t('Открыть раздел панели комнаты')"
+        >
           <button
             class="room-panel-tabs__tab"
             type="button"
-            aria-label="Чат"
+            :aria-label="t('Чат')"
             :aria-pressed="chatActive"
-            title="Чат"
+            :title="t('Чат')"
             @click="panelToggle.toggleRoomPanel('chat')"
           >
             <MessageSquare v-bind="iconSm" aria-hidden="true" />
@@ -146,9 +151,9 @@ function notifyRoomsChanged(): void {
           <button
             class="room-panel-tabs__tab"
             type="button"
-            aria-label="Участники"
+            :aria-label="t('Участники')"
             :aria-pressed="participantsActive"
-            title="Участники"
+            :title="t('Участники')"
             @click="panelToggle.toggleRoomPanel('participants')"
           >
             <Users v-bind="iconSm" aria-hidden="true" />
