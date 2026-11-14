@@ -105,13 +105,13 @@ test('before joining there is no call dock, only a note and one way in', async (
   expect(screen.queryByRole('button', { name: 'Выбрать микрофон' })).toBeNull();
   expect(document.querySelector('.participant--speaking')).toBeNull();
 
-  expect(screen.getByRole('button', { name: 'Войти', exact: true })).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Войти' })).toBeTruthy();
   await useLocaleStore().select('en');
   await nextTick();
-  expect(screen.getByRole('button', { name: 'Join', exact: true })).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Join' })).toBeTruthy();
   await useLocaleStore().select('fr');
   await nextTick();
   expect(onEnter).not.toHaveBeenCalled();
-  await userEvent.click(screen.getByRole('button', { name: 'Rejoindre', exact: true }));
+  await userEvent.click(screen.getByRole('button', { name: 'Rejoindre' }));
   expect(onEnter).toHaveBeenCalledOnce();
 });

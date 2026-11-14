@@ -19,7 +19,7 @@ test('the guest name dialog links the terms and the personal data policy, with n
   expect(terms.getAttribute('href')).toMatch(/\/terms$/);
   expect(privacy.getAttribute('href')).toMatch(/\/privacy$/);
   expect(within(dialog).queryByRole('checkbox')).toBeNull();
-  expect(within(dialog).getByRole('button', { name: 'Войти', exact: true })).toBeTruthy();
+  expect(within(dialog).getByRole('button', { name: 'Войти' })).toBeTruthy();
   const rawName = 'Алиса {p0} Élodie';
   await fireEvent.update(within(dialog).getByRole('textbox'), rawName);
   for (const [locale, title, termsName, privacyName, action] of [
@@ -38,7 +38,7 @@ test('the guest name dialog links the terms and the personal data policy, with n
     expect(within(dialog).getByRole('link', { name: termsName }).getAttribute('href')).toMatch(/\/terms$/);
     expect(within(dialog).getByRole('link', { name: privacyName }).getAttribute('href')).toMatch(/\/privacy$/);
     expect(within(dialog).queryByRole('checkbox')).toBeNull();
-    expect(within(dialog).getByRole('button', { name: action, exact: true })).toBeTruthy();
+    expect(within(dialog).getByRole('button', { name: action })).toBeTruthy();
     expect(within(dialog).getByDisplayValue(rawName)).toBeTruthy();
     expect(useGuestNameUiStore(view.pinia).inputValue).toBe(rawName);
   }
