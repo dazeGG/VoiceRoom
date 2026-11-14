@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '@/shared/i18n';
 import { computed, ref } from 'vue';
 import type { Attachment } from '@voice-room/shared/contracts/messages';
 import { attachmentVariantUrl } from '@/api/attachments';
@@ -33,7 +34,7 @@ const items = computed(() =>
         type="button"
         class="attachment-mosaic__tile"
         :data-attachment-id="attachment.id"
-        :aria-label="`Открыть изображение ${index + 1} из ${attachments.length}`"
+        :aria-label="t('Открыть изображение {p0} из {p1}', { p0: index + 1, p1: attachments.length })"
         :style="{ '--attachment-aspect': `${attachment.width}/${attachment.height}` }"
         @click="selected = ready.findIndex((item) => item.id === attachment.id)"
       >
@@ -51,9 +52,9 @@ const items = computed(() =>
         v-else
         class="attachment-mosaic__tile attachment-mosaic__unavailable"
         role="img"
-        aria-label="Изображение недоступно"
+        :aria-label="t('Изображение недоступно')"
       >
-        Изображение недоступно
+        {{ t('Изображение недоступно') }}
       </div>
     </template>
   </div>

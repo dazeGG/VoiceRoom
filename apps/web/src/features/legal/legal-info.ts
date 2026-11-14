@@ -4,6 +4,7 @@
 // the per-person activity rolled up after them, deploy backups, the container
 // diagnostic journal retention); change them here when the code changes.
 
+import { t } from '@/shared/i18n';
 import { ACCOUNT_DELETION_GRACE_MS } from '@voice-room/shared/account-security';
 import { VOICE_HISTORY_KEEP_DAYS } from '@voice-room/shared/contracts/admin';
 
@@ -12,12 +13,12 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 export const LEGAL = Object.freeze({
   service: 'VoiceRoom',
   site: 'voiceroom.ru',
-  operator: 'Ефремов Владимир Владимирович',
-  operatorStatus: 'физическое лицо, плательщик налога на профессиональный доход (самозанятый)',
+  operator: t('Ефремов Владимир Владимирович'),
+  operatorStatus: t('физическое лицо, плательщик налога на профессиональный доход (самозанятый)'),
   email: 'support@voiceroom.ru',
-  effectiveDate: '1 ноября 2026 г.',
+  effectiveDate: t('1 ноября 2026 г.'),
   /** The personal data policy changed on its own since. */
-  privacyEffectiveDate: '10 ноября 2026 г.',
+  privacyEffectiveDate: t('10 ноября 2026 г.'),
   minimumAge: 14,
   sessionDays: 30,
   loginHistoryDays: 90,

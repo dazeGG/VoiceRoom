@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '@/shared/i18n';
 import { SliderRoot, SliderThumb, SliderTrack } from 'reka-ui';
 import { computed, ref } from 'vue';
 import type { SliderProps } from './types';
@@ -11,7 +12,7 @@ const props = withDefaults(defineProps<SliderProps>(), {
   snapThreshold: 0,
   disabled: false,
   showFill: true,
-  ariaLabel: 'Значение'
+  ariaLabel: ''
 });
 
 const emit = defineEmits<{ valueChange: [value: number] }>();
@@ -63,7 +64,7 @@ function handleUpdate(values: number[] | undefined): void {
         <span v-if="showFill" class="vr-slider__fill"></span>
         <span class="vr-slider__thumb"></span>
       </SliderTrack>
-      <SliderThumb class="vr-slider__input" :aria-label="ariaLabel" :aria-valuetext="ariaValueText" />
+      <SliderThumb class="vr-slider__input" :aria-label="ariaLabel || t('Значение')" :aria-valuetext="ariaValueText" />
     </div>
   </SliderRoot>
 </template>

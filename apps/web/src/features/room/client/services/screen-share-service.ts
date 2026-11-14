@@ -1,3 +1,4 @@
+import { t } from '@/shared/i18n';
 import type { LocalTrackPublication } from 'livekit-client';
 import { DEFAULT_SCREEN_STREAM_MODE, SCREEN_STATS_INTERVAL_MS } from '../core/config';
 import { state } from '../core/room-runtime.store';
@@ -46,10 +47,10 @@ let screenStatsGeneration = 0;
 // going without sound. Offer a restart, which reopens the picker.
 onDesktopScreenAudioLost(() => {
   if (!state.localScreenStream) return;
-  showToast('Звук стрима пропал', {
+  showToast(t('Звук стрима пропал'), {
     action: restartScreenShare,
-    actionLabel: 'Перезапустить',
-    description: 'Картинка продолжает идти. Перезапустите демонстрацию, чтобы вернуть звук.',
+    actionLabel: t('Перезапустить'),
+    description: t('Картинка продолжает идти. Перезапустите демонстрацию, чтобы вернуть звук.'),
     duration: 15000,
     variant: 'error'
   });
@@ -83,7 +84,7 @@ function applyLocalScreenProfileState(profile: ScreenProfile, mode: ScreenStream
 
 async function startScreenShare(profileId: string = getSelectedScreenProfileId()): Promise<void> {
   if (!state.joined || state.connecting) {
-    showToast('Сначала подключитесь к комнате');
+    showToast(t('Сначала подключитесь к комнате'));
     return;
   }
   if (state.localScreenStream) return;
@@ -98,7 +99,7 @@ async function startScreenShare(profileId: string = getSelectedScreenProfileId()
     if (!videoTrack) {
       stopLocalScreenAudioCapture();
       stopStream(stream);
-      showToast('Браузер не отдал видео экрана');
+      showToast(t('Браузер не отдал видео экрана'));
       return;
     }
 
@@ -152,7 +153,9 @@ async function startScreenShare(profileId: string = getSelectedScreenProfileId()
 
     playStreamCue('start');
     if (lowered) {
-      showToast(`Сервер загружен: стрим идёт в ${profile.label} вместо ${requestedLabel}`, { duration: 8000 });
+      showToast(t('Сервер загружен: стрим идёт в {p0} вместо {p1}', { p0: profile.label, p1: requestedLabel }), {
+        duration: 8000
+      });
     } else {
       showScreenShareStartedToast(profile);
     }
@@ -167,7 +170,7 @@ async function startScreenShare(profileId: string = getSelectedScreenProfileId()
       setLocalAppAudioSuppressed(false);
     }
     showToast(
-      cancelled ? 'Демонстрация отменена' : errorMessage(error) || 'Не удалось показать экран',
+      cancelled ? t('Демонстрация отменена') : errorMessage(error) || t('Не удалось показать экран'),
       cancelled ? undefined : { duration: 12000, variant: 'error' }
     );
   } finally {
@@ -206,11 +209,11 @@ async function stopScreenShare(
     if (!quiet) {
       playStreamCue('stop');
       showToast(
-        'Демонстрация остановлена',
+        t('Демонстрация остановлена'),
         offerRestart && state.joined
           ? {
               action: () => startScreenShare(getSelectedScreenProfileId()),
-              actionLabel: 'Показать снова'
+              actionLabel: t('Показать снова')
             }
           : undefined
       );
@@ -226,18 +229,20 @@ function hasScreenAudio(): boolean {
 
 function showScreenShareStartedToast(profile: ScreenProfile): void {
   if (hasScreenAudio()) {
-    showToast(`Стрим запущен: ${profile.label}, звук включен`);
+    showToast(t('Стрим запущен: {p0}, звук включен', { p0: profile.label }));
     return;
   }
 
   if (isSafariBrowser()) {
     showToast(
-      `Стрим запущен: ${profile.label}, без звука. Safari обычно не дает выбор системного звука для демонстрации.`
+      t('Стрим запущен: {p0}, без звука. Safari обычно не дает выбор системного звука для демонстрации.', {
+        p0: profile.label
+      })
     );
     return;
   }
 
-  showToast(`Стрим запущен: ${profile.label}, без звука`);
+  showToast(t('Стрим запущен: {p0}, без звука', { p0: profile.label }));
 }
 
 export function stopLocalScreenStream(): void {

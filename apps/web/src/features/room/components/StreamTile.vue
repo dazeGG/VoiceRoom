@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '@/shared/i18n';
 import { Monitor } from '@lucide/vue';
 import { computed, ref, watch } from 'vue';
 import { createLogger, errorContext } from '@/shared/log';
@@ -37,10 +38,10 @@ const avatarImageFailed = computed(
 );
 const ariaLabel = computed(() =>
   props.hasPreview
-    ? `Развернуть стрим ${props.participant.name}`
+    ? t('Развернуть стрим {p0}', { p0: props.participant.name })
     : props.isSubscribed
-      ? `Подключение к стриму ${props.participant.name}`
-      : `Смотреть стрим ${props.participant.name}`
+      ? t('Подключение к стриму {p0}', { p0: props.participant.name })
+      : t('Смотреть стрим {p0}', { p0: props.participant.name })
 );
 
 function handleEnter(event?: Event): void {
@@ -94,7 +95,7 @@ watch(
       class="stream-tile__expand"
       type="button"
       :aria-pressed="isActive"
-      :aria-label="`Развернуть стрим ${participant.isLocal ? 'ваш' : participant.name}`"
+      :aria-label="t('Развернуть стрим {p0}', { p0: participant.isLocal ? t('ваш') : participant.name })"
       @click="handleEnter"
     ></button>
     <span v-if="isCollapsed || isIdle" :class="['stream-tile__copy', { 'stream-tile__copy--idle': !isCollapsed }]">
@@ -109,12 +110,12 @@ watch(
             alt=""
             @error="failedAvatarUrl = streamerAvatar.src"
           /><template v-else>{{ streamerAvatar.initials }}</template></span
-        >Стрим
+        >{{ t('Стрим') }}
       </span>
     </span>
     <span v-if="!isCollapsed && isIdle" class="stream-tile__actions">
       <span class="stream-tile__action stream-tile__action--primary">
-        {{ isSubscribed ? 'Подключение' : 'Смотреть стрим' }}
+        {{ isSubscribed ? t('Подключение') : t('Смотреть стрим') }}
       </span>
     </span>
   </component>

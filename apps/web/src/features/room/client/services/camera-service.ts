@@ -1,6 +1,7 @@
 // The local camera: open the capture, show it in our own tile and publish it.
 // The camera is off on every join; it lives only as long as the call.
 
+import { t } from '@/shared/i18n';
 import { markRaw } from 'vue';
 import { CAMERA_CAPTURE, CAMERA_DEVICE_STORAGE_KEY } from '../core/config';
 import { state } from '../core/room-runtime.store';
@@ -27,7 +28,7 @@ export async function toggleCamera(): Promise<void> {
 async function startCamera(): Promise<void> {
   if (!state.joined) return;
   if (!navigator.mediaDevices?.getUserMedia) {
-    showToast('Камера недоступна в этом браузере');
+    showToast(t('Камера недоступна в этом браузере'));
     return;
   }
 
@@ -118,7 +119,7 @@ export async function flipCamera(): Promise<void> {
       persistCameraDeviceId('');
     } catch (error) {
       log.warn('camera flip failed', errorContext(error));
-      showToast(isMissingDeviceError(error) ? 'Другой камеры нет' : describeCameraError(error));
+      showToast(isMissingDeviceError(error) ? t('Другой камеры нет') : describeCameraError(error));
       next = await openCameraCapture(previousDeviceId);
     }
     // Leaving the room while the capture opened drops it.
@@ -150,7 +151,7 @@ function adoptCameraStream(stream: MediaStream, opened?: CameraFacing): void {
   stream.getVideoTracks()[0]?.addEventListener('ended', () => {
     if (state.localCameraStream !== stream) return;
     void stopCamera();
-    showToast('Камера отключилась');
+    showToast(t('Камера отключилась'));
   });
   if (state.self) {
     state.self.camera = true;
@@ -220,8 +221,8 @@ function isMissingDeviceError(error: unknown): boolean {
 
 export function describeCameraError(error: unknown): string {
   const name = isRecord(error) ? error.name : undefined;
-  if (name === 'NotAllowedError' || name === 'SecurityError') return 'Нет доступа к камере: разрешите её в браузере';
-  if (isMissingDeviceError(error)) return 'Камера не найдена';
-  if (name === 'NotReadableError' || name === 'AbortError') return 'Камера занята другим приложением';
-  return 'Не удалось включить камеру';
+  if (name === 'NotAllowedError' || name === 'SecurityError') return t('Нет доступа к камере: разрешите её в браузере');
+  if (isMissingDeviceError(error)) return t('Камера не найдена');
+  if (name === 'NotReadableError' || name === 'AbortError') return t('Камера занята другим приложением');
+  return t('Не удалось включить камеру');
 }

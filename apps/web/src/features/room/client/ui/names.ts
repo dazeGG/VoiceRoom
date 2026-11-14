@@ -1,3 +1,4 @@
+import { t } from '@/shared/i18n';
 import { useGuestNameUiStore } from '../../guest-name-ui.store';
 import { getNameStatusView, useStartUiStore } from '../../start-ui.store';
 import { state } from '../core/room-runtime.store';
@@ -10,7 +11,7 @@ let resolvePendingGuestName: ((name: string) => void) | null = null;
 let rejectPendingGuestName: (() => void) | null = null;
 
 export function getDisplayName(): string {
-  return state.savedName || 'Гость';
+  return state.savedName || t('Гость');
 }
 
 export function saveStartName(event: Event): void {
@@ -21,13 +22,13 @@ export function saveStartName(event: Event): void {
 function saveNameFromValue(rawValue: string): string {
   const name = cleanDisplayName(rawValue);
   if (!name) {
-    showToast('Введите имя');
+    showToast(t('Введите имя'));
     return '';
   }
 
   persistName(name);
   updateNameStatuses(name);
-  showToast('Имя сохранено');
+  showToast(t('Имя сохранено'));
   return name;
 }
 
@@ -36,8 +37,8 @@ export function handleGuestNameSubmit(event: Event): void {
 
   const name = cleanDisplayName(useGuestNameUiStore().inputValue);
   if (!name) {
-    useGuestNameUiStore().error = 'Введите имя, чтобы войти в комнату';
-    showToast('Введите имя');
+    useGuestNameUiStore().setError(() => t('Введите имя, чтобы войти в комнату'));
+    showToast(t('Введите имя'));
     return;
   }
 
@@ -154,12 +155,12 @@ export function requireSavedName(currentName = state.savedName): boolean {
   const cleaned = cleanDisplayName(currentName);
 
   if (!state.savedName) {
-    showToast('Сначала сохраните имя');
+    showToast(t('Сначала сохраните имя'));
     return false;
   }
 
   if (cleaned && cleaned !== state.savedName) {
-    showToast('Сохраните новое имя');
+    showToast(t('Сохраните новое имя'));
     return false;
   }
 
@@ -170,6 +171,6 @@ export function requireSavedName(currentName = state.savedName): boolean {
 export function updateNameStatuses(currentName = state.savedName): void {
   const cleaned = cleanDisplayName(currentName);
   const view = getNameStatusView(cleaned, state.savedName);
-  useStartUiStore().savedNameStatus = view.text;
+  useStartUiStore().setSavedNameStatus(() => getNameStatusView(cleaned, state.savedName).text);
   useStartUiStore().savedNameState = view.state;
 }

@@ -1,10 +1,11 @@
 <script setup lang="ts">
+import { t } from '@/shared/i18n';
 import { computed } from 'vue';
 
 import Avatar from '../Avatar/Avatar.vue';
 import type { AvatarStackProps } from './types';
 
-const props = withDefaults(defineProps<AvatarStackProps>(), { maxAvatars: 3, size: 24, ariaLabel: 'Участники' });
+const props = withDefaults(defineProps<AvatarStackProps>(), { maxAvatars: 3, size: 24, ariaLabel: '' });
 
 const visibleItems = computed(() => {
   const { items, maxAvatars } = props;
@@ -20,7 +21,7 @@ const fontSize = computed(() => Math.max(10, Math.round(props.size * 0.42)));
     v-if="items.length > 0"
     class="avatar-stack"
     :style="{ '--avatar-stack-size': `${size}px`, '--avatar-stack-font': `${fontSize}px` }"
-    :aria-label="`${ariaLabel}: ${items.map((item) => item.label).join(', ')}`"
+    :aria-label="`${ariaLabel || t('Участники')}: ${items.map((item) => item.label).join(', ')}`"
   >
     <span
       v-for="item in visibleItems"
@@ -42,7 +43,7 @@ const fontSize = computed(() => Math.max(10, Math.round(props.size * 0.42)));
         :foreground="item.foreground"
         class="avatar-stack__avatar"
     /></span>
-    <span v-if="rest > 0" class="avatar-stack__rest" :aria-label="`Ещё ${rest}`">+{{ rest }}</span>
+    <span v-if="rest > 0" class="avatar-stack__rest" :aria-label="t('Ещё {p0}', { p0: rest })">+{{ rest }}</span>
   </span>
   <slot v-else name="empty" />
 </template>

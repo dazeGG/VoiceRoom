@@ -1,3 +1,4 @@
+import { t } from '@/shared/i18n';
 import {
   DEFAULT_GATE_THRESHOLD_DB,
   GATE_CAPTURE_SWITCH_DEBOUNCE_MS,
@@ -291,7 +292,7 @@ export function getGateControlView(): GateControlView {
     levelScale: position,
     levelState: gateOpen ? 'open' : 'closed',
     markerActive: !isGateDisabled(),
-    thresholdLabel: isGateDisabled() ? 'Выкл' : `${state.gateThresholdDb} dB`,
+    thresholdLabel: isGateDisabled() ? t('Выкл') : `${state.gateThresholdDb} dB`,
     thresholdValue: state.gateThresholdDb,
     gateOn: !isGateDisabled()
   };
@@ -366,8 +367,8 @@ export async function refreshDevices(): Promise<MediaDeviceInfo[]> {
   const cameras = listPhysicalDevices(devices, 'videoinput');
 
   useRoomDeviceUiStore().microphoneOptions = buildDeviceOptions(microphones, {
-    defaultLabel: 'Системный',
-    fallbackLabel: 'Микрофон'
+    defaultLabel: t('Системный'),
+    fallbackLabel: t('Микрофон')
   });
   useRoomDeviceUiStore().microphoneId = listedOrSystem(
     useRoomDeviceUiStore().microphoneOptions,
@@ -376,15 +377,15 @@ export async function refreshDevices(): Promise<MediaDeviceInfo[]> {
 
   useRoomDeviceUiStore().outputDisabled = !supportsAudioOutputSelection();
   useRoomDeviceUiStore().outputOptions = withSavedDeviceMissing(
-    buildDeviceOptions(outputs, { defaultLabel: 'Системный', fallbackLabel: 'Динамик' }),
+    buildDeviceOptions(outputs, { defaultLabel: t('Системный'), fallbackLabel: t('Динамик') }),
     state.outputDeviceId
   );
   useRoomDeviceUiStore().outputDeviceId = listedOrSystem(useRoomDeviceUiStore().outputOptions, state.outputDeviceId);
   if (useRoomDeviceUiStore().outputDeviceId === state.outputDeviceId) confirmedOutputDeviceId = state.outputDeviceId;
 
   useRoomDeviceUiStore().cameraOptions = buildDeviceOptions(cameras, {
-    defaultLabel: 'Системная',
-    fallbackLabel: 'Камера'
+    defaultLabel: t('Системная'),
+    fallbackLabel: t('Камера')
   });
   useRoomDeviceUiStore().cameraId = listedOrSystem(useRoomDeviceUiStore().cameraOptions, state.cameraDeviceId);
 
@@ -466,7 +467,7 @@ async function followPreferredOutput(devices: MediaDeviceInfo[]): Promise<void> 
   await moveAudioOutputToSystem();
   if (outputLossAnnounced) return;
   outputLossAnnounced = true;
-  showToast('Динамик недоступен, звук идёт через системный');
+  showToast(t('Динамик недоступен, звук идёт через системный'));
 }
 
 function buildDeviceOptions(
@@ -846,7 +847,7 @@ export async function attachMicrophoneOutcome(options: { automatic?: boolean } =
   if (!state.joined || state.localStream) return 'stale';
   if (currentAction) return 'coalesced';
   if (captureSlot || mutationSlot) {
-    if (!options.automatic) showToast('Микрофон ещё занят прошлой операцией: попробуйте через несколько секунд');
+    if (!options.automatic) showToast(t('Микрофон ещё занят прошлой операцией: попробуйте через несколько секунд'));
     return 'busy';
   }
   currentAction = true;
@@ -858,7 +859,7 @@ export async function attachMicrophoneOutcome(options: { automatic?: boolean } =
   try {
     const acquired = await acquireCandidate(isCurrent, deadline);
     if (acquired === 'timed_out') {
-      if (!options.automatic && version === actionVersion) showToast(ATTACH_TIMED_OUT_MESSAGE);
+      if (!options.automatic && version === actionVersion) showToast(t(ATTACH_TIMED_OUT_MESSAGE));
       return 'timed_out';
     }
     capture = acquired;
@@ -868,8 +869,8 @@ export async function attachMicrophoneOutcome(options: { automatic?: boolean } =
     const result = await mutateCandidate(room, null, capture, isCurrent, deadline);
     if (result.outcome !== 'applied' || !result.publication) {
       if (!options.automatic && version === actionVersion) {
-        if (result.outcome === 'timed_out') showToast(ATTACH_TIMED_OUT_MESSAGE);
-        if (result.outcome === 'failed') showToast('Не удалось подключить микрофон');
+        if (result.outcome === 'timed_out') showToast(t(ATTACH_TIMED_OUT_MESSAGE));
+        if (result.outcome === 'failed') showToast(t('Не удалось подключить микрофон'));
       }
       return result.outcome;
     }
@@ -880,7 +881,7 @@ export async function attachMicrophoneOutcome(options: { automatic?: boolean } =
     watchLocalMicrophone();
     attachMeter(state.self, state.localStream);
     void refreshDevices().catch((error: unknown) => log.warn('device list failed', errorContext(error)));
-    showToast(options.automatic ? 'Микрофон найден: включите его кнопкой микрофона' : 'Микрофон подключен');
+    showToast(options.automatic ? t('Микрофон найден: включите его кнопкой микрофона') : t('Микрофон подключен'));
     return 'applied';
   } catch (error) {
     // A left call or a newer choice made this attempt obsolete: nothing to report.
@@ -1097,9 +1098,9 @@ function reconsiderEndedCurrentMicrophone(): boolean {
   rawLossInFlight = true;
   if (canAdmitAutomaticMicrophoneAction()) {
     void runAutomaticReopen('raw_ended', {
-      failureMessage: 'Микрофон отключился: вы в комнате без микрофона',
-      lostMessage: 'Микрофон отключился: вы в комнате без микрофона',
-      successMessage: 'Микрофон переподключен'
+      failureMessage: t('Микрофон отключился: вы в комнате без микрофона'),
+      lostMessage: t('Микрофон отключился: вы в комнате без микрофона'),
+      successMessage: t('Микрофон переподключен')
     }).then(() => {
       rawLossInFlight = false;
       if (!ownsRawLoss(loss)) {
@@ -1182,10 +1183,10 @@ async function replaceMicrophoneCapture(
   retainManualOwner = false
 ): Promise<MicrophoneActionOutcome> {
   const {
-    failureMessage = 'Не удалось переключить микрофон',
+    failureMessage = t('Не удалось переключить микрофон'),
     refreshDeviceList = true,
-    successMessage = 'Микрофон переключен',
-    lostMessage = `${failureMessage}: вы в комнате без микрофона`
+    successMessage = t('Микрофон переключен'),
+    lostMessage = t('{p0}: вы в комнате без микрофона', { p0: failureMessage })
   } = options;
   if (!state.joined || !state.localStream) return 'stale';
   if (currentAction) return 'coalesced';
@@ -1270,10 +1271,10 @@ export function watchLocalMicrophone(): void {
 export function reopenMicrophone(): Promise<boolean> {
   recordMicDrop();
   return runAutomaticReopen('watchdog', {
-    failureMessage: 'Микрофон перестал работать: выберите его заново',
-    lostMessage: 'Микрофон перестал работать: вы в комнате без микрофона',
+    failureMessage: t('Микрофон перестал работать: выберите его заново'),
+    lostMessage: t('Микрофон перестал работать: вы в комнате без микрофона'),
     refreshDeviceList: false,
-    successMessage: 'Микрофон переподключен'
+    successMessage: t('Микрофон переподключен')
   });
 }
 
@@ -1290,10 +1291,10 @@ async function runAutomaticReopen(
 
 export function reopenMicrophoneAfterOwnedResumeFailure(): Promise<boolean> {
   return runAutomaticReopen('owned_resume_failure', {
-    failureMessage: 'Микрофон перестал работать: выберите его заново',
-    lostMessage: 'Микрофон перестал работать: вы в комнате без микрофона',
+    failureMessage: t('Микрофон перестал работать: выберите его заново'),
+    lostMessage: t('Микрофон перестал работать: вы в комнате без микрофона'),
     refreshDeviceList: false,
-    successMessage: 'Микрофон переподключен'
+    successMessage: t('Микрофон переподключен')
   });
 }
 
@@ -1303,9 +1304,9 @@ export function fallbackRnnoiseAfterProcessorError(capture: MicrophoneCapture): 
   if (!admission) return;
   processorFallbacks += 1;
   void replaceMicrophoneCapture({
-    failureMessage: 'Не удалось включить браузерный шумодав',
+    failureMessage: t('Не удалось включить браузерный шумодав'),
     refreshDeviceList: false,
-    successMessage: 'RNNoise остановился: включён браузерный шумодав',
+    successMessage: t('RNNoise остановился: включён браузерный шумодав'),
     modeOverride: 'browser'
   }).then((outcome) => {
     if (
@@ -1359,9 +1360,9 @@ export async function relieveNoiseSuppression(): Promise<boolean> {
   state.noiseMode = 'browser';
   useRoomDeviceUiStore().noiseMode = 'browser';
   const switched = await restartMicrophone({
-    failureMessage: 'Не удалось включить облегчённый шумодав',
+    failureMessage: t('Не удалось включить облегчённый шумодав'),
     refreshDeviceList: false,
-    successMessage: 'Компьютер перегружен: включён облегчённый шумодав'
+    successMessage: t('Компьютер перегружен: включён облегчённый шумодав')
   });
   if (!switched && state.noiseMode === 'browser') {
     state.noiseMode = 'rnnoise';
@@ -1390,9 +1391,9 @@ async function performNoiseSwitch(): Promise<boolean> {
 
   const action = replaceMicrophoneCapture(
     {
-      failureMessage: 'Не удалось переключить шумодав',
+      failureMessage: t('Не удалось переключить шумодав'),
       refreshDeviceList: false,
-      successMessage: (capture) => `Шумодав: ${getNoiseModeLabel(capture.mode)}`
+      successMessage: (capture) => t('Шумодав: {p0}', { p0: getNoiseModeLabel(capture.mode) })
     },
     true
   );
@@ -1418,9 +1419,9 @@ export function updateGateThresholdFromSlider(value: string | number): void {
 
   gateSwitchTimer = window.setTimeout(() => {
     const options = {
-      failureMessage: 'Не удалось применить гейт',
+      failureMessage: t('Не удалось применить гейт'),
       refreshDeviceList: false,
-      successMessage: isGateDisabled() ? 'Гейт выключен' : `Гейт: ${state.gateThresholdDb} dB`
+      successMessage: isGateDisabled() ? t('Гейт выключен') : t('Гейт: {p0} dB', { p0: state.gateThresholdDb })
     };
     const action =
       currentAction || captureSlot || mutationSlot
@@ -1458,7 +1459,7 @@ export async function switchOutputDevice(): Promise<void> {
   if (!supportsAudioOutputSelection()) {
     useRoomDeviceUiStore().outputDeviceId = '';
     persistOutputDeviceId('');
-    showToast('Выбор динамика недоступен в этой среде');
+    showToast(t('Выбор динамика недоступен в этой среде'));
     return;
   }
 
@@ -1474,12 +1475,12 @@ export async function switchOutputDevice(): Promise<void> {
       useRoomDeviceUiStore().outputDeviceId = confirmedOutputDeviceId;
     }
     await restoreAudioOutput();
-    showToast('Не удалось переключить динамик');
+    showToast(t('Не удалось переключить динамик'));
     return;
   }
 
   confirmedOutputDeviceId = requestedDeviceId;
-  showToast('Динамик переключен');
+  showToast(t('Динамик переключен'));
   // The entry of a device that is gone has served its purpose: drop it from the menu.
   refreshDevices().catch((error: unknown) => log.warn('device list refresh failed', errorContext(error)));
 }

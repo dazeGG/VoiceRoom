@@ -69,6 +69,11 @@ export function createRingService(deps: RingServiceDeps) {
         title: `${caller.displayName || caller.login || 'Друг'} зовёт вас`,
         body: room?.name ? `Комната «${room.name}»` : 'Присоединиться к комнате',
         privateBody: 'Вас зовут в голосовую комнату.',
+        copy: {
+          title: { key: 'ringTitle', args: { actor: caller.displayName || caller.login || '' } },
+          body: room?.name ? { key: 'ringRoom', args: { room: room.name } } : { key: 'ringJoin' },
+          privateBody: { key: 'ringPrivate' }
+        },
         tag: `ring:${caller.id}:${roomId}`,
         dedupeKey: `ring:${result.ring.id}:1:${userId}`,
         url: `/r/${encodeURIComponent(roomId)}`,
@@ -155,6 +160,12 @@ export function createRingService(deps: RingServiceDeps) {
           job.recipient_user_id,
           {
             type: 'ring',
+            copy: {
+              title: { key: 'ringTitle', args: { actor: caller?.displayName || caller?.login || '' } },
+              body: room?.name ? { key: 'ringRoom', args: { room: room.name } } : { key: 'ringJoin' },
+              privateBody: { key: 'ringPrivate' }
+            },
+            notificationPrivate: Boolean(preferences.privateNotifications),
             title: `${caller?.displayName || caller?.login || 'Друг'} зовёт вас`,
             body: preferences.privateNotifications
               ? 'Вас зовут в голосовую комнату.'

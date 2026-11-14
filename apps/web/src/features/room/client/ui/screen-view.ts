@@ -1,3 +1,4 @@
+import { t } from '@/shared/i18n';
 import { usePageStore } from '@/stores/page.store';
 import { showToast } from './toast';
 import { state } from '../core/room-runtime.store';
@@ -63,7 +64,7 @@ export async function enterScreenView(peerId: string): Promise<void> {
     peer.screen = true;
   }
   if (!peer?.screen) {
-    showToast('Демонстрация уже завершена');
+    showToast(t('Демонстрация уже завершена'));
     refreshScreenTiles();
     return;
   }

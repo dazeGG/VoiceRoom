@@ -1,3 +1,4 @@
+import { t } from '@/shared/i18n';
 import { state } from '../core/room-runtime.store';
 import type { DesktopCaptureSource, ScreenSourceSelection } from '../core/types';
 import { createAbortError } from '../core/utils';
@@ -58,7 +59,7 @@ function resolveScreenSourcePicker(selection: ScreenSourceSelection): void {
 
 export function cancelScreenSourcePicker(): void {
   const request = closeScreenSourcePicker();
-  request?.reject(createAbortError('Выбор источника отменен'));
+  request?.reject(createAbortError(t('Выбор источника отменен')));
 }
 
 function closeScreenSourcePicker() {

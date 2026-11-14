@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '@/shared/i18n';
 import { computed, onMounted, ref } from 'vue';
 import EmojiText from './EmojiText.vue';
 import Emoji from './Emoji.vue';
@@ -26,9 +27,11 @@ onMounted(() => {
   <section class="reactor-list" aria-labelledby="reactor-list-title">
     <header class="reactor-list__header">
       <h3 id="reactor-list-title" ref="heading" class="reactor-list__title" tabindex="-1">
-        Реакция <Emoji :emoji="emoji" :size="18" decorative />
+        {{ t('Реакция') }} <Emoji :emoji="emoji" :size="18" decorative />
       </h3>
-      <button class="reactor-list__close" type="button" aria-label="Закрыть список" @click="emit('close')">×</button>
+      <button class="reactor-list__close" type="button" :aria-label="t('Закрыть список')" @click="emit('close')">
+        ×
+      </button>
     </header>
 
     <p v-if="listState.error" class="reactor-list__message" role="alert">{{ listState.error }}</p>
@@ -49,16 +52,18 @@ onMounted(() => {
         <span><EmojiText :text="reactor.displayName" /></span>
       </li>
     </ul>
-    <p v-else-if="!listState.loading && !listState.error" class="reactor-list__message">Пока никто не отреагировал</p>
+    <p v-else-if="!listState.loading && !listState.error" class="reactor-list__message">
+      {{ t('Пока никто не отреагировал') }}
+    </p>
 
-    <p v-if="listState.loading" class="reactor-list__message" aria-live="polite">Загрузка…</p>
+    <p v-if="listState.loading" class="reactor-list__message" aria-live="polite">{{ t('Загрузка…') }}</p>
     <button
       v-else-if="listState.nextCursor"
       class="reactor-list__more"
       type="button"
       @click="void store.loadReactors(messageId, emoji, true)"
     >
-      Показать ещё
+      {{ t('Показать ещё') }}
     </button>
   </section>
 </template>

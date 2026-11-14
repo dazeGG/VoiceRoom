@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '@/shared/i18n';
 import { Bell, BellOff, Copy, Link, Settings, Trash2, UserRoundPlus } from '@lucide/vue';
 import type { RoomRelationship } from '@voice-room/shared/contracts/rooms';
 import { computed, ref } from 'vue';
@@ -67,13 +68,13 @@ async function copyValue(value: string, successMessage: string): Promise<void> {
     emit('toast', successMessage);
   } catch {
     if (!stillCurrent(targetRoomId)) return;
-    emit('toast', 'Не удалось скопировать');
+    emit('toast', t('Не удалось скопировать'));
   }
   if (stillCurrent(targetRoomId)) emit('close');
 }
 
 function copyLink(): Promise<void> {
-  return copyValue(`${window.location.origin}/r/${encodeURIComponent(props.roomId)}`, 'Ссылка скопирована');
+  return copyValue(`${window.location.origin}/r/${encodeURIComponent(props.roomId)}`, t('Ссылка скопирована'));
 }
 
 async function toggleRoomMute(): Promise<void> {
@@ -86,7 +87,7 @@ async function toggleRoomMute(): Promise<void> {
     await preferences.updateRoomNotificationsMuted(targetRoomId, nextMuted);
     if (stillCurrent(targetRoomId)) emit('close');
   } catch {
-    if (stillCurrent(targetRoomId)) emit('toast', 'Не удалось изменить уведомления');
+    if (stillCurrent(targetRoomId)) emit('toast', t('Не удалось изменить уведомления'));
   } finally {
     muteSaving.value = false;
   }
@@ -99,12 +100,15 @@ async function removeBookmark(): Promise<void> {
   try {
     await removeRoomFromList(targetRoomId);
     if (!stillCurrent(targetRoomId)) return;
-    emit('toast', `Комната «${props.name}» удалена из списка`);
+    emit('toast', t('Комната «{p0}» удалена из списка', { p0: props.name }));
     emit('close', false);
     emit('roomsChanged');
   } catch (error) {
     if (stillCurrent(targetRoomId)) {
-      emit('toast', error instanceof Error && error.message ? error.message : 'Не удалось удалить комнату из списка');
+      emit(
+        'toast',
+        error instanceof Error && error.message ? error.message : t('Не удалось удалить комнату из списка')
+      );
     }
   } finally {
     removeSaving.value = false;
@@ -123,13 +127,17 @@ async function removeBookmark(): Promise<void> {
     </div>
 
     <PopoverDivider />
-    <PopoverMenuLabel text="Комната" />
+    <PopoverMenuLabel :text="t('Комната')" />
 
-    <PopoverSubmenu v-if="$slots.inviteContent" label="Пригласить" :aria-label="`Позвать друга в ${name}`">
+    <PopoverSubmenu
+      v-if="$slots.inviteContent"
+      :label="t('Пригласить')"
+      :aria-label="t('Позвать друга в {p0}', { p0: name })"
+    >
       <template #icon><UserRoundPlus v-bind="iconMd" aria-hidden="true" /></template>
       <slot name="inviteContent" :close="() => emit('close')" />
     </PopoverSubmenu>
-    <PopoverSubmenu v-else-if="friends" label="Пригласить" :aria-label="`Позвать друга в ${name}`">
+    <PopoverSubmenu v-else-if="friends" :label="t('Пригласить')" :aria-label="t('Позвать друга в {p0}', { p0: name })">
       <template #icon><UserRoundPlus v-bind="iconMd" aria-hidden="true" /></template>
       <template #default="{ close: closeSubmenu }">
         <RoomInviteFriendList
@@ -145,18 +153,18 @@ async function removeBookmark(): Promise<void> {
       </template>
     </PopoverSubmenu>
 
-    <PopoverMenuItem label="Скопировать код" @click="void copyValue(roomId, 'Код скопирован')">
+    <PopoverMenuItem :label="t('Скопировать код')" @click="void copyValue(roomId, t('Код скопирован'))">
       <template #icon><Copy v-bind="iconMd" aria-hidden="true" /></template>
     </PopoverMenuItem>
 
-    <PopoverMenuItem label="Скопировать ссылку" @click="void copyLink()">
+    <PopoverMenuItem :label="t('Скопировать ссылку')" @click="void copyLink()">
       <template #icon><Link v-bind="iconMd" aria-hidden="true" /></template>
     </PopoverMenuItem>
 
     <template v-if="showNotificationControls">
       <PopoverDivider />
       <PopoverMenuItem
-        :label="roomMuted ? 'Включить уведомления' : 'Выключить уведомления'"
+        :label="roomMuted ? t('Включить уведомления') : t('Выключить уведомления')"
         :disabled="muteSaving"
         @click="void toggleRoomMute()"
       >
@@ -168,12 +176,12 @@ async function removeBookmark(): Promise<void> {
     </template>
 
     <PopoverDivider />
-    <PopoverMenuItem v-if="isOwner && onOpenSettings" label="Настройки комнаты" @click="openSettings">
+    <PopoverMenuItem v-if="isOwner && onOpenSettings" :label="t('Настройки комнаты')" @click="openSettings">
       <template #icon><Settings v-bind="iconMd" aria-hidden="true" /></template>
     </PopoverMenuItem>
     <PopoverMenuItem
       v-else-if="!isOwner"
-      label="Удалить из списка"
+      :label="t('Удалить из списка')"
       variant="danger"
       :disabled="removeSaving"
       @click="void removeBookmark()"

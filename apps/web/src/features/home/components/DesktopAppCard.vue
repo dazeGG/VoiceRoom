@@ -2,6 +2,7 @@
 // The desktop app: what it adds and one row per build. The build for this
 // computer is filled with the accent; a click downloads the latest release,
 // or opens the releases page when it cannot be fetched.
+import { t } from '@/shared/i18n';
 import { faApple, faWindows } from '@fortawesome/free-brands-svg-icons';
 import { Check, Clapperboard, Copy, Download, Gamepad2, Keyboard, Power } from '@lucide/vue';
 import { onMounted, ref } from 'vue';
@@ -23,10 +24,30 @@ import { copyText } from '@/shared/utils/clipboard';
 withDefaults(defineProps<{ title?: string; embedded?: boolean }>(), { title: 'VoiceRoom Desktop', embedded: false });
 
 const PERKS = [
-  { text: 'Оверлей поверх игры', icon: Gamepad2 },
-  { text: 'Стрим со звуком системы', icon: Clapperboard },
-  { text: 'Горячие клавиши в свёрнутом окне', icon: Keyboard },
-  { text: 'Автозапуск и работа из трея', icon: Power }
+  {
+    get text() {
+      return t('Оверлей поверх игры');
+    },
+    icon: Gamepad2
+  },
+  {
+    get text() {
+      return t('Стрим со звуком системы');
+    },
+    icon: Clapperboard
+  },
+  {
+    get text() {
+      return t('Горячие клавиши в свёрнутом окне');
+    },
+    icon: Keyboard
+  },
+  {
+    get text() {
+      return t('Автозапуск и работа из трея');
+    },
+    icon: Power
+  }
 ];
 
 const release = ref<DesktopRelease | null>(null);
@@ -67,13 +88,13 @@ async function copyCommand(): Promise<void> {
     :id="embedded ? undefined : 'download'"
     class="desktop-card"
     :class="{ 'desktop-card--embedded': embedded }"
-    aria-label="Десктоп-приложение"
+    :aria-label="t('Десктоп-приложение')"
   >
     <div class="desktop-card__head">
       <span class="desktop-card__icon"><MascotIcon variant="blink" :size="32" /></span>
       <span class="desktop-card__titles">
         <span class="desktop-card__title">{{ title }}</span>
-        <span class="desktop-card__sub">Всё то же, что в браузере, и немного больше</span>
+        <span class="desktop-card__sub">{{ t('Всё то же, что в браузере, и немного больше') }}</span>
       </span>
     </div>
 
@@ -110,15 +131,18 @@ async function copyCommand(): Promise<void> {
 
     <div class="desktop-card__note">
       <p>
-        Приложение не подписано. В macOS после установки выполните в Терминале, в Windows — «Подробнее» → «Выполнить в
-        любом случае».
+        {{
+          t(
+            'Приложение не подписано. В macOS после установки выполните в Терминале, в Windows — «Подробнее» → «Выполнить в любом случае».'
+          )
+        }}
       </p>
       <div class="desktop-card__cmd">
         <code>{{ QUARANTINE_CMD }}</code>
         <button type="button" @click="copyCommand">
           <Check v-if="cmdCopied" v-bind="iconXs" aria-hidden="true" />
           <Copy v-else v-bind="iconXs" aria-hidden="true" />
-          {{ cmdCopied ? 'Скопировано' : 'Копировать' }}
+          {{ cmdCopied ? t('Скопировано') : t('Копировать') }}
         </button>
       </div>
     </div>

@@ -1,3 +1,4 @@
+import { getLocale, t } from '@/shared/i18n';
 import { ref } from 'vue';
 import {
   TYPING_ACTIVITIES,
@@ -18,14 +19,13 @@ export function typingActivityOf(value: unknown): TypingActivity {
   return value === 'emoji' ? 'emoji' : 'typing';
 }
 
-const PLURAL_VERB: Record<TypingActivity, string> = { typing: 'печатают', emoji: 'выбирают эмодзи' };
-const SINGLE_VERB: Record<TypingActivity, string> = { typing: 'печатает', emoji: 'выбирает эмодзи' };
-
 function describe(names: readonly string[], activity: TypingActivity): string {
   if (names.length === 0) return '';
-  if (names.length === 1) return `${names[0]} ${SINGLE_VERB[activity]}`;
-  if (names.length === 2) return `${names[0]} и ${names[1]} ${PLURAL_VERB[activity]}`;
-  return `${names.slice(0, -1).join(', ')} и ${names[names.length - 1]} ${PLURAL_VERB[activity]}`;
+  const people = new Intl.ListFormat(getLocale(), { style: 'long', type: 'conjunction' }).format(names);
+  if (activity === 'emoji') {
+    return names.length === 1 ? t('{p0} выбирает эмодзи', { p0: people }) : t('{p0} выбирают эмодзи', { p0: people });
+  }
+  return names.length === 1 ? t('{p0} печатает', { p0: people }) : t('{p0} печатают', { p0: people });
 }
 
 export function formatTypingLabel(people: readonly TypingPerson[]): string {
@@ -33,7 +33,7 @@ export function formatTypingLabel(people: readonly TypingPerson[]): string {
     .map((person) => ({ name: person.name.trim(), activity: typingActivityOf(person.activity) }))
     .filter((person) => person.name);
   if (visible.length === 0) return '';
-  if (visible.length > 3) return 'Несколько человек печатают…';
+  if (visible.length > 3) return t('Несколько человек печатают…');
   const clauses = TYPING_ACTIVITIES.map((activity) =>
     describe(
       visible.filter((person) => person.activity === activity).map((person) => person.name),

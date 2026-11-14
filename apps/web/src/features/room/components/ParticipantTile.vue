@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '@/shared/i18n';
 import { HeadphoneOff, MicOff, MonitorPlay } from '@lucide/vue';
 import { computed, ref, watch } from 'vue';
 import EmojiText from '@/shared/chat/EmojiText.vue';
@@ -32,7 +33,7 @@ const avatar = computed(() => getAvatarPresentation(participant));
 const imageFailed = computed(() => failedAvatarUrl.value !== null && failedAvatarUrl.value === avatar.value.src);
 const viewing = computed(() => roomState.viewedScreenPeerId === participant.id);
 const canWatch = computed(() => !participant.isLocal && participant.screen && !viewing.value);
-const screenActionLabel = computed(() => (roomState.screenRequesting ? 'Подключение' : 'Смотреть экран'));
+const screenActionLabel = computed(() => (roomState.screenRequesting ? t('Подключение') : t('Смотреть экран')));
 const cameraStream = computed(() => participant.cameraStream);
 const mirrored = computed(() => participant.isLocal && roomState.cameraFacing !== 'environment');
 
@@ -130,7 +131,9 @@ function handleKeydown(event: KeyboardEvent): void {
     tabindex="0"
     :aria-haspopup="participant.isLocal ? undefined : 'dialog'"
     :aria-label="
-      participant.isLocal ? undefined : `${participant.name}. Откройте контекстное меню Shift+F10 или клавишей меню.`
+      participant.isLocal
+        ? undefined
+        : t('{p0}. Откройте контекстное меню Shift+F10 или клавишей меню.', { p0: participant.name })
     "
     :style="{ '--participant-pastel': avatar.background, '--participant-avatar-fg': avatar.foreground }"
     @click="handleTileClick"
@@ -155,11 +158,11 @@ function handleKeydown(event: KeyboardEvent): void {
       <h2 class="participant__heading">
         <span class="participant__name"><EmojiText :text="participant.name" /></span>
         <AccountBadge :user-id="participant.accountUserId" />
-        <span v-if="participant.isLocal" class="participant__you">вы</span>
-        <span class="participant__muted-icon" aria-label="Микрофон выключен" title="Микрофон выключен"
+        <span v-if="participant.isLocal" class="participant__you">{{ t('вы') }}</span>
+        <span class="participant__muted-icon" :aria-label="t('Микрофон выключен')" :title="t('Микрофон выключен')"
           ><MicOff v-bind="iconSm"
         /></span>
-        <span class="participant__deafened-icon" aria-label="Звук выключен" title="Звук выключен"
+        <span class="participant__deafened-icon" :aria-label="t('Звук выключен')" :title="t('Звук выключен')"
           ><HeadphoneOff v-bind="iconSm"
         /></span>
       </h2>

@@ -7,6 +7,7 @@
 //
 // Not the shared Dialog: that one is a titled card, this is a full-screen
 // viewer with its own toolbar. Focus is kept inside and handed back on close here.
+import { t } from '@/shared/i18n';
 import { Download, Minus, Plus, RotateCcw, X } from '@lucide/vue';
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { iconSm } from '@/shared/ui/icons';
@@ -147,26 +148,36 @@ onBeforeUnmount(() => previousFocus?.focus());
       role="dialog"
       aria-modal="true"
       tabindex="-1"
-      :aria-label="`Изображение ${current + 1} из ${items.length}`"
+      :aria-label="t('Изображение {p0} из {p1}', { p0: current + 1, p1: items.length })"
       @keydown="keydown"
     >
       <header class="attachment-lightbox__header">
         <span class="attachment-lightbox__counter">{{ current + 1 }} / {{ items.length }}</span>
         <div class="attachment-lightbox__tools">
-          <button type="button" :disabled="!zoomed" aria-label="Уменьшить" @click="zoomTo(scale - STEP)">
+          <button type="button" :disabled="!zoomed" :aria-label="t('Уменьшить')" @click="zoomTo(scale - STEP)">
             <Minus v-bind="iconSm" aria-hidden="true" />
           </button>
           <span class="attachment-lightbox__scale">{{ Math.round(scale * 100) }}%</span>
-          <button type="button" :disabled="scale >= MAX_SCALE" aria-label="Увеличить" @click="zoomTo(scale + STEP)">
+          <button
+            type="button"
+            :disabled="scale >= MAX_SCALE"
+            :aria-label="t('Увеличить')"
+            @click="zoomTo(scale + STEP)"
+          >
             <Plus v-bind="iconSm" aria-hidden="true" />
           </button>
-          <button type="button" :disabled="!zoomed && !offsetX && !offsetY" aria-label="Исходный размер" @click="reset">
+          <button
+            type="button"
+            :disabled="!zoomed && !offsetX && !offsetY"
+            :aria-label="t('Исходный размер')"
+            @click="reset"
+          >
             <RotateCcw v-bind="iconSm" aria-hidden="true" />
           </button>
-          <a v-if="item?.downloadHref" :href="item.downloadHref" download rel="external" aria-label="Скачать"
+          <a v-if="item?.downloadHref" :href="item.downloadHref" download rel="external" :aria-label="t('Скачать')"
             ><Download v-bind="iconSm" aria-hidden="true"
           /></a>
-          <button type="button" aria-label="Закрыть просмотр" @click="emit('close')">
+          <button type="button" :aria-label="t('Закрыть просмотр')" @click="emit('close')">
             <X v-bind="iconSm" aria-hidden="true" />
           </button>
         </div>
@@ -177,7 +188,7 @@ onBeforeUnmount(() => previousFocus?.focus());
         class="attachment-lightbox__stage"
         :class="{ 'attachment-lightbox__stage--zoomed': zoomed, 'attachment-lightbox__stage--dragging': dragging }"
         role="img"
-        :aria-label="item.alt || 'Изображение'"
+        :aria-label="item.alt || t('Изображение')"
         @wheel="onWheel"
         @pointerdown="onPointerDown"
         @pointermove="onPointerMove"
@@ -200,12 +211,17 @@ onBeforeUnmount(() => previousFocus?.focus());
         <button
           class="attachment-lightbox__previous"
           type="button"
-          aria-label="Предыдущее изображение"
+          :aria-label="t('Предыдущее изображение')"
           @click="move(-1)"
         >
           ‹
         </button>
-        <button class="attachment-lightbox__next" type="button" aria-label="Следующее изображение" @click="move(1)">
+        <button
+          class="attachment-lightbox__next"
+          type="button"
+          :aria-label="t('Следующее изображение')"
+          @click="move(1)"
+        >
           ›
         </button>
       </template>

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '@/shared/i18n';
 import { ref, watch } from 'vue';
 import { SmilePlus } from '@lucide/vue';
 import { iconSm } from '@/shared/ui/icons';
@@ -58,7 +59,7 @@ async function choose(emoji: string, close: () => void): Promise<void> {
 </script>
 
 <template>
-  <div v-if="!store.isDeleted(messageId)" class="reaction-picker" role="group" aria-label="Быстрые реакции">
+  <div v-if="!store.isDeleted(messageId)" class="reaction-picker" role="group" :aria-label="t('Быстрые реакции')">
     <template v-if="showQuickReactions">
       <button
         v-for="emoji in frequentEmoji"
@@ -66,8 +67,8 @@ async function choose(emoji: string, close: () => void): Promise<void> {
         class="reaction-picker__button"
         type="button"
         :disabled="disabled"
-        :aria-label="`Добавить быструю реакцию ${emoji}`"
-        :title="`Реакция ${emoji}`"
+        :aria-label="t('Добавить быструю реакцию {p0}', { p0: emoji })"
+        :title="t('Реакция {p0}', { p0: emoji })"
         @click="void react(emoji)"
       >
         <Emoji :emoji="emoji" :size="20" decorative />
@@ -79,7 +80,7 @@ async function choose(emoji: string, close: () => void): Promise<void> {
       flip
       floating
       role="dialog"
-      aria-label="Выбор реакции"
+      :aria-label="t('Выбор реакции')"
       panel-class="reaction-picker-panel"
     >
       <template #trigger="{ toggle, panelId }">
@@ -87,8 +88,8 @@ async function choose(emoji: string, close: () => void): Promise<void> {
           class="reaction-picker__button reaction-picker__button--more"
           type="button"
           :disabled="disabled"
-          aria-label="Открыть выбор эмодзи"
-          title="Добавить другую реакцию"
+          :aria-label="t('Открыть выбор эмодзи')"
+          :title="t('Добавить другую реакцию')"
           aria-haspopup="dialog"
           :aria-expanded="open"
           :aria-controls="panelId"

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '@/shared/i18n';
 import { computed, onMounted, ref, watch } from 'vue';
 import { addRoomByCode } from '@/api/auth';
 import AuthDialog from '@/features/auth/AuthDialog.vue';
@@ -69,26 +70,26 @@ async function afterAccountCreated(): Promise<void> {
   <div v-if="leaveScreen.open" class="leave-screen" role="dialog" aria-modal="true" aria-labelledby="leaveScreenTitle">
     <div class="leave-screen__card">
       <h1 id="leaveScreenTitle" class="leave-screen__title">
-        {{ accountCreated ? 'Аккаунт создан' : 'Вы вышли из комнаты' }}
+        {{ accountCreated ? t('Аккаунт создан') : t('Вы вышли из комнаты') }}
       </h1>
       <template v-if="offerAccount">
         <p v-if="leaveScreen.isStatic" class="leave-screen__text">
-          Создайте аккаунт, и эта комната сохранится у вас: вернётесь сюда без ссылки.
+          {{ t('Создайте аккаунт, и эта комната сохранится у вас: вернётесь сюда без ссылки.') }}
         </p>
         <p v-else class="leave-screen__text">
-          С аккаунтом у вас будут свои постоянные комнаты, друзья и личные сообщения.
+          {{ t('С аккаунтом у вас будут свои постоянные комнаты, друзья и личные сообщения.') }}
         </p>
       </template>
       <p v-else class="leave-screen__text">
-        Лобби, друзья и личные сообщения — на компьютере. С телефона можно вернуться в эту комнату.
+        {{ t('Лобби, друзья и личные сообщения — на компьютере. С телефона можно вернуться в эту комнату.') }}
       </p>
       <div class="leave-screen__actions">
         <template v-if="offerAccount">
-          <Button variant="primary" type="button" @click="authMode = 'register'">Создать аккаунт</Button>
-          <Button v-if="mobile" variant="ghost" type="button" @click="rejoin">Вернуться в звонок</Button>
-          <Button v-else variant="ghost" type="button" @click="goHome">Не сейчас</Button>
+          <Button variant="primary" type="button" @click="authMode = 'register'">{{ t('Создать аккаунт') }}</Button>
+          <Button v-if="mobile" variant="ghost" type="button" @click="rejoin">{{ t('Вернуться в звонок') }}</Button>
+          <Button v-else variant="ghost" type="button" @click="goHome">{{ t('Не сейчас') }}</Button>
         </template>
-        <Button v-else variant="primary" type="button" @click="rejoin">Вернуться в звонок</Button>
+        <Button v-else variant="primary" type="button" @click="rejoin">{{ t('Вернуться в звонок') }}</Button>
       </div>
       <template v-if="feedbackCall">
         <hr class="leave-screen__divider" />
@@ -97,7 +98,7 @@ async function afterAccountCreated(): Promise<void> {
       <template v-else-if="feedbackThanked">
         <hr class="leave-screen__divider" />
         <p class="leave-screen__text leave-screen__thanks" role="status">
-          Спасибо за отзыв! Это помогает делать звонки лучше.
+          {{ t('Спасибо за отзыв! Это помогает делать звонки лучше.') }}
         </p>
       </template>
     </div>

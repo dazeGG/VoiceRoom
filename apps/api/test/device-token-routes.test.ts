@@ -6,6 +6,7 @@ import test, { type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
 import fastify from 'fastify';
 import { Done, Failure } from '@voice-room/shared/contracts/http';
+import { PushRegistrationSuccess, PushRegistrationConflict } from '@voice-room/shared/contracts/push-registration';
 
 import type { ApiContext, ResolvedSession } from '../src/app/context.ts';
 import type { DeviceTokenRepository } from '../src/domains/notifications/device-token.repository.ts';
@@ -17,6 +18,21 @@ import { checked } from './helpers/checked.ts';
 
 const ANDROID = 'VoiceRoom-Android/1.2.3 (Linux; Android 12)';
 const TOKEN = 'rustore-token-1';
+
+test('registration HTTP responses retain typed locale state on success and conflict', async (t) => {
+  const request = {
+    provider: 'rustore',
+    token: TOKEN,
+    localeState: { protocol: 1, locale: 'en', expectedVersion: null }
+  };
+  const success = await harness(t).call('POST', request);
+  assert.equal(success.status, 201);
+  assert.equal(checked(PushRegistrationSuccess, success.body).registration.locale, 'en');
+  const conflict = await harness(t, { conflict: true }).call('POST', request);
+  assert.equal(conflict.status, 409);
+  assert.equal(checked(PushRegistrationConflict, conflict.body).registration?.locale, 'fr');
+  assert.equal(checked(Failure, conflict.body).code, 'push_registration_conflict');
+});
 
 type Stored = {
   userId: string;
@@ -36,14 +52,28 @@ function harness(
   {
     enabled = true,
     allowed = true,
+    conflict = false,
     session = signedIn('ada', 'session-1')
-  }: { enabled?: boolean; allowed?: boolean; session?: ResolvedSession | null } = {}
+  }: { enabled?: boolean; allowed?: boolean; session?: ResolvedSession | null; conflict?: boolean } = {}
 ) {
   const stored = new Map<string, Stored>();
   const limiterKeys: string[] = [];
   const tokens = fake<DeviceTokenRepository>({
-    async upsert(input) {
+    async register(input) {
+      if (conflict)
+        return {
+          status: 'locale_conflict',
+          registration: { protocol: 1, locale: 'fr', version: '22222222-2222-4222-8222-222222222222' }
+        };
       stored.set(`${input.provider}:${input.token}`, input);
+      return {
+        status: 'registered',
+        registration: {
+          protocol: 1,
+          locale: input.localeState?.locale ?? 'ru',
+          version: '11111111-1111-4111-8111-111111111111'
+        }
+      };
     },
     async remove({ userId, provider, token }) {
       const key = `${provider}:${token}`;

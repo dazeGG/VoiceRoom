@@ -1,6 +1,7 @@
 // Friends, friend requests, and people search. Shapes come from the shared
 // social contract the API answers with.
 
+import { t } from '@/shared/i18n';
 import {
   BlockApplied,
   BlockList,
@@ -55,7 +56,7 @@ export function sendFriendRequestByUserId(userId: string): Promise<{ status: Sen
 
 export async function acceptFriendRequest(requestId: string): Promise<PublicUser> {
   const answer = await api.post(`/api/friends/requests/${encodeURIComponent(requestId)}/accept`, FriendRequestAnswered);
-  if (answer.status !== 'accepted') throw new Error('Заявка больше недоступна');
+  if (answer.status !== 'accepted') throw new Error(t('Заявка больше недоступна'));
   return answer.user;
 }
 

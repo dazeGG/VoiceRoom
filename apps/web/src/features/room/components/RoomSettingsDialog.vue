@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { useLocalizedText, currentErrorMessage } from '@/shared/i18n/localized-text';
+
+import { t } from '@/shared/i18n';
 import { Ban, ChevronDown, SlidersHorizontal, Users } from '@lucide/vue';
 import { Value } from 'typebox/value';
 import { computed, ref, watch } from 'vue';
@@ -25,7 +28,7 @@ const shell = useRoomShell();
 const roomSettingsUi = useRoomSettingsStore();
 
 const name = ref('');
-const error = ref('');
+const error = useLocalizedText();
 const saving = ref(false);
 const confirmingDelete = ref(false);
 const deleting = ref(false);
@@ -59,7 +62,7 @@ async function save(): Promise<void> {
   if (saving.value) return;
   const trimmed = name.value.trim();
   if (!trimmed) {
-    error.value = 'Дайте комнате название';
+    error.value = () => t('Дайте комнате название');
     return;
   }
 
@@ -71,9 +74,10 @@ async function save(): Promise<void> {
     applyRoomUpdated(room);
     shell.roomsChanged(room.roomId);
     roomSettingsUi.closeRoomSettings();
-    showToast('Комната обновлена');
+    showToast(t('Комната обновлена'));
   } catch (err) {
-    error.value = err instanceof Error && err.message ? err.message : 'Не удалось сохранить изменения';
+    error.value = () =>
+      err instanceof Error && currentErrorMessage(err) ? currentErrorMessage(err) : t('Не удалось сохранить изменения');
   } finally {
     saving.value = false;
   }
@@ -89,7 +93,8 @@ async function confirmDelete(): Promise<void> {
   } catch (err) {
     deleting.value = false;
     roomSettingsUi.deleting = false;
-    error.value = err instanceof Error && err.message ? err.message : 'Не удалось удалить комнату';
+    error.value = () =>
+      err instanceof Error && currentErrorMessage(err) ? currentErrorMessage(err) : t('Не удалось удалить комнату');
   }
 }
 
@@ -101,7 +106,7 @@ async function saveNotificationLevel(event: Event): Promise<void> {
   try {
     await setRoomNotificationLevel(roomClientState.roomId, notificationLevel.value);
   } catch (value) {
-    error.value = value instanceof Error ? value.message : 'Не удалось сохранить уведомления';
+    error.value = () => (value instanceof Error ? currentErrorMessage(value) : t('Не удалось сохранить уведомления'));
   } finally {
     notificationSaving.value = false;
   }
@@ -135,10 +140,10 @@ function onCancel(): void {
 </script>
 
 <template>
-  <Dialog :open="roomSettingsUi.open" title="Настройки комнаты" :width="780" :on-close="onClose">
+  <Dialog :open="roomSettingsUi.open" :title="t('Настройки комнаты')" :width="780" :on-close="onClose">
     <div class="room-settings">
       <div class="settings__body settings__body--room">
-        <nav class="settings__nav" aria-label="Разделы настроек комнаты">
+        <nav class="settings__nav" :aria-label="t('Разделы настроек комнаты')">
           <div class="settings__nav-main">
             <button
               class="settings__nav-item"
@@ -146,8 +151,7 @@ function onCancel(): void {
               :aria-current="section === 'general' ? 'true' : undefined"
               @click="section = 'general'"
             >
-              <SlidersHorizontal v-bind="iconMd" aria-hidden="true" />
-              Основное
+              <SlidersHorizontal v-bind="iconMd" aria-hidden="true" /> {{ t('Основное') }}
             </button>
             <button
               class="settings__nav-item"
@@ -155,8 +159,7 @@ function onCancel(): void {
               :aria-current="section === 'members' ? 'true' : undefined"
               @click="section = 'members'"
             >
-              <Users v-bind="iconMd" aria-hidden="true" />
-              Участники
+              <Users v-bind="iconMd" aria-hidden="true" /> {{ t('Участники') }}
             </button>
             <button
               class="settings__nav-item"
@@ -164,8 +167,7 @@ function onCancel(): void {
               :aria-current="section === 'bans' ? 'true' : undefined"
               @click="section = 'bans'"
             >
-              <Ban v-bind="iconMd" aria-hidden="true" />
-              Блокировки
+              <Ban v-bind="iconMd" aria-hidden="true" /> {{ t('Блокировки') }}
             </button>
           </div>
         </nav>
@@ -188,13 +190,13 @@ function onCancel(): void {
               @error="(message: string) => (error = message)"
             />
             <label class="room-settings__name-field">
-              <span class="settings__field-label">Название</span>
-              <input v-model="name" class="settings__input" maxlength="60" placeholder="Название комнаты" />
+              <span class="settings__field-label">{{ t('Название') }}</span>
+              <input v-model="name" class="settings__input" maxlength="60" :placeholder="t('Название комнаты')" />
             </label>
           </div>
 
           <label class="room-settings__notifications">
-            <span class="settings__field-label">Уведомления комнаты</span>
+            <span class="settings__field-label">{{ t('Уведомления комнаты') }}</span>
             <span class="room-settings__select-wrap">
               <select
                 class="room-settings__select"
@@ -202,39 +204,37 @@ function onCancel(): void {
                 :disabled="notificationSaving"
                 @change="saveNotificationLevel"
               >
-                <option value="all">Все сообщения</option>
-                <option value="mentions">Упоминания и ответы</option>
-                <option value="none">Выключены</option>
+                <option value="all">{{ t('Все сообщения') }}</option>
+                <option value="mentions">{{ t('Упоминания и ответы') }}</option>
+                <option value="none">{{ t('Выключены') }}</option>
               </select>
               <span class="room-settings__select-chevron" aria-hidden="true"><ChevronDown v-bind="iconSm" /></span>
             </span>
           </label>
 
           <div class="settings__actions">
-            <button class="settings__cancel" type="button" @click="onCancel">Отмена</button>
+            <button class="settings__cancel" type="button" @click="onCancel">{{ t('Отмена') }}</button>
             <button class="settings__save" type="submit" :disabled="saving || !dirty">
-              <span v-if="saving" class="home-spinner" aria-hidden="true"></span>
-              Сохранить
+              <span v-if="saving" class="home-spinner" aria-hidden="true"></span> {{ t('Сохранить') }}
             </button>
           </div>
 
           <div class="dialog__danger-zone">
             <template v-if="confirmingDelete">
               <p class="dialog__danger-note">
-                Комната будет удалена для всех участников. Это действие нельзя отменить.
+                {{ t('Комната будет удалена для всех участников. Это действие нельзя отменить.') }}
               </p>
               <div class="dialog__danger-actions">
                 <button class="settings__cancel" type="button" :disabled="deleting" @click="confirmingDelete = false">
-                  Отмена
+                  {{ t('Отмена') }}
                 </button>
                 <button class="dialog__danger-confirm" type="button" :disabled="deleting" @click="confirmDelete">
-                  <span v-if="deleting" class="home-spinner" aria-hidden="true"></span>
-                  Удалить навсегда
+                  <span v-if="deleting" class="home-spinner" aria-hidden="true"></span> {{ t('Удалить навсегда') }}
                 </button>
               </div>
             </template>
             <button v-else class="dialog__danger-trigger" type="button" @click="confirmingDelete = true">
-              Удалить комнату
+              {{ t('Удалить комнату') }}
             </button>
           </div>
         </form>

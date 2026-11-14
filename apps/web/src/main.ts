@@ -6,6 +6,7 @@ import { createAppRouter, loadFailedPagesInFull } from './router';
 import { startWebVitals } from './platform/web-vitals';
 import { whenIdle } from './shared/utils/idle';
 import { installBodyClasses } from './stores/page.store';
+import { useLocaleStore } from './shared/i18n';
 import './styles/main.scss';
 
 const pinia = createPinia();
@@ -19,5 +20,5 @@ loadFailedPagesInFull(router);
 // The first route is known before the shell renders, so a phone never sees the
 // block screen of a route it may open. It mounts also when that route failed.
 const mount = () => app.mount('#app');
-void router.isReady().then(mount, mount);
+void Promise.all([router.isReady().catch(() => {}), useLocaleStore().init()]).then(mount);
 whenIdle(() => void startWebVitals().catch(() => {}));

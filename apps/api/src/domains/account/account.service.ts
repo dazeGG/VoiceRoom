@@ -131,6 +131,13 @@ export function createAccountService(deps: AccountDeps) {
           type: 'account.login',
           title: kind === 'recovery' ? 'Вход по коду восстановления' : 'Новый вход в аккаунт',
           body: `${describeLoginDevice(alert)}. Если это были не вы, откройте VoiceRoom.`,
+          copy: {
+            title: { key: kind === 'recovery' ? 'recoveryTitle' : 'loginTitle' },
+            body: {
+              key: 'loginBody',
+              args: { device: [alert.client || 'VoiceRoom', alert.os, alert.location].filter(Boolean).join(' · ') }
+            }
+          },
           tag: `login-alert:${alert.id}`,
           dedupeKey: `login-alert:${alert.id}`,
           url: '/'

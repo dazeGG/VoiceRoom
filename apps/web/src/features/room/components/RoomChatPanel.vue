@@ -2,6 +2,7 @@
 // The one room chat. The in-room rail and the lobby preview differ only in how
 // the viewer is identified and in who owns the surrounding panel chrome, so
 // both render this component instead of keeping parallel implementations.
+import { t } from '@/shared/i18n';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import type { ChatMessage } from '@/api/rooms';
 import { useProfileCardUiStore } from '@/entities/profile-card/profile-card-ui.store';
@@ -65,7 +66,7 @@ const props = withDefaults(
     peerId: '',
     sessionToken: '',
     rootClass: 'room-chat-rail',
-    ariaLabel: 'Панель комнаты',
+    ariaLabel: '',
     hidden: false,
     activeTab: 'chat',
     visible: true,
@@ -287,7 +288,7 @@ const canReport = computed(() =>
   <aside
     class="room-chat-panel"
     :class="rootClass"
-    :aria-label="ariaLabel"
+    :aria-label="ariaLabel || t('Панель комнаты')"
     :hidden="hidden"
     @dragenter="attachmentDrop.enter"
     @dragover="attachmentDrop.over"
@@ -323,7 +324,7 @@ const canReport = computed(() =>
         :aria-labelledby="chatTabId"
         @scroll="scroll.onScroll(chat.loadOlder)"
       >
-        <p v-if="timeline.loading" class="room-chat-panel__note">Загружаем сообщения…</p>
+        <p v-if="timeline.loading" class="room-chat-panel__note">{{ t('Загружаем сообщения…') }}</p>
         <template v-else-if="days.length">
           <button
             v-if="timeline.paged && (timeline.loadingOlder || timeline.hasMoreBefore)"
@@ -332,7 +333,7 @@ const canReport = computed(() =>
             :disabled="timeline.loadingOlder"
             @click="chat.loadOlder(scroll.element)"
           >
-            {{ timeline.loadingOlder ? 'Загружаем…' : 'Показать предыдущие' }}
+            {{ timeline.loadingOlder ? t('Загружаем…') : t('Показать предыдущие') }}
           </button>
           <section
             v-for="day in days"
@@ -360,7 +361,9 @@ const canReport = computed(() =>
             />
           </section>
         </template>
-        <p v-else-if="!outbox.items.length" class="room-chat-panel__note">Пока пусто. Напишите первое сообщение.</p>
+        <p v-else-if="!outbox.items.length" class="room-chat-panel__note">
+          {{ t('Пока пусто. Напишите первое сообщение.') }}
+        </p>
         <OutgoingMessages
           :items="outbox.items"
           :text-of="(outgoing: OutgoingRoomMessage) => outgoing.text"

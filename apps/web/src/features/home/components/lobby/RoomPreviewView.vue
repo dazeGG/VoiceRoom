@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '@/shared/i18n';
 import { MessageSquare, MicOff, Users } from '@lucide/vue';
 import { computed, reactive, ref, watch } from 'vue';
 import type { AuthUser, OwnedRoom } from '@/api/auth';
@@ -134,7 +135,7 @@ watch(
 );
 
 function peerName(peer: RoomPeer): string {
-  return peer.name?.trim() || 'Гость';
+  return peer.name?.trim() || t('Гость');
 }
 
 function peerAvatar(peer: RoomPeer, name: string): ReturnType<typeof getAvatarPresentation> {
@@ -164,13 +165,17 @@ function selectPanel(panel: Panel): void {
         @toast="(message: string) => emit('toast', message)"
       />
       <div class="room-preview__actions">
-        <div class="room-panel-tabs room-panel-tabs--topbar" role="group" aria-label="Открыть раздел панели комнаты">
+        <div
+          class="room-panel-tabs room-panel-tabs--topbar"
+          role="group"
+          :aria-label="t('Открыть раздел панели комнаты')"
+        >
           <button
             class="room-panel-tabs__tab"
             type="button"
-            aria-label="Чат"
+            :aria-label="t('Чат')"
             :aria-pressed="activePanel === 'chat'"
-            title="Чат"
+            :title="t('Чат')"
             @click="selectPanel('chat')"
           >
             <MessageSquare v-bind="iconSm" aria-hidden="true" />
@@ -179,9 +184,9 @@ function selectPanel(panel: Panel): void {
           <button
             class="room-panel-tabs__tab"
             type="button"
-            aria-label="Участники"
+            :aria-label="t('Участники')"
             :aria-pressed="activePanel === 'participants'"
-            title="Участники"
+            :title="t('Участники')"
             @click="selectPanel('participants')"
           >
             <Users v-bind="iconSm" aria-hidden="true" />
@@ -192,8 +197,8 @@ function selectPanel(panel: Panel): void {
 
     <div class="room-preview__content">
       <div class="room-preview__stage-pane">
-        <section class="stage room-preview__stage" aria-label="Участники комнаты">
-          <div class="stage-strip" aria-label="Плитки комнаты">
+        <section class="stage room-preview__stage" :aria-label="t('Участники комнаты')">
+          <div class="stage-strip" :aria-label="t('Плитки комнаты')">
             <div
               ref="grid"
               :class="['tile-grid', { 'tile-grid--scroll': gridScrolls, 'tile-grid--empty': tileCount === 0 }]"
@@ -228,7 +233,11 @@ function selectPanel(panel: Panel): void {
                 <div class="participant__copy">
                   <h2 class="participant__heading">
                     <span class="participant__name"><EmojiText :text="name" /></span>
-                    <span class="participant__muted-icon" aria-label="Микрофон выключен" title="Микрофон выключен">
+                    <span
+                      class="participant__muted-icon"
+                      :aria-label="t('Микрофон выключен')"
+                      :title="t('Микрофон выключен')"
+                    >
                       <MicOff v-bind="iconSm" aria-hidden="true" />
                     </span>
                   </h2>
@@ -240,7 +249,7 @@ function selectPanel(panel: Panel): void {
         </section>
 
         <div v-if="peers.length === 0 && !loading" class="room-preview__empty">
-          <p class="room-preview__empty-note">Пока никого нет</p>
+          <p class="room-preview__empty-note">{{ t('Пока никого нет') }}</p>
         </div>
 
         <RoomPreviewDock @enter="emit('enter')" />
@@ -261,7 +270,7 @@ function selectPanel(panel: Panel): void {
       <aside
         v-else-if="activePanel === 'participants'"
         class="room-preview__members"
-        aria-label="Список участников комнаты"
+        :aria-label="t('Список участников комнаты')"
       >
         <RoomPanelHeader
           active-tab="participants"

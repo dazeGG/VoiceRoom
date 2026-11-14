@@ -1,3 +1,4 @@
+import { t } from '@/shared/i18n';
 import { useSessionStore } from '@/features/auth/session.store';
 import { APP_HOME } from '@/shared/app-home';
 import { usePageStore } from '@/stores/page.store';
@@ -170,14 +171,14 @@ function showRoomScreen(): void {
 export function showRoomEntryFailure(): void {
   leaveRoom();
   usePageStore().screen = 'entry-error';
-  document.title = 'Не удалось проверить вход · VoiceRoom';
+  document.title = t('Не удалось проверить вход · VoiceRoom');
 }
 
 export function showRoomNotFound(): void {
   finishJoinTelemetry?.('failure');
   leaveRoom();
   usePageStore().screen = 'not-found';
-  document.title = 'Комната не найдена · VoiceRoom';
+  document.title = t('Комната не найдена · VoiceRoom');
   useStartUiStore().missingRoomCode = state.roomId || getMissingRoomLabel();
 }
 
@@ -189,7 +190,7 @@ function showRoomModerationScreen(reason: 'banned' | 'kicked'): void {
   state.sessionToken = nextSession.sessionToken;
   state.moderationReason = reason;
   usePageStore().screen = 'moderation';
-  document.title = reason === 'banned' ? 'Доступ к комнате закрыт · VoiceRoom' : 'Вы исключены · VoiceRoom';
+  document.title = reason === 'banned' ? t('Доступ к комнате закрыт · VoiceRoom') : t('Вы исключены · VoiceRoom');
 }
 
 function getMissingRoomLabel(): string {
@@ -466,22 +467,25 @@ async function openJoinMicrophone(isCurrent: () => boolean): Promise<MicrophoneC
   try {
     return await acquireMicrophoneForJoin(
       isCurrent,
-      () => showToast('Микрофон не ответил вовремя: вы в комнате без микрофона', { duration: 8000 }),
-      () => showToast('Микрофон ещё занят прошлой операцией: вы в комнате без микрофона', { duration: 8000 })
+      () => showToast(t('Микрофон не ответил вовремя: вы в комнате без микрофона'), { duration: 8000 }),
+      () => showToast(t('Микрофон ещё занят прошлой операцией: вы в комнате без микрофона'), { duration: 8000 })
     );
   } catch (error) {
     log.warn('joining without a microphone', errorContext(error));
-    if (isCurrent()) showToast(`${describeMicrophoneError(error)}: вы в комнате без микрофона`, { duration: 8000 });
+    if (isCurrent())
+      showToast(t('{p0}: вы в комнате без микрофона', { p0: describeMicrophoneError(error) }), {
+        duration: 8000
+      });
     return null;
   }
 }
 
 function formatJoinError(error: unknown): string {
   if (error instanceof LiveKitTransportError) {
-    return 'LiveKit недоступен: голосовой сервер не отвечает, попробуйте подключиться позже';
+    return t('LiveKit недоступен: голосовой сервер не отвечает, попробуйте подключиться позже');
   }
   if (error instanceof ApiError || error instanceof UserFacingError) return error.message;
-  return 'Не удалось подключиться';
+  return t('Не удалось подключиться');
 }
 
 export function leaveRoom(): void {

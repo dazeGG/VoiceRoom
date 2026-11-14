@@ -2,6 +2,7 @@
 // resize, loading older history at the top, and jumping to a message. The room
 // chat and the direct-message thread both use it, so they scroll the same way.
 
+import { t } from '@/shared/i18n';
 import { nextTick } from 'vue';
 import { copyAttachmentImage } from './attachment-actions';
 import { copyText } from '../utils/clipboard';
@@ -141,17 +142,17 @@ export type ChatScroll = ReturnType<typeof useChatScroll>;
 export async function copyMessageText(text: string, toast: ChatToast): Promise<void> {
   try {
     await copyText(text);
-    toast('Сообщение скопировано');
+    toast(t('Сообщение скопировано'));
   } catch {
-    toast('Не удалось скопировать', { variant: 'error' });
+    toast(t('Не удалось скопировать'), { variant: 'error' });
   }
 }
 
 export async function copyMessageImage(image: MessageAttachment, toast: ChatToast): Promise<void> {
   try {
     await copyAttachmentImage(image);
-    toast('Изображение скопировано');
+    toast(t('Изображение скопировано'));
   } catch {
-    toast('Не удалось скопировать', { variant: 'error' });
+    toast(t('Не удалось скопировать'), { variant: 'error' });
   }
 }

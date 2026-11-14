@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '@/shared/i18n';
 import { AppWindow, Check, Monitor, Play, Settings, Type, X } from '@lucide/vue';
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import { createLogger, errorContext } from '@/shared/log';
@@ -41,13 +42,15 @@ const filteredSources = computed(() =>
 );
 const selectedSource = computed(() => screenSourceUi.sources.find((s) => s.id === screenSourceUi.selectedSourceId));
 const qualityLabel = computed(() =>
-  screenSourceUi.mode === 'text' ? 'Источник' : screenSourceUi.quality === 'high' ? '1080p' : '720p'
+  screenSourceUi.mode === 'text' ? t('Источник') : screenSourceUi.quality === 'high' ? '1080p' : '720p'
 );
-const fpsLabel = computed(() => (screenSourceUi.mode === 'text' ? '5 к/с' : `${screenSourceUi.fps} к/с`));
-const summaryName = computed(() => selectedSource.value?.name ?? 'Не выбрано');
+const fpsLabel = computed(() =>
+  screenSourceUi.mode === 'text' ? t('5 к/с') : t('{p0} к/с', { p0: screenSourceUi.fps })
+);
+const summaryName = computed(() => selectedSource.value?.name ?? t('Не выбрано'));
 const summaryDetail = computed(
   () =>
-    `${screenSourceUi.mode === 'text' ? 'Текст' : screenSourceUi.quality === 'high' ? 'HD' : 'SD'} · ${qualityLabel.value} · ${fpsLabel.value}${screenSourceUi.audio ? ' · звук' : ''}`
+    `${screenSourceUi.mode === 'text' ? t('Текст') : screenSourceUi.quality === 'high' ? 'HD' : 'SD'} · ${qualityLabel.value} · ${fpsLabel.value}${screenSourceUi.audio ? t(' · звук') : ''}`
 );
 
 // Also re-runs when the element binds: the dialog may already be open at mount.
@@ -80,14 +83,14 @@ function onGuestNameKeydown(event: KeyboardEvent): void {
   >
     <section class="guest-name-dialog__panel">
       <div class="guest-name-dialog__heading">
-        <p class="eyebrow guest-name-dialog__eyebrow">Вход в комнату</p>
-        <h2 id="guestNameTitle">Как вас зовут?</h2>
-        <p class="guest-name-dialog__lead">Имя будет видно участникам этой голосовой комнаты.</p>
+        <p class="eyebrow guest-name-dialog__eyebrow">{{ t('Вход в комнату') }}</p>
+        <h2 id="guestNameTitle">{{ t('Как вас зовут?') }}</h2>
+        <p class="guest-name-dialog__lead">{{ t('Имя будет видно участникам этой голосовой комнаты.') }}</p>
       </div>
 
       <form id="guestNameForm" class="guest-name-dialog__form" @submit="handleGuestNameSubmit">
         <label class="guest-name-dialog__field" for="guestNameInput">
-          <span>Ваше имя</span>
+          <span>{{ t('Ваше имя') }}</span>
           <input
             id="guestNameInput"
             ref="guestNameInput"
@@ -95,19 +98,23 @@ function onGuestNameKeydown(event: KeyboardEvent): void {
             class="guest-name-dialog__input"
             maxlength="40"
             autocomplete="name"
-            placeholder="Ваше имя"
+            :placeholder="t('Ваше имя')"
             @input="clearGuestNameError"
           />
         </label>
         <p id="guestNameError" class="guest-name-dialog__error" role="alert" aria-live="polite">
           {{ guestNameUi.error }}
         </p>
-        <button id="guestNameSubmitButton" class="guest-name-dialog__submit" type="submit">Войти в комнату</button>
+        <button id="guestNameSubmitButton" class="guest-name-dialog__submit" type="submit">
+          {{ t('Войти в комнату') }}
+        </button>
         <!-- Information, not consent: a call needs no consent (152-FZ art. 6 part 1 item 5). -->
         <p class="guest-name-dialog__legal">
-          Входя в комнату, вы принимаете
-          <a href="/terms" target="_blank" rel="noopener">Пользовательское соглашение</a>. Какие данные мы храним и
-          сколько — в <a href="/privacy" target="_blank" rel="noopener">Политике обработки персональных данных</a>.
+          {{ t('Входя в комнату, вы принимаете') }}
+          <a href="/terms" target="_blank" rel="noopener">{{ t('Пользовательское соглашение') }}</a
+          >{{ t('. Какие данные мы храним и сколько — в') }}
+          <a href="/privacy" target="_blank" rel="noopener">{{ t('Политике обработки персональных данных') }}</a
+          >.
         </p>
       </form>
     </section>
@@ -126,11 +133,11 @@ function onGuestNameKeydown(event: KeyboardEvent): void {
     <section class="screen-source-dialog__panel">
       <!-- Header -->
       <div class="screen-source-dialog__heading">
-        <h2 id="screenSourceTitle">Выберите, что показать</h2>
+        <h2 id="screenSourceTitle">{{ t('Выберите, что показать') }}</h2>
         <button
           class="screen-source-dialog__close"
           type="button"
-          aria-label="Отменить выбор"
+          :aria-label="t('Отменить выбор')"
           @click="cancelScreenSourcePicker"
         >
           <X v-bind="iconMd" aria-hidden="true" />
@@ -144,16 +151,14 @@ function onGuestNameKeydown(event: KeyboardEvent): void {
           :aria-pressed="screenSourceUi.tab === 'screens'"
           @click="switchScreenTab('screens')"
         >
-          <Monitor v-bind="iconSm" aria-hidden="true" />
-          Экраны
+          <Monitor v-bind="iconSm" aria-hidden="true" /> {{ t('Экраны') }}
         </button>
         <button
           class="screen-source-dialog__tab"
           :aria-pressed="screenSourceUi.tab === 'windows'"
           @click="switchScreenTab('windows')"
         >
-          <AppWindow v-bind="iconSm" aria-hidden="true" />
-          Окна
+          <AppWindow v-bind="iconSm" aria-hidden="true" /> {{ t('Окна') }}
         </button>
       </div>
 
@@ -207,7 +212,7 @@ function onGuestNameKeydown(event: KeyboardEvent): void {
         <div class="screen-source-dialog__footer-actions">
           <!-- SD / HD toggle -->
           <template v-if="screenSourceUi.mode === 'games'">
-            <div class="screen-source-dialog__toggle-group" role="group" aria-label="Качество">
+            <div class="screen-source-dialog__toggle-group" role="group" :aria-label="t('Качество')">
               <button
                 class="screen-source-dialog__toggle-button"
                 :aria-pressed="screenSourceUi.quality === 'balanced'"
@@ -223,7 +228,7 @@ function onGuestNameKeydown(event: KeyboardEvent): void {
                 HD
               </button>
             </div>
-            <div class="screen-source-dialog__toggle-group" role="group" aria-label="Частота кадров">
+            <div class="screen-source-dialog__toggle-group" role="group" :aria-label="t('Частота кадров')">
               <button
                 class="screen-source-dialog__toggle-button"
                 :aria-pressed="screenSourceUi.fps === '30'"
@@ -234,7 +239,7 @@ function onGuestNameKeydown(event: KeyboardEvent): void {
               <button
                 class="screen-source-dialog__toggle-button"
                 :aria-pressed="screenSourceUi.fps === '60'"
-                title="60 к/с: плавнее, но вдвое больше нагрузки на кодирование и сеть"
+                :title="t('60 к/с: плавнее, но вдвое больше нагрузки на кодирование и сеть')"
                 @click="screenSourceUi.fps = '60'"
               >
                 60
@@ -247,7 +252,7 @@ function onGuestNameKeydown(event: KeyboardEvent): void {
             <button
               class="screen-source-dialog__gear"
               :aria-pressed="screenSourceUi.popOpen"
-              title="Настройки стрима"
+              :title="t('Настройки стрима')"
               @click="screenSourceUi.popOpen = !screenSourceUi.popOpen"
             >
               <Settings v-bind="iconMd" aria-hidden="true" />
@@ -257,9 +262,9 @@ function onGuestNameKeydown(event: KeyboardEvent): void {
               v-if="screenSourceUi.popOpen"
               class="screen-source-dialog__popover"
               role="dialog"
-              aria-label="Настройки стрима"
+              :aria-label="t('Настройки стрима')"
             >
-              <div class="screen-source-dialog__popover-label">Режим стрима</div>
+              <div class="screen-source-dialog__popover-label">{{ t('Режим стрима') }}</div>
               <div class="screen-source-dialog__presets">
                 <button
                   class="screen-source-dialog__preset"
@@ -270,8 +275,8 @@ function onGuestNameKeydown(event: KeyboardEvent): void {
                     <Play v-bind="iconSm" aria-hidden="true" />
                   </span>
                   <span class="screen-source-dialog__preset-info">
-                    <span class="screen-source-dialog__preset-title">Плавное видео</span>
-                    <span class="screen-source-dialog__preset-desc">30–60 к/с · для игр и видео</span>
+                    <span class="screen-source-dialog__preset-title">{{ t('Плавное видео') }}</span>
+                    <span class="screen-source-dialog__preset-desc">{{ t('30–60 к/с · для игр и видео') }}</span>
                   </span>
                   <span class="screen-source-dialog__preset-radio" aria-hidden="true">
                     <span v-if="screenSourceUi.mode === 'games'" class="screen-source-dialog__preset-dot"></span>
@@ -286,8 +291,8 @@ function onGuestNameKeydown(event: KeyboardEvent): void {
                     <Type v-bind="iconSm" aria-hidden="true" />
                   </span>
                   <span class="screen-source-dialog__preset-info">
-                    <span class="screen-source-dialog__preset-title">Чёткая картинка</span>
-                    <span class="screen-source-dialog__preset-desc">5 к/с · для текста и кода</span>
+                    <span class="screen-source-dialog__preset-title">{{ t('Чёткая картинка') }}</span>
+                    <span class="screen-source-dialog__preset-desc">{{ t('5 к/с · для текста и кода') }}</span>
                   </span>
                   <span class="screen-source-dialog__preset-radio" aria-hidden="true">
                     <span v-if="screenSourceUi.mode === 'text'" class="screen-source-dialog__preset-dot"></span>
@@ -301,7 +306,7 @@ function onGuestNameKeydown(event: KeyboardEvent): void {
                 :aria-checked="screenSourceUi.audio"
                 @click="screenSourceUi.audio = !screenSourceUi.audio"
               >
-                <span class="screen-source-dialog__audio-label">Звук стрима</span>
+                <span class="screen-source-dialog__audio-label">{{ t('Звук стрима') }}</span>
                 <span
                   :class="[
                     'screen-source-dialog__switch',
@@ -322,8 +327,7 @@ function onGuestNameKeydown(event: KeyboardEvent): void {
             :disabled="!screenSourceUi.selectedSourceId"
             @click="confirmScreenSourcePicker"
           >
-            <Play v-bind="iconSm" fill="currentColor" aria-hidden="true" />
-            Запустить
+            <Play v-bind="iconSm" fill="currentColor" aria-hidden="true" /> {{ t('Запустить') }}
           </button>
         </div>
       </div>
@@ -337,6 +341,6 @@ function onGuestNameKeydown(event: KeyboardEvent): void {
     :hidden="!startUi.soundButtonVisible"
     @click="unlockAudio().catch((error: unknown) => log.warn('audio unlock failed', errorContext(error)))"
   >
-    Разрешить звук
+    {{ t('Разрешить звук') }}
   </button>
 </template>

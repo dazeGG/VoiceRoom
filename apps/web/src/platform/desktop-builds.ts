@@ -1,3 +1,4 @@
+import { t } from '@/shared/i18n';
 import type { DesktopAsset, DesktopRelease } from '@/api/desktop';
 
 export const QUARANTINE_CMD = 'sudo xattr -rd com.apple.quarantine /Applications/VoiceRoom.app';
@@ -37,9 +38,9 @@ export function formatDesktopReleaseMeta(
   releaseLoading: boolean,
   releaseError: boolean
 ): string {
-  if (releaseLoading) return 'Получаем последний релиз…';
-  if (releaseError) return 'Не удалось получить релиз — откройте страницу загрузок.';
-  const size = asset ? `~${Math.round(asset.size / (1024 * 1024))} МБ` : '';
+  if (releaseLoading) return t('Получаем последний релиз…');
+  if (releaseError) return t('Не удалось получить релиз — откройте страницу загрузок.');
+  const size = asset ? t('~{p0} МБ', { p0: Math.round(asset.size / (1024 * 1024)) }) : '';
   const version = release ? `v${release.version}` : '';
   return [build.ext, size, build.req, version].filter(Boolean).join(' · ');
 }

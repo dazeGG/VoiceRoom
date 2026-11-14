@@ -141,11 +141,11 @@ test('a token whose session has expired is not listed', { skip }, async (t) => {
   await pool.query(`UPDATE sessions SET expires_at = $1 WHERE id = 's2'`, [new Date(at)]);
 
   assert.deepEqual(await tokens.listByUserId('ada', at - 1), [
-    { provider: 'rustore', token: 'expired', appVersion: null, notificationChannels: [] },
-    { provider: 'rustore', token: 'live', appVersion: '1.2.3', notificationChannels: [] }
+    { provider: 'rustore', token: 'expired', appVersion: null, notificationChannels: [], locale: 'ru' },
+    { provider: 'rustore', token: 'live', appVersion: '1.2.3', notificationChannels: [], locale: 'ru' }
   ]);
   assert.deepEqual(await tokens.listByUserId('ada', at), [
-    { provider: 'rustore', token: 'live', appVersion: '1.2.3', notificationChannels: [] }
+    { provider: 'rustore', token: 'live', appVersion: '1.2.3', notificationChannels: [], locale: 'ru' }
   ]);
   assert.deepEqual(await tokens.listByUserId('bob'), []);
 });

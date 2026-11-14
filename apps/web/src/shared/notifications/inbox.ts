@@ -1,3 +1,5 @@
+import { useLocalizedText, currentErrorMessage } from '@/shared/i18n/localized-text';
+import { t } from '@/shared/i18n';
 import { ref } from 'vue';
 import type { InboxItem, InboxItemRead, InboxPage, InboxReadAll } from '@voice-room/shared/contracts/notifications';
 import { uniqueBy } from '@/shared/utils/collections';
@@ -16,7 +18,7 @@ export function createNotificationInbox(transport: NotificationInboxTransport) {
   const nextCursor = ref<string | undefined>();
   const hasMore = ref(false);
   const loading = ref(false);
-  const error = ref('');
+  const error = useLocalizedText();
   const firstUnread = ref<InboxItem | null>(null);
   let requestGeneration = 0;
 
@@ -39,7 +41,8 @@ export function createNotificationInbox(transport: NotificationInboxTransport) {
       apply(page, append);
     } catch (value) {
       if (generation === requestGeneration)
-        error.value = value instanceof Error ? value.message : 'Не удалось загрузить уведомления';
+        error.value = () =>
+          value instanceof Error ? currentErrorMessage(value) : t('Не удалось загрузить уведомления');
     } finally {
       if (generation === requestGeneration) loading.value = false;
     }

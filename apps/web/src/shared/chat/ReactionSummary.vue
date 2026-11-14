@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '@/shared/i18n';
 import { computed } from 'vue';
 import { Popover } from '@/shared/ui';
 import ReactorList from './ReactorList.vue';
@@ -21,7 +22,7 @@ const summaries = computed(() => props.store.forMessage(props.messageId));
   <div
     v-if="summaries.length > 0 && !store.isDeleted(messageId)"
     class="reaction-summary"
-    aria-label="Реакции на сообщение"
+    :aria-label="t('Реакции на сообщение')"
   >
     <div
       v-for="summary in summaries"
@@ -38,7 +39,12 @@ const summaries = computed(() => props.store.forMessage(props.messageId));
         type="button"
         :disabled="summary.pending"
         :aria-pressed="summary.reactedByMe"
-        :aria-label="`${summary.reactedByMe ? 'Убрать' : 'Добавить'} реакцию ${summary.emoji}`"
+        :aria-label="
+          t('{p0} реакцию {p1}', {
+            p0: summary.reactedByMe ? t('Убрать') : t('Добавить'),
+            p1: summary.emoji
+          })
+        "
         @click="void store.toggle(messageId, summary.emoji)"
       >
         <Emoji :emoji="summary.emoji" :size="18" decorative />
@@ -46,12 +52,17 @@ const summaries = computed(() => props.store.forMessage(props.messageId));
       <span v-else class="reaction-summary__toggle" aria-hidden="true">
         <Emoji :emoji="summary.emoji" :size="18" decorative />
       </span>
-      <Popover placement="top-start" flip role="dialog" :aria-label="`Пользователи с реакцией ${summary.emoji}`">
+      <Popover
+        placement="top-start"
+        flip
+        role="dialog"
+        :aria-label="t('Пользователи с реакцией {p0}', { p0: summary.emoji })"
+      >
         <template #trigger="{ open, toggle, panelId }">
           <button
             class="reaction-summary__count"
             type="button"
-            :aria-label="`Показать пользователей: ${summary.count}`"
+            :aria-label="t('Показать пользователей: {p0}', { p0: summary.count })"
             aria-haspopup="dialog"
             :aria-expanded="open"
             :aria-controls="panelId"

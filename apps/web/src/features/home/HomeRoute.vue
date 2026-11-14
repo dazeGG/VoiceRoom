@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // What /app shows, and every route the lobby keeps in the address (the admin
 // panel's tabs): the lobby or the landing on a desktop, a room start on a phone.
+import { t } from '@/shared/i18n';
 import { onBeforeUnmount, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { applyDesktopBoundaryToDocument } from '@/platform/desktop-boundary';
@@ -43,10 +44,10 @@ onBeforeUnmount(() => {
 
 <template>
   <div v-if="!boundaryReady" class="app-shell">
-    <main class="auth-loader" aria-label="Проверка устройства" aria-busy="true">
+    <main class="auth-loader" :aria-label="t('Проверка устройства')" aria-busy="true">
       <div class="auth-loader__card">
-        <p class="auth-loader__kicker">Проверяем устройство</p>
-        <h1 class="auth-loader__title">VoiceRoom запускается</h1>
+        <p class="auth-loader__kicker">{{ t('Проверяем устройство') }}</p>
+        <h1 class="auth-loader__title">{{ t('VoiceRoom запускается') }}</h1>
       </div>
     </main>
   </div>
@@ -56,12 +57,14 @@ onBeforeUnmount(() => {
     <ToastStack :toasts="toasts.items" :on-dismiss="toasts.dismissToast" />
   </template>
   <div v-else class="app-shell">
-    <main class="auth-session-error" aria-label="Неподдерживаемое устройство" aria-live="polite">
+    <main class="auth-session-error" :aria-label="t('Неподдерживаемое устройство')" aria-live="polite">
       <div class="auth-session-error__card">
         <p class="auth-session-error__kicker">Desktop only</p>
-        <h1 class="auth-session-error__title">Откройте VoiceRoom на компьютере</h1>
+        <h1 class="auth-session-error__title">{{ t('Откройте VoiceRoom на компьютере') }}</h1>
         <p class="auth-session-error__text">
-          Мобильные браузеры не запускают этот клиент: realtime, голос, медиа и push-уведомления здесь отключены.
+          {{
+            t('Мобильные браузеры не запускают этот клиент: realtime, голос, медиа и push-уведомления здесь отключены.')
+          }}
         </p>
       </div>
     </main>

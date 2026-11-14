@@ -1,5 +1,6 @@
 // Our own tracks on the LiveKit room: the microphone, the camera and the shared screen.
 
+import { t } from '@/shared/i18n';
 import type { LocalTrackPublication, Room } from 'livekit-client';
 import {
   CAMERA_CAPTURE,
@@ -37,7 +38,7 @@ export async function publishLocalMicrophoneForRoom(
 ): Promise<LocalTrackPublication | null> {
   if (!stream || !isCurrent()) return null;
   const [track] = stream.getAudioTracks();
-  if (!track) throw new UserFacingError('Браузер не отдал аудио-трек');
+  if (!track) throw new UserFacingError(t('Браузер не отдал аудио-трек'));
   const { Track } = await loadLiveKitClient();
 
   const publication = await room.localParticipant.publishTrack(track, {

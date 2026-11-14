@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '@/shared/i18n';
 import { SwitchCamera } from '@lucide/vue';
 import { computed, ref } from 'vue';
 import { state as roomClientState } from '@/features/room/client/core/room-runtime.store';
@@ -12,7 +13,7 @@ const mobileCall = useMobileCallUiStore();
 
 // Each tap turns the icon half a turn, the way the camera turns.
 const turns = ref(0);
-const label = computed(() => (roomClientState.cameraFacing === 'environment' ? 'На фронтальную' : 'На основную'));
+const label = computed(() => (roomClientState.cameraFacing === 'environment' ? t('На фронтальную') : t('На основную')));
 
 function flip(event: MouseEvent): void {
   event.stopPropagation();
@@ -31,7 +32,7 @@ function keepControls(event: PointerEvent): void {
   <button
     :class="['mobile-call-flip', `mobile-call-flip--${variant}`]"
     type="button"
-    :aria-label="`${label} камеру`"
+    :aria-label="t('{p0} камеру', { p0: label })"
     :disabled="roomClientState.cameraStarting"
     @click="flip"
     @pointerdown="keepControls"

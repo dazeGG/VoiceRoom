@@ -2,6 +2,7 @@
 // Picking who to mention is picking a person, so the row carries the face
 // alongside both names: two people can share a display name, and the login is
 // what actually goes into the message.
+import { t } from '@/shared/i18n';
 import type { MembershipMember } from '@voice-room/shared/contracts/membership';
 import { Avatar } from '@/shared/ui';
 import { displayNameOf } from '@/shared/utils/display-name';
@@ -17,7 +18,7 @@ function label(member: MembershipMember): string {
 </script>
 
 <template>
-  <div class="mention-menu" role="listbox" aria-label="Упомянуть участника">
+  <div class="mention-menu" role="listbox" :aria-label="t('Упомянуть участника')">
     <button
       v-for="(member, index) in candidates"
       :key="member.userId"
@@ -41,7 +42,7 @@ function label(member: MembershipMember): string {
         <span class="mention-menu__name"><EmojiText :text="label(member)" /></span>
         {{ ' ' }}
         <small class="mention-menu__login"
-          >@{{ member.login }}{{ member.role === 'owner' ? ' · Создатель' : '' }}</small
+          >@{{ member.login }}{{ member.role === 'owner' ? t(' · Создатель') : '' }}</small
         >
       </span>
     </button>

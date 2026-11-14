@@ -1,3 +1,4 @@
+import { t } from '@/shared/i18n';
 import { getAvatarColor } from '@/visual/tokens';
 import { avatarInitial } from '@/shared/utils/avatar-initial';
 
@@ -35,8 +36,8 @@ export function getAvatarPresentation(participant: {
     background,
     foreground,
     shadow: 'none',
-    initials: avatarInitial(participant.name || 'Гость'),
-    label: participant.isLocal ? 'вы' : participant.name,
+    initials: avatarInitial(participant.name || t('Гость')),
+    label: participant.isLocal ? t('вы') : participant.name,
     src: participant.avatarUrl || null
   };
 }

@@ -1,3 +1,4 @@
+import { t } from '@/shared/i18n';
 import { usePageStore } from '@/stores/page.store';
 import { state } from '../core/room-runtime.store';
 import { showToast } from './toast';
@@ -165,11 +166,11 @@ export async function toggleScreenFullscreen(): Promise<void> {
     if (hasDesktopWindowControls()) {
       await setDesktopScreenFullscreen(true);
     } else {
-      showToast('Полноэкранный режим недоступен');
+      showToast(t('Полноэкранный режим недоступен'));
     }
   } catch (error) {
     log.error('screen stage action failed', errorContext(error));
-    showToast('Не удалось переключить полноэкранный режим');
+    showToast(t('Не удалось переключить полноэкранный режим'));
   }
 }
 

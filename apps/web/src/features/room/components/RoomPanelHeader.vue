@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '@/shared/i18n';
 import { PanelRightClose, X } from '@lucide/vue';
 import { iconSm } from '@/shared/ui/icons';
 
@@ -33,19 +34,19 @@ const emit = defineEmits<{
 
 <template>
   <header class="room-panel-header">
-    <div class="room-panel-tabs room-panel-tabs--header" role="tablist" aria-label="Раздел панели комнаты">
+    <div class="room-panel-tabs room-panel-tabs--header" role="tablist" :aria-label="t('Раздел панели комнаты')">
       <button
         :id="chatTabId"
         class="room-panel-tabs__tab"
         type="button"
         role="tab"
         :aria-controls="chatPanelId"
-        aria-label="Чат"
+        :aria-label="t('Чат')"
         :aria-selected="activeTab === 'chat'"
-        title="Чат"
+        :title="t('Чат')"
         @click="emit('selectChat')"
       >
-        <span>Чат</span>
+        <span>{{ t('Чат') }}</span>
         <span v-if="unread > 0" class="room-panel-tabs__unread" aria-hidden="true"></span>
       </button>
       <button
@@ -54,12 +55,12 @@ const emit = defineEmits<{
         type="button"
         role="tab"
         :aria-controls="participantsPanelId"
-        aria-label="Участники"
+        :aria-label="t('Участники')"
         :aria-selected="activeTab === 'participants'"
-        title="Участники"
+        :title="t('Участники')"
         @click="emit('selectParticipants')"
       >
-        <span>Участники</span>
+        <span>{{ t('Участники') }}</span>
         <span v-if="participantCount > 0" class="room-panel-tabs__count" aria-hidden="true">{{
           participantCount
         }}</span>
@@ -68,7 +69,7 @@ const emit = defineEmits<{
     <button
       class="room-panel-header__collapse"
       type="button"
-      :aria-label="mobile ? 'Закрыть панель' : 'Свернуть панель'"
+      :aria-label="mobile ? t('Закрыть панель') : t('Свернуть панель')"
       @click="emit('collapse')"
     >
       <X v-if="mobile" v-bind="iconSm" aria-hidden="true" />

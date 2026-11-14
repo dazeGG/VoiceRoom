@@ -8,6 +8,8 @@ import type { PushPayload as WebPushPayload } from '@voice-room/shared/notificat
 import { LOG_EVENTS } from '../../lib/log-events.ts';
 import { resolvePushTtl, shouldDeliverPush } from '../../lib/push-service.ts';
 import { notificationActor, type SocialUser } from '../social/social-views.ts';
+import { DirectMessageInvite } from '@voice-room/shared/contracts/messages';
+import { Value } from 'typebox/value';
 
 interface Preferences {
   privateNotifications?: boolean;
@@ -69,7 +71,13 @@ export function createNotificationDispatch(deps: NotificationDispatchDeps) {
       const visibleContext =
         hideText && context.nativeData ? { ...context, nativeData: withoutRoomNames(context.nativeData) } : context;
       const deliveryContext = ttl === undefined ? visibleContext : { ...visibleContext, ttl };
-      await deps.push().sendToUser(userId, { ...publicPayload, body }, deliveryContext);
+      await deps
+        .push()
+        .sendToUser(
+          userId,
+          { ...publicPayload, body, ...(payload.copy ? { notificationPrivate: hideText } : {}) },
+          deliveryContext
+        );
     } catch (error) {
       deps
         .logger()
@@ -88,11 +96,18 @@ export function createNotificationDispatch(deps: NotificationDispatchDeps) {
       const preferences = await deps.preferences(recipientUserId);
       if (preferences.mutedPeerIds.includes(sender.id)) return 0;
       const dedupeKey = `dm:${message.id}`;
+      const invite = Value.Check(DirectMessageInvite, message.invite) ? message.invite : null;
+      const inviteRoom = invite?.roomName ?? '';
       const notification: AccountMessage = {
         type: 'notification.dm.message',
         dedupeKey,
         peer: notificationActor(sender),
-        message: { id: message.id, body: message.body, createdAt: message.createdAt ?? Date.now() }
+        message: {
+          id: message.id,
+          body: message.body,
+          createdAt: message.createdAt ?? Date.now(),
+          ...(invite ? { invite } : {})
+        }
       };
       const broadcastCount = deps.notifyUser(recipientUserId, notification);
       void queuePush(
@@ -102,6 +117,18 @@ export function createNotificationDispatch(deps: NotificationDispatchDeps) {
           title: sender.displayName || sender.login || 'Новое сообщение',
           body: message.body,
           privateBody: 'Откройте VoiceRoom, чтобы прочитать сообщение.',
+          copy: {
+            ...(invite
+              ? {
+                  body: {
+                    key: inviteRoom ? ('roomInvitation' as const) : ('roomInvitationUnnamed' as const),
+                    args: { room: inviteRoom }
+                  }
+                }
+              : {}),
+            ...(!sender.displayName && !sender.login ? { title: { key: 'newMessage' as const } } : {}),
+            privateBody: { key: 'privateMessage' }
+          },
           tag: `dm:${sender.id}`,
           dedupeKey,
           url: `/?dm=${encodeURIComponent(sender.id)}`

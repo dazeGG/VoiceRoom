@@ -1,3 +1,5 @@
+import { t } from '@/shared/i18n';
+import { currentErrorMessage } from '@/shared/i18n/localized-text';
 import { markRaw, ref } from 'vue';
 import { isArray } from '@voice-room/shared/guards';
 import {
@@ -28,7 +30,7 @@ function disposePreview(draft: ComposeDraft): void {
 export class AttachmentComposeStore {
   readonly #drafts = ref<ComposeDraft[]>([]);
   readonly #busy = ref(false);
-  readonly #lastError = ref<string | null>(null);
+  readonly #lastError = ref<string | null | (() => string)>(null);
 
   private readonly storageKey: string;
 
@@ -59,9 +61,9 @@ export class AttachmentComposeStore {
     this.#busy.value = value;
   }
   get lastError(): string | null {
-    return this.#lastError.value;
+    return typeof this.#lastError.value === 'function' ? this.#lastError.value() : this.#lastError.value;
   }
-  set lastError(value: string | null) {
+  set lastError(value: string | null | (() => string)) {
     this.#lastError.value = value;
   }
 
@@ -77,7 +79,7 @@ export class AttachmentComposeStore {
     const candidates = Array.from(files).slice(0, Math.max(0, 4 - this.drafts.length));
     for (const file of candidates) {
       if (!allowedTypes.has(file.type) || file.size < 1 || file.size > 10 * 1024 * 1024) {
-        throw new Error('Поддерживаются JPEG, PNG и WebP размером до 10 МБ');
+        throw new Error(t('Поддерживаются JPEG, PNG и WebP размером до 10 МБ'));
       }
       await this.upload(file);
     }
@@ -114,7 +116,7 @@ export class AttachmentComposeStore {
       await this.waitUntilTerminal(added);
     } catch (error) {
       if (draft && draft.state !== 'ready') {
-        this.lastError = error instanceof Error ? error.message : 'Ошибка загрузки';
+        this.lastError = () => (error instanceof Error ? currentErrorMessage(error) : t('Ошибка загрузки'));
         await deleteAttachment(draft.id).catch(() => {});
         disposePreview(draft);
         this.drafts = this.drafts.filter((item) => item.id !== draft?.id);

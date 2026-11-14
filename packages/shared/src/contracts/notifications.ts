@@ -4,6 +4,7 @@
 import { Type, type Static } from 'typebox';
 import { Nullable, Ok } from './http.ts';
 import { PresenceStatus } from './users.ts';
+import { PushLocaleIntent } from './push-registration.ts';
 
 export const NotificationLevel = Type.Union([Type.Literal('all'), Type.Literal('mentions'), Type.Literal('none')]);
 export type NotificationLevel = Static<typeof NotificationLevel>;
@@ -42,6 +43,7 @@ export type PushConfig = Static<typeof PushConfig>;
 
 /** A browser PushSubscription as toJSON() gives it; the push service checks it. */
 export const SubscribeBody = Type.Object({
+  localeState: Type.Optional(PushLocaleIntent),
   subscription: Type.Optional(
     Type.Object({
       endpoint: Type.Optional(Type.String()),

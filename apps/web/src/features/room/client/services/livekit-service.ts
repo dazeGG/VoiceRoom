@@ -1,3 +1,4 @@
+import { t } from '@/shared/i18n';
 import type { LocalTrackPublication, Room } from 'livekit-client';
 import type { MicrophoneCapture } from '../core/types';
 import {
@@ -116,10 +117,10 @@ function reconcileGenerationFor(room: Room): LiveKitReconcileGeneration {
 
 /** Why the call was joined without the microphone prepared for it. */
 function joinMicrophoneLostMessage(outcome: MicrophoneActionOutcome): string {
-  if (outcome === 'timed_out') return 'Микрофон не ответил вовремя: вы в комнате без микрофона';
+  if (outcome === 'timed_out') return t('Микрофон не ответил вовремя: вы в комнате без микрофона');
   if (outcome === 'busy' || outcome === 'coalesced')
-    return 'Микрофон ещё занят прошлой операцией: вы в комнате без микрофона';
-  return 'Не удалось подключить микрофон: вы в комнате без микрофона';
+    return t('Микрофон ещё занят прошлой операцией: вы в комнате без микрофона');
+  return t('Не удалось подключить микрофон: вы в комнате без микрофона');
 }
 
 export async function connectLiveKitRoom(
@@ -208,7 +209,7 @@ export async function connectLiveKitRoom(
       }
       stopMicrophoneCapture(pendingMicrophone);
       state.microphoneMissing = true;
-      showToast('Не удалось подключить микрофон: вы в комнате без микрофона', { duration: 8000 });
+      showToast(t('Не удалось подключить микрофон: вы в комнате без микрофона'), { duration: 8000 });
     }
   }
 
@@ -387,7 +388,7 @@ async function bindLiveKitRoomEvents(room: Room, isCurrent: () => boolean): Prom
   room.on(RoomEvent.ParticipantDisconnected, (participant) => {
     if (!current()) return;
     const peer = state.peers.get(participant.identity);
-    if (peer) detachLiveKitParticipant(peer, 'голос переподключается');
+    if (peer) detachLiveKitParticipant(peer, t('голос переподключается'));
   });
   room.on(RoomEvent.SignalReconnecting, () => {
     if (!current()) return;
@@ -434,7 +435,7 @@ async function bindLiveKitRoomEvents(room: Room, isCurrent: () => boolean): Prom
     if (!rawTrack) return;
     void isMicrophoneInputSilent(rawTrack).then((silent) => {
       if (silent && current() && !state.muted && state.localRawStream?.getAudioTracks()[0] === rawTrack) {
-        showToast('Микрофон не передает звук');
+        showToast(t('Микрофон не передает звук'));
       }
     });
   });
@@ -591,5 +592,5 @@ async function followInPlaceMicrophone(room: Room, microphone: Promise<Microphon
   }
   if (replaced) await replaced;
   if (!unpublished()) return;
-  dropUnpublishedMicrophone('Микрофон не переподключился: вы в комнате без микрофона');
+  dropUnpublishedMicrophone(t('Микрофон не переподключился: вы в комнате без микрофона'));
 }

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '@/shared/i18n';
 import { Eye, EyeOff } from '@lucide/vue';
 import { ref } from 'vue';
 import { iconMd } from '@/shared/ui/icons';
@@ -30,7 +31,7 @@ const revealed = ref(false);
     <button
       type="button"
       class="auth-password__eye"
-      :aria-label="revealed ? 'Скрыть пароль' : 'Показать пароль'"
+      :aria-label="revealed ? t('Скрыть пароль') : t('Показать пароль')"
       :aria-pressed="revealed"
       @click="revealed = !revealed"
     >

@@ -10,7 +10,7 @@ import { Type, type Static, type TSchema } from 'typebox';
 import { LoginAlert } from './account.ts';
 import { AdminReportsEvent } from './admin.ts';
 import { Nullable } from './http.ts';
-import { DirectMessage, PinnedMessage, ReactionSummary, RoomMessage } from './messages.ts';
+import { DirectMessage, DirectMessageInvite, PinnedMessage, ReactionSummary, RoomMessage } from './messages.ts';
 import { NotificationPreferences } from './notifications.ts';
 import { CpuPressure, LobbyRoom, NetworkLevel, PublicPeer, RoomRelationship, VoiceCause } from './rooms.ts';
 import { PublicUser } from './users.ts';
@@ -273,7 +273,9 @@ export type NotificationActor = Static<typeof NotificationActor>;
 export const NotificationMessageBrief = Type.Object({
   id: Type.String(),
   body: Type.String(),
-  createdAt: Type.Number()
+  createdAt: Type.Number(),
+  /** App-generated invitation copy is rendered locally instead of translating its stored body. */
+  invite: Type.Optional(DirectMessageInvite)
 });
 export type NotificationMessageBrief = Static<typeof NotificationMessageBrief>;
 

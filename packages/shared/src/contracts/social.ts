@@ -3,12 +3,15 @@
 import { Type, type Static } from 'typebox';
 import { Done, Nullable, Ok } from './http.ts';
 import { PublicUser } from './users.ts';
+import { DirectMessageInvite } from './messages.ts';
 
 export const FriendLastMessage = Type.Object({
   id: Type.String(),
   body: Type.String(),
   createdAt: Nullable(Type.Number()),
-  fromMe: Type.Boolean()
+  fromMe: Type.Boolean(),
+  /** Only system invitations carry this; ordinary stored message bodies remain literal. */
+  invite: Type.Optional(DirectMessageInvite)
 });
 export type FriendLastMessage = Static<typeof FriendLastMessage>;
 

@@ -1,3 +1,4 @@
+import { useLocalizedText } from '@/shared/i18n/localized-text';
 // The DM thread the lobby has open: its paged history anchored at the newest
 // message, the read cursor to commit once that message rendered, and the
 // resync that converges the newest page after missed events. The lobby decides
@@ -26,7 +27,7 @@ export function useDmThread(isOpen: (peerId: string) => boolean) {
   const loading = ref(false);
   const loadingOlder = ref(false);
   const hasMoreBefore = ref(false);
-  const historyError = ref('');
+  const historyError = useLocalizedText();
   const profileOpen = ref(false);
 
   // Read receipts: what has been on screen is reported once it has rendered.
@@ -42,7 +43,7 @@ export function useDmThread(isOpen: (peerId: string) => boolean) {
       loading.value = state.loading;
       loadingOlder.value = state.loadingOlder;
       hasMoreBefore.value = state.hasMoreBefore;
-      historyError.value = state.error;
+      historyError.value = () => state.error;
     }
   });
 

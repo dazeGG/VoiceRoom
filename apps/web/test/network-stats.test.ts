@@ -206,6 +206,17 @@ test('the status pill explains loss, jitter and a TCP fallback and warns on real
   state.localNetwork = { inboundLossPct: 1.2, jitterMs: 9, outboundLossPct: 0, transport: 'tcp' };
   assert.equal(
     status.formatNetworkDetails('40 мс'),
-    'Пинг до LiveKit 40 мс · потери от вас 0% · потери к вам 1.2% · джиттер 9 мс · через TCP (UDP недоступен)'
+    'Пинг до LiveKit 40 мс · потери от вас 0% · потери к вам 1,2% · джиттер 9 мс · через TCP (UDP недоступен)'
+  );
+  const { useLocaleStore } = await import('@/shared/i18n');
+  await useLocaleStore().select('en');
+  assert.equal(
+    status.formatNetworkDetails('40 ms'),
+    'Ping to LiveKit 40 ms · losses from you 0% · loss to you 1.2% · jitter 9 ms · via TCP (UDP not available)'
+  );
+  await useLocaleStore().select('fr');
+  assert.equal(
+    status.formatNetworkDetails('40 ms'),
+    'Ping vers LiveKit 40 ms · pertes de votre part 0% · perte pour vous 1,2 % · gigue 9 ms · via TCP (UDP non disponible)'
   );
 });

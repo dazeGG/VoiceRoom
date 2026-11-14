@@ -1,3 +1,4 @@
+import { t } from '@/shared/i18n';
 import type { ScreenShareCaptureOptions, ScreenSharePresets, TrackPublishOptions, VideoPreset } from 'livekit-client';
 import {
   DEFAULT_SCREEN_FPS,
@@ -25,7 +26,11 @@ export function getScreenProfile(profileId: string): ScreenProfile {
 
   return {
     contentHint: fps.contentHint,
-    detail: `${quality.label} · ${fps.label} · до ${formatBitrate(videoBitrate)}`,
+    detail: t('{p0} · {p1} · до {p2}', {
+      p0: quality.label,
+      p1: fps.label,
+      p2: formatBitrate(videoBitrate)
+    }),
     frameRate: fps.frameRate,
     fpsId: fps.id,
     height: quality.height,
@@ -58,8 +63,8 @@ export function getScreenModeSummary(
   fallbackProfileId: string = DEFAULT_SCREEN_PROFILE_ID
 ): string {
   const profile = getScreenProfileForMode(mode, fallbackProfileId);
-  if (mode === 'games') return `Более плавное видео (${profile.label})`;
-  return `Более чёткий текст (${profile.label})`;
+  if (mode === 'games') return t('Более плавное видео ({p0})', { p0: profile.label });
+  return t('Более чёткий текст ({p0})', { p0: profile.label });
 }
 
 export function getScreenProfileLabels(profileId: string): { qualityLabel: string; fpsLabel: string } {
@@ -193,11 +198,15 @@ export function createSourceScreenProfile(
     SCREEN_SOURCE_MAX_BITRATE,
     Math.max(baseProfile.videoBitrate, Math.round(SCREEN_SOURCE_BASE_BITRATE * (pixels / SCREEN_SOURCE_BASE_PIXELS)))
   );
-  const qualityLabel = width > 0 && height > 0 ? `${width}×${height}` : 'Источник';
+  const qualityLabel = width > 0 && height > 0 ? `${width}×${height}` : t('Источник');
 
   return {
     ...baseProfile,
-    detail: `${qualityLabel} · ${baseProfile.frameRate} FPS · до ${formatBitrate(videoBitrate)}`,
+    detail: t('{p0} · {p1} FPS · до {p2}', {
+      p0: qualityLabel,
+      p1: baseProfile.frameRate,
+      p2: formatBitrate(videoBitrate)
+    }),
     height,
     label: `${qualityLabel} ${baseProfile.frameRate} FPS`,
     videoBitrate,

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '@/shared/i18n';
 import { Image as ImageIcon, LoaderCircle, RotateCcw, X } from '@lucide/vue';
 import { computed, ref } from 'vue';
 import { iconSm } from '@/shared/ui/icons';
@@ -24,7 +25,7 @@ function draftSource(draft: Draft): string {
 // send it, so a pending image opens in the same viewer a sent one does.
 const viewable = computed(() => store.drafts.filter((draft) => Boolean(draft.previewUrl) || draft.state === 'ready'));
 const items = computed(() =>
-  viewable.value.map((draft) => ({ src: draftSource(draft), alt: draft.file?.name || 'Изображение' }))
+  viewable.value.map((draft) => ({ src: draftSource(draft), alt: draft.file?.name || t('Изображение') }))
 );
 
 function view(draft: Draft): void {
@@ -34,7 +35,7 @@ function view(draft: Draft): void {
 </script>
 
 <template>
-  <section v-if="store.drafts.length" class="attachment-composer" aria-label="Изображения к сообщению">
+  <section v-if="store.drafts.length" class="attachment-composer" :aria-label="t('Изображения к сообщению')">
     <ol class="attachment-composer__list">
       <li
         v-for="(draft, index) in store.drafts"
@@ -46,10 +47,10 @@ function view(draft: Draft): void {
           v-if="draft.previewUrl || draft.state === 'ready'"
           class="attachment-composer__open"
           type="button"
-          :aria-label="`Открыть изображение ${index + 1}`"
+          :aria-label="t('Открыть изображение {p0}', { p0: index + 1 })"
           @click="view(draft)"
         >
-          <img :src="draftSource(draft)" :alt="draft.file?.name || `Изображение ${index + 1}`" />
+          <img :src="draftSource(draft)" :alt="draft.file?.name || t('Изображение {p0}', { p0: index + 1 })" />
         </button>
         <span v-else class="attachment-composer__placeholder"><ImageIcon v-bind="iconSm" aria-hidden="true" /></span>
 
@@ -60,8 +61,8 @@ function view(draft: Draft): void {
           role="status"
           :aria-label="
             draft.state === 'processing'
-              ? 'Обработка изображения'
-              : `Загрузка изображения ${Math.round(draft.progress * 100)}%`
+              ? t('Обработка изображения')
+              : t('Загрузка изображения {p0}%', { p0: Math.round(draft.progress * 100) })
           "
         >
           <LoaderCircle v-bind="iconSm" aria-hidden="true" />
@@ -71,8 +72,8 @@ function view(draft: Draft): void {
           v-if="draft.error || draft.state === 'failed'"
           class="attachment-composer__retry"
           type="button"
-          aria-label="Повторить загрузку"
-          :title="draft.error || 'Не удалось обработать изображение'"
+          :aria-label="t('Повторить загрузку')"
+          :title="draft.error || t('Не удалось обработать изображение')"
           :disabled="disabled"
           @click="void store.retry(draft)"
         >
@@ -82,7 +83,7 @@ function view(draft: Draft): void {
         <button
           class="attachment-composer__remove"
           type="button"
-          :aria-label="`Удалить изображение ${index + 1}`"
+          :aria-label="t('Удалить изображение {p0}', { p0: index + 1 })"
           :disabled="disabled"
           @click="remove(draft)"
         >

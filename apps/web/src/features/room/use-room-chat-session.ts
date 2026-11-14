@@ -3,6 +3,8 @@
 // it; the in-room rail and the lobby preview both mount that panel, so the host
 // hands in who the viewer is and how the room reacts to lifecycle events.
 
+import { t } from '@/shared/i18n';
+import { currentErrorMessage } from '@/shared/i18n/localized-text';
 import { computed, markRaw, nextTick, reactive } from 'vue';
 import {
   chatMessageFromRoomMessage,
@@ -107,7 +109,7 @@ export function useRoomChatSession(host: RoomChatHost) {
     const roomId = host.roomId();
     if (!roomId) {
       timeline.loading = false;
-      timeline.error = 'Комната не найдена';
+      timeline.setError(() => t('Комната не найдена'));
       return () => {};
     }
 
@@ -125,7 +127,7 @@ export function useRoomChatSession(host: RoomChatHost) {
       switch (event.type) {
         case 'room.not_found':
           lifecycle.notFound(event.payload.roomId);
-          timeline.error = 'Комната не найдена';
+          timeline.setError(() => t('Комната не найдена'));
           return;
         case 'room.updated':
           lifecycle.updated(event.payload.room);
@@ -213,14 +215,14 @@ export function useRoomChatSession(host: RoomChatHost) {
   };
 
   const jumpTo = (messageId: string): void => {
-    scroll.jumpTo(messageId, () => host.toast('Сообщение не загружено — прокрутите историю выше'));
+    scroll.jumpTo(messageId, () => host.toast(t('Сообщение не загружено — прокрутите историю выше')));
   };
 
   async function togglePinned(messageId: string): Promise<void> {
     try {
       await roomPins.togglePin(host.roomId(), messageId);
     } catch (err) {
-      host.toast(err instanceof Error && err.message ? err.message : 'Не удалось закрепить сообщение', {
+      host.toast(err instanceof Error && err.message ? err.message : t('Не удалось закрепить сообщение'), {
         variant: 'error'
       });
     }
@@ -233,7 +235,7 @@ export function useRoomChatSession(host: RoomChatHost) {
       await deleteRoomChatMessage(roomId, messageId, peerCredentials());
       timeline.remove(messageId);
     } catch {
-      timeline.error = 'Не удалось удалить сообщение';
+      timeline.setError(() => t('Не удалось удалить сообщение'));
       setTimeout(() => (timeline.error = ''), 1600);
     }
   }
@@ -243,7 +245,7 @@ export function useRoomChatSession(host: RoomChatHost) {
     try {
       timeline.replace(await editRoomChatMessage(host.roomId(), messageId, { ...peerCredentials(), text }));
     } catch (err) {
-      timeline.error = err instanceof Error ? err.message : 'Не удалось изменить сообщение';
+      timeline.setError(() => (err instanceof Error ? currentErrorMessage(err) : t('Не удалось изменить сообщение')));
       throw err;
     }
   }

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '@/shared/i18n';
 import { Bell, BellOff, Check, LayoutDashboard, Settings, UserPlus, Users } from '@lucide/vue';
 import { computed, nextTick, onBeforeUnmount, ref, type ComponentPublicInstance } from 'vue';
 import type { AuthUser } from '@/api/auth';
@@ -55,18 +56,18 @@ const selfPresence = computed(() =>
 );
 const statusOptions = computed<ReadonlyArray<{ value: PresenceStatus; label: string; note?: string | undefined }>>(
   () => [
-    { value: 'online', label: 'В сети' },
+    { value: 'online', label: t('В сети') },
     {
       value: 'away',
-      label: 'Отошёл',
-      note: lobby.automaticPresenceIdleAvailable ? 'Автоматически после 5 минут бездействия' : undefined
+      label: t('Отошёл'),
+      note: lobby.automaticPresenceIdleAvailable ? t('Автоматически после 5 минут бездействия') : undefined
     },
     {
       value: 'dnd',
-      label: 'Не беспокоить',
-      note: 'Уведомления и звуковые сигналы будут отключены'
+      label: t('Не беспокоить'),
+      note: t('Уведомления и звуковые сигналы будут отключены')
     },
-    { value: 'offline', label: 'Не в сети' }
+    { value: 'offline', label: t('Не в сети') }
   ]
 );
 const statusSaving = ref<PresenceStatus | null>(null);
@@ -199,7 +200,7 @@ async function selectStatus(status: PresenceStatus, close: () => void): Promise<
     await preferences.updatePresenceStatus(status);
     close();
   } catch {
-    emit('toast', 'Не удалось изменить статус');
+    emit('toast', t('Не удалось изменить статус'));
   } finally {
     statusSaving.value = null;
   }
@@ -209,7 +210,7 @@ async function selectStatus(status: PresenceStatus, close: () => void): Promise<
 <template>
   <aside class="sidebar">
     <div class="sidebar__top">
-      <button class="sidebar__head" type="button" title="Главная" @click="emit('goHome')">
+      <button class="sidebar__head" type="button" :title="t('Главная')" @click="emit('goHome')">
         <span class="sidebar__brand-mark" role="img" aria-label="VoiceRoom"></span>
         <span class="sidebar__brand-name">VoiceRoom</span>
         <BetaMark />
@@ -218,29 +219,31 @@ async function selectStatus(status: PresenceStatus, close: () => void): Promise<
         v-if="adminUrl"
         class="sidebar__icon-button"
         type="button"
-        title="Админка"
-        aria-label="Открыть админку"
+        :title="t('Админка')"
+        :aria-label="t('Открыть админку')"
         @click="openAdmin"
       >
         <LayoutDashboard v-bind="iconSm" aria-hidden="true" />
-        <span v-if="adminBadge > 0" class="sidebar__count" :aria-label="`открытых жалоб: ${adminBadge}`">{{
-          countLabel(adminBadge)
-        }}</span>
+        <span
+          v-if="adminBadge > 0"
+          class="sidebar__count"
+          :aria-label="t('открытых жалоб: {p0}', { p0: adminBadge })"
+          >{{ countLabel(adminBadge) }}</span
+        >
       </button>
     </div>
 
     <div class="sidebar__scroll">
       <div class="sidebar__section-head">
         <span class="sidebar__section-title"
-          >Друзья<span v-if="lobby.friends.length > 0" class="sidebar__section-count">{{
-            lobby.friends.length
-          }}</span></span
+          >{{ t('Друзья')
+          }}<span v-if="lobby.friends.length > 0" class="sidebar__section-count">{{ lobby.friends.length }}</span></span
         >
         <div class="sidebar__section-actions">
           <button
             class="sidebar__mini-button"
             type="button"
-            title="Заявки и добавить друга"
+            :title="t('Заявки и добавить друга')"
             @click="emit('openPeople')"
           >
             <UserPlus v-bind="iconSm" aria-hidden="true" />
@@ -251,10 +254,9 @@ async function selectStatus(status: PresenceStatus, close: () => void): Promise<
 
       <div v-if="lobby.friends.length === 0" class="sidebar__empty">
         <Users v-bind="iconSm" aria-hidden="true" />
-        <p>Пока нет друзей. Откройте «Заявки», чтобы добавить по логину.</p>
+        <p>{{ t('Пока нет друзей. Откройте «Заявки», чтобы добавить по логину.') }}</p>
         <Button variant="soft" class="ui-button--compact" @click="emit('openPeople')">
-          <template #icon><UserPlus v-bind="iconSm" aria-hidden="true" /></template>
-          Добавить друга
+          <template #icon><UserPlus v-bind="iconSm" aria-hidden="true" /></template> {{ t('Добавить друга') }}
         </Button>
       </div>
       <template v-else>
@@ -287,8 +289,8 @@ async function selectStatus(status: PresenceStatus, close: () => void): Promise<
                 v-if="notificationPreferences.mutedPeerIds.includes(entry.user.id)"
                 class="sidebar__row-muted"
                 role="img"
-                aria-label="Уведомления отключены"
-                title="Уведомления отключены"
+                :aria-label="t('Уведомления отключены')"
+                :title="t('Уведомления отключены')"
               >
                 <BellOff v-bind="iconSm" aria-hidden="true" />
               </span>
@@ -312,7 +314,7 @@ async function selectStatus(status: PresenceStatus, close: () => void): Promise<
         flip
         floating
         role="listbox"
-        aria-label="Статус пользователя"
+        :aria-label="t('Статус пользователя')"
         panel-class="sidebar__status-popover"
       >
         <template #trigger="{ open, panelId }">
@@ -344,7 +346,7 @@ async function selectStatus(status: PresenceStatus, close: () => void): Promise<
           </button>
         </template>
         <template #content="{ close }">
-          <PopoverMenuLabel text="Статус" />
+          <PopoverMenuLabel :text="t('Статус')" />
           <div class="sidebar__status-list">
             <button
               v-for="(option, index) in statusOptions"
@@ -380,8 +382,8 @@ async function selectStatus(status: PresenceStatus, close: () => void): Promise<
         <button
           class="sidebar__icon-button"
           type="button"
-          title="Уведомления"
-          aria-label="Открыть уведомления"
+          :title="t('Уведомления')"
+          :aria-label="t('Открыть уведомления')"
           :aria-expanded="notificationsOpen"
           @click="emit('openNotifications')"
         >
@@ -393,8 +395,8 @@ async function selectStatus(status: PresenceStatus, close: () => void): Promise<
         <button
           class="sidebar__icon-button"
           type="button"
-          title="Настройки"
-          aria-label="Открыть настройки"
+          :title="t('Настройки')"
+          :aria-label="t('Открыть настройки')"
           @click="emit('openSettings')"
         >
           <Settings v-bind="iconSm" aria-hidden="true" />

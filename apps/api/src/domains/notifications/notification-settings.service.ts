@@ -11,6 +11,7 @@ import type { PushConfig } from '@voice-room/shared/contracts/notifications';
 import { cleanPushEndpoint } from '../../lib/push-endpoint.ts';
 import type { RateCheck } from '../../lib/rate-limit.ts';
 import type { NotificationPreferencesRepository, PreferencesResult } from './notification-preferences.repository.ts';
+import type { PushLocaleIntent, PushRegistrationState } from '@voice-room/shared/contracts/push-registration';
 
 export type NotificationPreferenceStore = Pick<
   NotificationPreferencesRepository,
@@ -30,11 +31,16 @@ export interface PushSubscription {
 export interface NotificationSettingsDeps {
   preferences(): NotificationPreferenceStore;
   pushes(): {
-    upsert(input: {
+    register(input: {
       userId: string;
       subscription: PushSubscription;
       metadata: { userAgent: string };
-    }): Promise<unknown>;
+      localeState?: PushLocaleIntent;
+    }): Promise<
+      | { status: 'subscribed'; registration: PushRegistrationState }
+      | { status: 'locale_conflict'; registration: PushRegistrationState | null }
+      | { status: 'conflict' }
+    >;
     remove(input: { userId: string; endpoint: string }): Promise<unknown>;
   };
   pushConfig(): PushConfig;
@@ -108,17 +114,25 @@ export function createNotificationSettingsService(deps: NotificationSettingsDeps
     async subscribe(
       userId: string,
       rawSubscription: unknown,
-      userAgent: string
-    ): Promise<RateLimited | { status: 'disabled' | 'invalid' | 'conflict' | 'subscribed' }> {
+      userAgent: string,
+      localeState?: PushLocaleIntent
+    ): Promise<
+      | RateLimited
+      | { status: 'disabled' | 'invalid' | 'conflict' }
+      | { status: 'subscribed'; registration: PushRegistrationState }
+      | { status: 'locale_conflict'; registration: PushRegistrationState | null }
+    > {
       if (!deps.pushConfig().enabled) return { status: 'disabled' };
       const subscription = cleanPushSubscription(rawSubscription);
       if (!subscription) return { status: 'invalid' };
       const limited = rateLimited(userId);
       if (limited) return limited;
-      const stored = await deps
-        .pushes()
-        .upsert({ userId, subscription, metadata: { userAgent: userAgent.slice(0, 512) } });
-      return { status: stored ? 'subscribed' : 'conflict' };
+      return deps.pushes().register({
+        userId,
+        subscription,
+        metadata: { userAgent: userAgent.slice(0, 512) },
+        ...(localeState ? { localeState } : {})
+      });
     },
 
     async unsubscribe(userId: string, rawEndpoint: unknown): Promise<RateLimited | { status: 'invalid' | 'removed' }> {

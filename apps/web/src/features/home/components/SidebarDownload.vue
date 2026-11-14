@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '@/shared/i18n';
 import { faApple, faWindows } from '@fortawesome/free-brands-svg-icons';
 import { Download } from '@lucide/vue';
 import { ref } from 'vue';
@@ -49,7 +50,7 @@ async function download(buildId: DesktopBuildId, close: () => void): Promise<voi
     flip
     floating
     role="menu"
-    aria-label="Скачать приложение"
+    :aria-label="t('Скачать приложение')"
     root-class="sidebar-download"
     panel-class="sidebar-download__popover"
   >
@@ -57,8 +58,8 @@ async function download(buildId: DesktopBuildId, close: () => void): Promise<voi
       <button
         class="sidebar-download__trigger"
         type="button"
-        title="Скачать приложение"
-        aria-label="Скачать приложение"
+        :title="t('Скачать приложение')"
+        :aria-label="t('Скачать приложение')"
         aria-haspopup="menu"
         :aria-expanded="isOpen"
         :aria-controls="panelId"
@@ -69,7 +70,7 @@ async function download(buildId: DesktopBuildId, close: () => void): Promise<voi
     </template>
 
     <template #content="{ close }">
-      <div class="sidebar-download__head">Скачать приложение</div>
+      <div class="sidebar-download__head">{{ t('Скачать приложение') }}</div>
       <PopoverMenuItem
         v-for="build in DESKTOP_BUILDS"
         :key="build.id"
@@ -83,7 +84,7 @@ async function download(buildId: DesktopBuildId, close: () => void): Promise<voi
         </template>
       </PopoverMenuItem>
       <div v-if="releaseError" class="sidebar-download__note">
-        Не удалось получить релиз — откроем страницу загрузок.
+        {{ t('Не удалось получить релиз — откроем страницу загрузок.') }}
       </div>
     </template>
   </Popover>

@@ -2,6 +2,7 @@
 // overlay stays up while the pointer crosses child elements, and a drop hands
 // the images to the conversation's compose store.
 
+import { t } from '@/shared/i18n';
 import { markRaw, ref } from 'vue';
 import { dataTransferHasImages, imageFilesFromDataTransfer, type AttachmentComposeStore } from './attachment-compose';
 
@@ -62,7 +63,7 @@ export class AttachmentDrop {
     try {
       await media.addFiles(files);
     } catch (cause) {
-      this.#onError(cause instanceof Error ? cause.message : 'Не удалось загрузить изображение');
+      this.#onError(cause instanceof Error ? cause.message : t('Не удалось загрузить изображение'));
     }
   };
 }

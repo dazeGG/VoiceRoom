@@ -20,6 +20,24 @@ const target = (token: string, appVersion: string | null = '1.0.0'): DeviceToken
   appVersion
 });
 
+test('native pushes render semantic private text for each token language', async () => {
+  const { service, calls } = harness({
+    targets: [
+      { ...target('fr'), locale: 'fr' },
+      { ...target('en'), locale: 'en' }
+    ]
+  });
+  await service.sendToUser('ada', {
+    ...DM,
+    notificationPrivate: true,
+    copy: { privateBody: { key: 'privateMessage' } }
+  });
+  assert.deepEqual(
+    calls.sent.map((message) => message.notification?.body),
+    ['Ouvrez VoiceRoom pour lire le message.', 'Open VoiceRoom to read the message.']
+  );
+});
+
 function harness({
   config = ON,
   targets = [target('phone')],

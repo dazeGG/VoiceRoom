@@ -2,6 +2,7 @@
 // either a freshly cropped image or marked for removal. Nothing reaches the
 // server until `save`, so closing the settings throws the edits away.
 
+import { t } from '@/shared/i18n';
 import { computed, ref } from 'vue';
 import { deleteUserAvatar, updateDisplayName, uploadUserAvatar, type AuthUser } from '@/api/auth';
 import { useSessionStore } from '@/features/auth/session.store';
@@ -29,8 +30,8 @@ export function useProfileDraft(user: AuthUser | null) {
 
   /** Starts cropping `file`, or says why it cannot be an avatar. */
   const pickFile = (file: File): string | null => {
-    if (!file.type.startsWith('image/')) return 'Выберите изображение JPEG, PNG или WebP';
-    if (file.size > AVATAR_MAX_BYTES) return 'Изображение должно быть меньше 5 МБ';
+    if (!file.type.startsWith('image/')) return t('Выберите изображение JPEG, PNG или WebP');
+    if (file.size > AVATAR_MAX_BYTES) return t('Изображение должно быть меньше 5 МБ');
     cropFile.value = file;
     return null;
   };

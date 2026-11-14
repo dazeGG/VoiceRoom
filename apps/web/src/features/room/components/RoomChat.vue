@@ -2,6 +2,7 @@
 // The in-room rail: it owns the room-shell wiring (peer session, panel state,
 // participant menu) and renders the shared room chat panel for everything the
 // lobby preview also shows.
+import { t } from '@/shared/i18n';
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoomMembershipStore } from '@/entities/room/room-membership.store';
 import RoomMemberList from '@/entities/room/components/RoomMemberList.vue';
@@ -61,7 +62,7 @@ onBeforeUnmount(() => {
 // Read at send time: the guest name dialog can persist a name long after this
 // component mounted.
 function resolveDisplayName(): string {
-  return cleanDisplayName(readStorage(DISPLAY_NAME_STORAGE_KEY)) || 'Гость';
+  return cleanDisplayName(readStorage(DISPLAY_NAME_STORAGE_KEY)) || t('Гость');
 }
 
 function openAuthorMenu(authorPeerId: string, event: MouseEvent): void {
@@ -87,7 +88,7 @@ function openAuthorMenu(authorPeerId: string, event: MouseEvent): void {
     :session-token="sessionToken"
     :resolve-display-name="resolveDisplayName"
     root-class="room-chat-rail"
-    aria-label="Панель комнаты"
+    :aria-label="t('Панель комнаты')"
     :hidden="!roomUi.chatOpen"
     :active-tab="roomUi.activePanel === 'participants' ? 'participants' : 'chat'"
     :visible="roomUi.chatOpen"

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '@/shared/i18n';
 import { ArrowRight } from '@lucide/vue';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { RouterLink, useRoute, useRouter } from 'vue-router';
@@ -143,7 +144,7 @@ async function createTempRoom(): Promise<void> {
     openRoom(roomId);
   } catch (error) {
     creatingTemp.value = false;
-    showToast(error instanceof Error && error.message ? error.message : 'Не удалось создать комнату');
+    showToast(error instanceof Error && error.message ? error.message : t('Не удалось создать комнату'));
   }
 }
 
@@ -151,7 +152,7 @@ function handleJoinRoom(): void {
   if (joining.value) return;
   const roomId = extractRoomId(roomCode.value);
   if (!roomId) {
-    showToast('Введите код комнаты');
+    showToast(t('Введите код комнаты'));
     return;
   }
   joining.value = true;
@@ -163,9 +164,9 @@ async function handleLogout(): Promise<void> {
   loggingOut.value = true;
   try {
     await signOut();
-    showToast('Вы вышли из аккаунта');
+    showToast(t('Вы вышли из аккаунта'));
   } catch (error) {
-    showToast(error instanceof Error && error.message ? error.message : 'Не удалось выйти из аккаунта');
+    showToast(error instanceof Error && error.message ? error.message : t('Не удалось выйти из аккаунта'));
   } finally {
     loggingOut.value = false;
   }
@@ -192,11 +193,11 @@ function switchAuthMode(mode: AuthMode): void {
 <template>
   <div v-if="!session.loaded" class="app-shell">
     <Topbar label="VoiceRoom" />
-    <main class="auth-loader" aria-label="Загрузка аккаунта" aria-busy="true">
+    <main class="auth-loader" :aria-label="t('Загрузка аккаунта')" aria-busy="true">
       <div class="auth-loader__card">
         <span class="auth-loader__orb"><MascotIcon variant="blink" :size="52" /></span>
-        <p class="auth-loader__kicker">Проверяем сессию</p>
-        <h1 class="auth-loader__title">Готовим ваши комнаты</h1>
+        <p class="auth-loader__kicker">{{ t('Проверяем сессию') }}</p>
+        <h1 class="auth-loader__title">{{ t('Готовим ваши комнаты') }}</h1>
         <div class="auth-loader__lines" aria-hidden="true">
           <span class="auth-loader__line"></span><span class="auth-loader__line"></span
           ><span class="auth-loader__line"></span>
@@ -206,15 +207,18 @@ function switchAuthMode(mode: AuthMode): void {
   </div>
   <div v-else-if="authLoadError" class="app-shell">
     <Topbar label="VoiceRoom" />
-    <main class="auth-session-error" aria-label="Ошибка проверки аккаунта" aria-live="polite">
+    <main class="auth-session-error" :aria-label="t('Ошибка проверки аккаунта')" aria-live="polite">
       <div class="auth-session-error__card">
-        <p class="auth-session-error__kicker">Сессия не проверена</p>
-        <h1 class="auth-session-error__title">Не удалось проверить аккаунт</h1>
+        <p class="auth-session-error__kicker">{{ t('Сессия не проверена') }}</p>
+        <h1 class="auth-session-error__title">{{ t('Не удалось проверить аккаунт') }}</h1>
         <p class="auth-session-error__text">
-          Проверьте подключение к серверу и повторите попытку. Мы не будем показывать лобби или сбрасывать сессию, пока
-          проверка не пройдет.
+          {{
+            t(
+              'Проверьте подключение к серверу и повторите попытку. Мы не будем показывать лобби или сбрасывать сессию, пока проверка не пройдет.'
+            )
+          }}
         </p>
-        <button type="button" @click="retrySessionLoad">Повторить</button>
+        <button type="button" @click="retrySessionLoad">{{ t('Повторить') }}</button>
       </div>
     </main>
   </div>
@@ -228,16 +232,16 @@ function switchAuthMode(mode: AuthMode): void {
   />
   <div v-else class="app-shell">
     <div class="landing__container">
-      <Topbar label="Новая голосовая комната">
-        <nav class="landing__auth" aria-label="Аккаунт">
+      <Topbar :label="t('Новая голосовая комната')">
+        <nav class="landing__auth" :aria-label="t('Аккаунт')">
           <RouterLink class="landing__login" :to="{ path: APP_HOME, query: { auth: 'login' } }"
-            >Войти <ArrowRight :size="15" aria-hidden="true"
+            >{{ t('Войти') }} <ArrowRight :size="15" aria-hidden="true"
           /></RouterLink>
         </nav>
       </Topbar>
     </div>
 
-    <main id="startScreen" class="landing__layout" aria-label="Стартовый экран">
+    <main id="startScreen" class="landing__layout" :aria-label="t('Стартовый экран')">
       <LandingHero
         v-model:room-code="roomCode"
         :creating-temp="creatingTemp"

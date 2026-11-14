@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '@/shared/i18n';
 import { X } from '@lucide/vue';
 import { computed, onMounted, ref, watch } from 'vue';
 import {
@@ -80,12 +81,12 @@ watch(
 );
 
 async function openLogsFolder(): Promise<void> {
-  if (!(await openDesktopLogsFolder())) emit('toast', 'Не удалось открыть папку логов', { variant: 'error' });
+  if (!(await openDesktopLogsFolder())) emit('toast', t('Не удалось открыть папку логов'), { variant: 'error' });
 }
 
 async function copyDiagnostics(): Promise<void> {
-  if (await copyDesktopDiagnostics()) emit('toast', 'Скопировано');
-  else emit('toast', 'Не удалось скопировать информацию о системе', { variant: 'error' });
+  if (await copyDesktopDiagnostics()) emit('toast', t('Скопировано'));
+  else emit('toast', t('Не удалось скопировать информацию о системе'), { variant: 'error' });
 }
 
 function applyAutostartSettings(settings: DesktopAutostartSettings): void {
@@ -124,7 +125,7 @@ async function changeOverlay(patch: DesktopOverlayPatch): Promise<void> {
       overlayPending = null;
       const settings = await updateDesktopOverlaySettings(next);
       if (!settings) {
-        emit('toast', 'Не удалось сохранить оверлей', { variant: 'error' });
+        emit('toast', t('Не удалось сохранить оверлей'), { variant: 'error' });
         if (!overlayPending) await loadOverlaySettings();
         continue;
       }
@@ -142,13 +143,13 @@ function executableName(exe: string): string {
 async function addOverlayGame(): Promise<void> {
   const settings = await addDesktopOverlayGame(overlayForeground.value?.exe);
   if (settings) applyOverlaySettings(settings);
-  else emit('toast', 'Не удалось добавить игру', { variant: 'error' });
+  else emit('toast', t('Не удалось добавить игру'), { variant: 'error' });
 }
 
 async function removeOverlayGame(exe: string): Promise<void> {
   const settings = await removeDesktopOverlayGame(exe);
   if (settings) applyOverlaySettings(settings);
-  else emit('toast', 'Не удалось убрать игру', { variant: 'error' });
+  else emit('toast', t('Не удалось убрать игру'), { variant: 'error' });
 }
 
 async function changeAutostart(patch: DesktopAutostartPatch): Promise<void> {
@@ -157,7 +158,7 @@ async function changeAutostart(patch: DesktopAutostartPatch): Promise<void> {
   try {
     const settings = await updateDesktopAutostartSettings(patch);
     if (settings) applyAutostartSettings(settings);
-    if (!settings || settings.reason) emit('toast', 'Не удалось изменить автозапуск', { variant: 'error' });
+    if (!settings || settings.reason) emit('toast', t('Не удалось изменить автозапуск'), { variant: 'error' });
   } finally {
     autostartSaving.value = false;
   }
@@ -171,7 +172,7 @@ async function toggleSystemNotifications(): Promise<void> {
     return;
   }
   const permission = await preferences.requestNotificationsFromUiAction();
-  if (permission !== 'granted') emit('toast', 'Системные уведомления недоступны', { variant: 'error' });
+  if (permission !== 'granted') emit('toast', t('Системные уведомления недоступны'), { variant: 'error' });
 }
 </script>
 
@@ -180,13 +181,13 @@ async function toggleSystemNotifications(): Promise<void> {
     <template v-if="support.overlay">
       <div>
         <div class="settings__gate-head">
-          <span class="settings__field-label">Оверлей в игре</span>
+          <span class="settings__field-label">{{ t('Оверлей в игре') }}</span>
           <button
             class="settings__switch"
             type="button"
             role="switch"
             :aria-checked="overlayEnabled"
-            aria-label="Оверлей в игре"
+            :aria-label="t('Оверлей в игре')"
             :disabled="overlaySaving"
             @click="void changeOverlay({ enabled: !overlayEnabled })"
           >
@@ -194,9 +195,12 @@ async function toggleSystemNotifications(): Promise<void> {
           </button>
         </div>
         <div class="settings__gate-hint">
-          Панель только поверх <strong>игры</strong> в оконном или borderless режиме: Steam, Epic, Riot, Xbox и то, что
-          вы добавите ниже. Браузер, проводник и лаунчеры не считаются игрой. В exclusive fullscreen Windows отдаёт
-          монитор игре — оверлея там не будет.
+          {{ t('Панель только поверх') }} <strong>{{ t('игры') }}</strong>
+          {{
+            t(
+              'в оконном или borderless режиме: Steam, Epic, Riot, Xbox и то, что вы добавите ниже. Браузер, проводник и лаунчеры не считаются игрой. В exclusive fullscreen Windows отдаёт монитор игре — оверлея там не будет.'
+            )
+          }}
         </div>
       </div>
 
@@ -204,16 +208,16 @@ async function toggleSystemNotifications(): Promise<void> {
         class="settings__notification-dependent"
         :class="{ 'settings__notification-dependent--disabled': !overlayEnabled }"
       >
-        <span class="settings__field-label">Положение</span>
+        <span class="settings__field-label">{{ t('Положение') }}</span>
         <Select
           v-model="overlayAnchor"
           :options="[
-            { value: 'top-left', label: 'Слева сверху' },
-            { value: 'top-right', label: 'Справа сверху' },
-            { value: 'bottom-left', label: 'Слева снизу' },
-            { value: 'bottom-right', label: 'Справа снизу' }
+            { value: 'top-left', label: t('Слева сверху') },
+            { value: 'top-right', label: t('Справа сверху') },
+            { value: 'bottom-left', label: t('Слева снизу') },
+            { value: 'bottom-right', label: t('Справа снизу') }
           ]"
-          label="Положение оверлея"
+          :label="t('Положение оверлея')"
           variant="field"
           :disabled="overlaySaving || !overlayEnabled"
           @value-change="
@@ -228,15 +232,15 @@ async function toggleSystemNotifications(): Promise<void> {
         class="settings__notification-dependent"
         :class="{ 'settings__notification-dependent--disabled': !overlayEnabled }"
       >
-        <span class="settings__field-label">Размер аватаров</span>
+        <span class="settings__field-label">{{ t('Размер аватаров') }}</span>
         <Select
           v-model="overlayAvatarSize"
           :options="[
-            { value: 'small', label: 'Маленькие' },
-            { value: 'medium', label: 'Средние' },
-            { value: 'large', label: 'Большие' }
+            { value: 'small', label: t('Маленькие') },
+            { value: 'medium', label: t('Средние') },
+            { value: 'large', label: t('Большие') }
           ]"
-          label="Размер аватаров в оверлее"
+          :label="t('Размер аватаров в оверлее')"
           variant="field"
           :disabled="overlaySaving || !overlayEnabled"
           @value-change="
@@ -252,20 +256,20 @@ async function toggleSystemNotifications(): Promise<void> {
         :class="{ 'settings__notification-dependent--disabled': !overlayEnabled }"
       >
         <div class="settings__gate-head">
-          <span class="settings__field-label">Имена участников</span>
+          <span class="settings__field-label">{{ t('Имена участников') }}</span>
           <button
             class="settings__switch"
             type="button"
             role="switch"
             :aria-checked="overlayShowNames"
-            aria-label="Имена участников"
+            :aria-label="t('Имена участников')"
             :disabled="overlaySaving || !overlayEnabled"
             @click="void changeOverlay({ showNames: !overlayShowNames })"
           >
             <span class="settings__switch-knob" aria-hidden="true"></span>
           </button>
         </div>
-        <div class="settings__gate-hint">Если выключить, в игре останутся только аватары.</div>
+        <div class="settings__gate-hint">{{ t('Если выключить, в игре останутся только аватары.') }}</div>
       </div>
 
       <section
@@ -273,7 +277,7 @@ async function toggleSystemNotifications(): Promise<void> {
         :class="{ 'settings__overlay-games--disabled': !overlayEnabled }"
         aria-labelledby="overlayGamesTitle"
       >
-        <span id="overlayGamesTitle" class="settings__field-label">Последнее окно</span>
+        <span id="overlayGamesTitle" class="settings__field-label">{{ t('Последнее окно') }}</span>
         <div class="settings__overlay-window">
           <template v-if="overlayForeground?.exe">
             <div class="settings__overlay-window-text">
@@ -282,7 +286,7 @@ async function toggleSystemNotifications(): Promise<void> {
               }}</span>
               <span class="settings__overlay-window-exe">{{ overlayForeground.label }}</span>
             </div>
-            <span v-if="overlayForeground.game" class="settings__overlay-window-status">Игра</span>
+            <span v-if="overlayForeground.game" class="settings__overlay-window-status">{{ t('Игра') }}</span>
             <button
               v-else
               class="settings__overlay-add"
@@ -290,20 +294,20 @@ async function toggleSystemNotifications(): Promise<void> {
               :disabled="overlaySaving || !overlayEnabled"
               @click="void addOverlayGame()"
             >
-              Добавить как игру
+              {{ t('Добавить как игру') }}
             </button>
           </template>
-          <span v-else class="settings__overlay-window-empty"
-            >Переключитесь в игру и вернитесь сюда — здесь появится её окно.</span
-          >
+          <span v-else class="settings__overlay-window-empty">{{
+            t('Переключитесь в игру и вернитесь сюда — здесь появится её окно.')
+          }}</span>
         </div>
-        <ul v-if="overlayAllowed.length" class="settings__overlay-allowed" aria-label="Игры, добавленные вручную">
+        <ul v-if="overlayAllowed.length" class="settings__overlay-allowed" :aria-label="t('Игры, добавленные вручную')">
           <li v-for="exe in overlayAllowed" :key="exe" class="settings__overlay-allowed-item" :title="exe">
             <span>{{ executableName(exe) }}</span>
             <button
               class="settings__overlay-remove"
               type="button"
-              :aria-label="`Убрать ${executableName(exe)}`"
+              :aria-label="t('Убрать {p0}', { p0: executableName(exe) })"
               :disabled="overlaySaving || !overlayEnabled"
               @click="void removeOverlayGame(exe)"
             >
@@ -317,13 +321,13 @@ async function toggleSystemNotifications(): Promise<void> {
     <template v-if="support.autostart">
       <div>
         <div class="settings__gate-head">
-          <span class="settings__field-label">Автозапуск</span>
+          <span class="settings__field-label">{{ t('Автозапуск') }}</span>
           <button
             class="settings__switch"
             type="button"
             role="switch"
             :aria-checked="openAtLogin"
-            aria-label="Автозапуск"
+            :aria-label="t('Автозапуск')"
             :disabled="autostartSaving || !autostartSupported"
             @click="void changeAutostart({ openAtLogin: !openAtLogin })"
           >
@@ -331,8 +335,8 @@ async function toggleSystemNotifications(): Promise<void> {
           </button>
         </div>
         <div class="settings__gate-hint">
-          <template v-if="autostartSupported">VoiceRoom откроется при входе в систему.</template>
-          <template v-else>Автозапуск недоступен в этой сборке приложения.</template>
+          <template v-if="autostartSupported">{{ t('VoiceRoom откроется при входе в систему.') }}</template>
+          <template v-else>{{ t('Автозапуск недоступен в этой сборке приложения.') }}</template>
         </div>
       </div>
 
@@ -341,13 +345,13 @@ async function toggleSystemNotifications(): Promise<void> {
         :class="{ 'settings__notification-dependent--disabled': !openAtLogin }"
       >
         <div class="settings__gate-head">
-          <span class="settings__field-label">Автозапуск свёрнутым</span>
+          <span class="settings__field-label">{{ t('Автозапуск свёрнутым') }}</span>
           <button
             class="settings__switch"
             type="button"
             role="switch"
             :aria-checked="startMinimized"
-            aria-label="Автозапуск свёрнутым"
+            :aria-label="t('Автозапуск свёрнутым')"
             :disabled="autostartSaving || !autostartSupported || !openAtLogin"
             @click="void changeAutostart({ startMinimized: !startMinimized })"
           >
@@ -355,41 +359,48 @@ async function toggleSystemNotifications(): Promise<void> {
           </button>
         </div>
         <div class="settings__gate-hint">
-          <template v-if="support.mac">При автозапуске окно не откроется — VoiceRoom будет ждать в Dock.</template>
-          <template v-else>При автозапуске окно не откроется — VoiceRoom будет ждать в трее.</template>
+          <template v-if="support.mac">{{
+            t('При автозапуске окно не откроется — VoiceRoom будет ждать в Dock.')
+          }}</template>
+          <template v-else>{{ t('При автозапуске окно не откроется — VoiceRoom будет ждать в трее.') }}</template>
         </div>
       </div>
 
       <div v-if="!support.mac">
         <div class="settings__gate-head">
-          <span class="settings__field-label">Системные уведомления</span>
+          <span class="settings__field-label">{{ t('Системные уведомления') }}</span>
           <button
             class="settings__switch"
             type="button"
             role="switch"
             :aria-checked="systemNotificationsEnabled"
-            aria-label="Системные уведомления"
+            :aria-label="t('Системные уведомления')"
             @click="void toggleSystemNotifications()"
           >
             <span class="settings__switch-knob" aria-hidden="true"></span>
           </button>
         </div>
         <div class="settings__gate-hint">
-          Уведомления Windows о сообщениях и заявках в друзья, без системного звука. Звуки VoiceRoom и счётчик на панели
-          задач от этого не зависят.
+          {{
+            t(
+              'Уведомления Windows о сообщениях и заявках в друзья, без системного звука. Звуки VoiceRoom и счётчик на панели задач от этого не зависят.'
+            )
+          }}
         </div>
       </div>
     </template>
 
     <div v-if="support.diagnostics">
-      <span class="settings__field-label">Диагностика</span>
-      <div class="settings__gate-hint">Логи и сведения о системе помогут поддержке разобраться с проблемой.</div>
+      <span class="settings__field-label">{{ t('Диагностика') }}</span>
+      <div class="settings__gate-hint">
+        {{ t('Логи и сведения о системе помогут поддержке разобраться с проблемой.') }}
+      </div>
       <div class="settings__diagnostics-actions">
         <button class="settings__unblock-button" type="button" @click="void openLogsFolder()">
-          Открыть папку логов
+          {{ t('Открыть папку логов') }}
         </button>
         <button class="settings__unblock-button" type="button" @click="void copyDiagnostics()">
-          Скопировать информацию о системе
+          {{ t('Скопировать информацию о системе') }}
         </button>
       </div>
     </div>

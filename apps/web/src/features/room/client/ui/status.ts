@@ -1,3 +1,4 @@
+import { t } from '@/shared/i18n';
 import { NETWORK_THRESHOLDS } from '@voice-room/shared/network-quality';
 import type { VoiceCause } from '@voice-room/shared/contracts/rooms';
 import { PEER_LATENCY_GOOD_MS } from '../core/config';
@@ -29,25 +30,25 @@ export function setVoiceConnectionStatus(connection: VoiceConnection): void {
 export function getConnectionStatusView(): ConnectionStatusView {
   if (state.voiceConnection === 'playback-blocked') {
     return {
-      label: 'Звук заблокирован',
+      label: t('Звук заблокирован'),
       stateName: 'warning',
-      title: 'Браузер заблокировал воспроизведение звука'
+      title: t('Браузер заблокировал воспроизведение звука')
     };
   }
 
   if (state.voiceConnection === 'no-route') {
     return {
-      label: 'Нет маршрута к голосу',
+      label: t('Нет маршрута к голосу'),
       stateName: 'error',
-      title: 'LiveKit не смог установить медиасоединение'
+      title: t('LiveKit не смог установить медиасоединение')
     };
   }
 
   if (state.voiceConnection === 'error') {
     return {
-      label: 'Ошибка подключения',
+      label: t('Ошибка подключения'),
       stateName: 'error',
-      title: 'Не удалось подключить голосовой канал'
+      title: t('Не удалось подключить голосовой канал')
     };
   }
 
@@ -56,33 +57,33 @@ export function getConnectionStatusView(): ConnectionStatusView {
     (state.voiceConnection === 'connected' && state.localConnectionQuality === 'lost')
   ) {
     return {
-      label: 'Голос потерян',
+      label: t('Голос потерян'),
       stateName: 'error',
-      title: 'Медиасоединение до LiveKit потеряно'
+      title: t('Медиасоединение до LiveKit потеряно')
     };
   }
 
   if (state.voiceConnection === 'reconnecting') {
     return {
-      label: 'Переподключение голоса',
+      label: t('Переподключение голоса'),
       stateName: 'connecting',
-      title: 'LiveKit восстанавливает голосовой канал'
+      title: t('LiveKit восстанавливает голосовой канал')
     };
   }
 
   if (state.voiceConnection === 'signal-reconnecting') {
     return {
-      label: 'Сигнал переподключается',
+      label: t('Сигнал переподключается'),
       stateName: 'connecting',
-      title: 'Служебное соединение LiveKit восстанавливается'
+      title: t('Служебное соединение LiveKit восстанавливается')
     };
   }
 
   if (state.serverConnection === 'reconnecting') {
     return {
-      label: 'Сервер переподключается',
+      label: t('Сервер переподключается'),
       stateName: 'connecting',
-      title: 'Канал событий комнаты восстанавливается'
+      title: t('Канал событий комнаты восстанавливается')
     };
   }
 
@@ -91,7 +92,8 @@ export function getConnectionStatusView(): ConnectionStatusView {
     // The server's verdict from what everyone in the room heard, the one the admin panel shows.
     const level = state.voiceQuality?.level ?? 'good';
     const cause = level === 'good' ? null : state.voiceQuality?.cause;
-    const head = level === 'bad' ? 'Плохая связь' : level === 'unstable' ? 'Голос нестабилен' : 'Голос подключен';
+    const head =
+      level === 'bad' ? t('Плохая связь') : level === 'unstable' ? t('Голос нестабилен') : t('Голос подключен');
     const label = [head, ...(cause ? [CAUSE_LABELS[cause]] : []), ...(ping ? [ping] : [])].join(' · ');
     return {
       label,
@@ -102,30 +104,30 @@ export function getConnectionStatusView(): ConnectionStatusView {
 
   if (state.voiceConnection === 'connecting') {
     return {
-      label: state.serverConnection === 'connected' ? 'Подключение голоса' : 'Подключение',
+      label: state.serverConnection === 'connected' ? t('Подключение голоса') : t('Подключение'),
       stateName: 'connecting',
-      title: 'Подключаем голосовой канал'
+      title: t('Подключаем голосовой канал')
     };
   }
 
   if (state.serverConnection === 'connected') {
     return {
-      label: 'Сервер на связи',
+      label: t('Сервер на связи'),
       stateName: 'connecting',
-      title: 'Канал событий комнаты подключен'
+      title: t('Канал событий комнаты подключен')
     };
   }
 
   if (state.serverConnection === 'connecting') {
     return {
-      label: 'Подключение к серверу',
+      label: t('Подключение к серверу'),
       stateName: 'connecting',
-      title: 'Подключаем канал событий комнаты'
+      title: t('Подключаем канал событий комнаты')
     };
   }
 
   return {
-    label: 'готово',
+    label: t('готово'),
     stateName: 'idle',
     title: ''
   };
@@ -134,31 +136,43 @@ export function getConnectionStatusView(): ConnectionStatusView {
 // Whose side the trouble is on, in the words the warning shows. A warning
 // that only says "unstable" next to a 2 ms ping leaves the user guessing.
 const CAUSE_LABELS: Record<VoiceCause, string> = {
-  heard_badly: 'вас плохо слышно',
-  hears_badly: 'собеседников плохо слышно',
-  delay: 'большая задержка'
+  get heard_badly() {
+    return t('вас плохо слышно');
+  },
+  get hears_badly() {
+    return t('собеседников плохо слышно');
+  },
+  get delay() {
+    return t('большая задержка');
+  }
 };
 
 // The numbers after it are the line's, and they can all be fine: the warning is about the sound.
 const CAUSE_DETAILS: Record<VoiceCause, string> = {
-  heard_badly: 'Собеседники слышат разрывы в вашем голосе, оценка по самому звуку, а не по пингу',
-  hears_badly: 'В голосах собеседников слышны разрывы, оценка по самому звуку, а не по пингу',
-  delay: 'Голос доходит с заметной задержкой: пинг, буфер воспроизведения и кодек вместе дают больше 400 мс'
+  get heard_badly() {
+    return t('Собеседники слышат разрывы в вашем голосе, оценка по самому звуку, а не по пингу');
+  },
+  get hears_badly() {
+    return t('В голосах собеседников слышны разрывы, оценка по самому звуку, а не по пингу');
+  },
+  get delay() {
+    return t('Голос доходит с заметной задержкой: пинг, буфер воспроизведения и кодек вместе дают больше 400 мс');
+  }
 };
 
 export function formatNetworkDetails(ping: string): string {
   const { inboundLossPct, jitterMs, outboundLossPct, transport } = state.localNetwork;
-  const parts = [ping ? `Пинг до LiveKit ${ping}` : 'Голосовой канал LiveKit подключен'];
-  if (outboundLossPct !== null) parts.push(`потери от вас ${outboundLossPct}%`);
-  if (inboundLossPct !== null) parts.push(`потери к вам ${inboundLossPct}%`);
-  if (jitterMs !== null) parts.push(`джиттер ${jitterMs} мс`);
-  if (transport === 'relay') parts.push('через ретранслятор');
-  else if (transport === 'tcp') parts.push('через TCP (UDP недоступен)');
+  const parts = [ping ? t('Пинг до LiveKit {p0}', { p0: ping }) : t('Голосовой канал LiveKit подключен')];
+  if (outboundLossPct !== null) parts.push(t('потери от вас {p0}%', { p0: outboundLossPct }));
+  if (inboundLossPct !== null) parts.push(t('потери к вам {p0}%', { p0: inboundLossPct }));
+  if (jitterMs !== null) parts.push(t('джиттер {p0} мс', { p0: jitterMs }));
+  if (transport === 'relay') parts.push(t('через ретранслятор'));
+  else if (transport === 'tcp') parts.push(t('через TCP (UDP недоступен)'));
   return parts.join(' · ');
 }
 
 function formatLocalPing(): string {
-  return Number.isFinite(state.localPingMs) ? `${state.localPingMs} мс` : '';
+  return Number.isFinite(state.localPingMs) ? t('{p0} мс', { p0: state.localPingMs }) : '';
 }
 
 export function getPeerLatencyQuality(

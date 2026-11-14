@@ -1,3 +1,4 @@
+import { t } from '../shared/i18n/runtime.ts';
 // What the user reads for each failure code the API sends. The API's own
 // `error` text is only a fallback for a code this build does not know yet (a
 // newer server), so every refusal reads the same wherever the web shows it.
@@ -11,207 +12,590 @@ const IMAGE_FAILED = 'Не удалось загрузить изображен�
 const REALTIME_REJECTED = 'Сервер не понял запрос, обновите страницу';
 
 export const ERROR_TEXTS: Record<ErrorCode, string> = {
-  invalid_request: 'Некорректный запрос',
-  authentication_required: 'Требуется вход',
-  forbidden: 'Недостаточно прав',
-  not_found: 'Не найдено',
-  rate_limited: TRY_LATER,
-  internal_error: 'Ошибка сервера, попробуйте позже',
-  cross_origin_rejected: 'Запрос отклонён: откройте сайт заново',
-  not_supported: 'Не поддерживается',
-  client_outdated: 'Версия приложения устарела, обновите его',
+  get push_registration_conflict() {
+    return t('Язык уведомлений обновлён в другом окне. Повторяем сохранение.');
+  },
+  get invalid_request() {
+    return t('Некорректный запрос');
+  },
+  get authentication_required() {
+    return t('Требуется вход');
+  },
+  get forbidden() {
+    return t('Недостаточно прав');
+  },
+  get not_found() {
+    return t('Не найдено');
+  },
+  get rate_limited() {
+    return t(TRY_LATER);
+  },
+  get internal_error() {
+    return t('Ошибка сервера, попробуйте позже');
+  },
+  get cross_origin_rejected() {
+    return t('Запрос отклонён: откройте сайт заново');
+  },
+  get not_supported() {
+    return t('Не поддерживается');
+  },
+  get client_outdated() {
+    return t('Версия приложения устарела, обновите его');
+  },
 
-  call_not_found: 'Звонок не найден',
-  account_not_found: 'Аккаунт не найден',
-  account_deleted: 'Аккаунт удалён',
-  account_already_deleted: 'Аккаунт уже удалён',
-  account_deletion_pending: 'Аккаунт ожидает удаления',
-  account_deletion_unavailable: 'Удаление аккаунта сейчас недоступно',
-  invalid_login: 'Логин: 3–32 символа, латиница, цифры, . _ -',
-  login_taken: 'Этот логин уже занят',
-  password_too_short: 'Пароль должен быть не короче 8 символов',
-  passwords_mismatch: 'Пароли не совпадают',
-  wrong_password: 'Неверный пароль',
-  wrong_current_password: 'Неверный текущий пароль',
-  invalid_credentials: 'Неверный логин или пароль',
-  invalid_recovery: 'Неверный логин или код восстановления',
-  session_not_found: 'Сеанс не найден',
-  current_session: 'Чтобы завершить этот сеанс, выйдите из аккаунта',
-  login_alert_not_found: 'Вход не найден или на него уже ответили',
+  get call_not_found() {
+    return t('Звонок не найден');
+  },
+  get account_not_found() {
+    return t('Аккаунт не найден');
+  },
+  get account_deleted() {
+    return t('Аккаунт удалён');
+  },
+  get account_already_deleted() {
+    return t('Аккаунт уже удалён');
+  },
+  get account_deletion_pending() {
+    return t('Аккаунт ожидает удаления');
+  },
+  get account_deletion_unavailable() {
+    return t('Удаление аккаунта сейчас недоступно');
+  },
+  get invalid_login() {
+    return t('Логин: 3–32 символа, латиница, цифры, . _ -');
+  },
+  get login_taken() {
+    return t('Этот логин уже занят');
+  },
+  get password_too_short() {
+    return t('Пароль должен быть не короче 8 символов');
+  },
+  get passwords_mismatch() {
+    return t('Пароли не совпадают');
+  },
+  get wrong_password() {
+    return t('Неверный пароль');
+  },
+  get wrong_current_password() {
+    return t('Неверный текущий пароль');
+  },
+  get invalid_credentials() {
+    return t('Неверный логин или пароль');
+  },
+  get invalid_recovery() {
+    return t('Неверный логин или код восстановления');
+  },
+  get session_not_found() {
+    return t('Сеанс не найден');
+  },
+  get current_session() {
+    return t('Чтобы завершить этот сеанс, выйдите из аккаунта');
+  },
+  get login_alert_not_found() {
+    return t('Вход не найден или на него уже ответили');
+  },
 
-  user_not_found: 'Пользователь не найден',
-  invalid_user: 'Неверный пользователь',
-  cannot_befriend_self: 'Нельзя добавить себя',
-  friend_request_refused: 'Заявку отправить нельзя',
-  friend_request_not_found: 'Заявка не найдена',
-  friend_request_rate_limited: 'Слишком много заявок, попробуйте позже',
-  friend_not_found: 'Друг не найден',
-  not_friends: 'Вы не друзья',
-  relationship_blocked: 'Сообщение недоступно',
-  cannot_block_user: 'Нельзя заблокировать этого пользователя',
-  block_failed: 'Не удалось сохранить блокировку',
-  user_not_blocked: 'Пользователь не заблокирован',
+  get user_not_found() {
+    return t('Пользователь не найден');
+  },
+  get invalid_user() {
+    return t('Неверный пользователь');
+  },
+  get cannot_befriend_self() {
+    return t('Нельзя добавить себя');
+  },
+  get friend_request_refused() {
+    return t('Заявку отправить нельзя');
+  },
+  get friend_request_not_found() {
+    return t('Заявка не найдена');
+  },
+  get friend_request_rate_limited() {
+    return t('Слишком много заявок, попробуйте позже');
+  },
+  get friend_not_found() {
+    return t('Друг не найден');
+  },
+  get not_friends() {
+    return t('Вы не друзья');
+  },
+  get relationship_blocked() {
+    return t('Сообщение недоступно');
+  },
+  get cannot_block_user() {
+    return t('Нельзя заблокировать этого пользователя');
+  },
+  get block_failed() {
+    return t('Не удалось сохранить блокировку');
+  },
+  get user_not_blocked() {
+    return t('Пользователь не заблокирован');
+  },
 
-  room_not_found: 'Комната не найдена',
-  room_gone: 'Комната больше не существует',
-  invalid_room: 'Неверный код комнаты',
-  room_name_required: 'Дайте комнате название',
-  static_room_requires_login: 'Требуется вход для создания постоянной комнаты',
-  room_create_rate_limited: 'Слишком много новых комнат, попробуйте позже',
-  room_not_static: 'В список можно добавить только постоянную комнату',
-  room_forbidden: 'Комната недоступна',
-  room_full: 'Комната заполнена',
-  room_banned: 'Вы заблокированы в этой комнате',
-  room_owner: 'Владелец не может покинуть свою комнату',
-  room_owner_cannot_leave: 'Владелец не может покинуть свою комнату',
-  room_leave_failed: 'Не удалось покинуть комнату',
-  room_leave_unavailable: 'Не удалось покинуть комнату, попробуйте позже',
-  static_room_quota: 'Можно владеть максимум 3 постоянными комнатами',
-  temporary_room_quota: 'Слишком много временных комнат, используйте одну из них',
-  room_delete_peer_cleanup_failed: 'Не удалось удалить комнату, попробуйте позже',
-  room_ban_peer_cleanup_failed: 'Не удалось заблокировать участника, попробуйте позже',
-  room_ban_limit: 'Достигнут предел блокировок в комнате',
-  owner_required: 'Это может только владелец комнаты',
-  peer_not_found: 'Участник не найден',
-  cannot_kick_owner: 'Нельзя исключить владельца комнаты',
-  cannot_ban_owner: 'Нельзя заблокировать владельца комнаты',
-  cannot_mute_owner: 'Нельзя выключить микрофон владельцу комнаты',
-  server_mute_unsupported: 'Участник не поддерживает модерацию микрофона',
-  server_mute_unavailable: VOICE_UNAVAILABLE,
-  ban_not_found: 'Блокировка не найдена',
-  invalid_ring_target: 'Этому пользователю нельзя позвонить',
-  invite_cooldown: 'Приглашение уже отправлено, подождите немного',
-  state_updates_require_websocket: 'Соединение с комнатой потеряно, обновите страницу',
-  presence_or_login_required: 'Войдите в комнату или в аккаунт',
-  membership_required: 'Сначала вступите в комнату',
-  membership_unavailable: UNAVAILABLE,
-  membership_persist_failed: UNAVAILABLE,
-  credential_revoke_unavailable: UNAVAILABLE,
-  pow_required: 'Не удалось создать комнату',
-  pow_invalid: 'Не удалось создать комнату',
-  pow_expired: 'Проверка создания комнаты истекла',
-  pow_reused: 'Не удалось создать комнату',
+  get room_not_found() {
+    return t('Комната не найдена');
+  },
+  get room_gone() {
+    return t('Комната больше не существует');
+  },
+  get invalid_room() {
+    return t('Неверный код комнаты');
+  },
+  get room_name_required() {
+    return t('Дайте комнате название');
+  },
+  get static_room_requires_login() {
+    return t('Требуется вход для создания постоянной комнаты');
+  },
+  get room_create_rate_limited() {
+    return t('Слишком много новых комнат, попробуйте позже');
+  },
+  get room_not_static() {
+    return t('В список можно добавить только постоянную комнату');
+  },
+  get room_forbidden() {
+    return t('Комната недоступна');
+  },
+  get room_full() {
+    return t('Комната заполнена');
+  },
+  get room_banned() {
+    return t('Вы заблокированы в этой комнате');
+  },
+  get room_owner() {
+    return t('Владелец не может покинуть свою комнату');
+  },
+  get room_owner_cannot_leave() {
+    return t('Владелец не может покинуть свою комнату');
+  },
+  get room_leave_failed() {
+    return t('Не удалось покинуть комнату');
+  },
+  get room_leave_unavailable() {
+    return t('Не удалось покинуть комнату, попробуйте позже');
+  },
+  get static_room_quota() {
+    return t('Можно владеть максимум 3 постоянными комнатами');
+  },
+  get temporary_room_quota() {
+    return t('Слишком много временных комнат, используйте одну из них');
+  },
+  get room_delete_peer_cleanup_failed() {
+    return t('Не удалось удалить комнату, попробуйте позже');
+  },
+  get room_ban_peer_cleanup_failed() {
+    return t('Не удалось заблокировать участника, попробуйте позже');
+  },
+  get room_ban_limit() {
+    return t('Достигнут предел блокировок в комнате');
+  },
+  get owner_required() {
+    return t('Это может только владелец комнаты');
+  },
+  get peer_not_found() {
+    return t('Участник не найден');
+  },
+  get cannot_kick_owner() {
+    return t('Нельзя исключить владельца комнаты');
+  },
+  get cannot_ban_owner() {
+    return t('Нельзя заблокировать владельца комнаты');
+  },
+  get cannot_mute_owner() {
+    return t('Нельзя выключить микрофон владельцу комнаты');
+  },
+  get server_mute_unsupported() {
+    return t('Участник не поддерживает модерацию микрофона');
+  },
+  get server_mute_unavailable() {
+    return t(VOICE_UNAVAILABLE);
+  },
+  get ban_not_found() {
+    return t('Блокировка не найдена');
+  },
+  get invalid_ring_target() {
+    return t('Этому пользователю нельзя позвонить');
+  },
+  get invite_cooldown() {
+    return t('Приглашение уже отправлено, подождите немного');
+  },
+  get state_updates_require_websocket() {
+    return t('Соединение с комнатой потеряно, обновите страницу');
+  },
+  get presence_or_login_required() {
+    return t('Войдите в комнату или в аккаунт');
+  },
+  get membership_required() {
+    return t('Сначала вступите в комнату');
+  },
+  get membership_unavailable() {
+    return t(UNAVAILABLE);
+  },
+  get membership_persist_failed() {
+    return t(UNAVAILABLE);
+  },
+  get credential_revoke_unavailable() {
+    return t(UNAVAILABLE);
+  },
+  get pow_required() {
+    return t('Не удалось создать комнату');
+  },
+  get pow_invalid() {
+    return t('Не удалось создать комнату');
+  },
+  get pow_expired() {
+    return t('Проверка создания комнаты истекла');
+  },
+  get pow_reused() {
+    return t('Не удалось создать комнату');
+  },
 
-  invalid_session: 'Сессия участника недействительна',
-  not_in_room: 'Сначала нужно войти в комнату',
-  livekit_unconfigured: VOICE_UNAVAILABLE,
-  livekit_gate_unavailable: VOICE_UNAVAILABLE,
-  livekit_gate_principal_unavailable: VOICE_UNAVAILABLE,
-  livekit_gate_credential_unavailable: VOICE_UNAVAILABLE,
-  livekit_gate_revoke_unavailable: VOICE_UNAVAILABLE,
-  livekit_gate_principal_missing: VOICE_UNAVAILABLE,
+  get invalid_session() {
+    return t('Сессия участника недействительна');
+  },
+  get not_in_room() {
+    return t('Сначала нужно войти в комнату');
+  },
+  get livekit_unconfigured() {
+    return t(VOICE_UNAVAILABLE);
+  },
+  get livekit_gate_unavailable() {
+    return t(VOICE_UNAVAILABLE);
+  },
+  get livekit_gate_principal_unavailable() {
+    return t(VOICE_UNAVAILABLE);
+  },
+  get livekit_gate_credential_unavailable() {
+    return t(VOICE_UNAVAILABLE);
+  },
+  get livekit_gate_revoke_unavailable() {
+    return t(VOICE_UNAVAILABLE);
+  },
+  get livekit_gate_principal_missing() {
+    return t(VOICE_UNAVAILABLE);
+  },
 
-  message_not_found: 'Сообщение не найдено',
-  message_not_visible: 'Сообщение недоступно',
-  empty_message: 'Пустое сообщение',
-  invalid_message: 'Сообщение не отправлено: неверный формат',
-  invalid_message_content: 'Сообщение не отправлено: неверный формат',
-  invalid_mentions: 'Не удалось отметить участников',
-  invalid_mention_target: 'Этого участника нельзя отметить',
-  self_mention: 'Нельзя отметить себя',
-  too_many_mentions: 'Слишком много упоминаний в одном сообщении',
-  mention_not_eligible: 'Этого участника нельзя упомянуть',
-  creator_not_eligible: 'Вы не можете упоминать в этой комнате',
-  invalid_attachments: 'Вложения недоступны, прикрепите их заново',
-  reply_unavailable: 'Сообщение, на которое вы отвечаете, недоступно',
-  idempotency_conflict: 'Это сообщение уже отправлялось с другим текстом, попробуйте ещё раз',
-  idempotency_quota_exceeded: 'Слишком много сообщений, попробуйте позже',
-  message_rate_limited: 'Слишком много сообщений, попробуйте позже',
-  message_edit_forbidden: 'Можно редактировать только свои сообщения',
-  message_delete_forbidden: 'Можно удалять только свои сообщения',
-  thread_not_found: 'Диалог не найден',
-  thread_forbidden: 'Диалог недоступен',
-  invite_not_found: 'Приглашение не найдено',
-  invite_not_editable: 'Приглашение нельзя редактировать',
-  invite_already_answered: 'Приглашение уже обработано',
-  not_invited: 'Отвечать может только приглашённый',
-  invalid_action: 'Неверное действие',
-  invalid_cursor: 'Не удалось загрузить историю, обновите страницу',
-  invalid_read_cursor: 'Не удалось отметить прочитанное',
-  history_error: 'Не удалось загрузить историю',
-  invalid_conversation: 'Диалог недоступен',
-  invalid_reaction: 'Эту реакцию поставить нельзя',
-  invalid_reactor_query: 'Некорректный запрос',
-  reaction_error: 'Не удалось поставить реакцию',
-  account_required: 'Нужен аккаунт',
-  pin_limit_reached: 'Достигнут предел закреплённых сообщений',
-  pin_error: 'Не удалось закрепить сообщение',
+  get message_not_found() {
+    return t('Сообщение не найдено');
+  },
+  get message_not_visible() {
+    return t('Сообщение недоступно');
+  },
+  get empty_message() {
+    return t('Пустое сообщение');
+  },
+  get invalid_message() {
+    return t('Сообщение не отправлено: неверный формат');
+  },
+  get invalid_message_content() {
+    return t('Сообщение не отправлено: неверный формат');
+  },
+  get invalid_mentions() {
+    return t('Не удалось отметить участников');
+  },
+  get invalid_mention_target() {
+    return t('Этого участника нельзя отметить');
+  },
+  get self_mention() {
+    return t('Нельзя отметить себя');
+  },
+  get too_many_mentions() {
+    return t('Слишком много упоминаний в одном сообщении');
+  },
+  get mention_not_eligible() {
+    return t('Этого участника нельзя упомянуть');
+  },
+  get creator_not_eligible() {
+    return t('Вы не можете упоминать в этой комнате');
+  },
+  get invalid_attachments() {
+    return t('Вложения недоступны, прикрепите их заново');
+  },
+  get reply_unavailable() {
+    return t('Сообщение, на которое вы отвечаете, недоступно');
+  },
+  get idempotency_conflict() {
+    return t('Это сообщение уже отправлялось с другим текстом, попробуйте ещё раз');
+  },
+  get idempotency_quota_exceeded() {
+    return t('Слишком много сообщений, попробуйте позже');
+  },
+  get message_rate_limited() {
+    return t('Слишком много сообщений, попробуйте позже');
+  },
+  get message_edit_forbidden() {
+    return t('Можно редактировать только свои сообщения');
+  },
+  get message_delete_forbidden() {
+    return t('Можно удалять только свои сообщения');
+  },
+  get thread_not_found() {
+    return t('Диалог не найден');
+  },
+  get thread_forbidden() {
+    return t('Диалог недоступен');
+  },
+  get invite_not_found() {
+    return t('Приглашение не найдено');
+  },
+  get invite_not_editable() {
+    return t('Приглашение нельзя редактировать');
+  },
+  get invite_already_answered() {
+    return t('Приглашение уже обработано');
+  },
+  get not_invited() {
+    return t('Отвечать может только приглашённый');
+  },
+  get invalid_action() {
+    return t('Неверное действие');
+  },
+  get invalid_cursor() {
+    return t('Не удалось загрузить историю, обновите страницу');
+  },
+  get invalid_read_cursor() {
+    return t('Не удалось отметить прочитанное');
+  },
+  get history_error() {
+    return t('Не удалось загрузить историю');
+  },
+  get invalid_conversation() {
+    return t('Диалог недоступен');
+  },
+  get invalid_reaction() {
+    return t('Эту реакцию поставить нельзя');
+  },
+  get invalid_reactor_query() {
+    return t('Некорректный запрос');
+  },
+  get reaction_error() {
+    return t('Не удалось поставить реакцию');
+  },
+  get account_required() {
+    return t('Нужен аккаунт');
+  },
+  get pin_limit_reached() {
+    return t('Достигнут предел закреплённых сообщений');
+  },
+  get pin_error() {
+    return t('Не удалось закрепить сообщение');
+  },
 
-  invalid_notification_target: 'Неверная цель уведомлений',
-  temporary_room: 'Отключить уведомления можно только в постоянной комнате',
-  not_saved_room: 'Комната не добавлена в список',
-  invalid_level: 'Неверный уровень уведомлений',
-  push_disabled: 'Push-уведомления отключены на сервере',
-  invalid_push_subscription: 'Не удалось включить push-уведомления',
-  invalid_push_endpoint: 'Не удалось отключить push-уведомления',
-  push_endpoint_conflict: 'Это устройство уже подписано другим аккаунтом',
-  push_rate_limited: TRY_LATER,
-  invalid_device_token: 'Некорректный токен устройства',
+  get invalid_notification_target() {
+    return t('Неверная цель уведомлений');
+  },
+  get temporary_room() {
+    return t('Отключить уведомления можно только в постоянной комнате');
+  },
+  get not_saved_room() {
+    return t('Комната не добавлена в список');
+  },
+  get invalid_level() {
+    return t('Неверный уровень уведомлений');
+  },
+  get push_disabled() {
+    return t('Push-уведомления отключены на сервере');
+  },
+  get invalid_push_subscription() {
+    return t('Не удалось включить push-уведомления');
+  },
+  get invalid_push_endpoint() {
+    return t('Не удалось отключить push-уведомления');
+  },
+  get push_endpoint_conflict() {
+    return t('Это устройство уже подписано другим аккаунтом');
+  },
+  get push_rate_limited() {
+    return t(TRY_LATER);
+  },
+  get invalid_device_token() {
+    return t('Некорректный токен устройства');
+  },
 
-  media_error: IMAGE_FAILED,
-  media_uploads_disabled: 'Загрузка изображений временно недоступна',
-  media_attachment_id_invalid: IMAGE_FAILED,
-  media_not_found: 'Изображение не найдено',
-  media_body_required: IMAGE_FAILED,
-  media_byte_quota: 'Закончилось место для изображений',
-  media_context_invalid: IMAGE_FAILED,
-  media_invalid_image: 'Файл не похож на изображение',
-  media_pending_limit: 'Дождитесь загрузки предыдущих изображений',
-  media_pixel_limit: 'Изображение слишком большое',
-  media_rate_limit: 'Слишком много загрузок, попробуйте позже',
-  media_request_id_required: IMAGE_FAILED,
-  media_retry_unavailable: 'Повторить загрузку нельзя, прикрепите изображение заново',
-  media_size_invalid: IMAGE_FAILED,
-  media_size_mismatch: IMAGE_FAILED,
-  media_state_conflict: IMAGE_FAILED,
-  media_too_large: 'Изображение больше 10 МБ',
-  media_type_mismatch: 'Поддерживаются JPEG, PNG и WebP',
-  media_type_unsupported: 'Поддерживаются JPEG, PNG и WebP',
-  avatar_field_required: 'Выберите изображение',
-  avatar_too_large: 'Аватар должен быть не больше 5 МБ',
-  upload_rate_limited: 'Слишком много загрузок, попробуйте позже',
-  image_not_found: 'Изображение не найдено',
-  report_target_not_found: 'Сообщение не найдено или уже удалено',
-  report_own_message: 'Нельзя пожаловаться на своё сообщение',
-  report_not_found: 'Жалоба уже рассмотрена',
-  platform_admin_required: 'Раздел доступен только администратору сервиса',
-  account_blocked: 'Аккаунт заблокирован',
-  reserved_name: 'Это имя зарезервировано за VoiceRoom',
-  cannot_moderate_admin: 'Аккаунт администратора нельзя заблокировать или удалить',
-  confirmation_mismatch: 'Логин не совпадает с этим аккаунтом',
-  deletion_not_by_admin: 'Удаление попросил сам пользователь, отменить его может только он',
-  staff_session_required: 'Сеанс админки истёк, обновите страницу',
-  staff_role_fixed: 'Этот суперадминистратор задан в настройках сервера',
-  staff_role_self: 'Свою роль изменить нельзя',
+  get media_error() {
+    return t(IMAGE_FAILED);
+  },
+  get media_uploads_disabled() {
+    return t('Загрузка изображений временно недоступна');
+  },
+  get media_attachment_id_invalid() {
+    return t(IMAGE_FAILED);
+  },
+  get media_not_found() {
+    return t('Изображение не найдено');
+  },
+  get media_body_required() {
+    return t(IMAGE_FAILED);
+  },
+  get media_byte_quota() {
+    return t('Закончилось место для изображений');
+  },
+  get media_context_invalid() {
+    return t(IMAGE_FAILED);
+  },
+  get media_invalid_image() {
+    return t('Файл не похож на изображение');
+  },
+  get media_pending_limit() {
+    return t('Дождитесь загрузки предыдущих изображений');
+  },
+  get media_pixel_limit() {
+    return t('Изображение слишком большое');
+  },
+  get media_rate_limit() {
+    return t('Слишком много загрузок, попробуйте позже');
+  },
+  get media_request_id_required() {
+    return t(IMAGE_FAILED);
+  },
+  get media_retry_unavailable() {
+    return t('Повторить загрузку нельзя, прикрепите изображение заново');
+  },
+  get media_size_invalid() {
+    return t(IMAGE_FAILED);
+  },
+  get media_size_mismatch() {
+    return t(IMAGE_FAILED);
+  },
+  get media_state_conflict() {
+    return t(IMAGE_FAILED);
+  },
+  get media_too_large() {
+    return t('Изображение больше 10 МБ');
+  },
+  get media_type_mismatch() {
+    return t('Поддерживаются JPEG, PNG и WebP');
+  },
+  get media_type_unsupported() {
+    return t('Поддерживаются JPEG, PNG и WebP');
+  },
+  get avatar_field_required() {
+    return t('Выберите изображение');
+  },
+  get avatar_too_large() {
+    return t('Аватар должен быть не больше 5 МБ');
+  },
+  get upload_rate_limited() {
+    return t('Слишком много загрузок, попробуйте позже');
+  },
+  get image_not_found() {
+    return t('Изображение не найдено');
+  },
+  get report_target_not_found() {
+    return t('Сообщение не найдено или уже удалено');
+  },
+  get report_own_message() {
+    return t('Нельзя пожаловаться на своё сообщение');
+  },
+  get report_not_found() {
+    return t('Жалоба уже рассмотрена');
+  },
+  get platform_admin_required() {
+    return t('Раздел доступен только администратору сервиса');
+  },
+  get account_blocked() {
+    return t('Аккаунт заблокирован');
+  },
+  get reserved_name() {
+    return t('Это имя зарезервировано за VoiceRoom');
+  },
+  get cannot_moderate_admin() {
+    return t('Аккаунт администратора нельзя заблокировать или удалить');
+  },
+  get confirmation_mismatch() {
+    return t('Логин не совпадает с этим аккаунтом');
+  },
+  get deletion_not_by_admin() {
+    return t('Удаление попросил сам пользователь, отменить его может только он');
+  },
+  get staff_session_required() {
+    return t('Сеанс админки истёк, обновите страницу');
+  },
+  get staff_role_fixed() {
+    return t('Этот суперадминистратор задан в настройках сервера');
+  },
+  get staff_role_self() {
+    return t('Свою роль изменить нельзя');
+  },
 
-  desktop_release_unavailable: 'Не удалось получить данные о релизе',
+  get desktop_release_unavailable() {
+    return t('Не удалось получить данные о релизе');
+  },
 
-  invalid_response: 'Сервер прислал непонятный ответ, обновите страницу',
-  unavailable: 'Сервер недоступен',
+  get invalid_response() {
+    return t('Сервер прислал непонятный ответ, обновите страницу');
+  },
+  get unavailable() {
+    return t('Сервер недоступен');
+  },
 
-  invalid_json: REALTIME_REJECTED,
-  invalid_envelope: REALTIME_REJECTED,
-  invalid_payload: REALTIME_REJECTED,
-  unknown_type: REALTIME_REJECTED,
-  invalid_ping: REALTIME_REJECTED,
-  invalid_room_id: 'Неверный код комнаты',
-  invalid_peer_id: 'Неверный участник, обновите страницу',
-  invalid_session_token: 'Сессия участника недействительна',
-  invalid_name: 'Неверное имя',
-  invalid_media_kind: 'Неизвестный вид трансляции',
-  invalid_user_id: 'Неверный пользователь',
-  invalid_typing_activity: REALTIME_REJECTED,
+  get invalid_json() {
+    return t(REALTIME_REJECTED);
+  },
+  get invalid_envelope() {
+    return t(REALTIME_REJECTED);
+  },
+  get invalid_payload() {
+    return t(REALTIME_REJECTED);
+  },
+  get unknown_type() {
+    return t(REALTIME_REJECTED);
+  },
+  get invalid_ping() {
+    return t(REALTIME_REJECTED);
+  },
+  get invalid_room_id() {
+    return t('Неверный код комнаты');
+  },
+  get invalid_peer_id() {
+    return t('Неверный участник, обновите страницу');
+  },
+  get invalid_session_token() {
+    return t('Сессия участника недействительна');
+  },
+  get invalid_name() {
+    return t('Неверное имя');
+  },
+  get invalid_media_kind() {
+    return t('Неизвестный вид трансляции');
+  },
+  get invalid_user_id() {
+    return t('Неверный пользователь');
+  },
+  get invalid_typing_activity() {
+    return t(REALTIME_REJECTED);
+  },
 
-  invalid_join: 'Не удалось войти в комнату, обновите страницу',
-  superseded_join: 'Вход в комнату продолжен в другом окне',
-  reconnect_finalize_failed: 'Предыдущее подключение ещё закрывается, попробуйте ещё раз',
-  join_failed: 'Не удалось войти в комнату',
-  not_active_peer: 'Вы уже не в голосовом канале этой комнаты',
-  update_failed: 'Не удалось обновить состояние в комнате',
-  server_full: 'Сервер переполнен, попробуйте позже',
-  credential_boundary_unavailable: VOICE_UNAVAILABLE,
-  principal_unavailable: VOICE_UNAVAILABLE,
-  revoke_failed: 'Не удалось отключить доступ к комнате, попробуйте ещё раз'
+  get invalid_join() {
+    return t('Не удалось войти в комнату, обновите страницу');
+  },
+  get superseded_join() {
+    return t('Вход в комнату продолжен в другом окне');
+  },
+  get reconnect_finalize_failed() {
+    return t('Предыдущее подключение ещё закрывается, попробуйте ещё раз');
+  },
+  get join_failed() {
+    return t('Не удалось войти в комнату');
+  },
+  get not_active_peer() {
+    return t('Вы уже не в голосовом канале этой комнаты');
+  },
+  get update_failed() {
+    return t('Не удалось обновить состояние в комнате');
+  },
+  get server_full() {
+    return t('Сервер переполнен, попробуйте позже');
+  },
+  get credential_boundary_unavailable() {
+    return t(VOICE_UNAVAILABLE);
+  },
+  get principal_unavailable() {
+    return t(VOICE_UNAVAILABLE);
+  },
+  get revoke_failed() {
+    return t('Не удалось отключить доступ к комнате, попробуйте ещё раз');
+  }
 };
 
 /** The text for a failure code, or null when this build does not know the code. */

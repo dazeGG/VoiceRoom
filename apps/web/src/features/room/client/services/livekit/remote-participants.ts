@@ -2,6 +2,7 @@
 // which of their tracks to subscribe to, and what to do as tracks come and go.
 // Screens get a grace period through reconnects before they count as gone.
 
+import { t } from '@/shared/i18n';
 import { markRaw } from 'vue';
 import type { Room, RemoteParticipant, RemoteTrack, RemoteTrackPublication, TrackPublication } from 'livekit-client';
 import { state } from '../../core/room-runtime.store';
@@ -286,7 +287,7 @@ export function handleLiveKitTrackSubscriptionFailed(
   }
   if (!isMicrophonePublication(publication)) return;
 
-  peer.voiceIssue = 'голос не подключен';
+  peer.voiceIssue = t('голос не подключен');
   updatePeerStatus(peer);
 }
 

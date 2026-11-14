@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // One person on the phone layout. The picture is never cropped: it is fitted
 // whole, and a blurred copy of the same frame fills the rest of the tile.
+import { t } from '@/shared/i18n';
 import { HeadphoneOff, MicOff, MonitorPlay } from '@lucide/vue';
 import { computed, ref, type Directive } from 'vue';
 import type { Participant } from '@/features/room/client/core/types';
@@ -88,9 +89,9 @@ const vCamera: Directive<HTMLVideoElement, CameraBinding> = {
 const spokenLabel = computed(() =>
   [
     participant.name,
-    participant.isLocal ? 'вы' : '',
-    participant.muted ? 'микрофон выключен' : '',
-    participant.deafened ? 'звук выключен' : ''
+    participant.isLocal ? t('вы') : '',
+    participant.muted ? t('микрофон выключен') : '',
+    participant.deafened ? t('звук выключен') : ''
   ]
     .filter(Boolean)
     .join(', ')
@@ -144,7 +145,7 @@ function watchScreen(event: MouseEvent): void {
     <button class="mobile-call-tile__hit" type="button" :aria-label="spokenLabel" @click="emit('tap')"></button>
     <div class="mobile-call-tile__name" aria-hidden="true">
       <span class="mobile-call-tile__name-text"><EmojiText :text="participant.name" /></span>
-      <span v-if="participant.isLocal" class="mobile-call-tile__you">вы</span>
+      <span v-if="participant.isLocal" class="mobile-call-tile__you">{{ t('вы') }}</span>
       <span v-if="participant.muted" class="mobile-call-tile__icon"><MicOff /></span>
       <span v-if="participant.deafened" class="mobile-call-tile__icon"><HeadphoneOff /></span>
     </div>
@@ -156,7 +157,7 @@ function watchScreen(event: MouseEvent): void {
       @click="watchScreen"
     >
       <MonitorPlay aria-hidden="true" />
-      <span>Экран</span>
+      <span>{{ t('Экран') }}</span>
     </button>
   </div>
 </template>
