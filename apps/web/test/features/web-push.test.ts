@@ -4,6 +4,7 @@
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { stubFetch } from '../fixtures/fetch.ts';
 import { freshImport, stubWindow } from '../helpers/fresh-module.ts';
+import { useLocaleStore } from '@/shared/i18n';
 
 function fakePushManager(existing: boolean) {
   const subscription = {
@@ -99,4 +100,52 @@ test('the desktop app never uses Web Push', async () => {
   const push = await load();
   await expect(push.setPushNotificationsEnabled(true)).resolves.toBe(false);
   expect(calls).toEqual([]);
+});
+
+test('an offline language change keeps a confirmed subscription and syncs current language on reconnect', async () => {
+  const { subscription } = fakePushManager(true);
+  let offline = false;
+  let serverLocale = 'ru';
+  const { calls } = stubFetch({
+    '/api/push/config': { body: { enabled: true, vapidPublicKey: 'BAAA' } },
+    'POST /api/push/subscriptions': () => {
+      if (offline) throw new TypeError('offline');
+      return {
+        status: 201,
+        body: {
+          ok: true,
+          registration: { protocol: 1, locale: serverLocale, version: '11111111-1111-4111-8111-111111111111' }
+        }
+      };
+    }
+  });
+  const push = await load();
+  await push.syncPushNotificationState('alice');
+  expect(push.active).toBe(true);
+  offline = true;
+  await useLocaleStore().select('fr');
+  await vi.waitFor(() => expect(push.localeSyncPending).toBe(true));
+  expect(push.active).toBe(true);
+  expect(subscription.unsubscribe).not.toHaveBeenCalled();
+  offline = false;
+  serverLocale = 'fr';
+  window.dispatchEvent(new Event('online'));
+  await vi.waitFor(() => expect(push.localeSyncPending).toBe(false));
+  expect(calls.at(-1)?.body).toMatchObject({ localeState: { locale: 'fr' } });
+  push.$dispose();
+});
+
+test('an unconfirmed endpoint is detached if a new account cannot reconcile ownership', async () => {
+  const { subscription } = fakePushManager(true);
+  stubFetch({
+    '/api/push/config': { body: { enabled: true, vapidPublicKey: 'BAAA' } },
+    'POST /api/push/subscriptions': () => {
+      throw new TypeError('offline');
+    }
+  });
+  const push = await load();
+  await push.syncPushNotificationState('new-account');
+  expect(subscription.unsubscribe).toHaveBeenCalled();
+  expect(push.active).toBe(false);
+  push.$dispose();
 });

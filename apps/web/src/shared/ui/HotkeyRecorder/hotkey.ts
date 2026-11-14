@@ -1,3 +1,4 @@
+import { t } from '@/shared/i18n';
 import type { HotkeyBinding } from './types';
 
 const MODIFIER_CODES = new Set([
@@ -34,7 +35,7 @@ export function hotkeyMatchesEvent(binding: HotkeyBinding | null, event: Keyboar
 }
 
 export function formatHotkeyBinding(binding: HotkeyBinding | null): string {
-  if (!binding) return 'Не назначено';
+  if (!binding) return t('Не назначено');
   const parts: string[] = [];
   if (binding.ctrlKey) parts.push('Ctrl');
   if (binding.metaKey) parts.push('⌘');
@@ -76,7 +77,7 @@ function formatHotkeyCode(code: string): string {
     Quote: "'",
     Semicolon: ';',
     Slash: '/',
-    Space: 'Пробел',
+    Space: t('Пробел'),
     Tab: 'Tab'
   };
   return labels[code] || code;

@@ -1,3 +1,4 @@
+import { t } from '@/shared/i18n';
 import { Done } from '@voice-room/shared/contracts/http';
 import type { Static } from 'typebox';
 import {
@@ -54,7 +55,7 @@ async function roomAvatarRequest(roomId: string, method: 'POST' | 'DELETE', file
     body.append('avatar', file, 'avatar.webp');
   }
   const url = `/api/rooms/${encodeURIComponent(roomId)}/avatar`;
-  const fallback = 'Не удалось обновить аватар комнаты';
+  const fallback = t('Не удалось обновить аватар комнаты');
   const answer =
     method === 'POST'
       ? await api.post(url, RoomCard, body, { fallback })
@@ -171,7 +172,9 @@ export async function undoRoomBan(roomId: string, banId: string): Promise<void> 
 
 export async function fetchRoomStatus(roomId: string): Promise<RoomStatus | null> {
   const answer = await orNull(
-    api.get(`/api/rooms/${encodeURIComponent(roomId)}`, RoomStatusAnswer, { fallback: 'Не удалось проверить комнату' })
+    api.get(`/api/rooms/${encodeURIComponent(roomId)}`, RoomStatusAnswer, {
+      fallback: t('Не удалось проверить комнату')
+    })
   );
   if (!answer) return null;
   const { ok: _ok, ...status } = answer;
@@ -196,7 +199,7 @@ export async function fetchRoomChatPage(
   if (request.messageId) params.set('messageId', request.messageId);
   const page = await api.get(`/api/rooms/${encodeURIComponent(roomId)}/chat/history?${params}`, RoomHistoryPage, {
     signal: request.signal,
-    fallback: 'Не удалось загрузить историю комнаты'
+    fallback: t('Не удалось загрузить историю комнаты')
   });
   return { ...page, messages: page.messages.map((message) => roomMessageFromHistory(roomId, message)) };
 }
@@ -209,7 +212,7 @@ function roomMessageFromHistory(roomId: string, message: RoomHistoryMessage): Ch
     roomId,
     authorUserId: author.userId,
     peerId: author.peerId,
-    name: author.name || 'Гость',
+    name: author.name || t('Гость'),
     avatarColorKey: author.avatarColorKey ?? '',
     avatarUrl: author.avatarUrl,
     avatarAccent: author.avatarAccent,

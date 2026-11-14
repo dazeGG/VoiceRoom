@@ -3,6 +3,7 @@
 // the friend actions it offers. The lobby provides it; a guest's standalone
 // room has no social graph, so everything answers "stranger" there.
 
+import { t } from '@/shared/i18n';
 import { inject, provide, type InjectionKey } from 'vue';
 import type { Friend, PublicUser, Relationship, SendRequestStatus } from '@/api/friends';
 
@@ -19,7 +20,7 @@ export interface RoomSocial {
   showFriends(): void;
 }
 
-const unavailable = (): Promise<never> => Promise.reject(new Error('Нужен аккаунт'));
+const unavailable = (): Promise<never> => Promise.reject(new Error(t('Нужен аккаунт')));
 
 const NO_ROOM_SOCIAL: RoomSocial = {
   friends: () => [],

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // The room chat's compose form: text with @mentions, emoji, attachments and a
 // reply target. Sending itself belongs to the panel, which owns the messages.
+import { t } from '@/shared/i18n';
 import { onBeforeUnmount, onMounted, ref, nextTick } from 'vue';
 import { ArrowUp } from '@lucide/vue';
 import type { MembershipMember } from '@voice-room/shared/contracts/membership';
@@ -180,7 +181,7 @@ const onPaste = (event: ClipboardEvent): Promise<void> =>
           v-model="text"
           class="room-chat-composer__input"
           :maxlength="500"
-          placeholder="Написать в комнату…"
+          :placeholder="t('Написать в комнату…')"
           @keydown="onKeydown"
           @input="onInput"
           @compositionstart="mentions.setComposing(true)"
@@ -197,8 +198,8 @@ const onPaste = (event: ClipboardEvent): Promise<void> =>
         <button
           class="room-chat-composer__send"
           type="submit"
-          aria-label="Отправить"
-          title="Отправить"
+          :aria-label="t('Отправить')"
+          :title="t('Отправить')"
           :disabled="!(text.trim() || media?.canSend)"
         >
           <ArrowUp v-bind="iconSm" aria-hidden="true" />

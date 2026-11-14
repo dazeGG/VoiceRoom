@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { useLocalizedText } from '@/shared/i18n/localized-text';
+
+import { t } from '@/shared/i18n';
 import { Check, Clock } from '@lucide/vue';
 import { ref, watch } from 'vue';
 import { Button, Dialog } from '@/shared/ui';
@@ -10,7 +13,7 @@ const emit = defineEmits<{ close: []; create: [payload: { name: string; isStatic
 
 const tab = ref<'permanent' | 'temp'>('permanent');
 const name = ref('');
-const error = ref('');
+const error = useLocalizedText();
 const permanentTab = ref<HTMLButtonElement | null>(null);
 const tempTab = ref<HTMLButtonElement | null>(null);
 
@@ -30,7 +33,7 @@ function submit(): void {
   if (props.creating) return;
   const trimmed = name.value.trim();
   if (tab.value === 'permanent' && !trimmed) {
-    error.value = 'Дайте комнате название';
+    error.value = () => t('Дайте комнате название');
     return;
   }
   emit('create', {
@@ -64,12 +67,12 @@ function onTabsKeydown(event: KeyboardEvent): void {
 <template>
   <Dialog
     :open="open"
-    title="Новая комната"
+    :title="t('Новая комната')"
     :on-close="() => emit('close')"
     :width="430"
     initial-focus="#createRoomPermanentTab"
   >
-    <div class="create-room__tabs" role="tablist" aria-label="Тип комнаты" tabindex="-1" @keydown="onTabsKeydown">
+    <div class="create-room__tabs" role="tablist" :aria-label="t('Тип комнаты')" tabindex="-1" @keydown="onTabsKeydown">
       <button
         id="createRoomPermanentTab"
         ref="permanentTab"
@@ -81,7 +84,7 @@ function onTabsKeydown(event: KeyboardEvent): void {
         :tabindex="tab === 'permanent' ? 0 : -1"
         @click="selectTab('permanent')"
       >
-        Постоянная
+        {{ t('Постоянная') }}
       </button>
       <button
         id="createRoomTempTab"
@@ -94,7 +97,7 @@ function onTabsKeydown(event: KeyboardEvent): void {
         :tabindex="tab === 'temp' ? 0 : -1"
         @click="selectTab('temp')"
       >
-        Временная
+        {{ t('Временная') }}
       </button>
     </div>
 
@@ -103,14 +106,15 @@ function onTabsKeydown(event: KeyboardEvent): void {
 
       <div class="create-room__field">
         <label class="create-room__label" for="createRoomName">
-          Название<span v-if="tab === 'temp'" class="create-room__label-soft"> · необязательно</span>
+          {{ t('Название')
+          }}<span v-if="tab === 'temp'" class="create-room__label-soft"> {{ t('· необязательно') }}</span>
         </label>
         <input
           id="createRoomName"
           v-model="name"
           class="create-room__input"
           maxlength="60"
-          :placeholder="tab === 'permanent' ? 'Название комнаты' : 'Название созвона'"
+          :placeholder="tab === 'permanent' ? t('Название комнаты') : t('Название созвона')"
         />
       </div>
 
@@ -122,7 +126,7 @@ function onTabsKeydown(event: KeyboardEvent): void {
         aria-labelledby="createRoomPermanentTab"
       >
         <Check v-bind="iconSm" aria-hidden="true" />
-        <span>Всегда остаётся в вашем списке — заходите в любой момент.</span>
+        <span>{{ t('Всегда остаётся в вашем списке — заходите в любой момент.') }}</span>
       </div>
       <div
         v-else
@@ -132,14 +136,16 @@ function onTabsKeydown(event: KeyboardEvent): void {
         aria-labelledby="createRoomTempTab"
       >
         <Clock v-bind="iconSm" aria-hidden="true" />
-        <span>Код появится после создания. После выхода всех участников комната исчезнет примерно через 15 минут.</span>
+        <span>{{
+          t('Код появится после создания. После выхода всех участников комната исчезнет примерно через 15 минут.')
+        }}</span>
       </div>
 
       <div class="home-dialog__actions">
-        <Button variant="ghost" type="button" @click="emit('close')">Отмена</Button>
+        <Button variant="ghost" type="button" @click="emit('close')">{{ t('Отмена') }}</Button>
         <Button variant="primary" type="submit" :disabled="creating">
           <span v-if="creating" class="home-spinner" aria-hidden="true"></span>
-          {{ tab === 'permanent' ? 'Создать комнату' : 'Создать на время' }}
+          {{ tab === 'permanent' ? t('Создать комнату') : t('Создать на время') }}
         </Button>
       </div>
     </form>

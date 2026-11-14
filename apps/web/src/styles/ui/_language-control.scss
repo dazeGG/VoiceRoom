@@ -1,0 +1,19 @@
+.language-control {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  max-width: 100%;
+  color: var(--vr-muted);
+  font-size: 0.8125rem;
+}
+
+.language-control__select {
+  max-width: 100%;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--vr-line-strong);
+  border-radius: 0.5rem;
+  background: var(--vr-surface-2);
+  color: var(--vr-text);
+  font: inherit;
+}

@@ -2,6 +2,7 @@
 // The call on a phone in portrait: it covers the room page with a full-screen
 // layout (grid, focus, or two people face to face) whose controls hide
 // themselves. Opening someone's screen hands the page back to the room stage.
+import { t } from '@/shared/i18n';
 import { MicOff } from '@lucide/vue';
 import { computed, onMounted, onUnmounted, watch } from 'vue';
 import { state as roomClientState } from '@/features/room/client/core/room-runtime.store';
@@ -85,7 +86,7 @@ onUnmounted(() => {
     <button
       class="mobile-call__bubble"
       type="button"
-      aria-label="Показать управление"
+      :aria-label="t('Показать управление')"
       :inert="mobileCall.chromeVisible"
       @click="mobileCall.showChrome"
     >

@@ -17,6 +17,11 @@ declare global {
   }
 
   interface Window {
+    voiceRoomLocale?: {
+      get: () => Promise<unknown>;
+      set: (locale: 'ru' | 'en' | 'fr') => Promise<unknown>;
+      subscribe: (listener: (locale: unknown) => void) => () => void;
+    };
     voiceRoomDesktopAppIcon?: {
       getTheme: () => Promise<unknown>;
       setTheme: (theme: string) => Promise<unknown>;

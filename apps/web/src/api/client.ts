@@ -3,6 +3,7 @@
 // the route's contract schema, or a Failure that becomes an ApiError. Requests
 // are same-origin, so the HttpOnly session cookie always rides along.
 
+import { t } from '@/shared/i18n';
 import { isErrorCode, type ErrorCode } from '@voice-room/shared/contracts/errors';
 import type { Static, TSchema, TUnknown } from 'typebox';
 // Value.Check walks the schema. Never typebox/compile: it builds code with eval, which the CSP forbids.
@@ -119,7 +120,7 @@ export async function request<Schema extends TSchema>(
   schema: Schema,
   options: RequestOptions = {}
 ): Promise<Static<Schema>> {
-  const { body, bodySchema, signal, fallback = UNAVAILABLE } = options;
+  const { body, bodySchema, signal, fallback = t(UNAVAILABLE) } = options;
   // The types already hold the body to its contract; this catches a value that
   // slipped past them. The server still decides, so the request goes out.
   if (bodySchema && !(body instanceof FormData) && !Value.Check(bodySchema, body)) {

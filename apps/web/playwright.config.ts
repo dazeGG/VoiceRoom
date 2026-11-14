@@ -10,6 +10,7 @@ export default defineConfig({
   retries: 0,
   use: {
     baseURL: process.env.PLAYWRIGHT_BASE_URL ?? 'http://127.0.0.1:5180',
+    locale: 'ru-RU',
     trace: 'retain-on-failure',
     // фейковые медиа — комната просит микрофон/WebRTC
     launchOptions: {

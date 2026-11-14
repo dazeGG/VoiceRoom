@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '@/shared/i18n';
 import { Image as ImageIcon, Plus } from '@lucide/vue';
 import { ref } from 'vue';
 import { Popover, PopoverMenuItem } from '@/shared/ui';
@@ -22,7 +23,7 @@ async function addSelectedFiles(close: (restoreFocus?: boolean) => void): Promis
   try {
     await store.addFiles(files);
   } catch (cause) {
-    emit('error', cause instanceof Error ? cause.message : 'Не удалось загрузить изображение');
+    emit('error', cause instanceof Error ? cause.message : t('Не удалось загрузить изображение'));
   } finally {
     if (input.value) input.value.value = '';
   }
@@ -33,7 +34,7 @@ async function addSelectedFiles(close: (restoreFocus?: boolean) => void): Promis
   <Popover
     placement="top-start"
     role="menu"
-    aria-label="Добавить вложение"
+    :aria-label="t('Добавить вложение')"
     root-class="attachment-upload"
     panel-class="attachment-upload__popover"
     keep-content-mounted
@@ -42,7 +43,7 @@ async function addSelectedFiles(close: (restoreFocus?: boolean) => void): Promis
       <button
         class="attachment-upload__button"
         type="button"
-        aria-label="Добавить вложение"
+        :aria-label="t('Добавить вложение')"
         aria-haspopup="menu"
         :aria-controls="panelId"
         :aria-expanded="open"
@@ -63,7 +64,11 @@ async function addSelectedFiles(close: (restoreFocus?: boolean) => void): Promis
         aria-hidden="true"
         @change="void addSelectedFiles(close)"
       />
-      <PopoverMenuItem label="Загрузить фото" :disabled="disabled || store.drafts.length >= 4" @click="input?.click()">
+      <PopoverMenuItem
+        :label="t('Загрузить фото')"
+        :disabled="disabled || store.drafts.length >= 4"
+        @click="input?.click()"
+      >
         <template #icon><ImageIcon v-bind="iconSm" /></template>
       </PopoverMenuItem>
     </template>

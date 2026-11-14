@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { useLocalizedText, currentErrorMessage } from '@/shared/i18n/localized-text';
+
+import { t } from '@/shared/i18n';
 import { Ban, SlidersHorizontal, Users } from '@lucide/vue';
 import { computed, ref, watch } from 'vue';
 import type { OwnedRoom } from '@/api/auth';
@@ -29,7 +32,7 @@ const name = ref('');
 const saving = ref(false);
 const deleting = ref(false);
 const confirmDelete = ref(false);
-const error = ref('');
+const error = useLocalizedText();
 const avatarChange = ref<RoomAvatarChange>({ kind: 'keep' });
 const cropOpen = ref(false);
 const section = ref<Section>('general');
@@ -60,9 +63,9 @@ async function save(): Promise<void> {
     await saveRoomAvatarChange(room.roomId, avatarChange.value);
     emit('saved');
     emit('close');
-    emit('toast', 'Комната обновлена');
+    emit('toast', t('Комната обновлена'));
   } catch (cause) {
-    error.value = cause instanceof Error ? cause.message : 'Не удалось обновить комнату';
+    error.value = () => (cause instanceof Error ? currentErrorMessage(cause) : t('Не удалось обновить комнату'));
   } finally {
     saving.value = false;
   }
@@ -76,9 +79,9 @@ async function remove(): Promise<void> {
     await deleteRoom(room.roomId);
     emit('deleted');
     emit('close');
-    emit('toast', 'Комната удалена');
+    emit('toast', t('Комната удалена'));
   } catch (cause) {
-    error.value = cause instanceof Error ? cause.message : 'Не удалось удалить комнату';
+    error.value = () => (cause instanceof Error ? currentErrorMessage(cause) : t('Не удалось удалить комнату'));
     deleting.value = false;
   }
 }
@@ -118,10 +121,10 @@ function onClose(): void {
 </script>
 
 <template>
-  <Dialog :open="Boolean(room)" title="Настройки комнаты" :width="780" :on-close="onClose">
+  <Dialog :open="Boolean(room)" :title="t('Настройки комнаты')" :width="780" :on-close="onClose">
     <div v-if="room" class="room-settings">
       <div class="settings__body settings__body--room">
-        <nav class="settings__nav" aria-label="Разделы настроек комнаты">
+        <nav class="settings__nav" :aria-label="t('Разделы настроек комнаты')">
           <div class="settings__nav-main">
             <button
               class="settings__nav-item"
@@ -129,7 +132,7 @@ function onClose(): void {
               :aria-current="section === 'general' ? 'true' : undefined"
               @click="section = 'general'"
             >
-              <SlidersHorizontal v-bind="iconMd" aria-hidden="true" />Основное
+              <SlidersHorizontal v-bind="iconMd" aria-hidden="true" />{{ t('Основное') }}
             </button>
             <button
               class="settings__nav-item"
@@ -137,7 +140,7 @@ function onClose(): void {
               :aria-current="section === 'members' ? 'true' : undefined"
               @click="section = 'members'"
             >
-              <Users v-bind="iconMd" aria-hidden="true" />Участники
+              <Users v-bind="iconMd" aria-hidden="true" />{{ t('Участники') }}
             </button>
             <button
               class="settings__nav-item"
@@ -145,7 +148,7 @@ function onClose(): void {
               :aria-current="section === 'bans' ? 'true' : undefined"
               @click="section = 'bans'"
             >
-              <Ban v-bind="iconMd" aria-hidden="true" />Блокировки
+              <Ban v-bind="iconMd" aria-hidden="true" />{{ t('Блокировки') }}
             </button>
           </div>
         </nav>
@@ -169,28 +172,28 @@ function onClose(): void {
               @error="(message: string) => (error = message)"
             />
             <label class="room-settings__name-field"
-              ><span class="settings__field-label">Название</span
+              ><span class="settings__field-label">{{ t('Название') }}</span
               ><input v-model="name" class="settings__input" maxlength="60"
             /></label>
           </div>
           <div class="settings__actions">
-            <button class="settings__cancel" type="button" @click="emit('close')">Отмена</button
+            <button class="settings__cancel" type="button" @click="emit('close')">{{ t('Отмена') }}</button
             ><button class="settings__save" type="submit" :disabled="saving || !name.trim() || !dirty">
-              {{ saving ? 'Сохраняем…' : 'Сохранить' }}
+              {{ saving ? t('Сохраняем…') : t('Сохранить') }}
             </button>
           </div>
           <div class="dialog__danger-zone">
             <template v-if="confirmDelete">
-              <p class="dialog__danger-note">Комната будет удалена для всех участников.</p>
+              <p class="dialog__danger-note">{{ t('Комната будет удалена для всех участников.') }}</p>
               <div class="dialog__danger-actions">
-                <button class="settings__cancel" type="button" @click="confirmDelete = false">Отмена</button
+                <button class="settings__cancel" type="button" @click="confirmDelete = false">{{ t('Отмена') }}</button
                 ><button class="dialog__danger-confirm" type="button" :disabled="deleting" @click="remove">
-                  Удалить навсегда
+                  {{ t('Удалить навсегда') }}
                 </button>
               </div>
             </template>
             <button v-else class="dialog__danger-trigger" type="button" @click="confirmDelete = true">
-              Удалить комнату
+              {{ t('Удалить комнату') }}
             </button>
           </div>
         </form>

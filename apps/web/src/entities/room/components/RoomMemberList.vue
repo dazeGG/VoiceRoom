@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '@/shared/i18n';
 import { Ban, Ellipsis, User, UserX } from '@lucide/vue';
 import { presenceOfMember, type MembershipMember } from '@voice-room/shared/contracts/membership';
 import { computed, ref, watch } from 'vue';
@@ -37,8 +38,8 @@ const offlineMembers = computed(() =>
   (roster.value?.members ?? []).filter((member) => member.presenceStatus === 'offline')
 );
 const groups = computed(() => [
-  { heading: 'В сети', label: 'Участники в сети', members: onlineMembers.value },
-  { heading: 'Не в сети', label: 'Участники не в сети', members: offlineMembers.value }
+  { heading: t('В сети'), label: t('Участники в сети'), members: onlineMembers.value },
+  { heading: t('Не в сети'), label: t('Участники не в сети'), members: offlineMembers.value }
 ]);
 
 const banningUserId = ref('');
@@ -125,18 +126,18 @@ async function ban(member: MembershipMember, duration: ModerationDuration): Prom
 </script>
 
 <template>
-  <section class="room-member-list" aria-label="Участники комнаты">
+  <section class="room-member-list" :aria-label="t('Участники комнаты')">
     <div aria-live="polite" aria-atomic="true" class="room-member-list__sr-only">
-      <template v-if="roster?.loading">Загрузка участников</template>
+      <template v-if="roster?.loading">{{ t('Загрузка участников') }}</template>
       <template v-if="roster?.error">{{ roster.error }}</template>
     </div>
 
     <div v-if="!signedIn" class="room-member-list__notice">
-      <p>Список участников виден после входа в аккаунт.</p>
+      <p>{{ t('Список участников виден после входа в аккаунт.') }}</p>
     </div>
     <div v-else-if="roster?.error && roster.members.length === 0" class="room-member-list__notice" role="alert">
       <p>{{ roster.error }}</p>
-      <button type="button" @click="membership.loadRoomMembership(roomId)">Повторить</button>
+      <button type="button" @click="membership.loadRoomMembership(roomId)">{{ t('Повторить') }}</button>
     </div>
     <template v-else>
       <template v-for="group in groups" :key="group.heading">
@@ -150,7 +151,7 @@ async function ban(member: MembershipMember, duration: ModerationDuration): Prom
                 class="room-member-list__member"
                 type="button"
                 aria-haspopup="dialog"
-                :aria-label="`Профиль ${nameFor(member)}`"
+                :aria-label="t('Профиль {p0}', { p0: nameFor(member) })"
                 @click="openMemberProfile(member, $event)"
               >
                 <Avatar
@@ -168,7 +169,7 @@ async function ban(member: MembershipMember, duration: ModerationDuration): Prom
                     >{{ nameFor(member) }}<AccountBadge :user-id="member.userId" /><em
                       v-if="member.userId === session.user?.id"
                       class="room-member-list__you"
-                      >вы</em
+                      >{{ t('вы') }}</em
                     ></strong
                   ><small class="room-member-list__login">@{{ member.login }}</small></span
                 >
@@ -180,15 +181,15 @@ async function ban(member: MembershipMember, duration: ModerationDuration): Prom
                 flip
                 floating
                 role="menu"
-                :aria-label="`Действия с ${nameFor(member)}`"
+                :aria-label="t('Действия с {p0}', { p0: nameFor(member) })"
                 root-class="room-member-list__menu-root"
               >
                 <template #trigger="{ open, toggle, panelId }">
                   <button
                     class="room-member-list__menu-trigger"
                     type="button"
-                    :aria-label="`Действия с ${nameFor(member)}`"
-                    title="Действия"
+                    :aria-label="t('Действия с {p0}', { p0: nameFor(member) })"
+                    :title="t('Действия')"
                     aria-haspopup="menu"
                     :aria-expanded="open"
                     :aria-controls="panelId"
@@ -201,12 +202,12 @@ async function ban(member: MembershipMember, duration: ModerationDuration): Prom
 
                 <template #content="{ close }">
                   <div class="room-member-list__menu">
-                    <PopoverMenuItem label="Профиль" @click="showProfileFromMenu(member, close)">
+                    <PopoverMenuItem :label="t('Профиль')" @click="showProfileFromMenu(member, close)">
                       <template #icon><User v-bind="iconMd" aria-hidden="true" /></template>
                     </PopoverMenuItem>
                     <PopoverDivider />
                     <PopoverMenuItem
-                      label="Выгнать"
+                      :label="t('Выгнать')"
                       variant="danger"
                       :disabled="!livePeerId(member)"
                       @click="
@@ -216,7 +217,10 @@ async function ban(member: MembershipMember, duration: ModerationDuration): Prom
                     >
                       <template #icon><UserX v-bind="iconMd" aria-hidden="true" /></template>
                     </PopoverMenuItem>
-                    <PopoverSubmenu label="Заблокировать" :aria-label="`Срок блокировки ${nameFor(member)}`">
+                    <PopoverSubmenu
+                      :label="t('Заблокировать')"
+                      :aria-label="t('Срок блокировки {p0}', { p0: nameFor(member) })"
+                    >
                       <template #icon><Ban v-bind="iconMd" aria-hidden="true" /></template>
                       <template #default="{ close: closeSubmenu }">
                         <PopoverMenuItem
@@ -247,9 +251,11 @@ async function ban(member: MembershipMember, duration: ModerationDuration): Prom
         :disabled="roster.loading"
         @click="membership.loadRoomMembership(roomId, { append: true })"
       >
-        {{ roster.loading ? 'Загрузка…' : 'Показать ещё' }}
+        {{ roster.loading ? t('Загрузка…') : t('Показать ещё') }}
       </button>
-      <p v-else-if="roster?.loaded && roster.members.length === 0" class="room-member-list__empty">Никого не найдено</p>
+      <p v-else-if="roster?.loaded && roster.members.length === 0" class="room-member-list__empty">
+        {{ t('Никого не найдено') }}
+      </p>
     </template>
   </section>
 </template>

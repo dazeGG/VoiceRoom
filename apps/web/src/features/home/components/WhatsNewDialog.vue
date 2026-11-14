@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // Not the shared Dialog: the story has no title bar or cross, only its own
 // progress bars and buttons, so it keeps the Svelte card and traps focus itself.
+import { t } from '@/shared/i18n';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { fetchWhatsNew, markWhatsNewSeen } from '@/api/auth';
 import { Button } from '@/shared/ui';
@@ -211,8 +212,10 @@ function onHover(event: PointerEvent, value: boolean): void {
       </div>
 
       <div class="stories__head">
-        <span class="stories__kicker">Что нового в VoiceRoom · {{ index + 1 }} из {{ WHATS_NEW_SLIDES.length }}</span>
-        <button v-if="!last" class="stories__quiet" type="button" @click="finish(false)">Пропустить</button>
+        <span class="stories__kicker"
+          >{{ t('Что нового в VoiceRoom ·') }} {{ index + 1 }} {{ t('из') }} {{ WHATS_NEW_SLIDES.length }}</span
+        >
+        <button v-if="!last" class="stories__quiet" type="button" @click="finish(false)">{{ t('Пропустить') }}</button>
       </div>
 
       <div ref="stageEl" class="stories__stage" role="presentation" tabindex="-1" @pointerdown="onPointerDown">
@@ -224,13 +227,13 @@ function onHover(event: PointerEvent, value: boolean): void {
       </div>
 
       <div class="stories__actions">
-        <button v-if="index > 0" class="stories__quiet" type="button" @click="step(-1)">Назад</button>
+        <button v-if="index > 0" class="stories__quiet" type="button" @click="step(-1)">{{ t('Назад') }}</button>
         <span class="stories__spacer"></span>
         <Button v-if="last && slide.action === 'appearance'" variant="ghost" type="button" @click="finish(true)">
-          Настроить
+          {{ t('Настроить') }}
         </Button>
-        <Button v-if="last" variant="primary" type="button" @click="finish(false)">Понятно</Button>
-        <Button v-else variant="primary" type="button" @click="step(1)">Далее</Button>
+        <Button v-if="last" variant="primary" type="button" @click="finish(false)">{{ t('Понятно') }}</Button>
+        <Button v-else variant="primary" type="button" @click="step(1)">{{ t('Далее') }}</Button>
       </div>
     </div>
   </div>

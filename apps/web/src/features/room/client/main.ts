@@ -1,3 +1,4 @@
+import { t } from '@/shared/i18n';
 import { GATE_THRESHOLD_MIN_DB } from './core/config';
 import { useRoomDeviceUiStore } from '@/features/room/room-device-ui.store';
 import { useStartUiStore } from '@/features/room/start-ui.store';
@@ -96,23 +97,27 @@ export function mountRoomClient(
           const labels = [
             ...new Set(
               result.failed.map(({ action }) =>
-                action === 'mic-mute' ? 'мьют микрофона' : action === 'output-mute' ? 'мьют звука' : 'push-to-talk'
+                action === 'mic-mute'
+                  ? t('мьют микрофона')
+                  : action === 'output-mute'
+                    ? t('мьют звука')
+                    : 'push-to-talk'
               )
             )
           ];
           const reasons = new Set(result.failed.map(({ reason }) => reason));
           const explanation = reasons.has('modifier-required')
-            ? 'Для букв и цифр добавьте Ctrl, ⌘, Alt или Shift.'
+            ? t('Для букв и цифр добавьте Ctrl, ⌘, Alt или Shift.')
             : reasons.has('input-monitoring-required')
-              ? 'Разрешите VoiceRoom «Мониторинг ввода» в системных настройках macOS и переподключитесь к голосу.'
+              ? t('Разрешите VoiceRoom «Мониторинг ввода» в системных настройках macOS и переподключитесь к голосу.')
               : reasons.has('duplicate-binding')
-                ? 'Назначьте действиям разные сочетания.'
+                ? t('Назначьте действиям разные сочетания.')
                 : reasons.has('unsupported-key')
-                  ? 'Выберите другую клавишу.'
+                  ? t('Выберите другую клавишу.')
                   : [...reasons].some((reason) => reason.startsWith('helper-') || reason === 'platform-unsupported')
-                    ? 'Native-компонент системных клавиш недоступен.'
-                    : 'Возможно, сочетание занято другим приложением.';
-          showToast(`Системное сочетание недоступно: ${labels.join(', ')}. ${explanation}`);
+                    ? t('Native-компонент системных клавиш недоступен.')
+                    : t('Возможно, сочетание занято другим приложением.');
+          showToast(t('Системное сочетание недоступно: {p0}. {p1}', { p0: labels.join(', '), p1: explanation }));
         }
       )
     : null;
@@ -228,7 +233,7 @@ export function mountRoomClient(
         // while the buffer still holds the device and connection records.
         void reportClientLogs('room client failed to start');
         showRoomEntryFailure();
-        showToast('Не удалось проверить комнату');
+        showToast(t('Не удалось проверить комнату'));
       });
   }
 

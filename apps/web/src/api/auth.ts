@@ -3,6 +3,7 @@
 // which is how a signed-in user's persistent rooms get an owner). Shapes come
 // from @voice-room/shared/contracts/account.
 
+import { t } from '@/shared/i18n';
 import { normalizeReleaseVersion } from '@voice-room/shared/account-security';
 import { isUuid } from '@voice-room/shared/validation';
 import {
@@ -57,7 +58,7 @@ async function avatarRequest(method: 'POST' | 'DELETE', file?: Blob): Promise<Au
     body = new FormData();
     body.append('avatar', file, 'avatar.webp');
   }
-  const fallback = 'Не удалось обновить аватар';
+  const fallback = t('Не удалось обновить аватар');
   const answer =
     method === 'POST'
       ? await api.post('/api/auth/avatar', SignedIn, body, { fallback })
@@ -89,7 +90,7 @@ export async function changePassword(currentPassword: string, newPassword: strin
 }
 
 export async function fetchMe(): Promise<AuthUser | null> {
-  return (await api.get('/api/auth/me', Me, { fallback: 'Не удалось проверить сессию' })).user;
+  return (await api.get('/api/auth/me', Me, { fallback: t('Не удалось проверить сессию') })).user;
 }
 
 export async function addRoomByCode(code: string): Promise<OwnedRoom> {
@@ -98,13 +99,13 @@ export async function addRoomByCode(code: string): Promise<OwnedRoom> {
 
 export async function removeRoomFromList(roomId: string): Promise<boolean> {
   const answer = await api.delete(`/api/auth/rooms/${encodeURIComponent(roomId)}`, RoomUnbookmarked, undefined, {
-    fallback: 'Не удалось удалить комнату из списка'
+    fallback: t('Не удалось удалить комнату из списка')
   });
   return answer.removed;
 }
 
 export async function fetchOwnedRooms(): Promise<OwnedRoom[]> {
-  return (await api.get('/api/auth/rooms', RoomList, { fallback: 'Не удалось загрузить комнаты' })).rooms;
+  return (await api.get('/api/auth/rooms', RoomList, { fallback: t('Не удалось загрузить комнаты') })).rooms;
 }
 
 export type {
@@ -123,7 +124,7 @@ export interface AccountSecurity {
 
 export async function fetchAccountSecurity(): Promise<AccountSecurity> {
   const { recoveryCodes, recoveryCodesReminder } = await api.get('/api/auth/security', Security, {
-    fallback: 'Не удалось загрузить настройки безопасности'
+    fallback: t('Не удалось загрузить настройки безопасности')
   });
   return { recoveryCodes, recoveryCodesReminder };
 }
@@ -142,7 +143,7 @@ function readWhatsNew({ whatsNew }: WhatsNewAnswer): WhatsNew {
 
 export async function fetchWhatsNew(): Promise<WhatsNew> {
   return readWhatsNew(
-    await api.get('/api/auth/whats-new', WhatsNewAnswer, { fallback: 'Не удалось загрузить новости' })
+    await api.get('/api/auth/whats-new', WhatsNewAnswer, { fallback: t('Не удалось загрузить новости') })
   );
 }
 
@@ -166,14 +167,14 @@ export function isShowableLoginAlert(alert: LoginAlert): boolean {
 
 export async function fetchLoginAlerts(): Promise<LoginAlert[]> {
   const { alerts } = await api.get('/api/auth/login-alerts', LoginAlerts, {
-    fallback: 'Не удалось проверить входы в аккаунт'
+    fallback: t('Не удалось проверить входы в аккаунт')
   });
   return alerts.filter(isShowableLoginAlert);
 }
 
 export async function fetchAccountDeletionPreview(): Promise<AccountDeletionPreview> {
   const { graceDays, rooms } = await api.get('/api/auth/account/deletion', DeletionPreview, {
-    fallback: 'Не удалось подготовить удаление аккаунта'
+    fallback: t('Не удалось подготовить удаление аккаунта')
   });
   return { graceDays, rooms };
 }
@@ -200,18 +201,20 @@ export async function denyLoginAlert(
   alertId: string
 ): Promise<{ sessionEnded: boolean; recoveryCodes: RecoveryCodesStatus }> {
   const answer = await api.post(`/api/auth/login-alerts/${encodeURIComponent(alertId)}/deny`, LoginAlertResolved);
-  if (answer.resolution !== 'denied') throw new Error('Не удалось ответить на вход');
+  if (answer.resolution !== 'denied') throw new Error(t('Не удалось ответить на вход'));
   return { sessionEnded: answer.sessionEnded, recoveryCodes: answer.recoveryCodes };
 }
 
 export async function fetchAccountSessions(): Promise<AccountSession[]> {
-  const { sessions } = await api.get('/api/auth/sessions', Sessions, { fallback: 'Не удалось загрузить устройства' });
+  const { sessions } = await api.get('/api/auth/sessions', Sessions, {
+    fallback: t('Не удалось загрузить устройства')
+  });
   return sessions.filter((session) => isUuid(session.id) && hasValidTime(session.lastSeenAt));
 }
 
 export async function revokeAccountSession(sessionId: string): Promise<void> {
   await api.delete(`/api/auth/sessions/${encodeURIComponent(sessionId)}`, Done, undefined, {
-    fallback: 'Не удалось завершить сеанс'
+    fallback: t('Не удалось завершить сеанс')
   });
 }
 

@@ -1,3 +1,4 @@
+import { t } from '@/shared/i18n';
 import type { RoomPeerSummary } from '@voice-room/shared/contracts/realtime';
 import type { AvatarStackItem } from '@/shared/ui/AvatarStack/types';
 import { getAvatarPresentation } from '@/shared/ui/avatar-presentation';
@@ -9,7 +10,7 @@ export function roomPeerAvatarItems(peers: RoomPeerSummary[]): AvatarStackItem[]
       avatarColorKey: peer.avatarColorKey,
       avatarUrl: peer.avatarUrl || undefined,
       isLocal: false,
-      name: peer.name?.trim() || 'Гость'
+      name: peer.name?.trim() || t('Гость')
     });
     return {
       background: avatar.background,

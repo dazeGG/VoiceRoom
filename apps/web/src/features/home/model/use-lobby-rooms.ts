@@ -2,6 +2,7 @@
 // live peer counts. Realtime room summaries patch the list in place; a
 // reconnect or a change elsewhere refetches it.
 
+import { t } from '@/shared/i18n';
 import { ref } from 'vue';
 import { fetchOwnedRooms, type OwnedRoom } from '@/api/auth';
 import { useRoomPresenceStore } from '@/entities/room/room-presence.store';
@@ -26,7 +27,7 @@ export function useLobbyRooms(onError: (message: string) => void) {
       list.value = await fetchOwnedRooms();
     } catch (error) {
       list.value = [];
-      onError(error instanceof Error && error.message ? error.message : 'Не удалось загрузить комнаты');
+      onError(error instanceof Error && error.message ? error.message : t('Не удалось загрузить комнаты'));
     }
   }
 

@@ -2,6 +2,7 @@
 // The open settings. Mounted fresh on every opening, so each tab starts from
 // what is saved; only the profile edits live here, so they survive a look at
 // another tab before saving.
+import { t } from '@/shared/i18n';
 import { Bell, Keyboard, LogOut, Mic, Monitor, Palette, ShieldCheck, User } from '@lucide/vue';
 import { onBeforeUnmount, onMounted, reactive, type Component } from 'vue';
 import type { AuthUser, OwnedRoom } from '@/api/auth';
@@ -47,13 +48,63 @@ const appTab = support.desktopApp ? support.autostart || support.overlay : true;
 const profile = reactive(useProfileDraft(props.user));
 
 const navItems: { id: SettingsTab; label: string; icon: Component }[] = [
-  { id: 'profile', label: 'Профиль', icon: User },
-  { id: 'security', label: 'Безопасность', icon: ShieldCheck },
-  { id: 'sound', label: 'Звук', icon: Mic },
-  { id: 'notifications', label: 'Уведомления', icon: Bell },
-  { id: 'appearance', label: 'Внешний вид', icon: Palette },
-  ...(support.desktopApp ? [{ id: 'hotkeys' as const, label: 'Горячие клавиши', icon: Keyboard }] : []),
-  ...(appTab ? [{ id: 'app' as const, label: 'Приложение', icon: Monitor }] : [])
+  {
+    id: 'profile',
+    get label() {
+      return t('Профиль');
+    },
+    icon: User
+  },
+  {
+    id: 'security',
+    get label() {
+      return t('Безопасность');
+    },
+    icon: ShieldCheck
+  },
+  {
+    id: 'sound',
+    get label() {
+      return t('Звук');
+    },
+    icon: Mic
+  },
+  {
+    id: 'notifications',
+    get label() {
+      return t('Уведомления');
+    },
+    icon: Bell
+  },
+  {
+    id: 'appearance',
+    get label() {
+      return t('Внешний вид');
+    },
+    icon: Palette
+  },
+  ...(support.desktopApp
+    ? [
+        {
+          id: 'hotkeys' as const,
+          get label() {
+            return t('Горячие клавиши');
+          },
+          icon: Keyboard
+        }
+      ]
+    : []),
+  ...(appTab
+    ? [
+        {
+          id: 'app' as const,
+          get label() {
+            return t('Приложение');
+          },
+          icon: Monitor
+        }
+      ]
+    : [])
 ];
 
 const preferences = useNotificationPreferencesStore();
@@ -70,10 +121,10 @@ onBeforeUnmount(profile.dispose);
 
 <template>
   <!-- Escape, the click beside the card, focus and the stack of dialogs opened from here belong to Dialog. -->
-  <Dialog :open="true" title="Настройки" :width="940" :on-close="() => emit('close')">
+  <Dialog :open="true" :title="t('Настройки')" :width="940" :on-close="() => emit('close')">
     <div class="settings__frame">
       <div class="settings__body">
-        <nav class="settings__nav" aria-label="Разделы настроек">
+        <nav class="settings__nav" :aria-label="t('Разделы настроек')">
           <div class="settings__nav-main">
             <button
               v-for="item in navItems"
@@ -95,7 +146,7 @@ onBeforeUnmount(profile.dispose);
             @click="emit('logout')"
           >
             <LogOut v-bind="iconMd" aria-hidden="true" />
-            {{ loggingOut ? 'Выходим…' : 'Выйти' }}
+            {{ loggingOut ? t('Выходим…') : t('Выйти из аккаунта') }}
           </button>
         </nav>
 
@@ -124,7 +175,7 @@ onBeforeUnmount(profile.dispose);
           />
           <template v-else-if="tab === 'app' && appTab">
             <AppSettings v-if="support.desktopApp" :support="support" @toast="toast" />
-            <DesktopAppCard v-else title="VoiceRoom для компьютера" embedded />
+            <DesktopAppCard v-else :title="t('VoiceRoom для компьютера')" embedded />
           </template>
           <NotificationSettings
             v-else

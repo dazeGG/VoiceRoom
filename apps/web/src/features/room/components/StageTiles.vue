@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '@/shared/i18n';
 import { ChevronDown, ChevronLeft, ChevronRight } from '@lucide/vue';
 import { computed, ref, watch } from 'vue';
 import { fitTiles } from '@/shared/ui/tile-grid';
@@ -91,17 +92,17 @@ watch(
 </script>
 
 <template>
-  <div id="stageStrip" class="stage-strip" aria-label="Плитки комнаты">
+  <div id="stageStrip" class="stage-strip" :aria-label="t('Плитки комнаты')">
     <div class="stage-strip__bar" hidden>
       <div class="stage-strip__title">
-        <span id="stageStripKicker" class="stage-strip__kicker">В комнате</span>
-        <strong id="stageStripSummary" class="stage-strip__summary">0 участников</strong>
+        <span id="stageStripKicker" class="stage-strip__kicker">{{ t('В комнате') }}</span>
+        <strong id="stageStripSummary" class="stage-strip__summary">{{ t('0 участников') }}</strong>
       </div>
       <button
         id="stripToggleButton"
         class="stage-strip__toggle"
         type="button"
-        aria-label="Свернуть пользователей"
+        :aria-label="t('Свернуть пользователей')"
         aria-pressed="false"
         hidden
       >
@@ -117,7 +118,7 @@ watch(
         <button
           :class="['participant-carousel__nav', { 'participant-carousel__nav--hidden': !canScrollLeft }]"
           type="button"
-          aria-label="Предыдущие участники"
+          :aria-label="t('Предыдущие участники')"
           :tabindex="canScrollLeft ? 0 : -1"
           @click="moveCarousel(-1)"
         >
@@ -132,7 +133,7 @@ watch(
         <button
           :class="['participant-carousel__nav', { 'participant-carousel__nav--hidden': !canScrollRight }]"
           type="button"
-          aria-label="Следующие участники"
+          :aria-label="t('Следующие участники')"
           :tabindex="canScrollRight ? 0 : -1"
           @click="moveCarousel(1)"
         >
@@ -146,7 +147,7 @@ watch(
       <button
         :class="['participant-carousel__nav', { 'participant-carousel__nav--hidden': !canScrollLeft }]"
         type="button"
-        aria-label="Предыдущие участники"
+        :aria-label="t('Предыдущие участники')"
         :tabindex="canScrollLeft ? 0 : -1"
         @click="moveCarousel(-1)"
       >
@@ -161,7 +162,7 @@ watch(
       <button
         :class="['participant-carousel__nav', { 'participant-carousel__nav--hidden': !canScrollRight }]"
         type="button"
-        aria-label="Следующие участники"
+        :aria-label="t('Следующие участники')"
         :tabindex="canScrollRight ? 0 : -1"
         @click="moveCarousel(1)"
       >

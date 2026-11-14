@@ -1,3 +1,4 @@
+import { t } from '@/shared/i18n';
 import { SCREEN_BITRATE_BY_QUALITY, type ScreenFpsId } from '@voice-room/shared/media-budget';
 
 export const DEFAULT_NOISE_MODE = 'rnnoise';
@@ -86,13 +87,17 @@ export interface NoiseModeOption {
 }
 
 export const NOISE_MODES: Record<NoiseMode, NoiseModeOption> = {
-  browser: {
-    label: 'Браузерный',
-    nativeNoiseSuppression: true
+  get browser() {
+    return {
+      label: t('Браузерный'),
+      nativeNoiseSuppression: true
+    };
   },
-  off: {
-    label: 'Выкл',
-    nativeNoiseSuppression: false
+  get off() {
+    return {
+      label: t('Выкл'),
+      nativeNoiseSuppression: false
+    };
   },
   rnnoise: {
     label: 'RNNoise',
@@ -157,13 +162,15 @@ export const SCREEN_QUALITY_OPTIONS: Record<string, ScreenQualityOption> = {
     label: '1080p',
     width: 1920
   },
-  source: {
-    bitrateByFps: SCREEN_BITRATE_BY_QUALITY.source,
-    height: 0,
-    id: 'source',
-    label: 'Источник',
-    source: true,
-    width: 0
+  get source() {
+    return {
+      bitrateByFps: SCREEN_BITRATE_BY_QUALITY.source,
+      height: 0,
+      id: 'source',
+      label: t('Источник'),
+      source: true,
+      width: 0
+    };
   }
 };
 

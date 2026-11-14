@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '@/shared/i18n';
 import { BellOff } from '@lucide/vue';
 import { computed, onMounted, ref } from 'vue';
 import type { OwnedRoom } from '@/api/auth';
@@ -37,7 +38,7 @@ const browserNotificationsEnabled = computed(() =>
     : notificationPreferences.notificationsEnabled && notificationPreferences.deliveryPermission === 'granted'
 );
 const notificationToggleLabel = computed(() =>
-  props.support.desktopApp ? 'Уведомления приложения' : 'Push этого браузера'
+  props.support.desktopApp ? t('Уведомления приложения') : t('Push этого браузера')
 );
 
 onMounted(() => {
@@ -53,7 +54,7 @@ async function loadBlockedUsers(): Promise<void> {
   try {
     blockedUsers.value = await fetchBlockedUsers();
   } catch (error) {
-    emit('toast', failure(error, 'Не удалось загрузить блокировки'), { variant: 'error' });
+    emit('toast', failure(error, t('Не удалось загрузить блокировки')), { variant: 'error' });
   } finally {
     blockedUsersLoading.value = false;
   }
@@ -65,9 +66,9 @@ async function unblockBlockedUser(userId: string): Promise<void> {
   try {
     await unblockUser(userId);
     blockedUsers.value = blockedUsers.value.filter((entry) => entry.id !== userId);
-    emit('toast', 'Пользователь разблокирован');
+    emit('toast', t('Пользователь разблокирован'));
   } catch (error) {
-    emit('toast', failure(error, 'Не удалось разблокировать'), { variant: 'error' });
+    emit('toast', failure(error, t('Не удалось разблокировать')), { variant: 'error' });
   } finally {
     blockedUserSaving.value = '';
   }
@@ -88,20 +89,20 @@ async function toggleBrowserNotifications(): Promise<void> {
     if (permission === 'granted') {
       if (props.support.desktopApp) {
         void showBrowserNotification({
-          body: 'VoiceRoom сможет показывать уведомления, пока приложение открыто.',
+          body: t('VoiceRoom сможет показывать уведомления, пока приложение открыто.'),
           dedupeKey: `settings-notifications-enabled:${Date.now()}`,
           tag: 'settings-notifications-enabled',
-          title: 'Уведомления VoiceRoom включены'
+          title: t('Уведомления VoiceRoom включены')
         });
       }
-    } else if (permission === 'denied') emit('toast', 'Разрешите уведомления в настройках браузера');
-    else emit('toast', 'Системные уведомления недоступны');
+    } else if (permission === 'denied') emit('toast', t('Разрешите уведомления в настройках браузера'));
+    else emit('toast', t('Системные уведомления недоступны'));
   } catch {
     emit(
       'toast',
       pushNotifications.serverEnabled
-        ? 'Не удалось изменить push-уведомления'
-        : 'Push-уведомления не настроены на сервере',
+        ? t('Не удалось изменить push-уведомления')
+        : t('Push-уведомления не настроены на сервере'),
       { variant: 'error' }
     );
   }
@@ -113,7 +114,7 @@ async function togglePrivateNotifications(): Promise<void> {
   try {
     await preferences.updatePrivateNotifications(!notificationPreferences.privateNotifications);
   } catch {
-    emit('toast', 'Не удалось сохранить настройки уведомлений');
+    emit('toast', t('Не удалось сохранить настройки уведомлений'));
   } finally {
     notificationSaving.value = false;
   }
@@ -136,7 +137,7 @@ function togglePeerNotifications(userId: string): Promise<void> {
   return toggleTarget(
     `user:${userId}`,
     () => preferences.updatePeerNotificationsMuted(userId, muted),
-    'Не удалось изменить уведомления пользователя'
+    t('Не удалось изменить уведомления пользователя')
   );
 }
 
@@ -145,7 +146,7 @@ function toggleRoomNotifications(roomId: string): Promise<void> {
   return toggleTarget(
     `room:${roomId}`,
     () => preferences.updateRoomNotificationsMuted(roomId, muted),
-    'Не удалось изменить уведомления комнаты'
+    t('Не удалось изменить уведомления комнаты')
   );
 }
 </script>
@@ -170,26 +171,33 @@ function toggleRoomNotifications(roomId: string): Promise<void> {
           </button>
         </div>
         <div class="settings__gate-hint">
-          <template v-if="pushNotifications.supported && pushNotifications.active"
-            >Включены. События будут доставляться, когда вкладка закрыта.</template
-          >
+          <template v-if="pushNotifications.supported && pushNotifications.active">{{
+            t('Включены. События будут доставляться, когда вкладка закрыта.')
+          }}</template>
           <template
             v-else-if="pushNotifications.supported && pushNotifications.loaded && !pushNotifications.serverEnabled"
-            >Отключены на сервере: настройте VAPID-ключи.</template
+            >{{ t('Отключены на сервере: настройте VAPID-ключи.') }}</template
           >
-          <template v-else-if="support.desktopApp && notificationPreferences.deliveryPermission === 'granted'"
-            >Включены для открытого приложения.</template
-          >
-          <template v-else-if="notificationPreferences.deliveryPermission === 'granted'"
-            >Включены для открытой вкладки.</template
-          >
-          <template v-else-if="notificationPreferences.browserPermission === 'denied'"
-            >Запрещены браузером — измените разрешение сайта.</template
-          >
-          <template v-else
-            >Нажмите переключатель, чтобы включить. Запрос выполняется только по вашему действию.</template
-          >
+          <template v-else-if="support.desktopApp && notificationPreferences.deliveryPermission === 'granted'">{{
+            t('Включены для открытого приложения.')
+          }}</template>
+          <template v-else-if="notificationPreferences.deliveryPermission === 'granted'">{{
+            t('Включены для открытой вкладки.')
+          }}</template>
+          <template v-else-if="notificationPreferences.browserPermission === 'denied'">{{
+            t('Запрещены браузером — измените разрешение сайта.')
+          }}</template>
+          <template v-else>{{
+            t('Нажмите переключатель, чтобы включить. Запрос выполняется только по вашему действию.')
+          }}</template>
         </div>
+        <p
+          v-if="pushNotifications.active && pushNotifications.localeSyncPending"
+          class="settings__gate-hint"
+          role="status"
+        >
+          {{ t('Язык приложения сохранён. Язык фоновых уведомлений обновится после синхронизации.') }}
+        </p>
       </div>
 
       <div
@@ -197,34 +205,34 @@ function toggleRoomNotifications(roomId: string): Promise<void> {
         :class="{ 'settings__notification-dependent--disabled': !browserNotificationsEnabled }"
       >
         <div class="settings__gate-head">
-          <span class="settings__field-label">Приватный текст уведомлений</span>
+          <span class="settings__field-label">{{ t('Приватный текст уведомлений') }}</span>
           <button
             class="settings__switch"
             type="button"
             role="switch"
             :aria-checked="notificationPreferences.privateNotifications"
-            aria-label="Приватный текст уведомлений"
+            :aria-label="t('Приватный текст уведомлений')"
             :disabled="notificationSaving || !browserNotificationsEnabled"
             @click="void togglePrivateNotifications()"
           >
             <span class="settings__switch-knob" aria-hidden="true"></span>
           </button>
         </div>
-        <div class="settings__gate-hint">Скрывает текст сообщений в системных уведомлениях.</div>
+        <div class="settings__gate-hint">{{ t('Скрывает текст сообщений в системных уведомлениях.') }}</div>
       </div>
     </template>
 
     <div class="settings__notification-ignore">
       <div>
-        <span class="settings__section-title">Получать уведомления</span>
+        <span class="settings__section-title">{{ t('Получать уведомления') }}</span>
         <div class="settings__gate-hint">
-          Выберите диалоги и комнаты, от которых хотите получать системные уведомления и звуковые сигналы.
+          {{ t('Выберите диалоги и комнаты, от которых хотите получать системные уведомления и звуковые сигналы.') }}
         </div>
       </div>
 
       <div class="settings__notification-targets">
         <section class="settings__notification-group" aria-labelledby="notificationUsersTitle">
-          <span id="notificationUsersTitle" class="settings__field-label">Пользователи</span>
+          <span id="notificationUsersTitle" class="settings__field-label">{{ t('Пользователи') }}</span>
           <div v-if="users.length > 0" class="settings__notification-list">
             <div v-for="peer in users" :key="peer.id" class="settings__notification-row">
               <Avatar
@@ -241,8 +249,8 @@ function toggleRoomNotifications(roomId: string): Promise<void> {
                     v-if="notificationPreferences.mutedPeerIds.includes(peer.id)"
                     class="settings__notification-muted"
                     role="img"
-                    aria-label="Уведомления отключены"
-                    title="Уведомления отключены"
+                    :aria-label="t('Уведомления отключены')"
+                    :title="t('Уведомления отключены')"
                   >
                     <BellOff v-bind="iconSm" aria-hidden="true" />
                   </span>
@@ -254,7 +262,7 @@ function toggleRoomNotifications(roomId: string): Promise<void> {
                 type="button"
                 role="switch"
                 :aria-checked="!notificationPreferences.mutedPeerIds.includes(peer.id)"
-                :aria-label="`Получать уведомления от ${displayNameOf(peer)}`"
+                :aria-label="t('Получать уведомления от {p0}', { p0: displayNameOf(peer) })"
                 :disabled="Boolean(notificationTargetSaving)"
                 @click="void togglePeerNotifications(peer.id)"
               >
@@ -262,11 +270,11 @@ function toggleRoomNotifications(roomId: string): Promise<void> {
               </button>
             </div>
           </div>
-          <div v-else class="settings__notification-empty">Диалогов пока нет.</div>
+          <div v-else class="settings__notification-empty">{{ t('Диалогов пока нет.') }}</div>
         </section>
 
         <section class="settings__notification-group" aria-labelledby="notificationRoomsTitle">
-          <span id="notificationRoomsTitle" class="settings__field-label">Комнаты</span>
+          <span id="notificationRoomsTitle" class="settings__field-label">{{ t('Комнаты') }}</span>
           <div v-if="rooms.length > 0" class="settings__notification-list">
             <div v-for="room in rooms" :key="room.roomId" class="settings__notification-row">
               <Avatar
@@ -278,13 +286,13 @@ function toggleRoomNotifications(roomId: string): Promise<void> {
               />
               <span class="settings__notification-name">
                 <span class="settings__notification-title">
-                  <strong><EmojiText :text="room.name?.trim() || 'Комната'" /></strong>
+                  <strong><EmojiText :text="room.name?.trim() || t('Комната')" /></strong>
                   <span
                     v-if="notificationPreferences.mutedRoomIds.includes(room.roomId)"
                     class="settings__notification-muted"
                     role="img"
-                    aria-label="Уведомления отключены"
-                    title="Уведомления отключены"
+                    :aria-label="t('Уведомления отключены')"
+                    :title="t('Уведомления отключены')"
                   >
                     <BellOff v-bind="iconSm" aria-hidden="true" />
                   </span>
@@ -296,7 +304,7 @@ function toggleRoomNotifications(roomId: string): Promise<void> {
                 type="button"
                 role="switch"
                 :aria-checked="!notificationPreferences.mutedRoomIds.includes(room.roomId)"
-                :aria-label="`Получать уведомления комнаты ${room.name?.trim() || room.roomId}`"
+                :aria-label="t('Получать уведомления комнаты {p0}', { p0: room.name?.trim() || room.roomId })"
                 :disabled="Boolean(notificationTargetSaving)"
                 @click="void toggleRoomNotifications(room.roomId)"
               >
@@ -304,17 +312,17 @@ function toggleRoomNotifications(roomId: string): Promise<void> {
               </button>
             </div>
           </div>
-          <div v-else class="settings__notification-empty">Сохранённых комнат пока нет.</div>
+          <div v-else class="settings__notification-empty">{{ t('Сохранённых комнат пока нет.') }}</div>
         </section>
       </div>
     </div>
 
     <section class="settings__notification-group settings__blocked-users" aria-labelledby="blockedUsersTitle">
       <div>
-        <span id="blockedUsersTitle" class="settings__section-title">Заблокированные пользователи</span>
-        <div class="settings__gate-hint">Разблокировка не восстанавливает дружбу и историю отношений.</div>
+        <span id="blockedUsersTitle" class="settings__section-title">{{ t('Заблокированные пользователи') }}</span>
+        <div class="settings__gate-hint">{{ t('Разблокировка не восстанавливает дружбу и историю отношений.') }}</div>
       </div>
-      <div v-if="blockedUsersLoading" class="settings__notification-empty" role="status">Загружаем…</div>
+      <div v-if="blockedUsersLoading" class="settings__notification-empty" role="status">{{ t('Загружаем…') }}</div>
       <div v-else-if="blockedUsers.length > 0" class="settings__notification-list">
         <div v-for="blocked in blockedUsers" :key="blocked.id" class="settings__notification-row">
           <Avatar
@@ -334,11 +342,11 @@ function toggleRoomNotifications(roomId: string): Promise<void> {
             :disabled="Boolean(blockedUserSaving)"
             @click="void unblockBlockedUser(blocked.id)"
           >
-            {{ blockedUserSaving === blocked.id ? 'Разблокируем…' : 'Разблокировать' }}
+            {{ blockedUserSaving === blocked.id ? t('Разблокируем…') : t('Разблокировать') }}
           </button>
         </div>
       </div>
-      <div v-else class="settings__notification-empty">Заблокированных пользователей нет.</div>
+      <div v-else class="settings__notification-empty">{{ t('Заблокированных пользователей нет.') }}</div>
     </section>
   </div>
 </template>

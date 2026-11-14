@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '@/shared/i18n';
 import type { InboxItem } from '@voice-room/shared/contracts/notifications';
 import { computed, onBeforeUnmount, onMounted, ref, watchEffect } from 'vue';
 import type { AuthUser, OwnedRoom } from '@/api/auth';
@@ -150,7 +151,7 @@ onMounted(() => {
     // Our own sign-out or password change already handles the UI.
     if (session.consumeExpectedSessionEnd() || !session.user) return;
     session.clearSession();
-    toast('Сеанс на этом устройстве завершён. Войдите снова');
+    toast(t('Сеанс на этом устройстве завершён. Войдите снова'));
   });
 
   void rooms.refresh();
@@ -209,7 +210,7 @@ syncLobbyWithDesktop({
 function handleJoin(code: string): void {
   const roomId = extractRoomId(code);
   if (!roomId) {
-    toast('Введите код комнаты');
+    toast(t('Введите код комнаты'));
     return;
   }
   routing.requestEnterRoom(roomId);
@@ -223,9 +224,9 @@ async function handleCreate(payload: { name: string; isStatic: boolean }): Promi
     createDialogOpen.value = false;
     routing.requestEnterRoom(roomId);
     if (payload.isStatic) void rooms.refresh();
-    toast('Комната создана');
+    toast(t('Комната создана'));
   } catch (error) {
-    toast(error instanceof Error && error.message ? error.message : 'Не удалось создать комнату');
+    toast(error instanceof Error && error.message ? error.message : t('Не удалось создать комнату'));
   } finally {
     creating.value = false;
   }
@@ -273,7 +274,7 @@ function roomDeleted(): void {
       @toast="(message: string) => toast(message)"
     />
 
-    <main class="lobby-shell__main" aria-label="Главная VoiceRoom">
+    <main class="lobby-shell__main" :aria-label="t('Главная VoiceRoom')">
       <div v-if="embeddedRoomId" class="lobby-shell__room" :hidden="!embeddedRoomVisible">
         <RoomPage
           :key="embeddedRoomId"
@@ -363,7 +364,7 @@ function roomDeleted(): void {
   />
   <ProfileCardHost @toast="(message: string) => toast(message)" />
   <OpenInAppScreen v-if="openInAppRoomId" @retry="routing.openRoomInApp" @continue="routing.continueRoomInBrowser" />
-  <aside v-if="notificationsOpen" class="lobby-shell__inbox" aria-label="Панель уведомлений">
+  <aside v-if="notificationsOpen" class="lobby-shell__inbox" :aria-label="t('Панель уведомлений')">
     <NotificationInbox
       :inbox="notifications.inbox"
       :room-label="roomLabel"

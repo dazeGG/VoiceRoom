@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '@/shared/i18n';
 import { X } from '@lucide/vue';
 import { DialogContent, DialogPortal, DialogRoot, DialogTitle } from 'reka-ui';
 import { iconSm } from '@/shared/ui/icons';
@@ -49,7 +50,7 @@ function onOpenChange(next: boolean): void {
             <button
               class="ui-dialog__close"
               type="button"
-              aria-label="Закрыть"
+              :aria-label="t('Закрыть')"
               data-dialog-initial-focus
               @click="onClose"
             >

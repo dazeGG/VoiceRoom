@@ -1,3 +1,4 @@
+import { t } from '@/shared/i18n';
 import {
   AttachmentAnswer,
   CreateAttachmentBody,
@@ -19,7 +20,7 @@ export async function createAttachmentSlot(input: {
   return (
     await api.post('/api/media/attachments', AttachmentAnswer, input, {
       bodySchema: CreateAttachmentBody,
-      fallback: UPLOAD_FAILED
+      fallback: t(UPLOAD_FAILED)
     })
   ).attachment;
 }
@@ -51,13 +52,13 @@ export async function uploadAttachmentContent(
       request.upload.onprogress = (event) => {
         if (event.lengthComputable) onProgress(Math.max(0, Math.min(1, event.loaded / event.total)));
       };
-      request.onerror = () => reject(new ApiError('Сервер недоступен', 0));
+      request.onerror = () => reject(new ApiError(t('Сервер недоступен'), 0));
       request.onload = () => resolve({ status: request.status, payload: parseAnswer(request.responseText) });
       request.send(body);
     }
   );
   if (status < 200 || status >= 300 || !payload) {
-    throw new ApiError(failureMessage(payload, UPLOAD_FAILED), status, payload ?? {});
+    throw new ApiError(failureMessage(payload, t(UPLOAD_FAILED)), status, payload ?? {});
   }
   const { attachment } = checkedAnswer(AttachmentAnswer, payload, status, url);
   onProgress(1);
@@ -65,15 +66,15 @@ export async function uploadAttachmentContent(
 }
 
 export async function getAttachmentStatus(id: string): Promise<AttachmentDraft> {
-  return (await api.get(path(id), AttachmentAnswer, { fallback: UPLOAD_FAILED })).attachment;
+  return (await api.get(path(id), AttachmentAnswer, { fallback: t(UPLOAD_FAILED) })).attachment;
 }
 
 export async function retryAttachment(id: string): Promise<AttachmentDraft> {
-  return (await api.post(`${path(id)}/retry`, AttachmentAnswer, undefined, { fallback: UPLOAD_FAILED })).attachment;
+  return (await api.post(`${path(id)}/retry`, AttachmentAnswer, undefined, { fallback: t(UPLOAD_FAILED) })).attachment;
 }
 
 export async function deleteAttachment(id: string): Promise<void> {
-  await api.delete(path(id), AttachmentAnswer, undefined, { fallback: UPLOAD_FAILED });
+  await api.delete(path(id), AttachmentAnswer, undefined, { fallback: t(UPLOAD_FAILED) });
 }
 
 export function attachmentVariantUrl(id: string, variant: 'preview' | 'processed', download = false): string {

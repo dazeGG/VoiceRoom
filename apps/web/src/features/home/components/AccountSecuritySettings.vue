@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '@/shared/i18n';
 import { KeyRound, Laptop, MonitorSmartphone } from '@lucide/vue';
 import { computed, onMounted, ref, watch } from 'vue';
 import {
@@ -91,7 +92,7 @@ async function load(): Promise<void> {
     recoveryCodes.value = security.recoveryCodes;
     sessions.value = list;
   } catch (error) {
-    emit('toast', errorMessage(error, 'Не удалось загрузить настройки безопасности'), { variant: 'error' });
+    emit('toast', errorMessage(error, t('Не удалось загрузить настройки безопасности')), { variant: 'error' });
   } finally {
     loading.value = false;
   }
@@ -100,11 +101,11 @@ async function load(): Promise<void> {
 async function submitPasswordChange(): Promise<void> {
   if (changingPassword.value) return;
   if (!currentPassword.value) {
-    emit('toast', 'Введите текущий пароль');
+    emit('toast', t('Введите текущий пароль'));
     return;
   }
   if (!isValidPassword(newPassword.value)) {
-    emit('toast', `Новый пароль: минимум ${PASSWORD_MIN_LENGTH} символов`);
+    emit('toast', t('Новый пароль: минимум {p0} символов', { p0: PASSWORD_MIN_LENGTH }));
     return;
   }
   changingPassword.value = true;
@@ -115,10 +116,10 @@ async function submitPasswordChange(): Promise<void> {
     currentPassword.value = '';
     newPassword.value = '';
     clearSession();
-    emit('toast', 'Пароль изменён, войдите снова');
+    emit('toast', t('Пароль изменён, войдите снова'));
   } catch (error) {
     expectSessionEnd(false);
-    emit('toast', errorMessage(error, 'Не удалось сменить пароль'), { variant: 'error' });
+    emit('toast', errorMessage(error, t('Не удалось сменить пароль')), { variant: 'error' });
   } finally {
     changingPassword.value = false;
   }
@@ -130,9 +131,9 @@ async function endSession(session: AccountSession): Promise<void> {
   try {
     await revokeAccountSession(session.id);
     sessions.value = sessions.value.filter((entry) => entry.id !== session.id);
-    emit('toast', 'Сеанс завершён');
+    emit('toast', t('Сеанс завершён'));
   } catch (error) {
-    emit('toast', errorMessage(error, 'Не удалось завершить сеанс'), { variant: 'error' });
+    emit('toast', errorMessage(error, t('Не удалось завершить сеанс')), { variant: 'error' });
   } finally {
     endingSessionId.value = '';
   }
@@ -144,9 +145,9 @@ async function endOtherSessions(): Promise<void> {
   try {
     const ended = await revokeOtherAccountSessions();
     sessions.value = sessions.value.filter((session) => session.current);
-    emit('toast', ended > 0 ? `Завершено сеансов: ${ended}` : 'Других сеансов нет');
+    emit('toast', ended > 0 ? t('Завершено сеансов: {p0}', { p0: ended }) : t('Других сеансов нет'));
   } catch (error) {
-    emit('toast', errorMessage(error, 'Не удалось завершить сеансы'), { variant: 'error' });
+    emit('toast', errorMessage(error, t('Не удалось завершить сеансы')), { variant: 'error' });
   } finally {
     endingOthers.value = false;
   }
@@ -156,11 +157,11 @@ async function endOtherSessions(): Promise<void> {
 <template>
   <div class="account-security">
     <section class="settings__notification-group" aria-labelledby="accountPasswordTitle">
-      <span id="accountPasswordTitle" class="settings__section-title">Пароль</span>
+      <span id="accountPasswordTitle" class="settings__section-title">{{ t('Пароль') }}</span>
       <form class="account-security__password" @submit.prevent="submitPasswordChange">
         <div class="settings__password-fields">
           <label>
-            <span class="settings__field-label">Текущий пароль</span>
+            <span class="settings__field-label">{{ t('Текущий пароль') }}</span>
             <input
               ref="currentPasswordInput"
               v-model="currentPassword"
@@ -171,34 +172,35 @@ async function endOtherSessions(): Promise<void> {
             />
           </label>
           <label>
-            <span class="settings__field-label">Новый пароль</span>
+            <span class="settings__field-label">{{ t('Новый пароль') }}</span>
             <input
               v-model="newPassword"
               class="settings__input"
               type="password"
-              :placeholder="`Минимум ${PASSWORD_MIN_LENGTH} символов`"
+              :placeholder="t('Минимум {p0} символов', { p0: PASSWORD_MIN_LENGTH })"
               autocomplete="new-password"
             />
           </label>
         </div>
         <div class="account-security__password-foot">
-          <div class="settings__gate-hint">После смены пароля завершатся все сеансы, включая этот.</div>
+          <div class="settings__gate-hint">{{ t('После смены пароля завершатся все сеансы, включая этот.') }}</div>
           <button
             class="settings__save account-security__action"
             :class="{ 'account-security__action--highlight': highlightPassword }"
             type="submit"
             :disabled="changingPassword || !currentPassword || !newPassword"
           >
-            <span v-if="changingPassword" class="home-spinner" aria-hidden="true"></span>
-            Сменить пароль
+            <span v-if="changingPassword" class="home-spinner" aria-hidden="true"></span> {{ t('Сменить пароль') }}
           </button>
         </div>
       </form>
     </section>
 
     <section class="settings__notification-group" aria-labelledby="recoveryCodesTitle">
-      <span id="recoveryCodesTitle" class="settings__section-title">Коды восстановления</span>
-      <div v-if="loading && !recoveryCodes" class="settings__notification-empty" role="status">Загружаем…</div>
+      <span id="recoveryCodesTitle" class="settings__section-title">{{ t('Коды восстановления') }}</span>
+      <div v-if="loading && !recoveryCodes" class="settings__notification-empty" role="status">
+        {{ t('Загружаем…') }}
+      </div>
       <template v-else-if="recoveryCodes">
         <div
           class="settings__notification-row account-security__row"
@@ -206,7 +208,7 @@ async function endOtherSessions(): Promise<void> {
         >
           <span class="account-security__icon" aria-hidden="true"><KeyRound v-bind="iconMd" /></span>
           <span class="settings__notification-name">
-            <strong>{{ recoveryCodes.remaining > 0 ? 'Коды созданы' : 'Коды не созданы' }}</strong>
+            <strong>{{ recoveryCodes.remaining > 0 ? t('Коды созданы') : t('Коды не созданы') }}</strong>
             <small>{{ recoveryCodesSummary(recoveryCodes) }}</small>
           </span>
           <button
@@ -216,19 +218,21 @@ async function endOtherSessions(): Promise<void> {
             type="button"
             @click="codesDialogOpen = true"
           >
-            {{ recoveryCodes.generatedAt ? 'Создать новые' : 'Создать коды' }}
+            {{ recoveryCodes.generatedAt ? t('Создать новые') : t('Создать коды') }}
           </button>
         </div>
-        <div v-if="lowOnCodes" class="settings__gate-hint">Кодов почти не осталось — создайте новый набор.</div>
+        <div v-if="lowOnCodes" class="settings__gate-hint">
+          {{ t('Кодов почти не осталось — создайте новый набор.') }}
+        </div>
       </template>
     </section>
 
     <section class="settings__notification-group" aria-labelledby="accountSessionsTitle">
       <div class="account-security__head">
         <div>
-          <span id="accountSessionsTitle" class="settings__section-title">Устройства</span>
+          <span id="accountSessionsTitle" class="settings__section-title">{{ t('Устройства') }}</span>
           <div class="settings__gate-hint">
-            Где открыт ваш аккаунт. Незнакомый сеанс завершите — пароль после этого лучше сменить.
+            {{ t('Где открыт ваш аккаунт. Незнакомый сеанс завершите — пароль после этого лучше сменить.') }}
           </div>
         </div>
         <button
@@ -238,10 +242,12 @@ async function endOtherSessions(): Promise<void> {
           :disabled="endingOthers || Boolean(endingSessionId)"
           @click="void endOtherSessions()"
         >
-          {{ endingOthers ? 'Завершаем…' : 'Выйти на других устройствах' }}
+          {{ endingOthers ? t('Завершаем…') : t('Выйти на других устройствах') }}
         </button>
       </div>
-      <div v-if="loading && sessions.length === 0" class="settings__notification-empty" role="status">Загружаем…</div>
+      <div v-if="loading && sessions.length === 0" class="settings__notification-empty" role="status">
+        {{ t('Загружаем…') }}
+      </div>
       <div v-else-if="sessions.length > 0" class="settings__notification-list">
         <div v-for="session in sessions" :key="session.id" class="settings__notification-row account-security__row">
           <span class="account-security__icon" aria-hidden="true">
@@ -251,7 +257,7 @@ async function endOtherSessions(): Promise<void> {
           <span class="settings__notification-name">
             <strong>{{ sessionDeviceLabel(session) }}</strong>
             <small>
-              {{ session.current ? 'Это устройство' : formatLastSeen(session.lastSeenAt)
+              {{ session.current ? t('Это устройство') : formatLastSeen(session.lastSeenAt)
               }}{{ session.location ? ` · ${session.location}` : '' }}
             </small>
           </span>
@@ -262,24 +268,26 @@ async function endOtherSessions(): Promise<void> {
             :disabled="endingOthers || Boolean(endingSessionId)"
             @click="void endSession(session)"
           >
-            {{ endingSessionId === session.id ? 'Завершаем…' : 'Завершить' }}
+            {{ endingSessionId === session.id ? t('Завершаем…') : t('Завершить') }}
           </button>
         </div>
       </div>
-      <div v-else class="settings__notification-empty">Активных сеансов нет.</div>
+      <div v-else class="settings__notification-empty">{{ t('Активных сеансов нет.') }}</div>
       <div v-if="sessions.some((session) => session.location)" class="settings__gate-hint">
-        Город определяется по IP-адресу с помощью
-        <a href="https://db-ip.com" target="_blank" rel="noreferrer">DB-IP</a>; сам адрес не сохраняется.
+        {{ t('Город определяется по IP-адресу с помощью') }}
+        <a href="https://db-ip.com" target="_blank" rel="noreferrer">DB-IP</a>{{ t('; сам адрес не сохраняется.') }}
       </div>
     </section>
 
     <section class="settings__notification-group" aria-labelledby="accountDeletionTitle">
-      <span id="accountDeletionTitle" class="settings__section-title">Удаление аккаунта</span>
+      <span id="accountDeletionTitle" class="settings__section-title">{{ t('Удаление аккаунта') }}</span>
       <div class="account-security__danger">
         <div class="settings__gate-hint">
-          Аккаунт скроется сразу и удалится через 7 дней. До этого его можно восстановить, войдя с паролем.
+          {{ t('Аккаунт скроется сразу и удалится через 7 дней. До этого его можно восстановить, войдя с паролем.') }}
         </div>
-        <button class="settings__unblock-button" type="button" @click="deleteDialogOpen = true">Удалить аккаунт</button>
+        <button class="settings__unblock-button" type="button" @click="deleteDialogOpen = true">
+          {{ t('Удалить аккаунт') }}
+        </button>
       </div>
     </section>
   </div>

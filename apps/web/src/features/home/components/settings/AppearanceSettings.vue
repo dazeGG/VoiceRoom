@@ -1,17 +1,20 @@
 <script setup lang="ts">
 // The colour theme: a card per theme with a small preview painted in that
 // theme's own colours; picking one applies it to the whole app at once.
+import { t } from '@/shared/i18n';
 import { Check } from '@lucide/vue';
 import { THEMES, useThemeStore } from '@/shared/theme/theme.store';
 import { iconSm } from '@/shared/ui/icons';
+import LanguageControl from '@/shared/i18n/LanguageControl.vue';
 
 const theme = useThemeStore();
 </script>
 
 <template>
   <div class="settings__appearance">
-    <span class="settings__section-title">Тема</span>
-    <div class="settings__themes" role="radiogroup" aria-label="Цветовая тема">
+    <LanguageControl />
+    <span class="settings__section-title">{{ t('Тема') }}</span>
+    <div class="settings__themes" role="radiogroup" :aria-label="t('Цветовая тема')">
       <!-- The theme class on the card repaints the --vr-* tokens inside it (Svelte: data-theme). -->
       <button
         v-for="option in THEMES"

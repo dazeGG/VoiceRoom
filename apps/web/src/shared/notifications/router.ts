@@ -1,3 +1,4 @@
+import { t } from '@/shared/i18n';
 import type {
   NotificationActor,
   NotificationMessageBrief,
@@ -96,7 +97,7 @@ function actorLabel(
 }
 
 function roomLabel(room: Pick<NotificationRoomContext, 'name' | 'roomId'> | null | undefined): string {
-  return room?.name?.trim() || room?.roomId?.trim() || 'Комната';
+  return room?.name?.trim() || room?.roomId?.trim() || t('Комната');
 }
 
 function isNotificationRealtimeEvent(
@@ -279,10 +280,16 @@ export function buildNotificationPayload(
 
   if (event.type === 'notification.dm.message') {
     if (!isNonEmptyString(event.payload?.peer?.id) || !isNonEmptyString(event.payload?.message?.id)) return null;
-    const peerName = actorLabel(event.payload.peer, 'Друг');
+    const peerName = actorLabel(event.payload.peer, t('Друг'));
     return {
       title: peerName,
-      body: privateNotifications ? PRIVATE_BODY : truncateNotificationBody(event.payload.message?.body || DEFAULT_BODY),
+      body: privateNotifications
+        ? t(PRIVATE_BODY)
+        : event.payload.message.invite
+          ? t('Приглашение в комнату «{p0}»', {
+              p0: event.payload.message.invite.roomName || event.payload.message.invite.roomId
+            })
+          : truncateNotificationBody(event.payload.message?.body || t(DEFAULT_BODY)),
       tag: dedupeKey,
       dedupeKey,
       data: {
@@ -302,11 +309,13 @@ export function buildNotificationPayload(
     ) {
       return null;
     }
-    const senderName = actorLabel(event.payload.sender, 'Кто-то');
+    const senderName = actorLabel(event.payload.sender, t('Кто-то'));
     const name = roomLabel(event.payload.room);
     return {
       title: `${senderName} — ${name}`,
-      body: privateNotifications ? PRIVATE_BODY : truncateNotificationBody(event.payload.message?.body || DEFAULT_BODY),
+      body: privateNotifications
+        ? t(PRIVATE_BODY)
+        : truncateNotificationBody(event.payload.message?.body || t(DEFAULT_BODY)),
       tag: dedupeKey,
       dedupeKey,
       data: {
@@ -321,10 +330,10 @@ export function buildNotificationPayload(
 
   if (event.type === 'notification.friend.request') {
     if (!isNonEmptyString(event.payload?.requester?.id) || !isNonEmptyString(event.payload?.requestId)) return null;
-    const requesterName = actorLabel(event.payload.requester, 'Кто-то');
+    const requesterName = actorLabel(event.payload.requester, t('Кто-то'));
     return {
-      title: 'Новая заявка в друзья',
-      body: privateNotifications ? PRIVATE_BODY : `${requesterName} хочет добавить вас в друзья.`,
+      title: t('Новая заявка в друзья'),
+      body: privateNotifications ? t(PRIVATE_BODY) : t('{p0} хочет добавить вас в друзья.', { p0: requesterName }),
       tag: dedupeKey,
       dedupeKey,
       data: { kind: 'friend-request', requesterId: event.payload.requester?.id, requestId: event.payload.requestId }
@@ -332,10 +341,10 @@ export function buildNotificationPayload(
   }
 
   if (!isNonEmptyString(event.payload?.user?.id)) return null;
-  const userName = actorLabel(event.payload.user, 'Кто-то');
+  const userName = actorLabel(event.payload.user, t('Кто-то'));
   return {
-    title: 'Заявка в друзья принята',
-    body: privateNotifications ? PRIVATE_BODY : `${userName} теперь у вас в друзьях.`,
+    title: t('Заявка в друзья принята'),
+    body: privateNotifications ? t(PRIVATE_BODY) : t('{p0} теперь у вас в друзьях.', { p0: userName }),
     tag: dedupeKey,
     dedupeKey,
     data: { kind: 'friend-accepted', userId: event.payload.user?.id }

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '@/shared/i18n';
 import { computed } from 'vue';
 import { state } from '@/features/room/client/core/room-runtime.store';
 import { APP_HOME } from '@/shared/app-home';
@@ -14,18 +15,18 @@ const banned = computed(() => state.moderationReason === 'banned');
     <div class="not-found__watermark" aria-hidden="true">!</div>
     <div class="not-found__content">
       <h1 id="moderationTitle" class="not-found__title">
-        {{ banned ? 'Вы заблокированы в этой комнате' : 'Вас исключили из комнаты' }}
+        {{ banned ? t('Вы заблокированы в этой комнате') : t('Вас исключили из комнаты') }}
       </h1>
       <p class="not-found__copy">
         {{
           banned
-            ? 'Владелец комнаты закрыл для вас доступ.'
-            : 'Соединение остановлено владельцем комнаты. Вы можете вернуться на главный экран.'
+            ? t('Владелец комнаты закрыл для вас доступ.')
+            : t('Соединение остановлено владельцем комнаты. Вы можете вернуться на главный экран.')
         }}
       </p>
       <div class="not-found__actions">
         <!-- A full page load, as data-sveltekit-reload was. -->
-        <a class="not-found__home" :href="APP_HOME">На главный экран</a>
+        <a class="not-found__home" :href="APP_HOME">{{ t('На главный экран') }}</a>
       </div>
     </div>
   </main>

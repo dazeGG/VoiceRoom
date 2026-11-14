@@ -1,3 +1,5 @@
+import { getLocale, t } from '@/shared/i18n';
+import { localeTag } from '@voice-room/shared/localization';
 import type { LoginAlert } from '@/api/auth';
 import { timeAgo } from '@/shared/utils/date-format';
 import { sessionDeviceLabel } from './account-security';
@@ -6,8 +8,8 @@ export type SecureAccountTarget = 'password' | 'recovery-codes';
 
 export function loginAlertHeadline(alert: Pick<LoginAlert, 'kind'>): string {
   return alert.kind === 'recovery'
-    ? 'В ваш аккаунт вошли по коду восстановления'
-    : 'В ваш аккаунт вошли с нового устройства';
+    ? t('В ваш аккаунт вошли по коду восстановления')
+    : t('В ваш аккаунт вошли с нового устройства');
 }
 
 export function loginAlertDevice(alert: Pick<LoginAlert, 'client' | 'os'>): string {
@@ -18,7 +20,7 @@ export function loginAlertWhen(alert: Pick<LoginAlert, 'createdAt' | 'location'>
   const when =
     now - alert.createdAt < 60 * 60_000
       ? timeAgo(alert.createdAt, now)
-      : new Intl.DateTimeFormat('ru-RU', {
+      : new Intl.DateTimeFormat(localeTag(getLocale()), {
           day: 'numeric',
           month: 'long',
           hour: '2-digit',

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '@/shared/i18n';
 import { Smile } from '@lucide/vue';
 import { onBeforeUnmount, ref, watch } from 'vue';
 import { Popover } from '@/shared/ui';
@@ -83,7 +84,7 @@ function choose(emoji: string, close: (restoreFocus?: boolean) => void): void {
     flip
     floating
     role="dialog"
-    aria-label="Выбор эмодзи"
+    :aria-label="t('Выбор эмодзи')"
     root-class="composer-emoji-picker"
     panel-class="reaction-picker-panel"
   >
@@ -92,8 +93,8 @@ function choose(emoji: string, close: (restoreFocus?: boolean) => void): void {
         class="composer-emoji-picker__trigger"
         type="button"
         :disabled="disabled"
-        aria-label="Добавить эмодзи"
-        title="Эмодзи"
+        :aria-label="t('Добавить эмодзи')"
+        :title="t('Эмодзи')"
         aria-haspopup="dialog"
         :aria-expanded="open"
         :aria-controls="panelId"
@@ -106,11 +107,11 @@ function choose(emoji: string, close: (restoreFocus?: boolean) => void): void {
     <template #content="{ close }: PopoverContentState">
       <EmojiPickerPanel
         :frequent-emoji="frequentEmoji"
-        search-label="Поиск эмодзи"
-        sections-label="Разделы эмодзи"
-        grid-label="Эмодзи"
-        :option-label="(emoji: string) => `Эмодзи ${emoji}`"
-        tone-strip-label="Цвет кожи для этого эмодзи"
+        :search-label="t('Поиск эмодзи')"
+        :sections-label="t('Разделы эмодзи')"
+        :grid-label="t('Эмодзи')"
+        :option-label="(emoji: string) => t('Эмодзи {p0}', { p0: emoji })"
+        :tone-strip-label="t('Цвет кожи для этого эмодзи')"
         @pick="(emoji: string) => choose(emoji, close)"
       />
     </template>

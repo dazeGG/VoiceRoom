@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '@/shared/i18n';
 import { computed, watchEffect } from 'vue';
 import { state as roomClientState } from '../client/core/room-runtime.store';
 import { usePageStore } from '@/stores/page.store';
@@ -36,7 +37,7 @@ watchEffect(() => {
 
 <template>
   <main id="roomScreen" class="room-layout" :hidden="page.screen !== 'room'">
-    <section class="stage" aria-label="Голосовая комната">
+    <section class="stage" :aria-label="t('Голосовая комната')">
       <ScreenStage />
       <template v-if="!mobileCallUi.isMobileCallActive()">
         <StageTiles />

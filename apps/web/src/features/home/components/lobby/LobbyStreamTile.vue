@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '@/shared/i18n';
 import { computed } from 'vue';
 import type { RoomPeer } from '@/api/rooms';
 import { getAvatarPresentation } from '@/shared/ui/avatar-presentation';
@@ -13,7 +14,7 @@ const avatar = computed(() =>
     avatarColorKey: props.peer.avatarColorKey,
     avatarUrl: props.peer.avatarUrl || undefined,
     isLocal: false,
-    name: props.peer.name?.trim() || 'Гость'
+    name: props.peer.name?.trim() || t('Гость')
   })
 );
 </script>
@@ -24,10 +25,12 @@ const avatar = computed(() =>
   <button
     class="stream-tile stream-tile--preview lobby-stream-tile"
     type="button"
-    :aria-label="`Войти и смотреть стрим ${peer.name}`"
+    :aria-label="t('Войти и смотреть стрим {p0}', { p0: peer.name })"
     @click="$emit('enter')"
   >
-    <span class="stream-tile__preview"><span class="lobby-stream-tile__note">Стрим откроется после входа</span></span>
+    <span class="stream-tile__preview"
+      ><span class="lobby-stream-tile__note">{{ t('Стрим откроется после входа') }}</span></span
+    >
     <span class="stream-tile__copy">
       <span class="stream-tile__plate">
         <span
@@ -35,7 +38,7 @@ const avatar = computed(() =>
           :style="{ '--avatar-bg': avatar.background, '--avatar-fg': avatar.foreground }"
           aria-hidden="true"
           >{{ avatar.initials }}</span
-        >Стрим
+        >{{ t('Стрим') }}
       </span>
     </span>
   </button>

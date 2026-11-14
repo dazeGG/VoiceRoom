@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // What /r/:roomId shows on a load or a real navigation: the lobby for a
 // signed-in desktop visit, the room itself for a guest or a phone.
+import { t } from '@/shared/i18n';
 import { computed, onMounted, ref, watch } from 'vue';
 import { useSessionStore } from '@/features/auth/session.store';
 import { signOut } from '@/features/home/model/sign-out';
@@ -102,9 +103,9 @@ async function handleLogout(): Promise<void> {
   loggingOut.value = true;
   try {
     await signOut();
-    showToast('Вы вышли из аккаунта');
+    showToast(t('Вы вышли из аккаунта'));
   } catch (error) {
-    showToast(error instanceof Error && error.message ? error.message : 'Не удалось выйти');
+    showToast(error instanceof Error && error.message ? error.message : t('Не удалось выйти'));
   } finally {
     loggingOut.value = false;
   }
@@ -113,44 +114,47 @@ async function handleLogout(): Promise<void> {
 
 <template>
   <div v-if="!boundaryReady" class="app-shell">
-    <main class="auth-loader" aria-label="Проверка устройства" aria-busy="true">
+    <main class="auth-loader" :aria-label="t('Проверка устройства')" aria-busy="true">
       <div class="auth-loader__card">
         <span class="auth-loader__orb"><MascotIcon variant="look" :size="52" /></span>
-        <p class="auth-loader__kicker">Проверяем устройство</p>
-        <h1 class="auth-loader__title">VoiceRoom запускается</h1>
+        <p class="auth-loader__kicker">{{ t('Проверяем устройство') }}</p>
+        <h1 class="auth-loader__title">{{ t('VoiceRoom запускается') }}</h1>
       </div>
     </main>
   </div>
   <div v-else-if="!roomAllowed" class="app-shell">
-    <main class="auth-session-error" aria-label="Неподдерживаемое устройство" aria-live="polite">
+    <main class="auth-session-error" :aria-label="t('Неподдерживаемое устройство')" aria-live="polite">
       <div class="auth-session-error__card">
         <p class="auth-session-error__kicker">Desktop only</p>
-        <h1 class="auth-session-error__title">Откройте комнату на компьютере</h1>
+        <h1 class="auth-session-error__title">{{ t('Откройте комнату на компьютере') }}</h1>
         <p class="auth-session-error__text">
-          Мобильные браузеры не подключаются к realtime, LiveKit, медиа и push-инфраструктуре VoiceRoom.
+          {{ t('Мобильные браузеры не подключаются к realtime, LiveKit, медиа и push-инфраструктуре VoiceRoom.') }}
         </p>
       </div>
     </main>
   </div>
   <div v-else-if="!session.loaded" class="app-shell">
-    <main class="auth-loader" aria-label="Загрузка аккаунта" aria-busy="true">
+    <main class="auth-loader" :aria-label="t('Загрузка аккаунта')" aria-busy="true">
       <div class="auth-loader__card">
         <span class="auth-loader__orb"><MascotIcon variant="look" :size="52" /></span>
-        <p class="auth-loader__kicker">Проверяем сессию</p>
-        <h1 class="auth-loader__title">Открываем комнату</h1>
+        <p class="auth-loader__kicker">{{ t('Проверяем сессию') }}</p>
+        <h1 class="auth-loader__title">{{ t('Открываем комнату') }}</h1>
       </div>
     </main>
   </div>
   <div v-else-if="authLoadError" class="app-shell">
-    <main class="auth-session-error" aria-label="Ошибка проверки аккаунта" aria-live="polite">
+    <main class="auth-session-error" :aria-label="t('Ошибка проверки аккаунта')" aria-live="polite">
       <div class="auth-session-error__card">
-        <p class="auth-session-error__kicker">Сессия не проверена</p>
-        <h1 class="auth-session-error__title">Не удалось проверить аккаунт</h1>
+        <p class="auth-session-error__kicker">{{ t('Сессия не проверена') }}</p>
+        <h1 class="auth-session-error__title">{{ t('Не удалось проверить аккаунт') }}</h1>
         <p class="auth-session-error__text">
-          Проверьте подключение к серверу и повторите попытку. Мы не будем открывать комнату как гостевую, пока проверка
-          не пройдет.
+          {{
+            t(
+              'Проверьте подключение к серверу и повторите попытку. Мы не будем открывать комнату как гостевую, пока проверка не пройдет.'
+            )
+          }}
         </p>
-        <button type="button" @click="retrySessionLoad">Повторить</button>
+        <button type="button" @click="retrySessionLoad">{{ t('Повторить') }}</button>
       </div>
     </main>
   </div>

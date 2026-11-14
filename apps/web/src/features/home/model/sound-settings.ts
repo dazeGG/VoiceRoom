@@ -5,6 +5,7 @@
 // the room's config + settings helpers to keep the contract in one place, and
 // mirror the dock's gate control (a single slider over a live meter — the floor
 // threshold means «off», there is no separate toggle).
+import { t } from '@/shared/i18n';
 import {
   amplitudeToDb,
   clampGateThresholdDb,
@@ -78,7 +79,7 @@ export function isGateDisabled(db: number): boolean {
 }
 
 export function gateValueLabel(db: number): string {
-  return isGateDisabled(db) ? 'Выкл' : `${db} dB`;
+  return isGateDisabled(db) ? t('Выкл') : `${db} dB`;
 }
 
 // 0..1 position of a dB value along the [-100, 0] meter — reused for both the
@@ -172,11 +173,11 @@ async function enumerate(kind: MediaDeviceKind, fallback: string): Promise<Devic
 }
 
 export function enumerateMicrophones(): Promise<DeviceOption[]> {
-  return enumerate('audioinput', 'Микрофон');
+  return enumerate('audioinput', t('Микрофон'));
 }
 
 export function enumerateSpeakers(): Promise<DeviceOption[]> {
-  return enumerate('audiooutput', 'Динамик');
+  return enumerate('audiooutput', t('Динамик'));
 }
 
 export interface MicMeter {

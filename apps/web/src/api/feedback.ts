@@ -1,5 +1,6 @@
 // "How was the call?": sending an answer. Staff read them in the admin app.
 
+import { t } from '@/shared/i18n';
 import { CallFeedbackBody } from '@voice-room/shared/contracts/feedback';
 import { Done } from '@voice-room/shared/contracts/http';
 import { api } from './client';
@@ -9,6 +10,6 @@ export type { CallFeedbackCall, CallFeedbackRating, CallFeedbackTag } from '@voi
 export async function submitCallFeedback(body: CallFeedbackBody): Promise<void> {
   await api.post('/api/feedback/calls', Done, body, {
     bodySchema: CallFeedbackBody,
-    fallback: 'Не удалось отправить отзыв'
+    fallback: t('Не удалось отправить отзыв')
   });
 }

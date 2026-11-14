@@ -1,6 +1,7 @@
 // What the room composer and the direct-message composer do with a key press
 // and a paste in the same way.
 
+import { t } from '@/shared/i18n';
 import { imageFilesFromClipboard, type AttachmentComposeStore } from './attachment-compose';
 
 /** Enter sends (Shift+Enter breaks the line); ArrowUp in an empty field edits the last own message, like Discord. */
@@ -30,6 +31,6 @@ export async function pasteImages(
   try {
     await media.addFiles(files);
   } catch (cause) {
-    onError(cause instanceof Error ? cause.message : 'Не удалось вставить изображение');
+    onError(cause instanceof Error ? cause.message : t('Не удалось вставить изображение'));
   }
 }

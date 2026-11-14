@@ -1,3 +1,5 @@
+import { t } from '@/shared/i18n';
+import { useLocalizedText, currentErrorMessage } from '@/shared/i18n/localized-text';
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
 import { Type } from 'typebox';
@@ -17,6 +19,7 @@ interface RoomMembershipEntry {
   loading: boolean;
   requestGeneration: number;
   error: string;
+  setError: (source: () => string) => void;
 }
 
 const CACHE_PREFIX = 'voice-room:membership:v1:';
@@ -27,6 +30,7 @@ const CachedMembership = Type.Object({
 });
 
 function emptyEntry(): RoomMembershipEntry {
+  const error = useLocalizedText();
   return {
     cachedMembers: [],
     members: [],
@@ -36,7 +40,15 @@ function emptyEntry(): RoomMembershipEntry {
     loaded: false,
     loading: false,
     requestGeneration: 0,
-    error: ''
+    get error() {
+      return error.value;
+    },
+    set error(value: string) {
+      error.value = value;
+    },
+    setError: (source) => {
+      error.value = source;
+    }
   };
 }
 
@@ -48,13 +60,12 @@ function readCache(roomId: string): RoomMembershipEntry | null {
   try {
     const parsed: unknown = JSON.parse(localStorage.getItem(cacheKey(roomId)) || 'null');
     if (!Value.Check(CachedMembership, parsed)) return null;
-    return {
-      ...emptyEntry(),
+    return Object.assign(emptyEntry(), {
       cachedMembers: parsed.members,
       members: parsed.members,
       presenceRevision: Number(parsed.presenceRevision) || 0,
       loaded: true
-    };
+    });
   } catch {
     return null;
   }
@@ -123,7 +134,9 @@ export const useRoomMembershipStore = defineStore('room-membership', () => {
       persist(roomId, entry);
     } catch (error) {
       if (requestGeneration !== entry.requestGeneration) return;
-      entry.error = error instanceof Error ? error.message : 'Не удалось загрузить участников';
+      entry.setError(() =>
+        error instanceof Error ? currentErrorMessage(error) : t('Не удалось загрузить участников')
+      );
       if (!query && entry.cachedMembers.length > 0) entry.members = entry.cachedMembers;
     } finally {
       if (requestGeneration === entry.requestGeneration) entry.loading = false;

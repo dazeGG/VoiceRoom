@@ -2,6 +2,7 @@
 // app WebSocket (room.updated/room.deleted, handleServerMessage in room.ts), and
 // may reach a client on more than one logical channel, so the reaction lives
 // here once instead of being duplicated in each handler.
+import { t } from '@/shared/i18n';
 import type { RoomLifecycleSummary } from '../core/types';
 import { useRoomSettingsStore } from '../../room-settings.store';
 import { usePageStore } from '@/stores/page.store';
@@ -43,6 +44,6 @@ export function applyRoomDeleted(roomId: string): void {
   if (handledRoomDeletedId === roomId) return;
   if (usePageStore().screen === 'not-found') return;
   handledRoomDeletedId = roomId;
-  showToast('Комната удалена владельцем');
+  showToast(t('Комната удалена владельцем'));
   showRoomNotFoundSoon();
 }

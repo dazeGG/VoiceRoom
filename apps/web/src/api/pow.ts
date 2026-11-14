@@ -1,3 +1,4 @@
+import { t } from '@/shared/i18n';
 import { PowChallenge } from '@voice-room/shared/contracts/ops';
 import { api } from './client';
 
@@ -13,7 +14,7 @@ export async function createRoomProof(): Promise<RoomProof | null> {
   if (!challenge.required) return null;
 
   if (!window.crypto?.subtle || typeof TextEncoder !== 'function') {
-    throw new Error('Откройте сайт через HTTPS или localhost');
+    throw new Error(t('Откройте сайт через HTTPS или localhost'));
   }
 
   return {
@@ -23,8 +24,9 @@ export async function createRoomProof(): Promise<RoomProof | null> {
 }
 
 async function solveProofOfWork(challenge: string, difficulty: number, expiresAt: number): Promise<number> {
-  if (!Number.isInteger(difficulty) || difficulty < 0 || difficulty > 32) throw new Error('Не удалось создать комнату');
-  if (!Number.isFinite(expiresAt)) throw new Error('Не удалось создать комнату');
+  if (!Number.isInteger(difficulty) || difficulty < 0 || difficulty > 32)
+    throw new Error(t('Не удалось создать комнату'));
+  if (!Number.isFinite(expiresAt)) throw new Error(t('Не удалось создать комнату'));
 
   const encoder = new TextEncoder();
   let nonce = 0;
@@ -38,7 +40,7 @@ async function solveProofOfWork(challenge: string, difficulty: number, expiresAt
     await waitForUi();
   }
 
-  throw new Error('Проверка создания комнаты истекла');
+  throw new Error(t('Проверка создания комнаты истекла'));
 }
 
 function hasLeadingZeroBits(bytes: Uint8Array, bitCount: number): boolean {

@@ -1,3 +1,4 @@
+import { t } from '@/shared/i18n';
 import { useRoomDeviceUiStore } from '@/features/room/room-device-ui.store';
 import { state } from '../core/room-runtime.store';
 import { postState } from '../room/presence';
@@ -67,17 +68,17 @@ export interface ScreenControlsView {
 export function getCallControlsView(): CallControlsView {
   const label = !state.joined
     ? state.connecting
-      ? 'Подключение'
-      : 'Подключить микрофон'
+      ? t('Подключение')
+      : t('Подключить микрофон')
     : state.microphoneMissing
-      ? 'Микрофона нет: подключить'
+      ? t('Микрофона нет: подключить')
       : state.microphoneMode === 'push-to-talk'
         ? state.pushToTalkActive
-          ? 'Push-to-talk: микрофон открыт'
-          : 'Push-to-talk: микрофон закрыт'
+          ? t('Push-to-talk: микрофон открыт')
+          : t('Push-to-talk: микрофон закрыт')
         : state.muted
-          ? 'Включить микрофон'
-          : 'Выключить микрофон';
+          ? t('Включить микрофон')
+          : t('Выключить микрофон');
 
   return {
     label,
@@ -100,7 +101,7 @@ export function getCallControlsView(): CallControlsView {
 }
 
 export function getOutputControlsView(): OutputControlsView {
-  const label = state.outputMuted ? 'Включить звук' : 'Выключить звук';
+  const label = state.outputMuted ? t('Включить звук') : t('Выключить звук');
   return {
     label,
     ariaPressed: state.outputMuted,
@@ -111,7 +112,7 @@ export function getOutputControlsView(): OutputControlsView {
 export function getCameraControlsView(): CameraControlsView {
   const on = Boolean(state.localCameraStream);
   return {
-    label: on ? 'Выключить камеру' : 'Включить камеру',
+    label: on ? t('Выключить камеру') : t('Включить камеру'),
     ariaPressed: on,
     disabled: !state.joined || state.connecting || state.cameraStarting,
     stateName: on ? 'on' : 'off'
@@ -121,7 +122,7 @@ export function getCameraControlsView(): CameraControlsView {
 export function getScreenControlsView(): ScreenControlsView {
   const sharing = Boolean(state.localScreenStream);
   return {
-    label: sharing ? 'Закончить стрим' : 'Показать экран',
+    label: sharing ? t('Закончить стрим') : t('Показать экран'),
     ariaPressed: sharing,
     disabled: !state.joined || state.connecting || state.screenStarting,
     stateName: sharing ? 'live' : 'idle'
@@ -205,7 +206,7 @@ function toggleMute(): void {
     return;
   }
   if (state.microphoneMode === 'push-to-talk' && !state.outputMuted) {
-    showToast('В режиме Push-to-talk удерживайте назначенную клавишу');
+    showToast(t('В режиме Push-to-talk удерживайте назначенную клавишу'));
     return;
   }
 

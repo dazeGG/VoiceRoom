@@ -4,6 +4,7 @@
 // during a call, and while the leave screen is up, which asks the question
 // itself. A click beside it closes it as the cross does; an answer leaves a
 // short thanks.
+import { t } from '@/shared/i18n';
 import { computed, ref, watch } from 'vue';
 import { Dialog } from '@/shared/ui/Dialog';
 import CallFeedbackCard from './CallFeedbackCard.vue';
@@ -39,12 +40,12 @@ function close(): void {
 <template>
   <Dialog
     :open="!hidden && (call !== null || thanked)"
-    :title="call ? 'Как прошёл звонок?' : 'Спасибо!'"
+    :title="call ? t('Как прошёл звонок?') : t('Спасибо!')"
     :width="420"
     initial-focus=".call-feedback__thumb"
     :on-close="close"
   >
     <CallFeedbackCard v-if="call" :key="callKey" ref="card" :call="call" @answered="thanked = true" />
-    <p v-else class="call-feedback__thanks" role="status">Спасибо! Это помогает делать звонки лучше.</p>
+    <p v-else class="call-feedback__thanks" role="status">{{ t('Спасибо! Это помогает делать звонки лучше.') }}</p>
   </Dialog>
 </template>

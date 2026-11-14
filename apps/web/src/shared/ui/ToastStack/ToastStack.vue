@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '@/shared/i18n';
 import { Check, CircleAlert, Info, TriangleAlert, X } from '@lucide/vue';
 import { computed } from 'vue';
 import EmojiText from '@/shared/chat/EmojiText.vue';
@@ -12,7 +13,7 @@ const queuedCount = computed(() => Math.max(0, props.toasts.length - visibleToas
 
 <template>
   <div v-if="toasts.length > 0" :id="id" class="ui-toaststack" role="status" aria-live="polite">
-    <span v-if="queuedCount > 0" class="ui-toaststack__queue">+{{ queuedCount }} в очереди</span>
+    <span v-if="queuedCount > 0" class="ui-toaststack__queue">+{{ queuedCount }} {{ t('в очереди') }}</span>
     <div
       v-for="toast in visibleToasts"
       :key="toast.id"
@@ -41,7 +42,7 @@ const queuedCount = computed(() => Math.max(0, props.toasts.length - visibleToas
           {{ action.label }}
         </button>
       </div>
-      <button class="ui-toast__close" type="button" aria-label="Закрыть уведомление" @click="onDismiss(toast.id)">
+      <button class="ui-toast__close" type="button" :aria-label="t('Закрыть уведомление')" @click="onDismiss(toast.id)">
         <X v-bind="iconXs" aria-hidden="true" />
       </button>
       <span v-if="(toast.duration ?? 3200) > 0" class="ui-toast__progress" aria-hidden="true"></span>

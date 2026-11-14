@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // Friend picker behind "Пригласить". Inviting no longer requires being in the
 // room, so this works the same from the lobby and from inside the room.
+import { t } from '@/shared/i18n';
 import { computed, ref } from 'vue';
 import type { Friend } from '@/api/friends';
 import { ringRoomFriend } from '@/api/rooms';
@@ -45,10 +46,10 @@ async function invite(userId: string, name: string): Promise<void> {
   ringingUserId.value = userId;
   try {
     await ringRoomFriend(props.roomId, userId);
-    emit('toast', `${name} приглашён в комнату`);
+    emit('toast', t('{p0} приглашён в комнату', { p0: name }));
     emit('close');
   } catch (error) {
-    emit('toast', error instanceof Error && error.message ? error.message : 'Не удалось позвать друга');
+    emit('toast', error instanceof Error && error.message ? error.message : t('Не удалось позвать друга'));
   } finally {
     ringingUserId.value = '';
   }
@@ -57,7 +58,7 @@ async function invite(userId: string, name: string): Promise<void> {
 
 <template>
   <div class="room-invite-list">
-    <p v-if="friends.length === 0" class="room-invite-list__empty">Добавьте друзей, чтобы позвать их</p>
+    <p v-if="friends.length === 0" class="room-invite-list__empty">{{ t('Добавьте друзей, чтобы позвать их') }}</p>
     <template v-else>
       <button
         v-for="friend in friends"
@@ -66,7 +67,7 @@ async function invite(userId: string, name: string): Promise<void> {
         type="button"
         role="menuitem"
         :disabled="Boolean(ringingUserId) || presentUserIds.has(friend.user.id)"
-        :title="presentUserIds.has(friend.user.id) ? 'Уже в комнате' : undefined"
+        :title="presentUserIds.has(friend.user.id) ? t('Уже в комнате') : undefined"
         @click="void invite(friend.user.id, nameOf(friend))"
       >
         <Avatar
@@ -81,7 +82,9 @@ async function invite(userId: string, name: string): Promise<void> {
           show-dot
         />
         <span class="room-invite-list__friend-name"><EmojiText :text="nameOf(friend)" /></span>
-        <small v-if="presentUserIds.has(friend.user.id)" class="room-invite-list__friend-note">В комнате</small>
+        <small v-if="presentUserIds.has(friend.user.id)" class="room-invite-list__friend-note">{{
+          t('В комнате')
+        }}</small>
       </button>
     </template>
   </div>

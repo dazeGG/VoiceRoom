@@ -5,10 +5,11 @@
 // and asks the card to `close()`. `hosted` is the question as the bottom of the
 // leave screen: that window has its own ways out, so the question has no cross,
 // no Escape and does not go away by itself.
+import { t } from '@/shared/i18n';
 import { ThumbsDown, ThumbsUp } from '@lucide/vue';
 import { computed, ref, watchEffect } from 'vue';
 import { CALL_FEEDBACK_COMMENT_MAX_LENGTH, CALL_FEEDBACK_TAGS_BY_RATING } from '@voice-room/shared/contracts/feedback';
-import { CALL_FEEDBACK_TAG_LABELS } from '@voice-room/shared/feedback-labels';
+import { CALL_FEEDBACK_TAG_LABELS } from '@/shared/i18n/feedback-labels';
 import type { CallFeedbackCall, CallFeedbackRating, CallFeedbackTag } from '@/api/feedback';
 import { Button } from '@/shared/ui/Button';
 import { iconMd } from '@/shared/ui/icons';
@@ -74,8 +75,8 @@ defineExpose({ close });
   <div class="call-feedback">
     <div class="call-feedback__head">
       <div>
-        <h2 v-if="hosted" id="callFeedbackTitle" class="call-feedback__title">Как прошёл звонок?</h2>
-        <p class="call-feedback__sub">Звонок длился {{ minutes }} мин</p>
+        <h2 v-if="hosted" id="callFeedbackTitle" class="call-feedback__title">{{ t('Как прошёл звонок?') }}</h2>
+        <p class="call-feedback__sub">{{ t('Звонок длился') }} {{ minutes }} {{ t('мин') }}</p>
       </div>
     </div>
 
@@ -83,7 +84,7 @@ defineExpose({ close });
       <button
         class="call-feedback__thumb call-feedback__thumb--good"
         type="button"
-        aria-label="Хорошо"
+        :aria-label="t('Хорошо')"
         :aria-pressed="rating === 'good'"
         @click="choose('good')"
       >
@@ -92,7 +93,7 @@ defineExpose({ close });
       <button
         class="call-feedback__thumb call-feedback__thumb--bad"
         type="button"
-        aria-label="Плохо"
+        :aria-label="t('Плохо')"
         :aria-pressed="rating === 'bad'"
         @click="choose('bad')"
       >
@@ -102,7 +103,7 @@ defineExpose({ close });
 
     <form v-if="rating" class="call-feedback__details" @submit.prevent="send">
       <fieldset class="call-feedback__tags">
-        <legend>{{ rating === 'good' ? 'Что понравилось?' : 'Что пошло не так?' }}</legend>
+        <legend>{{ rating === 'good' ? t('Что понравилось?') : t('Что пошло не так?') }}</legend>
         <button
           v-for="tag in CALL_FEEDBACK_TAGS_BY_RATING[rating]"
           :key="tag"
@@ -117,13 +118,13 @@ defineExpose({ close });
       <textarea
         v-model="comment"
         class="call-feedback__comment"
-        aria-label="Комментарий"
+        :aria-label="t('Комментарий')"
         rows="2"
         :maxlength="CALL_FEEDBACK_COMMENT_MAX_LENGTH"
-        :placeholder="rating === 'good' ? 'Что ещё улучшить?' : 'Что случилось? Расскажите подробнее'"
+        :placeholder="rating === 'good' ? t('Что ещё улучшить?') : t('Что случилось? Расскажите подробнее')"
       ></textarea>
       <div class="call-feedback__actions">
-        <Button variant="primary" type="submit">Отправить</Button>
+        <Button variant="primary" type="submit">{{ t('Отправить') }}</Button>
       </div>
     </form>
   </div>

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '@/shared/i18n';
 import { ChevronLeft } from '@lucide/vue';
 import { computed } from 'vue';
 import type { OwnedRoom } from '@/api/auth';
@@ -29,8 +30,8 @@ const name = computed(() => roomDisplayName(props.room));
     <button
       class="room-view-header__back"
       type="button"
-      title="К списку комнат"
-      aria-label="Назад"
+      :title="t('К списку комнат')"
+      :aria-label="t('Назад')"
       @click="$emit('back')"
     >
       <ChevronLeft v-bind="iconMd" aria-hidden="true" />

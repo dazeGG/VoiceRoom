@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '@/shared/i18n';
 import { SKIN_TONES } from '@voice-room/shared/emoji-skin-tones';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
 import Emoji from './Emoji.vue';
@@ -39,11 +40,11 @@ const TONE_STRIP_MARGIN = 8;
 
 const {
   frequentEmoji,
-  searchLabel = 'Поиск реакции',
-  sectionsLabel = 'Разделы реакций',
-  gridLabel = 'Доступные реакции',
-  optionLabel = (emoji: string) => `Реакция ${emoji}`,
-  toneStripLabel = 'Цвет кожи для этой реакции'
+  searchLabel = t('Поиск реакции'),
+  sectionsLabel = t('Разделы реакций'),
+  gridLabel = t('Доступные реакции'),
+  optionLabel = (emoji: string) => t('Реакция {p0}', { p0: emoji }),
+  toneStripLabel = t('Цвет кожи для этой реакции')
 } = defineProps<{
   frequentEmoji: readonly string[];
   searchLabel?: string;
@@ -83,12 +84,12 @@ const sections = computed((): PickerSection[] => {
   const query = search.value.trim();
   if (query) {
     const matches = BROWSABLE_EMOJIS.filter((emoji) => emoji.includes(query));
-    return [{ key: 'search', label: 'Результаты', emojis: [...matches] }];
+    return [{ key: 'search', label: t('Результаты'), emojis: [...matches] }];
   }
 
   const browse: PickerSection[] = [];
   if (frequentEmoji.length) {
-    browse.push({ key: 'frequent', label: 'Часто используемые', emojis: [...frequentEmoji] });
+    browse.push({ key: 'frequent', label: t('Часто используемые'), emojis: [...frequentEmoji] });
   }
   for (const category of CATEGORIES) {
     browse.push({ key: category.key, label: category.label, emojis: category.emojis });
@@ -372,8 +373,8 @@ function onSearchInput(): void {
           <button
             class="emoji-picker__tone-trigger"
             type="button"
-            aria-label="Цвет кожи по умолчанию"
-            title="Цвет кожи по умолчанию"
+            :aria-label="t('Цвет кожи по умолчанию')"
+            :title="t('Цвет кожи по умолчанию')"
             aria-haspopup="true"
             :aria-expanded="toneMenuOpen"
             @click="toneMenuOpen = !toneMenuOpen"
@@ -381,7 +382,7 @@ function onSearchInput(): void {
             <Emoji :emoji="withSkinTone(TONE_SWATCH_BASE, skinTone)" :size="20" decorative />
           </button>
 
-          <div v-if="toneMenuOpen" class="emoji-picker__tone-menu" role="menu" aria-label="Цвет кожи">
+          <div v-if="toneMenuOpen" class="emoji-picker__tone-menu" role="menu" :aria-label="t('Цвет кожи')">
             <button
               v-for="(swatch, index) in skinToneChoices(TONE_SWATCH_BASE)"
               :key="swatch"
@@ -389,7 +390,7 @@ function onSearchInput(): void {
               type="button"
               role="menuitemradio"
               :aria-checked="index - 1 === skinTone"
-              :aria-label="index - 1 === NEUTRAL_TONE ? 'Без цвета кожи' : `Тон ${index}`"
+              :aria-label="index - 1 === NEUTRAL_TONE ? t('Без цвета кожи') : t('Тон {p0}', { p0: index })"
               @click="chooseTone(index - 1)"
             >
               <Emoji :emoji="swatch" :size="20" decorative />
@@ -413,9 +414,9 @@ function onSearchInput(): void {
           :class="{ 'emoji-picker__anchor--active': !searching && activeSectionKey === 'frequent' }"
           type="button"
           data-category="frequent"
-          aria-label="Часто используемые"
+          :aria-label="t('Часто используемые')"
           :aria-current="activeSectionKey === 'frequent' ? 'true' : undefined"
-          title="Часто используемые"
+          :title="t('Часто используемые')"
           @click="goToSection('frequent')"
         >
           🕘
@@ -475,7 +476,7 @@ function onSearchInput(): void {
         </template>
       </div>
 
-      <p v-if="layout.flat.length === 0" class="emoji-picker__empty">Ничего не найдено</p>
+      <p v-if="layout.flat.length === 0" class="emoji-picker__empty">{{ t('Ничего не найдено') }}</p>
     </div>
 
     <!-- Anchored to the tile and only as wide as the six swatches. It

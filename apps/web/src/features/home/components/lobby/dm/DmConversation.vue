@@ -2,6 +2,7 @@
 // One open thread: its messages and its compose field. The DM view mounts it
 // per peer, so opening another thread starts from a clean slate — no editing,
 // reply or menu carried over, the thread's own draft and reactions loaded.
+import { t } from '@/shared/i18n';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import type { AuthUser } from '@/api/auth';
 import type { DirectMessage } from '@/api/dm';
@@ -179,7 +180,7 @@ watch(
 const loadOlder = (element: HTMLElement): void => void lobby.loadOlderThread(element);
 
 function jumpToMessage(messageId: string): void {
-  scroll.jumpTo(messageId, () => pushToast('Сообщение не загружено — прокрутите историю выше'));
+  scroll.jumpTo(messageId, () => pushToast(t('Сообщение не загружено — прокрутите историю выше')));
 }
 
 function openProfile(event: MouseEvent, fromMe: boolean): void {
@@ -219,9 +220,9 @@ async function deleteMessage(messageId: string): Promise<void> {
   try {
     await lobby.deleteMessage(messageId);
     reactions.markDeleted(messageId);
-    pushToast('Сообщение удалено');
+    pushToast(t('Сообщение удалено'));
   } catch (cause) {
-    pushToast(cause instanceof Error && cause.message ? cause.message : 'Не удалось удалить сообщение', {
+    pushToast(cause instanceof Error && cause.message ? cause.message : t('Не удалось удалить сообщение'), {
       variant: 'error'
     });
   }
@@ -239,7 +240,7 @@ async function respondToInvite(message: DirectMessage, action: 'accept' | 'decli
   try {
     await lobby.respondRoomInvitation(message, action);
   } catch {
-    pushToast('Не удалось ответить на приглашение');
+    pushToast(t('Не удалось ответить на приглашение'));
   } finally {
     inviteResponding.value = '';
   }
@@ -268,7 +269,9 @@ function onMenuImage(action: (image: NonNullable<typeof menuImage.value>) => voi
 
 <template>
   <div ref="scrollElement" class="dm-conversation__scroll" @scroll="scroll.onScroll(loadOlder)">
-    <div v-if="lobby.thread.loading" class="dm-conversation__loading" role="status">Загружаем переписку…</div>
+    <div v-if="lobby.thread.loading" class="dm-conversation__loading" role="status">
+      {{ t('Загружаем переписку…') }}
+    </div>
     <div v-if="lobby.thread.historyError && groups.length === 0" class="dm-conversation__empty">
       {{ lobby.thread.historyError }}
     </div>
@@ -276,7 +279,7 @@ function onMenuImage(action: (image: NonNullable<typeof menuImage.value>) => voi
       v-else-if="groups.length === 0 && !lobby.thread.loading && !outbox.items.length"
       class="dm-conversation__empty"
     >
-      Здесь пока пусто. Напишите первым!
+      {{ t('Здесь пока пусто. Напишите первым!') }}
     </div>
     <div v-else ref="threadElement" class="dm-conversation__thread">
       <div v-if="lobby.thread.historyError" class="dm-conversation__empty">{{ lobby.thread.historyError }}</div>
@@ -287,7 +290,7 @@ function onMenuImage(action: (image: NonNullable<typeof menuImage.value>) => voi
         :disabled="lobby.thread.loadingOlder"
         @click="void lobby.loadOlderThread(scroll.element)"
       >
-        {{ lobby.thread.loadingOlder ? 'Загружаем…' : 'Показать предыдущие' }}
+        {{ lobby.thread.loadingOlder ? t('Загружаем…') : t('Показать предыдущие') }}
       </button>
       <template v-for="group in groups" :key="group.key">
         <div v-if="group.dayLabel" class="dm-conversation__day-divider">
@@ -298,7 +301,7 @@ function onMenuImage(action: (image: NonNullable<typeof menuImage.value>) => voi
             class="dm-group__avatar-button dm-group__trigger"
             type="button"
             aria-haspopup="dialog"
-            :aria-label="group.fromMe ? 'Ваш профиль' : `Профиль ${peerName}`"
+            :aria-label="group.fromMe ? t('Ваш профиль') : t('Профиль {p0}', { p0: peerName })"
             @click="openProfile($event, group.fromMe)"
           >
             <Avatar
@@ -316,7 +319,7 @@ function onMenuImage(action: (image: NonNullable<typeof menuImage.value>) => voi
                 class="dm-group__author dm-group__trigger"
                 type="button"
                 aria-haspopup="dialog"
-                :aria-label="group.fromMe ? 'Ваш профиль' : `Профиль ${peerName}`"
+                :aria-label="group.fromMe ? t('Ваш профиль') : t('Профиль {p0}', { p0: peerName })"
                 @click="openProfile($event, group.fromMe)"
               >
                 <EmojiText :text="group.fromMe ? selfName : peerName" /><AccountBadge
@@ -360,9 +363,9 @@ function onMenuImage(action: (image: NonNullable<typeof menuImage.value>) => voi
               </template>
               <template #content>
                 <span v-if="bubble.body.trim()" class="dm-group__content"
-                  ><ChatText :text="bubble.body" /><span v-if="bubble.editedAt" class="dm-group__edited"
-                    >(изменено)</span
-                  ></span
+                  ><ChatText :text="bubble.body" /><span v-if="bubble.editedAt" class="dm-group__edited">{{
+                    t('(изменено)')
+                  }}</span></span
                 >
               </template>
             </MessageBubble>

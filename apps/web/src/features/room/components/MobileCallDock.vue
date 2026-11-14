@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // The phone dock: four big buttons and nothing to aim at. The phone picks the
 // microphone and its own volume keys stand in for muting the sound.
+import { t } from '@/shared/i18n';
 import { Check, Headphones, Mic, MicOff, PhoneOff, Smartphone, Video, VideoOff, Volume2 } from '@lucide/vue';
 import { computed } from 'vue';
 import { handleLeaveButtonClick } from '@/features/room/client/room/room';
@@ -55,10 +56,10 @@ function pickOutput(value: string): void {
     <button
       class="mobile-call-dock__output-scrim"
       type="button"
-      aria-label="Закрыть выбор звука"
+      :aria-label="t('Закрыть выбор звука')"
       @click="mobileCall.outputOpen = false"
     ></button>
-    <div class="mobile-call-dock__output-menu" role="group" aria-label="Куда выводить звук">
+    <div class="mobile-call-dock__output-menu" role="group" :aria-label="t('Куда выводить звук')">
       <button
         v-for="option in outputs"
         :key="option.value"
@@ -84,7 +85,7 @@ function pickOutput(value: string): void {
     </div>
   </template>
 
-  <div class="mobile-call-dock" role="group" aria-label="Управление звонком">
+  <div class="mobile-call-dock" role="group" :aria-label="t('Управление звонком')">
     <button
       class="mobile-call-dock__button mobile-call-dock__button--mic"
       type="button"
@@ -100,7 +101,7 @@ function pickOutput(value: string): void {
       v-if="canPickOutput"
       class="mobile-call-dock__button mobile-call-dock__button--output"
       type="button"
-      aria-label="Куда выводить звук"
+      :aria-label="t('Куда выводить звук')"
       :aria-expanded="mobileCall.outputOpen"
       @click="toggleOutputMenu"
     >
@@ -125,7 +126,7 @@ function pickOutput(value: string): void {
     <button
       class="mobile-call-dock__button mobile-call-dock__button--leave"
       type="button"
-      aria-label="Покинуть звонок"
+      :aria-label="t('Покинуть звонок')"
       @click="handleLeaveButtonClick"
     >
       <PhoneOff :size="24" aria-hidden="true" />

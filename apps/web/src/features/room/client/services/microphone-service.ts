@@ -1,3 +1,4 @@
+import { t } from '@/shared/i18n';
 import {
   AUDIO_GATE_WORKLET_URL,
   GATE_ATTACK_MS,
@@ -98,7 +99,7 @@ async function openMicrophone(
   isCurrent: () => boolean = () => true
 ): Promise<MediaStream> {
   if (!navigator.mediaDevices?.getUserMedia) {
-    throw new Error('Браузер не дал доступ к микрофону. Нужен HTTPS или localhost.');
+    throw new Error(t('Браузер не дал доступ к микрофону. Нужен HTTPS или localhost.'));
   }
 
   const noiseMode = NOISE_MODES[getNoiseMode(mode)];
@@ -133,7 +134,7 @@ async function openMicrophone(
       stopStream(stream);
       throw new Error('Microphone action is stale', { cause: error });
     }
-    showToast('Выбранный микрофон недоступен, включен микрофон по умолчанию');
+    showToast(t('Выбранный микрофон недоступен, включен микрофон по умолчанию'));
     return stream;
   }
 }
@@ -164,7 +165,7 @@ export async function openLocalMicrophone(
     log.warn('RNNoise unavailable', errorContext(error));
     stopStream(rawStream);
     rnnoiseFailedOnPage = true;
-    showToast('RNNoise недоступен, включен браузерный шумодав');
+    showToast(t('RNNoise недоступен, включен браузерный шумодав'));
     return buildCapturePipeline(await openMicrophone('browser', isCurrent), 'browser', isCurrent);
   }
 }
@@ -227,7 +228,7 @@ async function buildCapturePipeline(
     if (!isCurrent()) throw new Error('Microphone action is stale');
 
     const [outputTrack] = destination.stream.getAudioTracks();
-    if (!outputTrack) throw new Error('Обработка микрофона не вернула аудио-трек');
+    if (!outputTrack) throw new Error(t('Обработка микрофона не вернула аудио-трек'));
     outputTrack.enabled = false;
     if ('contentHint' in outputTrack) outputTrack.contentHint = 'speech';
 
@@ -332,7 +333,7 @@ async function createOptionalGateNode(context: AudioContext): Promise<GateStage 
     return await createNoiseGateNode(context, threshold);
   } catch (error) {
     log.warn('noise gate unavailable', errorContext(error));
-    showToast('Гейт недоступен, микрофон работает без него');
+    showToast(t('Гейт недоступен, микрофон работает без него'));
     return null;
   }
 }
@@ -402,7 +403,7 @@ function createNoiseGateOptions(threshold: number) {
 
 function createScriptProcessorNoiseGateNode(context: AudioContext, threshold: number): GateStage {
   if (typeof context.createScriptProcessor !== 'function') {
-    throw new Error('ScriptProcessor недоступен');
+    throw new Error(t('ScriptProcessor недоступен'));
   }
 
   const gate = context.createScriptProcessor(GATE_PROCESSOR_BUFFER_SIZE, 1, 1);
@@ -479,7 +480,7 @@ function getGateSmoothingCoefficient(milliseconds: number, sampleRate: number): 
 
 async function createRnnoiseNode(context: AudioContext, onCreated: (node: AudioNode) => void): Promise<AudioNode> {
   if (!window.AudioWorkletNode || !context.audioWorklet) {
-    throw new Error('AudioWorklet недоступен');
+    throw new Error(t('AudioWorklet недоступен'));
   }
   const { RNNoiseNode, rnnoise_loadAssets: loadAssets } = await loadRnnoiseModule();
   await RNNoiseNode.register(
@@ -526,10 +527,10 @@ function createProcessingAudioContext(): AudioContext {
 /** Why the microphone could not be opened, for a listener who joins without one. */
 export function describeMicrophoneError(error: unknown): string {
   const name = isRecord(error) ? error.name : undefined;
-  if (name === 'NotAllowedError' || name === 'SecurityError') return 'Нет доступа к микрофону';
-  if (name === 'NotFoundError' || name === 'OverconstrainedError') return 'Микрофон не найден';
-  if (name === 'NotReadableError' || name === 'AbortError') return 'Микрофон занят другим приложением';
-  return 'Микрофон недоступен';
+  if (name === 'NotAllowedError' || name === 'SecurityError') return t('Нет доступа к микрофону');
+  if (name === 'NotFoundError' || name === 'OverconstrainedError') return t('Микрофон не найден');
+  if (name === 'NotReadableError' || name === 'AbortError') return t('Микрофон занят другим приложением');
+  return t('Микрофон недоступен');
 }
 
 export function getLocalMicrophoneCapture(): MicrophoneCapture {

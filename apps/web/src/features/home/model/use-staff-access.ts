@@ -1,6 +1,7 @@
 // What the lobby shows staff: a link to the admin app, a site of its own
 // (apps/admin), with the open reports on it, and a notice for each new report.
 
+import { t } from '@/shared/i18n';
 import { ref } from 'vue';
 import type { AdminReportsEvent } from '@voice-room/shared/contracts/admin';
 import { describeFiledReport } from '@voice-room/shared/report-labels';
@@ -33,13 +34,13 @@ export function useStaffAccess(onToast: (message: string, options?: ToastOptions
     const filed = event.filed;
     if (!filed) return;
     // It stays until closed: a report must not slip by while the admin is away.
-    onToast('Новая жалоба', {
+    onToast(t('Новая жалоба'), {
       description: describeFiledReport(filed),
       variant: 'warning',
       duration: 0,
       actions: [
         {
-          label: 'Посмотреть',
+          label: t('Посмотреть'),
           onClick: (toastId: string) => {
             useToastsStore().dismissToast(toastId);
             if (adminUrl.value) window.open(new URL('reports', adminUrl.value).href, '_blank', 'noopener');

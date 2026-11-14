@@ -1,3 +1,5 @@
+import { t } from '@/shared/i18n';
+import { useLocalizedText, currentErrorMessage } from '@/shared/i18n/localized-text';
 import { nextTick, shallowReactive } from 'vue';
 import type { HistoryCache } from './history-cache';
 import { createHistorySnapshots } from './history-snapshots';
@@ -32,6 +34,7 @@ interface AnchoredHistoryState<T> {
 }
 
 export function createAnchoredHistory<T extends { id: string }>(options: AnchoredHistoryOptions<T>) {
+  const errorText = useLocalizedText();
   let scope = '';
   let generation = 0;
   let controller: AbortController | null = null;
@@ -46,7 +49,9 @@ export function createAnchoredHistory<T extends { id: string }>(options: Anchore
     loadingOlder: false,
     hasMoreBefore: false,
     before: undefined,
-    error: ''
+    get error() {
+      return errorText.value;
+    }
   });
 
   function notify(): void {
@@ -87,7 +92,7 @@ export function createAnchoredHistory<T extends { id: string }>(options: Anchore
     state.loadingOlder = false;
     state.before = undefined;
     state.hasMoreBefore = false;
-    state.error = '';
+    errorText.value = '';
     notify();
     const snapshot = snapshots.begin('open');
     try {
@@ -106,7 +111,7 @@ export function createAnchoredHistory<T extends { id: string }>(options: Anchore
       notify();
     } catch (error) {
       if (requestGeneration !== generation || controller.signal.aborted) return;
-      state.error = error instanceof Error ? error.message : 'Не удалось загрузить историю';
+      errorText.value = () => (error instanceof Error ? currentErrorMessage(error) : t('Не удалось загрузить историю'));
       notify();
     } finally {
       snapshot.dispose();
@@ -132,7 +137,7 @@ export function createAnchoredHistory<T extends { id: string }>(options: Anchore
     const previousHeight = scrollElement?.scrollHeight ?? 0;
     const previousTop = scrollElement?.scrollTop ?? 0;
     state.loadingOlder = true;
-    state.error = '';
+    errorText.value = '';
     notify();
     const snapshot = snapshots.begin('older');
     let promise: Promise<void> | null = null;
@@ -152,7 +157,8 @@ export function createAnchoredHistory<T extends { id: string }>(options: Anchore
         }
       } catch (error) {
         if (!requestController.signal.aborted && requestGeneration === generation) {
-          state.error = error instanceof Error ? error.message : 'Не удалось загрузить старые сообщения';
+          errorText.value = () =>
+            error instanceof Error ? currentErrorMessage(error) : t('Не удалось загрузить старые сообщения');
           notify();
         }
       } finally {

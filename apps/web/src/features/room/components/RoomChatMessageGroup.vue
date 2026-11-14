@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // One author's run of messages in the room chat: the avatar and name (which
 // open the author's profile), then each message as a MessageBubble.
+import { t } from '@/shared/i18n';
 import { computed } from 'vue';
 import type { ChatMessage } from '@/api/rooms';
 import { useSessionStore } from '@/features/auth/session.store';
@@ -32,7 +33,9 @@ const emit = defineEmits<{
 }>();
 
 const session = useSessionStore();
-const profileLabel = computed(() => (props.group.self ? 'Ваш профиль' : `Профиль ${props.group.name}`));
+const profileLabel = computed(() =>
+  props.group.self ? t('Ваш профиль') : t('Профиль {p0}', { p0: props.group.name })
+);
 </script>
 
 <template>
@@ -112,9 +115,9 @@ const profileLabel = computed(() => (props.group.self ? 'Ваш профиль' 
               :content="message.content"
               :fallback="message.text"
               :onmention="onMention"
-            /><ChatText v-else :text="message.text" /><span v-if="message.editedAt" class="room-chat-group__edited"
-              >(изменено)</span
-            ></span
+            /><ChatText v-else :text="message.text" /><span v-if="message.editedAt" class="room-chat-group__edited">{{
+              t('(изменено)')
+            }}</span></span
           >
         </template>
       </MessageBubble>

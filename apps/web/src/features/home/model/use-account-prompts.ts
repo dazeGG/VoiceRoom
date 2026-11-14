@@ -3,6 +3,7 @@
 // "what's new" stories, and the one-time desktop app prompt, which waits until
 // none of the others is on screen and no call is joining or live.
 
+import { t } from '@/shared/i18n';
 import { computed, ref, watch } from 'vue';
 import { fetchAccountSecurity, markAppPromptSeen, snoozeRecoveryCodesReminder, type AuthUser } from '@/api/auth';
 import { shouldOpenAppPrompt } from '@/features/room/room-cta';
@@ -97,7 +98,7 @@ export function useAccountPrompts(options: {
     try {
       await snoozeRecoveryCodesReminder();
     } catch {
-      options.onToast('Не удалось отложить напоминание', { variant: 'error' });
+      options.onToast(t('Не удалось отложить напоминание'), { variant: 'error' });
     }
   };
 
