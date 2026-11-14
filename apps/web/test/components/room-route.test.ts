@@ -4,7 +4,10 @@
 
 import { screen } from '@testing-library/vue';
 import { nextTick } from 'vue';
-import { beforeAll, expect, test } from 'vitest';
+import { beforeAll, expect, test, vi } from 'vitest';
+import * as desktopBoundary from '../../src/platform/desktop-boundary';
+import { useLocaleStore } from '../../src/shared/i18n';
+import { french } from '../../src/shared/i18n/catalog';
 import RoomRoute from '../../src/pages/RoomRoute.vue';
 import { useProfileCardUiStore } from '../../src/entities/profile-card/profile-card-ui.store.ts';
 import { stubFetch } from '../fixtures/fetch.ts';
@@ -51,4 +54,24 @@ test('a signed-in room link opens exactly one profile card, and it stays open', 
   for (let i = 0; i < 5; i += 1) await nextTick();
 
   expect(screen.getAllByRole('dialog', { name: 'Профиль Боб' })).toHaveLength(1);
+});
+
+test('unsupported room route kicker follows the active client language', async () => {
+  const policy = desktopBoundary.resolveDesktopBoundaryPolicy();
+  const boundary = vi
+    .spyOn(desktopBoundary, 'applyDesktopBoundaryToDocument')
+    .mockReturnValue({ ...policy, desktopAllowed: false, roomClientAllowed: false });
+  try {
+    const { pinia } = await renderWithApp(RoomRoute, { props: { roomId: 'room-1' } });
+    const locale = useLocaleStore(pinia);
+    expect(screen.getByText('Только для компьютера')).toBeTruthy();
+    await locale.select('en');
+    await nextTick();
+    expect(screen.getByText('Desktop only')).toBeTruthy();
+    await locale.select('fr');
+    await nextTick();
+    expect(screen.getByText(french['Только для компьютера'])).toBeTruthy();
+  } finally {
+    boundary.mockRestore();
+  }
 });

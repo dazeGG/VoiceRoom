@@ -125,7 +125,7 @@ async function handleLogout(): Promise<void> {
   <div v-else-if="!roomAllowed" class="app-shell">
     <main class="auth-session-error" :aria-label="t('Неподдерживаемое устройство')" aria-live="polite">
       <div class="auth-session-error__card">
-        <p class="auth-session-error__kicker">Desktop only</p>
+        <p class="auth-session-error__kicker">{{ t('Только для компьютера') }}</p>
         <h1 class="auth-session-error__title">{{ t('Откройте комнату на компьютере') }}</h1>
         <p class="auth-session-error__text">
           {{ t('Мобильные браузеры не подключаются к realtime, LiveKit, медиа и push-инфраструктуре VoiceRoom.') }}
