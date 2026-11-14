@@ -71,14 +71,17 @@ test('native association CAS fences same-language transfers and makes conflicts 
   assert.equal(moved.status, 'registered');
   if (moved.status !== 'registered') return;
   assert.notEqual(moved.registration.version, first.registration.version);
-  const before = await pool.query('SELECT * FROM device_tokens ORDER BY id');
+  const before = await pool.query<Record<string, unknown>>('SELECT * FROM device_tokens ORDER BY id');
   const stale = await tokens.register({
     ...base,
     notificationChannels: ['calls'],
     localeState: intent('en', first.registration.version)
   });
   assert.deepEqual(stale, { status: 'locale_conflict', registration: moved.registration });
-  assert.deepEqual((await pool.query('SELECT * FROM device_tokens ORDER BY id')).rows, before.rows);
+  assert.deepEqual(
+    (await pool.query<Record<string, unknown>>('SELECT * FROM device_tokens ORDER BY id')).rows,
+    before.rows
+  );
   await tokens.upsert({ ...base, userId: 'b', sessionId: 'sb' });
   assert.equal((await tokens.listByUserId('b'))[0]?.locale, 'fr', 'legacy refresh preserves selected locale');
   await tokens.removeToken({ provider: 'rustore', token: 'one' });
@@ -134,7 +137,7 @@ test(
     });
     assert.equal(moved.status, 'subscribed');
     if (moved.status !== 'subscribed') return;
-    const before = await pool.query('SELECT * FROM push_subscriptions ORDER BY id');
+    const before = await pool.query<Record<string, unknown>>('SELECT * FROM push_subscriptions ORDER BY id');
     assert.deepEqual(
       await pushes.register({
         userId: 'a',
@@ -144,7 +147,10 @@ test(
       }),
       { status: 'locale_conflict', registration: moved.registration }
     );
-    assert.deepEqual((await pool.query('SELECT * FROM push_subscriptions ORDER BY id')).rows, before.rows);
+    assert.deepEqual(
+      (await pool.query<Record<string, unknown>>('SELECT * FROM push_subscriptions ORDER BY id')).rows,
+      before.rows
+    );
     await pushes.upsert({ userId: 'b', subscription });
     assert.equal((await pushes.listByUserId('b'))[0]?.metadata.locale, 'fr');
   }
