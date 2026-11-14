@@ -79,7 +79,7 @@ export async function loadLiveKitHarness(
     onPublish?: (track: unknown) => Promise<void>;
     /** Holds exact SDK cleanup to verify a stale join cannot affect a newer call. */
     onUnpublish?: (track: unknown) => Promise<void>;
-    /** Isolate control-sync presence only in the raw-loss service test that invokes it. */
+    /** Isolate control-sync presence in media-only tests without an app realtime fake. */
     stubPresence?: boolean;
     /** What the raw-microphone silence check answers. */
     inputSilent?: () => Promise<boolean>;
@@ -198,8 +198,8 @@ export async function loadLiveKitHarness(
 
   vi.doMock('@/features/room/start-ui.store', () => ({ useStartUiStore: () => ({}) }));
   vi.doMock(`${P}/core/room-runtime.store`, () => ({ state }));
-  // Only the raw-loss service test needs a networkless presence edge. Camera
-  // tests use their own room-realtime mock to verify real presence payloads.
+  // Media-only tests can isolate the network presence edge. Camera tests use
+  // their own room-realtime mock to verify real presence payloads.
   if (options.stubPresence) vi.doMock(`${P}/room/presence`, () => ({ postState: vi.fn(async () => {}) }));
   else vi.doUnmock(`${P}/room/presence`);
   vi.doMock(`${P}/ui/status`, () => ({

@@ -23,7 +23,9 @@ afterEach(() => {
 
 async function inCall(options: Parameters<typeof loadLiveKitHarness>[0] = {}) {
   micTrack.readyState = 'live';
-  const lk = await loadLiveKitHarness({ autoResolveClient: true, ...options });
+  // Microphone controls synchronize presence after recovery; the application
+  // WebSocket is outside this media-recovery harness and has its own tests.
+  const lk = await loadLiveKitHarness({ autoResolveClient: true, stubPresence: true, ...options });
   const oldRoom = {
     closed: false,
     disconnect: async () => {
