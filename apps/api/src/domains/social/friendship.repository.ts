@@ -6,9 +6,10 @@ import { sql } from 'kysely';
 import type pg from 'pg';
 import { kyselyOn, type Database, type Queryable } from '../../platform/db/kysely.ts';
 import { escapeLike } from '../../platform/db/like.ts';
-import { friendOf, mapPublicUser, now, orderedPair } from './social-records.ts';
+import { friendOf, mapInvite, mapPublicUser, now, orderedPair } from './social-records.ts';
 import { epochMillis } from '../../platform/epoch-millis.ts';
 import { unreadCountsFor } from '../messaging/dm-thread.repository.ts';
+import { isRecord } from '@voice-room/shared/guards';
 
 export async function friendsOn(q: Database, a: string, b: string): Promise<boolean> {
   const [low, high] = orderedPair(a, b);
@@ -72,6 +73,7 @@ export function createFriendshipRepository({ pool }: { pool: pg.Pool }) {
             sql<string>`CASE WHEN sender_id = ${userId} THEN recipient_id ELSE sender_id END`.as('peer'),
             'id',
             'body',
+            'metadata',
             'created_at',
             'sender_id'
           ])
@@ -86,10 +88,19 @@ export function createFriendshipRepository({ pool }: { pool: pg.Pool }) {
       .orderBy('id', 'desc')
       .execute();
     const lastMessage = new Map(
-      last.map((row) => [
-        row.peer,
-        { id: row.id, body: row.body, createdAt: epochMillis(row.created_at), fromMe: row.sender_id === userId }
-      ])
+      last.map((row) => {
+        const invite = mapInvite(isRecord(row.metadata) ? row.metadata : null);
+        return [
+          row.peer,
+          {
+            id: row.id,
+            body: row.body,
+            createdAt: epochMillis(row.created_at),
+            fromMe: row.sender_id === userId,
+            ...(invite ? { invite } : {})
+          }
+        ] as const;
+      })
     );
 
     return friends.map((row) => ({
