@@ -4,7 +4,8 @@
 import { screen } from '@testing-library/vue';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, expect, test, vi } from 'vitest';
-import { defineComponent, h } from 'vue';
+import { defineComponent, h, nextTick } from 'vue';
+import { useLocaleStore } from '@/shared/i18n';
 import RoomPreviewView from '@/features/home/components/lobby/RoomPreviewView.vue';
 import { provideLobby } from '@/features/home/model/lobby-context';
 import { useLobbyStore } from '@/features/home/model/lobby.store';
@@ -104,6 +105,13 @@ test('before joining there is no call dock, only a note and one way in', async (
   expect(screen.queryByRole('button', { name: 'Выбрать микрофон' })).toBeNull();
   expect(document.querySelector('.participant--speaking')).toBeNull();
 
-  await userEvent.click(screen.getByRole('button', { name: 'Войти в комнату' }));
+  expect(screen.getByRole('button', { name: 'Войти', exact: true })).toBeTruthy();
+  await useLocaleStore().select('en');
+  await nextTick();
+  expect(screen.getByRole('button', { name: 'Join', exact: true })).toBeTruthy();
+  await useLocaleStore().select('fr');
+  await nextTick();
+  expect(onEnter).not.toHaveBeenCalled();
+  await userEvent.click(screen.getByRole('button', { name: 'Rejoindre', exact: true }));
   expect(onEnter).toHaveBeenCalledOnce();
 });
