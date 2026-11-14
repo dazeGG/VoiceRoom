@@ -380,6 +380,7 @@ export function createVoiceJoin(deps: VoiceJoinDeps) {
         os: connection.device?.os ?? '',
         browser: connection.device?.browser ?? '',
         guestId: sessionUser ? '' : normalizeGuestId(payload.guestId),
+        clientId: normalizeGuestId(payload.clientId) || normalizeGuestId(payload.guestId),
         ip: clientIp || '',
         joinedAt: previous?.joinedAt ?? Date.now(),
         muted: Boolean(previous?.muted || persistedServerMuted),

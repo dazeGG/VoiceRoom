@@ -69,6 +69,8 @@ export type FinishedVoiceSession = {
   guestName: string | null;
   /** A guest's lasting browser id; null when it sent none. */
   guestId: string | null;
+  /** Random browser/application installation id, independent of the account. */
+  clientId?: string | null;
   client: ClientKind | null;
   /** The system and browser the socket named; empty when it named none. */
   os: string;
@@ -113,6 +115,7 @@ export function createVoiceSessionRepository({
             user_id: session.userId,
             guest_name: session.userId ? null : session.guestName,
             guest_id: (!session.userId && session.guestId) || null,
+            client_id: session.clientId || (!session.userId && session.guestId) || null,
             client: session.client,
             os: session.os || null,
             browser: session.browser || null,
@@ -172,6 +175,7 @@ export function createVoiceSessionRepository({
           room_id: null,
           guest_name: null,
           guest_id: null,
+          client_id: null,
           ip_key: null,
           location: null,
           network: null,

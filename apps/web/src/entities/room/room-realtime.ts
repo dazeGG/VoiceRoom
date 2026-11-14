@@ -345,7 +345,7 @@ export function subscribeRoomVoice(roomId: string, handler: RoomDetailHandler): 
 export function joinVoiceRoom(payload: { roomId: string; peerId: string; sessionToken: string; name: string }): void {
   ensureReconnectRestore();
   const guestId = guestBrowserId();
-  const join = guestId ? { ...payload, guestId } : payload;
+  const join = guestId ? { ...payload, guestId, clientId: guestId } : payload;
   activeVoiceJoin = join;
   getAppRealtime().send('room.join', join);
 }

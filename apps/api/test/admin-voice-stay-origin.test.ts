@@ -66,6 +66,7 @@ test('a guest stay keeps its name, browser id, device and keyed address, never t
   assert.equal(peer?.os, 'Windows');
   assert.equal(peer?.browser, 'Chrome');
   assert.equal(peer?.guestId, GUEST_ID);
+  assert.equal(peer?.clientId, GUEST_ID, 'older browser guestId is also its installation id');
   assert.match(peer?.ipKey ?? '', /^[0-9a-f]{16}$/);
   assert.equal(JSON.stringify(seated).includes(GUEST_IP), false, 'the live answer never carries the address');
 
@@ -80,6 +81,7 @@ test('a guest stay keeps its name, browser id, device and keyed address, never t
   assert.equal(stay?.account, null);
   assert.equal(stay?.guestName, 'Петя');
   assert.equal(stay?.guestId, GUEST_ID);
+  assert.equal(stay?.clientId, GUEST_ID);
   assert.equal(stay?.client, 'browser');
   assert.equal(stay?.os, 'Windows');
   assert.equal(stay?.browser, 'Chrome');
@@ -101,8 +103,8 @@ test('past the kept days a stay forgets whose and where from it was', { skip }, 
   beforeCleanup(() => pool.end());
 
   await pool.query(
-    `INSERT INTO voice_sessions (room_id, user_id, guest_name, guest_id, client, os, browser, ip_key, location, joined_at, left_at)
-     VALUES ('old-room', NULL, 'Петя', $1, 'browser', 'Windows', 'Chrome', '0123456789abcdef', 'Москва, Россия',
+    `INSERT INTO voice_sessions (room_id, user_id, guest_name, guest_id, client_id, client, os, browser, ip_key, location, joined_at, left_at)
+     VALUES ('old-room', NULL, 'Петя', $1, $1, 'browser', 'Windows', 'Chrome', '0123456789abcdef', 'Москва, Россия',
              now() - interval '91 days', now() - interval '91 days' + interval '1 hour')`,
     [GUEST_ID]
   );
@@ -113,9 +115,10 @@ test('past the kept days a stay forgets whose and where from it was', { skip }, 
           room_id: string | null;
           guest_name: string | null;
           guest_id: string | null;
+          client_id: string | null;
           ip_key: string | null;
           location: string | null;
-        }>(`SELECT room_id, guest_name, guest_id, ip_key, location FROM voice_sessions`)
+        }>(`SELECT room_id, guest_name, guest_id, client_id, ip_key, location FROM voice_sessions`)
         .then((r) => r.rows[0]),
     (row) => row?.room_id === null
   );
@@ -123,6 +126,7 @@ test('past the kept days a stay forgets whose and where from it was', { skip }, 
     room_id: null,
     guest_name: null,
     guest_id: null,
+    client_id: null,
     ip_key: null,
     location: null
   });

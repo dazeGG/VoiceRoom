@@ -65,7 +65,13 @@ export function callSince(room: PresenceRoom): number | null {
 }
 
 // Where a stay came from is for those who may see it; the rest see who and when.
-const withoutOrigin = (stay: RoomStay): RoomStay => ({ ...stay, guestId: null, ipKey: null, location: null });
+const withoutOrigin = (stay: RoomStay): RoomStay => ({
+  ...stay,
+  guestId: null,
+  clientId: null,
+  ipKey: null,
+  location: null
+});
 
 function parseCursor(cursor: string | undefined): { leftAt: number; id: string } | undefined {
   if (!cursor) return undefined;
@@ -123,6 +129,7 @@ export function createAdminRoomsService(deps: AdminRoomsServiceDeps) {
           os: peer.os ?? '',
           browser: peer.browser ?? '',
           guestId: (origin && !peer.accountUserId && peer.guestId) || null,
+          clientId: origin ? peer.clientId || peer.guestId || null : null,
           ipKey: origins.get(peer)?.ipKey ?? null,
           location: origins.get(peer)?.location || null,
           network: currentVoice(peer)?.level ?? null,
@@ -169,6 +176,7 @@ export function createAdminRoomsService(deps: AdminRoomsServiceDeps) {
   async function calls(userId: string, query: RoomCallsQuery): Promise<Payload<RoomCalls> | null> {
     if (!(await allowed(userId))) return null;
     const [origin, readsFeedback] = await Promise.all([seesOrigin(userId), deps.staff.can(userId, 'stats.view')]);
+    if (!origin && (query.clientId || query.ipKey)) return null;
     const liveSince = new Map<string, number>();
     for (const room of deps.presenceRooms()) {
       const since = room.peers.size > 0 ? callSince(room) : null;
@@ -177,6 +185,8 @@ export function createAdminRoomsService(deps: AdminRoomsServiceDeps) {
     const { calls: page, more } = await deps.repository().calls({
       roomId: query.roomId,
       accountId: query.accountId,
+      clientId: query.clientId,
+      ipKey: query.ipKey,
       after: parseCursor(query.after),
       from: query.from === undefined ? undefined : Number(query.from),
       to: query.to === undefined ? undefined : Number(query.to)
@@ -286,6 +296,7 @@ export function createAdminRoomsService(deps: AdminRoomsServiceDeps) {
           account: (peer.accountUserId && accountById.get(peer.accountUserId)) || null,
           guestName: peer.accountUserId ? null : peer.name || null,
           guestId: (!peer.accountUserId && peer.guestId) || null,
+          clientId: peer.clientId || peer.guestId || null,
           client: peer.client ?? null,
           os: peer.os ?? null,
           browser: peer.browser ?? null,

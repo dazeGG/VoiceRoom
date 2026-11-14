@@ -37,6 +37,7 @@ const stay: RoomStay = {
   account: null,
   guestName: 'Петя',
   guestId: GUEST_BROWSER,
+  clientId: GUEST_BROWSER,
   client: 'browser',
   os: 'Windows',
   browser: 'Chrome',
@@ -81,6 +82,7 @@ test('without the origin the stay keeps who and how, not where from', async () =
   assert.equal(entry?.stay?.guestName, 'Петя');
   assert.deepEqual(entry?.stay?.network, stay.network);
   assert.equal(entry?.stay?.guestId, null);
+  assert.equal(entry?.stay?.clientId, null);
   assert.equal(entry?.stay?.ipKey, null);
   assert.equal(entry?.stay?.location, null);
 });

@@ -63,13 +63,34 @@ export function AccountName({
   );
 }
 
-type Seat = Pick<RoomStay, 'client' | 'os' | 'browser' | 'guestId' | 'ipKey' | 'location'>;
+type Seat = Pick<RoomStay, 'client' | 'os' | 'browser' | 'guestId' | 'clientId' | 'ipKey' | 'location'>;
+
+function OriginId({ title, value, short }: { title: string; value: string; short: string }) {
+  return (
+    <span className="rooms-code ui-mono" title={`${title} ${value}`}>
+      <span>{short}</span>
+      <input
+        className="rooms-origin-full-id"
+        aria-label={title}
+        title="Выделить полный ID для копирования"
+        value={value}
+        readOnly
+        onFocus={(event) => event.currentTarget.select()}
+        onClick={(event) => {
+          event.stopPropagation();
+          event.currentTarget.select();
+        }}
+      />
+    </span>
+  );
+}
 
 /** The device and the place, never the address: equal ip· keys are the same address. */
 export function Origin({ seat }: { seat: Seat }) {
   const device = deviceLabel(seat);
+  const clientId = seat.clientId ?? seat.guestId;
   const parts = [device, seat.location].filter((part): part is string => Boolean(part));
-  if (!parts.length && !seat.ipKey && !seat.guestId) return null;
+  if (!parts.length && !seat.ipKey && !clientId) return null;
   // The dots between the parts are drawn by the stylesheet.
   return (
     <span className="rooms-origin">
@@ -78,15 +99,13 @@ export function Origin({ seat }: { seat: Seat }) {
         {parts.map((part) => (
           <span key={part}>{part}</span>
         ))}
-        {seat.ipKey ? (
-          <span className="rooms-code ui-mono" title={`Ключ адреса ${seat.ipKey}`}>
-            {shortIpKey(seat.ipKey)}
-          </span>
-        ) : null}
-        {seat.guestId ? (
-          <span className="rooms-code ui-mono" title={`Браузер гостя ${seat.guestId}`}>
-            {shortGuestId(seat.guestId)}
-          </span>
+        {seat.ipKey ? <OriginId title="Ключ адреса" value={seat.ipKey} short={shortIpKey(seat.ipKey)} /> : null}
+        {clientId ? (
+          <OriginId
+            title={seat.clientId ? 'ID браузера / приложения' : 'Браузер гостя'}
+            value={clientId}
+            short={shortGuestId(clientId)}
+          />
         ) : null}
       </span>
     </span>

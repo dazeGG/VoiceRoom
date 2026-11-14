@@ -22,6 +22,7 @@ import { defined } from './helpers/assert-defined.ts';
 const SILENT = { log() {}, info() {}, warn() {}, error() {} };
 const skip = !process.env.TEST_DATABASE_URL;
 const ADMIN_ID = '00000000-0000-4000-8000-0000000000ad';
+const ALICE_CLIENT_ID = 'a1111111-1111-4111-8111-111111111111';
 const DESKTOP_APP_UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) VoiceRoom/1.4.6 Chrome/130.0.0.0 Electron/33.0.0 Safari/537.36';
 const IPHONE_UA =
@@ -73,7 +74,7 @@ test('an administrator sees who is in voice now and the stays before, a page at 
   const guestWs = openWs(socketPath, { headers: { 'User-Agent': IPHONE_UA } });
   await Promise.all([aliceWs.ready, guestWs.ready]);
   const aliceVoice = { roomId: 'kitchen', peerId: 'alice-peer', sessionToken: 'a'.repeat(32) };
-  await joinVoiceRoom(aliceWs, { ...aliceVoice, name: 'Алиса' });
+  await joinVoiceRoom(aliceWs, { ...aliceVoice, name: 'Алиса', clientId: ALICE_CLIENT_ID });
   await joinVoiceRoom(guestWs, { roomId: 'kitchen', peerId: 'guest-peer', sessionToken: 'g'.repeat(32), name: 'Петя' });
 
   for (const pathname of ['/api/admin/rooms', '/api/admin/rooms/history']) {
@@ -100,6 +101,8 @@ test('an administrator sees who is in voice now and the stays before, a page at 
     ]
   );
   assert.equal(kitchen.since, defined(kitchen.peers[0], 'the first peer').joinedAt);
+  assert.equal(kitchen.peers[0]?.clientId, ALICE_CLIENT_ID, 'an authenticated application has its installation id');
+  assert.equal(kitchen.peers[0]?.guestId, null, 'an account is still not a guest');
   assert.deepEqual(
     kitchen.peers.map((peer) => peer.client),
     ['desktop_app', 'mobile']
@@ -113,6 +116,8 @@ test('an administrator sees who is in voice now and the stays before, a page at 
   const left = defined(afterLeave.stays[0], 'the stay of alice');
   assert.equal(left.roomName, 'Кухня');
   assert.equal(left.account?.login, 'alice');
+  assert.equal(left.clientId, ALICE_CLIENT_ID, 'the application id survives in finished history');
+  assert.equal(left.guestId, null);
   assert.equal(afterLeave.keepDays, 90);
   const stillIn = await request(socketPath, { pathname: '/api/admin/rooms', cookie: admin }, LiveRooms);
   assert.deepEqual(

@@ -18,7 +18,14 @@ import { joinVoiceRoom, openWs, sendWs } from './ws-harness.ts';
 const SILENT = { log() {}, info() {}, warn() {}, error() {} };
 const skip = !process.env.TEST_DATABASE_URL;
 
-type SessionRow = { room_id: string; user_id: string | null; joined_at: Date; left_at: Date };
+type SessionRow = {
+  room_id: string;
+  user_id: string | null;
+  client_id: string | null;
+  guest_id: string | null;
+  joined_at: Date;
+  left_at: Date;
+};
 
 function listen(server: http.Server) {
   return new Promise<number>((resolve) => {
@@ -65,12 +72,17 @@ test('a stay in voice is recorded when the peer leaves and when the API stops', 
   const adaSeat = { roomId, peerId: 'ada-peer', sessionToken: 'a'.repeat(32) };
   const guestSeat = { roomId, peerId: 'guest-peer', sessionToken: 'g'.repeat(32) };
   const beforeJoin = Date.now();
-  await joinVoiceRoom(ada, { ...adaSeat, name: 'Ада' });
-  await joinVoiceRoom(guest, { ...guestSeat, name: 'Гость' });
+  const adaClientId = 'a1111111-1111-4111-8111-111111111111';
+  const guestClientId = 'b2222222-2222-4222-8222-222222222222';
+  const guestId = 'c3333333-3333-4333-8333-333333333333';
+  await joinVoiceRoom(ada, { ...adaSeat, name: 'Ада', guestId: adaClientId });
+  await joinVoiceRoom(guest, { ...guestSeat, name: 'Гость', clientId: guestClientId, guestId });
 
   const rows = () =>
     db
-      .query<SessionRow>('SELECT room_id, user_id, joined_at, left_at FROM voice_sessions ORDER BY left_at')
+      .query<SessionRow>(
+        'SELECT room_id, user_id, client_id, guest_id, joined_at, left_at FROM voice_sessions ORDER BY left_at'
+      )
       .then((result) => result.rows);
   assert.deepEqual(await rows(), [], 'nothing is written while the stay goes on');
 
@@ -80,6 +92,8 @@ test('a stay in voice is recorded when the peer leaves and when the API stops', 
   const guestRow = defined(afterGuestLeft[0], 'the guest voice session row');
   assert.equal(guestRow.room_id, roomId);
   assert.equal(guestRow.user_id, null, 'a guest has no account');
+  assert.equal(guestRow.client_id, guestClientId, 'the explicit installation id wins over the legacy guest id');
+  assert.equal(guestRow.guest_id, guestId, 'the feedback guest id retains its own meaning');
   assert.ok(guestRow.joined_at.getTime() >= beforeJoin - 1000);
   assert.ok(guestRow.left_at.getTime() >= guestRow.joined_at.getTime());
 
@@ -102,6 +116,8 @@ test('a stay in voice is recorded when the peer leaves and when the API stops', 
   const adaRow = defined(afterStop[1], "Ada's voice session row");
   assert.equal(adaRow.user_id, user.id);
   assert.equal(adaRow.room_id, roomId);
+  assert.equal(adaRow.client_id, adaClientId, 'older account clients sent their random browser id as guestId');
+  assert.equal(adaRow.guest_id, null, 'a signed-in account does not become a guest');
   assert.ok(adaRow.left_at.getTime() >= beforeStop - 1000);
 });
 

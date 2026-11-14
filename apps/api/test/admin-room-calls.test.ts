@@ -35,11 +35,11 @@ async function stay(
   roomId: string,
   from: number,
   to: number,
-  who: { userId?: string; guestName?: string; ipKey?: string } = {}
+  who: { userId?: string; guestName?: string; ipKey?: string; clientId?: string; guestId?: string } = {}
 ): Promise<string> {
   const { rows } = await pool.query<{ id: string }>(
-    `INSERT INTO voice_sessions (room_id, user_id, guest_name, ip_key, location, joined_at, left_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
+    `INSERT INTO voice_sessions (room_id, user_id, guest_name, ip_key, location, joined_at, left_at, client_id, guest_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
     [
       roomId,
       who.userId ?? null,
@@ -47,7 +47,9 @@ async function stay(
       who.ipKey ?? null,
       who.ipKey ? 'Москва, Россия' : null,
       at(from),
-      at(to)
+      at(to),
+      who.clientId ?? null,
+      who.guestId ?? null
     ]
   );
   return defined(rows[0], 'the stay').id;
@@ -192,4 +194,97 @@ test('over HTTP the calls are for staff only, and a malformed cursor is refused'
   );
   assert.equal((await request(socketPath, { pathname: `${pathname}?after=yesterday`, cookie: admin })).status, 400);
   assert.equal((await request(socketPath, { pathname: `${pathname}?from=soon`, cookie: admin })).status, 400);
+  for (const query of [
+    'clientId=browser',
+    'clientId=123',
+    'ipKey=203.0.113.1',
+    'ipKey=abcd',
+    'ipKey=0123456789abcdeg'
+  ]) {
+    assert.equal((await request(socketPath, { pathname: `${pathname}?${query}`, cookie: admin })).status, 400, query);
+  }
+});
+
+test('origin filters find whole calls, match one stay and preserve legacy guest IDs', { skip }, async (t) => {
+  const { cleanup, databaseUrl, pool } = await createTestDatabase(t);
+  t.after(cleanup);
+  await runMigrations({ databaseUrl, logger: SILENT });
+  const clientId = 'a1111111-1111-4111-8111-111111111111';
+  const otherClient = 'b2222222-2222-4222-8222-222222222222';
+  const legacyClient = 'c3333333-3333-4333-8333-333333333333';
+  const firstIp = '0123456789abcdef';
+  const secondIp = 'fedcba9876543210';
+  await pool.query(`INSERT INTO users (id, login, display_name, password_hash) VALUES ($1, 'calluser', '', 'unused')`, [
+    ADMIN_ID
+  ]);
+  const first = await stay(pool, 'kitchen', 0, 10, { clientId, ipKey: firstIp, userId: ADMIN_ID });
+  await stay(pool, 'kitchen', 5, 25, { clientId: otherClient, ipKey: secondIp });
+  await stay(pool, 'kitchen', 20, 30, { clientId, ipKey: firstIp });
+  const second = await stay(pool, 'kitchen', 40, 50, { clientId, ipKey: secondIp });
+  const legacy = await stay(pool, 'legacy', 60, 70, { guestId: legacyClient, ipKey: firstIp });
+  const repository = createAdminRoomsRepository({ pool });
+  const matching = await repository.calls({ clientId });
+  assert.deepEqual(
+    matching.calls.map((call) => [call.id, call.stays.length]),
+    [
+      [second, 1],
+      [first, 3]
+    ]
+  );
+  assert.equal(
+    matching.calls[1]?.endedAt,
+    BASE + 30 * MINUTE,
+    'the nonmatching bridge still defines one complete call'
+  );
+  const combined = await repository.calls({ clientId, ipKey: secondIp });
+  assert.deepEqual(
+    combined.calls.map((call) => call.id),
+    [second],
+    'IDs on different stays do not combine'
+  );
+  assert.deepEqual(
+    (await repository.calls({ ipKey: secondIp })).calls.map((call) => call.id),
+    [second, first]
+  );
+  assert.deepEqual(
+    (await repository.calls({ clientId: legacyClient })).calls.map((call) => call.id),
+    [legacy]
+  );
+  assert.equal((await repository.calls({ clientId: legacyClient })).calls[0]?.stays[0]?.clientId, legacyClient);
+  assert.deepEqual(
+    (
+      await repository.calls({ clientId, accountId: ADMIN_ID, roomId: 'kitchen', from: BASE, to: BASE + 35 * MINUTE })
+    ).calls.map((call) => call.id),
+    [first]
+  );
+  assert.deepEqual((await repository.calls({ clientId: otherClient, roomId: 'absent' })).calls, []);
+  const service = serviceOver(pool);
+  assert.equal(await service.calls('moderator', { clientId }), null);
+  assert.equal(await service.calls('moderator', { ipKey: firstIp }), null);
+  assert.equal(await service.calls('moderator', { clientId, ipKey: firstIp }), null);
+  const redacted = defined(await service.calls('moderator', {}), 'redacted history');
+  assert.ok(
+    redacted.calls.every((call) =>
+      call.stays.every((one) => one.clientId === null && one.guestId === null && one.ipKey === null)
+    )
+  );
+});
+
+test('filtered calls keep a stable cursor across pages', { skip }, async (t) => {
+  const { cleanup, databaseUrl, pool } = await createTestDatabase(t);
+  t.after(cleanup);
+  await runMigrations({ databaseUrl, logger: SILENT });
+  const clientId = 'a1111111-1111-4111-8111-111111111111';
+  for (let n = 0; n <= ROOM_CALLS_PAGE_SIZE; n += 1) {
+    await stay(pool, 'kitchen', n * 10, n * 10 + 2, { clientId });
+    await stay(pool, 'kitchen', n * 10 + 4, n * 10 + 6);
+  }
+  const service = serviceOver(pool);
+  const first = defined(await service.calls('admin', { clientId }), 'first filtered page');
+  assert.equal(first.calls.length, ROOM_CALLS_PAGE_SIZE);
+  assert.ok(first.next);
+  const second = defined(await service.calls('admin', { clientId, after: first.next }), 'second filtered page');
+  assert.equal(second.calls.length, 1);
+  assert.equal(second.next, null);
+  assert.equal(new Set([...first.calls, ...second.calls].map((call) => call.id)).size, ROOM_CALLS_PAGE_SIZE + 1);
 });
