@@ -92,7 +92,7 @@ function PeerRow({
       <span className="live-peer-origin">
         {/* A role that may not see the origin still learns the kind of client. */}
         <Origin seat={peer} />
-        {!peer.os && !peer.browser && !peer.location && !peer.ipKey && !peer.guestId ? (
+        {!peer.os && !peer.browser && !peer.location && !peer.ipKey && !peer.guestId && !peer.clientId ? (
           <ClientIcon client={peer.client} size={14} />
         ) : null}
       </span>

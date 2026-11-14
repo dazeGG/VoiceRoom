@@ -15,6 +15,16 @@ import {
 } from '../src/realtime.ts';
 import { defined } from './helpers/assert-defined.ts';
 
+test('voice joins accept a random installation UUID independently of the guest id', () => {
+  const join = { roomId: 'abcdefghij', peerId: 'peer-0001', sessionToken: 't'.repeat(32), name: 'Alice' };
+  const clientId = '123e4567-e89b-12d3-a456-426614174000';
+  assert.equal(validateClientCommand({ type: 'room.join', payload: join }).ok, true, 'older clients remain valid');
+  assert.equal(validateClientCommand({ type: 'room.join', payload: { ...join, clientId } }).ok, true);
+  for (const bad of ['', 'hardware-id', 42, null, `${clientId}x`]) {
+    assert.equal(validateClientCommand({ type: 'room.join', payload: { ...join, clientId: bad } }).ok, false);
+  }
+});
+
 test('typing notices name a room or a user and carry nothing the server trusts', () => {
   assert.ok(TYPING_NOTICE_TTL_MS > TYPING_NOTICE_INTERVAL_MS, 'a repeated notice arrives before the last one expires');
 

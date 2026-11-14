@@ -682,6 +682,7 @@ export interface VoiceroomMigrationGuard {
 export interface VoiceSessions {
   browser: string | null;
   client: string | null;
+  client_id: string | null;
   guest_id: string | null;
   guest_name: string | null;
   id: Generated<string>;

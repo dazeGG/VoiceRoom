@@ -50,6 +50,7 @@ export interface StoredStay {
   account: RoomAccount | null;
   guestName: string | null;
   guestId: string | null;
+  clientId?: string | null;
   client: ClientKind | null;
   os: string | null;
   browser: string | null;
@@ -324,6 +325,7 @@ export function createAdminRoomsRepository({ pool }: { pool: pg.Pool }) {
         's.left_at',
         's.guest_name',
         's.guest_id',
+        's.client_id',
         's.client',
         's.os',
         's.browser',
@@ -355,6 +357,7 @@ export function createAdminRoomsRepository({ pool }: { pool: pg.Pool }) {
       account: account(row),
       guestName: row.guest_name,
       guestId: row.guest_id,
+      clientId: row.client_id ?? row.guest_id,
       client: clientOf(row.client),
       os: row.os,
       browser: row.browser,
@@ -471,6 +474,8 @@ export function createAdminRoomsRepository({ pool }: { pool: pg.Pool }) {
   async function calls(query: {
     roomId?: string | undefined;
     accountId?: string | undefined;
+    clientId?: string | undefined;
+    ipKey?: string | undefined;
     /** One call by its first stay's id. */
     callId?: string | undefined;
     after?: HistoryAfter | undefined;
@@ -492,6 +497,9 @@ export function createAdminRoomsRepository({ pool }: { pool: pg.Pool }) {
             'id',
             'room_id',
             'user_id',
+            'client_id',
+            'guest_id',
+            'ip_key',
             'joined_at',
             'left_at',
             sql<Date | null>`max(left_at) over (
@@ -508,6 +516,21 @@ export function createAdminRoomsRepository({ pool }: { pool: pg.Pool }) {
             eb.selectFrom('voice_sessions').select('room_id').where('user_id', '=', accountId)
           );
         }
+        // Narrow rooms, never the stays used to establish call boundaries.
+        if (query.clientId || query.ipKey) {
+          let origins = qb.selectFrom('voice_sessions').select('room_id');
+          if (query.clientId) {
+            const { clientId } = query;
+            origins = origins.where((eb) =>
+              eb.or([
+                eb('client_id', '=', clientId),
+                eb.and([eb('client_id', 'is', null), eb('guest_id', '=', clientId)])
+              ])
+            );
+          }
+          if (query.ipKey) origins = origins.where('ip_key', '=', query.ipKey);
+          base = base.where('room_id', 'in', origins);
+        }
         return base;
       })
       .with('numbered', (qb) =>
@@ -515,6 +538,9 @@ export function createAdminRoomsRepository({ pool }: { pool: pg.Pool }) {
           'id',
           'room_id',
           'user_id',
+          'client_id',
+          'guest_id',
+          'ip_key',
           'joined_at',
           'left_at',
           sql<string>`sum(case when earlier_end is null or joined_at > earlier_end then 1 else 0 end) over (
@@ -534,7 +560,12 @@ export function createAdminRoomsRepository({ pool }: { pool: pg.Pool }) {
             sql<Date | null>`lead(min(joined_at)) over (partition by room_id order by min(joined_at))`.as(
               'next_started_at'
             ),
-            sql<boolean>`coalesce(bool_or(user_id = ${query.accountId ?? null}), false)`.as('has_account')
+            sql<boolean>`coalesce(bool_or(user_id = ${query.accountId ?? null}), false)`.as('has_account'),
+            // Both origin filters must describe one stay, not two people sharing a call.
+            sql<boolean>`coalesce(bool_or(
+              (${query.clientId ?? null}::uuid IS NULL OR coalesce(client_id, guest_id) = ${query.clientId ?? null}::uuid)
+              AND (${query.ipKey ?? null}::text IS NULL OR ip_key = ${query.ipKey ?? null}::text)
+            ), false)`.as('has_origin')
           ])
           .groupBy(['room_id', 'call_no'])
       )
@@ -552,6 +583,7 @@ export function createAdminRoomsRepository({ pool }: { pool: pg.Pool }) {
         'r.avatar_key as room_avatar_key'
       ]);
     if (query.accountId) pageQuery = pageQuery.where('c.has_account', '=', true);
+    if (query.clientId || query.ipKey) pageQuery = pageQuery.where('c.has_origin', '=', true);
     if (query.callId) pageQuery = pageQuery.where('c.call_id', '=', query.callId);
     if (query.from !== undefined) pageQuery = pageQuery.where('c.ended_at', '>', new Date(query.from));
     if (query.to !== undefined) pageQuery = pageQuery.where('c.started_at', '<', new Date(query.to));

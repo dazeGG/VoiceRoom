@@ -89,7 +89,10 @@ export function createCallFeedbackService(deps: CallFeedbackServiceDeps) {
     const entries = answers.map(({ userId: _userId, guestId: _guestId, ...answer }, index) => {
       const stay = stays[index] ?? null;
       // Where a stay came from is for those who may see it, as in the rooms section.
-      return { ...answer, stay: stay && !origin ? { ...stay, guestId: null, ipKey: null, location: null } : stay };
+      return {
+        ...answer,
+        stay: stay && !origin ? { ...stay, guestId: null, clientId: null, ipKey: null, location: null } : stay
+      };
     });
     return { days, summary, entries };
   }

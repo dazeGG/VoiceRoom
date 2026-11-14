@@ -1,6 +1,65 @@
 /* The rooms section: the table of calls going on now, the history of calls
    by day, and one day's timeline. */
 
+.call-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.call-filters label {
+  display: grid;
+  flex: 1 1 240px;
+  gap: 6px;
+  color: var(--vr-text-2);
+  font-size: 12.5px;
+}
+
+.call-filters input {
+  width: 100%;
+  min-width: 0;
+  height: 36px;
+  border: 1px solid var(--vr-line-strong);
+  border-radius: 10px;
+  padding: 0 10px;
+  background: var(--vr-surface);
+  color: var(--vr-text);
+  font: inherit;
+  font-family: var(--font-mono);
+}
+
+.call-filters input:focus-visible {
+  outline: 2px solid var(--vr-accent-line);
+  outline-offset: 2px;
+}
+
+.call-filters .ui-footnote {
+  flex-basis: 100%;
+  margin: 0;
+}
+
+.rooms-origin-full-id {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  max-width: 36ch;
+  border: 0;
+  border-bottom: 1px dotted var(--vr-line-strong);
+  padding: 2px 0;
+  background: transparent;
+  color: var(--vr-text-3);
+  font: inherit;
+  font-size: 10px;
+  cursor: text;
+}
+
+.rooms-origin-full-id:focus-visible {
+  outline: 2px solid var(--vr-accent-line);
+  outline-offset: 2px;
+}
+
 .rooms-picked-aside {
   display: inline-flex;
   flex-wrap: wrap;

@@ -231,7 +231,15 @@ export const ClientCommandFrames = {
   /** `guestId` is the browser's lasting guest id (see normalizeGuestId); the API keeps it only for guests. */
   'room.join': Frame(
     'room.join',
-    Type.Object({ ...VoiceTarget.properties, name: Type.String(), guestId: Type.Optional(Type.String()) })
+    Type.Object({
+      ...VoiceTarget.properties,
+      name: Type.String(),
+      guestId: Type.Optional(Type.String()),
+      /** Random browser/application installation id, independent of the signed-in account. */
+      clientId: Type.Optional(
+        Type.String({ pattern: '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$' })
+      )
+    })
   ),
   'room.leave': Frame('room.leave', VoiceTarget),
   'room.peer.update': Frame('room.peer.update', Type.Object({ ...VoiceTarget.properties, patch: PeerPatch })),
