@@ -2133,7 +2133,7 @@ export const french: Record<MessageKey, string> = {
   'Заявка отменена': 'Demande annulée',
   'Комната {p0}': 'Salon {p0}',
   'Открыть раздел панели комнаты': 'Ouvrir la section du panneau de salon',
-  Чат: 'Bavarder',
+  Чат: 'Discussion',
   'Просмотр комнаты без подключения к голосу': 'Afficher un salon sans vous connecter à la voix',
   'Плитки комнаты': 'Tuiles de salon',
   'Микрофон выключен': 'Microphone coupé',
@@ -2168,7 +2168,7 @@ export const french: Record<MessageKey, string> = {
   'активного голоса': 'voix active',
   'Активный голос': 'Voix active',
   Подключено: 'Connecté',
-  'Включить микрофон': 'Allumez le microphone',
+  'Включить микрофон': 'Activer le microphone',
   'Выключить микрофон': 'Microphone muet',
   'Включить звук': 'Activer le son',
   'Заглушить звук': 'Muet',
@@ -2468,7 +2468,7 @@ export const french: Record<MessageKey, string> = {
     'Appel dans le salon : deux participants avec la caméra allumée et un troisième avec un avatar, en bas il y a un panneau de contrôle avec un bouton caméra',
   'Камера в звонке': "Caméra dans l'appel",
   'Включайте камеру кнопкой на панели звонка, а устройство выбирайте рядом, в меню.':
-    "Allumez la caméra avec le bouton du panneau d'appel et sélectionnez l'appareil à côté dans le menu.",
+    "Activez la caméra avec le bouton du panneau d'appel et sélectionnez l'appareil à côté dans le menu.",
   'Настройки, вкладка «Внешний вид»: три карточки темы Volt, Ice и Coral, выбрана Coral':
     'Paramètres, onglet Apparence : trois cartes thématiques Volt, Glace et Corail, Corail sélectionné',
   'Свой акцент': 'Votre propre accent',
@@ -2825,7 +2825,7 @@ export const french: Record<MessageKey, string> = {
   'Push-to-talk: микрофон закрыт': 'Push-to-talk : microphone fermé',
   'Выключить звук': 'Muet',
   'Выключить камеру': 'Éteignez la caméra',
-  'Включить камеру': 'Allumez la caméra',
+  'Включить камеру': 'Activer la caméra',
   'Закончить стрим': 'Fin du flux',
   'Показать экран': "Afficher l'écran",
   'В режиме Push-to-talk удерживайте назначенную клавишу':
