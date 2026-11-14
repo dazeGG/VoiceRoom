@@ -15,7 +15,7 @@ function reload(): void {
         <p class="auth-session-error__kicker">{{ t('Страница не загрузилась') }}</p>
         <h1 class="auth-session-error__title">{{ t('Не удалось загрузить VoiceRoom') }}</h1>
         <p class="auth-session-error__text">{{ t('Проверьте подключение к интернету и обновите страницу.') }}</p>
-        <button type="button" @click="reload">{{ t('Обновить') }}</button>
+        <button type="button" @click="reload">{{ t('Обновить страницу') }}</button>
       </div>
     </main>
   </div>

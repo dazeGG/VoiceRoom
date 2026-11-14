@@ -1,4 +1,4 @@
-import { t } from '@/shared/i18n';
+import { t } from '../shared/i18n/runtime.ts';
 // What the user reads for each failure code the API sends. The API's own
 // `error` text is only a fallback for a code this build does not know yet (a
 // newer server), so every refusal reads the same wherever the web shows it.

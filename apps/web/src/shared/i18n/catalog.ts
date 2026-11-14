@@ -246,6 +246,7 @@ export const english = {
   'Доступно обновление': 'Update available',
   Перезапустить: 'Restart',
   Обновить: 'Update',
+  'Обновить страницу': 'Reload',
   'после звонка': 'after the call',
   '3–32 символа: латиница, цифры, точка, дефис, подчёркивание':
     '3–32 characters: Latin, numbers, period, hyphen, underscore',
@@ -1909,7 +1910,8 @@ export const french: Record<MessageKey, string> = {
   'Новая версия приложения': "Nouvelle version de l'application",
   'Доступно обновление': 'Mise à jour disponible',
   Перезапустить: 'Redémarrer',
-  Обновить: 'Mise à jour',
+  Обновить: 'Mettre à jour',
+  'Обновить страницу': 'Actualiser',
   'после звонка': "après l'appel",
   '3–32 символа: латиница, цифры, точка, дефис, подчёркивание':
     "3 à 32 caractères : latin, chiffres, point, trait d'union, trait de soulignement",
@@ -3340,6 +3342,7 @@ export const french: Record<MessageKey, string> = {
 
 /** Context-specific keys retain the original compact Russian button copy. */
 export const russian: Partial<Record<MessageKey, string>> = {
+  'Обновить страницу': 'Обновить',
   'Войти в комнату': 'Войти',
   'Выйти из аккаунта': 'Выйти'
 };

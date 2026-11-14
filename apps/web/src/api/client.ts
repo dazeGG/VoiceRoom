@@ -3,7 +3,7 @@
 // the route's contract schema, or a Failure that becomes an ApiError. Requests
 // are same-origin, so the HttpOnly session cookie always rides along.
 
-import { t } from '@/shared/i18n';
+import { t } from '../shared/i18n/runtime.ts';
 import { isErrorCode, type ErrorCode } from '@voice-room/shared/contracts/errors';
 import type { Static, TSchema, TUnknown } from 'typebox';
 // Value.Check walks the schema. Never typebox/compile: it builds code with eval, which the CSP forbids.

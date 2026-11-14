@@ -3,7 +3,7 @@
 // which is how a signed-in user's persistent rooms get an owner). Shapes come
 // from @voice-room/shared/contracts/account.
 
-import { t } from '@/shared/i18n';
+import { t } from '../shared/i18n/runtime.ts';
 import { normalizeReleaseVersion } from '@voice-room/shared/account-security';
 import { isUuid } from '@voice-room/shared/validation';
 import {

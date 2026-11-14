@@ -1,5 +1,5 @@
 import { createPinia, setActivePinia } from 'pinia';
-import { nextTick } from 'vue';
+import { computed, nextTick } from 'vue';
 import { beforeEach, expect, test, vi } from 'vitest';
 import { fireEvent } from '@testing-library/vue';
 import { english, french } from '../src/shared/i18n/catalog';
@@ -7,6 +7,8 @@ import { LOCALE_STORAGE_KEY, t, useLocaleStore } from '../src/shared/i18n';
 import { formatNumber } from '../src/shared/i18n';
 import { currentErrorMessage, useLocalizedText } from '../src/shared/i18n/localized-text';
 import { ApiError } from '../src/api/client';
+import { errorText } from '../src/api/error-texts';
+import { t as runtimeTranslation } from '../src/shared/i18n/runtime.ts';
 import { NOISE_MODES } from '../src/features/room/client/core/config';
 import { dayMonth, timeAgo } from '../src/shared/utils/date-format';
 import { formatTypingLabel } from '../src/shared/chat/typing';
@@ -208,4 +210,28 @@ test('foreground invitation copy uses metadata while ordinary user bodies remain
     buildNotificationPayload({ ...event, payload: { ...event.payload, message: { ...ordinary, body: userBody } } })
       ?.body
   ).toBe(userBody);
+});
+
+test('Node-compatible API translation runtime tracks the browser locale reactively', async () => {
+  const locale = useLocaleStore();
+  const message = computed(() => errorText('authentication_required'));
+  const interpolated = computed(() => runtimeTranslation('{p0}. Причина: {p1}', { p0: 'Alice {p1}', p1: 1234 }));
+  expect(message.value).toBe('Требуется вход');
+  await locale.select('en');
+  expect(message.value).toBe('Sign in required');
+  expect(interpolated.value).toBe('Alice {p1}. Reason: 1,234');
+  await locale.select('fr');
+  expect(message.value).toBe(french['Требуется вход']);
+  expect(interpolated.value).toContain(new Intl.NumberFormat('fr').format(1234));
+});
+
+test('page reload and software update have distinct translated button actions', async () => {
+  const locale = useLocaleStore();
+  expect(t('Обновить страницу')).toBe('Обновить');
+  await locale.select('en');
+  expect(t('Обновить страницу')).toBe('Reload');
+  expect(t('Обновить')).toBe('Update');
+  await locale.select('fr');
+  expect(t('Обновить страницу')).toBe('Actualiser');
+  expect(t('Обновить')).toBe('Mettre à jour');
 });
