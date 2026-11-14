@@ -33,6 +33,15 @@ async function renderDialog(mode: 'login' | 'recover') {
   return onAuthenticated;
 }
 
+test('language selection follows the sign-in form rather than displacing its heading', async () => {
+  await renderDialog('login');
+  const language = screen.getByRole('combobox', { name: 'Язык' });
+  const submit = screen.getByRole('button', { name: 'Войти' });
+  expect(submit.compareDocumentPosition(language) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
+  expect(language.closest('.auth-dialog__heading')).toBeNull();
+  expect(language.closest('.auth-dialog__language')).not.toBeNull();
+});
+
 test('a recovery code signs in with a new password; a malformed code is refused first', async () => {
   const user = authUser({ login: 'ada' });
   const { calls } = stubFetch({

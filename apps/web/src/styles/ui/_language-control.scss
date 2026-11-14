@@ -1,19 +1,105 @@
+@use '../mixins' as *;
+
 .language-control {
-  display: inline-flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(112px, 200px);
   align-items: center;
-  gap: 0.5rem;
+  gap: 8px 16px;
+  min-width: 0;
   max-width: 100%;
-  color: var(--vr-muted);
-  font-size: 0.8125rem;
+  color: var(--vr-text-2);
+  font-size: 14px;
 }
 
-.language-control__select {
-  max-width: 100%;
-  padding: 0.35rem 0.5rem;
-  border: 1px solid var(--vr-line-strong);
-  border-radius: 0.5rem;
-  background: var(--vr-surface-2);
-  color: var(--vr-text);
-  font: inherit;
+.language-control__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  font-weight: 500;
+}
+
+.language-control__icon {
+  flex: none;
+}
+
+.language-control__picker {
+  position: relative;
+  min-width: 0;
+}
+
+.language-control__select.select__trigger {
+  appearance: none;
+  padding-right: 38px;
+}
+
+.language-control__chevron {
+  position: absolute;
+  top: 50%;
+  right: 14px;
+  transform: translateY(-50%);
+  pointer-events: none;
+  color: var(--vr-text-3);
+}
+
+.language-control__error {
+  grid-column: 1 / -1;
+  color: var(--vr-danger);
+  font-size: 13px;
+}
+
+.language-control--compact {
+  position: relative;
+  display: inline-flex;
+  justify-content: center;
+  width: var(--interactive-md, 40px);
+  height: var(--interactive-md, 40px);
+  flex: none;
+  border-radius: 10px;
+  cursor: pointer;
+
+  &:hover {
+    background: var(--vr-hover);
+    color: var(--vr-text);
+  }
+
+  &:focus-within {
+    outline: 2px solid var(--focus-border);
+    outline-offset: 2px;
+  }
+
+  .language-control__caption {
+    @include visually-hidden;
+  }
+
+  .language-control__picker,
+  .language-control__select {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+  }
+
+  .language-control__select.select__trigger {
+    padding: 0;
+    border: 0;
+    opacity: 0;
+    cursor: pointer;
+  }
+
+  .language-control__chevron {
+    display: none;
+  }
+
+  .language-control__error {
+    position: absolute;
+    bottom: calc(100% + 8px);
+    width: max-content;
+    max-width: 240px;
+    padding: 8px 10px;
+    border: 1px solid var(--vr-line-strong);
+    border-radius: 8px;
+    background: var(--vr-surface);
+  }
 }

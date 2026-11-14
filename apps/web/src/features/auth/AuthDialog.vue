@@ -211,7 +211,6 @@ async function restorePendingAccount(): Promise<void> {
         <p class="auth-dialog__kicker">{{ t('Ваши комнаты всегда рядом') }}</p>
         <h1 id="authDialogTitle" class="auth-dialog__title">{{ copy.title }}</h1>
         <p class="auth-dialog__subtitle">{{ copy.subtitle }}</p>
-        <LanguageControl />
       </div>
 
       <form class="auth-dialog__form" @submit.prevent="handleSubmit">
@@ -326,6 +325,9 @@ async function restorePendingAccount(): Promise<void> {
         {{ isRecover ? t('Вспомнили пароль?') : t('Уже есть аккаунт?') }}
         <button type="button" class="auth-dialog__link" @click="switchMode('login')">{{ t('Войти') }}</button>
       </p>
+      <div class="auth-dialog__language">
+        <LanguageControl />
+      </div>
     </div>
   </dialog>
 </template>

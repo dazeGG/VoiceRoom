@@ -76,3 +76,37 @@ test.describe('French narrow layouts', () => {
     await page.screenshot({ path: '../../.omx/ultragoal/evidence-web-fr-390.png', fullPage: true });
   });
 });
+
+test('guest sign-in stays at the header edge and language remains available below the content', async ({ page }) => {
+  for (const width of [1280, 390, 320]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto('/app');
+    const login = page.locator('.landing__login');
+    await expect(login).toBeVisible();
+    const header = await page.locator('.topbar').boundingBox();
+    const action = await login.boundingBox();
+    expect(header).not.toBeNull();
+    expect(action).not.toBeNull();
+    if (!header || !action) throw new Error('Guest header is not rendered');
+    expect(Math.abs(action.x + action.width - header.x - header.width)).toBeLessThan(2);
+    const language = page.getByRole('contentinfo').getByRole('combobox');
+    const picker = await language.boundingBox();
+    const iconControl = await page.locator('.landing__legal .language-control').boundingBox();
+    if (!picker || !iconControl) throw new Error('Guest language icon is not rendered');
+    expect(picker.width).toBeLessThanOrEqual(iconControl.width);
+    await language.selectOption('fr');
+    await expect(page.locator('html')).toHaveAttribute('lang', 'fr');
+    await expect(page.locator('.language-control__icon')).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+    await login.click();
+    const dialog = page.getByRole('dialog');
+    const form = await dialog.locator('form').boundingBox();
+    const choice = await dialog.getByRole('combobox').boundingBox();
+    if (!form || !choice) throw new Error('Sign-in form language control is not rendered');
+    expect(choice.y).toBeGreaterThanOrEqual(form.y + form.height);
+    await dialog.getByRole('combobox').selectOption('en');
+    await expect(page.locator('html')).toHaveAttribute('lang', 'en');
+    await expect(dialog.getByRole('button', { name: 'Sign in', exact: true })).toBeVisible();
+    await expect(dialog.getByRole('combobox')).toHaveCSS('min-height', '44px');
+  }
+});

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { t } from '@/shared/i18n';
+import LanguageControl from '@/shared/i18n/LanguageControl.vue';
 import { ArrowRight } from '@lucide/vue';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { RouterLink, useRoute, useRouter } from 'vue-router';
@@ -192,7 +193,7 @@ function switchAuthMode(mode: AuthMode): void {
 
 <template>
   <div v-if="!session.loaded" class="app-shell">
-    <Topbar label="VoiceRoom" />
+    <Topbar label="VoiceRoom" show-language />
     <main class="auth-loader" :aria-label="t('Загрузка аккаунта')" aria-busy="true">
       <div class="auth-loader__card">
         <span class="auth-loader__orb"><MascotIcon variant="blink" :size="52" /></span>
@@ -206,7 +207,7 @@ function switchAuthMode(mode: AuthMode): void {
     </main>
   </div>
   <div v-else-if="authLoadError" class="app-shell">
-    <Topbar label="VoiceRoom" />
+    <Topbar label="VoiceRoom" show-language />
     <main class="auth-session-error" :aria-label="t('Ошибка проверки аккаунта')" aria-live="polite">
       <div class="auth-session-error__card">
         <p class="auth-session-error__kicker">{{ t('Сессия не проверена') }}</p>
@@ -252,6 +253,7 @@ function switchAuthMode(mode: AuthMode): void {
       <DesktopAppCard v-if="!desktopApp" />
     </main>
     <footer class="landing__legal">
+      <LanguageControl compact />
       <LegalLinks />
     </footer>
   </div>
