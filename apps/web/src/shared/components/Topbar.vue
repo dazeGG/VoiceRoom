@@ -5,7 +5,11 @@ import { APP_HOME } from '@/shared/app-home';
 import BetaMark from './BetaMark.vue';
 import LanguageControl from '@/shared/i18n/LanguageControl.vue';
 
-withDefaults(defineProps<{ label?: string; reload?: boolean }>(), { label: '', reload: false });
+withDefaults(defineProps<{ label?: string; reload?: boolean; showLanguage?: boolean }>(), {
+  label: '',
+  reload: false,
+  showLanguage: false
+});
 </script>
 
 <template>
@@ -22,6 +26,6 @@ withDefaults(defineProps<{ label?: string; reload?: boolean }>(), { label: '', r
       <BetaMark />
     </RouterLink>
     <slot />
-    <LanguageControl />
+    <LanguageControl v-if="showLanguage" compact />
   </header>
 </template>

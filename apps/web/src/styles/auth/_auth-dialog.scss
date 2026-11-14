@@ -132,6 +132,12 @@
   gap: 14px;
 }
 
+.auth-dialog__language {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--vr-line);
+}
+
 .auth-dialog__field {
   display: flex;
   flex-direction: column;

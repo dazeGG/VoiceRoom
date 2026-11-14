@@ -61,7 +61,7 @@ function notifyRoomsChanged(): void {
 </script>
 
 <template>
-  <Topbar :label="t('Новая голосовая комната')" reload>
+  <Topbar :label="t('Новая голосовая комната')" reload show-language>
     <div class="room-topbar__heading" :aria-label="t('Комната')" :hidden="page.screen !== 'room'">
       <div class="room-topbar__heading-main">
         <RoomMenu
