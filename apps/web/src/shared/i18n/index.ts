@@ -23,7 +23,17 @@ export function t<Key extends MessageKey>(
     : [parameters: Readonly<Record<Placeholder<Key>, unknown>>]
 ): string {
   const locale = getLocale();
-  const translated = locale === 'en' ? english[key] : locale === 'fr' ? french[key] : russian[key];
+  let translated: string | undefined;
+  switch (locale) {
+    case 'en':
+      translated = english[key];
+      break;
+    case 'fr':
+      translated = french[key];
+      break;
+    default:
+      translated = russian[key];
+  }
   const text = translated ?? key;
   const values = new Map(Object.entries(parameters ?? {}));
   // Split only the app template once: inserted user text is never another placeholder.
