@@ -2,6 +2,7 @@
 import { t } from '@/shared/i18n';
 import { Link, MessageSquare, UserPlus, Users } from '@lucide/vue';
 import { computed } from 'vue';
+import { useSessionStore } from '@/features/auth/session.store';
 import Topbar from '@/shared/components/Topbar.vue';
 import { RoomInviteFriendList, RoomMenu } from '@/shared/components/room-menu';
 import { Popover, PopoverDivider, PopoverMenuItem, PopoverMenuLabel } from '@/shared/ui';
@@ -20,6 +21,7 @@ import { useRoomSocial } from '../social';
 import RoomCallTimer from './RoomCallTimer.vue';
 
 const social = useRoomSocial();
+const session = useSessionStore();
 const shell = useRoomShell();
 const page = usePageStore();
 const roomUi = useRoomUiStore();
@@ -61,7 +63,7 @@ function notifyRoomsChanged(): void {
 </script>
 
 <template>
-  <Topbar :label="t('Новая голосовая комната')" reload show-language>
+  <Topbar :label="t('Новая голосовая комната')" reload :show-language="session.loaded && !session.user">
     <div class="room-topbar__heading" :aria-label="t('Комната')" :hidden="page.screen !== 'room'">
       <div class="room-topbar__heading-main">
         <RoomMenu
