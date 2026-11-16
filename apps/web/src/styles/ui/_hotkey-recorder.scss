@@ -61,14 +61,14 @@
   display: block;
   overflow: hidden;
   font-family: var(--font-ui, system-ui);
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 700;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .hotkey-recorder__value--empty {
-  color: var(--vr-text-3);
+  color: var(--vr-text-muted);
   font-weight: 600;
 }
 

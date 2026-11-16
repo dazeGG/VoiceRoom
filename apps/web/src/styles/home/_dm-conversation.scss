@@ -43,8 +43,8 @@
   justify-content: center;
   margin-bottom: -100%;
   background: var(--vr-bg);
-  color: var(--vr-text-3);
-  font-size: 13.5px;
+  color: var(--vr-text-muted);
+  font-size: 0.84375rem;
 }
 
 .dm-conversation__thread {
@@ -60,8 +60,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--vr-text-3);
-  font-size: 13.5px;
+  color: var(--vr-text-muted);
+  font-size: 0.84375rem;
 }
 
 .dm-conversation__day-divider {
@@ -80,9 +80,9 @@
   border-radius: 999px;
   padding: 4px 12px;
   background: var(--vr-surface);
-  color: var(--vr-text-3);
+  color: var(--vr-text-muted);
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 0.6875rem;
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }

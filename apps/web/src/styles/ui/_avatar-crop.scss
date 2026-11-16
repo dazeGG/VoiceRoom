@@ -54,13 +54,13 @@
 
 .avatar-crop__title {
   margin: 0;
-  font-size: 18px;
+  font-size: 1.125rem;
 }
 
 .avatar-crop__hint {
   margin: 5px 0 0;
-  color: var(--vr-text-3);
-  font-size: 13px;
+  color: var(--vr-text-muted);
+  font-size: 0.8125rem;
 }
 
 .avatar-crop__close {
@@ -123,7 +123,7 @@
   margin: 18px auto 0;
   max-width: 430px;
   color: var(--vr-text-2);
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 700;
 }
 
@@ -138,9 +138,9 @@
 }
 
 .avatar-crop__preview-label {
-  color: var(--vr-text-3);
+  color: var(--vr-text-muted);
   font-family: var(--font-ui, sans-serif);
-  font-size: 10px;
+  font-size: 0.625rem;
   letter-spacing: 0.14em;
   text-transform: uppercase;
 }
@@ -163,7 +163,7 @@
 
 .avatar-crop__caption {
   color: color-mix(in oklch, var(--vr-text) 62%, transparent);
-  font-size: 11px;
+  font-size: 0.6875rem;
 }
 
 .avatar-crop__card {
@@ -192,7 +192,7 @@
 .avatar-crop__error {
   margin: 0 24px 12px;
   color: var(--vr-danger);
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 
 .avatar-crop__actions {
@@ -211,7 +211,7 @@
   padding: 10px 16px;
   border-radius: 11px;
   font: inherit;
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 700;
   cursor: pointer;
 }

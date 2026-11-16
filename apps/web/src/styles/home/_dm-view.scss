@@ -63,19 +63,19 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--vr-text-3);
+  color: var(--vr-text-muted);
 }
 
 .dm-view__head-name {
   color: var(--vr-text);
-  font-size: 15.5px;
+  font-size: 0.96875rem;
   font-weight: 600;
   letter-spacing: -0.01em;
 }
 
 .dm-view__head-status {
   margin-top: 2px;
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 
 .dm-view__head-status--dnd {
@@ -91,5 +91,5 @@
 }
 
 .dm-view__head-status--offline {
-  color: var(--vr-text-3);
+  color: var(--vr-text-muted);
 }

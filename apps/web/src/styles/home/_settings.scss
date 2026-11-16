@@ -132,7 +132,7 @@
 
 .settings__title {
   color: var(--vr-text);
-  font-size: 17px;
+  font-size: 1.0625rem;
   font-weight: 600;
   letter-spacing: -0.015em;
 }
@@ -210,7 +210,7 @@
   background: transparent;
   color: var(--vr-text-2);
   font-family: var(--font-ui);
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 500;
   text-align: left;
   cursor: pointer;
@@ -265,7 +265,7 @@
   margin-bottom: 8px;
   color: var(--vr-text-2);
   font-family: var(--font-ui);
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 500;
 }
 
@@ -291,7 +291,7 @@
   background: var(--vr-accent);
   color: var(--vr-accent-ink);
   font-family: var(--font-ui);
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 600;
   cursor: pointer;
   transition: background 0.15s ease;
@@ -304,7 +304,7 @@
 // Nothing to save yet: the button waits, grey, until something changes.
 .settings__save:disabled {
   background: var(--vr-surface-3);
-  color: var(--vr-text-3);
+  color: var(--vr-text-muted);
   cursor: default;
 }
 
@@ -321,7 +321,7 @@
   background: transparent;
   color: var(--vr-text);
   font-family: var(--font-ui);
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 500;
   cursor: pointer;
   transition: background 0.15s ease;
@@ -467,8 +467,8 @@
 
 .settings__gate-hint {
   margin-top: 12px;
-  color: var(--vr-text-3);
-  font-size: 12px;
+  color: var(--vr-text-muted);
+  font-size: 0.75rem;
   line-height: 1.5;
 }
 
@@ -477,7 +477,7 @@
   margin-bottom: 10px;
   color: var(--vr-text);
   font-family: var(--font-ui);
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 600;
 }
 
@@ -512,15 +512,15 @@
 
 .settings__hotkey-label {
   color: var(--vr-text);
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 700;
 }
 
 .settings__hotkey-description,
 .settings__hotkey-window-note {
   margin-top: 3px;
-  color: var(--vr-text-3);
-  font-size: 11.5px;
+  color: var(--vr-text-muted);
+  font-size: 0.71875rem;
   line-height: 1.45;
 }
 
@@ -587,7 +587,7 @@
 .settings__notification-name strong {
   overflow: hidden;
   color: var(--vr-text);
-  font-size: 13px;
+  font-size: 0.8125rem;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -595,9 +595,9 @@
 .settings__notification-name small {
   margin-top: 1px;
   overflow: hidden;
-  color: var(--vr-text-3);
+  color: var(--vr-text-muted);
   font-family: var(--font-mono);
-  font-size: 10.5px;
+  font-size: 0.65625rem;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -606,8 +606,8 @@
   padding: 14px;
   border: 1px dashed var(--vr-line);
   border-radius: 12px;
-  color: var(--vr-text-3);
-  font-size: 12px;
+  color: var(--vr-text-muted);
+  font-size: 0.75rem;
   text-align: center;
 }
 
@@ -623,7 +623,7 @@
   border-radius: 10px;
   background: transparent;
   color: var(--vr-text);
-  font: 500 13px var(--font-ui);
+  font: 500 0.8125rem var(--font-ui);
   cursor: pointer;
 }
 
@@ -729,7 +729,7 @@
   width: 56px;
   height: 56px;
   border-radius: 50%;
-  font-size: 22px;
+  font-size: 1.375rem;
   font-weight: 700;
   color: var(--vr-text);
 }
@@ -826,16 +826,16 @@
 
 .settings__profile-name {
   color: var(--vr-text);
-  font-size: 17px;
+  font-size: 1.0625rem;
   font-weight: 700;
   letter-spacing: -0.01em;
 }
 
 .settings__profile-sub {
   margin-top: 3px;
-  color: var(--vr-text-3);
+  color: var(--vr-text-muted);
   font-family: var(--font-mono);
-  font-size: 11.5px;
+  font-size: 0.71875rem;
 }
 
 .settings__fields {
@@ -859,6 +859,7 @@
 }
 
 .settings__theme {
+  position: relative;
   display: grid;
   gap: 10px;
   padding: 10px;
@@ -869,6 +870,15 @@
   font: inherit;
   text-align: left;
   cursor: pointer;
+}
+
+.settings__theme-input {
+  @include visually-hidden;
+}
+
+.settings__theme:has(:focus-visible) {
+  outline: 2px solid var(--vr-accent);
+  outline-offset: 4px;
 }
 
 .settings__theme--selected {
@@ -938,7 +948,7 @@
   align-items: center;
   justify-content: space-between;
   padding: 0 2px;
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 500;
 }
 
@@ -963,7 +973,7 @@
 .settings__sound-value {
   color: var(--vr-text);
   font-family: var(--font-mono);
-  font-size: 12.5px;
+  font-size: 0.78125rem;
   font-weight: 500;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
@@ -982,7 +992,7 @@
   background: transparent;
   color: var(--vr-text);
   font-family: var(--font-ui);
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 500;
   cursor: pointer;
   transition:
@@ -1003,7 +1013,7 @@
   text-align: right;
   color: var(--vr-text);
   font-family: var(--font-mono);
-  font-size: 12.5px;
+  font-size: 0.78125rem;
   font-weight: 500;
   white-space: nowrap;
 }
@@ -1034,7 +1044,7 @@
 .settings__notification-muted {
   display: inline-flex;
   flex: none;
-  color: var(--vr-text-3);
+  color: var(--vr-text-muted);
 }
 
 // ---- desktop app section (AppSettings) ----
@@ -1074,19 +1084,19 @@
 
 .settings__overlay-window-name {
   color: var(--vr-text);
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 650;
 }
 
 .settings__overlay-window-exe {
-  color: var(--vr-text-3);
-  font-size: 12px;
+  color: var(--vr-text-muted);
+  font-size: 0.75rem;
 }
 
 .settings__overlay-window-empty {
   padding: 6px 0;
-  color: var(--vr-text-3);
-  font-size: 12.5px;
+  color: var(--vr-text-muted);
+  font-size: 0.78125rem;
   line-height: 1.45;
 }
 
@@ -1097,7 +1107,7 @@
   border-radius: var(--radius-pill);
   background: color-mix(in oklch, var(--vr-online), transparent 86%);
   color: var(--vr-online);
-  font: 700 12px var(--font-ui);
+  font: 700 0.75rem var(--font-ui);
 }
 
 .settings__overlay-add {
@@ -1108,7 +1118,7 @@
   border-radius: 11px;
   background: var(--vr-online);
   color: var(--vr-accent-ink);
-  font: 700 12.5px var(--font-ui);
+  font: 700 0.78125rem var(--font-ui);
   cursor: pointer;
   transition: filter 0.15s ease;
 }
@@ -1141,7 +1151,7 @@
   border-radius: var(--radius-pill);
   background: color-mix(in oklch, var(--vr-surface-3), transparent 25%);
   color: var(--vr-text);
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 
 :where(.settings__overlay-allowed-item) > span {
@@ -1160,7 +1170,7 @@
   border: none;
   border-radius: 50%;
   background: transparent;
-  color: var(--vr-text-3);
+  color: var(--vr-text-muted);
   cursor: pointer;
 }
 

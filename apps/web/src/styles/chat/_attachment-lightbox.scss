@@ -14,7 +14,7 @@
 .attachment-lightbox__counter {
   margin-right: auto;
   font-family: var(--font-mono);
-  font-size: 12.5px;
+  font-size: 0.78125rem;
   opacity: 0.75;
 }
 
@@ -56,7 +56,7 @@
 .attachment-lightbox__scale {
   min-width: 44px;
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: 0.75rem;
   text-align: center;
   opacity: 0.8;
 }
@@ -104,7 +104,7 @@
   height: 64px;
   border: 0;
   border-radius: 10px;
-  font-size: 38px;
+  font-size: 2.375rem;
   color: var(--vr-text);
   background: color-mix(in oklch, var(--vr-bg), transparent 45%);
 }

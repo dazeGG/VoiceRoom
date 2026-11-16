@@ -20,7 +20,7 @@ const fontSize = computed(() => Math.max(10, Math.round(props.size * 0.42)));
   <span
     v-if="items.length > 0"
     class="avatar-stack"
-    :style="{ '--avatar-stack-size': `${size}px`, '--avatar-stack-font': `${fontSize}px` }"
+    :style="{ '--avatar-stack-size': `${size}px`, '--avatar-stack-font': `${fontSize / 16}rem` }"
     :aria-label="`${ariaLabel || t('Участники')}: ${items.map((item) => item.label).join(', ')}`"
   >
     <span

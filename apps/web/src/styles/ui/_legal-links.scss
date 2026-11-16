@@ -11,7 +11,7 @@
   justify-content: center;
   gap: 6px 18px;
   font-family: var(--font-ui);
-  font-size: 12.5px;
+  font-size: 0.78125rem;
 }
 
 .legal-links--compact {
@@ -19,11 +19,11 @@
   align-items: flex-start;
   gap: 4px;
   padding: 6px 10px;
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 
 .legal-links__link {
-  color: var(--vr-text-3);
+  color: var(--vr-text-muted);
   text-decoration: none;
 }
 

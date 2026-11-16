@@ -8,7 +8,7 @@
   min-width: 0;
   max-width: 100%;
   color: var(--vr-text-2);
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 
 .language-control__label {
@@ -39,13 +39,13 @@
   right: 14px;
   transform: translateY(-50%);
   pointer-events: none;
-  color: var(--vr-text-3);
+  color: var(--vr-text-muted);
 }
 
 .language-control__error {
   grid-column: 1 / -1;
   color: var(--vr-danger);
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 
 .language-control--compact {

@@ -58,7 +58,7 @@
 
 .room-view-header__name {
   font-family: var(--font-ui);
-  font-size: 17px;
+  font-size: 1.0625rem;
   font-weight: 600;
   color: var(--vr-text);
   letter-spacing: -0.015em;
@@ -68,7 +68,7 @@
 .room-view-header__chevron {
   flex: none;
   display: inline-flex;
-  color: var(--vr-text-3);
+  color: var(--vr-text-muted);
   transition: transform 0.15s ease;
 }
 

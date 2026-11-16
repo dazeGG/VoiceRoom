@@ -34,12 +34,12 @@
   padding: 0;
   color: var(--vr-text-2);
   font-family: var(--font-ui);
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 500;
 }
 
 .report-dialog__soft {
-  color: var(--vr-text-3);
+  color: var(--vr-text-muted);
   font-weight: 400;
 }
 
@@ -57,7 +57,7 @@
   border-radius: 12px;
   background: var(--vr-surface-2);
   color: var(--vr-text);
-  font-size: 14px;
+  font-size: 0.875rem;
   cursor: pointer;
   transition:
     border-color 0.14s ease,
@@ -130,7 +130,7 @@
   background: var(--vr-surface-2);
   color: var(--vr-text);
   font: inherit;
-  font-size: 14px;
+  font-size: 0.875rem;
   resize: vertical;
   outline: none;
 
@@ -142,12 +142,12 @@
 .report-dialog__note,
 .report-dialog__error {
   margin: 0;
-  font-size: 13px;
+  font-size: 0.8125rem;
   line-height: 1.45;
 }
 
 .report-dialog__note {
-  color: var(--vr-text-3);
+  color: var(--vr-text-muted);
 }
 
 .report-dialog__error {

@@ -22,25 +22,25 @@
 
 .room-call-timer--sidebar {
   color: var(--vr-text-2);
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 
 .room-call-timer__separator {
   color: var(--vr-text-3);
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 
 .room-call-timer--topbar {
   gap: 8px;
   color: var(--vr-text-2);
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 
 // The phone shows the timer alone over the call while its controls are hidden.
 .room-call-timer--bubble {
   gap: 8px;
   color: var(--vr-text);
-  font-size: 12.5px;
+  font-size: 0.78125rem;
 }
 
 .room-call-timer--topbar::before,

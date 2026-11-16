@@ -12,7 +12,7 @@
   position: relative;
   display: flex;
   flex-direction: column;
-  padding: 14px 18px 18px;
+  padding: 0.875rem 18px 18px;
   --chat-typing-inset: 20px;
 
   .attachment-upload {
@@ -38,7 +38,7 @@
   background: var(--vr-surface-2);
   color: var(--vr-text);
   font-family: var(--font-ui);
-  font-size: 14px;
+  font-size: 0.875rem;
   outline: none;
   transition: border-color 0.15s ease;
 
@@ -50,7 +50,7 @@
   line-height: 1.35;
 
   &::placeholder {
-    color: var(--vr-text-3);
+    color: var(--vr-text-muted);
   }
 
   &:focus,
@@ -80,7 +80,7 @@
 
   &:disabled {
     background: var(--vr-surface-3);
-    color: var(--vr-text-3);
+    color: var(--vr-text-muted);
     cursor: default;
     opacity: 1;
   }
