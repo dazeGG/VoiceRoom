@@ -73,15 +73,15 @@
 .room-menu-content__name {
   color: var(--vr-text);
   font-family: var(--font-ui);
-  font-size: 15px;
+  font-size: 0.9375rem;
   font-weight: 700;
   letter-spacing: -0.01em;
 }
 
 .room-menu-content__code {
-  color: var(--vr-text-2, var(--vr-text-3));
+  color: var(--vr-text-2, var(--vr-text-muted));
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: 0.75rem;
   letter-spacing: 0.02em;
 }
 
@@ -96,8 +96,8 @@
 .room-invite-list__empty {
   margin: 0;
   padding: 8px 12px;
-  color: var(--vr-text-3);
-  font-size: 13px;
+  color: var(--vr-text-muted);
+  font-size: 0.8125rem;
   line-height: 1.45;
 }
 
@@ -113,7 +113,7 @@
   background: transparent;
   color: var(--vr-text);
   font-family: var(--font-ui);
-  font-size: 14.5px;
+  font-size: 0.90625rem;
   font-weight: 600;
   text-align: left;
   cursor: pointer;
@@ -143,7 +143,7 @@
 
 .room-invite-list__friend-note {
   flex: none;
-  color: var(--vr-text-3);
+  color: var(--vr-text-muted);
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 0.6875rem;
 }

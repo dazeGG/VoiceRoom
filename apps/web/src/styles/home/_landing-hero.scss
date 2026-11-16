@@ -29,7 +29,7 @@
   gap: 8px;
   margin: 0 0 16px;
   color: var(--vr-accent);
-  font-size: 13.5px;
+  font-size: 0.84375rem;
   font-weight: 500;
 }
 
@@ -44,7 +44,7 @@
 .landing-hero__title {
   margin: 0;
   color: var(--vr-text);
-  font-size: clamp(34px, 4.6vw, 58px);
+  font-size: clamp(2.125rem, 4.6vw, 3.625rem);
   font-weight: 600;
   line-height: 1.04;
   letter-spacing: -0.035em;
@@ -55,7 +55,7 @@
   max-width: 500px;
   margin: 18px 0 0;
   color: var(--vr-text-2);
-  font-size: 17px;
+  font-size: 1.0625rem;
   line-height: 1.55;
   text-wrap: pretty;
 }
@@ -97,10 +97,10 @@
   background: transparent;
   color: var(--vr-text);
   font-family: var(--font-mono);
-  font-size: 14px;
+  font-size: 0.875rem;
 
   &::placeholder {
-    color: var(--vr-text-3);
+    color: var(--vr-text-muted);
   }
 
   &::-webkit-search-cancel-button,
@@ -115,7 +115,7 @@
   border-left: 1px solid var(--vr-line-strong);
   background: transparent;
   color: var(--vr-text);
-  font: 500 14.5px var(--font-ui);
+  font: 500 0.90625rem var(--font-ui);
   cursor: pointer;
 
   &:hover:not(:disabled) {
@@ -125,6 +125,6 @@
 
 .landing-hero__disclaimer {
   margin: 14px 0 0;
-  color: var(--vr-text-3);
-  font-size: 13px;
+  color: var(--vr-text-muted);
+  font-size: 0.8125rem;
 }

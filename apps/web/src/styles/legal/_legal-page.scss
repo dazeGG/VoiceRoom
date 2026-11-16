@@ -46,10 +46,10 @@
   display: flex;
   flex-wrap: wrap;
   gap: 6px 16px;
-  font-size: 13px;
+  font-size: 0.8125rem;
 
   a {
-    color: var(--vr-text-3);
+    color: var(--vr-text-muted);
     text-decoration: none;
 
     &:hover,
@@ -67,26 +67,26 @@
 
 .legal-page__title {
   margin: 0 0 6px;
-  font-size: clamp(24px, 5vw, 34px);
+  font-size: clamp(1.5rem, 5vw, 2.125rem);
   line-height: 1.15;
   letter-spacing: -0.02em;
 }
 
 .legal-page__date {
   margin: 0 0 28px;
-  color: var(--vr-text-3);
-  font-size: 13px;
+  color: var(--vr-text-muted);
+  font-size: 0.8125rem;
 }
 
 .legal-page__text {
   color: var(--vr-text-2);
-  font-size: 15px;
+  font-size: 0.9375rem;
   line-height: 1.6;
 
   h2 {
     margin: 32px 0 10px;
     color: var(--vr-text);
-    font-size: 18px;
+    font-size: 1.125rem;
     line-height: 1.3;
   }
 

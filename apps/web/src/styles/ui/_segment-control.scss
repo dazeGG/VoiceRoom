@@ -29,7 +29,7 @@
   background: transparent;
   color: var(--vr-text-2);
   font-family: var(--font-ui);
-  font-size: 13.5px;
+  font-size: 0.84375rem;
   font-weight: 500;
   white-space: nowrap;
   cursor: pointer;
@@ -41,7 +41,7 @@
     min-height: 28px;
     padding: 0 12px;
     border-radius: 9px;
-    font-size: 13px;
+    font-size: 0.8125rem;
   }
 
   &:hover:not(:disabled):not([aria-selected='true']):not([aria-checked='true']) {

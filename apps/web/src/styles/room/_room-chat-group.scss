@@ -44,7 +44,7 @@
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 600;
 }
 
@@ -77,7 +77,7 @@
 
 .room-chat-group__author {
   color: var(--vr-text);
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 600;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -118,9 +118,9 @@ button.room-chat-group__author {
 
 .room-chat-group__time {
   flex: none;
-  color: var(--vr-text-3);
+  color: var(--vr-text-muted);
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 0.6875rem;
 }
 
 // The author line holds the first message's toolbar open: it floats over that
@@ -139,9 +139,9 @@ button.room-chat-group__author {
 
 .room-chat-group__edited {
   margin-left: 5px;
-  color: var(--vr-text-3);
+  color: var(--vr-text-muted);
   font-family: var(--font-mono);
-  font-size: 10.5px;
+  font-size: 0.65625rem;
   white-space: nowrap;
 }
 

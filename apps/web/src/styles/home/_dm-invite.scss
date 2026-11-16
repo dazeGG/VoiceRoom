@@ -39,13 +39,13 @@
 
   strong {
     color: var(--vr-text);
-    font-size: 13.5px;
+    font-size: 0.84375rem;
   }
 
   span {
     overflow: hidden;
     color: var(--vr-text-2);
-    font-size: 12.5px;
+    font-size: 0.78125rem;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -62,7 +62,7 @@
     border-radius: 9px;
     padding: 0 14px;
     font: inherit;
-    font-size: 13px;
+    font-size: 0.8125rem;
     font-weight: 600;
     cursor: pointer;
   }

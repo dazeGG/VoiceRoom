@@ -256,7 +256,7 @@
   padding: 1px 3px;
   background: var(--vr-hover);
   color: var(--vr-text-2);
-  font-size: 7px;
+  font-size: 0.4375rem;
   font-weight: 700;
   line-height: 1.15;
   letter-spacing: 0.04em;
@@ -377,7 +377,7 @@
 }
 
 .room-dock__connection-label {
-  font-size: 12.5px;
+  font-size: 0.78125rem;
   font-weight: 600;
   color: var(--vr-text);
 }
@@ -431,7 +431,7 @@
 
 .room-dock__field > span {
   color: var(--vr-text-2);
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 500;
 }
 
@@ -464,7 +464,7 @@
 
 .room-dock__gate-head > span {
   color: var(--vr-text-2);
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 500;
 }
 

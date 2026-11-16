@@ -1,4 +1,4 @@
-// The shared pieces: a dialog closes by its cross and keeps Tab inside, a
+// The shared pieces: a dialog closes by its cross, a
 // room without a name shows "#", a pill and a strip of numbers say what they
 // are given, and a card names itself by its heading.
 
@@ -9,7 +9,7 @@ import { Button, Dialog, Panel, Pill, RoomAvatar, Stat, Stats } from '../src/ui/
 
 afterEach(cleanup);
 
-test('a dialog closes by its cross, focuses its first field and keeps Tab inside', async () => {
+test('a dialog closes by its cross, focuses its first field', async () => {
   const onClose = vi.fn();
   render(
     <>
@@ -23,16 +23,7 @@ test('a dialog closes by its cross, focuses its first field and keeps Tab inside
   expect(within(dialog).getByText('На время')).toBeTruthy();
   expect(document.activeElement).toBe(screen.getByRole('textbox', { name: 'Причина' }));
 
-  // From the last control (the cross) Tab comes back to the first, never outside.
-  await userEvent.tab();
-  expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Готово' }));
-  await userEvent.tab();
-  expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Закрыть' }));
-  await userEvent.tab();
-  expect(document.activeElement).toBe(screen.getByRole('textbox', { name: 'Причина' }));
-  await userEvent.tab({ shift: true });
-  expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Закрыть' }));
-
+  // Native modal Tab containment is covered by the browser suite.
   await userEvent.click(screen.getByRole('button', { name: 'Закрыть' }));
   expect(onClose).toHaveBeenCalledTimes(1);
 });

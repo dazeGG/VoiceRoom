@@ -15,7 +15,7 @@
 
 .acc-filter-count {
   margin-left: 6px;
-  color: var(--vr-text-3);
+  color: var(--vr-text-muted);
   font-weight: 500;
 }
 
@@ -32,8 +32,8 @@
 }
 
 .acc-quality-text {
-  color: var(--vr-text-3);
-  font-size: 12px;
+  color: var(--vr-text-muted);
+  font-size: 0.75rem;
 }
 
 .acc-quality-text[data-tone='warning'] {
@@ -45,7 +45,7 @@
 }
 
 .acc-quality-none {
-  font-size: 12.5px;
+  font-size: 0.78125rem;
 }
 
 .acc-search {
@@ -58,7 +58,7 @@
   border-radius: 10px;
   padding: 0 12px;
   background: var(--vr-surface);
-  color: var(--vr-text-3);
+  color: var(--vr-text-muted);
 }
 
 .acc-search:focus-within {
@@ -73,7 +73,7 @@
   background: transparent;
   color: var(--vr-text);
   font: inherit;
-  font-size: 13.5px;
+  font-size: 0.84375rem;
 }
 
 .acc-count {
@@ -86,14 +86,14 @@
   min-width: 760px;
   border-collapse: collapse;
   table-layout: fixed;
-  font-size: 13.5px;
+  font-size: 0.84375rem;
 }
 
 .acc-table th {
   border-bottom: 1px solid var(--vr-line);
   padding: 10px 18px;
-  color: var(--vr-text-3);
-  font-size: 12px;
+  color: var(--vr-text-muted);
+  font-size: 0.75rem;
   font-weight: 600;
   text-align: left;
 }
@@ -219,8 +219,8 @@ th[aria-sort='descending'] .acc-sort {
 .acc-person-login {
   min-width: 0;
   overflow: hidden;
-  color: var(--vr-text-3);
-  font-size: 12px;
+  color: var(--vr-text-muted);
+  font-size: 0.75rem;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -234,7 +234,7 @@ th[aria-sort='descending'] .acc-sort {
 }
 
 .acc-none {
-  color: var(--vr-text-3);
+  color: var(--vr-text-muted);
 }
 
 .acc-table .has-reports {
@@ -245,7 +245,7 @@ th[aria-sort='descending'] .acc-sort {
 .acc-clients {
   display: inline-flex;
   gap: 8px;
-  color: var(--vr-text-3);
+  color: var(--vr-text-muted);
 }
 
 .acc-foot {
@@ -260,8 +260,8 @@ th[aria-sort='descending'] .acc-sort {
 .acc-foot-note {
   min-width: 240px;
   flex: 1;
-  color: var(--vr-text-3);
-  font-size: 12px;
+  color: var(--vr-text-muted);
+  font-size: 0.75rem;
 }
 
 .acc-pages {
@@ -272,6 +272,6 @@ th[aria-sort='descending'] .acc-sort {
 
 .acc-page {
   color: var(--vr-text-2);
-  font-size: 12.5px;
+  font-size: 0.78125rem;
   white-space: nowrap;
 }

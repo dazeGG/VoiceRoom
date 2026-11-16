@@ -92,7 +92,7 @@
   margin: 0;
   overflow: hidden;
   color: var(--vr-text);
-  font-size: 16px;
+  font-size: 1rem;
   font-weight: 600;
   letter-spacing: -0.015em;
   line-height: 1.2;
@@ -106,12 +106,12 @@
   gap: 8px;
   margin: 0;
   color: var(--vr-text-2);
-  font-size: 12px;
+  font-size: 0.75rem;
   line-height: 1;
   white-space: nowrap;
 
   .room-call-timer--topbar {
-    font-size: 12px;
+    font-size: 0.75rem;
   }
 }
 

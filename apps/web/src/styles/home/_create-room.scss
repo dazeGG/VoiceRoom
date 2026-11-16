@@ -28,14 +28,14 @@
 
 .create-room__label {
   display: block;
-  font-size: 12.5px;
+  font-size: 0.78125rem;
   font-weight: 700;
   color: var(--vr-text-2);
   margin-bottom: 8px;
 }
 
 .create-room__label-soft {
-  color: var(--vr-text-3);
+  color: var(--vr-text-muted);
   font-weight: 500;
 }
 
@@ -47,12 +47,12 @@
   background: var(--vr-bg);
   color: var(--vr-text);
   font-family: var(--font-ui);
-  font-size: 15px;
+  font-size: 0.9375rem;
   outline: none;
   transition: border-color 0.15s ease;
 
   &::placeholder {
-    color: var(--vr-text-3);
+    color: var(--vr-text-muted);
   }
 
   &:focus {
@@ -77,7 +77,7 @@
   background: transparent;
   color: var(--vr-text-2);
   font-family: var(--font-ui);
-  font-size: 13.5px;
+  font-size: 0.84375rem;
   font-weight: 600;
   cursor: pointer;
   transition:
@@ -102,7 +102,7 @@
   gap: 9px;
   border-radius: var(--radius-md);
   padding: 11px 13px;
-  font-size: 12.5px;
+  font-size: 0.78125rem;
   line-height: 1.4;
 
   svg {
@@ -137,5 +137,5 @@
   padding: 9px 12px;
   background: color-mix(in oklch, var(--vr-danger), transparent 88%);
   color: var(--vr-text);
-  font-size: 12.5px;
+  font-size: 0.78125rem;
 }

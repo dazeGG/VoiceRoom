@@ -9,7 +9,9 @@ export function sendOrEditLast(
   event: KeyboardEvent,
   composer: { empty: boolean; send: () => void; editLast: () => boolean }
 ): void {
-  if (event.isComposing) return;
+  // Safari may end composition before the confirming Enter keydown.
+  // eslint-disable-next-line @typescript-eslint/no-deprecated -- IME compatibility: MDN keydown recommends keyCode 229.
+  if (event.isComposing || event.keyCode === 229) return;
   if (event.key === 'Enter' && !event.shiftKey) {
     event.preventDefault();
     composer.send();

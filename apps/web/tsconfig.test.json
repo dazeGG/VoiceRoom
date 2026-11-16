@@ -13,6 +13,8 @@
     "test/**/*.ts",
     "test/**/*.vue",
     "e2e/**/*.ts",
+    "ui-audit-e2e/**/*.ts",
+    "playwright.ui-audit.config.ts",
     "scripts/**/*.ts",
     "playwright.config.ts",
     "vite.config.ts"

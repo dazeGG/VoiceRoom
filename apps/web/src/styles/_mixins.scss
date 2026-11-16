@@ -47,12 +47,12 @@ $bp-phone-sm: 560px;
   background: var(--vr-surface-2);
   color: var(--vr-text);
   font-family: var(--font-ui);
-  font-size: 14.5px;
+  font-size: 0.90625rem;
   outline: none;
   transition: border-color 0.15s ease;
 
   &::placeholder {
-    color: var(--vr-text-3);
+    color: var(--vr-text-muted);
   }
 
   &:focus {

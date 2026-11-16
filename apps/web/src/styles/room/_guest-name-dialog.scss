@@ -49,7 +49,7 @@
 }
 
 .guest-name-dialog__heading h2 {
-  font-size: 26px;
+  font-size: 1.625rem;
   font-weight: 600;
   letter-spacing: -0.025em;
   line-height: 1.1;
@@ -57,7 +57,7 @@
 
 .guest-name-dialog__eyebrow {
   color: var(--vr-accent);
-  font-size: 12.5px;
+  font-size: 0.78125rem;
   font-weight: 500;
   letter-spacing: 0;
   text-transform: none;
@@ -65,7 +65,7 @@
 
 .guest-name-dialog__lead {
   color: var(--vr-text-2);
-  font-size: 14px;
+  font-size: 0.875rem;
   line-height: 1.5;
 }
 
@@ -81,7 +81,7 @@
 
 .guest-name-dialog__field > span {
   color: var(--vr-text-2);
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 500;
 }
 
@@ -97,7 +97,7 @@
   min-height: 1.2em;
   margin: calc(var(--space-xs) * -1) 0 0;
   color: color-mix(in oklch, var(--vr-danger), var(--vr-text) 22%);
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 500;
 }
 
@@ -109,7 +109,7 @@
   border-radius: 12px;
   background: var(--vr-accent);
   color: var(--vr-accent-ink);
-  font-size: 15px;
+  font-size: 0.9375rem;
   font-weight: 600;
   transition:
     background 160ms var(--ease-out),
@@ -136,8 +136,8 @@
 
 .guest-name-dialog__legal {
   margin: 0;
-  color: var(--vr-text-3);
-  font-size: 12.5px;
+  color: var(--vr-text-muted);
+  font-size: 0.78125rem;
   line-height: 1.45;
 }
 

@@ -46,10 +46,8 @@ test('the server section draws the minutes over the chosen span and says when th
   expect(span(must(calls.at(-1), 'the last request').url)).toBe(HOUR);
   // The picker stays so a longer span can be chosen.
   expect(
-    within(screen.getByRole('radiogroup', { name: 'Период' }))
-      .getByRole('radio', { name: '1 ч' })
-      .getAttribute('aria-checked')
-  ).toBe('true');
+    within(screen.getByRole('radiogroup', { name: 'Период' })).getByRole('radio', { name: '1 ч', checked: true })
+  ).toBeTruthy();
 });
 
 test('the media server shows its traffic, its losses each way with too little traffic left blank, and when LiveKit was not read', async () => {

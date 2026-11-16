@@ -38,6 +38,7 @@
 }
 
 html {
+  font-size: 100%;
   min-height: 100%;
 }
 
@@ -46,7 +47,7 @@ body {
   margin: 0;
   background: var(--vr-bg);
   color: var(--vr-text);
-  font-size: 16px;
+  font-size: 1rem;
   line-height: 1.45;
 }
 

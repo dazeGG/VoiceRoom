@@ -12,12 +12,12 @@
   top: 0;
   right: var(--chat-typing-inset, 18px);
   left: var(--chat-typing-inset, 18px);
-  height: 14px;
+  height: 0.875rem;
   margin: 0;
   overflow: hidden;
-  color: var(--vr-text-3);
-  font-size: 12.5px;
-  line-height: 14px;
+  color: var(--vr-text-muted);
+  font-size: 0.78125rem;
+  line-height: 0.875rem;
   pointer-events: none;
   text-overflow: ellipsis;
   white-space: nowrap;

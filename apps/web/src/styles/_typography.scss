@@ -79,9 +79,9 @@
 .eyebrow {
   margin: 0;
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 400;
   letter-spacing: 0.18em;
   text-transform: uppercase;
-  color: var(--eyebrow-ink, var(--vr-text-3));
+  color: var(--eyebrow-ink, var(--vr-text-muted));
 }
