@@ -38,7 +38,10 @@ export async function startCaddyEdge({
   files = {},
   binaryFiles = {},
   siteFiles = DEFAULT_SITE_FILES,
-  sites = {}
+  sites = {},
+  network,
+  networkAlias,
+  behindEdge = false
 }: {
   env?: Record<string, string>;
   /** Files of the web root by path, next to index.html. */
@@ -48,6 +51,9 @@ export async function startCaddyEdge({
   siteFiles?: Record<string, string>;
   /** Files of the extra-sites directory by name, e.g. 'extra.caddy'. */
   sites?: Record<string, string>;
+  network?: string;
+  networkAlias?: string;
+  behindEdge?: boolean;
 } = {}): Promise<string> {
   const name = `voiceroom-edge-${randomUUID()}`;
   // The image generates this snippet from its own build; any valid policy
@@ -74,6 +80,8 @@ export async function startCaddyEdge({
       '-d',
       '--name',
       name,
+      ...(network ? ['--network', network] : []),
+      ...(networkAlias ? ['--network-alias', networkAlias] : []),
       '-e',
       'DOMAIN=:80',
       '-e',
@@ -97,6 +105,12 @@ export async function startCaddyEdge({
       `${path.join(repositoryRoot, 'config/caddy/admin-csp.caddy')}:/etc/caddy/admin-csp.caddy:ro`,
       '-v',
       `${sitesDir}:/etc/caddy/sites.d:ro`,
+      ...(behindEdge
+        ? [
+            '-v',
+            `${path.join(repositoryRoot, 'config/caddy/behind-edge.headers')}:/etc/caddy/proxy.d/behind-edge.caddy:ro`
+          ]
+        : []),
       caddyImage
     ],
     { encoding: 'utf8' }

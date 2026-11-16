@@ -285,6 +285,100 @@ docker compose exec caddy caddy reload --config /etc/caddy/Caddyfile --adapter c
 
 Каталог смонтирован только для чтения; пока в нём нет `*.caddy`, Caddy работает как раньше.
 
+### Дев-стенд на хосте прода
+
+The permanent dev stack uses `/home/daze/VoiceRoom-dev` on the production host,
+with Compose project `voiceroom-dev`. It has independent PostgreSQL, uploads,
+media, web archives and secrets. Production data is never copied into dev.
+The production Caddy terminates HTTPS for `dev.voiceroom.ru`,
+`admin.dev.voiceroom.ru` and `livekit.dev.voiceroom.ru`; all three A records point
+at the host. The inner Caddy serves HTTP without publishing host ports.
+
+Use this non-secret part of the dev `.env`, plus fresh independent values for
+`POSTGRES_PASSWORD`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`,
+`LIVEKIT_GATE_SECRET`, `VOICE_ROOM_CURSOR_HMAC_KEYS` and `POW_SECRET`:
+
+```dotenv
+COMPOSE_PROJECT_NAME=voiceroom-dev
+COMPOSE_FILE=docker-compose.yml:docker-compose.behind-edge.yml
+DOMAIN=dev.voiceroom.ru
+ADMIN_DOMAIN=admin.dev.voiceroom.ru
+LIVEKIT_DOMAIN=livekit.dev.voiceroom.ru
+LIVEKIT_RTC_TCP_PORT=7891
+LIVEKIT_RTC_UDP_PORT=7892
+LIVEKIT_TURN_UDP_PORT=3488
+LIVEKIT_RELAY_PORT_FIRST=30100
+LIVEKIT_RELAY_PORT_LAST=30119
+LIVEKIT_METRICS_PORT=6790
+TURN_ENABLED=false
+MAX_ROOMS=10
+MAX_ROOM_PEERS=6
+MAX_VOICE_PEERS=12
+```
+
+Set the three `VOICEROOM_*_IMAGE` values to images from the same verified commit.
+The overlay caps each service's memory and CPU and raises its OOM score. It
+bind-mounts the checkout's Caddyfile and `behind-edge.headers`, so infrastructure
+configuration also works when bootstrapping from existing immutable images.
+The dev media ports must be allowed by the host/provider firewall. TURN/TLS on
+443 remains production-only; dev uses direct ICE on 7891/TCP and 7892/UDP.
+
+Create the external `voiceroom-edge` Docker network once. Attach only the two
+Caddys to it; do not attach dev services to `voiceroom_default`, where service
+names would collide. On the production host, keep this ignored file as
+`docker-compose.edge.yml`:
+
+```yaml
+services:
+  caddy:
+    networks:
+      default:
+      edge:
+networks:
+  edge:
+    name: voiceroom-edge
+    external: true
+```
+
+Preserve production's logging overlay by setting its `.env` to
+`COMPOSE_FILE=docker-compose.yml:docker-compose.override.yml:docker-compose.edge.yml`.
+For first activation, `docker network connect voiceroom-edge <prod-caddy-id>`
+attaches the running Caddy without restarting it. The overlay preserves that
+membership when a future deployment recreates it.
+
+Add `config/caddy/sites.d/voiceroom-dev.caddy` in the production checkout:
+
+```caddy
+dev.voiceroom.ru, admin.dev.voiceroom.ru, livekit.dev.voiceroom.ru {
+  reverse_proxy voiceroom-dev-edge:80 {
+    header_up X-VoiceRoom-Client-IP {remote_host}
+  }
+}
+```
+
+Validate and reload Caddy using the commands above. The outer edge replaces
+the dedicated client-IP header; the inner edge converts it to a single trusted
+`X-Forwarded-For` value and removes the dedicated header before proxying.
+This preserves per-client rate limits through both proxies, including when a
+client supplies spoofed forwarding headers.
+
+The GitHub `dev` environment needs its own `SSH_HOST`, `SSH_USER`, `SSH_KEY`,
+`DEPLOY_PATH=/home/daze/VoiceRoom-dev` and the production host's verified
+`SSH_FINGERPRINT`. Once the CI change reaches `develop`, successful pushes
+publish images and call the existing deployment workflow. The first bootstrap
+uses `docker compose up -d --wait`; later rollouts use `remote-deploy.sh`, which
+first backs up this stack's database and environment. Its image cleanup keeps
+both current and previous releases of every detected stack and only prunes
+untagged images globally. Rollouts sharing the same deploy account also hold
+`~/.cache/voiceroom/deploy.lock` to serialize pulls and cleanup. Both dev and production deployment workflows must
+use this corrected cleanup before either is allowed to clean the shared host.
+
+Check `https://dev.voiceroom.ru/api/healthz`, the admin host, LiveKit gate,
+container health, resource limits and production health after activation.
+Stop only dev with `cd /home/daze/VoiceRoom-dev && docker compose stop`;
+`docker compose down` also removes its containers/network but preserves data
+volumes unless explicitly passed `--volumes`.
+
 ### UDP-буферы для LiveKit
 
 Всё медиа LiveKit идёт через один UDP-сокет (`7882`). Ядро Ubuntu по умолчанию даёт сокету 212 КБ (`net.core.rmem_max`), и LiveKit пишет при старте `UDP receive buffer is too small for a production set-up`. Под нагрузкой такой буфер переполняется, и входящие пакеты стримеров пропадают ещё до SFU. Поднимите лимиты на хосте (параметры не относятся к сетевому namespace, поэтому задаются на хосте, а не в compose):

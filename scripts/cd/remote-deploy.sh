@@ -78,6 +78,11 @@ main() {
     echo "another deploy is running in $deploy_path" >&2
     exit 1
   fi
+  # Dev and production use the same deploy account. Serialize their rollouts:
+  # image cleanup must never race another stack's pull or .env replacement.
+  mkdir -p "$HOME/.cache/voiceroom"
+  exec 8>"$HOME/.cache/voiceroom/deploy.lock"
+  flock 8
 
   stamp=$(date -u +%Y%m%dT%H%M%SZ)
   previous_commit=$(git rev-parse HEAD)
@@ -163,10 +168,30 @@ main() {
   # filter below keeps all of them and a small disk fills up (dev hit 100% on
   # 2026-09-13 and 2026-09-24). Keep only this release and the previous one,
   # whose tags the .env backup holds, so a manual rollback needs no pull.
+  # Prod and dev can share a host (docs/SELF_HOSTING.md), so the same pair of
+  # every other compose stack here is kept too: its .env and newest backup.
+  kept_release_images() {
+    local stack previous
+    printf '%s\n' "$api_image" "$worker_image" "$web_image"
+    grep -hE '^VOICEROOM_(API|WORKER|WEB)_IMAGE=' "$env_backup" | cut -d= -f2- || return 1
+    docker ps --all --format '{{.Label "com.docker.compose.project.working_dir"}}' | sort -u \
+      | while IFS= read -r stack; do
+        [ -n "$stack" ] && [ -f "$stack/.env" ] || continue
+        previous=''
+        if [ -d "$stack/deploy-backups/ci" ]; then
+          previous=$(find "$stack/deploy-backups/ci" -maxdepth 1 -type f -name 'env-*' -printf '%T@ %p\n' 2> /dev/null \
+            | sort -rn | sed -n '1s/^[^ ]* //p') || exit 1
+        fi
+        grep -hE '^VOICEROOM_(API|WORKER|WEB)_IMAGE=' "$stack/.env" ${previous:+"$previous"} 2> /dev/null \
+          | cut -d= -f2- || { [ "$?" -eq 1 ] || exit 1; }
+      done
+  }
   prune_release_images() {
     local keep_list
-    keep_list=$(printf '%s\n' "$api_image" "$worker_image" "$web_image"
-      grep -hE '^VOICEROOM_(API|WORKER|WEB)_IMAGE=' "$env_backup" | cut -d= -f2- || true)
+    keep_list=$(kept_release_images) || {
+      echo 'warning: cannot read shared-host release inventory; skipping tagged-image cleanup' >&2
+      return 0
+    }
     docker image ls --format '{{.Repository}}:{{.Tag}}' \
       | grep -E '/voiceroom-(api|worker|web):' \
       | grep -vxF -f <(printf '%s\n' "$keep_list") \
@@ -183,7 +208,9 @@ main() {
   bash scripts/cd/prune-backups.sh . || true
   # Cleanup must not turn a finished rollout into a failed job.
   prune_release_images
-  docker image prune -af --filter 'until=72h' > /dev/null || true
+  # Tagged rollback images above must survive regardless of their age.
+  # --all would discard them (and unrelated stacks' images) host-wide.
+  docker image prune -f --filter 'until=72h' > /dev/null || true
   docker builder prune -af --filter 'until=72h' > /dev/null || true
 
   docker compose ps --format '{{.Service}}\t{{.Status}}'

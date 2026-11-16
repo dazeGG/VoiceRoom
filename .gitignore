@@ -33,6 +33,7 @@ caddy_data/
 caddy_config/
 # Host-installed persistent logging override must survive Git checkouts.
 /docker-compose.override.yml
+/docker-compose.edge.yml
 
 # Test and coverage output
 coverage/
