@@ -26,7 +26,7 @@ export type DeletionRequest =
 export type AccountRestore =
   | { status: 'invalid' | 'expired'; userId: null }
   | { status: 'blocked'; userId: null; blockedUntil: number | null; blockReason: string }
-  | { status: 'restored'; userId: string };
+  | { status: 'restored'; userId: string; passwordHash: string };
 
 export type OperatorDeletion =
   { status: 'not_found' } | { status: 'already_requested' | 'requested'; scheduledFor: number };
@@ -315,7 +315,7 @@ function createAccountDeletionRepository({ pool, now: clock = Date.now }: { pool
         return { status: 'blocked', userId: null, blockedUntil, blockReason: user.block_reason || '' };
 
       await trx.updateTable('users').set(restoredProfile(user, now)).where('id', '=', user.id).execute();
-      return { status: 'restored', userId: user.id };
+      return { status: 'restored', userId: user.id, passwordHash: user.password_hash };
     });
   }
 

@@ -70,6 +70,13 @@ export interface MembershipServices {
   };
 }
 
+export interface AdmissionPeer {
+  readonly sessionToken: string;
+  readonly accountUserId: string | null;
+  readonly gateGuestPrincipalId: string;
+  readonly transportId: string;
+}
+
 export interface AdmissionDeps {
   livekitConfig(): LiveKitConfig;
   credentialProvider(): CredentialProvider | null;
@@ -77,7 +84,8 @@ export interface AdmissionDeps {
   store(): AdmissionStore;
   roomExists(roomId: string): Promise<boolean>;
   findRoomBan(roomId: string, userId: string | undefined, ip: string): Promise<unknown>;
-  waitForRosterPeer(roomId: string, peerId: string): Promise<{ sessionToken?: string } | null>;
+  waitForRosterPeer(roomId: string, peerId: string): Promise<AdmissionPeer | null>;
+  currentRosterPeer(roomId: string, peerId: string): AdmissionPeer | null;
   memberships(): MembershipServices | null;
   roomName(roomId: string): string;
   recordRevokeFailure(): void;
@@ -194,7 +202,6 @@ export function createAdmissionService(deps: AdmissionDeps) {
     const livekit = deps.livekitConfig();
 
     if (!(await deps.roomExists(roomId))) return refuse('room_not_found');
-    if (await deps.findRoomBan(roomId, user?.id, clientIp)) return refuse('room_banned');
 
     // Media admission belongs to a peer the room roster already knows. Without
     // this a caller holding only the room id could subscribe to every voice and
@@ -203,10 +210,28 @@ export function createAdmissionService(deps: AdmissionDeps) {
     // roster lookup waits a moment for that join to land.
     const rosterPeer = await deps.waitForRosterPeer(roomId, peerId);
     if (!rosterPeer) {
+      // Preserve the ban refusal for an already evicted caller; this path cannot issue credentials.
+      if (await deps.findRoomBan(roomId, user?.id, clientIp)) return refuse('room_banned');
       logDenied(log, { roomId, peerId, code: 'not_in_room' });
       return refuse('not_in_room');
     }
-    if (!tokensMatch(rosterPeer.sessionToken, sessionToken)) return refuse('invalid_session');
+    const captured = { ...rosterPeer };
+    const current = () => {
+      const peer = deps.currentRosterPeer(roomId, peerId);
+      return (
+        peer !== null &&
+        peer.sessionToken === captured.sessionToken &&
+        peer.accountUserId === captured.accountUserId &&
+        peer.gateGuestPrincipalId === captured.gateGuestPrincipalId &&
+        peer.transportId === captured.transportId
+      );
+    };
+    const accountUserId = captured.accountUserId;
+    if (!tokensMatch(captured.sessionToken, sessionToken) || accountUserId !== (user?.id || null) || !current()) {
+      return refuse('invalid_session');
+    }
+    if (await deps.findRoomBan(roomId, accountUserId || undefined, clientIp)) return refuse('room_banned');
+    if (!current()) return refuse('invalid_session');
 
     const provider = deps.credentialProvider();
     if (!provider && !livekit.enabled) return refuse('livekit_unconfigured');
@@ -225,10 +250,12 @@ export function createAdmissionService(deps: AdmissionDeps) {
     });
     // Null only if the identity row vanished mid-transaction.
     if (!identity) throw new Error('the peer identity vanished while it was being created');
+    if (!current() || (!accountUserId && identity.identity?.id !== captured.gateGuestPrincipalId))
+      return refuse('invalid_session');
     if (identity.status === 'token_mismatch') return refuse('invalid_session');
     const principal = store.normalizeGatePrincipal({
-      accountUserId: user?.id || null,
-      guestPrincipalId: identity.identity?.id || '',
+      accountUserId,
+      guestPrincipalId: captured.gateGuestPrincipalId,
       roomId
     });
     if (!principal) {
@@ -245,8 +272,8 @@ export function createAdmissionService(deps: AdmissionDeps) {
       return refuse('server_mute_unavailable');
     }
 
-    const memberships = user?.id ? deps.memberships() : null;
-    if (user?.id && !memberships) return refuse('membership_unavailable');
+    const memberships = accountUserId ? deps.memberships() : null;
+    if (accountUserId && !memberships) return refuse('membership_unavailable');
 
     if (!provider) {
       logDenied(log, { roomId, peerId, code: 'livekit_gate_unavailable' });
@@ -273,6 +300,7 @@ export function createAdmissionService(deps: AdmissionDeps) {
         roomId
       });
 
+    if (!current()) return refuse('invalid_session');
     let issued = await issue();
     if (issued.status !== 'issued' || !issued.admission) {
       logDenied(log, { roomId, peerId, code: 'livekit_gate_credential_unavailable' });
@@ -280,34 +308,52 @@ export function createAdmissionService(deps: AdmissionDeps) {
     }
     let admission: Admission = issued.admission;
 
+    if (!current()) {
+      await revoke(admission.gateCredentialId);
+      return refuse('invalid_session');
+    }
+
     // A server mute that lands between the lookup and the issue would leave the
     // microphone in the token; re-check and reissue if the answer changed.
     try {
       const currentServerMuted = await serverMuteLookup();
+      if (!current()) {
+        await revoke(admission.gateCredentialId);
+        return refuse('invalid_session');
+      }
       if (currentServerMuted !== serverMuted) {
         await revoke(admission.gateCredentialId);
+        if (!current()) return refuse('invalid_session');
         serverMuted = currentServerMuted;
         issued = await issue();
         if (issued.status !== 'issued' || !issued.admission) return refuse('livekit_gate_credential_unavailable');
         admission = issued.admission;
+        if (!current()) {
+          await revoke(admission.gateCredentialId);
+          return refuse('invalid_session');
+        }
       }
     } catch (error) {
       await revoke(admission.gateCredentialId, error);
       throw error;
     }
 
-    if (await deps.findRoomBan(roomId, user?.id, clientIp)) {
+    if (await deps.findRoomBan(roomId, accountUserId || undefined, clientIp)) {
       logDenied(log, { roomId, peerId, code: 'room_banned' });
       await deps.credentialBoundary()?.revokePrincipal({ roomId, principal });
       return refuse('room_banned');
     }
 
-    if (user?.id && memberships) {
+    if (!current()) {
+      await revoke(admission.gateCredentialId);
+      return refuse('invalid_session');
+    }
+    if (accountUserId && memberships) {
       let persisted: { status: PersistedAdmission['status'] };
       try {
         persisted = await memberships.service.persistSuccessfulAdmission({
           roomId,
-          userId: user.id,
+          userId: accountUserId,
           ip: clientIp,
           admissionSucceeded: true
         });
@@ -321,6 +367,10 @@ export function createAdmissionService(deps: AdmissionDeps) {
       }
     }
 
+    if (!current()) {
+      await revoke(admission.gateCredentialId);
+      return refuse('invalid_session');
+    }
     return { status: 'issued', admission };
   }
 

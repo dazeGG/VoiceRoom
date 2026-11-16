@@ -77,7 +77,10 @@ test('changePassword rotates the credential only after verifying the current one
   assert.equal(wrong.status, 'invalid_password');
   assert.ok(await store.verifyCredentials('ada', 'lovelace-1843'));
 
-  const session = await store.createSession({ userId: user.id, now: 1000 });
+  const session = await store.createSession({
+    credentialProof: { userId: user.id, passwordHash: user.passwordHash },
+    now: 1000
+  });
 
   const updated = await store.changePassword({
     userId: user.id,
@@ -102,7 +105,10 @@ test('sessions resolve to their user and expire', async (t) => {
   const { user } = await store.createUser({ login: 'grace', password: 'cobol-1959' });
   assert.ok(user);
 
-  const session = await store.createSession({ userId: user.id, now: 1000 });
+  const session = await store.createSession({
+    credentialProof: { userId: user.id, passwordHash: user.passwordHash },
+    now: 1000
+  });
   const resolved = await store.getSessionUser(session.token, 1500);
   assert.ok(resolved);
   assert.ok(resolved.user);
@@ -120,11 +126,14 @@ test('deleteSession and pruneSessions remove session rows', async (t) => {
   const { user } = await store.createUser({ login: 'linus', password: 'kernel-1991' });
   assert.ok(user);
 
-  const active = await store.createSession({ userId: user.id, now: 2000 });
+  const active = await store.createSession({
+    credentialProof: { userId: user.id, passwordHash: user.passwordHash },
+    now: 2000
+  });
   assert.equal(await store.deleteSession(active.token), true);
   assert.equal(await store.getSessionUser(active.token, 2500), null);
 
-  await store.createSession({ userId: user.id, now: 1000 });
+  await store.createSession({ credentialProof: { userId: user.id, passwordHash: user.passwordHash }, now: 1000 });
   assert.equal(await store.pruneSessions(5000), 1);
 });
 

@@ -439,7 +439,15 @@ export function createReconnectLeases(deps: ReconnectLeaseDeps) {
     for (const peer of presenceRooms.get(roomId)?.peers?.values?.() || []) {
       if (peer.accountUserId === userId) peerIds.add(peer.id);
     }
-    const records = [...peerIds].flatMap((peerId) => recordsForPeer(roomId, peerId));
+    const records = [...peerIds]
+      .flatMap((peerId) => {
+        const peer = presenceRooms.get(roomId)?.peers.get(peerId);
+        // recordsForPeer synthesizes an expiry lease for a live transport.
+        // An older account record must not create one for its replacement.
+        if (peer && peer.accountUserId !== userId) return [];
+        return recordsForPeer(roomId, peerId);
+      })
+      .filter((record) => record.peer?.accountUserId === userId);
     for (const record of records) terminalClaimRecord(record, reason, finalizePeer);
     const results = await settleLeaseFinalizers(records, reason);
     return { ok: true, finalized: results.filter((result) => result.finalized).length };

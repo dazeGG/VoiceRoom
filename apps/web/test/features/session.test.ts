@@ -33,7 +33,7 @@ test('a signed-in account fills the voice room name; there is no local session h
   await loadSession();
 
   expect(localStorage.getItem('voice-room:name')).toBe('boris');
-  expect(Object.keys(localStorage)).toEqual(['voice-room:name']);
+  expect(Object.keys(localStorage).sort()).toEqual(['voice-room:auth-invalidation', 'voice-room:name']);
 });
 
 test('a failed session check is reported, not shown as a signed-out visitor', async () => {

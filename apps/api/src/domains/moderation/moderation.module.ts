@@ -36,6 +36,8 @@ export interface ModerationModuleDeps {
     type: EvictionType,
     options: { gateAlreadyRevoked?: boolean }
   ) => Promise<unknown>;
+  detachAccountRoom(roomId: string, userId: string): void;
+  disconnectAccount(roomId: string, userId: string): Promise<void>;
   broadcastRoomDetail: (roomId: string, envelope: ServerEnvelope) => void;
 }
 
@@ -61,6 +63,11 @@ export function createModerationModule(deps: ModerationModuleDeps) {
     revokePrincipalInTransaction: ({ client, principal, roomId, now }) =>
       deps.revokeGatePrincipal(client, { principal, roomId, now }),
     afterBanCommitted: async ({ roomId, userId, guestIp }) => {
+      if (userId) {
+        deps.detachAccountRoom(roomId, userId);
+        await deps.disconnectAccount(roomId, userId);
+        return;
+      }
       const room = await deps.getRoom(roomId);
       if (!room) return;
       const peers = [...room.peers.values()].filter((peer) =>

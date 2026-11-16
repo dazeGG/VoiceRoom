@@ -103,6 +103,7 @@ function createGateAwareStore() {
     ip: '203.0.113.10',
     sessionToken: SESSION_TOKEN,
     transport: {
+      connection: { closed: false },
       close() {},
       id: 'transport-g05',
       send() {
@@ -117,6 +118,7 @@ function createGateAwareStore() {
     ip: '203.0.113.10',
     sessionToken: 'session-same-nat',
     transport: {
+      connection: { closed: false },
       close() {},
       id: 'transport-same-nat',
       send() {

@@ -4,7 +4,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { TrackSource } from 'livekit-server-sdk';
-import { dbRoom, userSession, type Fakes } from './fakes/index.ts';
+import type { WsConnection } from '../src/realtime/registry.ts';
+import { fake, dbRoom, userSession, type Fakes } from './fakes/index.ts';
 import { fieldOf } from '../src/platform/record.ts';
 const { createApiApp } = await import('../src/server.ts');
 const { isLiveKitParticipantAlreadyGone, resolveServerMutePermission } =
@@ -196,6 +197,8 @@ test('LiveKit admission fails closed when persisted server-mute lookup fails', a
   room.peers.set('peer-alice', {
     id: 'peer-alice',
     name: 'Alice',
+    accountUserId: ALICE_ID,
+    transport: { id: 'alice-transport', connection: fake<WsConnection>({ closed: false, userId: ALICE_ID }) },
     sessionToken: 'goodtoken123456789012345678901234'
   });
   const app = createApiApp({

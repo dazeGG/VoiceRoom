@@ -22,6 +22,15 @@ export interface EvictionStore {
 }
 
 export interface ReconnectRuntime {
+  cancelAccountReconnectLeases(input: {
+    roomId: string;
+    userId: string;
+    reason: EvictionType;
+    finalizePeer(input: {
+      peer?: PresencePeer | null | undefined;
+      ownershipFinalized: boolean;
+    }): Promise<{ finalized: boolean }>;
+  }): Promise<unknown>;
   finalizeReconnectPeers(input: {
     roomId: string;
     peerIds: string[];
@@ -41,7 +50,7 @@ export interface PeerEvictionDeps {
   notifyPeer(peer: PresencePeer, event: ServerEnvelope): void;
   notifyUser(userId: string, event: AccountMessage): void;
   /** Drops the voice seat any socket of this peer still holds in the room. */
-  detachVoiceConnections(roomId: string, peerId: string): void;
+  detachVoiceConnections(roomId: string, peerId: string, transportId?: string): void;
   closePeer(roomId: string, peerId: string, transportId: string | undefined, reason: PeerLeaveReason): void;
   removeParticipant(roomId: string, peerId: string): Promise<void>;
 }
@@ -85,7 +94,7 @@ export function createPeerEviction(deps: PeerEvictionDeps) {
     }
     deps.notifyPeer(peer, buildServerEnvelope(type, { roomId: room.id, peerId: peer.id }));
     if (peer.accountUserId) deps.notifyUser(peer.accountUserId, { type, roomId: room.id, peerId: peer.id });
-    deps.detachVoiceConnections(room.id, peer.id);
+    deps.detachVoiceConnections(room.id, peer.id, peer.transport?.id);
     if (!ownershipFinalized) {
       deps.closePeer(room.id, peer.id, peer.transport?.id, type === 'room.banned' ? 'banned' : 'kicked');
     }
@@ -121,6 +130,7 @@ export function createPeerEviction(deps: PeerEvictionDeps) {
     };
     const runtime = deps.runtime();
     if (!runtime) throw new Error('The realtime runtime is not running');
+    if (peers.length === 0) await ensurePrerequisite();
     await runtime.finalizeReconnectPeers({
       roomId: room.id,
       peerIds: peers.map((peer) => peer.id),
@@ -144,7 +154,21 @@ export function createPeerEviction(deps: PeerEvictionDeps) {
     await finalize(room, [peer], type, { gateAlreadyRevoked });
   }
 
-  return { finalize, disconnect };
+  async function finalizeAccount(roomId: string, userId: string, gateAlreadyRevoked: boolean): Promise<void> {
+    const runtime = deps.runtime();
+    if (!runtime) throw new Error('The realtime runtime is not running');
+    await runtime.cancelAccountReconnectLeases({
+      roomId,
+      userId,
+      reason: 'room.banned',
+      finalizePeer: async ({ peer, ownershipFinalized }) => {
+        if (!peer || peer.accountUserId !== userId) return { finalized: ownershipFinalized };
+        return evictPeer({ id: roomId }, peer, 'room.banned', { gateAlreadyRevoked, ownershipFinalized });
+      }
+    });
+  }
+
+  return { finalize, disconnect, finalizeAccount };
 }
 
 export type PeerEviction = ReturnType<typeof createPeerEviction>;

@@ -271,7 +271,9 @@ test('closing the last seat logs a failed occupancy write', async () => {
 test('the roster wait returns the peer as soon as it joins, or null at the deadline', async (t) => {
   t.mock.timers.enable({ apis: ['setTimeout', 'Date'], now: 1000 });
   const { presence } = harness();
-  const peer = { id: 'p' };
+  const { connection } = socket();
+  t.after(() => sockets.removeConnection(connection));
+  const peer = { id: 'p', sessionToken: 'token', transport: { id: 'transport', connection } };
   setTimeout(() => presence.room('r1').peers.set('p', peer), 8);
   const joined = presence.waitForRosterPeer('r1', 'p');
   const joinedResult = t.mock.fn();
@@ -283,7 +285,12 @@ test('the roster wait returns the peer as soon as it joins, or null at the deadl
   assert.equal(joinedResult.mock.callCount(), 0, 'waits while the peer is absent');
   t.mock.timers.tick(3);
   t.mock.timers.tick(2);
-  assert.equal(await joined, peer, 'returns the peer on the first poll after its join');
+  assert.deepEqual(await joined, {
+    sessionToken: 'token',
+    accountUserId: null,
+    gateGuestPrincipalId: '',
+    transportId: 'transport'
+  });
   assert.equal(Date.now(), 1010);
 
   const missing = presence.waitForRosterPeer('r1', 'missing', 10);
@@ -420,4 +427,34 @@ test('a failed stay write is logged, and without a database nothing is written',
   offline.presence.closePeer('r1', 'p', 'tp');
   await offline.presence.recordOpenSessions();
   assert.deepEqual(offline.calls.errors, []);
+});
+
+test('admission roster snapshots are immutable and disconnected or replaced seats are unavailable', () => {
+  const { presence } = harness();
+  const { connection } = socket();
+  const peer: RosterPeer = {
+    id: 'p',
+    accountUserId: 'A',
+    sessionToken: 'token',
+    gateGuestPrincipalId: 'guest',
+    transport: { id: 'old', connection }
+  };
+  presence.room('room').peers.set('p', peer);
+  try {
+    const captured = presence.currentRosterPeer('room', 'p');
+    assert.ok(captured);
+    assert.equal(Object.isFrozen(captured), true);
+    peer.accountUserId = 'B';
+    peer.transport = { id: 'new', connection };
+    assert.equal(captured.accountUserId, 'A');
+    assert.equal(captured.transportId, 'old');
+    peer.replaced = true;
+    assert.equal(presence.currentRosterPeer('room', 'p'), null);
+    peer.replaced = false;
+    peer.transport.connection = null;
+    assert.equal(presence.currentRosterPeer('room', 'p'), null);
+  } finally {
+    sockets.removeConnection(connection);
+    presence.reset();
+  }
 });

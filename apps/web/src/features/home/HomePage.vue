@@ -49,7 +49,6 @@ const roomCode = ref('');
 const creatingTemp = ref(false);
 const joining = ref(false);
 const loggingOut = ref(false);
-const authLoadError = ref(false);
 const permanentRoomOfferOpen = ref(false);
 // The sign-in dialog opened from the offer; it is not the one in the URL,
 // because it ends in the lobby's new-room dialog, not on the bare lobby.
@@ -89,9 +88,7 @@ onMounted(() => {
       if (account) createRoomInLobby.value = true;
       else handleCreateTemp();
     },
-    () => {
-      authLoadError.value = true;
-    }
+    () => {} // The session store exposes the retryable failure below.
   );
 });
 
@@ -101,11 +98,8 @@ onBeforeUnmount(() => {
 
 function retrySessionLoad(): void {
   if (!session.loaded) return;
-  authLoadError.value = false;
   session.loaded = false;
-  void session.loadSession(true).catch(() => {
-    authLoadError.value = true;
-  });
+  void session.loadSession(true).catch(() => {});
 }
 
 function handleCreateTemp(): void {
@@ -206,7 +200,7 @@ function switchAuthMode(mode: AuthMode): void {
       </div>
     </main>
   </div>
-  <div v-else-if="authLoadError" class="app-shell">
+  <div v-else-if="session.loadError" class="app-shell">
     <Topbar label="VoiceRoom" show-language />
     <main class="auth-session-error" :aria-label="t('Ошибка проверки аккаунта')" aria-live="polite">
       <div class="auth-session-error__card">

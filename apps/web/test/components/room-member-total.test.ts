@@ -38,6 +38,7 @@ test('the member total counts offline members too and falls back to the live cou
     }
   });
   const membership = useRoomMembershipStore();
+  membership.resetViewer('viewer', 1);
   const { ensureRoomMembership, roomMemberTotal } = membership;
 
   expect(roomMemberTotal('room-total', 0)).toBe(0);

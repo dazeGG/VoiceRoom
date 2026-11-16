@@ -18,6 +18,7 @@ apps/web/public/
 apps/site/public/
 apps/site/.astro/
 .omc/
+.omx/
 .claude/
 .idea/
 .ruff_cache/

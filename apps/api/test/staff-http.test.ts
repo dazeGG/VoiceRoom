@@ -256,6 +256,28 @@ test('a moderator reviews and blocks for a while; numbers, address keys and role
     });
   assert.equal((await block(moderator, bobId, 'forever')).status, 403);
   assert.equal((await block(moderator, bobId, 'day')).status, 200);
+  const unblock = (cookie: string) =>
+    request(socketPath, {
+      method: 'POST',
+      pathname: `/api/admin/accounts/${bobId}/unblock`,
+      cookie,
+      headers: FROM_ADMIN_APP,
+      body: {}
+    });
+  assert.equal((await unblock(moderator)).status, 200);
+  assert.equal((await block(root, bobId, 'forever')).status, 200);
+  const actionsBefore = (await pool.query('SELECT id FROM admin_actions WHERE target_user_id = $1', [bobId])).rowCount;
+  assert.equal((await block(moderator, bobId, 'day')).status, 403);
+  assert.equal((await unblock(moderator)).status, 403);
+  assert.equal(
+    (await pool.query('SELECT id FROM admin_actions WHERE target_user_id = $1', [bobId])).rowCount,
+    actionsBefore
+  );
+  assert.equal((await block(root, bobId, 'day')).status, 200);
+  assert.equal((await unblock(moderator)).status, 200);
+  assert.equal((await block(root, bobId, 'forever')).status, 200);
+  assert.equal((await unblock(root)).status, 200);
+
   assert.equal((await block(moderator, ROOT_ID, 'day')).status, 403, 'staff accounts are not blocked from the panel');
 
   // Taking the role away ends what the session may do at once.

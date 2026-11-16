@@ -37,7 +37,9 @@ async function renderSettings(user: AuthUser = saved) {
     onLogout: vi.fn()
   };
   const view = await renderWithApp(SettingsModal, { props });
-  return { ...view, props, session: useSessionStore(view.pinia) };
+  const session = useSessionStore(view.pinia);
+  session.setUser(user);
+  return { ...view, props, session };
 }
 
 const profileImage = () => document.querySelector<HTMLImageElement>('.settings__profile-avatar img');

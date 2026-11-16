@@ -117,6 +117,8 @@ export type ServiceRegistryDeps = {
   /** Sends a server event to every socket of an account; answers how many took it. */
   sendToUser: (userId: string, envelope: ServerEnvelope) => number;
   attachMediaProjectionMany: ReturnType<typeof createMessageProjection>['projectMediaMany'];
+  detachAccountRoom: (roomId: string, userId: string) => void;
+  disconnectModeratedAccount: (roomId: string, userId: string) => Promise<void>;
   disconnectModeratedPeer: (
     room: Room,
     peer: PresencePeer,
@@ -371,6 +373,8 @@ export function createServiceRegistry(config: ServiceRegistryConfig, deps: Servi
       getRoom,
       gatePrincipalForPeer: deps.liveKitGatePrincipalForPeer,
       disconnectPeer: deps.disconnectModeratedPeer,
+      detachAccountRoom: deps.detachAccountRoom,
+      disconnectAccount: deps.disconnectModeratedAccount,
       broadcastRoomDetail
     })
   );
