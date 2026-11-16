@@ -6,6 +6,7 @@
 import type { PeerLeaveReason } from '@voice-room/shared/contracts/realtime';
 import type { ServerEnvelope } from '@voice-room/shared/realtime';
 import type { Logger } from 'pino';
+import type { AdmissionPeer } from '../domains/admission/admission.service.ts';
 import { LOG_EVENTS } from '../lib/log-events.ts';
 import { publicPeer, type PresencePeer } from '../domains/rooms/room-views.ts';
 import type { FinishedVoiceSession, VoiceSessionRepository } from '../domains/rooms/voice-session.repository.ts';
@@ -270,16 +271,35 @@ export function createRoomPresence(deps: RoomPresenceDeps) {
     }
   }
 
+  function currentRosterPeer(roomId: string, peerId: string): AdmissionPeer | null {
+    const peer = rooms.get(roomId)?.peers.get(peerId);
+    if (
+      !peer ||
+      peer.closed ||
+      peer.replaced ||
+      !peer.transport?.id ||
+      !peer.transport.connection ||
+      peer.transport.connection.closed
+    )
+      return null;
+    return Object.freeze({
+      sessionToken: peer.sessionToken || '',
+      accountUserId: peer.accountUserId || null,
+      gateGuestPrincipalId: peer.gateGuestPrincipalId || '',
+      transportId: peer.transport.id
+    });
+  }
+
   // The client sends its realtime join just before asking for a media token,
   // so admission waits a moment for the join to land.
   async function waitForRosterPeer(
     roomId: string,
     peerId: string,
     timeoutMs = deps.roster.waitMs
-  ): Promise<RosterPeer | null> {
+  ): Promise<AdmissionPeer | null> {
     const deadline = Date.now() + timeoutMs;
     for (;;) {
-      const peer = rooms.get(roomId)?.peers?.get(peerId);
+      const peer = currentRosterPeer(roomId, peerId);
       if (peer || Date.now() >= deadline) return peer || null;
       await new Promise((resolve) => setTimeout(resolve, deps.roster.pollMs));
     }
@@ -322,6 +342,7 @@ export function createRoomPresence(deps: RoomPresenceDeps) {
     closePeer,
     queueOccupancy,
     waitForRosterPeer,
+    currentRosterPeer,
     prune,
     reset,
     clearOccupancyRetries,

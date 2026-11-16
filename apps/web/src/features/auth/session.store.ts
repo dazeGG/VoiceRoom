@@ -1,18 +1,28 @@
 import { defineStore } from 'pinia';
-import { ref } from 'vue';
+import { onScopeDispose, ref } from 'vue';
 import { fetchMe, type AuthUser } from '@/api/auth';
 import { clearChatDrafts, resumeChatDrafts } from '@/shared/chat/chat-drafts';
 import { clearAttachmentComposeStores } from '@/shared/chat/attachment-compose-stores';
 import { clearHistoryCache } from '@/shared/chat/history-cache';
 import { displayNameOf } from '@/shared/utils/display-name';
-import { DISPLAY_NAME_STORAGE_KEY } from '@/shared/storage';
+import { useRoomMembershipStore } from '@/entities/room/room-membership.store';
+import { DISPLAY_NAME_STORAGE_KEY, writeStorage } from '@/shared/storage';
+
+export const AUTH_INVALIDATION_KEY = 'voice-room:auth-invalidation';
+export interface AuthContext {
+  generation: number;
+  userId: string | null;
+}
 
 // App-wide auth state. `loaded` flips true once the first /auth/me resolves so
 // the UI can avoid flashing the logged-out state before we know.
 export const useSessionStore = defineStore('session', () => {
   const loaded = ref(false);
+  const loadError = ref(false);
   const user = ref<AuthUser | null>(null);
 
+  const membership = useRoomMembershipStore();
+  let generation = 0;
   let inflight: Promise<AuthUser | null> | null = null;
 
   // Set right before a request that ends this device's own session (sign-out,
@@ -34,7 +44,6 @@ export const useSessionStore = defineStore('session', () => {
   // with the account's display name already filled in. This is not used as an
   // auth oracle; /auth/me remains the only source for logged-in state.
   function syncRoomName(next: AuthUser | null): void {
-    if (typeof localStorage === 'undefined') return;
     try {
       if (next) {
         localStorage.setItem(DISPLAY_NAME_STORAGE_KEY, displayNameOf(next));
@@ -46,32 +55,106 @@ export const useSessionStore = defineStore('session', () => {
     }
   }
 
-  function setUser(next: AuthUser | null): void {
+  function context(): AuthContext {
+    return { generation, userId: user.value?.id ?? null };
+  }
+  function isCurrent(captured: AuthContext): boolean {
+    return captured.generation === generation && captured.userId === (user.value?.id ?? null);
+  }
+  function invalidate(): void {
+    generation++;
+    inflight = null;
+    membership.resetViewer(null, generation);
+  }
+  function applyUser(next: AuthUser | null, publish: boolean): void {
+    const changed = (user.value?.id ?? null) !== (next?.id ?? null);
+    if (changed) {
+      invalidate();
+      membership.resetViewer(next?.id ?? null, generation);
+      if (publish) writeStorage(AUTH_INVALIDATION_KEY, crypto.randomUUID());
+    }
     sessionEndExpected = false;
     if (next) resumeChatDrafts();
     user.value = next;
     loaded.value = true;
+    loadError.value = false;
     syncRoomName(next);
+  }
+
+  // Explicit authentication may establish a different account.
+  function setUser(next: AuthUser | null): void {
+    applyUser(next, true);
+  }
+
+  function commitProfile(captured: AuthContext, next: AuthUser): boolean {
+    if (!captured.userId || !isCurrent(captured) || next.id !== captured.userId) return false;
+    applyUser(next, false);
+    return true;
+  }
+
+  async function verifySession(
+    publish = true
+  ): Promise<{ applied: true; user: AuthUser | null; context: AuthContext } | { applied: false }> {
+    const captured = context();
+    const me = await fetchMe();
+    if (!isCurrent(captured)) return { applied: false };
+    applyUser(me, publish);
+    return { applied: true, user: me, context: context() };
   }
 
   async function loadSession(force = false): Promise<AuthUser | null> {
     if (loaded.value && !force) return user.value;
     if (inflight) return inflight;
-
-    inflight = fetchMe()
-      .then((me) => {
-        setUser(me);
-        return me;
-      })
+    loadError.value = false;
+    const captured = context();
+    const operation = verifySession()
+      .then((result) => (result.applied && isCurrent(result.context) ? result.user : user.value))
       .catch((error: unknown) => {
-        loaded.value = true;
+        if (isCurrent(captured)) {
+          loaded.value = true;
+          loadError.value = true;
+        }
         throw error;
       })
       .finally(() => {
-        inflight = null;
+        if (inflight === operation) inflight = null;
       });
+    inflight = operation;
+    return operation;
+  }
 
-    return inflight;
+  function revalidate(): void {
+    invalidate();
+    user.value = null;
+    loaded.value = false;
+    loadError.value = false;
+    syncRoomName(null);
+    const captured = context();
+    // Events carry no identity proof and must not echo another invalidation.
+    void verifySession(false).catch(() => {
+      if (!isCurrent(captured)) return;
+      loaded.value = true;
+      loadError.value = true;
+    });
+  }
+  if (typeof window !== 'undefined') {
+    let wasHidden = document.visibilityState === 'hidden';
+    const onStorage = (event: StorageEvent): void => {
+      if (event.key === AUTH_INVALIDATION_KEY && event.newValue !== event.oldValue) revalidate();
+    };
+    const onVisibility = (): void => {
+      if (document.visibilityState === 'hidden') wasHidden = true;
+      else if (wasHidden) {
+        wasHidden = false;
+        revalidate();
+      }
+    };
+    window.addEventListener('storage', onStorage);
+    document.addEventListener('visibilitychange', onVisibility);
+    onScopeDispose(() => {
+      window.removeEventListener('storage', onStorage);
+      document.removeEventListener('visibilitychange', onVisibility);
+    });
   }
 
   function clearSession(): void {
@@ -80,10 +163,26 @@ export const useSessionStore = defineStore('session', () => {
     clearChatDrafts();
     clearAttachmentComposeStores();
     clearHistoryCache();
+    invalidate();
+    writeStorage(AUTH_INVALIDATION_KEY, crypto.randomUUID());
     user.value = null;
     loaded.value = true;
+    loadError.value = false;
     syncRoomName(null);
   }
 
-  return { loaded, user, expectSessionEnd, consumeExpectedSessionEnd, setUser, loadSession, clearSession };
+  return {
+    context,
+    isCurrent,
+    verifySession,
+    commitProfile,
+    loaded,
+    loadError,
+    user,
+    expectSessionEnd,
+    consumeExpectedSessionEnd,
+    setUser,
+    loadSession,
+    clearSession
+  };
 });

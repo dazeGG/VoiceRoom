@@ -27,6 +27,7 @@ type BanResult =
 export interface PeerModerationDeps {
   store(): PeerModerationStore;
   eviction: PeerEviction;
+  detachAccountRoom(roomId: string, userId: string): void;
   gatePrincipalForPeer(roomId: string, peer: PresencePeer): GatePrincipal | null;
   livekitConfig(): LiveKitConfig;
   revokeForServerMute(input: {
@@ -158,20 +159,29 @@ export function createPeerModerationService(deps: PeerModerationDeps) {
 
     // Set by the ban write that runs inside finalize.
     const written: { result: BanResult | null } = { result: null };
+    let committed = false;
     try {
-      await deps.eviction.finalize(room, matchingPeers, 'room.banned', {
-        gateAlreadyRevoked: strictGate,
-        beforeFinalize: async () => {
-          const result = await persist().catch((error: unknown) => {
-            throw markRollbackTerminal(error);
-          });
-          written.result = result;
-          if (result.status === 'cap_exceeded') throw banError('room_ban_limit');
-          const revoked = !strictGate || ('revocations' in result && result.revocations.length > 0);
-          if (!result.ban || !revoked) throw banError('room_ban_failed');
-          return result;
-        }
-      });
+      try {
+        await deps.eviction.finalize(room, matchingPeers, 'room.banned', {
+          gateAlreadyRevoked: strictGate,
+          beforeFinalize: async () => {
+            const result = await persist().catch((error: unknown) => {
+              throw markRollbackTerminal(error);
+            });
+            written.result = result;
+            if (result.status === 'cap_exceeded') throw banError('room_ban_limit');
+            const revoked = !strictGate || ('revocations' in result && result.revocations.length > 0);
+            if (!result.ban || !revoked) throw banError('room_ban_failed');
+            committed = true;
+            if (bannedUserId) deps.detachAccountRoom(roomId, bannedUserId);
+            return result;
+          }
+        });
+      } finally {
+        // Include seats/leases created while persistence was awaiting the database,
+        // even when cleanup of one of the originally captured peers failed.
+        if (committed && bannedUserId) await deps.eviction.finalizeAccount(roomId, bannedUserId, strictGate);
+      }
     } catch (error) {
       const code = codeOf(error);
       if (code === 'room_ban_limit') return { status: 'ban_limit' };

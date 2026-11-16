@@ -5,6 +5,7 @@
 import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, expect, onTestFinished, test } from 'vitest';
 import { useRoomMembershipStore } from '@/entities/room/room-membership.store';
+import { useSessionStore } from '@/features/auth/session.store';
 import { persistMasterVolume } from '@/features/room/client/core/settings';
 import { state } from '@/features/room/client/core/room-runtime.store';
 import { createInitialRoomState } from '@/features/room/client/model/room-state';
@@ -13,6 +14,7 @@ import { useRoomDeviceUiStore } from '@/features/room/room-device-ui.store';
 import { clearAttachmentComposeStores } from '@/shared/chat/attachment-compose-stores';
 import { AttachmentComposeStore } from '@/shared/chat/attachment-compose';
 import { stubFetch } from '../fixtures/fetch';
+import { authUser } from '../fixtures/users';
 
 beforeEach(() => setActivePinia(createPinia()));
 
@@ -65,6 +67,7 @@ test('blocked localStorage does not break picking a microphone, a speaker or the
 
 test('blocked localStorage does not break the room chat attachments or leaving the room', async () => {
   blockLocalStorage();
+  useSessionStore().setUser(authUser());
   stubFetch({ 'DELETE /api/rooms/room-blocked/memberships/me': { body: { ok: true, left: true } } });
 
   expect(new AttachmentComposeStore('room', 'room-blocked').drafts).toEqual([]);

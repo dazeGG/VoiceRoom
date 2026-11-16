@@ -38,7 +38,14 @@ async function signIn(
     now
   }: { kind?: string; userAgent: string; location?: string; now: number }
 ) {
-  const session = await store.createSession({ userId, now, userAgent, locationLabel: location });
+  const user = await store.getUserById(userId);
+  assert.ok(user);
+  const session = await store.createSession({
+    credentialProof: { userId, passwordHash: user.passwordHash },
+    now,
+    userAgent,
+    locationLabel: location
+  });
   const { alert } = await store.recordLogin({
     userId,
     sessionPublicId: session.publicId,

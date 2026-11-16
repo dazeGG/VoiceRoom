@@ -51,7 +51,7 @@ let menuAnchor: HTMLElement | null = null;
 const signedIn = computed(() => Boolean(session.user?.id));
 
 watch(
-  [() => props.roomId, signedIn],
+  [() => props.roomId, () => session.user?.id],
   ([currentRoomId, isSignedIn]) => {
     if (!isSignedIn) return;
     membership.getRoomMembership(currentRoomId);

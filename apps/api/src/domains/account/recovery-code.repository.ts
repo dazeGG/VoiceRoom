@@ -88,13 +88,15 @@ export function createRecoveryCodeRepository({ pool }: { pool: pg.Pool }) {
       if (spent.length !== 1) return { status: 'invalid' as const, user: null, remaining: 0 };
 
       await replacePassword(trx, { userId: user.id, newPassword, now });
+      const recoveredUser = mapUser(await lockUser(trx, 'id', user.id));
+      if (!recoveredUser) throw new Error('Recovered account disappeared');
       const remaining = await trx
         .selectFrom('account_recovery_codes')
         .select(sql<number>`count(*)::int`.as('remaining'))
         .where('user_id', '=', user.id)
         .where('used_at', 'is', null)
         .executeTakeFirst();
-      return { status: 'recovered' as const, user, remaining: Number(remaining?.remaining) || 0 };
+      return { status: 'recovered' as const, user: recoveredUser, remaining: Number(remaining?.remaining) || 0 };
     });
   }
 

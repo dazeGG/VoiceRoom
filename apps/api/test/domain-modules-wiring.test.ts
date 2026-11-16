@@ -122,6 +122,10 @@ test(
       },
       getRoom: async (roomId) => (roomId === 'room' ? room : null),
       gatePrincipalForPeer: () => null,
+      detachAccountRoom: (roomId, userId) => events.push('detach ' + roomId + ':' + userId),
+      disconnectAccount: async (_roomId, userId) => {
+        events.push(`disconnect account ${userId}, committed bans: ${await banCount()}`);
+      },
       disconnectPeer: async (_room, target, type, options) => {
         events.push(
           `disconnect ${target.id} ${type} gateAlreadyRevoked=${String(options.gateAlreadyRevoked)}, committed bans: ${await banCount()}`
@@ -139,7 +143,8 @@ test(
     assert.equal(outcome.status, 'created');
     assert.deepEqual(events, [
       'revoke target, in transaction: true, committed bans: 0',
-      'disconnect peer-1 room.banned gateAlreadyRevoked=true, committed bans: 1'
+      'detach room:target',
+      'disconnect account target, committed bans: 1'
     ]);
   }
 );
@@ -173,3 +178,46 @@ test('media uploads pause while the storage has less free space than configured'
   await assert.rejects(full.assertAcceptingUploads(), { code: 'MEDIA_PRESSURE' });
   assert.equal((await pressureWithFloor(1).measure({ force: true })).reason, 'ready');
 });
+
+test(
+  'a failed member-ban gate revocation rolls back without account detachment',
+  { skip: !process.env.TEST_DATABASE_URL },
+  async (t) => {
+    const pool = await banSetup(t);
+    let detached = 0;
+    let disconnected = 0;
+    const moderation = createModerationModule({
+      pool,
+      cursorCodec,
+      maxActiveBans: 10,
+      ipKeyOf: createIpKey('wiring-test-ip-key-secret'),
+      revokeGatePrincipal: async () => {
+        throw new Error('revocation failed');
+      },
+      getRoom: async () => null,
+      gatePrincipalForPeer: () => null,
+      detachAccountRoom: () => {
+        detached++;
+      },
+      disconnectAccount: async () => {
+        disconnected++;
+      },
+      disconnectPeer: async () => {
+        disconnected++;
+      },
+      broadcastRoomDetail: () => {}
+    });
+    await assert.rejects(
+      moderation.service.putBan({
+        roomId: 'room',
+        actorUserId: 'owner',
+        input: { userId: 'target', duration: '1h' },
+        idempotencyKey: 'rollback'
+      }),
+      /revocation failed/
+    );
+    assert.equal(detached, 0);
+    assert.equal(disconnected, 0);
+    assert.equal(Number((await pool.query<{ count: string }>('SELECT count(*) FROM room_bans')).rows[0]?.count), 0);
+  }
+);

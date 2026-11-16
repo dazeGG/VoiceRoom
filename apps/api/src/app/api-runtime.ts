@@ -54,6 +54,8 @@ export function createApiRuntime({ env = process.env }: { env?: NodeJS.ProcessEn
     findRoomBan: (roomId, userId, ip) => hub.findRoomBan(roomId, userId, ip),
     sendToUser: (userId, envelope) => hub.registry.sendToUser(userId, envelope),
     attachMediaProjectionMany: (context, messages) => hub.projection.projectMediaMany(context, messages),
+    detachAccountRoom: (roomId, userId) => hub.registry.detachAccountRoom(roomId, userId),
+    disconnectModeratedAccount: (roomId, userId) => domain.peerEviction.finalizeAccount(roomId, userId, true),
     disconnectModeratedPeer: (room, peer, type, options) => domain.peerEviction.disconnect(room, peer, type, options),
     liveKitGatePrincipalForPeer: (roomId, peer) => hub.liveKitGatePrincipalForPeer(roomId, peer),
     getLiveKitConfig: () => liveKit.config(),
@@ -117,6 +119,7 @@ export function createApiRuntime({ env = process.env }: { env?: NodeJS.ProcessEn
     roomExists: async (roomId) => Boolean(await hub.getRoom(roomId)),
     findRoomBan: hub.findRoomBan,
     waitForRosterPeer: hub.presence.waitForRosterPeer,
+    currentRosterPeer: hub.presence.currentRosterPeer,
     memberships: services.getMembershipServices,
     roomName: liveKit.roomName,
     recordRevokeFailure: recordCredentialRevokeCleanupFailure

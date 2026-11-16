@@ -6,6 +6,7 @@ import userEvent from '@testing-library/user-event';
 import { beforeAll, expect, test, vi } from 'vitest';
 import { useProfileCardUiStore } from '@/entities/profile-card/profile-card-ui.store';
 import HomePage from '@/features/home/HomePage.vue';
+import { AUTH_INVALIDATION_KEY } from '@/features/auth/session.store';
 import { stubFetch } from '../fixtures/fetch';
 import { installFakeWebSocket } from '../fixtures/fake-websocket';
 import { authUser } from '../fixtures/users';
@@ -82,6 +83,21 @@ test('the landing offers the desktop app in a browser', async () => {
   await renderWithApp(HomePage);
 
   expect(await screen.findByRole('region', { name: 'Десктоп-приложение' }, { timeout: 5000 })).toBeTruthy();
+});
+
+test('failed cross-tab verification renders a working retry instead of an endless loader', async () => {
+  installFakeWebSocket();
+  stubMatchMedia();
+  stubFetch({ 'GET /api/auth/me': { body: { ok: true, user: null } } });
+  await renderWithApp(HomePage);
+  await screen.findByRole('region', { name: 'Десктоп-приложение' }, { timeout: 5000 });
+  stubFetch({ 'GET /api/auth/me': { status: 503 } });
+  window.dispatchEvent(new StorageEvent('storage', { key: AUTH_INVALIDATION_KEY, newValue: 'retry' }));
+  expect(await screen.findByRole('heading', { name: 'Не удалось проверить аккаунт' })).toBeTruthy();
+  stubFetch({ 'GET /api/auth/me': { body: { ok: true, user: null } } });
+  await userEvent.click(screen.getByRole('button', { name: 'Повторить' }));
+  expect(await screen.findByRole('region', { name: 'Десктоп-приложение' }, { timeout: 5000 })).toBeTruthy();
+  expect(screen.queryByRole('heading', { name: 'Не удалось проверить аккаунт' })).toBeNull();
 });
 
 test('the landing inside the desktop app does not offer to download it', async () => {

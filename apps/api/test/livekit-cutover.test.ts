@@ -2,6 +2,7 @@ process.env.ROOM_CREATE_POW_DIFFICULTY = '0';
 process.env.LIVEKIT_GATE_SECRET = 'g48-test-livekit-gate-secret-at-least-32-bytes';
 
 import assert from 'node:assert/strict';
+import type { WsConnection } from '../src/realtime/registry.ts';
 import type { PresencePeer } from '../src/domains/rooms/room-views.ts';
 import fs from 'node:fs';
 import net from 'node:net';
@@ -247,7 +248,15 @@ test(
     // Set inside the credential provider the app calls.
     const failed: { credential?: IssuedCredential } = {};
     const app = createApiApp({
-      store: withRosterPeer(store, { id: 'failed-tab', sessionToken: 'goodtoken123456789012345678901234' }),
+      store: withRosterPeer(store, {
+        id: 'failed-tab',
+        accountUserId: principal.principalId,
+        transport: {
+          id: 'failed-transport',
+          connection: fake<WsConnection>({ closed: false, userId: principal.principalId })
+        },
+        sessionToken: 'goodtoken123456789012345678901234'
+      }),
       users: {
         async getSessionUser() {
           return { user: { id: principal.principalId, avatarColorKey: 'green' } };
@@ -386,7 +395,12 @@ test('G48-A03 issued credential fails closed when membership persistence and rev
     }
   };
   const app = createApiApp({
-    store: withRosterPeer(store, { id: 'peer0001', sessionToken: 'goodtoken123456789012345678901234' }),
+    store: withRosterPeer(store, {
+      id: 'peer0001',
+      accountUserId: 'account',
+      transport: { id: 'peer-transport', connection: fake<WsConnection>({ closed: false, userId: 'account' }) },
+      sessionToken: 'goodtoken123456789012345678901234'
+    }),
     users: {
       async getSessionUser() {
         return { user: { id: 'account', avatarColorKey: 'green' } };

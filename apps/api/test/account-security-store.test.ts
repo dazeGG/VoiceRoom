@@ -43,12 +43,16 @@ test('sessions record their device and list newest first without exposing token 
   assert.ok(user);
 
   const laptop = await store.createSession({
-    userId: user.id,
+    credentialProof: { userId: user.id, passwordHash: user.passwordHash },
     now: 1_000,
     userAgent: CHROME_WINDOWS,
     locationLabel: 'Москва, Россия'
   });
-  const desktop = await store.createSession({ userId: user.id, now: 2_000, userAgent: FIREFOX_LINUX });
+  const desktop = await store.createSession({
+    credentialProof: { userId: user.id, passwordHash: user.passwordHash },
+    now: 2_000,
+    userAgent: FIREFOX_LINUX
+  });
 
   const sessions = await store.listSessions({ userId: user.id, currentTokenHash: laptop.tokenHash, now: 3_000 });
   assert.deepEqual(
@@ -78,7 +82,7 @@ test('the hourly touch refreshes the device but keeps a known location when a lo
   const { user } = await store.createUser({ login: 'ada', password: 'lovelace-1843' });
   assert.ok(user);
   const session = await store.createSession({
-    userId: user.id,
+    credentialProof: { userId: user.id, passwordHash: user.passwordHash },
     now: 0,
     userAgent: CHROME_WINDOWS,
     locationLabel: 'Казань, Россия'
@@ -112,9 +116,18 @@ test('revoking a session touches only that account and reports the revoked token
   const { user: other } = await store.createUser({ login: 'grace', password: 'cobol-1959' });
   assert.ok(other);
 
-  const first = await store.createSession({ userId: user.id, now: 1_000 });
-  const second = await store.createSession({ userId: user.id, now: 1_000 });
-  const foreign = await store.createSession({ userId: other.id, now: 1_000 });
+  const first = await store.createSession({
+    credentialProof: { userId: user.id, passwordHash: user.passwordHash },
+    now: 1_000
+  });
+  const second = await store.createSession({
+    credentialProof: { userId: user.id, passwordHash: user.passwordHash },
+    now: 1_000
+  });
+  const foreign = await store.createSession({
+    credentialProof: { userId: other.id, passwordHash: other.passwordHash },
+    now: 1_000
+  });
 
   assert.deepEqual(await store.revokeSession({ userId: other.id, publicId: first.publicId }), {
     status: 'not_found',
@@ -131,7 +144,10 @@ test('revoking a session touches only that account and reports the revoked token
   assert.equal(await store.getSessionUser(first.token, 5_000), null);
   assert.ok(await store.getSessionUser(second.token, 5_000));
 
-  const current = await store.createSession({ userId: user.id, now: 1_000 });
+  const current = await store.createSession({
+    credentialProof: { userId: user.id, passwordHash: user.passwordHash },
+    now: 1_000
+  });
   const others = await store.revokeOtherSessions({ userId: user.id, keepTokenHash: current.tokenHash });
   assert.deepEqual(others.tokenHashes, [second.tokenHash]);
   assert.ok(await store.getSessionUser(current.token, 5_000));
@@ -162,7 +178,10 @@ test('recovery codes are handed out once, work once and replace the password eve
   for (const code of generated.codes) assert.equal(normalizeRecoveryCode(code), code);
   assert.deepEqual(await store.getRecoveryCodesStatus(user.id), { remaining: 10, generatedAt: 1_000 });
 
-  const session = await store.createSession({ userId: user.id, now: 1_000 });
+  const session = await store.createSession({
+    credentialProof: { userId: user.id, passwordHash: user.passwordHash },
+    now: 1_000
+  });
   const [first, second] = generated.codes;
   assert.ok(first);
 

@@ -63,7 +63,9 @@ export function useProfileDraft(user: AuthUser | null) {
    * there was nothing to save; throws when the server refuses.
    */
   const save = async (current: AuthUser | null): Promise<boolean> => {
-    if (saving.value) return false;
+    const session = useSessionStore();
+    const captured = session.context();
+    if (saving.value || !current || captured.userId !== current.id) return false;
     // Snapshot before any await: the session update below changes `user`.
     const trimmedName = name.value.trim();
     const rename = trimmedName !== (current?.displayName ?? '');
@@ -73,11 +75,12 @@ export function useProfileDraft(user: AuthUser | null) {
 
     saving.value = true;
     try {
-      const { setUser } = useSessionStore();
-      if (rename) setUser(await updateDisplayName(trimmedName));
+      if (!session.isCurrent(captured)) return false;
+      if (rename && !session.commitProfile(captured, await updateDisplayName(trimmedName))) return false;
+      if (!session.isCurrent(captured)) return false;
       if (avatar || removeAvatarNow) {
         const next = avatar ? await uploadUserAvatar(avatar) : await deleteUserAvatar();
-        setUser(next);
+        if (!session.commitProfile(captured, next)) return false;
         // The call tile of the local participant shows the new avatar without a rejoin.
         syncLocalProfile(next);
       }

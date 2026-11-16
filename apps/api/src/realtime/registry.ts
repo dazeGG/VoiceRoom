@@ -34,6 +34,8 @@ export type WsConnection = {
   socket: RealtimeSocket;
   presenceStatus: PresenceStatus;
   previewRoomIds: Set<string>;
+  pendingPreviews?: Map<string, symbol>;
+  previewOwners?: Map<string, symbol>;
   activeVoice: ActiveVoice | null;
   /** The voice join this socket asked for last; a newer one supersedes it. */
   pendingVoiceJoin: { roomId: string; peerId: string } | null;
@@ -334,10 +336,22 @@ function createConnectionRegistry({
   }
 
   function unregisterConnectionFromAllRooms(connection: WsConnection): void {
+    connection.pendingPreviews?.clear();
+    connection.previewOwners?.clear();
     for (const roomId of connection.previewRoomIds || []) {
       unregisterConnectionForRoom(connection, roomId);
     }
     if (connection.activeVoice?.roomId) unregisterConnectionForRoom(connection, connection.activeVoice.roomId);
+  }
+
+  function detachAccountRoom(roomId: string, userId: string): void {
+    for (const connection of userConnections.get(userId) || []) {
+      connection.pendingPreviews?.delete(roomId);
+      connection.previewOwners?.delete(roomId);
+      connection.previewRoomIds.delete(roomId);
+      if (connection.pendingVoiceJoin?.roomId === roomId) connection.pendingVoiceJoin = null;
+      unregisterConnectionForRoom(connection, roomId);
+    }
   }
 
   function roomDetailSubscribers(roomId: string): Set<WsConnection> {
@@ -346,9 +360,10 @@ function createConnectionRegistry({
 
   // A voice seat that ended without its socket: every socket still holding it
   // leaves the room's call and stops following the room.
-  function detachVoicePeer(roomId: string, peerId: string): void {
+  function detachVoicePeer(roomId: string, peerId: string, transportId?: string): void {
     for (const connection of connections.values()) {
       if (connection.activeVoice?.roomId !== roomId || connection.activeVoice.peerId !== peerId) continue;
+      if (transportId && connection.activeVoice.transportId !== transportId) continue;
       connection.activeVoice = null;
       connection.previewRoomIds.delete(roomId);
       unregisterConnectionForRoom(connection, roomId);
@@ -434,6 +449,7 @@ function createConnectionRegistry({
     closeConnections,
     connectionCount,
     detachVoicePeer,
+    detachAccountRoom,
     findAccountConnections,
     isUserOnline,
     presenceSnapshot,

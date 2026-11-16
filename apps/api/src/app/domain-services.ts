@@ -93,13 +93,14 @@ export function createDomainServices(deps: DomainServiceDeps) {
     runtime: () => hub.runtime(),
     notifyPeer: (peer, event) => hub.presence.sendToPeer(peer, event),
     notifyUser: (userId, event) => hub.broadcastToUser(userId, event),
-    detachVoiceConnections: (roomId, peerId) => hub.registry.detachVoicePeer(roomId, peerId),
+    detachVoiceConnections: (roomId, peerId, transportId) => hub.registry.detachVoicePeer(roomId, peerId, transportId),
     closePeer: (roomId, peerId, transportId, reason) => hub.presence.closePeer(roomId, peerId, transportId, reason),
     removeParticipant: (roomId, peerId) => liveKit.removeParticipant(roomId, peerId)
   });
   const peerModeration = createPeerModerationService({
     store: services.getRoomStore,
     eviction: peerEviction,
+    detachAccountRoom: (roomId, userId) => hub.registry.detachAccountRoom(roomId, userId),
     gatePrincipalForPeer: (roomId, peer) => hub.liveKitGatePrincipalForPeer(roomId, peer),
     livekitConfig: () => liveKit.config(),
     revokeForServerMute: (input) => deps.admission.revokeForServerMute(input),

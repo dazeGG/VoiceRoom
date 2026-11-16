@@ -6,24 +6,31 @@ import type pg from 'pg';
 import type { AccountBadge } from '@voice-room/shared/contracts/users';
 import { kyselyOn } from '../../platform/db/kysely.ts';
 import { toDate } from '../../platform/epoch-millis.ts';
+import { lockUser } from './user.repository.ts';
 import { cleanBadge } from './user-records.ts';
 
 export function createAccountStandingRepository({ pool }: { pool: pg.Pool }) {
   const db = kyselyOn(pool);
 
-  /** Blocks a live account until `until` (null: for good); false when there is no such account. */
+  /** Locks current standing before changing a live account or ending its sessions. */
   async function block({
     userId,
     until,
     reason,
+    canManage,
     now = Date.now()
   }: {
     userId: string;
     until: number | null;
     reason: string;
+    canManage: boolean;
     now?: number;
-  }): Promise<boolean> {
+  }): Promise<'updated' | 'not_found' | 'forbidden'> {
     return db.transaction().execute(async (trx) => {
+      const user = await lockUser(trx, 'id', userId);
+      if (!user || user.deleted_at) return 'not_found';
+      if (!canManage && (until === null || (user.blocked_at !== null && user.blocked_until === null)))
+        return 'forbidden';
       const result = await trx
         .updateTable('users')
         .set({
@@ -35,21 +42,33 @@ export function createAccountStandingRepository({ pool }: { pool: pg.Pool }) {
         .where('id', '=', userId)
         .where('deleted_at', 'is', null)
         .executeTakeFirst();
-      if (result.numUpdatedRows !== 1n) return false;
+      if (result.numUpdatedRows !== 1n) return 'not_found';
       await trx.deleteFrom('sessions').where('user_id', '=', userId).execute();
       await trx.deleteFrom('push_subscriptions').where('user_id', '=', userId).execute();
-      return true;
+      return 'updated';
     });
   }
 
-  async function unblock({ userId, now = Date.now() }: { userId: string; now?: number }): Promise<boolean> {
-    const result = await db
-      .updateTable('users')
-      .set({ blocked_at: null, blocked_until: null, block_reason: '', updated_at: toDate(now) })
-      .where('id', '=', userId)
-      .where('deleted_at', 'is', null)
-      .executeTakeFirst();
-    return result.numUpdatedRows === 1n;
+  async function unblock({
+    userId,
+    canManage,
+    now = Date.now()
+  }: {
+    userId: string;
+    canManage: boolean;
+    now?: number;
+  }): Promise<'updated' | 'not_found' | 'forbidden'> {
+    return db.transaction().execute(async (trx) => {
+      const user = await lockUser(trx, 'id', userId);
+      if (!user || user.deleted_at) return 'not_found';
+      if (!canManage && user.blocked_at !== null && user.blocked_until === null) return 'forbidden';
+      await trx
+        .updateTable('users')
+        .set({ blocked_at: null, blocked_until: null, block_reason: '', updated_at: toDate(now) })
+        .where('id', '=', userId)
+        .execute();
+      return 'updated';
+    });
   }
 
   /** Ends every session of the account; the number ended. */
