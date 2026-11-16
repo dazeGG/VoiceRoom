@@ -20,6 +20,7 @@ export default defineConfig({
   test: {
     include: ['test/**/*.test.ts', 'test/**/*.test.tsx'],
     environment: 'jsdom',
+    setupFiles: ['test/setup.ts'],
     testTimeout: 20000,
     unstubGlobals: true
   }

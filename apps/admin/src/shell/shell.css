@@ -106,13 +106,13 @@
 }
 
 .side-brand-name {
-  font-size: 15px;
+  font-size: 0.9375rem;
   font-weight: 700;
 }
 
 .side-brand-sub {
-  color: var(--vr-text-3);
-  font-size: 12px;
+  color: var(--vr-text-muted);
+  font-size: 0.75rem;
 }
 
 .side-nav {
@@ -133,8 +133,8 @@
 
 .side-group-label {
   padding: 0 12px 6px;
-  color: var(--vr-text-3);
-  font-size: 11px;
+  color: var(--vr-text-muted);
+  font-size: 0.6875rem;
   font-weight: 600;
   letter-spacing: 0.07em;
   text-transform: uppercase;
@@ -151,7 +151,7 @@
   border-radius: 10px;
   padding: 0 15px;
   color: var(--vr-text-2);
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 500;
   text-decoration: none;
 }
@@ -171,7 +171,7 @@
 
 .side-item-icon {
   flex: none;
-  color: var(--vr-text-3);
+  color: var(--vr-text-muted);
 }
 
 .side-item[aria-current='page'] {
@@ -207,6 +207,18 @@
   white-space: nowrap;
 }
 
+.side-rail[data-wide='true'] .side-item {
+  height: auto;
+  min-height: 40px;
+  padding-block: 4px;
+}
+
+.side-rail[data-wide='true'] .side-item-label {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
 .side-badge {
   display: inline-grid;
   min-width: 20px;
@@ -216,7 +228,7 @@
   border-radius: 999px;
   background: var(--vr-danger);
   color: var(--vr-on-danger);
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
@@ -251,15 +263,15 @@
 
 .side-who-name {
   overflow: hidden;
-  font-size: 13.5px;
+  font-size: 0.84375rem;
   font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .side-who-role {
-  color: var(--vr-text-3);
-  font-size: 12px;
+  color: var(--vr-text-muted);
+  font-size: 0.75rem;
   white-space: nowrap;
 }
 
@@ -272,7 +284,7 @@
   border: 0;
   border-radius: 8px;
   background: transparent;
-  color: var(--vr-text-3);
+  color: var(--vr-text-muted);
   cursor: pointer;
 }
 
@@ -330,16 +342,20 @@
 .top-crumb,
 .top-crumb-sep {
   flex: none;
-  color: var(--vr-text-3);
-  font-size: 13px;
+  color: var(--vr-text-muted);
+  font-size: 0.8125rem;
   white-space: nowrap;
+}
+
+.top-crumb-sep {
+  color: var(--vr-text-3);
 }
 
 .top-title {
   margin: 0;
   overflow: hidden;
   max-width: 360px;
-  font-size: 18px;
+  font-size: 1.125rem;
   font-weight: 600;
   letter-spacing: -0.01em;
   text-overflow: ellipsis;
@@ -347,8 +363,8 @@
 }
 
 .top-still {
-  color: var(--vr-text-3);
-  font-size: 12.5px;
+  color: var(--vr-text-muted);
+  font-size: 0.78125rem;
 }
 
 .top-fresh {
@@ -366,7 +382,7 @@
   gap: 8px;
   overflow: hidden;
   color: var(--vr-text-2);
-  font-size: 12.5px;
+  font-size: 0.78125rem;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
@@ -388,7 +404,7 @@
 
 .top-fresh-every {
   min-width: 0;
-  color: var(--vr-text-3);
+  color: var(--vr-text-muted);
 }
 
 .top-refresh {
@@ -451,7 +467,7 @@
   border-radius: 10px;
   padding: 0 8px 0 12px;
   background: var(--vr-surface);
-  color: var(--vr-text-3);
+  color: var(--vr-text-muted);
 }
 
 .search-field:focus-within {
@@ -466,11 +482,11 @@
   background: transparent;
   color: var(--vr-text);
   font: inherit;
-  font-size: 13.5px;
+  font-size: 0.84375rem;
 }
 
 .search-field input::placeholder {
-  color: var(--vr-text-3);
+  color: var(--vr-text-muted);
 }
 
 .search-key {
@@ -481,9 +497,9 @@
   border: 1px solid oklch(100% 0 0 / 0.09);
   border-radius: 6px;
   padding: 0 6px;
-  color: var(--vr-text-3);
+  color: var(--vr-text-muted);
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 0.6875rem;
 }
 
 .search-panel {
@@ -510,8 +526,8 @@
 
 .search-section {
   padding: 8px 10px 4px;
-  color: var(--vr-text-3);
-  font-size: 11px;
+  color: var(--vr-text-muted);
+  font-size: 0.6875rem;
   font-weight: 600;
   letter-spacing: 0.07em;
   text-transform: uppercase;
@@ -524,7 +540,7 @@
   gap: 10px;
   border-radius: 9px;
   padding: 7px 10px;
-  font-size: 13.5px;
+  font-size: 0.84375rem;
   cursor: pointer;
 }
 
@@ -542,9 +558,9 @@
 .search-hit-meta {
   margin-left: auto;
   flex: none;
-  color: var(--vr-text-3);
+  color: var(--vr-text-muted);
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 
 .search-hit-meta--plain {
@@ -566,7 +582,7 @@
 .search-quiet {
   margin: 0;
   padding: 14px 10px;
-  color: var(--vr-text-3);
-  font-size: 13px;
+  color: var(--vr-text-muted);
+  font-size: 0.8125rem;
   text-align: center;
 }

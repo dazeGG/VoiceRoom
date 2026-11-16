@@ -94,6 +94,8 @@
   --vr-text: oklch(96% 0.003 260);
   --vr-text-2: oklch(72% 0.006 260);
   --vr-text-3: oklch(54% 0.006 260);
+  /* Informative text; keep the darker token for decorative marks. */
+  --vr-text-muted: oklch(71% 0.006 260);
 
   --vr-accent: oklch(90% 0.19 125);
   --vr-accent-hover: oklch(94% 0.16 125);

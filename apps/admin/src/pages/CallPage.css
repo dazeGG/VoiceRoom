@@ -54,14 +54,14 @@
 
 .call-head-title h2 {
   margin: 0;
-  font-size: 22px;
+  font-size: 1.375rem;
   font-weight: 700;
   letter-spacing: -0.01em;
 }
 
 .call-head-line {
   color: var(--vr-text-2);
-  font-size: 13.5px;
+  font-size: 0.84375rem;
 }
 
 .call-head-actions {
@@ -106,13 +106,13 @@
 
 .call-card-head h3 {
   margin: 0;
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 600;
 }
 
 .call-note {
-  color: var(--vr-text-3);
-  font-size: 12px;
+  color: var(--vr-text-muted);
+  font-size: 0.75rem;
 }
 
 .call-card .call-people {
@@ -143,16 +143,16 @@
   margin: 0;
   border-top: 1px solid var(--vr-line);
   padding: 10px 18px 14px;
-  color: var(--vr-text-3);
-  font-size: 12px;
+  color: var(--vr-text-muted);
+  font-size: 0.75rem;
 }
 
 .call-axis {
   position: relative;
   display: block;
   height: 16px;
-  color: var(--vr-text-3);
-  font-size: 11.5px;
+  color: var(--vr-text-muted);
+  font-size: 0.71875rem;
   font-weight: 400;
 }
 
@@ -203,12 +203,12 @@
 
 .minute-chart-label {
   color: var(--vr-text-2);
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 
 .minute-chart-numbers {
-  color: var(--vr-text-3);
-  font-size: 12.5px;
+  color: var(--vr-text-muted);
+  font-size: 0.78125rem;
 }
 
 .minute-chart-numbers b {
@@ -262,7 +262,7 @@
   position: absolute;
   right: 8px;
   color: var(--vr-danger);
-  font-size: 11px;
+  font-size: 0.6875rem;
   transform: translateY(-110%);
 }
 
@@ -296,17 +296,18 @@
 }
 
 .call-person-name {
-  font-size: 16px;
+  font-size: 1rem;
   font-weight: 700;
 }
 
 .call-person-login {
-  color: var(--vr-text-3);
-  font-size: 12px;
+  color: var(--vr-text-muted);
+  font-size: 0.75rem;
 }
 
 .call-verdict {
   --verdict-tone: var(--vr-text-3);
+  --verdict-text: var(--vr-text-muted);
 
   display: flex;
   flex-direction: column;
@@ -314,24 +315,27 @@
   border-radius: 12px;
   padding: 10px 12px;
   background: color-mix(in oklch, var(--verdict-tone) 9%, transparent);
-  font-size: 13px;
+  font-size: 0.8125rem;
   line-height: 1.5;
 }
 
 .call-verdict[data-tone='success'] {
   --verdict-tone: var(--vr-success);
+  --verdict-text: var(--verdict-tone);
 }
 
 .call-verdict[data-tone='warning'] {
   --verdict-tone: var(--vr-warning);
+  --verdict-text: var(--verdict-tone);
 }
 
 .call-verdict[data-tone='danger'] {
   --verdict-tone: var(--vr-danger);
+  --verdict-text: var(--verdict-tone);
 }
 
 .call-verdict-title {
-  color: var(--verdict-tone);
+  color: var(--verdict-text);
   font-weight: 600;
 }
 
@@ -344,7 +348,7 @@
   flex-direction: column;
   gap: 9px;
   margin: 0;
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 
 .call-facts > div {
@@ -355,7 +359,7 @@
 
 .call-facts dt {
   flex: none;
-  color: var(--vr-text-3);
+  color: var(--vr-text-muted);
 }
 
 .call-facts dd {
@@ -389,8 +393,8 @@
 
 .call-event-at {
   padding-top: 1px;
-  color: var(--vr-text-3);
-  font-size: 12.5px;
+  color: var(--vr-text-muted);
+  font-size: 0.78125rem;
 }
 
 .call-event-dot {
@@ -418,7 +422,7 @@
 }
 
 .call-event-text {
-  font-size: 13.5px;
+  font-size: 0.84375rem;
 }
 
 /* The answers. */
@@ -449,14 +453,14 @@
 }
 
 .call-answer-who {
-  font-size: 13.5px;
+  font-size: 0.84375rem;
   font-weight: 600;
 }
 
 .call-answer-at {
   margin-left: auto;
-  color: var(--vr-text-3);
-  font-size: 12px;
+  color: var(--vr-text-muted);
+  font-size: 0.75rem;
 }
 
 .call-answer-tags {
@@ -467,13 +471,13 @@
 
 .call-answer-comment {
   margin: 0;
-  font-size: 13.5px;
+  font-size: 0.84375rem;
 }
 
 .call-answer-line {
   margin: 0;
-  color: var(--vr-text-3);
-  font-size: 12px;
+  color: var(--vr-text-muted);
+  font-size: 0.75rem;
 }
 
 /* The people's table when a row picks a person. */

@@ -31,8 +31,15 @@ body {
   background: var(--vr-bg);
   color: var(--vr-text);
   font-family: var(--font-ui);
-  font-size: 15px;
   line-height: 1.45;
+}
+
+html {
+  font-size: 100%;
+}
+
+body {
+  font-size: 0.9375rem;
 }
 
 a {
@@ -58,5 +65,5 @@ a {
   display: grid;
   min-height: 60dvh;
   place-items: center;
-  color: var(--vr-text-3);
+  color: var(--vr-text-muted);
 }

@@ -41,14 +41,14 @@
 
 .panel-name {
   margin: 0;
-  font-size: 17px;
+  font-size: 1.0625rem;
   font-weight: 700;
 }
 
 .panel-login {
   overflow: hidden;
-  color: var(--vr-text-3);
-  font-size: 12px;
+  color: var(--vr-text-muted);
+  font-size: 0.75rem;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -63,7 +63,7 @@
   background: color-mix(in oklch, var(--vr-success) 7%, transparent);
   color: var(--vr-text);
   font: inherit;
-  font-size: 13px;
+  font-size: 0.8125rem;
   text-align: left;
   cursor: pointer;
 }
@@ -84,13 +84,13 @@
 }
 
 .panel-facts dt {
-  color: var(--vr-text-3);
-  font-size: 12px;
+  color: var(--vr-text-muted);
+  font-size: 0.75rem;
 }
 
 .panel-facts dd {
   margin: 0;
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 
 .panel-head {
@@ -98,7 +98,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  font-size: 12.5px;
+  font-size: 0.78125rem;
 }
 
 .panel-head--inset {
@@ -107,19 +107,19 @@
 
 .panel-head h3 {
   margin: 0;
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 600;
 }
 
 .panel-note {
-  color: var(--vr-text-3);
-  font-size: 12px;
+  color: var(--vr-text-muted);
+  font-size: 0.75rem;
 }
 
 .panel-quiet {
   margin: 0;
   color: var(--vr-text-2);
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 
 .panel-inset {
@@ -151,7 +151,7 @@
 }
 
 .panel-cell-value {
-  font-size: 16px;
+  font-size: 1rem;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
@@ -169,7 +169,7 @@
   grid-template-columns: 110px 1fr 44px;
   align-items: center;
   gap: 8px 10px;
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 
 .panel-cpu-name {
@@ -243,7 +243,7 @@
 
 .panel-call-room {
   overflow: hidden;
-  font-size: 13.5px;
+  font-size: 0.84375rem;
   font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -267,5 +267,5 @@
 .panel-confirm {
   margin: 0;
   color: var(--vr-text-2);
-  font-size: 14px;
+  font-size: 0.875rem;
 }

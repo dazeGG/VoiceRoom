@@ -26,7 +26,7 @@
   background: transparent;
   color: var(--vr-text-2);
   font: inherit;
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 600;
   cursor: pointer;
 }
@@ -49,8 +49,8 @@
 }
 
 .time-range-covered {
-  color: var(--vr-text-3);
-  font-size: 12.5px;
+  color: var(--vr-text-muted);
+  font-size: 0.78125rem;
   font-variant-numeric: tabular-nums;
 }
 
@@ -64,7 +64,7 @@
 
 .time-range-title {
   color: var(--vr-text);
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 600;
 }
 
@@ -72,7 +72,7 @@
   display: grid;
   gap: 4px;
   color: var(--vr-text-2);
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 
 .time-range-custom input {
@@ -83,7 +83,7 @@
   background: var(--vr-surface);
   color: var(--vr-text);
   font: inherit;
-  font-size: 13px;
+  font-size: 0.8125rem;
   color-scheme: dark light;
 }
 
@@ -94,5 +94,5 @@
 .time-range-error {
   margin: 0;
   color: var(--vr-danger);
-  font-size: 12px;
+  font-size: 0.75rem;
 }

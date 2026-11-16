@@ -13,7 +13,7 @@
   background: transparent;
   color: var(--vr-text);
   font: inherit;
-  font-size: 13.5px;
+  font-size: 0.84375rem;
   font-weight: 600;
   white-space: nowrap;
   cursor: pointer;
@@ -95,7 +95,7 @@
   background: transparent;
   color: var(--vr-text-2);
   font: inherit;
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 600;
   white-space: nowrap;
   cursor: pointer;
@@ -143,7 +143,7 @@
 
 .ui-panel-title {
   margin: 0;
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 600;
 }
 
@@ -152,8 +152,8 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 8px 12px;
-  color: var(--vr-text-3);
-  font-size: 12px;
+  color: var(--vr-text-muted);
+  font-size: 0.75rem;
 }
 
 /* A section's heading: its title, a pill and a quiet note on the right. */
@@ -166,14 +166,14 @@
 
 .ui-section-head h2 {
   margin: 0;
-  font-size: 16px;
+  font-size: 1rem;
   font-weight: 600;
 }
 
 .ui-section-note {
   margin-left: auto;
-  color: var(--vr-text-3);
-  font-size: 12.5px;
+  color: var(--vr-text-muted);
+  font-size: 0.78125rem;
 }
 
 /* A row of controls over a section. */
@@ -185,8 +185,8 @@
 }
 
 .ui-toolbar-note {
-  color: var(--vr-text-3);
-  font-size: 12.5px;
+  color: var(--vr-text-muted);
+  font-size: 0.78125rem;
 }
 
 /* Grids of cards that wrap by themselves: --grid-min is a card's narrowest width. */
@@ -198,8 +198,8 @@
 
 .ui-footnote {
   margin: 0;
-  color: var(--vr-text-3);
-  font-size: 12px;
+  color: var(--vr-text-muted);
+  font-size: 0.75rem;
 }
 
 .ui-mono {
@@ -222,7 +222,7 @@
   padding: 2px 8px;
   background: color-mix(in oklch, var(--tone) 12%, transparent);
   color: var(--tone);
-  font-size: 11.5px;
+  font-size: 0.71875rem;
   font-weight: 600;
   line-height: 1.4;
   white-space: nowrap;
@@ -230,7 +230,7 @@
 
 .ui-pill[data-compact='true'] {
   padding: 1px 7px;
-  font-size: 11px;
+  font-size: 0.6875rem;
 }
 
 .ui-pill[data-tone='neutral'] {
@@ -334,8 +334,8 @@
   padding-top: 10px;
   padding-bottom: 10px;
   border-bottom: 1px solid var(--vr-line);
-  color: var(--vr-text-3);
-  font-size: 12px;
+  color: var(--vr-text-muted);
+  font-size: 0.75rem;
   font-weight: 600;
 }
 
@@ -385,7 +385,7 @@
   align-items: center;
   gap: 6px;
   color: var(--vr-text-2);
-  font-size: 12.5px;
+  font-size: 0.78125rem;
 }
 
 .ui-stat-dot {
@@ -409,7 +409,7 @@
 }
 
 .ui-stat-value {
-  font-size: 22px;
+  font-size: 1.375rem;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.01em;
@@ -425,8 +425,8 @@
 }
 
 .ui-stat-note {
-  color: var(--vr-text-3);
-  font-size: 12px;
+  color: var(--vr-text-muted);
+  font-size: 0.75rem;
 }
 
 /* --- placeholders --------------------------------------------------------- */
@@ -434,8 +434,8 @@
 .ui-empty {
   margin: 0;
   padding: 32px 16px;
-  color: var(--vr-text-3);
-  font-size: 13px;
+  color: var(--vr-text-muted);
+  font-size: 0.8125rem;
   text-align: center;
 }
 
@@ -448,22 +448,24 @@
 
 /* --- dialog --------------------------------------------------------------- */
 
-.ui-dialog-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 50;
-  display: grid;
-  place-items: center;
-  padding: 24px;
+.ui-dialog::backdrop {
   background: var(--vr-backdrop);
+  overflow: hidden;
+  overscroll-behavior: contain;
 }
-
-.ui-dialog {
-  position: relative;
+.ui-dialog:modal {
+  overscroll-behavior: contain;
+}
+.ui-dialog[open] {
   display: flex;
+}
+.ui-dialog {
+  position: fixed;
+  margin: auto;
+  color: var(--vr-text);
   flex-direction: column;
   gap: 14px;
-  width: min(440px, 100%);
+  width: min(440px, calc(100% - 48px));
   max-height: calc(100dvh - 48px);
   overflow-y: auto;
   border: 1px solid oklch(100% 0 0 / 0.1);
@@ -474,7 +476,7 @@
 }
 
 .ui-dialog[data-wide='true'] {
-  width: min(920px, 100%);
+  width: min(920px, calc(100% - 48px));
   overflow: hidden;
   padding: 0;
 }
@@ -502,25 +504,25 @@
 
 .ui-dialog-title {
   margin: 0;
-  font-size: 17px;
+  font-size: 1.0625rem;
   font-weight: 700;
 }
 
 .ui-dialog[data-wide='true'] .ui-dialog-title {
-  font-size: 19px;
+  font-size: 1.1875rem;
 }
 
 .ui-dialog-description {
   margin: 0;
   color: var(--vr-text-2);
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 
 .ui-dialog-body {
   display: grid;
   gap: 12px;
   color: var(--vr-text-2);
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 
 .ui-dialog-footer {
@@ -542,7 +544,7 @@
   border: 0;
   border-radius: 8px;
   background: transparent;
-  color: var(--vr-text-3);
+  color: var(--vr-text-muted);
   cursor: pointer;
 }
 
@@ -593,7 +595,7 @@
   background: var(--vr-surface);
   color: var(--vr-text);
   font: inherit;
-  font-size: 13.5px;
+  font-size: 0.84375rem;
 }
 
 .ui-popover {
@@ -612,4 +614,19 @@
   padding: 12px;
   background: var(--vr-surface-2);
   box-shadow: var(--vr-shadow-popover);
+}
+
+.ui-segment-option {
+  position: relative;
+}
+.ui-segment-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  clip-path: inset(50%);
+  overflow: hidden;
+}
+.ui-segment-option:has(input:focus-visible) {
+  outline: 2px solid var(--vr-accent);
+  outline-offset: -2px;
 }

@@ -730,7 +730,7 @@ test("a room picked elsewhere while the day's timeline is on screen narrows the 
   await userEvent.click(screen.getByRole('button', { name: 'Найти Кухню' }));
   await waitFor(() => expect(callRequests(calls).at(-1)?.url.searchParams.get('roomId')).toBe('kitchen'));
   expect(callRequests(calls).at(-1)?.url.searchParams.has('from')).toBe(true);
-  expect(screen.getByRole('radio', { name: 'Лента дня' }).getAttribute('aria-checked')).toBe('true');
+  expect(screen.getByRole('radio', { name: 'Лента дня', checked: true })).toBeTruthy();
   // The pick starts afresh, like any other narrowing: the call picked before closes.
   await screen.findByRole('list', { name: 'Звонки за день' });
   expect(screen.queryByRole('region', { name: 'Кухня · 00:30–01:15' })).toBeNull();
