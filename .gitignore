@@ -52,5 +52,9 @@ playwright-report/
 apps/web/public/emoji/
 apps/site/.astro/
 
+# Python helper bytecode
+__pycache__/
+*.pyc
+
 # Host-managed extra Caddy sites (config/caddy/sites.d/README.md)
 config/caddy/sites.d/*.caddy
