@@ -91,7 +91,7 @@ export function createRingRepository({ pool, isBanned }: { pool: pg.Pool; isBann
     if (!friendship.rowCount) return 'not_friends' as const;
     if (block.rowCount) return 'blocked' as const;
     const room = await client.query<{ name: string; emoji: string }>(
-      `SELECT name,emoji FROM rooms WHERE id=$1 AND deleted_at IS NULL`,
+      `SELECT name,emoji FROM rooms WHERE id=$1 AND deleted_at IS NULL AND kind='main'`,
       [roomId]
     );
     if (!room.rows[0]) return 'room_not_found' as const;
@@ -155,6 +155,11 @@ export function createRingRepository({ pool, isBanned }: { pool: pg.Pool; isBann
           if (old) {
             if (old.recipient_user_id !== input.recipientUserId || old.room_id !== input.roomId)
               throw new CreationRejected({ status: 'request_conflict' });
+            const target = await client.query<{ '?column?': number }>(
+              "SELECT 1 FROM rooms WHERE id=$1 AND kind='main' AND deleted_at IS NULL",
+              [input.roomId]
+            );
+            if (!target.rowCount) throw new CreationRejected({ status: 'room_not_found' });
             result.ring = snapshot(old);
             result.replay = true;
             return { replay: true, message: { id: old.invite_message_id } };
@@ -234,7 +239,12 @@ export function createRingRepository({ pool, isBanned }: { pool: pg.Pool; isBann
     return transaction(pool, async (client) => {
       // Inspect immutable participants before taking the shared pair lock; the
       // row lock follows it, matching creation and relationship changes.
-      const hint = (await client.query<RingRow>(`SELECT * FROM room_rings WHERE id=$1`, [input.ringId])).rows[0];
+      const hint = (
+        await client.query<RingRow>(
+          `SELECT rr.* FROM room_rings rr WHERE rr.id=$1 AND NOT EXISTS (SELECT 1 FROM rooms room WHERE room.id=rr.room_id AND room.kind='widget')`,
+          [input.ringId]
+        )
+      ).rows[0];
       if (!hint || ![hint.caller_user_id, hint.recipient_user_id].includes(input.actorUserId)) return null;
       if ((input.action === 'accept' || input.action === 'decline') && hint.recipient_user_id !== input.actorUserId)
         return null;
@@ -298,7 +308,7 @@ export function createRingRepository({ pool, isBanned }: { pool: pg.Pool; isBann
   async function current(job: RingDeliveryJob): Promise<RingSnapshot | null> {
     const row = (
       await pool.query<RingRow>(
-        `SELECT r.* FROM room_rings r JOIN ring_delivery_outbox j ON j.ring_id=r.id WHERE r.id=$1 AND j.revision=$2 AND j.recipient_user_id=$3 AND j.claim_token=$4 AND j.claimed_until>clock_timestamp() AND j.deadline>clock_timestamp() AND (($5='incoming' AND r.state='pending' AND r.expires_at>clock_timestamp()) OR ($5='terminal' AND r.revision=$2 AND r.state<>'pending'))`,
+        `SELECT r.* FROM room_rings r JOIN rooms room ON room.id=r.room_id AND room.kind='main' AND room.deleted_at IS NULL JOIN ring_delivery_outbox j ON j.ring_id=r.id WHERE r.id=$1 AND j.revision=$2 AND j.recipient_user_id=$3 AND j.claim_token=$4 AND j.claimed_until>clock_timestamp() AND j.deadline>clock_timestamp() AND (($5='incoming' AND r.state='pending' AND r.expires_at>clock_timestamp()) OR ($5='terminal' AND r.revision=$2 AND r.state<>'pending'))`,
         [job.ring_id, job.revision, job.recipient_user_id, job.claim_token, job.kind]
       )
     ).rows[0];

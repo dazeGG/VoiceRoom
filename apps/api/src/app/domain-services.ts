@@ -3,6 +3,7 @@
 // accounts, friends, direct messages, notification settings, avatars and the
 // desktop release feed.
 
+import { roomAllowsSurface } from '../domains/rooms/room-surface.policy.ts';
 import type { FastifyBaseLogger } from 'fastify';
 import { buildServerEnvelope } from '../realtime/envelope.ts';
 import { mentionUserIdsFromContent } from '@voice-room/shared/mentions';
@@ -160,7 +161,10 @@ export function createDomainServices(deps: DomainServiceDeps) {
   const rings = createRingService({
     repository: services.getRingRepository,
     findUser: (userId) => services.getUserStore().getUserById(userId),
-    findRoom: (roomId) => services.getRoomStore().getRoom(roomId),
+    findRoom: async (roomId) => {
+      const room = await services.getRoomStore().getRoom(roomId);
+      return roomAllowsSurface(room, 'main') ? room : null;
+    },
     notifyUser: (userId, event) => hub.broadcastToUser(userId, event),
     answerInvitation: (input) => services.getMessageService().direct.respondInvite(input),
     queueWebPush: (userId, payload, context) => hub.notifications.queuePush(userId, payload, context),
@@ -183,7 +187,7 @@ export function createDomainServices(deps: DomainServiceDeps) {
     friends: services.getFriendStore,
     findUser: (userId) => services.getUserStore().getUserById(userId),
     isDmMuted: (userId, peerUserId) => services.getNotificationPreferences().isDmMuted({ userId, peerUserId }),
-    roomExists: async (roomId) => Boolean(await hub.getRoom(roomId)),
+    roomExists: async (roomId) => roomAllowsSurface(await hub.getRoom(roomId), 'main'),
     expireRoomInvitations: (senderId, roomId) => hub.roomLifecycle.expireRoomInvitations(senderId, roomId),
     limiter: limits.dm,
     media: services.getMediaServices,

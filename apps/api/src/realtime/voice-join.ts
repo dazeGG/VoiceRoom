@@ -4,6 +4,7 @@
 // peer's transport, and the snapshot and roster events that follow.
 
 import crypto from 'node:crypto';
+import { roomAllowsSurface } from '../domains/rooms/room-surface.policy.ts';
 import type { PublicPeer } from '@voice-room/shared/contracts/rooms';
 import type { ErrorCode } from '@voice-room/shared/contracts/errors';
 import type { ClientCommands, PeerLeaveReason, RoomSnapshot } from '@voice-room/shared/contracts/realtime';
@@ -193,6 +194,7 @@ export function createVoiceJoin(deps: VoiceJoinDeps) {
     clientIp = '',
     requestId = ''
   ): Promise<JoinResult> {
+    if (connection.roomSurface === 'widget' && connection.widgetQuiesced) return { ok: false, code: 'room_not_found' };
     const joinRequestSequence = ++joinRequestSequenceCounter;
     const { roomId, peerId, sessionToken } = payload;
     const name = sessionUser ? cleanName(sessionUser.displayName || sessionUser.login) : cleanGuestName(payload.name);
@@ -256,12 +258,13 @@ export function createVoiceJoin(deps: VoiceJoinDeps) {
       if (!isCurrentConnectionVoiceJoin(connection, connectionJoinIntent)) {
         return supersededVoiceJoin(connection, roomId);
       }
-      if (!room) {
+      if (!roomAllowsSurface(room, connection.roomSurface ?? 'main')) {
         terminalClaimFailure = true;
         wsRegistry.sendToConnection(connection, buildServerEnvelope('room.not_found', { roomId }));
         return { ok: false, code: 'room_not_found' };
       }
 
+      if (!room) throw new Error('Room disappeared after scope validation');
       const roomBan = await findRoomBan(roomId, sessionUser?.id, clientIp);
       if (claimedSessionWasTerminated()) {
         return { ok: false, code: 'superseded_join', message: SESSION_TERMINATED };
@@ -437,7 +440,11 @@ export function createVoiceJoin(deps: VoiceJoinDeps) {
         // live by delivering the authoritative snapshot even when the
         // best-effort occupancy marker cannot be persisted.
         logger.error(
-          { evt: LOG_EVENTS.ROOM_OCCUPANCY_PERSIST_FAILED, roomId, err: error },
+          {
+            evt: LOG_EVENTS.ROOM_OCCUPANCY_PERSIST_FAILED,
+            roomId: connection.roomSurface === 'widget' ? undefined : roomId,
+            err: connection.roomSurface === 'widget' ? undefined : error
+          },
           'failed to persist room occupancy'
         );
       }

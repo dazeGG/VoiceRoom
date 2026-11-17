@@ -50,6 +50,8 @@ export interface RealtimeStartOptions {
   clearTimeout(this: void, timer: Timer): void;
   resolveSession: (req: IncomingMessage) => Promise<ResolvedSession | null>;
   clientIp: (req: IncomingMessage) => string;
+  widgetCanAdmit?: () => Promise<boolean>;
+  widgetLocalAllowed?: () => boolean;
 }
 
 export function createRealtimeHub(deps: RealtimeHubDeps) {
@@ -228,6 +230,7 @@ export function createRealtimeHub(deps: RealtimeHubDeps) {
     const wsHandler = createWsHandler({
       registry: wsRegistry,
       roomRuntime: startedRuntime,
+      getBoundary: getRoom,
       resolveSessionUser: options.resolveSession,
       getFriendIds: (userId) => services.getFriendStore().getFriendIds(userId),
       isUserOnline,
@@ -238,10 +241,51 @@ export function createRealtimeHub(deps: RealtimeHubDeps) {
       getClientIp: options.clientIp,
       logger: options.logger
     });
-    return { roomRuntime: startedRuntime, wsHandler };
+    const widgetWsHandler = createWsHandler({
+      registry: wsRegistry,
+      roomRuntime: startedRuntime,
+      surface: 'widget',
+      getBoundary: getRoom,
+      widgetAdmissionEnabled: options.widgetCanAdmit ?? (async () => false),
+      widgetLocalAllowed: options.widgetLocalAllowed ?? (() => false),
+      resolveSessionUser: async () => null,
+      getFriendIds: async () => [],
+      isUserOnline: () => false,
+      getClientIp: options.clientIp,
+      logger: options.logger
+    });
+    return { roomRuntime: startedRuntime, wsHandler, widgetWsHandler };
+  }
+
+  function invalidateWidgetConnections(): void {
+    for (const connection of wsRegistry.allConnections())
+      if (connection.roomSurface === 'widget') {
+        connection.widgetQuiesced = true;
+        connection.pendingVoiceJoin = null;
+        connection.socket.close(1008, 'Widget admission disabled');
+      }
+  }
+  async function reconcileWidgetAdmission(force = false): Promise<boolean> {
+    const connections = [...wsRegistry.allConnections()].filter((connection) => connection.roomSurface === 'widget');
+    const widgetRooms = [...presenceRooms.values()].filter((room) => room.kind === 'widget');
+    if (connections.length === 0 && !widgetRooms.some((room) => room.peers.size > 0)) return true;
+    if (!force && config.WIDGET_ENABLED && (await services.getRoomStore().isWidgetAdmissionEnabled())) return false;
+    for (const connection of connections) {
+      connection.widgetQuiesced = true;
+      connection.pendingVoiceJoin = null;
+      connection.socket.close(1008, 'Widget admission disabled');
+    }
+    for (const room of widgetRooms) {
+      await roomRuntime?.cancelRoomReconnectLeases({ roomId: room.id, reason: 'left' });
+      if (room.peers.size > 0) throw new Error('widget_peer_cleanup_incomplete');
+      await queueRoomOccupancyTransition(room.id);
+    }
+    return true;
   }
 
   return {
+    reconcileWidgetAdmission,
+    invalidateWidgetConnections,
     start,
     registry: wsRegistry,
     runtime,

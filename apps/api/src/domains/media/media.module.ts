@@ -33,14 +33,15 @@ export function createMediaModule(deps: MediaModuleDeps) {
   const jobs = createMediaJobRepository({ pool });
   const quotaRepository = createMediaQuotaRepository({ attachmentRepository: attachments, pool });
   const quota = createMediaQuotaService({ attachmentRepository: attachments, quotaRepository });
+  const access = createMediaAccessRepository({ pool });
   const service = createMediaService({
     attachmentRepository: attachments,
     jobRepository: jobs,
     pressureService: pressure,
     quotaService: quota,
-    storage
+    storage,
+    isRoomAttachmentAllowed: access.isMainRoomMessage
   });
-  const access = createMediaAccessRepository({ pool });
   const visibility = createMediaVisibilityService({
     attachmentRepository: attachments,
     storage,

@@ -21,6 +21,9 @@ export type RealtimeSocket = {
 /** The voice seat a socket holds. */
 export type ActiveVoice = { roomId: string; peerId: string; sessionToken: string; transportId: string };
 export type WsConnection = {
+  /** Trusted upgrade adapter scope, never decoded from client frames. */
+  roomSurface?: 'main' | 'widget';
+  widgetQuiesced?: boolean;
   id: string;
   userId: string | null;
   guest: boolean;

@@ -61,6 +61,7 @@ const COMPARE = { before: '<', after: '>', 'at-or-after': '>=' } as const;
 function roomMessages(db: Database, roomId: string, now: Date) {
   return db
     .selectFrom('room_messages as m')
+    .innerJoin('rooms as room', 'room.id', 'm.room_id')
     .leftJoin('room_peer_identities as rpi', (join) =>
       join.onRef('rpi.room_id', '=', 'm.room_id').onRef('rpi.peer_id', '=', 'm.peer_id')
     )
@@ -74,6 +75,7 @@ function roomMessages(db: Database, roomId: string, now: Date) {
       'u.avatar_accent'
     ])
     .where('m.room_id', '=', roomId)
+    .where('room.kind', '=', 'main')
     .where('m.deleted_at', 'is', null)
     .where((eb) => eb.or([eb('m.expires_at', 'is', null), eb('m.expires_at', '>', now)]));
 }
@@ -109,6 +111,7 @@ function createRoomHistoryRepository({ pool }: { pool: pg.Pool }) {
       .select('id')
       .where('id', '=', roomId)
       .where('deleted_at', 'is', null)
+      .where('kind', '=', 'main')
       .limit(1)
       .executeTakeFirst();
     return Boolean(row);
@@ -117,9 +120,11 @@ function createRoomHistoryRepository({ pool }: { pool: pg.Pool }) {
   async function getAnchor({ roomId, messageId }: { roomId: string; messageId: string }): Promise<CursorTuple | null> {
     const row = await db
       .selectFrom('room_messages')
-      .select(['id', microsOf('created_at').as('created_at_micros')])
+      .innerJoin('rooms as room', 'room.id', 'room_messages.room_id')
+      .select(['room_messages.id', microsOf('room_messages.created_at').as('created_at_micros')])
       .where('room_id', '=', roomId)
-      .where('id', '=', messageId)
+      .where('room_messages.id', '=', messageId)
+      .where('room.kind', '=', 'main')
       .limit(1)
       .executeTakeFirst();
     return row ? { id: row.id, createdAtMicros: row.created_at_micros } : null;

@@ -228,3 +228,13 @@ jobs:
       contents: read
       packages: write
     uses: ./.github/workflows/images.yml
+
+  deploy-dev:
+    name: Deploy dev
+    needs: images
+    if: github.event_name == 'push'
+    uses: ./.github/workflows/deploy.yml
+    with:
+      environment: dev
+      url: https://dev.voiceroom.ru
+    secrets: inherit

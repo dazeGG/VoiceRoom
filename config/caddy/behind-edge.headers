@@ -1,0 +1,6 @@
+# Only mounted by docker-compose.behind-edge.yml. The outer edge overwrites
+# this header with its socket peer; the inner edge has no public HTTP ports.
+# Send a single address because the API deliberately trusts the final XFF hop.
+header_up X-Forwarded-For {http.request.header.X-VoiceRoom-Client-IP}
+header_up X-Forwarded-Proto https
+header_up -X-VoiceRoom-Client-IP

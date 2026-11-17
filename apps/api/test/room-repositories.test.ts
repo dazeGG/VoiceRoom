@@ -88,6 +88,8 @@ test('mapRoom turns a room row into the API room shape', () => {
     emptySince: null,
     id: 'abc123',
     isStatic: true,
+    kind: 'main',
+    widgetChatEnabled: false,
     lastMessageAt: undefined,
     name: '',
     ownerId: null,

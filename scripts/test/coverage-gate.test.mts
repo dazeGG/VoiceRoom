@@ -1007,6 +1007,8 @@ test(
 test('G08 realtime join retains and revokes the exact gate principal', async () => {
   const room: PresenceRoom = { id: 'room123456', peers: new Map(), updatedAt: 0 };
   const storedRoom = {
+    kind: 'main' as const,
+    widgetChatEnabled: false,
     avatarKey: null,
     createdAt: 0,
     creatorIp: '',

@@ -19,6 +19,34 @@ function harness() {
   return { frames, registry, connection, deps };
 }
 
+test('preview boundary denial clears its intent without subscribing or reading messages', async () => {
+  for (const scenario of ['missing-room', 'widget-room', 'widget-connection'] as const) {
+    const h = harness();
+    let messageReads = 0;
+    const store = h.deps.getRoomStore();
+    h.deps.getRoomStore = () => ({
+      ...store,
+      getRoom: async () =>
+        scenario === 'missing-room' ? null : dbRoom('room', { kind: scenario === 'widget-room' ? 'widget' : 'main' }),
+      listMessages: async () => {
+        messageReads++;
+        return [];
+      }
+    });
+    if (scenario === 'widget-connection') h.connection.roomSurface = 'widget';
+    const runtime = createRoomRealtimeRuntime(h.deps);
+    try {
+      await runtime.subscribePreview(h.connection, 'room');
+      assert.equal(h.frames.length, 0, scenario);
+      assert.equal(h.registry.roomDetailSubscribers('room').size, 0, scenario);
+      assert.equal(h.connection.pendingPreviews?.size, 0, scenario);
+      assert.equal(messageReads, 0, scenario);
+    } finally {
+      h.registry.removeConnection(h.connection);
+    }
+  }
+});
+
 for (const phase of ['lookup', 'snapshot'] as const) {
   test(
     `account detachment cancels pending preview ${phase}; fresh unbanned attempt succeeds`,

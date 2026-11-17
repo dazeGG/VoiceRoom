@@ -46,11 +46,10 @@ test('LiveKit runs embedded TURN behind external TLS with published UDP and rela
   const compose = read('docker-compose.yml');
   assert.match(
     compose,
-    /turn:\n\s+enabled: \$\{TURN_ENABLED:-false\}\n\s+domain: "\$\{TURN_DOMAIN:-\}"\n\s+tls_port: 5349\n\s+udp_port: 3478\n\s+external_tls: true/
+    /turn:\n\s+enabled: \$\{TURN_ENABLED:-false\}\n\s+domain: "\$\{TURN_DOMAIN:-\}"\n\s+tls_port: 5349\n\s+udp_port: \$\{LIVEKIT_TURN_UDP_PORT:-3478\}\n\s+external_tls: true/
   );
-  assert.match(compose, /relay_range_start: 30000\n\s+relay_range_end: 30099/);
-  assert.match(compose, /- "3478:3478\/udp"/);
-  assert.match(compose, /- "30000-30099:30000-30099\/udp"/);
+  // Resolved default and alternate ports are exercised by
+  // scripts/test/behind-edge-compose.test.mts through Docker Compose itself.
   assert.match(compose, /max_participants: \$\{LIVEKIT_MAX_PARTICIPANTS:-24\}/);
   assert.match(compose, /TURN_ENABLED: \$\{TURN_ENABLED:-false\}\n\s+TURN_DOMAIN: \$\{TURN_DOMAIN:-\}/);
 });

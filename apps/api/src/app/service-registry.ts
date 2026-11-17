@@ -6,6 +6,7 @@
 // What the domains need from the realtime layer (rooms with their roster,
 // socket fan-out) comes in through `deps`.
 
+import { roomAllowsSurface } from '../domains/rooms/room-surface.policy.ts';
 import { type ServerEnvelope } from '@voice-room/shared/realtime';
 import pg from 'pg';
 import { createDbPool } from '../platform/db/pool.ts';
@@ -341,7 +342,7 @@ export function createServiceRegistry(config: ServiceRegistryConfig, deps: Servi
     createReactionsModule({
       pool,
       cursorCodec: history.get().cursorCodec,
-      roomExists: async (roomId) => Boolean(await getRoom(roomId)),
+      roomExists: async (roomId) => roomAllowsSurface(await getRoom(roomId), 'main'),
       roomMessageExists: async (roomId, messageId) =>
         Boolean(await messageService.get().room.getMessage(roomId, messageId)),
       directMessageVisible: async (userId, peerId, messageId) =>
@@ -353,7 +354,11 @@ export function createServiceRegistry(config: ServiceRegistryConfig, deps: Servi
     })
   );
   const pins = pooled((pool) =>
-    createPinsModule({ pool, roomExists: async (roomId) => Boolean(await getRoom(roomId)), broadcastRoomDetail })
+    createPinsModule({
+      pool,
+      roomExists: async (roomId) => roomAllowsSurface(await getRoom(roomId), 'main'),
+      broadcastRoomDetail
+    })
   );
   const notifications = pooled((pool) =>
     createNotificationsModule({

@@ -267,6 +267,7 @@ export function registerRoomRoutes(root: FastifyInstance, ctx: ApiContext, deps:
       const roomId: string = normalizeRoomId(body.roomId);
       const peerId: string = normalizePeerId(body.peerId);
       const sessionToken: string = normalizeSessionToken(body.sessionToken);
+      if (roomId && !(await deps.getRoom(roomId))) return reply.code(404).send(ROOM_NOT_FOUND);
 
       // Moderation removes the peer before its next state read. Check the
       // request's own identity first so a banned client gets the stable ban

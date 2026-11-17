@@ -20,6 +20,8 @@ export interface RosterPeer extends PresencePeer {
 }
 
 export interface PresenceRoom {
+  kind?: 'main' | 'widget';
+  widgetChatEnabled?: boolean;
   id: string;
   peers: Map<string, RosterPeer>;
   updatedAt?: number;
@@ -67,11 +69,12 @@ export function createRoomPresence(deps: RoomPresenceDeps) {
   }
 
   /** Joins a stored room with its live roster (the roster object is shared, not copied). */
-  function attach<T extends { id: string; peers?: Map<string, RosterPeer> }>(
+  function attach<T extends { id: string; kind?: 'main' | 'widget'; peers?: Map<string, RosterPeer> }>(
     dbRoom: T | null
   ): (T & { peers: Map<string, RosterPeer> }) | null {
     if (!dbRoom) return null;
     const presence = room(dbRoom.id);
+    presence.kind = dbRoom.kind ?? 'main';
     if (dbRoom.peers instanceof Map && dbRoom.peers !== presence.peers) {
       for (const [peerId, peer] of dbRoom.peers) {
         if (!presence.peers.has(peerId)) presence.peers.set(peerId, peer);
@@ -97,12 +100,13 @@ export function createRoomPresence(deps: RoomPresenceDeps) {
       if (occupancyRetries.get(roomId) !== retry) return;
       retry.timer = null;
       void queueOccupancy(roomId).catch((error: unknown) => {
-        deps
-          .logger()
-          .error(
-            { evt: LOG_EVENTS.ROOM_OCCUPANCY_RETRY_FAILED, err: error },
-            'failed to retry room occupancy persistence'
-          );
+        deps.logger().error(
+          {
+            evt: LOG_EVENTS.ROOM_OCCUPANCY_RETRY_FAILED,
+            err: rooms.get(roomId)?.kind === 'widget' ? undefined : error
+          },
+          'failed to retry room occupancy persistence'
+        );
       });
     }, delay);
     retry.timer?.unref?.();
@@ -259,12 +263,14 @@ export function createRoomPresence(deps: RoomPresenceDeps) {
       // The call ended: reset the in-memory call clock (never persisted).
       target.voiceActiveSince = null;
       void queueOccupancy(roomId).catch((error: unknown) => {
-        deps
-          .logger()
-          .error(
-            { evt: LOG_EVENTS.ROOM_OCCUPANCY_PERSIST_FAILED, roomId, err: error },
-            'failed to persist room occupancy'
-          );
+        deps.logger().error(
+          {
+            evt: LOG_EVENTS.ROOM_OCCUPANCY_PERSIST_FAILED,
+            roomId: target.kind === 'widget' ? undefined : roomId,
+            err: target.kind === 'widget' ? undefined : error
+          },
+          'failed to persist room occupancy'
+        );
       });
     } else {
       target.updatedAt = Date.now();
