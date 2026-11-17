@@ -171,3 +171,32 @@ test('server-muted admission omits microphone publishing while preserving screen
   assert.equal(sources.includes('screen_share_audio'), true, 'screen-share audio TrackSource remains allowed');
   assert.equal(sources.includes('camera'), true, 'a server-muted peer can still turn the camera on');
 });
+
+test('widget media grant contains microphone/camera only and preserves server mute', async () => {
+  const provider = createLiveKitCredentialProvider({
+    apiKey: 'key',
+    apiSecret: 'secret',
+    gateUrl: 'wss://gate.example',
+    boundary: {
+      async issueCredential() {
+        return issued('widget-credential', 'widget-value');
+      }
+    }
+  });
+  for (const muted of [false, true]) {
+    const result = await provider.issueAdmission({
+      roomId: 'widget',
+      livekitRoom: 'voice-widget',
+      peerId: 'guest',
+      principal: { principalType: 'guest', principalId: 'guest' },
+      canPublishScreen: false,
+      canPublishMicrophone: !muted
+    });
+    assert.equal(result.status, 'issued');
+    assert.ok(result.admission);
+    assert.deepEqual(
+      jwtPayload(result.admission.token).video.canPublishSources,
+      muted ? ['camera'] : ['microphone', 'camera']
+    );
+  }
+});

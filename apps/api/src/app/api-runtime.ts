@@ -3,6 +3,8 @@
 // each app a test builds starts from its own state and nothing is shared
 // through module scope.
 
+import { createWidgetRuntimeOwner, type WidgetRuntimeOwner } from '../domains/rooms/widget-runtime-owner.repository.ts';
+import { roomAllowsSurface } from '../domains/rooms/room-surface.policy.ts';
 import type http from 'node:http';
 import type { IncomingMessage } from 'node:http';
 import type { FastifyBaseLogger } from 'fastify';
@@ -110,6 +112,9 @@ export function createApiRuntime({ env = process.env }: { env?: NodeJS.ProcessEn
     processLogger = logger || null;
   }
 
+  let widgetOwner: WidgetRuntimeOwner | null = null;
+  const widgetCanAdmit = async () =>
+    config.WIDGET_ENABLED && widgetOwner !== null && (await widgetOwner.capture()) !== null;
   const limits = createRateLimits(config);
   const admissionService = createAdmissionService({
     livekitConfig: liveKit.config,
@@ -117,6 +122,8 @@ export function createApiRuntime({ env = process.env }: { env?: NodeJS.ProcessEn
     credentialBoundary: services.getCredentialBoundary,
     store: services.getRoomStore,
     roomExists: async (roomId) => Boolean(await hub.getRoom(roomId)),
+    roomAllowed: async (roomId, surface) =>
+      roomAllowsSurface(await hub.getRoom(roomId), surface) && (surface === 'main' || (await widgetCanAdmit())),
     findRoomBan: hub.findRoomBan,
     waitForRosterPeer: hub.presence.waitForRosterPeer,
     currentRosterPeer: hub.presence.currentRosterPeer,
@@ -283,14 +290,47 @@ export function createApiRuntime({ env = process.env }: { env?: NodeJS.ProcessEn
     app.addHook('onReady', async () => ringDelivery.start());
     app.addHook('onClose', ringDelivery.stop);
 
-    const { roomRuntime, wsHandler } = hub.start({
+    const { roomRuntime, wsHandler, widgetWsHandler } = hub.start({
       logger: appLogger,
       reconnectLeaseMs: realtimeReconnectLeaseMs,
       now: realtimeNow,
       setTimeout: realtimeSetTimeout,
       clearTimeout: realtimeClearTimeout,
       resolveSession: resolveSessionUser,
-      clientIp: (req) => getClientIp(req, config.TRUST_PROXY)
+      clientIp: (req) => getClientIp(req, config.TRUST_PROXY),
+      widgetCanAdmit,
+      widgetLocalAllowed: () => widgetOwner?.localEnabled() === true
+    });
+
+    let widgetSweep: ReturnType<typeof setInterval> | undefined;
+    let widgetSweepRun: Promise<void> | null = null;
+    app.addHook('onReady', async () => {
+      const pool = services.getPool();
+      if (pool) {
+        widgetOwner = createWidgetRuntimeOwner({
+          pool,
+          role: 'api',
+          quiesce: () => hub.reconcileWidgetAdmission(true),
+          lost: () => hub.invalidateWidgetConnections()
+        });
+        await widgetOwner.start();
+      }
+      widgetSweep = setInterval(() => {
+        if (widgetSweepRun) return;
+        widgetSweepRun = (widgetOwner?.tick() ?? Promise.resolve())
+          .catch(() => {
+            appLogger.error({ evt: 'widget.recovery_failed' }, 'widget peer reconciliation failed');
+          })
+          .finally(() => {
+            widgetSweepRun = null;
+          });
+      }, 1000);
+      widgetSweep.unref();
+    });
+    app.addHook('onClose', async () => {
+      if (widgetSweep) clearInterval(widgetSweep);
+      await widgetSweepRun;
+      await widgetOwner?.stop();
     });
 
     const renderMetrics = () =>
@@ -314,6 +354,8 @@ export function createApiRuntime({ env = process.env }: { env?: NodeJS.ProcessEn
       presenceRooms: hub.presenceRooms,
       roomRuntime,
       wsHandler,
+      widgetWsHandler,
+      widgetCanAdmit,
       livekitEnabled: () => liveKit.config().enabled,
       renderMetrics
     });

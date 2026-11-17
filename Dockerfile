@@ -24,6 +24,7 @@ RUN npm --workspace @voice-room/web run build \
   && node apps/web/scripts/emit-caddy-csp.ts apps/web/dist/index.html > /app/csp.caddy
 
 FROM node:24.18.0-alpine3.23 AS api
+LABEL org.voiceroom.capabilities="widget-boundary-v1"
 
 ENV NODE_ENV=production
 WORKDIR /app
@@ -59,6 +60,7 @@ FROM caddy:2.11.4-builder-alpine AS caddy-build
 RUN xcaddy build v2.11.4 --with github.com/mholt/caddy-l4@v0.1.2
 
 FROM caddy:2.11.4-alpine AS web
+LABEL org.voiceroom.capabilities="widget-boundary-v1"
 
 COPY --from=caddy-build /usr/bin/caddy /usr/bin/caddy
 COPY Caddyfile /etc/caddy/Caddyfile

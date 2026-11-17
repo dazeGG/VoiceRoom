@@ -1,0 +1,31 @@
+.widget-configurator {
+  max-width: 64rem;
+  padding: 2rem;
+  margin: auto;
+
+  form {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+    gap: 1rem;
+  }
+  label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+  }
+  input,
+  select,
+  textarea {
+    font: inherit;
+  }
+  textarea {
+    width: 100%;
+    box-sizing: border-box;
+  }
+  .widget-preview {
+    padding: 1.5rem;
+    box-sizing: border-box;
+    max-width: 100%;
+    margin-block: 1.5rem;
+  }
+}

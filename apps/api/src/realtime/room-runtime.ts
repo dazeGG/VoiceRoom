@@ -230,7 +230,20 @@ function createRoomRealtimeRuntime(deps: RoomRuntimeDeps) {
   ): Promise<RoomSnapshot | null> {
     const dbRoom = await getRoomStore().getRoom(roomId);
     if (!dbRoom) return null;
-    const recentMessages = (await getRoomStore().listMessages(roomId, { limit: 100 })).map(publicChatMessage);
+    const recentMessages =
+      dbRoom.kind === 'widget' && !dbRoom.widgetChatEnabled
+        ? []
+        : (await getRoomStore().listMessages(roomId, { limit: 100 })).map((message) => {
+            const result = publicChatMessage(message);
+            if (dbRoom.kind === 'widget') {
+              result.attachments = [];
+              delete result.content;
+              delete result.linkPreview;
+              delete result.replyTo;
+              delete result.replyPreview;
+            }
+            return result;
+          });
     // Presence is the last synchronous read: no awaited work may let this
     // snapshot overwrite a newer peer update that was already broadcast.
     const presence = presenceRooms.get(roomId);
@@ -260,6 +273,9 @@ function createRoomRealtimeRuntime(deps: RoomRuntimeDeps) {
       if (connection.activeVoice?.roomId !== roomId) wsRegistry.unregisterConnectionForRoom(connection, roomId);
     };
     try {
+      const boundary = await getRoomStore().getRoom(roomId);
+      if (!current()) return;
+      if (!boundary || (boundary.kind ?? 'main') !== 'main' || connection.roomSurface === 'widget') return;
       const roomBan = await findRoomBan(roomId, userId, connection.clientIp || connection.guestIp || '');
       if (!current()) return;
       if (roomBan) {
@@ -480,7 +496,7 @@ function createRoomRealtimeRuntime(deps: RoomRuntimeDeps) {
           evt: LOG_EVENTS.ROOM_MIC_STALL_RECOVERY,
           connId: connection.id,
           userId: connection.userId || undefined,
-          roomId,
+          roomId: connection.roomSurface === 'widget' ? undefined : roomId,
           mic
         },
         'a client recovered a stalled microphone'

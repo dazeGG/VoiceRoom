@@ -94,12 +94,14 @@ test(
     t.after(() => sockets.removeConnection(connection));
     const entered = Promise.withResolvers<void>();
     const release = Promise.withResolvers<void>();
+    let roomLookups = 0;
     t.after(() => release.resolve());
     const runtime = createRoomRealtimeRuntime(
       runtimeDeps({
         wsRegistry: sockets,
         store: {
           getRoom: async () => {
+            if (++roomLookups === 1) return dbRoom('room');
             entered.resolve();
             await release.promise;
             return dbRoom('room');

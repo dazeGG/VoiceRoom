@@ -1,4 +1,5 @@
 import http from 'node:http';
+import { createWidgetRuntimeOwner, type WidgetRuntimeOwner } from '../rooms/widget-runtime-owner.repository.ts';
 import net from 'node:net';
 import type { Duplex } from 'node:stream';
 import { URL } from 'node:url';
@@ -23,7 +24,8 @@ const VALIDATE_TIMEOUT_MS = 5_000;
 type GateLogger = { warn(...args: unknown[]): void; error(...args: unknown[]): void };
 type GateSocket = Duplex & { writable?: boolean; writableEnded?: boolean };
 type GateDecision =
-  { ok: true; claims: unknown; strippedPath: string } | { ok: false; code: string; strippedPath: string };
+  | { ok: true; claims: unknown; strippedPath: string; widget?: boolean; generation?: string }
+  | { ok: false; code: string; strippedPath: string };
 
 function normalizeGatePath(value: string): string {
   const path = (value || DEFAULT_GATE_PATH).trim();
@@ -133,6 +135,48 @@ function createLiveKitAuthGateService({
       signer: createGateCredentialSigner({ secret })
     });
 
+  type Pending = { kind: 'unknown' | 'main' | 'widget'; cancelled: boolean; client: GateSocket; upstream?: net.Socket };
+  const pending = new Set<Pending>();
+  function cancel(token: Pending): void {
+    token.cancelled = true;
+    destroySocket(token.client);
+    destroySocket(token.upstream);
+    pending.delete(token);
+  }
+  function cutWidgets(): void {
+    for (const token of pending) if (token.kind === 'widget') cancel(token);
+  }
+  async function quiesce(): Promise<boolean> {
+    cutWidgets();
+    return ![...pending].some((token) => token.kind === 'unknown');
+  }
+  const owner: WidgetRuntimeOwner | null = pool
+    ? createWidgetRuntimeOwner({ pool, role: 'gate', quiesce, lost: cutWidgets })
+    : null;
+  let timer: ReturnType<typeof setInterval> | undefined;
+  let sweep: Promise<void> | null = null;
+  let started = false;
+  async function start(): Promise<void> {
+    if (started) return;
+    started = true;
+    await owner?.start();
+    timer = setInterval(() => {
+      if (sweep) return;
+      sweep = (owner?.tick() ?? Promise.resolve())
+        .catch(() => cutWidgets())
+        .finally(() => {
+          sweep = null;
+        });
+    }, 250);
+    timer.unref();
+  }
+  async function stop(): Promise<void> {
+    if (timer) clearInterval(timer);
+    await sweep;
+    for (const token of pending) cancel(token);
+    await owner?.stop();
+  }
+
   // With `headers` the LiveKit JWT that rides along must belong to the same
   // admission as the gate credential (see livekit-token-binding.js). The
   // upgrade handler always passes them; credential-only callers are proofs that
@@ -145,6 +189,18 @@ function createLiveKitAuthGateService({
       const binding = verifyAccessTokenBinding({ claims: result.claims, requestUrl, headers, roomPrefix });
       if (!binding.ok) return { ok: false, code: binding.code, strippedPath };
     }
+    if (pool) {
+      const room = await pool.query<{ kind: string }>('SELECT kind FROM rooms WHERE id=$1 AND deleted_at IS NULL', [
+        result.claims.room
+      ]);
+      if (!room.rows[0]) return { ok: false, code: 'room_not_found', strippedPath };
+      if (room.rows[0].kind === 'widget') {
+        const generation = await owner?.capture();
+        if (generation === null || generation === undefined)
+          return { ok: false, code: 'widget_unavailable', strippedPath };
+        return { ok: true, claims: result.claims, strippedPath, widget: true, generation };
+      }
+    }
     return { ok: true, claims: result.claims, strippedPath };
   }
 
@@ -154,6 +210,7 @@ function createLiveKitAuthGateService({
         credentialBoundary
           .assertReady()
           .then(() => {
+            if (owner && !owner.valid()) throw new Error('widget_gate_owner_unavailable');
             res.writeHead(200, { 'content-type': 'application/json' });
             res.end(JSON.stringify({ ok: true }));
           })
@@ -179,45 +236,84 @@ function createLiveKitAuthGateService({
         deny(socket, 404, 'Not Found');
         return;
       }
+      const token: Pending = { kind: 'unknown', cancelled: false, client: socket };
+      pending.add(token);
+      const authTimeout = setTimeout(() => cancel(token), VALIDATE_TIMEOUT_MS);
+      authTimeout.unref();
+      socket.once('close', () => {
+        clearTimeout(authTimeout);
+        cancel(token);
+      });
       // An IncomingMessage always carries its headers.
       authorize(request.url, request.headers)
         .then((decision) => {
+          clearTimeout(authTimeout);
+          if (token.cancelled) return;
           if (!decision.ok) {
             logger.warn({ evt: LOG_EVENTS.LIVEKIT_GATE_DENIED, code: decision.code }, 'LiveKit gate denied an upgrade');
+            pending.delete(token);
             deny(socket, 403, 'Forbidden');
             return;
           }
-          if (!isSocketWritable(socket)) return;
+          token.kind = decision.widget ? 'widget' : 'main';
+          if (token.kind === 'main') pending.delete(token);
+          if (!isSocketWritable(socket) || token.cancelled) return;
           const upstreamSocket = net.connect({
             noDelay: true,
             host: upstream.hostname,
             port: Number(upstream.port || (upstream.protocol === 'wss:' ? 443 : 80))
           });
+          token.upstream = upstreamSocket;
           let tunnelEstablished = false;
           const closeUpstream = () => destroySocket(upstreamSocket);
           socket.once('close', closeUpstream);
           socket.once('end', closeUpstream);
           upstreamSocket.once('connect', () => {
-            if (!isSocketWritable(socket)) {
-              closeUpstream();
-              return;
-            }
-            try {
-              upstreamSocket.write(
-                buildUpstreamUpgradeRequest({ request, strippedPath: decision.strippedPath, upstream })
-              );
-              if (head?.length) upstreamSocket.write(head);
-              tunnelEstablished = true;
-              socket.pipe(upstreamSocket);
-              upstreamSocket.pipe(socket);
-            } catch (error) {
-              logger.error(
-                { evt: LOG_EVENTS.LIVEKIT_GATE_UPSTREAM_FAILED, err: error },
-                'LiveKit gate upstream connection failed'
-              );
-              destroySocket(socket);
-              closeUpstream();
-            }
+            void (async () => {
+              if (!isSocketWritable(socket) || token.cancelled) {
+                closeUpstream();
+                return;
+              }
+              try {
+                if (decision.widget) {
+                  if (
+                    !owner ||
+                    decision.generation === undefined ||
+                    !(await owner.allows(decision.generation)) ||
+                    token.cancelled
+                  ) {
+                    cancel(token);
+                    return;
+                  }
+                  const fresh = await authorize(request.url, request.headers);
+                  if (
+                    !fresh.ok ||
+                    !fresh.widget ||
+                    fresh.generation !== decision.generation ||
+                    !(await owner.allows(decision.generation)) ||
+                    !owner.localEnabled() ||
+                    token.cancelled
+                  ) {
+                    cancel(token);
+                    return;
+                  }
+                }
+                upstreamSocket.write(
+                  buildUpstreamUpgradeRequest({ request, strippedPath: decision.strippedPath, upstream })
+                );
+                if (head?.length) upstreamSocket.write(head);
+                tunnelEstablished = true;
+                socket.pipe(upstreamSocket);
+                upstreamSocket.pipe(socket);
+              } catch (error) {
+                logger.error(
+                  { evt: LOG_EVENTS.LIVEKIT_GATE_UPSTREAM_FAILED, err: error },
+                  'LiveKit gate upstream connection failed'
+                );
+                destroySocket(socket);
+                closeUpstream();
+              }
+            })().catch(() => cancel(token));
           });
           upstreamSocket.once('error', (error) => {
             if (!tunnelEstablished) {
@@ -234,6 +330,8 @@ function createLiveKitAuthGateService({
           upstreamSocket.once('close', () => destroySocket(socket));
         })
         .catch((error: unknown) => {
+          clearTimeout(authTimeout);
+          pending.delete(token);
           logger.error(
             { evt: LOG_EVENTS.LIVEKIT_GATE_AUTHORIZATION_FAILED, err: error },
             'LiveKit gate authorization failed'
@@ -241,6 +339,8 @@ function createLiveKitAuthGateService({
           deny(socket, 503, 'Service Unavailable');
         });
     });
+    server.once('listening', () => void start().catch(() => cutWidgets()));
+    server.once('close', () => void stop());
     return server;
   }
 
@@ -297,6 +397,8 @@ function createLiveKitAuthGateService({
 
   return {
     authorize,
+    start,
+    stop,
     createServer,
     path,
     upstream

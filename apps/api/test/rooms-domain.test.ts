@@ -708,6 +708,8 @@ function listedRoom(room: StoredRoom): ListedRoom {
     emptySince: room.emptySince ?? null,
     id: room.id,
     isStatic: room.isStatic,
+    kind: room.kind ?? 'main',
+    widgetChatEnabled: room.widgetChatEnabled ?? false,
     lastMessageAt: room.lastMessageAt,
     name: room.name,
     ownerId: room.ownerId ?? null,
@@ -999,7 +1001,7 @@ test('GET /api/rooms/:roomId/peers hides the roster from banned viewers', async 
 test('POST /api/state reads the peer and refuses writes, bans and foreign sessions', async (t) => {
   const peer: PresencePeer = { ...accountPeer, id: 'peer0001', sessionToken: 't'.repeat(32) };
   const request = { roomId: 'room-1', peerId: 'peer0001', sessionToken: 't'.repeat(32) };
-  const { app } = routeApp(t, { peer });
+  const { app } = routeApp(t, { peer, room: liveRoom() });
   const read = await call(app, 'POST', '/api/state', request);
   assert.equal(read.status, 200);
   assert.equal(read.body.peer?.id, 'peer0001');
@@ -1015,11 +1017,12 @@ test('POST /api/state reads the peer and refuses writes, bans and foreign sessio
   );
   assert.equal((await call(app, 'POST', '/api/state')).status, 403);
 
-  const requesterBanned = routeApp(t, { peer, bans: (userId) => userId === null });
+  const requesterBanned = routeApp(t, { peer, room: liveRoom(), bans: (userId) => userId === null });
   assert.equal((await call(requesterBanned.app, 'POST', '/api/state', request)).body.code, 'room_banned');
-  const peerBanned = routeApp(t, { peer, bans: (userId) => userId === 'user-1' });
+  const peerBanned = routeApp(t, { peer, room: liveRoom(), bans: (userId) => userId === 'user-1' });
   assert.equal((await call(peerBanned.app, 'POST', '/api/state', request)).body.code, 'room_banned');
   const peerWithoutIp = routeApp(t, {
+    room: liveRoom(),
     peer: { ...peer, ip: undefined },
     bans: (userId, ip) => userId === 'user-1' && ip !== ''
   });

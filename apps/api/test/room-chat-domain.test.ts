@@ -421,6 +421,46 @@ const postBase: PostInput = {
   idempotencyKey: ''
 };
 
+test('widget chat policy blocks every chat operation and ordinary callers cannot enter enabled widget chat', async () => {
+  for (const enabled of [false, true]) {
+    const { service, calls } = harness({ room: room([guest], { kind: 'widget', widgetChatEnabled: enabled }) });
+    const claim = { ...postBase, peerId: guest.id, sessionToken: TOKEN };
+    assert.equal((await service.list('room-1', claim)).status, 'room_not_found');
+    assert.equal((await service.post(claim)).status, 'room_not_found');
+    assert.equal((await service.edit({ ...claim, messageId: UUID_A })).status, 'room_not_found');
+    assert.equal((await service.remove({ ...claim, messageId: UUID_A })).status, 'room_not_found');
+    assert.equal((await service.markRead('room-1', ACCOUNT.id, '')).status, 'room_not_found');
+    if (!enabled) {
+      const widget = { ...claim, surface: 'widget' as const };
+      assert.equal((await service.list('room-1', widget)).status, 'room_not_found');
+      assert.equal((await service.post(widget)).status, 'room_not_found');
+      assert.equal((await service.edit({ ...widget, messageId: UUID_A })).status, 'room_not_found');
+      assert.equal((await service.remove({ ...widget, messageId: UUID_A })).status, 'room_not_found');
+    }
+    assert.deepEqual(calls.appended, []);
+    assert.deepEqual(calls.deleted, []);
+  }
+});
+
+test('enabled widget chat preserves guest session and text only, without previews or uploaded attachment reuse', async () => {
+  const { service, calls } = harness({ room: room([guest], { kind: 'widget', widgetChatEnabled: true }) });
+  const input = {
+    ...postBase,
+    surface: 'widget' as const,
+    peerId: guest.id,
+    sessionToken: TOKEN,
+    text: 'https://example.com'
+  };
+  assert.equal((await service.post({ ...input, attachmentIds: [UUID_A] })).status, 'invalid_attachments');
+  assert.equal((await service.post({ ...input, content: { type: 'text', text: 'x' } })).status, 'invalid_content');
+  assert.equal((await service.post({ ...input, sessionToken: 'wrong' })).status, 'invalid_session');
+  assert.equal((await service.post({ ...input, user: ACCOUNT })).status, 'invalid_session');
+  assert.equal((await service.post(input)).status, 'created');
+  assert.equal(calls.appended.length, 1);
+  assert.deepEqual(calls.previews, []);
+  assert.deepEqual(calls.bound, []);
+});
+
 test('the list refuses missing rooms and banned viewers and projects media and replies', async () => {
   assert.equal(
     (await harness({ room: null }).service.list('room-1', { user: null, clientIp: 'ip' })).status,
@@ -790,7 +830,7 @@ type Outcomes = { [Method in keyof RoomChatService]: Awaited<ReturnType<RoomChat
 function routeApp(
   t: TestContext,
   outcomes: Partial<Outcomes> = {},
-  { user = null }: { user?: typeof ACCOUNT | null } = {}
+  { user = null, surface = 'main' }: { user?: typeof ACCOUNT | null; surface?: 'main' | 'widget' } = {}
 ) {
   const app = fastify();
   registerHttpKit(app, { securityHeaders: () => ({}), recordRequest() {}, logRequest() {}, logHandlerFailure() {} });
@@ -846,11 +886,27 @@ function routeApp(
       resolveSession: async () => (user ? { user: storedUser(user) } : null),
       hashIp: (ip: string) => ip
     },
-    chat
+    chat,
+    surface
   );
   t.after(() => app.close());
   return { app, seen };
 }
+
+test('widget HTTP chat adapter ignores account cookies and has no account read route', async (t) => {
+  const { app, seen } = routeApp(t, {}, { user: ACCOUNT, surface: 'widget' });
+  const response = await app.inject({
+    method: 'GET',
+    url: '/api/widget/rooms/room-1/messages',
+    headers: { cookie: 'vr_session=account' }
+  });
+  assert.equal(response.statusCode, 200);
+  assert.equal(seen.list?.user, null);
+  assert.equal(
+    (await app.inject({ method: 'POST', url: '/api/widget/rooms/room-1/read', payload: {} })).statusCode,
+    404
+  );
+});
 
 type Body = {
   ok?: boolean;

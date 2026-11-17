@@ -15,6 +15,8 @@ export interface RoomsStore {
   roomIdExists?(roomId: string): Promise<boolean>;
   getRoom(roomId: string): Promise<StoredRoom | null>;
   createRoomWithQuota(input: {
+    kind?: 'main' | 'widget';
+    widgetChatEnabled?: boolean;
     creatorIp: string;
     isStatic: boolean;
     ownerId: string | null;
@@ -58,6 +60,8 @@ export function createRoomsService(deps: RoomsServiceDeps) {
   }
 
   async function createRoom(input: {
+    kind?: 'main' | 'widget';
+    widgetChatEnabled?: boolean;
     creatorIp: string;
     isStatic: boolean;
     ownerId: string | null;

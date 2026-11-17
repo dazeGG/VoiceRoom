@@ -531,12 +531,14 @@ export interface Rooms {
   empty_since: Timestamp | null;
   id: string;
   is_static: Generated<boolean>;
+  kind: Generated<string>;
   metadata: Generated<Json>;
   name: Generated<string>;
   owner_id: string | null;
   room_color_key: Generated<string>;
   room_icon_key: Generated<string>;
   updated_at: Generated<Timestamp>;
+  widget_chat_enabled: Generated<boolean>;
 }
 
 export interface RoomServerMutes {
@@ -737,6 +739,20 @@ export interface VoiceSessionSamples {
   uplink_packets: Generated<number>;
 }
 
+export interface WidgetBoundaryActivation {
+  recovery_generation: Generated<Int8>;
+  singleton: Generated<boolean>;
+  widget_admission_enabled: Generated<boolean>;
+  widget_boundary_required: Generated<boolean>;
+}
+
+export interface WidgetRuntimeOwners {
+  acknowledged_generation: Int8 | null;
+  backend_pid: number | null;
+  owner_id: string | null;
+  role: string;
+}
+
 export interface DB {
   account_login_events: AccountLoginEvents;
   account_recovery_codes: AccountRecoveryCodes;
@@ -795,4 +811,6 @@ export interface DB {
   voice_session_samples: VoiceSessionSamples;
   voice_sessions: VoiceSessions;
   voiceroom_migration_guard: VoiceroomMigrationGuard;
+  widget_boundary_activation: WidgetBoundaryActivation;
+  widget_runtime_owners: WidgetRuntimeOwners;
 }

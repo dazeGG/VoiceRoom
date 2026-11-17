@@ -43,9 +43,11 @@ function sharedHost(t: TestContext, inventoryFails = false, metadataFails = fals
     path.join(bin, 'docker'),
     `#!/bin/bash
 case "$1 $2" in
-  'compose exec') echo 'database dump' ;;
+  'compose exec')
+    case "$*" in *psql*) echo legacy ;; *) echo 'database dump' ;; esac ;;
   'ps --all') ${inventoryFails ? 'exit 1' : `printf '%s\\n' ${JSON.stringify(stack)} ${JSON.stringify(other)} ${JSON.stringify(other)} ''`} ;;
   'image ls') printf '%s\\n' ${images.map((name) => JSON.stringify(name)).join(' ')} 'postgres:16-alpine' ;;
+  'image inspect') echo '[{"Config":{"Labels":{}},"RepoDigests":[]}]' ;;
   'image rm') shift 2; printf '%s\\n' "$@" >> ${JSON.stringify(removed)} ;;
   'image prune') printf '%s\\n' "$*" >> ${JSON.stringify(pruned)} ;;
 esac
@@ -53,9 +55,30 @@ exit 0
 `,
     { mode: 0o755 }
   );
-  fs.writeFileSync(path.join(bin, 'git'), '#!/bin/bash\n[ "$1" = rev-parse ] && echo previous-commit\nexit 0\n', {
-    mode: 0o755
-  });
+  fs.writeFileSync(
+    path.join(bin, 'git'),
+    `#!/bin/bash
+[ "$1" = rev-parse ] && echo previous-commit
+if [ "$1" = show ]; then
+case "$2" in
+*widget-release-capabilities.py)
+cat <<'MANIFEST_HELPER'
+${fs.readFileSync(path.resolve(import.meta.dirname, '../cd/widget-release-capabilities.py'), 'utf8')}
+MANIFEST_HELPER
+;;
+*)
+cat <<'WIDGET_HELPER'
+${fs.readFileSync(path.resolve(import.meta.dirname, '../cd/widget-boundary-preflight.py'), 'utf8')}
+WIDGET_HELPER
+;;
+esac
+fi
+exit 0
+`,
+    {
+      mode: 0o755
+    }
+  );
   if (metadataFails) {
     fs.writeFileSync(
       path.join(bin, 'grep'),

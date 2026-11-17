@@ -8,7 +8,11 @@ import { createRoomId, createRowId } from '../../platform/db/ids.ts';
 import { toDate, toMillis } from '../../platform/epoch-millis.ts';
 
 /** A room row, plus the per-user columns some listings add. */
-export type RoomRow = Selectable<Rooms> & { last_message_at?: Date | null; unread_count?: number };
+export type RoomRow = Omit<Selectable<Rooms>, 'kind' | 'widget_chat_enabled'> &
+  Partial<Pick<Selectable<Rooms>, 'kind' | 'widget_chat_enabled'>> & {
+    last_message_at?: Date | null;
+    unread_count?: number;
+  };
 export type StoredRoom = ReturnType<typeof mapRoom>;
 export type RoomCreation =
   | { room: StoredRoom; status: 'created' }
@@ -19,6 +23,12 @@ export function normalizePositiveInt(value: unknown, fallback: number): number {
   return Number.isFinite(next) && next >= 0 ? next : fallback;
 }
 
+function storedRoomKind(kind: string | undefined): 'main' | 'widget' {
+  if (kind === undefined || kind === 'main') return 'main';
+  if (kind === 'widget') return 'widget';
+  throw new Error('Invalid stored room kind');
+}
+
 export function mapRoom(row: RoomRow) {
   return {
     avatarKey: row.avatar_key || null,
@@ -27,6 +37,8 @@ export function mapRoom(row: RoomRow) {
     emptySince: row.empty_since ? toMillis(row.empty_since) : null,
     id: row.id,
     isStatic: Boolean(row.is_static),
+    kind: storedRoomKind(row.kind),
+    widgetChatEnabled: row.widget_chat_enabled ?? false,
     lastMessageAt: Object.hasOwn(row, 'last_message_at')
       ? row.last_message_at
         ? toMillis(row.last_message_at)
@@ -93,13 +105,24 @@ async function countLiveTemporaryRooms(db: Database): Promise<number> {
   return row?.count || 0;
 }
 
-type NewRoom = { id: string; creatorIp: string; isStatic: boolean; ownerId: string | null; name: string; at: Date };
+type NewRoom = {
+  kind: 'main' | 'widget';
+  widgetChatEnabled: boolean;
+  id: string;
+  creatorIp: string;
+  isStatic: boolean;
+  ownerId: string | null;
+  name: string;
+  at: Date;
+};
 
 function insertRoom(db: Database, room: NewRoom) {
   return db
     .insertInto('rooms')
     .values({
       id: room.id,
+      kind: room.kind,
+      widget_chat_enabled: room.widgetChatEnabled,
       creator_ip: room.creatorIp,
       is_static: room.isStatic,
       owner_id: room.ownerId,
@@ -116,6 +139,8 @@ export function createRoomRepository({ db, roomIdleTtlMs = 15 * 60 * 1000 }: { d
   async function createRoom({
     roomId = createRoomId(),
     creatorIp,
+    kind = 'main',
+    widgetChatEnabled = false,
     isStatic = false,
     ownerId = null,
     name = '',
@@ -123,6 +148,8 @@ export function createRoomRepository({ db, roomIdleTtlMs = 15 * 60 * 1000 }: { d
   }: {
     roomId?: string;
     creatorIp?: unknown;
+    kind?: 'main' | 'widget';
+    widgetChatEnabled?: boolean;
     isStatic?: boolean;
     ownerId?: string | null;
     name?: unknown;
@@ -134,6 +161,8 @@ export function createRoomRepository({ db, roomIdleTtlMs = 15 * 60 * 1000 }: { d
     }
     const row = await insertRoom(db, {
       id,
+      kind,
+      widgetChatEnabled,
       creatorIp: typeof creatorIp === 'string' ? creatorIp : '',
       isStatic: Boolean(isStatic),
       ownerId: ownerId || null,
@@ -146,6 +175,8 @@ export function createRoomRepository({ db, roomIdleTtlMs = 15 * 60 * 1000 }: { d
   async function createRoomWithQuota({
     roomId = createRoomId(),
     creatorIp,
+    kind = 'main',
+    widgetChatEnabled = false,
     isStatic = false,
     ownerId = null,
     name = '',
@@ -157,6 +188,8 @@ export function createRoomRepository({ db, roomIdleTtlMs = 15 * 60 * 1000 }: { d
   }: {
     roomId?: string;
     creatorIp?: unknown;
+    kind?: 'main' | 'widget';
+    widgetChatEnabled?: boolean;
     isStatic?: boolean;
     ownerId?: string | null;
     name?: unknown;
@@ -198,6 +231,8 @@ export function createRoomRepository({ db, roomIdleTtlMs = 15 * 60 * 1000 }: { d
       const at = toDate(now);
       const inserted = await insertRoom(trx, {
         id,
+        kind,
+        widgetChatEnabled,
         creatorIp: normalizedCreatorIp,
         isStatic: Boolean(isStatic),
         ownerId: ownerId || null,
@@ -464,7 +499,17 @@ export function createRoomRepository({ db, roomIdleTtlMs = 15 * 60 * 1000 }: { d
     });
   }
 
+  async function isWidgetAdmissionEnabled(): Promise<boolean> {
+    const row = await db
+      .selectFrom('widget_boundary_activation')
+      .select(['widget_boundary_required', 'widget_admission_enabled'])
+      .where('singleton', '=', true)
+      .executeTakeFirst();
+    return row?.widget_boundary_required === true && row.widget_admission_enabled === true;
+  }
+
   return {
+    isWidgetAdmissionEnabled,
     countEmptyRoomsForIp,
     countOwnedStaticRoomsForUser,
     countQuotaRoomsForIp,

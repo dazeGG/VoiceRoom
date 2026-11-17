@@ -17,6 +17,8 @@
   ],
   "writeRules": {
     "allowedOwners": {
+      "widget_runtime_owners": ["apps/api/src/domains/rooms/widget-runtime-owner.repository.ts"],
+      "widget_boundary_activation": ["apps/api/src/domains/rooms/widget-runtime-owner.repository.ts", "apps/api/src/scripts/widget-recovery.ts"],
       "rooms": [
         "apps/api/src/domains/messaging/room-chat.repository.ts",
         "apps/api/src/domains/rooms/room.repository.ts"

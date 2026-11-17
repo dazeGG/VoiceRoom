@@ -51,6 +51,17 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     emptyOutDir: true,
+    rollupOptions: {
+      input: {
+        app: fileURLToPath(new URL('./index.html', import.meta.url)),
+        embed: fileURLToPath(new URL('./embed/v1/index.html', import.meta.url)),
+        widgetLoader: fileURLToPath(new URL('./src/features/widget/loader-entry.ts', import.meta.url))
+      },
+      output: {
+        entryFileNames: (chunk) =>
+          chunk.name === 'widgetLoader' ? 'widget/v1/loader.js' : '_app/immutable/[name]-[hash].js'
+      }
+    },
     // Caddy caches /_app/immutable/* for a year and keeps earlier releases'
     // chunks there for open tabs (Caddyfile, config/caddy/archive-assets.sh).
     assetsDir: '_app/immutable'

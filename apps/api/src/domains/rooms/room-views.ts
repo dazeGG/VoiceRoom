@@ -53,6 +53,9 @@ export interface PresencePeer {
 
 /** A room row as the store returns it. */
 export interface StoredRoom {
+  /** Legacy in-memory fixtures without a discriminator belong to main. */
+  kind?: 'main' | 'widget';
+  widgetChatEnabled?: boolean;
   id: string;
   avatarKey?: string | null;
   createdAt: number;

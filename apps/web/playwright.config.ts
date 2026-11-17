@@ -17,6 +17,7 @@ export default defineConfig({
       args: [
         '--use-fake-device-for-media-stream',
         '--use-fake-ui-for-media-stream',
+        ...(process.env.PLAYWRIGHT_WIDGET_E2E === '1' ? ['--test-third-party-cookie-phaseout'] : []),
         '--host-resolver-rules=MAP voice-gate.test 127.0.0.1'
       ]
     }

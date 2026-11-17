@@ -396,3 +396,39 @@ test(
     assert.equal((await f.pool.query('SELECT * FROM ring_delivery_outbox')).rowCount, 0);
   }
 );
+
+test(
+  'widget rooms cannot create, replay, inspect or accept account Rings',
+  { skip: !process.env.TEST_DATABASE_URL },
+  async (t) => {
+    const f = await fixture(t);
+    await f.pool.query(
+      "UPDATE widget_boundary_activation SET widget_boundary_required=true,widget_admission_enabled=true; INSERT INTO rooms(id,kind) VALUES('widget-ring','widget')"
+    );
+    const input = {
+      callerUserId: f.a,
+      recipientUserId: f.b,
+      roomId: 'widget-ring',
+      clientRequestId: crypto.randomUUID(),
+      ttlMs: 30000,
+      cooldownMs: 0
+    };
+    assert.equal((await f.repo.create(input)).status, 'room_not_found');
+    for (const table of ['direct_messages', 'room_rings', 'ring_delivery_outbox'])
+      assert.equal((await f.pool.query(`SELECT * FROM ${table}`)).rowCount, 0, table);
+    const existing = await f.repo.create({ ...input, roomId: 'ring-room' });
+    assert.equal(existing.status, 'rung');
+    if (existing.status !== 'rung') throw new Error('fixture');
+    await f.pool.query("UPDATE room_rings SET room_id='widget-ring' WHERE id=$1", [existing.ring.id]);
+    assert.equal((await f.repo.create(input)).status, 'room_not_found');
+    for (const action of ['status', 'accept', 'decline', 'cancel'] as const)
+      assert.equal(
+        await f.repo.act({ ringId: existing.ring.id, actorUserId: action === 'cancel' ? f.a : f.b, action }),
+        null
+      );
+    const job = await f.repo.claim();
+    assert.ok(job);
+    assert.equal(await f.repo.current(job), null);
+    assert.equal((await f.pool.query('SELECT * FROM direct_messages')).rowCount, 1);
+  }
+);

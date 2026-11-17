@@ -666,3 +666,28 @@ test('stale issued admission cleanup failure is metered and never returned', asy
   assert.equal(calls.failures, 1);
   assert.equal(entries.error()[0]?.code, 'credential_revoke_cleanup_failed');
 });
+
+test('widget admission derives its narrow media sources from trusted scope and rejects account identity', async () => {
+  const widget = setup({ roomAllowed: async (_id, surface) => surface === 'widget' });
+  assert.deepEqual(await widget.service.admit(request()), { status: 'refused', reason: 'room_not_found' });
+  assert.equal(widget.calls.issued.length, 0);
+  assert.equal((await widget.service.admit(request({ surface: 'widget' }))).status, 'issued');
+  assert.equal(widget.calls.issued[0]?.canPublishScreen, false);
+  assert.equal(widget.calls.issued[0]?.canPublishMicrophone, true);
+  assert.deepEqual(await widget.service.admit(request({ surface: 'widget', user: { id: 'account' } })), {
+    status: 'refused',
+    reason: 'invalid_session'
+  });
+  assert.equal(widget.calls.issued.length, 1);
+});
+
+test('disabling widget admission while credential issuance is pending revokes the new credential', async () => {
+  let checks = 0;
+  const widget = setup({ roomAllowed: async () => ++checks === 1 });
+  assert.deepEqual(await widget.service.admit(request({ surface: 'widget' })), {
+    status: 'refused',
+    reason: 'room_not_found'
+  });
+  assert.equal(widget.calls.issued.length, 1);
+  assert.deepEqual(widget.calls.revokedCredentials, ['cred-1']);
+});

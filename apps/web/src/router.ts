@@ -28,6 +28,7 @@ export const routes: RouteRecordRaw[] = [
   // /app and `/r/:roomId` share one component so the lobby's address changes keep it (MainRoute.vue).
   { path: APP_HOME, component: MainRoute, meta: { routeId: APP_HOME } },
   { path: '/r/:roomId', component: MainRoute, meta: { routeId: '/r/[roomId]' } },
+  { path: '/widgets', component: () => import('./pages/WidgetsPage.vue'), meta: { routeId: '/widgets' } },
   { path: '/login', component: () => import('./pages/LoginPage.vue'), meta: { routeId: '/login' } },
   { path: '/register', component: () => import('./pages/RegisterPage.vue'), meta: { routeId: '/register' } },
   { path: '/privacy', component: () => import('./pages/PrivacyPage.vue'), meta: { routeId: '/privacy' } },

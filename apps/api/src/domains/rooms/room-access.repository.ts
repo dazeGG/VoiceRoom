@@ -54,7 +54,8 @@ export function createRoomAccessRepository({ db, pool, bans }: { db: Database; p
       .where('rm.user_id', '=', userId)
       .where('rm.role', '=', 'owner')
       .where('r.is_static', '=', true)
-      .where('r.deleted_at', 'is', null);
+      .where('r.deleted_at', 'is', null)
+      .where('r.kind', '=', 'main');
     const bookmarked = db
       .selectFrom('room_bookmarks as rb')
       .innerJoin('rooms as r', 'r.id', 'rb.room_id')
@@ -62,7 +63,8 @@ export function createRoomAccessRepository({ db, pool, bans }: { db: Database; p
       .select([sql<string>`'bookmarked'::text`.as('relationship'), sql<number>`2`.as('priority')])
       .where('rb.user_id', '=', userId)
       .where('r.is_static', '=', true)
-      .where('r.deleted_at', 'is', null);
+      .where('r.deleted_at', 'is', null)
+      .where('r.kind', '=', 'main');
     const rows = await db
       .with('visible', () => owned.unionAll(bookmarked))
       .with('deduped', (qb) =>
@@ -123,6 +125,7 @@ export function createRoomAccessRepository({ db, pool, bans }: { db: Database; p
           ])
           .where('r.id', '=', sql<string>`${roomId}::varchar(48)`)
           .where('r.deleted_at', 'is', null)
+          .where('r.kind', '=', 'main')
           .where((w) =>
             w.or([
               w.exists(
@@ -160,6 +163,7 @@ export function createRoomAccessRepository({ db, pool, bans }: { db: Database; p
       .select('r.id')
       .where('r.id', '=', roomId)
       .where('r.deleted_at', 'is', null)
+      .where('r.kind', '=', 'main')
       .where((w) =>
         w.or([
           w.exists(
@@ -193,6 +197,7 @@ export function createRoomAccessRepository({ db, pool, bans }: { db: Database; p
       .select('r.id')
       .where('r.id', '=', roomId)
       .where('r.deleted_at', 'is', null)
+      .where('r.kind', '=', 'main')
       .limit(1)
       .executeTakeFirst();
     return Boolean(row) && !(await bans().isBanned({ roomId, userId }));
@@ -204,7 +209,8 @@ export function createRoomAccessRepository({ db, pool, bans }: { db: Database; p
       .innerJoin('rooms as r', 'r.id', 'rm.room_id')
       .select('rm.user_id')
       .where('rm.room_id', '=', roomId)
-      .where('r.deleted_at', 'is', null);
+      .where('r.deleted_at', 'is', null)
+      .where('r.kind', '=', 'main');
     if (ownersOnly) members = members.where('rm.role', '=', 'owner');
     if (staticOnly) members = members.where('r.is_static', '=', true);
     let bookmarked = db
@@ -212,7 +218,8 @@ export function createRoomAccessRepository({ db, pool, bans }: { db: Database; p
       .innerJoin('rooms as r', 'r.id', 'rb.room_id')
       .select('rb.user_id')
       .where('rb.room_id', '=', roomId)
-      .where('r.deleted_at', 'is', null);
+      .where('r.deleted_at', 'is', null)
+      .where('r.kind', '=', 'main');
     if (staticOnly) bookmarked = bookmarked.where('r.is_static', '=', true);
     const rows = await db
       .with('recipients', () => members.unionAll(bookmarked))
@@ -257,6 +264,7 @@ export function createRoomAccessRepository({ db, pool, bans }: { db: Database; p
           .selectAll()
           .where('id', '=', roomId)
           .where('deleted_at', 'is', null)
+          .where('kind', '=', 'main')
           .executeTakeFirst()
       );
       if (!room) return { room: null, status: 'not_found' as const };

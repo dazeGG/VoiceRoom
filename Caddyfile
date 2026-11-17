@@ -59,6 +59,9 @@ import /etc/caddy/sites.d/*.caddy
     }
   }
   header @immutable Cache-Control "public, max-age=31536000, immutable"
+  # Public module loader dependencies carry no credentials.
+  header @immutable Access-Control-Allow-Origin "*"
+  header @immutable Cross-Origin-Resource-Policy "cross-origin"
   header @versioned_audio Cache-Control "public, max-age=31536000, immutable"
   header @emoji Cache-Control "public, max-age=2592000"
   header @web_fallback Cache-Control "no-cache"
@@ -91,6 +94,34 @@ import /etc/caddy/sites.d/*.caddy
     header Content-Type "application/json; charset=utf-8"
     header Cache-Control "no-store"
     respond `{"contractVersion":"voice-room.runtime-config/v1","schemaVersion":1,"livekit":{"wsUrl":"{$LIVEKIT_GATE_PUBLIC_URL}","connectFallbacks":[]}}` 200
+  }
+
+  # Only the compact guest entry may be framed by external HTTPS hosts.
+  @widget_embed path /embed/v1 /embed/v1/ /embed/v1/index.html
+  handle @widget_embed {
+    header {
+      defer
+      -X-Frame-Options
+      Content-Security-Policy "default-src 'self'; base-uri 'none'; object-src 'none'; form-action 'none'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; worker-src 'self'; connect-src 'self' wss://{$LIVEKIT_DOMAIN} https://{$LIVEKIT_DOMAIN} stun: turn: turns:; frame-ancestors https:"
+      Permissions-Policy "microphone=(self), camera=(self), display-capture=(), geolocation=(), payment=()"
+      Cache-Control "no-cache"
+      X-Robots-Tag "noindex"
+    }
+    root * /srv/web
+    rewrite * /embed/v1/index.html
+    file_server {
+      precompressed br gzip
+    }
+  }
+
+  handle /widget/v1/loader.js {
+    header Cache-Control "no-cache"
+    header Cross-Origin-Resource-Policy "cross-origin"
+    header Access-Control-Allow-Origin "*"
+    root * /srv/web
+    file_server {
+      precompressed br gzip
+    }
   }
 
   # Android App Links for the RuStore app (package voiceroom.app). Only a
@@ -151,7 +182,7 @@ import /etc/caddy/sites.d/*.caddy
   # The app's addresses (apps/web/src/router.ts) answer with its page. The
   # build's .br and .gz (precompressPlugin) when there are any; encode above
   # compresses the rest on the fly.
-  @app_page path /app /r/* /login /register /privacy /terms /licenses
+  @app_page path /app /r/* /login /register /privacy /terms /licenses /widgets
   handle @app_page {
     root * /srv/web
     rewrite * /index.html

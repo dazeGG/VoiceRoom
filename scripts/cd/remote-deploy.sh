@@ -12,6 +12,10 @@ set -Eeuo pipefail
 # command that could consume the rest (docker compose exec, ssh, ...).
 main() {
   local deploy_path=$1 commit=$2 api_image=$3 worker_image=$4 web_image=$5
+  command -v python3 > /dev/null || {
+    echo 'deployment requires Python 3 for the widget compatibility preflight; no changes made' >&2
+    exit 1
+  }
   keep=${KEEP_DEPLOY_BACKUPS:-5}
 
   cd "$deploy_path"
@@ -111,14 +115,54 @@ main() {
   chmod 600 "$db_dump"
 
   local rollout_started=false
+  # Pin recovery logic outside the checkout before any checkout/env mutation.
+  # The helper must survive returning to an older release.
+  git fetch --quiet --prune origin
+  local boundary_helper="$PWD/$backup_dir/widget-boundary-$stamp.py"
+  git show "$commit:scripts/cd/widget-boundary-preflight.py" > "$boundary_helper"
+  chmod 700 "$boundary_helper"
+  local boundary_manifest="$PWD/$backup_dir/widget-release-capabilities.json"
+  local manifest_helper="$PWD/$backup_dir/widget-manifest-$stamp.py"
+  git show "$commit:scripts/cd/widget-release-capabilities.py" > "$manifest_helper"
+  local previous_api previous_worker previous_web
+  previous_api=$(sed -n 's/^VOICEROOM_API_IMAGE=//p' "$env_backup")
+  previous_worker=$(sed -n 's/^VOICEROOM_WORKER_IMAGE=//p' "$env_backup")
+  previous_web=$(sed -n 's/^VOICEROOM_WEB_IMAGE=//p' "$env_backup")
+  docker pull --quiet "$api_image"
+  docker pull --quiet "$worker_image"
+  docker pull --quiet "$web_image"
+  python3 "$manifest_helper" "$boundary_manifest" \
+    "$api_image" "$worker_image" "$web_image" \
+    "$previous_api" "$previous_worker" "$previous_web" < /dev/null
+  boundary_preflight() {
+    python3 "$boundary_helper" "$@" "$boundary_manifest" \
+      "$api_image" "$worker_image" "$web_image" \
+      "$previous_api" "$previous_worker" "$previous_web" < /dev/null
+  }
+  boundary_preflight
   rollback() {
     trap - ERR
     log_deploy deployment.rollback_requested
+    # Recheck persistent state even if the earlier preflight passed: a floor
+    # activated during rollout must prevent restoration of legacy binaries.
+    if ! boundary_preflight --rollback; then
+      echo 'rollback refused: leaving the last stack in place; operator recovery required' >&2
+      exit 1
+    fi
     echo "== deploy failed, restoring $previous_commit and the previous .env" >&2
     cp "$env_backup" .env
+    # Recovery proved persisted admission off. Never restore a backed-up flag
+    # that could later enable entry unexpectedly on the compatible target.
+    if grep -q '^WIDGET_ENABLED=' .env; then
+      sed -i 's/^WIDGET_ENABLED=.*/WIDGET_ENABLED=false/' .env
+    else
+      printf 'WIDGET_ENABLED=false\n' >> .env
+    fi
     git checkout --quiet --detach "$previous_commit"
     if [ "$rollout_started" = true ]; then
-      docker compose up -d --remove-orphans || true
+      if ! docker compose up -d --remove-orphans; then
+        echo 'rollback stack restoration failed; operator repair required' >&2
+      fi
     fi
     exit 1
   }
@@ -133,13 +177,9 @@ main() {
   }
 
   echo "== checking out $commit"
-  git fetch --quiet --prune origin
   git checkout --quiet --detach "$commit"
 
   echo "== pulling images"
-  docker pull --quiet "$api_image"
-  docker pull --quiet "$worker_image"
-  docker pull --quiet "$web_image"
 
   set_env VOICEROOM_API_IMAGE "$api_image"
   set_env VOICEROOM_WORKER_IMAGE "$worker_image"

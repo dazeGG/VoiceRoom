@@ -6,6 +6,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { createMediaAccessRepository } from '../src/domains/media/media-access.repository.ts';
+import { createRoomHistoryRepository } from '../src/domains/messaging/room-history.repository.ts';
 import { runMigrations } from '../src/lib/migrate.ts';
 import { createTestDatabase } from './db-harness.ts';
 
@@ -37,6 +38,18 @@ test('attachment messages are visible to room members and to both sides of a DM'
   assert.equal(await room('deleted'), null);
   assert.equal(await room('expired'), null);
   assert.equal(await room('in-gone'), null, 'the room was deleted');
+
+  // Even a stale/imported membership cannot turn a widget into main-app media
+  // or paginated history. The floor deliberately stays active for this DB.
+  await pool.query(`UPDATE widget_boundary_activation SET widget_boundary_required=true,widget_admission_enabled=true;
+    INSERT INTO rooms(id, creator_ip, kind, widget_chat_enabled) VALUES ('widget', '', 'widget', true);
+    INSERT INTO room_memberships(id, room_id, user_id) VALUES ('wm', 'widget', 'ada');
+    INSERT INTO room_messages(id, room_id, text) VALUES ('widget-message', 'widget', 'secret');`);
+  assert.equal(await room('widget-message'), null);
+  const history = createRoomHistoryRepository({ pool });
+  assert.equal(await history.roomExists('widget'), false);
+  assert.equal(await history.getAnchor({ roomId: 'widget', messageId: 'widget-message' }), null);
+  assert.deepEqual((await history.listLatest({ roomId: 'widget', limit: 10, now: new Date() })).messages, []);
 
   const direct = (messageId: string, viewerId: string) => access.canSeeDirectMessage({ messageId, viewerId });
   assert.equal(await direct('dm', 'ada'), true);
