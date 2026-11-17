@@ -389,9 +389,21 @@ test(
 function rolloutFixture(t: TestContext) {
   const { dir, env } = fakeCommands(t, {
     docker: 'exec /usr/bin/python3 "$VR_FAKE_DOCKER" "$@"',
-    git: 'echo "git $*" >> "$VR_TEST_CALLS"; if [[ "$1" == rev-parse ]]; then echo previous-commit; fi',
+    git: `echo "git $*" >> "$VR_TEST_CALLS"
+if [[ "$1" == rev-parse ]]; then echo previous-commit; fi
+if [[ "$1" == show ]]; then
+  case "$2" in
+    *:scripts/cd/widget-boundary-preflight.py) cat "$VR_CD_SCRIPTS/widget-boundary-preflight.py" ;;
+    *:scripts/cd/widget-release-capabilities.py) cat "$VR_CD_SCRIPTS/widget-release-capabilities.py" ;;
+    *) exit 99 ;;
+  esac
+fi`,
     bash: 'echo "bash $1" >> "$VR_TEST_CALLS"; if [[ "$1" == /etc/voiceroom/logging/preflight.sh ]]; then exit "${VR_PREFLIGHT_EXIT:-0}"; fi; exit 0',
-    python3: 'echo archive >> "$VR_TEST_CALLS"; exit "${VR_ARCHIVE_EXIT:-0}"',
+    python3: `if [[ "$1" == scripts/logging/archive-current.py ]]; then
+  echo archive >> "$VR_TEST_CALLS"
+  exit "\${VR_ARCHIVE_EXIT:-0}"
+fi
+exec /usr/bin/python3 "$@"`,
     logger: 'echo "logger $*" >> "$VR_TEST_CALLS"',
     flock: 'exit 0'
   });
@@ -422,8 +434,16 @@ elif args[:6] == ['compose', 'exec', '-T', 'api', 'node', '-e']:
     prelude = "globalThis.fetch = async (_url, options) => { if (!(options.signal instanceof AbortSignal)) throw new Error('timeout required'); return {ok: process.env.VR_HTTP_OK !== 'false', text: async () => process.env.VR_METRIC_VALUE}; };"
     sys.exit(subprocess.run(['node', '-e', prelude + args[6]], env=env).returncode)
 elif args[:4] == ['compose', 'exec', '-T', 'postgres']:
-    note('database-backup')
-    print('database dump')
+    if 'pg_dump' in args[6]:
+        note('database-backup')
+        print('database dump')
+    elif 'psql' in args[6]:
+        note('widget-preflight')
+        print('legacy')
+    else:
+        sys.exit(99)
+elif args[:2] == ['image', 'inspect']:
+    print('[{"Config":{"Labels":{}},"RepoDigests":[]}]')
 elif args[0] == 'pull':
     note('pull')
     sys.exit(int(os.environ.get('VR_PULL_EXIT', '0')))
@@ -444,6 +464,7 @@ else:
           REQUIRE_PERSISTENT_LOGS: '1',
           VR_TEST_CALLS: calls,
           VR_FAKE_DOCKER: fakeDocker,
+          VR_CD_SCRIPTS: path.resolve(scripts, '../cd'),
           VR_METRIC_COUNTER: path.join(dir, 'metric-count'),
           ...overrides
         },
@@ -451,7 +472,7 @@ else:
       }
     );
   const events = () => (fs.existsSync(calls) ? fs.readFileSync(calls, 'utf8').trim().split('\n') : []);
-  return { dir, initialEnv, run, events };
+  return { dir, initialEnv, restoredEnv: `${initialEnv}WIDGET_ENABLED=false\n`, run, events };
 }
 
 test(
@@ -513,7 +534,10 @@ test(
         });
         assert.notEqual(result.status, 0);
         assert.equal(fixture.events().includes('compose-up'), false);
-        assert.equal(fs.readFileSync(path.join(fixture.dir, '.env'), 'utf8'), fixture.initialEnv);
+        assert.equal(
+          fs.readFileSync(path.join(fixture.dir, '.env'), 'utf8'),
+          failure === 'archive' ? fixture.restoredEnv : fixture.initialEnv
+        );
         if (failure !== 'archive') assert.equal(fs.existsSync(path.join(fixture.dir, 'deploy-backups')), false);
       });
     }
@@ -568,13 +592,21 @@ test(
 );
 
 test(
-  'failed pull restores files without triggering first logging activation through rollback',
+  'failed pull leaves files untouched without triggering first logging activation or rollback',
   { skip: !python || !bash || !linux },
   (t) => {
     const fixture = rolloutFixture(t);
     const result = fixture.run({ VR_PULL_EXIT: '17' });
     assert.notEqual(result.status, 0);
-    assert.ok(fixture.events().includes('git checkout --quiet --detach previous-commit'));
+    assert.ok(fixture.events().includes('pull'));
+    assert.equal(
+      fixture.events().some((event) => event.startsWith('git checkout ')),
+      false
+    );
+    assert.equal(
+      fixture.events().some((event) => event.includes('deployment.rollback_requested')),
+      false
+    );
     assert.equal(fixture.events().includes('compose-up'), false);
     assert.equal(fixture.events().includes('archive'), false);
     assert.equal(fs.readFileSync(path.join(fixture.dir, '.env'), 'utf8'), fixture.initialEnv);
@@ -592,7 +624,7 @@ test(
         assert.notEqual(result.status, 0);
         assert.ok(fixture.events().includes('archive'));
         assert.equal(fixture.events().includes('compose-up'), false);
-        assert.equal(fs.readFileSync(path.join(fixture.dir, '.env'), 'utf8'), fixture.initialEnv);
+        assert.equal(fs.readFileSync(path.join(fixture.dir, '.env'), 'utf8'), fixture.restoredEnv);
       });
     }
   }
@@ -608,6 +640,16 @@ test(
         const result = fixture.run({ VR_DRIVER: driver });
         assert.equal(result.status, 0, result.stderr);
         const events = fixture.events();
+        assert.equal(events.filter((event) => event === 'pull').length, 3);
+        assert.equal(events.filter((event) => event === 'widget-preflight').length, 1);
+        assert.ok(events.lastIndexOf('pull') < events.indexOf('widget-preflight'));
+        assert.ok(events.indexOf('widget-preflight') < events.indexOf('git checkout --quiet --detach test-commit'));
+        assert.deepEqual(
+          JSON.parse(
+            fs.readFileSync(path.join(fixture.dir, 'deploy-backups/ci/widget-release-capabilities.json'), 'utf8')
+          ),
+          { releases: {} }
+        );
         assert.equal(events.filter((event) => event === 'compose-up').length, 1);
         if (driver === 'json-file') {
           assert.equal(events.filter((event) => event === 'metric').length, 2);
@@ -630,7 +672,7 @@ test(
     const result = fixture.run({ VR_DRIVER: 'syslog', VR_UP_EXIT: '24' });
     assert.notEqual(result.status, 0);
     assert.equal(fixture.events().filter((event) => event === 'compose-up').length, 2);
-    assert.equal(fs.readFileSync(path.join(fixture.dir, '.env'), 'utf8'), fixture.initialEnv);
+    assert.equal(fs.readFileSync(path.join(fixture.dir, '.env'), 'utf8'), fixture.restoredEnv);
   }
 );
 

@@ -203,6 +203,84 @@ test('an upstream write that throws tears down both sockets and is logged', asyn
 });
 
 test(
+  'an owned widget is reauthorized before forwarding and its established tunnel is fenced on disable',
+  { skip: !process.env.TEST_DATABASE_URL },
+  async (t) => {
+    const { createTestDatabase } = await import('./db-harness.ts');
+    const db = await createTestDatabase(t);
+    await db.pool.query(
+      "UPDATE widget_boundary_activation SET widget_boundary_required=true,widget_admission_enabled=true;INSERT INTO rooms(id,kind,empty_since) VALUES('room-1','widget',now())"
+    );
+    const reauthorizing = Promise.withResolvers<void>();
+    const resume = Promise.withResolvers<void>();
+    let authorizations = 0;
+    const service = createLiveKitAuthGateService({
+      pool: db.pool,
+      boundary: fake<CredentialBoundaryService>({
+        authorizeCredential: async () => {
+          authorizations++;
+          if (authorizations === 2) {
+            reauthorizing.resolve();
+            await resume.promise;
+          }
+          return { ok: true, claims: CLAIMS };
+        },
+        assertReady: async () => true
+      }),
+      upstreamUrl: 'ws://127.0.0.1:7880'
+    });
+    await service.start();
+    const server = service.createServer();
+    t.after(async () => {
+      resume.resolve();
+      await service.stop();
+      await db.cleanup();
+    });
+    const opened = Promise.withResolvers<void>();
+    const upstream = new FakeSocket();
+    const client = new FakeSocket();
+    await withConnect(
+      () => {
+        opened.resolve();
+        return upstream;
+      },
+      async () => {
+        server.emit('upgrade', upgradeRequest(), client, Buffer.from('upgrade-head'));
+        await opened.promise;
+        upstream.emit('connect');
+        await reauthorizing.promise;
+        assert.equal(upstream.writes.length, 0, 'the JWT must wait for the fresh credential check');
+        resume.resolve();
+        const deadline = Date.now() + 5000;
+        while (upstream.writes.length < 2 && Date.now() < deadline)
+          await new Promise((resolve) => setTimeout(resolve, 10));
+        assert.equal(authorizations, 2);
+        assert.match(upstream.writes[0] ?? '', /^GET \/rtc\?access_token=/);
+        assert.equal(upstream.writes[0]?.includes('vr_gate_credential'), false);
+        assert.equal(upstream.writes[1], 'upgrade-head');
+        assert.equal(client.destroyed, false);
+        assert.equal(upstream.destroyed, false);
+
+        await db.pool.query(
+          'UPDATE widget_boundary_activation SET widget_admission_enabled=false,recovery_generation=recovery_generation+1'
+        );
+        let acknowledgment: string | null | undefined;
+        while (acknowledgment !== '1' && Date.now() < deadline) {
+          const owner = await db.pool.query<{ generation: string | null }>(
+            "SELECT acknowledged_generation::text AS generation FROM widget_runtime_owners WHERE role='gate'"
+          );
+          acknowledgment = owner.rows[0]?.generation;
+          if (acknowledgment !== '1') await new Promise((resolve) => setTimeout(resolve, 10));
+        }
+        assert.equal(acknowledgment, '1');
+        assert.equal(client.destroyed, true, 'a recovery ACK requires the established widget tunnel to close');
+        assert.equal(upstream.destroyed, true);
+      }
+    );
+  }
+);
+
+test(
   'widget recovery ACK fences a delayed upstream connect callback and preserves main tunnels',
   { skip: !process.env.TEST_DATABASE_URL },
   async (t) => {

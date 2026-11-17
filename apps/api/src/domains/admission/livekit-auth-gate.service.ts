@@ -156,19 +156,31 @@ function createLiveKitAuthGateService({
   let timer: ReturnType<typeof setInterval> | undefined;
   let sweep: Promise<void> | null = null;
   let started = false;
+  let ownerStarted = false;
+  function sweepOwner(): Promise<void> {
+    if (sweep) return sweep;
+    sweep = (async () => {
+      if (!ownerStarted) {
+        // The API applies migrations after this process can start. Retry an
+        // unsuccessful bootstrap, but never reacquire a lost runtime owner.
+        await owner?.start();
+        ownerStarted = true;
+      } else {
+        await owner?.tick();
+      }
+    })()
+      .catch(() => cutWidgets())
+      .finally(() => {
+        sweep = null;
+      });
+    return sweep;
+  }
   async function start(): Promise<void> {
     if (started) return;
     started = true;
-    await owner?.start();
-    timer = setInterval(() => {
-      if (sweep) return;
-      sweep = (owner?.tick() ?? Promise.resolve())
-        .catch(() => cutWidgets())
-        .finally(() => {
-          sweep = null;
-        });
-    }, 250);
+    timer = setInterval(() => void sweepOwner(), 250);
     timer.unref();
+    await sweepOwner();
   }
   async function stop(): Promise<void> {
     if (timer) clearInterval(timer);
@@ -210,7 +222,6 @@ function createLiveKitAuthGateService({
         credentialBoundary
           .assertReady()
           .then(() => {
-            if (owner && !owner.valid()) throw new Error('widget_gate_owner_unavailable');
             res.writeHead(200, { 'content-type': 'application/json' });
             res.end(JSON.stringify({ ok: true }));
           })
