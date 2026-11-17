@@ -2,6 +2,7 @@
 import { onMounted, onBeforeUnmount, ref, shallowRef, computed } from 'vue';
 import type { WidgetBootstrap } from '@voice-room/shared/contracts/widget';
 import { createWidgetRuntime } from './runtime';
+import WidgetJoinControls from './WidgetJoinControls.vue';
 const props = defineProps<{ bootstrap: WidgetBootstrap }>();
 const mediaMount = ref<HTMLElement | null>(null);
 const runtime = shallowRef<ReturnType<typeof createWidgetRuntime> | null>(null);
@@ -9,9 +10,9 @@ const code = ref('');
 const message = ref('');
 const cameraDevice = ref('');
 const style = computed(() => ({
-  backgroundColor: props.bootstrap.config.background,
-  color: props.bootstrap.config.text,
-  '--widget-accent': props.bootstrap.config.accent,
+  '--vr-bg': props.bootstrap.config.background,
+  '--vr-text': props.bootstrap.config.text,
+  '--vr-accent': props.bootstrap.config.accent,
   borderRadius: `${props.bootstrap.config.radius}px`
 }));
 const notify = (type: 'callState' | 'requestCollapse', active?: boolean) =>
@@ -43,20 +44,24 @@ async function sendText() {
 </script>
 <template>
   <main class="widget-shell" :style="style">
-    <header>
-      <strong>VoiceRoom</strong
+    <header class="widget-shell__header">
+      <strong><span class="widget-shell__brand-mark" aria-hidden="true"></span>VoiceRoom</strong
       ><button v-if="bootstrap.config.mode === 'floating'" type="button" @click="notify('requestCollapse')">
         Свернуть
       </button>
+      <span v-else class="widget-shell__guest">Гость</span>
     </header>
     <template v-if="runtime">
-      <p role="status">{{ runtime.state.status }}</p>
+      <p role="status" class="widget-shell__status">{{ runtime.state.status }}</p>
       <p v-if="runtime.state.error" role="alert">{{ runtime.state.error }}</p>
-      <label>Ваше имя<input v-model="runtime.state.name" maxlength="80" /></label>
-      <form v-if="!runtime.state.joined" @submit.prevent="run(() => runtime?.join(code))">
-        <label>Код комнаты<input v-model="code" required maxlength="48" /></label><button>Войти</button
-        ><button type="button" @click="run(() => runtime?.create())">Создать комнату</button>
-      </form>
+      <label v-if="runtime.state.joined">Ваше имя<input v-model="runtime.state.name" maxlength="80" /></label>
+      <WidgetJoinControls
+        v-if="!runtime.state.joined"
+        v-model:name="runtime.state.name"
+        v-model:code="code"
+        @create="run(() => runtime?.create())"
+        @join="run(() => runtime?.join(code))"
+      />
       <template v-else>
         <p>
           Код: <strong>{{ runtime.state.roomId }}</strong>
@@ -145,7 +150,7 @@ async function sendText() {
             >
           </li>
         </ul>
-        <section v-if="runtime.state.chat" aria-label="Текстовый чат">
+        <section v-if="runtime.state.chat" aria-label="Текстовый чат" class="widget-shell__chat">
           <ol>
             <li v-for="item in runtime.state.messages" :key="item.id">
               {{ item.name }}: <span>{{ item.text }}</span

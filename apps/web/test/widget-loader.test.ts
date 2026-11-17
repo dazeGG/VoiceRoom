@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { defaultWidgetConfig, encodeWidgetConfig } from '@voice-room/shared/contracts/widget';
+import { defaultWidgetConfig, encodeWidgetConfig, type WidgetConfig } from '@voice-room/shared/contracts/widget';
 import { mountWidget } from '../src/features/widget/loader';
 import { widgetSnippet } from '../src/features/widget/snippet';
 const disposals: (() => void)[] = [];
@@ -7,9 +7,11 @@ afterEach(() => {
   disposals.splice(0).forEach((dispose) => dispose());
   document.body.replaceChildren();
 });
-function create() {
+function create(overrides: Partial<WidgetConfig> = {}) {
   const host = document.createElement('div');
-  host.dataset.config = encodeURIComponent(encodeWidgetConfig({ ...defaultWidgetConfig, mode: 'floating' }));
+  host.dataset.config = encodeURIComponent(
+    encodeWidgetConfig({ ...defaultWidgetConfig, mode: 'floating', ...overrides })
+  );
   document.body.append(host);
   disposals.push(mountWidget(host, 'https://voice.test'));
   const frame = host.querySelector('iframe');
@@ -18,6 +20,54 @@ function create() {
   return { host, frame, button };
 }
 describe('widget loader', () => {
+  it('keeps the floating launcher below its frame and leaves the surrounding host clickable', () => {
+    const { host, frame, button } = create({
+      corner: 'top-left',
+      offset: 24,
+      width: 960,
+      height: 900,
+      background: '#223344',
+      text: '#f0f1f2',
+      accent: '#ccef33'
+    });
+    expect([...host.children]).toEqual([frame, button]);
+    expect(host.style.display).toBe('flex');
+    expect(host.style.flexDirection).toBe('column');
+    expect(host.style.alignItems).toBe('flex-start');
+    expect(host.style.top).toBe('24px');
+    expect(host.style.left).toBe('24px');
+    const expandedWidth = host.style.width;
+    expect(expandedWidth).toContain('960px');
+    expect(expandedWidth).toContain('100vw');
+    expect(expandedWidth).toContain('48px');
+    expect(frame.style.height).toContain('100dvh');
+    expect(frame.style.height).toContain('108px');
+    expect(button.style.minHeight).toBe('48px');
+    expect(button.style.getPropertyValue('--vr-bg')).toBe('#223344');
+    expect(button.style.getPropertyValue('--vr-text')).toBe('#f0f1f2');
+    expect(button.style.getPropertyValue('--vr-accent')).toBe('#ccef33');
+    expect(host.style.pointerEvents).toBe('none');
+    expect(frame.style.pointerEvents).toBe('auto');
+    expect(button.style.pointerEvents).toBe('auto');
+    button.click();
+    expect(host.querySelector('iframe')).toBe(frame);
+    expect(frame.inert).toBe(true);
+    expect(frame.style.position).toBe('absolute');
+    expect(frame.style.pointerEvents).toBe('none');
+    expect(host.style.width).toBe('max-content');
+    expect(button.getAttribute('aria-expanded')).toBe('false');
+    expect(document.activeElement).toBe(button);
+    button.click();
+    expect(frame.inert).toBe(false);
+    expect(frame.style.pointerEvents).toBe('auto');
+    expect(host.style.width).toBe(expandedWidth);
+  });
+  it('keeps an inline launcher hidden even though the floating launcher has a display style', () => {
+    const { host, button } = create({ mode: 'inline' });
+    expect(button.hidden).toBe(true);
+    expect(button.style.display).toBe('none');
+    expect(host.style.position).toBe('');
+  });
   it('creates independent instances without capture delegation beyond mic/camera and retains frame on collapse', () => {
     const a = create();
     const b = create();

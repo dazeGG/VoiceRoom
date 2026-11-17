@@ -2,8 +2,9 @@
 
 ## Source of truth
 - Status: Active
-- Last refreshed: 2026-07-14
+- Last refreshed: 2026-11-17
 - Primary product surfaces: landing start flow, authenticated lobby, room voice/screen/chat UI, direct messages, profile/sound/notification settings.
+- Guest embed surfaces: `/widgets` anonymous configurator and `/embed/v1` compact guest room. Current Vue evidence: `apps/web/src/pages/WidgetsPage.vue`, `features/widget/WidgetShell.vue`, shared UI primitives, `_tokens.scss`, and the rejected configurator screenshot supplied on 2026-11-17.
 - Evidence reviewed: `img.png`, `img_1.png`, user-provided settings screenshots (2026-07-14), `apps/web/src/lib/shared/styles/app.css`, `apps/web/src/lib/shared/ui/Button/Button.svelte`, `apps/web/src/lib/features/home/styles/home.css`, `apps/web/src/lib/features/home/styles/lobby-v2.css`, `apps/web/src/lib/features/home/styles/settings.css`, `apps/web/src/lib/features/home/components/SettingsModal.svelte`, `apps/web/src/lib/features/room/styles/controls.css` (Svelte paths from before the Vue cutover).
 
 ## Brand
@@ -25,6 +26,7 @@
 - Primary navigation: landing → lobby → room; lobby side rail for friends/settings/active voice.
 - Core routes/screens: unauthenticated landing, authenticated lobby, room screen, DM/people/settings overlays.
 - Content hierarchy: primary action row first, room/friend lists second, secondary metadata subdued.
+- Widget builder: grouped placement, appearance, dimensions and chat settings beside a representative preview on desktop; code and copy action below. Stack settings, preview and code on narrow screens. Show corner/offset only for floating placement while retaining their values.
 
 ## Design principles
 - Shared sizing beats local pixel fixes.
@@ -51,6 +53,7 @@
 - New/changed components: interaction sizing tokens (`--interactive-*`) in `_tokens.scss`; shared Button now defaults to large action sizing; settings notification-target rows, a compact profile identity row, room-avatar editing in every room-settings entry point, and a single sequential sound-set preview action.
 - Variants and states: 36px small, 40px medium, 52px large; 46px reserved for dock; disabled/hover/focus must be visible.
 - Token/component ownership: `apps/web/src/styles/_tokens.scss` owns sizing tokens; shared primitives consume them.
+- Widget configuration uses existing SegmentControl, Switch and Button primitives. A shared presentation-only WidgetJoinControls keeps the preview and actual guest entry consistent. Widget colours belong inside the configured card; the builder retains the app theme.
 
 ## Accessibility
 - Target standard: keyboard-operable controls with visible focus.
@@ -67,6 +70,7 @@
 ## Interaction states
 - Loading: primary labels can change inline (`Создаём...`).
 - Empty: lobby empty states should point to the primary create action.
+- Widget preview is inert and visibly labelled: no runtime, iframe, network, microphone or camera activation. Use disabled join controls and keep the safety caption outside the card. Copying reports success; clipboard failure selects the code for manual copying.
 - Error: preserve existing toasts/status messaging.
 - Success: immediate navigation/toasts where already implemented.
 - Disabled: visible opacity/cursor state.
@@ -86,6 +90,7 @@
 - Compatibility constraints: no new package/browser APIs. Microphone mode and configurable hotkeys are desktop-app controls; browser sessions always use the open-microphone mode and do not register voice hotkeys.
 - Font/runtime constraints: typography assets are self-hosted under `apps/web/public/fonts` with Cyrillic and Latin coverage. CSS must keep `font-src 'self'` compatibility and avoid remote font hosts. System fallbacks remain only after the local role fonts.
 - Test/screenshot expectations: run `npm --workspace @voice-room/web run check`; visual review should compare landing/lobby create/join rows.
+- Widget UI acceptance includes browser inspection at 1440px and 390px, no page overflow/text collisions, accurate colour/radius/dimension preview, preserved generated configuration, and working keyboard/copy states. Functional media checks do not substitute for visual review.
 
 ## Open questions
 - [ ] Should shared `Button` expose explicit `size` props instead of class-based compact override? Owner: frontend. Impact: broader design-system API clarity.
