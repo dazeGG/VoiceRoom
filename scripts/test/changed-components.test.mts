@@ -25,6 +25,7 @@ test('routes application, public site and documentation changes independently', 
 
 test('routes shared dependencies and validation files to their consumers', () => {
   assert.deepEqual(changedComponents(['packages/shared/src/app-home.ts']), appAndSite);
+  assert.deepEqual(changedComponents(['packages/shared/package.json']), appAndSite);
   assert.deepEqual(changedComponents(['apps/web/src/styles/_tokens.scss']), appAndSite);
   assert.deepEqual(changedComponents(['apps/web/src/assets/fonts/onest-latin.woff2']), appAndSite);
   assert.deepEqual(changedComponents(['scripts/check-type-coverage.mts']), appAndSite);
@@ -48,6 +49,7 @@ test('manifest and lock version bumps stay in their release lane', () => {
         'apps/web': { version: appVersion },
         'apps/admin': { version: appVersion },
         'apps/api': { version: appVersion },
+        'packages/shared': { version: appVersion },
         'apps/site': { name: '@voice-room/site', version: siteVersion, devDependencies: { astro: astroVersion } },
         'node_modules/astro': { version: astroVersion }
       }
@@ -63,6 +65,13 @@ test('manifest and lock version bumps stay in their release lane', () => {
   assert.equal(manifestVersionOnly('{"version":"2.13.0"}', '{"version":"2.13.1"}'), true);
   assert.equal(manifestVersionOnly('{"version":"2.13.0"}', '{"version":"2.13.1","devDependencies":{}}'), false);
   assert.deepEqual(changedComponents(['apps/site/package.json', 'package-lock.json'], { lock: 'site' }), site);
-  assert.deepEqual(changedComponents(['package.json', 'package-lock.json'], { manifest: 'app', lock: 'app' }), app);
+  const appManifests = ['package.json', 'packages/shared/package.json'];
+  assert.deepEqual(
+    changedComponents([...appManifests, 'apps/api/package.json', 'apps/web/package.json', 'package-lock.json'], {
+      appManifests,
+      lock: 'app'
+    }),
+    app
+  );
   assert.deepEqual(changedComponents(['package-lock.json']), appAndSite);
 });

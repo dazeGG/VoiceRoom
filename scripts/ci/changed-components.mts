@@ -3,8 +3,10 @@ import { isDeepStrictEqual } from 'node:util';
 import { isRecord } from '../../packages/shared/src/guards.ts';
 
 const SITE = 'apps/site';
+const SHARED = 'packages/shared';
+const APP_VERSION_MANIFESTS = ['package.json', `${SHARED}/package.json`];
 type Workspace = 'app' | 'site';
-type VersionChanges = { manifest?: 'app'; lock?: Workspace };
+type VersionChanges = { appManifests?: readonly string[]; lock?: Workspace };
 
 function versionedPackage(source: string) {
   const value: unknown = JSON.parse(source);
@@ -55,7 +57,7 @@ export function lockVersionComponent(before: string, after: string): Workspace |
     };
     const sitePackages = normalize([SITE]);
     if (sitePackages && isDeepStrictEqual(previous, { ...current, packages: sitePackages })) return 'site';
-    const appPackages = normalize(['', 'apps/admin', 'apps/api', 'apps/web']);
+    const appPackages = normalize(['', 'apps/admin', 'apps/api', 'apps/web', SHARED]);
     if (appPackages && isDeepStrictEqual(previous, { ...current, version: previous.version, packages: appPackages })) {
       return 'app';
     }
@@ -71,8 +73,8 @@ export function changedComponents(paths: string[], versionChanges: VersionChange
       lanes.site = true;
     } else if (path.startsWith('apps/docs/')) {
       lanes.docs = true;
-    } else if (path === 'package.json' && versionChanges.manifest) {
-      lanes[versionChanges.manifest] = true;
+    } else if (versionChanges.appManifests?.includes(path)) {
+      lanes.app = true;
     } else if (path === 'package-lock.json' && versionChanges.lock) {
       lanes[versionChanges.lock] = true;
     } else if (
@@ -127,9 +129,9 @@ if (import.meta.main) {
         // Compare the exact trees CI sees. Treat renames as deletion plus addition so both lanes get coverage.
         const paths = git(['diff', '--name-only', '--no-renames', '-z', base, head, '--']).split('\0').filter(Boolean);
         const versions: VersionChanges = {};
-        if (paths.includes('package.json') && compareVersionMetadata(base, head, 'package.json', manifestVersionOnly)) {
-          versions.manifest = 'app';
-        }
+        versions.appManifests = APP_VERSION_MANIFESTS.filter(
+          (path) => paths.includes(path) && compareVersionMetadata(base, head, path, manifestVersionOnly)
+        );
         if (paths.includes('package-lock.json')) {
           const component = compareVersionMetadata(base, head, 'package-lock.json', lockVersionComponent);
           if (component) versions.lock = component;
