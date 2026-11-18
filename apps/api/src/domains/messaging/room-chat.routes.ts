@@ -23,7 +23,6 @@ import { roomBanned } from '../rooms/room-views.ts';
 import { cleanUuid, requestIdempotencyKey } from './message-input.ts';
 import { publicChatMessage } from './room-chat-views.ts';
 import type { Caller, ChatRefusal, PostOutcome, RoomChatService } from './room-chat.service.ts';
-import type { RoomSurface } from '../rooms/room-surface.policy.ts';
 
 const Failures = { '4xx': MessageFailure, 503: MessageFailure };
 
@@ -70,18 +69,13 @@ function sendRefusal(reply: FastifyReply, roomId: string, refusal: Refusal) {
   }
 }
 
-export function registerRoomChatRoutes(
-  root: FastifyInstance,
-  ctx: ApiContext,
-  chat: RoomChatService,
-  surface: RoomSurface = 'main'
-): void {
+export function registerRoomChatRoutes(root: FastifyInstance, ctx: ApiContext, chat: RoomChatService): void {
   const app = root.withTypeProvider<TypeBoxTypeProvider>();
-  const messagePath = surface === 'widget' ? '/api/widget/rooms/:roomId/messages' : '/api/rooms/:roomId/chat';
+  const messagePath = '/api/rooms/:roomId/chat';
 
   async function caller(raw: Parameters<ApiContext['resolveSession']>[0]): Promise<Caller> {
-    const session = surface === 'widget' ? null : await ctx.resolveSession(raw);
-    return { user: session?.user ?? null, clientIp: ctx.clientIp(raw), surface };
+    const session = await ctx.resolveSession(raw);
+    return { user: session?.user ?? null, clientIp: ctx.clientIp(raw) };
   }
 
   app.get(
@@ -181,7 +175,6 @@ export function registerRoomChatRoutes(
     }
   );
 
-  if (surface === 'widget') return;
   app.post(
     '/api/rooms/:roomId/read',
     {

@@ -231,19 +231,9 @@ function createRoomRealtimeRuntime(deps: RoomRuntimeDeps) {
     const dbRoom = await getRoomStore().getRoom(roomId);
     if (!dbRoom) return null;
     const recentMessages =
-      dbRoom.kind === 'widget' && !dbRoom.widgetChatEnabled
+      dbRoom.kind === 'widget'
         ? []
-        : (await getRoomStore().listMessages(roomId, { limit: 100 })).map((message) => {
-            const result = publicChatMessage(message);
-            if (dbRoom.kind === 'widget') {
-              result.attachments = [];
-              delete result.content;
-              delete result.linkPreview;
-              delete result.replyTo;
-              delete result.replyPreview;
-            }
-            return result;
-          });
+        : (await getRoomStore().listMessages(roomId, { limit: 100 })).map(publicChatMessage);
     // Presence is the last synchronous read: no awaited work may let this
     // snapshot overwrite a newer peer update that was already broadcast.
     const presence = presenceRooms.get(roomId);

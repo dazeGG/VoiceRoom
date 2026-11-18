@@ -135,6 +135,7 @@
 }
 
 .widget-configurator__field select,
+.widget-configurator__title-input,
 .widget-configurator__number,
 .widget-configurator__color-control {
   min-width: 0;
@@ -145,7 +146,8 @@
   color: var(--vr-text);
 }
 
-.widget-configurator__field select {
+.widget-configurator__field select,
+.widget-configurator__title-input {
   width: 100%;
   padding-inline: var(--space-sm);
   font: inherit;
@@ -190,24 +192,33 @@
 
 .widget-configurator__colors {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 7rem), 1fr));
   gap: var(--space-xs);
+  margin-block-start: var(--space-sm);
 }
 
 .widget-configurator__color-control {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: 2rem minmax(0, 1fr);
   align-items: center;
-  padding: var(--space-xs);
+  padding: 6px;
   gap: var(--space-xs);
+  color-scheme: dark;
 
-  input {
+  // Keep injected color-picker shortcuts out of the two-control grid.
+  > :not(input[type='color'], input[type='text']) {
+    display: none !important;
+  }
+
+  input[type='color'] {
+    appearance: none;
+    forced-color-adjust: none;
     width: 100%;
-    min-height: 48px;
+    height: 2rem;
     padding: 0;
     overflow: hidden;
-    border: 0;
-    border-radius: 6px;
+    border: 1px solid var(--vr-line-strong);
+    border-radius: var(--radius-sm);
     background: transparent;
     cursor: pointer;
   }
@@ -218,17 +229,32 @@
 
   input::-webkit-color-swatch {
     border: 0;
-    border-radius: 6px;
+    border-radius: inherit;
   }
 
   input::-moz-color-swatch {
     border: 0;
-    border-radius: 6px;
+    border-radius: inherit;
   }
 
-  > span {
-    font-family: var(--font-mono);
-    font-size: 0.6875rem;
+  input[type='text'] {
+    width: 100%;
+    min-width: 0;
+    padding: 4px 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: 0.75rem var(--font-mono);
+  }
+}
+
+.widget-configurator__color-control:has([aria-invalid='true']) {
+  border-color: var(--vr-danger);
+}
+
+@media (forced-colors: active) {
+  .widget-configurator__color-control input[type='color'] {
+    border-color: ButtonText;
   }
 }
 
@@ -271,10 +297,6 @@
 }
 
 .widget-configurator__canvas {
-  display: flex;
-  min-height: 584px;
-  max-height: 740px;
-  justify-content: center;
   padding: var(--space-xl);
   overflow: auto;
   border: 1px solid var(--vr-line-strong);
@@ -284,20 +306,65 @@
   background-size: 16px 16px;
 }
 
-.widget-configurator__canvas--floating {
-  height: 680px;
-  flex-direction: column;
-  justify-content: flex-start;
+.widget-configurator__preview-controls {
+  margin-block-end: var(--space-md);
+}
+
+.widget-configurator__preview-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: start;
+  gap: var(--space-sm);
+  margin-block-start: var(--space-sm);
+
+  .widget-configurator__size {
+    flex: 1 1 7rem;
+  }
+}
+
+.widget-configurator__radius {
+  margin-block-start: var(--space-md);
+}
+
+.widget-configurator__size {
+  min-width: 0;
+}
+
+.widget-configurator__size-label {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--space-xs);
+  color: var(--vr-text-2);
+  font-size: 0.8125rem;
+
+  output {
+    color: var(--vr-text);
+    font: 0.75rem/1.5 var(--font-mono);
+  }
+}
+
+.widget-configurator__frame {
+  position: relative;
+  overflow: clip;
+
+  .widget-shell {
+    position: absolute;
+    inset: 0 auto auto 0;
+    transform-origin: top left;
+  }
+}
+
+.widget-configurator__viewport[data-voiceroom-expanded] > .widget-shell {
+  width: 100% !important;
+  height: 100% !important;
+  transform: none !important;
 }
 
 .widget-configurator__sample {
-  flex: none;
   min-width: 0;
   max-width: 100%;
-
-  .widget-shell {
-    box-shadow: var(--vr-shadow-popover);
-  }
+  margin-inline: auto;
 }
 
 .widget-configurator__launcher {
@@ -425,9 +492,5 @@
 
   .widget-configurator__header {
     margin-block: var(--space-lg);
-  }
-
-  .widget-configurator__canvas {
-    min-height: 552px;
   }
 }

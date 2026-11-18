@@ -1,7 +1,11 @@
 <script setup lang="ts">
-import { KeyRound, Mic, Plus } from '@lucide/vue';
+import { KeyRound, Plus } from '@lucide/vue';
+import { DEFAULT_WIDGET_TITLE } from '@voice-room/shared/contracts/widget';
 
-withDefaults(defineProps<{ preview?: boolean }>(), { preview: false });
+withDefaults(defineProps<{ preview?: boolean; title?: string | undefined }>(), {
+  preview: false,
+  title: DEFAULT_WIDGET_TITLE
+});
 const name = defineModel<string>('name', { default: '' });
 const code = defineModel<string>('code', { default: '' });
 defineEmits<{ create: []; join: [] }>();
@@ -9,11 +13,7 @@ defineEmits<{ create: []; join: [] }>();
 
 <template>
   <div class="widget-entry">
-    <div class="widget-entry__intro">
-      <span class="widget-entry__icon"><Mic :size="23" aria-hidden="true" /></span>
-      <h1>Ваша компания на связи</h1>
-      <p>Голос и видео — без лишних вкладок.</p>
-    </div>
+    <h1 class="widget-entry__title">{{ title }}</h1>
     <label class="widget-entry__field">
       Ваше имя
       <input v-model="name" :disabled="preview" maxlength="80" placeholder="Как вас зовут?" autocomplete="nickname" />

@@ -1,5 +1,29 @@
 import { afterEach, describe, expect, test, vi } from 'vitest';
-import { fitTileGrid, fitTiles, MIN_TILE_WIDTH } from '@/shared/ui/tile-grid';
+import { fitTileGrid, fitTiles, fitWidgetTileGrid, MIN_TILE_WIDTH } from '@/shared/ui/tile-grid';
+
+test('crowded widget calls keep one 16:9 size over three columns', () => {
+  for (const count of [9, 10, 11, 12]) {
+    const { columns, tileWidth, scroll } = fitWidgetTileGrid({ width: 206, height: 150, count, gap: 4 });
+    const rows = Math.ceil(count / 3);
+    expect(columns).toBe(3);
+    expect(scroll).toBe(false);
+    expect(tileWidth).toBe(count === 9 ? 66 : 61);
+    expect(rows * ((tileWidth * 9) / 16) + (rows - 1) * 4).toBeLessThanOrEqual(150);
+  }
+});
+
+test('a single widget tile is limited by width in a tall slot and by height in a wide slot', () => {
+  expect(fitWidgetTileGrid({ width: 220, height: 320, count: 1, gap: 8 })).toEqual({
+    columns: 1,
+    tileWidth: 220,
+    scroll: false
+  });
+  expect(fitWidgetTileGrid({ width: 760, height: 180, count: 1, gap: 8 })).toEqual({
+    columns: 1,
+    tileWidth: 320,
+    scroll: false
+  });
+});
 
 const GAP = 16;
 

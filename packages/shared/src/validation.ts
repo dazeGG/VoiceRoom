@@ -42,6 +42,12 @@ export function normalizeRoomId(value: unknown): string {
   return /^[A-Za-z0-9_-]{3,48}$/.test(roomId) ? roomId : '';
 }
 
+export function createRoomCode(): string {
+  const alphabet = 'abcdefghijkmnpqrstuvwxyz23456789';
+  const bytes = crypto.getRandomValues(new Uint8Array(10));
+  return Array.from(bytes, (byte) => alphabet[byte % alphabet.length]).join('');
+}
+
 export function normalizePeerId(value: unknown): string {
   if (typeof value !== 'string') return '';
   const peerId = value.trim();

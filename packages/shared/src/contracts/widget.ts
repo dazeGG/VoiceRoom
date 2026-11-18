@@ -3,16 +3,25 @@ import { Type, type Static } from 'typebox';
 import { Value } from 'typebox/value';
 
 const color = Type.String({ pattern: '^#[0-9a-fA-F]{6}$' });
+export const DEFAULT_WIDGET_TITLE = 'Голосовой чат';
+export const WIDGET_TITLE_LIMIT = 80;
+export const WIDGET_SERVICE_URL = 'https://voiceroom.ru/';
+export const DEFAULT_WIDGET_WIDTH = 360;
+export const DEFAULT_WIDGET_HEIGHT = 520;
+export const DEFAULT_WIDGET_PREVIEW_HEIGHT = 400;
+
 export const WidgetConfig = Type.Object(
   {
     version: Type.Literal(1),
+    title: Type.Optional(Type.String({ minLength: 1, maxLength: WIDGET_TITLE_LIMIT })),
     mode: Type.Union([Type.Literal('inline'), Type.Literal('floating')]),
     background: color,
     text: color,
     accent: color,
     radius: Type.Integer({ minimum: 0, maximum: 24 }),
-    width: Type.Integer({ minimum: 280, maximum: 960 }),
-    height: Type.Integer({ minimum: 320, maximum: 900 }),
+    // Kept for embeds generated before sizing moved to the host page.
+    width: Type.Optional(Type.Integer({ minimum: 280, maximum: 960 })),
+    height: Type.Optional(Type.Integer({ minimum: 320, maximum: 900 })),
     corner: Type.Union([
       Type.Literal('top-left'),
       Type.Literal('top-right'),
@@ -20,7 +29,9 @@ export const WidgetConfig = Type.Object(
       Type.Literal('bottom-right')
     ]),
     offset: Type.Integer({ minimum: 0, maximum: 48 }),
-    chat: Type.Boolean()
+    // Retained for previously copied snippets.
+    chat: Type.Optional(Type.Boolean()),
+    camera: Type.Optional(Type.Boolean())
   },
   { additionalProperties: false }
 );
@@ -32,11 +43,8 @@ export const defaultWidgetConfig: Readonly<WidgetConfig> = Object.freeze({
   text: '#ffffff',
   accent: '#a5b4fc',
   radius: 16,
-  width: 360,
-  height: 520,
   corner: 'bottom-right',
-  offset: 16,
-  chat: false
+  offset: 16
 });
 export function parseWidgetConfig(value: unknown): WidgetConfig {
   if (!Value.Check(WidgetConfig, value) || new TextEncoder().encode(JSON.stringify(value)).length > 2048) {
@@ -50,6 +58,35 @@ export function decodeWidgetConfig(serialized: string): WidgetConfig {
 }
 export function encodeWidgetConfig(value: WidgetConfig): string {
   return JSON.stringify(parseWidgetConfig(value));
+}
+
+export function decodeWidgetEmbedConfig(attribute: string): WidgetConfig {
+  return decodeWidgetConfig(attribute.trimStart().startsWith('{') ? attribute : decodeURIComponent(attribute));
+}
+
+export function widgetEmbedMarkup(config: WidgetConfig, origin: string): string {
+  const base = widgetOrigin(origin);
+  // A single-quoted HTML attribute keeps the JSON quotes readable.
+  const value = encodeWidgetConfig(config)
+    .replaceAll('&', '&amp;')
+    .replaceAll("'", '&#39;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;');
+  return `<div data-voiceroom-widget data-config='${value}'></div>\n<script type="module" src="${base}/widget/v1/loader.js" defer></script>`;
+}
+
+export function normalizeWidgetColor(input: string): string | null {
+  const value = input.trim().toLowerCase();
+  const hex = /^#?([0-9a-f]{3}|[0-9a-f]{6})$/.exec(value)?.[1];
+  if (hex) return `#${hex.length === 3 ? hex.replace(/./g, '$&$&') : hex}`;
+
+  const rgb =
+    /^rgb\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*\)$/.exec(value) ??
+    /^rgb\(\s*(\d{1,3})\s+(\d{1,3})\s+(\d{1,3})\s*\)$/.exec(value);
+  if (!rgb) return null;
+  const channels = rgb.slice(1).map(Number);
+  if (channels.some((channel) => channel > 255)) return null;
+  return `#${channels.map((channel) => channel.toString(16).padStart(2, '0')).join('')}`;
 }
 /** Canonical tuple origins only; URL parsing is the Firefox-compatible fallback. */
 export function widgetOrigin(value: string): string {
@@ -92,6 +129,8 @@ export const WidgetMessage = Type.Object(
       Type.Literal('ready'),
       Type.Literal('initialize'),
       Type.Literal('requestCollapse'),
+      Type.Literal('requestExpand'),
+      Type.Literal('expandState'),
       Type.Literal('callState')
     ]),
     active: Type.Optional(Type.Boolean())

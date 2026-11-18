@@ -1,5 +1,10 @@
-import { afterEach, describe, expect, it } from 'vitest';
-import { defaultWidgetConfig, encodeWidgetConfig, type WidgetConfig } from '@voice-room/shared/contracts/widget';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import {
+  defaultWidgetConfig,
+  encodeWidgetConfig,
+  parseWidgetBootstrap,
+  type WidgetConfig
+} from '@voice-room/shared/contracts/widget';
 import { mountWidget } from '../src/features/widget/loader';
 import { widgetSnippet } from '../src/features/widget/snippet';
 const disposals: (() => void)[] = [];
@@ -19,6 +24,23 @@ function create(overrides: Partial<WidgetConfig> = {}) {
   if (!frame || !button) throw new Error('Widget elements missing');
   return { host, frame, button };
 }
+
+function send(
+  frame: HTMLIFrameElement,
+  type: string,
+  fields: { nonce?: string; active?: boolean } = {},
+  origin = 'https://voice.test'
+) {
+  const { nonce } = parseWidgetBootstrap(new URL(frame.src).hash);
+  window.dispatchEvent(
+    new MessageEvent('message', {
+      origin,
+      source: frame.contentWindow,
+      data: { version: 1, nonce, type, ...fields }
+    })
+  );
+}
+
 describe('widget loader', () => {
   it('keeps the floating launcher below its frame and leaves the surrounding host clickable', () => {
     const { host, frame, button } = create({
@@ -62,11 +84,23 @@ describe('widget loader', () => {
     expect(frame.style.pointerEvents).toBe('auto');
     expect(host.style.width).toBe(expandedWidth);
   });
-  it('keeps an inline launcher hidden even though the floating launcher has a display style', () => {
+  it('keeps an inline launcher hidden and fills the host width for new embeds', () => {
     const { host, button } = create({ mode: 'inline' });
     expect(button.hidden).toBe(true);
     expect(button.style.display).toBe('none');
     expect(host.style.position).toBe('');
+    expect(host.querySelector('iframe')?.style.width).toBe('100%');
+  });
+  it('declares clipboard permissions and leaves camera delegation off for an audio-only widget', () => {
+    const { frame } = create({ camera: false });
+    expect(frame.allow).toBe("microphone; camera 'none'; autoplay; clipboard-write");
+    const legacy = create();
+    expect(legacy.frame.allow).toContain('camera');
+  });
+  it('retains explicit inline sizes for old embeds', () => {
+    const { frame } = create({ mode: 'inline', width: 420, height: 640 });
+    expect(frame.style.width).toBe('min(420px, 100%)');
+    expect(frame.style.height).toContain('640px');
   });
   it('creates independent instances without capture delegation beyond mic/camera and retains frame on collapse', () => {
     const a = create();
@@ -104,13 +138,78 @@ describe('widget loader', () => {
     expect(a.frame.style.visibility).toBe('hidden');
     expect(b.frame.style.visibility).not.toBe('hidden');
   });
-  it('disposal removes frame and snippet encodes configuration as data', () => {
+  it('advertises expansion after initialization and restores the same embedded context', () => {
+    const { host, frame } = create({ mode: 'inline', width: 420, height: 640 });
+    const context = frame.contentWindow;
+    if (!context) throw new Error('Missing frame context');
+    const post = vi.spyOn(context, 'postMessage');
+    const original = frame.style.cssText;
+    send(frame, 'ready');
+    expect(post.mock.calls).toEqual([
+      [expect.objectContaining({ type: 'initialize' }), 'https://voice.test'],
+      [expect.objectContaining({ type: 'expandState', active: false }), 'https://voice.test']
+    ]);
+    send(frame, 'requestExpand', {}, 'https://foreign.test');
+    send(frame, 'requestExpand', { nonce: 'ab'.repeat(24) });
+    expect(frame.style.cssText).toBe(original);
+
+    send(frame, 'requestExpand');
+    expect(post).toHaveBeenLastCalledWith(
+      expect.objectContaining({ type: 'expandState', active: true }),
+      'https://voice.test'
+    );
+    expect(frame.style.position).toBe('fixed');
+    expect(frame.hasAttribute('data-voiceroom-expanded')).toBe(true);
+    expect(host.querySelector('iframe')).toBe(frame);
+    expect(frame.contentWindow).toBe(context);
+    expect(host.children).toHaveLength(3);
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', cancelable: true }));
+    expect(post).toHaveBeenLastCalledWith(
+      expect.objectContaining({ type: 'expandState', active: false }),
+      'https://voice.test'
+    );
+    expect(frame.style.cssText).toBe(original);
+    expect(frame.hasAttribute('data-voiceroom-expanded')).toBe(false);
+    expect(host.children).toHaveLength(2);
+    expect(frame.contentWindow).toBe(context);
+  });
+  it('closes the previously expanded widget and clears expansion when the call or panel closes', () => {
+    const a = create();
+    const b = create();
+    send(a.frame, 'requestExpand', { active: true });
+    expect(a.frame.style.position).toBe('fixed');
+    send(b.frame, 'requestExpand');
+    expect(a.frame.style.position).not.toBe('fixed');
+    expect(b.frame.style.position).toBe('fixed');
+    send(b.frame, 'callState', { active: false });
+    expect(b.frame.style.position).not.toBe('fixed');
+    send(a.frame, 'requestExpand');
+    a.button.click();
+    expect(a.frame.style.position).toBe('absolute');
+    expect(a.frame.inert).toBe(true);
+    send(a.frame, 'requestExpand');
+    expect(a.frame.style.position).toBe('absolute');
+  });
+  it('mounts readable snippets and safely round-trips custom titles', () => {
+    const config = { ...defaultWidgetConfig, title: `100%: ДнД's "стол" & <друзья>` };
+    const snippet = widgetSnippet(config, 'https://voice.test');
+    expect(snippet).toContain(`data-config='{"version":1,`);
+    expect(snippet).toContain('type="module"');
+    const parsed = new DOMParser().parseFromString(snippet, 'text/html');
+    const host = parsed.querySelector<HTMLElement>('[data-voiceroom-widget]');
+    if (!host) throw new Error('Missing embed host');
+    document.body.append(host);
+    disposals.push(mountWidget(host, 'https://voice.test'));
+    const frame = host.querySelector('iframe');
+    if (!frame) throw new Error('Missing iframe');
+    expect(parseWidgetBootstrap(new URL(frame.src).hash).config).toEqual(config);
+  });
+  it('disposal removes the frame and invalid origins cannot be used in a snippet', () => {
     const a = create();
     const dispose = disposals.pop();
     if (!dispose) throw new Error('Missing disposal');
     dispose();
     expect(a.host.children).toHaveLength(0);
-    expect(widgetSnippet(defaultWidgetConfig, 'https://voice.test')).toContain('type="module"');
     expect(() => widgetSnippet(defaultWidgetConfig, 'null')).toThrow();
   });
 });

@@ -1,32 +1,92 @@
 <script setup lang="ts">
-import { onMounted, onBeforeUnmount, ref, shallowRef, computed } from 'vue';
-import type { WidgetBootstrap } from '@voice-room/shared/contracts/widget';
+import { onMounted, onBeforeUnmount, ref, shallowRef, computed, watch } from 'vue';
+import { X } from '@lucide/vue';
+import { WIDGET_SERVICE_URL, parseWidgetMessage, type WidgetBootstrap } from '@voice-room/shared/contracts/widget';
 import { createWidgetRuntime } from './runtime';
+import WidgetCallLayout from './WidgetCallLayout.vue';
 import WidgetJoinControls from './WidgetJoinControls.vue';
 const props = defineProps<{ bootstrap: WidgetBootstrap }>();
 const mediaMount = ref<HTMLElement | null>(null);
 const runtime = shallowRef<ReturnType<typeof createWidgetRuntime> | null>(null);
 const code = ref('');
-const message = ref('');
 const cameraDevice = ref('');
+const expandable = ref(false);
+const expanded = ref(false);
+const cameraAllowed = computed(() => props.bootstrap.config.camera !== false);
+type Device = 'input' | 'output' | 'camera';
+const panel = ref<Device | 'participant' | null>(null);
+const panelLabels = {
+  input: 'Настройки микрофона',
+  output: 'Настройки динамика',
+  camera: 'Настройки камеры'
+};
+const participantId = ref('');
+const participants = computed(() => {
+  const call = runtime.value;
+  if (!call?.state.joined) return [];
+  const self = call.state.peers.find((peer) => peer.id === call.peerId);
+  return [
+    {
+      id: call.peerId,
+      name: call.state.name || 'Вы',
+      self: true,
+      muted: call.state.muted || self?.serverMuted === true,
+      speaking: call.speaking(call.peerId),
+      video: call.video(call.peerId)
+    },
+    ...call.state.peers
+      .filter((peer) => peer.id !== call.peerId)
+      .map((peer) => ({
+        id: peer.id,
+        name: peer.name || 'Гость',
+        muted: peer.muted === true || peer.serverMuted,
+        speaking: call.speaking(peer.id),
+        video: call.video(peer.id)
+      }))
+  ];
+});
+const selectedParticipant = computed(() => participants.value.find(({ id }) => id === participantId.value));
+const visiblePanel = computed(() => (panel.value === 'participant' && !selectedParticipant.value ? null : panel.value));
+const panelTitle = computed(() => {
+  const current = visiblePanel.value;
+  if (current === 'participant') return selectedParticipant.value?.name;
+  return current ? panelLabels[current] : '';
+});
+watch(
+  () => runtime.value?.state.joined,
+  (joined) => {
+    if (!joined) panel.value = null;
+  }
+);
 const style = computed(() => ({
   '--vr-bg': props.bootstrap.config.background,
   '--vr-text': props.bootstrap.config.text,
   '--vr-accent': props.bootstrap.config.accent,
+  '--widget-radius': `${props.bootstrap.config.radius}px`,
   borderRadius: `${props.bootstrap.config.radius}px`
 }));
-const notify = (type: 'callState' | 'requestCollapse', active?: boolean) =>
+const notify = (type: 'callState' | 'requestCollapse' | 'requestExpand', active?: boolean) =>
   window.parent.postMessage(
     { version: 1, nonce: props.bootstrap.nonce, type, ...(active === undefined ? {} : { active }) },
     props.bootstrap.parentOrigin
   );
+function receiveExpansion(event: MessageEvent<unknown>) {
+  if (event.source !== window.parent || event.origin !== props.bootstrap.parentOrigin) return;
+  const message = parseWidgetMessage(event.data);
+  if (message?.type !== 'expandState' || message.nonce !== props.bootstrap.nonce || typeof message.active !== 'boolean')
+    return;
+  expandable.value = true;
+  expanded.value = message.active;
+}
 onMounted(() => {
+  window.addEventListener('message', receiveExpansion);
   if (mediaMount.value)
-    runtime.value = createWidgetRuntime(mediaMount.value, props.bootstrap.config.chat, (active) =>
-      notify('callState', active)
-    );
+    runtime.value = createWidgetRuntime(mediaMount.value, (active) => notify('callState', active), cameraAllowed.value);
 });
-onBeforeUnmount(() => runtime.value?.leave());
+onBeforeUnmount(() => {
+  window.removeEventListener('message', receiveExpansion);
+  runtime.value?.leave();
+});
 async function run(action: () => Promise<unknown> | undefined) {
   try {
     await action();
@@ -37,54 +97,72 @@ async function run(action: () => Promise<unknown> | undefined) {
 function volume(peer: string, event: Event) {
   if (event.target instanceof HTMLInputElement) runtime.value?.volume(peer, Number(event.target.value));
 }
-async function sendText() {
-  await runtime.value?.text(message.value);
-  message.value = '';
+function togglePanel(next: Device) {
+  panel.value = panel.value === next ? null : next;
+  if (panel.value) void run(() => runtime.value?.devices());
+}
+function toggleDevice(device: Device) {
+  const call = runtime.value;
+  if (!call) return;
+  if (device === 'input') call.mute();
+  else if (device === 'output') void run(() => call.toggleOutput());
+  else void run(() => call.camera(!call.state.camera, cameraDevice.value));
+}
+function showParticipant(id: string) {
+  panel.value = panel.value === 'participant' && participantId.value === id ? null : 'participant';
+  participantId.value = id;
 }
 </script>
 <template>
-  <main class="widget-shell" :style="style">
-    <header class="widget-shell__header">
-      <strong><span class="widget-shell__brand-mark" aria-hidden="true"></span>VoiceRoom</strong
-      ><button v-if="bootstrap.config.mode === 'floating'" type="button" @click="notify('requestCollapse')">
-        Свернуть
-      </button>
-      <span v-else class="widget-shell__guest">Гость</span>
+  <main class="widget-shell" :class="{ 'widget-shell--call': runtime?.state.joined }" :style="style">
+    <header v-if="bootstrap.config.mode === 'floating' && !runtime?.state.joined" class="widget-shell__header">
+      <button type="button" @click="notify('requestCollapse')">Свернуть</button>
     </header>
-    <template v-if="runtime">
-      <p role="status" class="widget-shell__status">{{ runtime.state.status }}</p>
+    <div v-if="runtime" class="widget-shell__body">
+      <p v-if="!runtime.state.joined" role="status" class="widget-shell__status">{{ runtime.state.status }}</p>
       <p v-if="runtime.state.error" role="alert">{{ runtime.state.error }}</p>
-      <label v-if="runtime.state.joined">Ваше имя<input v-model="runtime.state.name" maxlength="80" /></label>
       <WidgetJoinControls
         v-if="!runtime.state.joined"
         v-model:name="runtime.state.name"
         v-model:code="code"
+        :title="bootstrap.config.title"
         @create="run(() => runtime?.create())"
         @join="run(() => runtime?.join(code))"
       />
-      <template v-else>
-        <p>
-          Код: <strong>{{ runtime.state.roomId }}</strong>
-        </p>
-        <button @click="runtime.mute()">
-          {{ runtime.state.muted ? 'Включить микрофон' : 'Выключить микрофон' }}
-        </button>
-        <button
-          @click="
-            run(async () => {
-              if (!runtime) return;
-              await runtime.camera(!runtime.state.camera);
-            })
-          "
-        >
-          {{ runtime.state.camera ? 'Выключить камеру' : 'Включить камеру' }}
-        </button>
-        <button @click="run(() => runtime?.media.resumeAudio())">Включить звук</button>
-        <button @click="runtime.leave()">Выйти</button>
-        <details>
-          <summary>Настройки звука и видео</summary>
+      <WidgetCallLayout
+        v-else
+        :members="participants"
+        :room-code="runtime.state.roomId"
+        :status="runtime.state.status"
+        :quality="runtime.connectionQuality()"
+        :muted="runtime.state.muted"
+        :output-muted="runtime.state.outputMuted || runtime.outputBlocked()"
+        :camera="runtime.state.camera"
+        :camera-allowed="cameraAllowed"
+        :expandable="expandable"
+        :expanded="expanded"
+        :floating="bootstrap.config.mode === 'floating'"
+        :panel="visiblePanel"
+        @toggle-device="toggleDevice"
+        @device="togglePanel"
+        @participant="showParticipant"
+        @leave="runtime.leave()"
+        @collapse="notify('requestCollapse')"
+        @expand="(active) => notify('requestExpand', active)"
+        @close-panel="panel = null"
+      >
+        <div class="widget-call__panel-head">
+          <strong>{{ panelTitle }}</strong>
+          <button type="button" aria-label="Закрыть" title="Закрыть" @click="panel = null">
+            <X :size="16" aria-hidden="true" />
+          </button>
+        </div>
+        <section v-if="visiblePanel === 'camera'" aria-label="Настройки камеры" class="widget-call__settings">
           <label
-            >Камера<select v-model="cameraDevice" @change="run(() => runtime?.camera(true, cameraDevice))">
+            >Камера<select
+              v-model="cameraDevice"
+              @change="runtime.state.camera && run(() => runtime?.camera(true, cameraDevice))"
+            >
               <option value="">По умолчанию</option>
               <option
                 v-for="device in runtime.state.devices.filter((d) => d.kind === 'videoinput')"
@@ -95,8 +173,8 @@ async function sendText() {
               </option>
             </select></label
           >
-
-          <button @click="run(() => runtime?.devices())">Обновить устройства</button>
+        </section>
+        <section v-else-if="visiblePanel === 'input'" aria-label="Настройки микрофона" class="widget-call__settings">
           <label
             >Микрофон<select v-model="runtime.state.input" @change="run(() => runtime?.capture())">
               <option value="">По умолчанию</option>
@@ -110,7 +188,17 @@ async function sendText() {
             </select></label
           >
           <label
-            >Вывод звука<select
+            >Шумоподавление<select v-model="runtime.state.noise" @change="run(() => runtime?.capture())">
+              <option value="rnnoise">RNNoise</option>
+              <option value="browser">Браузерное</option>
+              <option value="off">Выключено</option>
+            </select></label
+          >
+        </section>
+        <section v-else-if="visiblePanel === 'output'" aria-label="Настройки динамика" class="widget-call__settings">
+          <label>
+            Вывод звука
+            <select
               v-model="runtime.state.output"
               @change="run(() => runtime?.media.outputDevice(runtime.state.output))"
             >
@@ -122,50 +210,37 @@ async function sendText() {
               >
                 {{ device.label || 'Динамики' }}
               </option>
-            </select></label
-          >
-          <label
-            >Шумоподавление<select v-model="runtime.state.noise" @change="run(() => runtime?.capture())">
-              <option value="rnnoise">RNNoise</option>
-              <option value="browser">Браузерное</option>
-              <option value="off">Выключено</option>
-            </select></label
-          >
-        </details>
-        <ul>
-          <li v-for="peer in runtime.state.peers" :key="peer.id">
-            {{ peer.name || 'Гость'
-            }}<template v-if="peer.id !== runtime.peerId"
-              ><label
-                >Громкость<input
-                  type="range"
-                  min="0"
-                  max="1"
-                  step="0.05"
-                  :value="runtime.state.localVolumes[peer.id] ?? 1"
-                  @input="volume(peer.id, $event)" /></label
-              ><button @click="runtime.volume(peer.id, runtime.state.localVolumes[peer.id] === 0 ? 1 : 0)">
-                {{ runtime.state.localVolumes[peer.id] === 0 ? 'Включить локально' : 'Отключить локально' }}
-              </button></template
-            >
-          </li>
-        </ul>
-        <section v-if="runtime.state.chat" aria-label="Текстовый чат" class="widget-shell__chat">
-          <ol>
-            <li v-for="item in runtime.state.messages" :key="item.id">
-              {{ item.name }}: <span>{{ item.text }}</span
-              ><button v-if="item.peerId === runtime.peerId" @click="run(() => runtime?.deleteText(item.id))">
-                Удалить сообщение
-              </button>
-            </li>
-          </ol>
-          <form @submit.prevent="run(sendText)">
-            <label>Сообщение<input v-model="message" maxlength="4000" /></label>
-            <button>Отправить</button>
-          </form>
+            </select>
+          </label>
         </section>
-      </template>
-    </template>
+        <section
+          v-else-if="visiblePanel === 'participant' && selectedParticipant"
+          class="widget-call__settings"
+          aria-label="Громкость участника"
+        >
+          <label
+            >Громкость<input
+              type="range"
+              min="0"
+              max="1"
+              step="0.05"
+              :value="runtime.state.localVolumes[selectedParticipant.id] ?? 1"
+              @input="volume(selectedParticipant.id, $event)"
+          /></label>
+          <button
+            type="button"
+            @click="
+              runtime.volume(selectedParticipant.id, runtime.state.localVolumes[selectedParticipant.id] === 0 ? 1 : 0)
+            "
+          >
+            {{ runtime.state.localVolumes[selectedParticipant.id] === 0 ? 'Включить локально' : 'Отключить локально' }}
+          </button>
+        </section>
+      </WidgetCallLayout>
+    </div>
     <div ref="mediaMount" class="widget-media" />
+    <footer class="widget-shell__credit">
+      Powered by <a :href="WIDGET_SERVICE_URL" target="_blank" rel="noopener noreferrer">VoiceRoom</a>
+    </footer>
   </main>
 </template>

@@ -1,18 +1,16 @@
 import { reactive } from 'vue';
 import { LiveKitAdmission } from '@voice-room/shared/contracts/admission';
 import { WidgetRoomCreated, WidgetRoomInfo } from '@voice-room/shared/contracts/widget';
-import { MessageDeleted, RoomMessageAnswer, type RoomMessage } from '@voice-room/shared/contracts/messages';
 import type { PublicPeer } from '@voice-room/shared/contracts/rooms';
 import { parseServerFrame } from '@voice-room/shared/realtime';
 import type { ClientCommand } from '@voice-room/shared/contracts/realtime';
 import { widgetRequest } from './http';
 import { widgetProof } from './proof';
-import { WidgetMedia } from './media';
+import { WIDGET_AUDIO_BLOCKED_MESSAGE, WidgetMedia } from './media';
 
-export function createWidgetRuntime(mount: HTMLElement, chatPreference: boolean, callState: (active: boolean) => void) {
+export function createWidgetRuntime(mount: HTMLElement, callState: (active: boolean) => void, cameraAllowed = true) {
   const localVolumes: Record<string, number> = {};
   const peers: PublicPeer[] = [];
-  const messages: RoomMessage[] = [];
   const devicesList: MediaDeviceInfo[] = [];
   const settings: { noise: 'rnnoise' | 'browser' | 'off' } = { noise: 'rnnoise' };
   const state = reactive({
@@ -22,11 +20,10 @@ export function createWidgetRuntime(mount: HTMLElement, chatPreference: boolean,
     error: '',
     joined: false,
     muted: false,
+    outputMuted: false,
     camera: false,
-    chat: false,
     peers,
     localVolumes,
-    messages,
     input: '',
     output: '',
     noise: settings.noise,
@@ -47,12 +44,14 @@ export function createWidgetRuntime(mount: HTMLElement, chatPreference: boolean,
           socket.close();
         } else leave();
       }
-    }
+    },
+    cameraAllowed
   );
   let socket: WebSocket | null = null;
   let stopped = false;
   let reconnect: ReturnType<typeof setTimeout> | undefined;
   let generation = 0;
+  let cameraRevision = 0;
   let mediaRecoveries = 0;
   let heartbeat: ReturnType<typeof setInterval> | undefined;
   let connectingMedia: number | null = null;
@@ -71,7 +70,8 @@ export function createWidgetRuntime(mount: HTMLElement, chatPreference: boolean,
     state.error = error instanceof Error ? error.message : 'Не удалось подключиться';
   };
   async function devices() {
-    state.devices = await navigator.mediaDevices.enumerateDevices();
+    const available = await navigator.mediaDevices.enumerateDevices();
+    state.devices = cameraAllowed ? available : available.filter(({ kind }) => kind !== 'videoinput');
   }
   async function capture() {
     await media.microphone(state.input, state.noise, state.muted);
@@ -137,7 +137,6 @@ export function createWidgetRuntime(mount: HTMLElement, chatPreference: boolean,
             break;
           case 'room.snapshot':
             state.peers = frame.payload.peers;
-            state.messages = state.chat ? frame.payload.recentMessages : [];
             if (!state.joined) void connectMedia();
             break;
           case 'room.peer.updated':
@@ -147,18 +146,6 @@ export function createWidgetRuntime(mount: HTMLElement, chatPreference: boolean,
             break;
           case 'room.peer.left':
             state.peers = state.peers.filter((peer) => peer.id !== frame.payload.peerId);
-            break;
-          case 'room.chat.message':
-            if (state.chat) state.messages.push(frame.payload.message);
-            break;
-          case 'room.chat.edited':
-            if (state.chat)
-              state.messages = state.messages.map((message) =>
-                message.id === frame.payload.message.id ? frame.payload.message : message
-              );
-            break;
-          case 'room.chat.deleted':
-            state.messages = state.messages.filter((message) => message.id !== frame.payload.messageId);
             break;
           case 'room.full':
           case 'server.full':
@@ -186,6 +173,7 @@ export function createWidgetRuntime(mount: HTMLElement, chatPreference: boolean,
       if (heartbeat) clearInterval(heartbeat);
       generation++;
       state.joined = false;
+      state.camera = false;
       media.dispose();
       state.status = 'Связь потеряна. Переподключение…';
       reconnect = setTimeout(openSocket, 1000);
@@ -200,7 +188,6 @@ export function createWidgetRuntime(mount: HTMLElement, chatPreference: boolean,
     const room = await widgetRequest(`/api/widget/rooms/${encodeURIComponent(code.trim())}`, WidgetRoomInfo);
     if (revision !== generation || stopped) return;
     state.roomId = room.roomId;
-    state.chat = room.chat && chatPreference;
     openSocket();
   }
   async function create() {
@@ -208,7 +195,7 @@ export function createWidgetRuntime(mount: HTMLElement, chatPreference: boolean,
     const proof = await widgetProof();
     if (revision !== generation) return;
     const room = await widgetRequest('/api/widget/rooms', WidgetRoomCreated, {
-      chat: chatPreference,
+      chat: false,
       ...(proof ? { proof } : {})
     });
     if (revision !== generation) return;
@@ -232,17 +219,8 @@ export function createWidgetRuntime(mount: HTMLElement, chatPreference: boolean,
     state.joined = false;
     state.camera = false;
     state.peers = [];
-    state.messages = [];
     state.status = 'Готов к подключению';
     callState(false);
-  }
-  async function text(text: string) {
-    if (!state.chat || !text.trim()) return;
-    await widgetRequest(`/api/widget/rooms/${encodeURIComponent(state.roomId)}/messages`, RoomMessageAnswer, {
-      ...target(),
-      name: state.name || 'Гость',
-      text
-    });
   }
   function volume(peer: string, value: number) {
     state.localVolumes[peer] = Math.max(0, Math.min(1, value));
@@ -253,23 +231,32 @@ export function createWidgetRuntime(mount: HTMLElement, chatPreference: boolean,
     media.mute(state.muted || Boolean(state.peers.find((peer) => peer.id === peerId)?.serverMuted));
     send({ type: 'room.peer.update', payload: { ...target(), patch: { muted: state.muted } } });
   }
-  async function deleteText(messageId: string) {
-    if (!state.chat) return;
-    await widgetRequest(
-      `/api/widget/rooms/${encodeURIComponent(state.roomId)}/messages/${encodeURIComponent(messageId)}`,
-      MessageDeleted,
-      { peerId, sessionToken },
-      'DELETE'
-    );
+  function outputBlocked(): boolean {
+    return state.audioRevision > 0 && media.outputBlocked();
+  }
+  async function toggleOutput(): Promise<void> {
+    if (!state.joined) return;
+    if (state.outputMuted || !media.outputBlocked()) {
+      state.outputMuted = !state.outputMuted;
+      media.setOutputMuted(state.outputMuted);
+    }
+    if (state.outputMuted) return;
+    const revision = generation;
+    await media.resumeAudio();
+    if (revision === generation && !media.outputBlocked() && state.error === WIDGET_AUDIO_BLOCKED_MESSAGE) {
+      state.error = '';
+    }
   }
   async function camera(enabled: boolean, deviceId = '') {
+    if (!cameraAllowed) {
+      if (enabled) throw new Error('Камера отключена для этого виджета');
+      return;
+    }
+    if (enabled && grant) throw new Error('Подождите завершения настройки камеры');
     const revision = generation;
+    const operation = ++cameraRevision;
     if (enabled)
       await new Promise<void>((resolve, reject) => {
-        if (grant) {
-          reject(new Error('Подождите завершения настройки камеры'));
-          return;
-        }
         grant = {
           resolve,
           reject,
@@ -280,8 +267,9 @@ export function createWidgetRuntime(mount: HTMLElement, chatPreference: boolean,
         };
         send({ type: 'room.media.request', payload: { ...target(), kind: 'camera' } });
       });
-    if (revision !== generation) return;
+    if (revision !== generation || operation !== cameraRevision) return;
     await media.camera(enabled, deviceId);
+    if (revision !== generation || operation !== cameraRevision) return;
     state.camera = enabled;
     send({ type: 'room.peer.update', payload: { ...target(), patch: { camera: enabled } } });
   }
@@ -289,15 +277,24 @@ export function createWidgetRuntime(mount: HTMLElement, chatPreference: boolean,
     state,
     media,
     camera,
+    video(peer: string) {
+      return state.audioRevision ? media.video(peer, peer === peerId) : undefined;
+    },
+    speaking(peer: string) {
+      return state.audioRevision > 0 && media.speaking(peer);
+    },
+    connectionQuality() {
+      return state.audioRevision > 0 ? media.connectionQuality() : 'unknown';
+    },
     peerId,
     create,
     join,
     leave,
     capture,
     devices,
-    text,
-    deleteText,
     mute,
+    toggleOutput,
+    outputBlocked,
     volume,
     report,
     send,

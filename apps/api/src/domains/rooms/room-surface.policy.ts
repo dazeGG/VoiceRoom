@@ -11,7 +11,7 @@ export function roomAllowsSurface(room: RoomBoundary | null | undefined, surface
 }
 
 export function roomAllowsChat(room: RoomBoundary | null | undefined, surface: RoomSurface): boolean {
-  return roomAllowsSurface(room, surface) && (surface === 'main' || room?.widgetChatEnabled === true);
+  return surface === 'main' && roomAllowsSurface(room, surface);
 }
 
 export function roomAllowsAttachments(room: RoomBoundary | null | undefined, surface: RoomSurface): boolean {
