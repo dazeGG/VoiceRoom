@@ -20,6 +20,8 @@ import { useRoomShell } from '../shell';
 import { useRoomSocial } from '../social';
 import RoomCallTimer from './RoomCallTimer.vue';
 
+defineProps<{ languageInSettings?: boolean }>();
+
 const social = useRoomSocial();
 const session = useSessionStore();
 const shell = useRoomShell();
@@ -63,7 +65,11 @@ function notifyRoomsChanged(): void {
 </script>
 
 <template>
-  <Topbar :label="t('Новая голосовая комната')" reload :show-language="session.loaded && !session.user">
+  <Topbar
+    :label="t('Новая голосовая комната')"
+    reload
+    :show-language="!languageInSettings && session.loaded && !session.user"
+  >
     <div class="room-topbar__heading" :aria-label="t('Комната')" :hidden="page.screen !== 'room'">
       <div class="room-topbar__heading-main">
         <RoomMenu

@@ -61,7 +61,7 @@ onBeforeUnmount(() => {
 
 <template>
   <div ref="roomRoot" :class="['app-shell', { 'room-embedded-shell': embedded }]">
-    <RoomTopbar />
+    <RoomTopbar :language-in-settings="embedded" />
     <RoomCtaSlot />
     <StartRoomScreen />
     <RoomStage />

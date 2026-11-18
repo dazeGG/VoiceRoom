@@ -28,6 +28,14 @@ test('unresolved and authenticated sessions have no language picker, even before
   expect(view.queryByRole('combobox')).toBeNull();
 });
 
+test('the room header omits the language picker when it is available in settings', async () => {
+  const view = await renderWithApp(RoomTopbar, { props: { languageInSettings: true } });
+  useSessionStore(view.pinia).setUser(null);
+  await nextTick();
+
+  expect(view.queryByRole('combobox', { name: 'Язык' })).toBeNull();
+});
+
 test('guests can change language, while sign-in hides the picker and sign-out restores the saved choice', async () => {
   const view = await renderWithApp(RoomTopbar);
   const session = useSessionStore(view.pinia);
