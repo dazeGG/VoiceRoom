@@ -10,5 +10,5 @@ test('widget deployment compatibility and ERR ordering regressions', { skip: pro
   });
   assert.equal(result.error, undefined);
   assert.equal(result.status, 0, result.stdout + result.stderr);
-  assert.match(result.stderr, /Ran 19 tests/);
+  assert.match(result.stderr, /Ran 20 tests/);
 });

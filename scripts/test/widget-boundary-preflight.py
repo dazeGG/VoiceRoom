@@ -2,6 +2,7 @@ import importlib.util
 import json
 import sys
 import pathlib
+import shutil
 import unittest
 import os
 import subprocess
@@ -54,7 +55,7 @@ class CompatibilityTest(unittest.TestCase):
 
 
 class DeploymentOrderingTest(unittest.TestCase):
-    def run_deploy(self, initial, activate_during_rollout=False, compatible=False, recovery_fails=False, proof_mode='', multiple_owner='', fence_fails=False):
+    def run_deploy(self, initial, activate_during_rollout=False, compatible=False, recovery_fails=False, proof_mode='', multiple_owner='', fence_fails=False, legacy_site=False):
         with tempfile.TemporaryDirectory() as temporary:
             root = pathlib.Path(temporary)
             tools = root / 'bin'
@@ -62,13 +63,20 @@ class DeploymentOrderingTest(unittest.TestCase):
             (root / '.env').write_text('VOICEROOM_API_IMAGE=old-api\nVOICEROOM_WORKER_IMAGE=old-worker\nVOICEROOM_WEB_IMAGE=old-web\n')
             (root / 'floor').write_text(initial)
             log = root / 'events'
+            legacy_dist = root / 'legacy-site'
+            if legacy_site:
+                legacy_dist.mkdir()
+                (legacy_dist / 'index.html').write_text('<h1>Legacy public site</h1>')
+                publisher = root / 'scripts' / 'cd' / 'publish-static.sh'
+                publisher.parent.mkdir(parents=True)
+                shutil.copyfile(path.parent / publisher.name, publisher)
             def executable(name, body):
                 target = tools / name
                 target.write_text('#!/bin/bash\nset -e\n' + body)
                 target.chmod(0o755)
             executable('git', '''echo "git $*" >> "$EVENTS"
 case "$1" in
-rev-parse) echo previous ;;
+rev-parse) echo "$PREVIOUS_COMMIT" ;;
 show) case "$2" in *widget-release-capabilities.py) cat "$MANIFEST_HELPER" ;; *) cat "$HELPER" ;; esac ;;
 esac
 ''')
@@ -80,6 +88,8 @@ case "$*" in
 "compose ps --quiet"*)
   echo aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
   if [ "$MULTIPLE_OWNER" = "${@: -1}" ]; then echo bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb; fi ;;
+"exec "*" test -s /srv/site/index.html") test -s "$LEGACY_DIST/index.html" ;;
+"cp "*":/srv/site/. -") tar -cf - -C "$LEGACY_DIST" . ;;
 "compose up"*)
   if [ "$ACTIVATE" = 1 ]; then echo t > "$FLOOR"; fi
   exit 1 ;;
@@ -102,13 +112,23 @@ esac
             env = dict(os.environ, PATH=str(tools) + os.pathsep + os.environ['PATH'],
                        EVENTS=str(log), HELPER=str(path), FLOOR=str(root / 'floor'),
                        MANIFEST_HELPER=str(path.parent / 'widget-release-capabilities.py'),
+                       LEGACY_DIST=str(legacy_dist), PREVIOUS_COMMIT='1' * 40 if legacy_site else 'previous',
                        ACTIVATE='1' if activate_during_rollout else '0')
             env.update(COMPATIBLE='1' if compatible else '0', RECOVERY_FAILS='1' if recovery_fails else '0')
             env.update(PROOF_MODE=proof_mode, MULTIPLE_OWNER=multiple_owner, FENCE_FAILS='1' if fence_fails else '0')
             script = pathlib.Path(__file__).parents[1] / 'cd' / 'remote-deploy.sh'
             result = subprocess.run(['bash', str(script), str(root), 'candidate', 'new-api', 'new-worker', 'new-web'],
                                     env=env, capture_output=True, text=True)
+            if legacy_site:
+                current = root / 'static' / 'site' / 'current'
+                self.assertEqual((current / 'index.html').read_text(), (legacy_dist / 'index.html').read_text())
+                self.assertEqual(current.readlink(), pathlib.Path('releases', env['PREVIOUS_COMMIT']))
             return result, log.read_text(), (root / '.env').read_text()
+
+    def test_first_rollout_seeds_the_legacy_site_before_compose_recreation(self):
+        result, events, _ = self.run_deploy('f', legacy_site=True)
+        self.assertIn('published site', result.stdout)
+        self.assertLess(events.index('docker cp'), events.index('docker compose up'))
 
     def test_disabled_first_rollout_can_restore_legacy(self):
         result, events, environment = self.run_deploy('f')
