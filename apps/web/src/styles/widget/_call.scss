@@ -31,8 +31,7 @@
 
 .widget-call {
   --call-line: color-mix(in srgb, var(--vr-text) 14%, var(--vr-bg));
-  --call-surface: color-mix(in srgb, var(--vr-text) 7%, var(--vr-bg));
-  --vr-surface-2: var(--call-surface);
+  --vr-surface-2: color-mix(in srgb, var(--vr-text) 7%, var(--vr-bg));
   --vr-surface-3: color-mix(in srgb, var(--vr-text) 9%, var(--vr-bg));
   --vr-line: color-mix(in srgb, var(--vr-text) 14%, transparent);
   --vr-line-strong: var(--call-line);
@@ -118,7 +117,12 @@
     opacity: 0;
   }
 
-  .widget-shell--call:not(:hover, :has(:focus-visible), :has(.widget-call__panel), :has([data-copy-feedback]))
+  .widget-shell--call:not(
+      :hover,
+      :has(:focus-visible),
+      :has(.widget-call__panel),
+      :has(.widget-call__header--copy-feedback)
+    )
     .widget-call__chrome {
     opacity: 0;
     pointer-events: none;
@@ -142,11 +146,7 @@
   scrollbar-color: var(--call-line) transparent;
   scrollbar-gutter: auto;
 
-  &[data-scroll='true'] {
-    align-content: flex-start;
-  }
-
-  &[data-scroll='false'] {
+  &.widget-call__tiles--fit {
     overflow: clip;
   }
 
@@ -284,7 +284,7 @@
   overflow: auto;
   border: 1px solid var(--call-line);
   border-radius: var(--widget-radius);
-  background: var(--call-surface);
+  background: var(--vr-surface-2);
 }
 
 .widget-call__panel-head {

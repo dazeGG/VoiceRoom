@@ -1,0 +1,69 @@
+name: Deploy static component
+
+on:
+  workflow_call:
+    inputs:
+      component:
+        required: true
+        type: string
+      environment:
+        required: true
+        type: string
+      url:
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: ${{ inputs.environment }}
+      url: ${{ inputs.url }}
+    concurrency:
+      group: deploy-${{ inputs.environment }}-${{ inputs.component }}
+      cancel-in-progress: false
+    env:
+      COMPONENT: ${{ inputs.component }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v5
+        with:
+          name: ${{ inputs.component }}-dist
+          path: static-dist
+      - name: Publish the static files
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_KEY: ${{ secrets.SSH_KEY }}
+          SSH_FINGERPRINT: ${{ vars.SSH_FINGERPRINT }}
+          DEPLOY_PATH: ${{ vars.DEPLOY_PATH }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          : "${DEPLOY_PATH:?set DEPLOY_PATH on the deployment environment}"
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          ssh-keyscan -T 15 -t ed25519 "$SSH_HOST" > ~/.ssh/known_hosts 2>/dev/null
+          actual="$(ssh-keygen -lf ~/.ssh/known_hosts | awk '{print $2}')"
+          if [ -z "$SSH_FINGERPRINT" ] || [ "$actual" != "$SSH_FINGERPRINT" ]; then
+            echo '::error::static deploy host fingerprint does not match SSH_FINGERPRINT'
+            exit 1
+          fi
+          key="$RUNNER_TEMP/static_deploy_key"
+          install -m 600 /dev/null "$key"
+          trap 'rm -f -- "$key"' EXIT
+          printf '%s\n' "$SSH_KEY" > "$key"
+          remote="$(printf 'bash -c %q -- %q %q %q' "$(<scripts/cd/publish-static.sh)" "$DEPLOY_PATH" "$COMPONENT" "$GITHUB_SHA")"
+          tar -cf - -C static-dist . | ssh -i "$key" \
+            -o BatchMode=yes -o StrictHostKeyChecking=yes -o IdentitiesOnly=yes \
+            "$SSH_USER@$SSH_HOST" "$remote" | tee "$RUNNER_TEMP/static-rollout.log"
+          grep -Fx "published $COMPONENT $GITHUB_SHA" "$RUNNER_TEMP/static-rollout.log"
+      - name: Verify the public page
+        env:
+          PUBLIC_URL: ${{ inputs.url || (inputs.component == 'docs' && vars.DOCS_URL) || (inputs.component == 'site' && vars.SITE_URL) || '' }}
+        if: inputs.url != '' || (inputs.component == 'docs' && vars.DOCS_URL != '') || (inputs.component == 'site' && vars.SITE_URL != '')
+        run: curl --fail --silent --show-error --location --max-time 15 --retry 2 --output /dev/null -- "$PUBLIC_URL"

@@ -11,8 +11,7 @@
 .widget-configurator__badge,
 .widget-configurator__preview-head,
 .widget-configurator__preview-head > div,
-.widget-configurator__code-head,
-.widget-configurator__code-head > div {
+.widget-configurator__code-head {
   display: flex;
   align-items: center;
   gap: var(--space-xs);
@@ -355,7 +354,7 @@
   }
 }
 
-.widget-configurator__viewport[data-voiceroom-expanded] > .widget-shell {
+.widget-configurator__viewport.voiceroom-frame--expanded > .widget-shell {
   width: 100% !important;
   height: 100% !important;
   transform: none !important;
@@ -404,8 +403,7 @@
   margin-block-start: var(--space-lg);
   padding: var(--space-lg);
 
-  > p,
-  .widget-configurator__help {
+  > p {
     color: var(--vr-text-2);
     font-size: 0.875rem;
     line-height: 1.6;
@@ -430,29 +428,19 @@
 .widget-configurator__code-head {
   flex-wrap: wrap;
   gap: var(--space-md);
+  margin-block-end: var(--space-xs);
 
-  .ui-button {
-    min-height: var(--interactive-lg);
-    gap: var(--space-xs);
-  }
-}
-
-.widget-configurator__help {
-  margin-block-start: var(--space-md);
-
-  summary {
-    width: fit-content;
-    padding-block: var(--space-xs);
-    cursor: pointer;
+  .widget-configurator__copy {
+    min-inline-size: 36px;
+    min-block-size: 36px;
+    padding: 0;
+    border-radius: var(--radius-sm);
+    color: var(--vr-text-2);
   }
 }
 
 .widget-configurator__code > .widget-configurator__error {
   color: var(--vr-danger);
-}
-
-.widget-configurator__code > .widget-configurator__copy-status {
-  color: var(--vr-accent);
 }
 
 .widget-configurator :where(a, button, select, textarea, input[type='color']):focus-visible {

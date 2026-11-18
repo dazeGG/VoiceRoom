@@ -2,12 +2,14 @@
 import '@/styles/widget/_configurator.scss';
 import '@/styles/widget/_shell.scss';
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
-import { ArrowLeft, Check, Code, Copy, PanelTop, ShieldCheck } from '@lucide/vue';
+import { ArrowLeft, Check, Copy, PanelTop, ShieldCheck } from '@lucide/vue';
 import {
+  DEFAULT_WIDGET_HEIGHT,
   DEFAULT_WIDGET_TITLE,
   DEFAULT_WIDGET_WIDTH,
   DEFAULT_WIDGET_PREVIEW_HEIGHT,
   WIDGET_SERVICE_URL,
+  WIDGET_SIZE_LIMITS,
   WIDGET_TITLE_LIMIT,
   defaultWidgetConfig,
   normalizeWidgetColor,
@@ -33,6 +35,10 @@ const demoExpanded = ref(false);
 let demoExpansion: ReturnType<typeof createWidgetFrameExpansion> | undefined;
 const stageWidth = ref(0);
 const demoSize = reactive({ width: DEFAULT_WIDGET_WIDTH, height: DEFAULT_WIDGET_PREVIEW_HEIGHT });
+const panelSize = reactive({ width: DEFAULT_WIDGET_WIDTH, height: DEFAULT_WIDGET_HEIGHT });
+const sizeLabels = { width: 'Ширина', height: 'Высота' };
+const isFloating = computed(() => config.mode === 'floating');
+const previewSize = computed(() => (isFloating.value ? panelSize : demoSize));
 const previewScreen = ref('entry');
 const demoRoomCode = createRoomCode();
 const demoCount = ref(4);
@@ -46,7 +52,7 @@ const guests = ['Вы', 'Лена', 'Макс', 'Саша', 'Даша', 'Кир�
 const demoMembers = computed(() =>
   guests.slice(0, demoCount.value).map((name, index) => ({ id: name, name, self: index === 0, speaking: index === 1 }))
 );
-const scale = computed(() => Math.min(1, (stageWidth.value || demoSize.width) / demoSize.width));
+const scale = computed(() => Math.min(1, (stageWidth.value || previewSize.value.width) / previewSize.value.width));
 let resize: ResizeObserver | undefined;
 onMounted(() => {
   if (demoViewport.value?.parentElement) {
@@ -63,11 +69,13 @@ onMounted(() => {
 onBeforeUnmount(() => {
   demoExpansion?.dispose();
   resize?.disconnect();
+  clearTimeout(copyTimer);
 });
 
 const title = ref(DEFAULT_WIDGET_TITLE);
 const heading = computed(() => title.value.trim() || DEFAULT_WIDGET_TITLE);
 const copiedCode = ref('');
+let copyTimer: ReturnType<typeof setTimeout> | undefined;
 const failedCode = ref('');
 const showValidation = ref(false);
 const codeField = ref<HTMLTextAreaElement | null>(null);
@@ -98,10 +106,11 @@ const result = computed(() => {
   try {
     const settings = {
       ...config,
+      ...(isFloating.value ? panelSize : {}),
       ...(cameraAllowed.value ? {} : { camera: false }),
       ...(heading.value === DEFAULT_WIDGET_TITLE ? {} : { title: heading.value })
     };
-    return { code: widgetSnippet(settings, window.location.origin), error: '' };
+    return { code: widgetSnippet(settings), error: '' };
   } catch {
     return { code: '', error: 'Проверьте скругление (0–24 px) и отступ (0–48 px).' };
   }
@@ -114,14 +123,14 @@ const previewStyle = computed(() => ({
   '--vr-accent': config.accent,
   '--widget-radius': `${config.radius}px`,
   borderRadius: `${config.radius}px`,
-  width: `${demoSize.width}px`,
-  height: `${demoSize.height}px`,
+  width: `${previewSize.value.width}px`,
+  height: `${previewSize.value.height}px`,
   minHeight: '0',
   transform: `scale(${scale.value})`
 }));
 const sampleStyle = computed(() => ({
-  width: `${demoSize.width * scale.value}px`,
-  ...(config.mode === 'floating'
+  width: `${previewSize.value.width * scale.value}px`,
+  ...(isFloating.value
     ? {
         marginInlineStart: config.corner.endsWith('right') ? 'auto' : '0',
         marginInlineEnd: config.corner.endsWith('left') ? 'auto' : '0',
@@ -150,12 +159,19 @@ function expandDemo(expanded: boolean) {
 }
 async function copyCode() {
   const code = result.value.code;
+  if (!code) return;
+  clearTimeout(copyTimer);
+  copiedCode.value = '';
+  failedCode.value = '';
   try {
     await copyText(code);
+    if (result.value.code !== code) return;
     copiedCode.value = code;
-    failedCode.value = '';
+    copyTimer = setTimeout(() => {
+      copiedCode.value = '';
+    }, 1800);
   } catch {
-    copiedCode.value = '';
+    if (result.value.code !== code) return;
     failedCode.value = code;
     codeField.value?.focus();
     codeField.value?.select();
@@ -167,6 +183,7 @@ async function copyCode() {
   <main class="widget-configurator">
     <nav class="widget-configurator__nav" aria-label="Навигация">
       <a href="/app" class="widget-configurator__back"><ArrowLeft :size="16" aria-hidden="true" />VoiceRoom</a>
+      <a class="widget-configurator__back" href="https://docs.voiceroom.ru/widgets/install">Как встроить виджет</a>
       <span class="widget-configurator__badge"><ShieldCheck :size="14" aria-hidden="true" />Без аккаунта</span>
     </nav>
     <header class="widget-configurator__header">
@@ -198,7 +215,7 @@ async function copyCode() {
                 : 'Остаётся под рукой в углу сайта. Можно свернуть во время звонка.'
             }}
           </p>
-          <div v-if="config.mode === 'floating'" class="widget-configurator__pair">
+          <div v-if="isFloating" class="widget-configurator__pair">
             <label class="widget-configurator__field"
               >Положение
               <select v-model="config.corner" name="corner">
@@ -217,6 +234,19 @@ async function copyCode() {
                 ></span
               >
             </label>
+            <div v-for="(limits, dimension) in WIDGET_SIZE_LIMITS" :key="dimension" class="widget-configurator__size">
+              <span class="widget-configurator__size-label">
+                <span>{{ sizeLabels[dimension] }}</span
+                ><output aria-hidden="true">{{ panelSize[dimension] }} px</output>
+              </span>
+              <Slider
+                v-model="panelSize[dimension]"
+                :min="limits.minimum"
+                :max="limits.maximum"
+                :aria-label="sizeLabels[dimension]"
+                :aria-value-text="`${panelSize[dimension]} px`"
+              />
+            </div>
           </div>
         </fieldset>
 
@@ -286,8 +316,8 @@ async function copyCode() {
           <span v-if="scale < 1">Масштаб {{ Math.round(scale * 100) }}%</span>
         </div>
         <fieldset class="widget-configurator__group widget-configurator__preview-controls">
-          <legend>Демо-контейнер</legend>
-          <div class="widget-configurator__pair">
+          <legend>{{ isFloating ? 'Предпросмотр' : 'Демо-контейнер' }}</legend>
+          <div v-if="!isFloating" class="widget-configurator__pair">
             <div class="widget-configurator__size">
               <span class="widget-configurator__size-label"
                 ><span>Ширина</span><output aria-hidden="true">{{ demoSize.width }} px</output></span
@@ -335,7 +365,7 @@ async function copyCode() {
         >
           <div ref="stage" class="widget-configurator__stage">
             <div class="widget-configurator__sample" :style="sampleStyle">
-              <div class="widget-configurator__frame" :style="{ height: `${demoSize.height * scale}px` }">
+              <div class="widget-configurator__frame" :style="{ height: `${previewSize.height * scale}px` }">
                 <div
                   ref="demoViewport"
                   class="widget-configurator__viewport"
@@ -411,44 +441,37 @@ async function copyCode() {
           </div>
         </div>
         <p class="widget-configurator__preview-note">
-          <ShieldCheck :size="16" aria-hidden="true" />Размеры и участники относятся к предпросмотру. Камера и микрофон
-          выключены.
+          <ShieldCheck :size="16" aria-hidden="true" />Камера и микрофон выключены.
         </p>
       </section>
     </div>
 
     <section class="widget-configurator__code" aria-labelledby="widget-code-heading">
       <div class="widget-configurator__code-head">
-        <div>
-          <Code :size="20" aria-hidden="true" />
-          <h2 id="widget-code-heading">Добавьте на свой сайт</h2>
-        </div>
-        <Button variant="primary" :disabled="!result.code" @click="copyCode"
-          ><Check v-if="copied" :size="16" aria-hidden="true" /><Copy v-else :size="16" aria-hidden="true" />{{
-            copied ? 'Скопировано' : 'Скопировать код'
-          }}</Button
+        <h2 id="widget-code-heading">Код вставки</h2>
+        <Button
+          variant="ghost"
+          class="widget-configurator__copy"
+          aria-label="Скопировать код"
+          :title="copied ? 'Скопировано' : 'Скопировать код'"
+          :disabled="!result.code"
+          @click="copyCode"
         >
+          <Check v-if="copied" :size="18" aria-hidden="true" />
+          <Copy v-else :size="18" aria-hidden="true" />
+        </Button>
       </div>
-      <p>Вставьте этот код в HTML страницы. Чтобы изменить настройки, замените его новым.</p>
-      <p>Размеры встроенного блока задаются в CSS сайта на контейнере <code>[data-voiceroom-widget]</code>.</p>
-      <label class="widget-configurator__sr-only" for="widget-code">Код вставки</label>
-      <textarea id="widget-code" ref="codeField" :value="result.code" readonly rows="4" spellcheck="false" />
+      <textarea
+        ref="codeField"
+        :value="result.code"
+        aria-labelledby="widget-code-heading"
+        readonly
+        rows="4"
+        spellcheck="false"
+      />
       <p v-if="result.error && showValidation" role="alert" class="widget-configurator__error">{{ result.error }}</p>
       <p v-if="copyFailed" role="status">Не удалось скопировать автоматически. Код выделен — нажмите Ctrl+C или ⌘C.</p>
-      <p v-else-if="copied" role="status" class="widget-configurator__copy-status">
-        Код скопирован. Можно вставлять на сайт.
-      </p>
-      <details class="widget-configurator__help">
-        <summary>Что нужно для работы?</summary>
-        <p>
-          Для размеров плавающей панели задайте на контейнере <code>--voiceroom-width</code> и
-          <code>--voiceroom-height</code>.
-        </p>
-        <p>
-          Сайт должен работать по HTTPS. Игрок разрешает доступ к микрофону и камере при подключении. Если на сайте
-          настроен CSP, разрешите скрипты и фреймы с адреса VoiceRoom.
-        </p>
-      </details>
+      <span class="widget-configurator__sr-only" aria-live="polite">{{ copied ? 'Код скопирован.' : '' }}</span>
     </section>
   </main>
 </template>

@@ -145,10 +145,13 @@ describe('widget loader', () => {
     const post = vi.spyOn(context, 'postMessage');
     const original = frame.style.cssText;
     send(frame, 'ready');
-    expect(post.mock.calls).toEqual([
-      [expect.objectContaining({ type: 'initialize' }), 'https://voice.test'],
-      [expect.objectContaining({ type: 'expandState', active: false }), 'https://voice.test']
-    ]);
+    expect(post).toHaveBeenCalledTimes(2);
+    expect(post).toHaveBeenNthCalledWith(1, expect.objectContaining({ type: 'initialize' }), 'https://voice.test');
+    expect(post).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ type: 'expandState', active: false }),
+      'https://voice.test'
+    );
     send(frame, 'requestExpand', {}, 'https://foreign.test');
     send(frame, 'requestExpand', { nonce: 'ab'.repeat(24) });
     expect(frame.style.cssText).toBe(original);
@@ -159,7 +162,7 @@ describe('widget loader', () => {
       'https://voice.test'
     );
     expect(frame.style.position).toBe('fixed');
-    expect(frame.hasAttribute('data-voiceroom-expanded')).toBe(true);
+    expect(frame.classList.contains('voiceroom-frame--expanded')).toBe(true);
     expect(host.querySelector('iframe')).toBe(frame);
     expect(frame.contentWindow).toBe(context);
     expect(host.children).toHaveLength(3);
@@ -169,7 +172,7 @@ describe('widget loader', () => {
       'https://voice.test'
     );
     expect(frame.style.cssText).toBe(original);
-    expect(frame.hasAttribute('data-voiceroom-expanded')).toBe(false);
+    expect(frame.classList.contains('voiceroom-frame--expanded')).toBe(false);
     expect(host.children).toHaveLength(2);
     expect(frame.contentWindow).toBe(context);
   });

@@ -1,3 +1,5 @@
+import { PRODUCTION_APP_HOST } from '@/shared/app-home';
+
 export const APP_LINK_SCHEME = 'voiceroom';
 export const DEV_APP_LINK_SCHEME = 'voiceroom-dev';
 
@@ -29,7 +31,7 @@ export function consumeInAppRoomNavigation(): boolean {
   return inAppNavigation;
 }
 
-const PRODUCTION_HOSTS = new Set(['voiceroom.ru', 'www.voiceroom.ru']);
+const PRODUCTION_HOSTS = new Set(['voiceroom.ru', 'www.voiceroom.ru', PRODUCTION_APP_HOST]);
 const ROOM_ID_PATTERN = /^[A-Za-z0-9_-]{3,48}$/;
 
 export interface OpenInAppSignals {

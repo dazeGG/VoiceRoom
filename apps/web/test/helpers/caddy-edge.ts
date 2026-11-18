@@ -4,7 +4,8 @@
 
 import { spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { copyFileSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { get } from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import { onTestFinished } from 'vitest';
@@ -38,6 +39,7 @@ export async function startCaddyEdge({
   files = {},
   binaryFiles = {},
   siteFiles = DEFAULT_SITE_FILES,
+  docsFiles = {},
   sites = {},
   network,
   networkAlias,
@@ -49,6 +51,8 @@ export async function startCaddyEdge({
   binaryFiles?: Record<string, Uint8Array>;
   /** Files of the public site's root (apps/site/dist). */
   siteFiles?: Record<string, string>;
+  /** Files of the documentation root (apps/docs/dist). */
+  docsFiles?: Record<string, string>;
   /** Files of the extra-sites directory by name, e.g. 'extra.caddy'. */
   sites?: Record<string, string>;
   network?: string;
@@ -70,6 +74,16 @@ export async function startCaddyEdge({
     ...binaryFiles
   });
   const siteRoot = writeRoot('voiceroom-site-', siteFiles);
+  const docsRoot = writeRoot('voiceroom-docs-', docsFiles);
+  const domainsDir = mkdtempSync(path.join(os.tmpdir(), 'voiceroom-domains-'));
+  for (const name of ['app', 'docs']) {
+    if (env[`${name.toUpperCase()}_DOMAIN`]) {
+      copyFileSync(
+        path.join(repositoryRoot, 'config/caddy/domains-available', `${name}.caddy`),
+        path.join(domainsDir, `${name}.caddy`)
+      );
+    }
+  }
   // Extra sites the host manages; empty unless a test provides some.
   const sitesDir = mkdtempSync(path.join(os.tmpdir(), 'voiceroom-sites-'));
   for (const [file, content] of Object.entries(sites)) writeFileSync(path.join(sitesDir, file), content);
@@ -100,7 +114,11 @@ export async function startCaddyEdge({
       '-v',
       `${webRoot}:/srv/web:ro`,
       '-v',
-      `${siteRoot}:/srv/site:ro`,
+      `${siteRoot}:/srv/static/site/current:ro`,
+      '-v',
+      `${docsRoot}:/srv/static/docs/current:ro`,
+      '-v',
+      `${domainsDir}:/etc/caddy/domains.d:ro`,
       '-v',
       `${path.join(repositoryRoot, 'config/caddy/admin-csp.caddy')}:/etc/caddy/admin-csp.caddy:ro`,
       '-v',
@@ -129,7 +147,13 @@ export async function startCaddyEdge({
   let lastError: unknown = new Error('Caddy did not answer');
   for (let attempt = 0; attempt < 50; attempt += 1) {
     try {
-      if ((await fetch(`${origin}/runtime-config.json`)).ok) return origin;
+      const status = await new Promise<number | undefined>((resolve, reject) => {
+        get(`${origin}/runtime-config.json`, { headers: env.DOMAIN ? { Host: env.DOMAIN } : {} }, (response) => {
+          response.resume();
+          resolve(response.statusCode);
+        }).on('error', reject);
+      });
+      if (status === 200) return origin;
     } catch (error) {
       lastError = error;
     }

@@ -5,10 +5,15 @@ import { Value } from 'typebox/value';
 const color = Type.String({ pattern: '^#[0-9a-fA-F]{6}$' });
 export const DEFAULT_WIDGET_TITLE = 'Голосовой чат';
 export const WIDGET_TITLE_LIMIT = 80;
-export const WIDGET_SERVICE_URL = 'https://voiceroom.ru/';
+export const WIDGET_SERVICE_ORIGIN = 'https://voiceroom.ru';
+export const WIDGET_SERVICE_URL = `${WIDGET_SERVICE_ORIGIN}/`;
 export const DEFAULT_WIDGET_WIDTH = 360;
 export const DEFAULT_WIDGET_HEIGHT = 520;
 export const DEFAULT_WIDGET_PREVIEW_HEIGHT = 400;
+export const WIDGET_SIZE_LIMITS = {
+  width: { minimum: 280, maximum: 960 },
+  height: { minimum: 320, maximum: 900 }
+} as const;
 
 export const WidgetConfig = Type.Object(
   {
@@ -19,9 +24,9 @@ export const WidgetConfig = Type.Object(
     text: color,
     accent: color,
     radius: Type.Integer({ minimum: 0, maximum: 24 }),
-    // Kept for embeds generated before sizing moved to the host page.
-    width: Type.Optional(Type.Integer({ minimum: 280, maximum: 960 })),
-    height: Type.Optional(Type.Integer({ minimum: 320, maximum: 900 })),
+    // Floating panels set a size. Earlier inline embeds may also specify one.
+    width: Type.Optional(Type.Integer(WIDGET_SIZE_LIMITS.width)),
+    height: Type.Optional(Type.Integer(WIDGET_SIZE_LIMITS.height)),
     corner: Type.Union([
       Type.Literal('top-left'),
       Type.Literal('top-right'),
@@ -64,7 +69,7 @@ export function decodeWidgetEmbedConfig(attribute: string): WidgetConfig {
   return decodeWidgetConfig(attribute.trimStart().startsWith('{') ? attribute : decodeURIComponent(attribute));
 }
 
-export function widgetEmbedMarkup(config: WidgetConfig, origin: string): string {
+export function widgetEmbedMarkup(config: WidgetConfig, origin = WIDGET_SERVICE_ORIGIN): string {
   const base = widgetOrigin(origin);
   // A single-quoted HTML attribute keeps the JSON quotes readable.
   const value = encodeWidgetConfig(config)

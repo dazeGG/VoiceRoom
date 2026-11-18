@@ -15,7 +15,7 @@ beforeEach(() => {
 });
 
 function snippetField() {
-  const field = screen.getByLabelText('Код вставки');
+  const field = screen.getByRole('textbox', { name: 'Код вставки' });
   if (!(field instanceof HTMLTextAreaElement)) throw new Error('Missing snippet field');
   return field;
 }
@@ -51,6 +51,8 @@ test('anonymous configurator updates every supported setting without starting it
       version: 1,
       title: `Клуб 'Бэнг' & "ДнД" <3 • 100% голосом`,
       mode: 'floating',
+      width: 280,
+      height: 900,
       radius: 24,
       offset: 24,
       corner: 'top-left',
@@ -60,6 +62,7 @@ test('anonymous configurator updates every supported setting without starting it
     });
     const parsed = new DOMParser().parseFromString(snippetField().value, 'text/html');
     expect(parsed.querySelector('script')?.type).toBe('module');
+    expect(parsed.querySelector('script')?.src).toBe('https://voiceroom.ru/widget/v1/loader.js');
     expect(document.querySelector('iframe')).toBeNull();
     expect(fetchSpy).not.toHaveBeenCalled();
     const preview = screen.getByRole('region', { name: 'Предпросмотр' });
@@ -68,10 +71,12 @@ test('anonymous configurator updates every supported setting without starting it
     expect(card.querySelector('.widget-shell__body')?.hasAttribute('inert')).toBe(true);
     expect(card.querySelector('h1')?.textContent).toBe(snippetConfig().title);
     expect(within(preview).getByRole('link', { name: 'VoiceRoom' }).getAttribute('href')).toBe('https://voiceroom.ru/');
-    expect(card.style.width).toBe('240px');
+    expect(card.style.width).toBe('280px');
     expect(card.style.height).toBe('900px');
     expect(card.style.borderRadius).toBe('24px');
-    expect(slider('Ширина').getAttribute('aria-valuetext')).toBe('240 px');
+    expect(slider('Ширина').getAttribute('aria-valuetext')).toBe('280 px');
+    expect(within(preview).queryByRole('slider', { name: 'Ширина' })).toBeNull();
+    expect(within(preview).queryByRole('slider', { name: 'Высота' })).toBeNull();
     expect(card.style.getPropertyValue('--vr-accent')).toBe('#aad500');
     for (const input of card.querySelectorAll('input')) expect(input.disabled).toBe(true);
     for (const button of card.querySelectorAll('button')) expect(button.disabled).toBe(true);
@@ -82,19 +87,26 @@ test('anonymous configurator updates every supported setting without starting it
   }
 });
 
-test('inline placement hides irrelevant corner controls without losing their configured values', async () => {
+test('inline preview dimensions and floating panel dimensions stay independent when switching placement', async () => {
   render(WidgetsPage);
   expect(screen.queryByLabelText('Положение')).toBeNull();
   expect(screen.queryByLabelText('Отступ')).toBeNull();
+  await fireEvent.keyDown(await screen.findByRole('slider', { name: 'Ширина' }), { key: 'Home' });
   await fireEvent.click(screen.getByRole('radio', { name: 'Плавающая панель' }));
+  expect(snippetConfig()).toMatchObject({ width: 360, height: 520 });
+  await fireEvent.keyDown(await screen.findByRole('slider', { name: 'Ширина' }), { key: 'End' });
   await fireEvent.update(screen.getByLabelText('Положение'), 'top-right');
   await fireEvent.update(numericField('Отступ'), '32');
   await fireEvent.click(screen.getByRole('radio', { name: 'Внутри страницы' }));
   expect(screen.queryByLabelText('Положение')).toBeNull();
   expect(snippetConfig()).toMatchObject({ mode: 'inline', corner: 'top-right', offset: 32 });
+  expect(snippetConfig().width).toBeUndefined();
+  expect(snippetConfig().height).toBeUndefined();
+  expect((await screen.findByRole('slider', { name: 'Ширина' })).getAttribute('aria-valuenow')).toBe('240');
   await fireEvent.click(screen.getByRole('radio', { name: 'Плавающая панель' }));
   expect(screen.getByLabelText('Положение')).toHaveProperty('value', 'top-right');
   expect(numericField('Отступ')).toHaveProperty('value', '32');
+  expect(snippetConfig()).toMatchObject({ width: 960, height: 520 });
 });
 
 test('the camera switch exports an explicit opt-out and removes the preview camera controls', async () => {
@@ -145,12 +157,14 @@ test('copy action writes the current snippet and a settings change clears stale 
   vi.stubGlobal('navigator', Object.create(navigator, { clipboard: { value: { writeText } } }));
   render(WidgetsPage);
   const original = snippetField().value;
-  await fireEvent.click(screen.getByRole('button', { name: 'Скопировать код' }));
-  await waitFor(() => expect(screen.getByRole('button', { name: 'Скопировано' })).toBeTruthy());
+  const copy = screen.getByRole('button', { name: 'Скопировать код' });
+  expect(copy.textContent?.trim()).toBe('');
+  await fireEvent.click(copy);
+  await waitFor(() => expect(copy.getAttribute('title')).toBe('Скопировано'));
   expect(writeText).toHaveBeenCalledWith(original);
   await fireEvent.keyDown(slider('Скругление'), { key: 'End' });
-  expect(screen.queryByRole('button', { name: 'Скопировано' })).toBeNull();
-  await fireEvent.click(screen.getByRole('button', { name: 'Скопировать код' }));
+  expect(copy.getAttribute('title')).toBe('Скопировать код');
+  await fireEvent.click(copy);
   await waitFor(() => expect(writeText).toHaveBeenLastCalledWith(snippetField().value));
   expect(snippetField().value).not.toBe(original);
 });

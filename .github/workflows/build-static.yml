@@ -1,0 +1,51 @@
+name: Build static component
+
+on:
+  workflow_call:
+    inputs:
+      component:
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      ASTRO_TELEMETRY_DISABLED: 1
+      COMPONENT: ${{ inputs.component }}
+    steps:
+      - name: Validate component
+        run: |
+          case "$COMPONENT" in site|docs) ;; *) exit 1 ;; esac
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: ${{ inputs.component == 'docs' && 'apps/docs/.nvmrc' || '.nvmrc' }}
+          cache: npm
+          cache-dependency-path: ${{ inputs.component == 'docs' && 'apps/docs/package-lock.json' || 'package-lock.json' }}
+      - name: Check static publication
+        run: bash scripts/test/static-publication.sh
+      - name: Check and build the public site
+        if: inputs.component == 'site'
+        run: |
+          npm ci
+          npm run check:site
+          npm --workspace @voice-room/site run build
+          npm run test:site
+      - name: Check and build documentation
+        if: inputs.component == 'docs'
+        run: |
+          npm --prefix apps/docs ci
+          npm --prefix apps/docs run check
+          npm --prefix apps/docs run build
+          npm --prefix apps/docs test
+      - uses: actions/upload-artifact@v6
+        if: github.event_name != 'pull_request'
+        with:
+          name: ${{ inputs.component }}-dist
+          path: apps/${{ inputs.component }}/dist/
+          if-no-files-found: error
+          include-hidden-files: true

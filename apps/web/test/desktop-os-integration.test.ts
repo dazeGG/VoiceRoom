@@ -176,6 +176,7 @@ test('open in app targets desktop browsers only with the right scheme', async ()
 
   assert.equal(service.resolveAppLinkScheme('voiceroom.ru'), 'voiceroom');
   assert.equal(service.resolveAppLinkScheme('WWW.VoiceRoom.ru'), 'voiceroom');
+  assert.equal(service.resolveAppLinkScheme('app.voiceroom.ru'), 'voiceroom');
   assert.equal(service.resolveAppLinkScheme('dev.voiceroom.ru'), 'voiceroom-dev');
   assert.equal(service.resolveAppLinkScheme('localhost'), 'voiceroom-dev');
   assert.equal(service.buildAppRoomLink('abc123', 'voiceroom.ru'), 'voiceroom://r/abc123');

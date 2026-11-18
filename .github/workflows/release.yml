@@ -1,14 +1,11 @@
-name: Release
+name: Release application
 
 # A commit reaches main only through a pull request whose head passed ci.yml while
 # up to date with main (branch protection), so nothing here runs those jobs again.
-# Keep them out of this workflow: a skipped job would count as passed for that
-# protection, on whatever commit it was skipped.
+# Static components use their own release tags and workflows.
 on:
   push:
-    # main only keeps the Docker cache warm for the tag that follows.
-    branches: [main]
-    tags: ['v*']
+    tags: ['v[0-9]*']
 
 permissions:
   contents: read
@@ -24,7 +21,6 @@ jobs:
   deploy-production:
     name: Deploy production
     needs: images
-    if: startsWith(github.ref, 'refs/tags/v')
     uses: ./.github/workflows/deploy.yml
     with:
       environment: production

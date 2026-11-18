@@ -17,6 +17,7 @@ coverage/
 apps/web/public/
 apps/site/public/
 apps/site/.astro/
+apps/docs/
 .omc/
 .omx/
 .claude/

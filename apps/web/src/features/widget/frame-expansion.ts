@@ -23,7 +23,7 @@ export function createWidgetFrameExpansion(
       if (frame.isConnected) frame.hidePopover();
       frame.removeAttribute('popover');
     }
-    frame.removeAttribute('data-voiceroom-expanded');
+    frame.classList.remove('voiceroom-frame--expanded');
     frame.style.cssText = frameStyle;
     restoreContainment?.();
     restoreContainment = undefined;
@@ -65,7 +65,7 @@ export function createWidgetFrameExpansion(
         container.insertBefore(slot, frame);
         frame.style.cssText +=
           ';position:fixed;inset:0;margin:auto;padding:0;width:min(1200px,calc(100vw - 24px));height:min(900px,calc(100dvh - 24px));max-width:none;max-height:none;z-index:2147483647;transform-origin:top left;box-shadow:0 18px 90px #0008;';
-        frame.setAttribute('data-voiceroom-expanded', '');
+        frame.classList.add('voiceroom-frame--expanded');
         if (typeof frame.showPopover === 'function') {
           frame.setAttribute('popover', 'manual');
           frame.showPopover();

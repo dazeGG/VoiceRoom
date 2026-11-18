@@ -56,12 +56,12 @@ export function fitWidgetTileGrid(box: TileGridBox): TileGridFit {
 
 /** Sizes the tiles of a grid to its own box, again whenever it resizes or a tile comes or goes. */
 export function fitTiles(grid: HTMLElement, fitGrid = fitTileGrid): () => void {
+  const widget = fitGrid === fitWidgetTileGrid;
   const apply = (): void => {
     // The size is read once, before anything is written: a new tile width lays
     // the grid out again, which can bring its scrollbar in or out and change
     // clientWidth. A margin taken from that second width no longer matches the
     // columns, the row wraps, the scrollbar flips and the grid refits forever.
-    const widget = fitGrid === fitWidgetTileGrid;
     let width = widget ? grid.offsetWidth : grid.clientWidth;
     const height = grid.clientHeight;
     // A hidden grid has no size to fit to; the tiles keep the stylesheet's own.
@@ -78,6 +78,10 @@ export function fitTiles(grid: HTMLElement, fitGrid = fitTileGrid): () => void {
     grid.style.setProperty('--tile-width', `${fit.tileWidth}px`);
     grid.style.setProperty('--tile-gutter', `${Math.floor((width - row) / 2)}px`);
     grid.dataset.scroll = String(fit.scroll);
+    if (widget) {
+      grid.classList.toggle('tile-grid--scroll', fit.scroll);
+      grid.classList.toggle('widget-call__tiles--fit', !fit.scroll);
+    }
   };
   const resize = new ResizeObserver(apply);
   const tiles = new MutationObserver(apply);
@@ -90,6 +94,7 @@ export function fitTiles(grid: HTMLElement, fitGrid = fitTileGrid): () => void {
     grid.style.removeProperty('--tile-width');
     grid.style.removeProperty('--tile-gutter');
     delete grid.dataset.scroll;
+    if (widget) grid.classList.remove('tile-grid--scroll', 'widget-call__tiles--fit');
   };
 }
 

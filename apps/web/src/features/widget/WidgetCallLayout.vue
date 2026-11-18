@@ -188,7 +188,10 @@ function openParticipantMenu(event: MouseEvent | KeyboardEvent, member: (typeof 
 <template>
   <div class="widget-call" @keydown.esc="escape">
     <span class="widget-call__sr-only" role="status">{{ status }}</span>
-    <header class="widget-call__header widget-call__chrome" :data-copy-feedback="copyResult ? '' : undefined">
+    <header
+      class="widget-call__header widget-call__chrome"
+      :class="{ 'widget-call__header--copy-feedback': copyResult }"
+    >
       <button
         type="button"
         class="widget-call__code-button"
