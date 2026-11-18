@@ -170,7 +170,12 @@ function createLinkPreviewFetcher({
           signal,
           headers: { Accept: accept, 'Accept-Language': 'ru,en;q=0.8', 'User-Agent': userAgent }
         },
-        resolve
+        (response) => {
+          // Disposal can emit a late response error after the headers promise
+          // settled. Body readers still observe errors through their iterator.
+          response.on('error', reject);
+          resolve(response);
+        }
       );
       request.on('error', reject);
       request.end();
@@ -212,35 +217,35 @@ function createLinkPreviewFetcher({
       let url = checkedUrl(rawUrl);
       for (let redirects = 0; ; redirects += 1) {
         const response = await requestOnce(url, accept, controller.signal);
-        const status = response.statusCode || 0;
-        if (REDIRECT_STATUSES.has(status) && response.headers.location) {
-          response.resume();
-          if (redirects >= maxRedirects) throw fetchError('too_many_redirects', 'Too many redirects');
-          let next: string;
-          try {
-            next = new URL(response.headers.location, url).href;
-          } catch {
-            throw fetchError('unsupported_url', 'Invalid redirect');
+        try {
+          const status = response.statusCode || 0;
+          if (REDIRECT_STATUSES.has(status) && response.headers.location) {
+            if (redirects >= maxRedirects) throw fetchError('too_many_redirects', 'Too many redirects');
+            let next: string;
+            try {
+              next = new URL(response.headers.location, url).href;
+            } catch {
+              throw fetchError('unsupported_url', 'Invalid redirect');
+            }
+            url = checkedUrl(next);
+            continue;
           }
-          url = checkedUrl(next);
-          continue;
+          if (status !== 200) throw fetchError('bad_status', `The site answered ${status}`);
+          const contentType = String(response.headers['content-type'] || '').toLowerCase();
+          if (!acceptsType(contentType)) throw fetchError('unsupported_type', 'Unsupported content type');
+          const body = await readBody(response, maxBytes, truncate);
+          return { url: url.href, contentType, body };
+        } finally {
+          // Never drain an unused body: its lifetime must end before this
+          // fetch settles or the next redirect acquires another connection.
+          response.destroy();
         }
-        if (status !== 200) {
-          response.resume();
-          throw fetchError('bad_status', `The site answered ${status}`);
-        }
-        const contentType = String(response.headers['content-type'] || '').toLowerCase();
-        if (!acceptsType(contentType)) {
-          response.resume();
-          throw fetchError('unsupported_type', 'Unsupported content type');
-        }
-        const body = await readBody(response, maxBytes, truncate);
-        return { url: url.href, contentType, body };
       }
     } catch (error) {
       if (controller.signal.aborted) throw fetchError('timeout', 'The site took too long to answer');
       throw error;
     } finally {
+      controller.abort();
       clearTimeout(timer);
     }
   }

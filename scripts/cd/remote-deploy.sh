@@ -12,6 +12,10 @@ set -Eeuo pipefail
 # command that could consume the rest (docker compose exec, ssh, ...).
 main() {
   local deploy_path=$1 commit=$2 api_image=$3 worker_image=$4 web_image=$5
+  command -v python3 > /dev/null || {
+    echo 'deployment requires Python 3 for the widget compatibility preflight; no changes made' >&2
+    exit 1
+  }
   keep=${KEEP_DEPLOY_BACKUPS:-5}
 
   cd "$deploy_path"
@@ -78,6 +82,11 @@ main() {
     echo "another deploy is running in $deploy_path" >&2
     exit 1
   fi
+  # Dev and production use the same deploy account. Serialize their rollouts:
+  # image cleanup must never race another stack's pull or .env replacement.
+  mkdir -p "$HOME/.cache/voiceroom"
+  exec 8>"$HOME/.cache/voiceroom/deploy.lock"
+  flock 8
 
   stamp=$(date -u +%Y%m%dT%H%M%SZ)
   previous_commit=$(git rev-parse HEAD)
@@ -106,14 +115,54 @@ main() {
   chmod 600 "$db_dump"
 
   local rollout_started=false
+  # Pin recovery logic outside the checkout before any checkout/env mutation.
+  # The helper must survive returning to an older release.
+  git fetch --quiet --prune origin
+  local boundary_helper="$PWD/$backup_dir/widget-boundary-$stamp.py"
+  git show "$commit:scripts/cd/widget-boundary-preflight.py" > "$boundary_helper"
+  chmod 700 "$boundary_helper"
+  local boundary_manifest="$PWD/$backup_dir/widget-release-capabilities.json"
+  local manifest_helper="$PWD/$backup_dir/widget-manifest-$stamp.py"
+  git show "$commit:scripts/cd/widget-release-capabilities.py" > "$manifest_helper"
+  local previous_api previous_worker previous_web
+  previous_api=$(sed -n 's/^VOICEROOM_API_IMAGE=//p' "$env_backup")
+  previous_worker=$(sed -n 's/^VOICEROOM_WORKER_IMAGE=//p' "$env_backup")
+  previous_web=$(sed -n 's/^VOICEROOM_WEB_IMAGE=//p' "$env_backup")
+  docker pull --quiet "$api_image"
+  docker pull --quiet "$worker_image"
+  docker pull --quiet "$web_image"
+  python3 "$manifest_helper" "$boundary_manifest" \
+    "$api_image" "$worker_image" "$web_image" \
+    "$previous_api" "$previous_worker" "$previous_web" < /dev/null
+  boundary_preflight() {
+    python3 "$boundary_helper" "$@" "$boundary_manifest" \
+      "$api_image" "$worker_image" "$web_image" \
+      "$previous_api" "$previous_worker" "$previous_web" < /dev/null
+  }
+  boundary_preflight
   rollback() {
     trap - ERR
     log_deploy deployment.rollback_requested
+    # Recheck persistent state even if the earlier preflight passed: a floor
+    # activated during rollout must prevent restoration of legacy binaries.
+    if ! boundary_preflight --rollback; then
+      echo 'rollback refused: leaving the last stack in place; operator recovery required' >&2
+      exit 1
+    fi
     echo "== deploy failed, restoring $previous_commit and the previous .env" >&2
     cp "$env_backup" .env
+    # Recovery proved persisted admission off. Never restore a backed-up flag
+    # that could later enable entry unexpectedly on the compatible target.
+    if grep -q '^WIDGET_ENABLED=' .env; then
+      sed -i 's/^WIDGET_ENABLED=.*/WIDGET_ENABLED=false/' .env
+    else
+      printf 'WIDGET_ENABLED=false\n' >> .env
+    fi
     git checkout --quiet --detach "$previous_commit"
     if [ "$rollout_started" = true ]; then
-      docker compose up -d --remove-orphans || true
+      if ! docker compose up -d --remove-orphans; then
+        echo 'rollback stack restoration failed; operator repair required' >&2
+      fi
     fi
     exit 1
   }
@@ -128,13 +177,21 @@ main() {
   }
 
   echo "== checking out $commit"
-  git fetch --quiet --prune origin
   git checkout --quiet --detach "$commit"
 
+  # Preserve the existing marketing site on the first rollout that separates
+  # static publication from the app image. The publisher takes the same site
+  # lock as independent releases and never overrides one that won the race.
+  if [ ! -s static/site/current/index.html ]; then
+    local previous_caddy
+    previous_caddy=$(docker compose ps --quiet caddy)
+    if [ -n "$previous_caddy" ] && docker exec "$previous_caddy" test -s /srv/site/index.html; then
+      docker cp "$previous_caddy:/srv/site/." - |
+        bash scripts/cd/publish-static.sh "$PWD" site "$previous_commit" --if-empty
+    fi
+  fi
+
   echo "== pulling images"
-  docker pull --quiet "$api_image"
-  docker pull --quiet "$worker_image"
-  docker pull --quiet "$web_image"
 
   set_env VOICEROOM_API_IMAGE "$api_image"
   set_env VOICEROOM_WORKER_IMAGE "$worker_image"
@@ -163,10 +220,30 @@ main() {
   # filter below keeps all of them and a small disk fills up (dev hit 100% on
   # 2026-09-13 and 2026-09-24). Keep only this release and the previous one,
   # whose tags the .env backup holds, so a manual rollback needs no pull.
+  # Prod and dev can share a host (docs/SELF_HOSTING.md), so the same pair of
+  # every other compose stack here is kept too: its .env and newest backup.
+  kept_release_images() {
+    local stack previous
+    printf '%s\n' "$api_image" "$worker_image" "$web_image"
+    grep -hE '^VOICEROOM_(API|WORKER|WEB)_IMAGE=' "$env_backup" | cut -d= -f2- || return 1
+    docker ps --all --format '{{.Label "com.docker.compose.project.working_dir"}}' | sort -u \
+      | while IFS= read -r stack; do
+        [ -n "$stack" ] && [ -f "$stack/.env" ] || continue
+        previous=''
+        if [ -d "$stack/deploy-backups/ci" ]; then
+          previous=$(find "$stack/deploy-backups/ci" -maxdepth 1 -type f -name 'env-*' -printf '%T@ %p\n' 2> /dev/null \
+            | sort -rn | sed -n '1s/^[^ ]* //p') || exit 1
+        fi
+        grep -hE '^VOICEROOM_(API|WORKER|WEB)_IMAGE=' "$stack/.env" ${previous:+"$previous"} 2> /dev/null \
+          | cut -d= -f2- || { [ "$?" -eq 1 ] || exit 1; }
+      done
+  }
   prune_release_images() {
     local keep_list
-    keep_list=$(printf '%s\n' "$api_image" "$worker_image" "$web_image"
-      grep -hE '^VOICEROOM_(API|WORKER|WEB)_IMAGE=' "$env_backup" | cut -d= -f2- || true)
+    keep_list=$(kept_release_images) || {
+      echo 'warning: cannot read shared-host release inventory; skipping tagged-image cleanup' >&2
+      return 0
+    }
     docker image ls --format '{{.Repository}}:{{.Tag}}' \
       | grep -E '/voiceroom-(api|worker|web):' \
       | grep -vxF -f <(printf '%s\n' "$keep_list") \
@@ -183,7 +260,9 @@ main() {
   bash scripts/cd/prune-backups.sh . || true
   # Cleanup must not turn a finished rollout into a failed job.
   prune_release_images
-  docker image prune -af --filter 'until=72h' > /dev/null || true
+  # Tagged rollback images above must survive regardless of their age.
+  # --all would discard them (and unrelated stacks' images) host-wide.
+  docker image prune -f --filter 'until=72h' > /dev/null || true
   docker builder prune -af --filter 'until=72h' > /dev/null || true
 
   docker compose ps --format '{{.Service}}\t{{.Status}}'

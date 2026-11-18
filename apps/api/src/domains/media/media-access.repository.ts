@@ -5,6 +5,16 @@ import { kyselyOn } from '../../platform/db/kysely.ts';
 // Who may see the message an attachment belongs to.
 export function createMediaAccessRepository({ pool }: { pool: Pick<pg.Pool, 'query'> }) {
   const db = kyselyOn(pool);
+  async function isMainRoomMessage(messageId: string): Promise<boolean> {
+    const row = await db
+      .selectFrom('room_messages as message')
+      .innerJoin('rooms as room', 'room.id', 'message.room_id')
+      .select('message.id')
+      .where('message.id', '=', messageId)
+      .where('room.kind', '=', 'main')
+      .executeTakeFirst();
+    return Boolean(row);
+  }
 
   // The room of a live room message the viewer is a member of, or null.
   async function roomOfVisibleRoomMessage({
@@ -23,6 +33,7 @@ export function createMediaAccessRepository({ pool }: { pool: Pick<pg.Pool, 'que
         join.onRef('membership.room_id', '=', 'room.id').on('membership.user_id', '=', viewerId)
       )
       .select('room.id as room_id')
+      .where('room.kind', '=', 'main')
       .where('message.id', '=', messageId)
       .where('message.deleted_at', 'is', null)
       .where((eb) =>
@@ -46,5 +57,5 @@ export function createMediaAccessRepository({ pool }: { pool: Pick<pg.Pool, 'que
     return Boolean(row);
   }
 
-  return { canSeeDirectMessage, roomOfVisibleRoomMessage };
+  return { canSeeDirectMessage, roomOfVisibleRoomMessage, isMainRoomMessage };
 }

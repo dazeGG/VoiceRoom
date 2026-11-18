@@ -238,6 +238,8 @@ export function dbRoom(id: string, overrides: Partial<DbRoom> = {}): DbRoom {
     avatarKey: null,
     createdAt: 1,
     creatorIp: '',
+    kind: 'main',
+    widgetChatEnabled: false,
     emptySince: null,
     id,
     isStatic: true,

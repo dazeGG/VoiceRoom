@@ -33,7 +33,9 @@ GitHub-аналог GitLab CI/CD variables находится здесь:
 
 | Name | Default/пример | Комментарий |
 | --- | --- | --- |
-| `DOMAIN` | `voice.example.com` | Основной домен web-приложения. |
+| `DOMAIN` | `voice.example.com` | Публичный домен VoiceRoom. По умолчанию также обслуживает веб-приложение. |
+| `APP_DOMAIN` | optional | Отдельный хост веб-приложения. Укажите после настройки DNS и проверки ссылок и клиентов. |
+| `DOCS_DOMAIN` | optional | Отдельный хост статической документации. Укажите после настройки DNS. |
 | `LIVEKIT_DOMAIN` | `livekit.${DOMAIN}` | Домен LiveKit. |
 | `LIVEKIT_GATE_PUBLIC_URL` | `wss://livekit.example.com` | Публичный browser-facing URL auth-gate. По умолчанию собирается из `LIVEKIT_DOMAIN`. |
 | `LIVEKIT_INTERNAL_URL` | `ws://livekit:7880` | Внутренний адрес LiveKit SFU для API при запуске без production compose. Production compose фиксирует service URL сам. |
@@ -174,7 +176,6 @@ VAPID_SUBJECT
 **Деплой** (`.github/workflows/deploy.yml`, вызывается после публикации образов; на `develop` образы собираются только после зелёных `check`, `test`, `test-web`, `voice-join` и G05):
 
 - **images** — на каждый push в `develop`, `main` и тег `v*` собирает таргеты `api`, `worker`, `web` и публикует `ghcr.io/dazegg/voiceroom-<target>:<commit-sha>`.
-- **deploy-dev** — push в `develop` сразу выкатывается на dev (environment `dev`, https://dev.voiceroom.ru).
 - **deploy-production** — тег `v*` на коммите, влитом в `main` (первый родитель), совпадающий с версией в `package.json`, сразу выкатывается на прод без ручного подтверждения: environment `production` только ограничивает деплой тегами `v*` (https://voiceroom.ru).
 
 Выкатку делает `scripts/cd/remote-deploy.sh` на сервере по SSH: бэкап `.env` и `pg_dump` в `deploy-backups/ci/` (хранятся 5 последних, а дампы и копии `.env` старше 30 дней удаляются и в `deploy-backups/ci/`, и в `deploy-backups/manual/`), `git checkout` коммита, `docker pull` образов, подстановка `VOICEROOM_*_IMAGE` в `.env`, `docker compose config`, `docker compose up -d --wait`. Если любой шаг падает, возвращаются прежние коммит, `.env` и контейнеры. Миграции при этом **не откатываются** — после неудачной миграции восстанавливайте БД из дампа (см. «Миграции» ниже).
@@ -185,6 +186,35 @@ VAPID_SUBJECT
 
 - Для protected branches включите required reviewers; сделайте `policy`, `check` и `test` обязательными проверками для PR в `develop` и `main`.
 - Не печатайте secrets в workflow logs; передавайте их через `with:`/`env:` только в нужные jobs/steps.
+
+### Static site and documentation
+
+Caddy serves the public site from `static/site/current` and documentation from
+`static/docs/current` in the deploy checkout. The static publication workflow uploads
+the built files and atomically points `current` at `releases/<commit>`. Publishing static
+files leaves the running containers and database in place. The first application
+rollout copies the public site out of the legacy Caddy image when a site release has
+yet to be published.
+
+On a new self-host install, build and publish the site files once:
+
+```bash
+npm ci
+npm --workspace @voice-room/site run build
+tar -cf - -C apps/site/dist . | bash scripts/cd/publish-static.sh "$PWD" site "$(git rev-parse HEAD)"
+```
+
+To serve documentation, add its DNS record and set `DOCS_DOMAIN` in Compose. Supply
+the build from `apps/docs/dist` using the same publisher with `docs` as the component.
+For the hosted project, the static workflows use the existing `dev` and `production`
+environments and their SSH settings. Set the environment's `DOCS_URL` or `SITE_URL` if
+the public health check for that dev component should use a custom URL.
+
+Set `APP_DOMAIN` after verifying the new host's TLS, sign-in, voice, admin handoff and
+native clients. Existing sessions remain scoped to the old host and users sign in
+again at the new host. The public widget loader and frame keep the public site's
+origin. Leave both optional hosts unset for an installation using only the public
+domain.
 
 ## Миграции
 
@@ -285,6 +315,102 @@ docker compose exec caddy caddy reload --config /etc/caddy/Caddyfile --adapter c
 ```
 
 Каталог смонтирован только для чтения; пока в нём нет `*.caddy`, Caddy работает как раньше.
+
+### Дев-стенд на хосте прода
+
+The permanent dev stack uses `/home/daze/VoiceRoom-dev` on the production host,
+with Compose project `voiceroom-dev`. It has independent PostgreSQL, uploads,
+media, web archives and secrets. Production data is never copied into dev.
+The production Caddy terminates HTTPS for the dev site, app, docs, admin and
+LiveKit hosts. Their A records point at the same host. The inner Caddy serves
+HTTP without publishing host ports.
+
+Use this non-secret part of the dev `.env`, plus fresh independent values for
+`POSTGRES_PASSWORD`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`,
+`LIVEKIT_GATE_SECRET`, `VOICE_ROOM_CURSOR_HMAC_KEYS` and `POW_SECRET`:
+
+```dotenv
+COMPOSE_PROJECT_NAME=voiceroom-dev
+COMPOSE_FILE=docker-compose.yml:docker-compose.behind-edge.yml
+DOMAIN=dev.voiceroom.ru
+APP_DOMAIN=app.dev.voiceroom.ru
+DOCS_DOMAIN=docs.dev.voiceroom.ru
+ADMIN_DOMAIN=admin.dev.voiceroom.ru
+LIVEKIT_DOMAIN=livekit.dev.voiceroom.ru
+LIVEKIT_RTC_TCP_PORT=7891
+LIVEKIT_RTC_UDP_PORT=7892
+LIVEKIT_TURN_UDP_PORT=3488
+LIVEKIT_RELAY_PORT_FIRST=30100
+LIVEKIT_RELAY_PORT_LAST=30119
+LIVEKIT_METRICS_PORT=6790
+TURN_ENABLED=false
+MAX_ROOMS=10
+MAX_ROOM_PEERS=6
+MAX_VOICE_PEERS=12
+```
+
+Set the three `VOICEROOM_*_IMAGE` values to images from the same verified commit.
+The overlay caps each service's memory and CPU and raises its OOM score. It
+bind-mounts the checkout's Caddyfile and `behind-edge.headers`, so infrastructure
+configuration also works when bootstrapping from existing immutable images.
+The dev media ports must be allowed by the host/provider firewall. TURN/TLS on
+443 remains production-only; dev uses direct ICE on 7891/TCP and 7892/UDP.
+
+Create the external `voiceroom-edge` Docker network once. Attach only the two
+Caddys to it; do not attach dev services to `voiceroom_default`, where service
+names would collide. On the production host, keep this ignored file as
+`docker-compose.edge.yml`:
+
+```yaml
+services:
+  caddy:
+    networks:
+      default:
+      edge:
+networks:
+  edge:
+    name: voiceroom-edge
+    external: true
+```
+
+Preserve production's logging overlay by setting its `.env` to
+`COMPOSE_FILE=docker-compose.yml:docker-compose.override.yml:docker-compose.edge.yml`.
+For first activation, `docker network connect voiceroom-edge <prod-caddy-id>`
+attaches the running Caddy without restarting it. The overlay preserves that
+membership when a future deployment recreates it.
+
+Add `config/caddy/sites.d/voiceroom-dev.caddy` in the production checkout:
+
+```caddy
+dev.voiceroom.ru, app.dev.voiceroom.ru, docs.dev.voiceroom.ru, admin.dev.voiceroom.ru, livekit.dev.voiceroom.ru {
+  reverse_proxy voiceroom-dev-edge:80 {
+    header_up X-VoiceRoom-Client-IP {remote_host}
+  }
+}
+```
+
+Validate and reload Caddy using the commands above. The outer edge replaces
+the dedicated client-IP header; the inner edge converts it to a single trusted
+`X-Forwarded-For` value and removes the dedicated header before proxying.
+This preserves per-client rate limits through both proxies, including when a
+client supplies spoofed forwarding headers.
+
+The GitHub `dev` environment needs its own `SSH_HOST`, `SSH_USER`, `SSH_KEY`,
+`DEPLOY_PATH=/home/daze/VoiceRoom-dev` and the production host's verified
+`SSH_FINGERPRINT`. Once the CI change reaches `develop`, successful pushes
+publish images and call the existing deployment workflow. The first bootstrap
+uses `docker compose up -d --wait`; later rollouts use `remote-deploy.sh`, which
+first backs up this stack's database and environment. Its image cleanup keeps
+both current and previous releases of every detected stack and only prunes
+untagged images globally. Rollouts sharing the same deploy account also hold
+`~/.cache/voiceroom/deploy.lock` to serialize pulls and cleanup. Both dev and production deployment workflows must
+use this corrected cleanup before either is allowed to clean the shared host.
+
+Check `https://dev.voiceroom.ru/api/healthz`, the admin host, LiveKit gate,
+container health, resource limits and production health after activation.
+Stop only dev with `cd /home/daze/VoiceRoom-dev && docker compose stop`;
+`docker compose down` also removes its containers/network but preserves data
+volumes unless explicitly passed `--volumes`.
 
 ### UDP-буферы для LiveKit
 

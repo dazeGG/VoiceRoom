@@ -51,7 +51,13 @@ function issued(result: AdmissionResult) {
   return result.admission;
 }
 
-function setup(overrides: Partial<AdmissionDeps> = {}) {
+function setup(overrides: Partial<AdmissionDeps> = {}, accountUserId: string | null = null) {
+  const roster = {
+    sessionToken: 'token-token-token',
+    accountUserId,
+    gateGuestPrincipalId: 'guest-1',
+    transportId: 'transport-1'
+  };
   const calls = {
     issued: new Array<Parameters<CredentialProvider['issueAdmission']>[0]>(),
     revokedCredentials: new Array<string | undefined>(),
@@ -97,7 +103,8 @@ function setup(overrides: Partial<AdmissionDeps> = {}) {
     }),
     roomExists: async () => true,
     findRoomBan: async () => null,
-    waitForRosterPeer: async () => ({ sessionToken: 'token-token-token' }),
+    waitForRosterPeer: async () => ({ ...roster }),
+    currentRosterPeer: () => ({ ...roster }),
     memberships: () => ({
       service: {
         async persistSuccessfulAdmission(input) {
@@ -148,7 +155,17 @@ test('refusals before anything is issued', async () => {
     [{ roomExists: async () => false }, 'room_not_found'],
     [{ findRoomBan: async () => ({ id: 'ban' }) }, 'room_banned'],
     [{ waitForRosterPeer: async () => null }, 'not_in_room'],
-    [{ waitForRosterPeer: async () => ({ sessionToken: 'someone-else-token' }) }, 'invalid_session'],
+    [
+      {
+        waitForRosterPeer: async () => ({
+          sessionToken: 'someone-else-token',
+          accountUserId: null,
+          gateGuestPrincipalId: 'guest-1',
+          transportId: 't'
+        })
+      },
+      'invalid_session'
+    ],
     [{ credentialProvider: () => null, livekitConfig: () => ({ ...ENABLED, enabled: false }) }, 'livekit_unconfigured'],
     [
       { credentialProvider: () => null, livekitConfig: () => ({ ...ENABLED, gateSecret: 'short' }) },
@@ -195,7 +212,7 @@ test('identity, principal and moderation state must all be available', async () 
     const { service } = setup(overrides);
     assert.deepEqual(await service.admit(request()), { status: 'refused', reason }, reason);
   }
-  const accounts = setup({ memberships: () => null });
+  const accounts = setup({ memberships: () => null }, 'user-1');
   assert.deepEqual(await accounts.service.admit(request({ user: { id: 'user-1' } })), {
     status: 'refused',
     reason: 'membership_unavailable'
@@ -291,7 +308,7 @@ test('a ban that lands during admission revokes the principal', async () => {
 
 test('account admissions persist membership and revoke the credential when that fails', async () => {
   const user = { id: 'user-1', avatarColorKey: 'green' };
-  const ok = setup();
+  const ok = setup({}, user.id);
   assert.equal((await ok.service.admit(request({ user }))).status, 'issued');
   assert.deepEqual(ok.calls.persisted, [
     { roomId: 'room-1', userId: 'user-1', ip: '203.0.113.1', admissionSucceeded: true }
@@ -301,22 +318,28 @@ test('account admissions persist membership and revoke the credential when that 
     ['banned', 'room_banned'],
     ['not_found', 'membership_persist_failed']
   ] as const) {
-    const refused = setup({
-      memberships: () => ({ service: { persistSuccessfulAdmission: async () => ({ status }) } })
-    });
+    const refused = setup(
+      {
+        memberships: () => ({ service: { persistSuccessfulAdmission: async () => ({ status }) } })
+      },
+      user.id
+    );
     assert.deepEqual(await refused.service.admit(request({ user })), { status: 'refused', reason });
     assert.deepEqual(refused.calls.revokedCredentials, ['cred-1']);
   }
 
-  const thrown = setup({
-    memberships: () => ({
-      service: {
-        persistSuccessfulAdmission: async () => {
-          throw new Error('db down');
+  const thrown = setup(
+    {
+      memberships: () => ({
+        service: {
+          persistSuccessfulAdmission: async () => {
+            throw new Error('db down');
+          }
         }
-      }
-    })
-  });
+      })
+    },
+    user.id
+  );
   await assert.rejects(thrown.service.admit(request({ user })), /db down/);
   assert.deepEqual(thrown.calls.revokedCredentials, ['cred-1']);
 });
@@ -530,4 +553,141 @@ test('mute permissions and "already gone" classification', () => {
   assert.equal(tokensMatch('abc', 'abd'), false);
   assert.equal(tokensMatch('', ''), false);
   assert.equal(tokensMatch('abc', 'abcd'), false);
+});
+
+for (const accountUserId of [null, 'user-1']) {
+  test(`roster identity ${accountUserId} rejects every inconsistent HTTP identity`, async () => {
+    for (const id of [null, 'user-1', 'user-2'].filter((id) => id !== accountUserId)) {
+      const { service, calls } = setup({}, accountUserId);
+      assert.deepEqual(await service.admit(request({ user: id ? { id } : null })), {
+        status: 'refused',
+        reason: 'invalid_session'
+      });
+      assert.equal(calls.issued.length, 0);
+      assert.equal(calls.persisted.length, 0);
+    }
+  });
+}
+
+test('guest persisted identity must agree with the roster', async () => {
+  const { service, deps, calls } = setup();
+  const store = deps.store();
+  deps.store = () => ({
+    ...store,
+    getOrCreatePeerIdentity: async () => ({ status: 'created', identity: { id: 'other' } })
+  });
+  assert.deepEqual(await service.admit(request()), { status: 'refused', reason: 'invalid_session' });
+  assert.equal(calls.issued.length, 0);
+});
+
+for (const phase of ['identity', 'issue', 'mute', 'reissue', 'membership'] as const) {
+  test(`replacement during ${phase} refuses and revokes only the captured credential`, { timeout: 5000 }, async () => {
+    const { service, deps, calls } = setup({}, 'user-1');
+    const reached = Promise.withResolvers<void>();
+    const resume = Promise.withResolvers<void>();
+    const pause = async () => {
+      reached.resolve();
+      await resume.promise;
+    };
+    const store = deps.store();
+    const provider = deps.credentialProvider();
+    assert.ok(provider);
+    let muteReads = 0;
+    let issues = 0;
+    deps.store = () => ({
+      ...store,
+      async getOrCreatePeerIdentity(input) {
+        if (phase === 'identity') await pause();
+        return store.getOrCreatePeerIdentity(input);
+      },
+      async isRoomServerMuted() {
+        muteReads++;
+        if (phase === 'mute' && muteReads === 2) await pause();
+        return phase === 'reissue' && muteReads > 1;
+      }
+    });
+    deps.credentialProvider = () => ({
+      async issueAdmission(input) {
+        issues++;
+        const result = await provider.issueAdmission(input);
+        if ((phase === 'issue' && issues === 1) || (phase === 'reissue' && issues === 2)) await pause();
+        return result;
+      }
+    });
+    const memberships = deps.memberships();
+    assert.ok(memberships);
+    deps.memberships = () => ({
+      service: {
+        async persistSuccessfulAdmission(input) {
+          const result = await memberships.service.persistSuccessfulAdmission(input);
+          if (phase === 'membership') await pause();
+          return result;
+        }
+      }
+    });
+    const pending = service.admit(request({ user: { id: 'user-1' } }));
+    try {
+      await reached.promise;
+      const old = deps.currentRosterPeer('room-1', 'peer-1');
+      assert.ok(old);
+      deps.currentRosterPeer = () => ({ ...old, transportId: 'replacement' });
+      resume.resolve();
+      assert.deepEqual(await pending, { status: 'refused', reason: 'invalid_session' });
+      assert.deepEqual(
+        calls.revokedCredentials,
+        phase === 'identity' ? [] : phase === 'reissue' ? ['cred-1', 'cred-2'] : ['cred-1']
+      );
+      assert.equal(calls.persisted.length, phase === 'membership' ? 1 : 0);
+    } finally {
+      resume.resolve();
+    }
+  });
+}
+
+test('stale issued admission cleanup failure is metered and never returned', async () => {
+  const { service, deps, calls } = setup();
+  const provider = deps.credentialProvider();
+  assert.ok(provider);
+  deps.credentialProvider = () => ({
+    async issueAdmission(input) {
+      const result = await provider.issueAdmission(input);
+      deps.currentRosterPeer = () => null;
+      return result;
+    }
+  });
+  deps.credentialBoundary = () => ({
+    revokeCredential: async () => {
+      throw new Error('cleanup unavailable');
+    },
+    revokePrincipal: async () => {}
+  });
+  const { log, entries } = quietLog();
+  await assert.rejects(service.admit(request({ log })), /cleanup unavailable/);
+  assert.equal(calls.failures, 1);
+  assert.equal(entries.error()[0]?.code, 'credential_revoke_cleanup_failed');
+});
+
+test('widget admission derives its narrow media sources from trusted scope and rejects account identity', async () => {
+  const widget = setup({ roomAllowed: async (_id, surface) => surface === 'widget' });
+  assert.deepEqual(await widget.service.admit(request()), { status: 'refused', reason: 'room_not_found' });
+  assert.equal(widget.calls.issued.length, 0);
+  assert.equal((await widget.service.admit(request({ surface: 'widget' }))).status, 'issued');
+  assert.equal(widget.calls.issued[0]?.canPublishScreen, false);
+  assert.equal(widget.calls.issued[0]?.canPublishMicrophone, true);
+  assert.deepEqual(await widget.service.admit(request({ surface: 'widget', user: { id: 'account' } })), {
+    status: 'refused',
+    reason: 'invalid_session'
+  });
+  assert.equal(widget.calls.issued.length, 1);
+});
+
+test('disabling widget admission while credential issuance is pending revokes the new credential', async () => {
+  let checks = 0;
+  const widget = setup({ roomAllowed: async () => ++checks === 1 });
+  assert.deepEqual(await widget.service.admit(request({ surface: 'widget' })), {
+    status: 'refused',
+    reason: 'room_not_found'
+  });
+  assert.equal(widget.calls.issued.length, 1);
+  assert.deepEqual(widget.calls.revokedCredentials, ['cred-1']);
 });

@@ -95,7 +95,7 @@
   background: var(--vr-scrim);
   color: var(--vr-text-2);
   font-family: var(--font-mono);
-  font-size: 11.5px;
+  font-size: 0.71875rem;
   line-height: 1;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -128,7 +128,7 @@
   border-radius: 8px;
   background: var(--vr-scrim);
   color: var(--vr-text);
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 500;
   white-space: nowrap;
 }
@@ -143,7 +143,7 @@
   border-radius: 50%;
   background: var(--avatar-bg, var(--vr-surface-3));
   color: var(--avatar-fg, var(--vr-text));
-  font-size: 10px;
+  font-size: 0.625rem;
   font-weight: 700;
 
   img {
@@ -181,7 +181,7 @@
   padding: 0 14px;
   background: var(--vr-accent);
   color: var(--vr-accent-ink);
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 600;
   white-space: nowrap;
 }

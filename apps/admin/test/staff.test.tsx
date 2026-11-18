@@ -3,7 +3,7 @@
 // is given by login and taken away; the summary and the table of rights say
 // what each role may do and open, as the roles really are.
 
-import { cleanup, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, expect, test } from 'vitest';
 import type { StaffMember, StaffRole } from '@voice-room/shared/contracts/staff';
@@ -68,7 +68,7 @@ test('the summary counts the rights of each role', async () => {
   expect(within(summary).getByText('4 из 8 прав')).toBeTruthy();
 });
 
-test('the table of rights says what each role may do and open, and closes by Escape', async () => {
+test('the table of rights says what each role may do and open, and handles native cancel', async () => {
   stubTeam();
   renderAs(<StaffPage />, 'superadmin');
   await userEvent.click(await screen.findByRole('button', { name: 'Таблица прав' }));
@@ -100,6 +100,7 @@ test('the table of rights says what each role may do and open, and closes by Esc
     'Пользователи, Комнаты, Жалобы'
   ]);
 
-  await userEvent.keyboard('{Escape}');
+  // Browser-owned Escape is checked by browser tests; here assert cancel handling.
+  fireEvent(screen.getByRole('dialog'), new Event('cancel', { cancelable: true }));
   expect(screen.queryByRole('dialog')).toBeNull();
 });

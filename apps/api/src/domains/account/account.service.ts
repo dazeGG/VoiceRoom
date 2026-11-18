@@ -26,6 +26,7 @@ import { activeBlock, hashSessionToken, selfUser, type StoredUser } from './user
 import type { AccountDeletionRepository as DeletionRepository, AccountRestore } from './account-deletion.repository.ts';
 import type { LoginEventRepository } from './login-event.repository.ts';
 import type { RecoveryCodeRepository } from './recovery-code.repository.ts';
+import { SessionIssuanceError, type CredentialProof } from './session-proof.ts';
 import type { SessionRepository } from './session.repository.ts';
 import type { UserRepository } from './user.repository.ts';
 
@@ -154,12 +155,26 @@ export function createAccountService(deps: AccountDeps) {
   async function openSession(
     user: AccountUser,
     device: () => Promise<Device>,
-    kind: LoginKind
-  ): Promise<OpenedSession> {
-    const where = await device();
-    const session = await deps.users().createSession({ userId: user.id, ...where });
-    await recordAndAnnounceLogin(user.id, session, where, kind);
-    return { status: 'signed_in', token: session.token, user: await reloadSelf(user) };
+    kind: LoginKind,
+    credentialProof: CredentialProof = { userId: user.id, passwordHash: user.passwordHash }
+  ): Promise<
+    | OpenedSession
+    | Blocked
+    | Status<'invalid_credentials'>
+    | { status: 'deletion_pending'; deletionScheduledFor: number }
+  > {
+    try {
+      const where = await device();
+      const session = await deps.users().createSession({ credentialProof, ...where });
+      await recordAndAnnounceLogin(user.id, session, where, kind);
+      return { status: 'signed_in', token: session.token, user: await reloadSelf(user) };
+    } catch (error) {
+      if (!(error instanceof SessionIssuanceError)) throw error;
+      const refusal = error.refusal;
+      return refusal.status === 'deletion_pending'
+        ? { status: 'deletion_pending', deletionScheduledFor: refusal.deletionRequestedAt + ACCOUNT_DELETION_GRACE_MS }
+        : refusal;
+    }
   }
 
   async function register(input: {
@@ -169,7 +184,15 @@ export function createAccountService(deps: AccountDeps) {
     passwordConfirm: string;
     device: () => Promise<Device>;
   }): Promise<
-    OpenedSession | Status<'invalid_login' | 'invalid_password' | 'password_mismatch' | 'login_taken' | 'reserved_name'>
+    | OpenedSession
+    | Status<
+        | 'invalid_login'
+        | 'invalid_password'
+        | 'password_mismatch'
+        | 'login_taken'
+        | 'reserved_name'
+        | 'invalid_credentials'
+      >
   > {
     if (!input.login) return { status: 'invalid_login' };
     // Only the official account carries the service's name, and it is never a new one.
@@ -183,7 +206,8 @@ export function createAccountService(deps: AccountDeps) {
       .users()
       .createUser({ login: input.login, displayName: input.displayName, password: input.password });
     if (created.status === 'login_taken') return { status: 'login_taken' };
-    return openSession(created.user, input.device, 'register');
+    const opened = await openSession(created.user, input.device, 'register');
+    return opened.status === 'signed_in' ? opened : { status: 'invalid_credentials' };
   }
 
   async function login(input: {
@@ -376,6 +400,8 @@ export function createAccountService(deps: AccountDeps) {
     const blocked = blockedAnswer(user);
     if (blocked) return blocked;
     const opened = await openSession(user, input.device, 'recovery');
+    if (opened.status === 'blocked') return opened;
+    if (opened.status !== 'signed_in') return { status: 'invalid_code' };
     return { ...opened, remaining: result.remaining ?? 0 };
   }
 
@@ -427,10 +453,13 @@ export function createAccountService(deps: AccountDeps) {
       return { status: 'blocked', blockedUntil: result.blockedUntil, blockReason: result.blockReason };
     if (result.status !== 'restored') return { status: 'invalid_credentials' };
     const user = await deps.users().getUserById(result.userId);
-    if (!user) throw new Error('the restored account is gone');
-    const opened = await openSession(user, input.device, 'login');
+    if (!user) return { status: 'invalid_credentials' };
+    const opened = await openSession(user, input.device, 'login', {
+      userId: result.userId,
+      passwordHash: result.passwordHash
+    });
     await deps.broadcastProfileToFriends(user, log);
-    return opened;
+    return opened.status === 'deletion_pending' ? { status: 'invalid_credentials' } : opened;
   }
 
   return {

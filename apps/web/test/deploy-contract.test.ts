@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { brotliDecompressSync } from 'node:zlib';
 import { build, createServer } from 'vite';
@@ -109,7 +109,11 @@ test('a production build keeps the deployment contract', { timeout: 60_000 }, as
     // The page has something to show before its code arrives, and the app mounts over it.
     assert.match(html, /<div id="app"><div class="boot-splash"/);
     // The largest files come compressed ahead, at a strength too slow for each request.
-    const entry = immutable.find((file) => /^index-.+\.js$/.test(file));
+    const entryUrl = html.match(
+      /<script type="module" crossorigin src="(\/_app\/immutable\/[^"]+\.js)"><\/script>/
+    )?.[1];
+    assert.ok(entryUrl, 'the page declares its actual immutable module entry');
+    const entry = basename(entryUrl);
     assert.ok(entry && immutable.includes(`${entry}.br`) && immutable.includes(`${entry}.gz`), 'a compressed entry');
     const entryPath = join(outDir, '_app', 'immutable', entry);
     assert.deepEqual(brotliDecompressSync(readFileSync(`${entryPath}.br`)), readFileSync(entryPath));
@@ -138,7 +142,7 @@ test('the dev server leaves the address of the RNNoise module alone', { timeout:
     optimizeDeps: { noDiscovery: true, include: [] }
   });
   try {
-    const module = await server.transformRequest('/src/features/room/client/services/microphone-service.ts');
+    const module = await server.transformRequest('/src/features/room/client/media/rnnoise-node.ts');
     assert.ok(module, 'the module transforms');
     // Left as written: it ends in .mjs, so nothing is added to it.
     assert.match(module.code, /^\s*`\$\{RNNOISE_ASSET_BASE\}rnnoise\.mjs`\s*$/m);

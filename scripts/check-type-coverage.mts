@@ -46,6 +46,8 @@ const AREAS: ReadonlyArray<{ folder: string; project: string; ignore?: readonly 
 ];
 
 type Area = (typeof AREAS)[number];
+const scope = process.argv.includes('--site') ? 'site' : process.argv.includes('--app') ? 'app' : 'all';
+const isSite = (area: Area) => area.folder === 'apps/site';
 
 function run(command: string, args: string[], cwd: string): Promise<{ code: number | null; output: string }> {
   return new Promise((done, fail) => {
@@ -75,7 +77,10 @@ async function measure({ folder, project, ignore = [] }: Area): Promise<{ ok: bo
 
 // An ignore comment would be a cast nobody reviews, like an inline eslint-disable.
 async function optOuts(): Promise<{ ok: boolean; report: string }> {
-  const { code, output } = await run('git', ['grep', '-n', OPT_OUT, '--', '*.ts', '*.mts', '*.tsx', '*.vue'], root);
+  const paths = ['*.ts', '*.mts', '*.tsx', '*.vue', ':(exclude)apps/docs/**'];
+  if (scope === 'app') paths.push(':(exclude)apps/site/**');
+  if (scope === 'site') paths.splice(0, paths.length, 'apps/site');
+  const { code, output } = await run('git', ['grep', '-n', OPT_OUT, '--', ...paths], root);
   const lines = output
     .split('\n')
     .filter((line) => line.trim() && !line.startsWith('scripts/check-type-coverage.mts:'));
@@ -87,7 +92,7 @@ async function optOuts(): Promise<{ ok: boolean; report: string }> {
   };
 }
 
-const queue = [...AREAS];
+const queue = AREAS.filter((area) => scope === 'all' || isSite(area) === (scope === 'site'));
 const results: Array<{ ok: boolean; report: string }> = [await optOuts()];
 await Promise.all(
   Array.from({ length: PARALLEL }, async () => {

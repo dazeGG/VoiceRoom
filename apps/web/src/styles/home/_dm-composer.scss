@@ -9,7 +9,7 @@
 .dm-composer {
   position: relative;
   flex: none;
-  padding: 14px 24px 20px;
+  padding: 0.875rem 24px 20px;
   --chat-typing-inset: 26px;
 }
 
@@ -19,7 +19,7 @@
 }
 
 .dm-composer__input {
-  --composer-placeholder: var(--vr-text-3);
+  --composer-placeholder: var(--vr-text-muted);
   flex: 1;
   min-width: 0;
   width: 100%;
@@ -29,7 +29,7 @@
   background: var(--vr-bg);
   color: var(--vr-text);
   font-family: var(--font-ui);
-  font-size: 14px;
+  font-size: 0.875rem;
   outline: none;
   transition: border-color 0.15s ease;
   resize: none;
@@ -42,7 +42,7 @@
   line-height: 1.35;
 
   &::placeholder {
-    color: var(--vr-text-3);
+    color: var(--vr-text-muted);
   }
 
   &:focus {
@@ -71,7 +71,7 @@
 
   &:disabled {
     background: var(--vr-surface-3);
-    color: var(--vr-text-3);
+    color: var(--vr-text-muted);
     cursor: default;
   }
 }

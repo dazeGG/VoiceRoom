@@ -1,6 +1,8 @@
 // Sessions: issuing a session token, resolving it on each request (and
 // touching it at most hourly), listing and revoking an account's sessions.
 
+import { lockUser } from './user.repository.ts';
+import { SessionIssuanceError, type CredentialProof } from './session-proof.ts';
 import { sql } from 'kysely';
 import type pg from 'pg';
 import { isUuid } from '@voice-room/shared/validation';
@@ -35,42 +37,56 @@ export function createSessionRepository({
   const db = kyselyOn(pool);
 
   async function createSession({
-    userId,
-    now = Date.now(),
+    credentialProof,
+    now,
     token = createSessionToken(),
     userAgent = '',
     locationLabel = ''
   }: {
-    userId: string;
+    credentialProof: CredentialProof;
     now?: number;
     token?: string;
     userAgent?: string;
     locationLabel?: unknown;
   }) {
-    const expiresAt = now + sessionTtlMs;
-    const tokenHash = hashSessionToken(token);
-    const row = await db
-      .insertInto('sessions')
-      .values({
-        id: tokenHash,
-        user_id: userId,
-        created_at: toDate(now),
-        last_seen_at: toDate(now),
-        expires_at: toDate(expiresAt),
-        user_agent: cleanUserAgent(userAgent),
-        location_label: cleanLocationLabel(locationLabel)
-      })
-      .returning('public_id')
-      .executeTakeFirstOrThrow();
-    if (isDesktopAppUserAgent(userAgent)) {
-      await db
-        .updateTable('users')
-        .set({ metadata: desktopAppSeen(now) })
-        .where('id', '=', userId)
-        .where((eb) => eb.not(hasMetadataKey('desktopAppSeenAt')))
-        .execute();
-    }
-    return { expiresAt, publicId: row.public_id, token, tokenHash };
+    return db.transaction().execute(async (trx) => {
+      const { userId, passwordHash } = credentialProof;
+      const row = await lockUser(trx, 'id', userId);
+      if (!row || row.password_hash !== passwordHash) throw new SessionIssuanceError({ status: 'invalid_credentials' });
+      const user = storedUser(row);
+      const at = Date.now();
+      if (user.deletedAt !== null) throw new SessionIssuanceError({ status: 'invalid_credentials' });
+      const block = activeBlock(user, at);
+      if (block)
+        throw new SessionIssuanceError({ status: 'blocked', blockedUntil: block.until, blockReason: block.reason });
+      if (user.deletionRequestedAt !== null)
+        throw new SessionIssuanceError({ status: 'deletion_pending', deletionRequestedAt: user.deletionRequestedAt });
+      now ??= at;
+      const expiresAt = now + sessionTtlMs;
+      const tokenHash = hashSessionToken(token);
+      const sessionRow = await trx
+        .insertInto('sessions')
+        .values({
+          id: tokenHash,
+          user_id: userId,
+          created_at: toDate(now),
+          last_seen_at: toDate(now),
+          expires_at: toDate(expiresAt),
+          user_agent: cleanUserAgent(userAgent),
+          location_label: cleanLocationLabel(locationLabel)
+        })
+        .returning('public_id')
+        .executeTakeFirstOrThrow();
+      if (isDesktopAppUserAgent(userAgent)) {
+        await trx
+          .updateTable('users')
+          .set({ metadata: desktopAppSeen(now) })
+          .where('id', '=', userId)
+          .where((eb) => eb.not(hasMetadataKey('desktopAppSeenAt')))
+          .execute();
+      }
+      return { expiresAt, publicId: sessionRow.public_id, token, tokenHash };
+    });
   }
 
   // `userAgent` and `resolveLocation` only feed the hourly touch, so a request

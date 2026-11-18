@@ -1,9 +1,11 @@
 import test from 'node:test';
 import type { StoredRoom } from '../src/domains/rooms/room-views.ts';
-import { dbRoom, lobbyRoom } from './fakes/index.ts';
+import { dbRoom, fake, lobbyRoom } from './fakes/index.ts';
 import assert from 'node:assert/strict';
 import { buildRoomRealtimeSummary } from '@voice-room/shared/realtime';
 import { createRoomRealtimeRuntime } from '../src/realtime/room-runtime.ts';
+import { buildServerEnvelope } from '../src/realtime/envelope.ts';
+import type { WsConnection } from '../src/realtime/registry.ts';
 import { runtimeDeps } from './fakes/room-runtime.ts';
 
 test('buildRoomRealtimeSummary mirrors shared summary rules', () => {
@@ -30,6 +32,41 @@ test('buildRoomRealtimeSummary mirrors shared summary rules', () => {
   assert.equal(summary.hiddenPeerCount, 1);
   assert.equal(summary.name, 'Test room');
   assert.equal('emoji' in summary, false);
+});
+
+test('legacy widget chat skips snapshot reads and queued room detail deliveries', async () => {
+  const roomId = 'widget01';
+  const widget = fake<WsConnection>({
+    roomSurface: 'widget',
+    previewRoomIds: new Set(),
+    activeVoice: { roomId, peerId: 'peer1', sessionToken: 'token', transportId: 'transport1' }
+  });
+  const delivered: string[] = [];
+  let reads = 0;
+  const runtime = createRoomRealtimeRuntime(
+    runtimeDeps({
+      store: {
+        getRoom: async () => dbRoom(roomId, { kind: 'widget', widgetChatEnabled: true }),
+        async listMessages() {
+          reads++;
+          return [];
+        }
+      },
+      wsRegistry: {
+        roomDetailSubscribers: () => new Set([widget]),
+        sendToConnection(_connection, envelope) {
+          delivered.push(envelope.type);
+          return true;
+        }
+      }
+    })
+  );
+  const snapshot = await runtime.buildRoomSnapshot(roomId, 'active');
+  assert.deepEqual(snapshot?.recentMessages, []);
+  assert.equal(reads, 0);
+  runtime.broadcastRoomDetail(roomId, buildServerEnvelope('room.chat.deleted', { roomId, messageId: 'old' }));
+  runtime.broadcastRoomDetail(roomId, buildServerEnvelope('room.not_found', { roomId }));
+  assert.deepEqual(delivered, ['room.not_found']);
 });
 
 test('chat messages schedule personalized unread summaries for room recipients', async () => {

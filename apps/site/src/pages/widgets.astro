@@ -1,0 +1,193 @@
+---
+import Icon from '../components/Icon.astro';
+import WidgetCallPreview from '../components/WidgetCallPreview.astro';
+import WidgetSizeSlider from '../components/WidgetSizeSlider.astro';
+import Base from '../layouts/Base.astro';
+import {
+  DEFAULT_WIDGET_HEIGHT,
+  DEFAULT_WIDGET_TITLE,
+  DEFAULT_WIDGET_WIDTH,
+  DEFAULT_WIDGET_PREVIEW_HEIGHT,
+  WIDGET_SERVICE_URL,
+  WIDGET_SIZE_LIMITS,
+  WIDGET_TITLE_LIMIT,
+  defaultWidgetConfig,
+  widgetEmbedMarkup
+} from '@voice-room/shared/contracts/widget';
+import { widgetCodeParts } from '../scripts/widget-code-syntax.ts';
+import { PAGES } from '../site.ts';
+import '../styles/widgets.scss';
+
+const config = defaultWidgetConfig;
+const example = widgetCodeParts(widgetEmbedMarkup(config));
+const docsUrl = import.meta.env.PUBLIC_WIDGET_DOCS_URL || '/widgets/docs';
+const colors = [
+  { name: 'background', label: 'Фон' },
+  { name: 'text', label: 'Текст' },
+  { name: 'accent', label: 'Акцент' }
+] as const;
+const guests = ['Вы', 'Лена', 'Макс', 'Саша', 'Даша', 'Кирилл', 'Анна', 'Миша', 'Ира', 'Олег', 'Вика', 'Рома'];
+---
+
+<Base page={PAGES.widgets}>
+  <header class="widget-intro">
+    <h1>Виджет для вашего сайта</h1>
+    <p>Настройте VoiceRoom, скопируйте код — и общайтесь, не покидая игру.</p>
+  </header>
+
+  <section id="widget-code" aria-labelledby="widget-settings-title">
+    <div class="widget-builder">
+      <form class="widget-builder__inputs" aria-labelledby="widget-settings-title" data-widget-settings>
+        <h2 id="widget-settings-title" class="visually-hidden">Настройки виджета</h2>
+        <fieldset class="widget-builder__group">
+          <legend>Размещение</legend>
+          <div class="widget-segment widget-builder__modes">
+            <label><input type="radio" name="mode" value="inline" checked /> Внутри страницы</label>
+            <label><input type="radio" name="mode" value="floating" /> Плавающая панель</label>
+          </div>
+          <p class="widget-builder__hint">
+            <span data-placement-inline>Встраивается в выбранное место на странице.</span>
+            <span data-placement-floating hidden>Остаётся под рукой в углу сайта. Можно свернуть во время звонка.</span>
+          </p>
+          <div class="widget-builder__position" data-widget-position hidden>
+            <label for="widget-corner">
+              Положение
+              <select id="widget-corner" name="corner">
+                <option value="bottom-right">Справа внизу</option>
+                <option value="bottom-left">Слева внизу</option>
+                <option value="top-right">Справа вверху</option>
+                <option value="top-left">Слева вверху</option>
+              </select>
+            </label>
+            <label for="widget-offset">
+              Отступ, px
+              <input id="widget-offset" type="number" name="offset" min="0" max="48" value={config.offset} required />
+            </label>
+            <WidgetSizeSlider
+              id="widget-panel-width"
+              name="width"
+              label="Ширина"
+              min={WIDGET_SIZE_LIMITS.width.minimum}
+              max={WIDGET_SIZE_LIMITS.width.maximum}
+              value={DEFAULT_WIDGET_WIDTH}
+            />
+            <WidgetSizeSlider
+              id="widget-panel-height"
+              name="height"
+              label="Высота"
+              min={WIDGET_SIZE_LIMITS.height.minimum}
+              max={WIDGET_SIZE_LIMITS.height.maximum}
+              value={DEFAULT_WIDGET_HEIGHT}
+            />
+          </div>
+        </fieldset>
+
+        <fieldset class="widget-builder__group">
+          <legend>Оформление</legend>
+          <label class="widget-builder__field" for="widget-title">
+            Заголовок виджета
+            <input id="widget-title" type="text" name="title" maxlength={WIDGET_TITLE_LIMIT} value={DEFAULT_WIDGET_TITLE} />
+          </label>
+          <div class="widget-builder__fields">
+            {colors.map(({ name, label }) => (
+              <div class="widget-builder__field" data-widget-color>
+                <label for={`widget-${name}`}>{label}</label>
+                <div class="widget-builder__color-control">
+                  <input id={`widget-${name}`} type="color" name={name} value={config[name]} />
+                  <input type="text" aria-label={`${label} (HEX или RGB)`} value={config[name]} spellcheck="false" autocomplete="off" />
+                </div>
+              </div>
+            ))}
+          </div>
+          <WidgetSizeSlider id="widget-radius" name="radius" label="Скругление" min={0} max={24} value={config.radius} />
+        </fieldset>
+
+        <fieldset class="widget-builder__group">
+          <legend>Возможности</legend>
+          <label class="widget-builder__toggle">
+            Камера <input type="checkbox" name="camera" role="switch" checked />
+          </label>
+        </fieldset>
+      </form>
+
+      <figure class="widget-preview" data-widget-preview>
+        <figcaption class="widget-preview__top">
+          <Icon name="window" size={18} />
+          <span>Так увидят ваши пользователи</span>
+          <span class="widget-preview__scale" data-preview-scale hidden></span>
+        </figcaption>
+        <div class="widget-preview__panel">
+          <div class="widget-preview__settings">
+            <div class="widget-preview__toolbar">
+              <span>Демо-контейнер</span>
+              <div class="widget-segment widget-preview__screen" role="group" aria-label="Экран виджета">
+                <label><input type="radio" name="preview-screen" value="entry" checked /> Вход</label>
+                <label><input type="radio" name="preview-screen" value="call" /> В комнате</label>
+              </div>
+            </div>
+            <fieldset class="widget-builder__group" data-preview-sizes>
+              <legend class="visually-hidden">Размеры демо-контейнера</legend>
+              <div class="widget-builder__fields">
+                <WidgetSizeSlider id="widget-demo-width" label="Ширина" min={240} max={960} value={DEFAULT_WIDGET_WIDTH} previewControl="width" />
+                <WidgetSizeSlider id="widget-demo-height" label="Высота" min={260} max={900} value={DEFAULT_WIDGET_PREVIEW_HEIGHT} previewControl="height" />
+              </div>
+            </fieldset>
+            <div class="widget-preview__count" data-preview-count-field hidden>
+              <WidgetSizeSlider id="widget-demo-count" label="Участников" min={1} max={guests.length} value={4} unit="" previewControl="count" />
+            </div>
+          </div>
+          <div class="widget-preview__body">
+            <div class="widget-preview__stage" data-preview-stage>
+              <div class="widget-preview__sample">
+                <div class="widget-preview__slot">
+                  <div class="widget-preview__invite" data-preview-card>
+                    <div class="widget-preview__controls" data-preview-entry inert>
+                      <p class="widget-preview__title" data-preview-title>{DEFAULT_WIDGET_TITLE}</p>
+                      <div class="widget-preview__field">
+                        <span>Ваше имя</span>
+                        <span class="widget-preview__input">Как вас зовут?</span>
+                      </div>
+                      <span class="widget-preview__create"><Icon name="plus" size={18} /> Создать комнату</span>
+                      <p class="widget-preview__divider">или войти по коду</p>
+                      <div class="widget-preview__join">
+                        <span class="widget-preview__input"><Icon name="key-round" size={17} /> Код комнаты</span>
+                        <span class="widget-preview__enter">Войти</span>
+                      </div>
+                    </div>
+                    <WidgetCallPreview {guests} />
+                    <footer class="widget-preview__credit">
+                      Powered by <a href={WIDGET_SERVICE_URL} target="_blank" rel="noopener noreferrer">VoiceRoom</a>
+                    </footer>
+                    <button type="button" class="widget-preview__expand" data-preview-expand aria-label="Развернуть виджет" title="Развернуть виджет" aria-expanded="false" hidden>
+                      <span data-preview-expand-icon><Icon name="maximize-2" size={16} stroke={2} /></span>
+                      <span data-preview-restore-icon hidden><Icon name="minimize-2" size={16} stroke={2} /></span>
+                    </button>
+                  </div>
+                </div>
+                <span class="widget-preview__launcher" data-preview-launcher hidden aria-hidden="true">VoiceRoom</span>
+              </div>
+            </div>
+          </div>
+          <p class="widget-preview__footnote"><Icon name="shield" size={16} /> Камера и микрофон выключены.</p>
+        </div>
+      </figure>
+    </div>
+    <figure class="widget-code">
+      <figcaption class="widget-code__header">
+        <h2>Код вставки</h2>
+        <button class="widget-code__copy" type="button" aria-label="Скопировать код" title="Скопировать код" data-copy-code hidden>
+          <span data-copy-icon><Icon name="copy" size={18} /></span>
+          <span data-copy-check><Icon name="check" size={18} /></span>
+        </button>
+      </figcaption>
+      <pre><code data-widget-code>{example.map(({ text, kind }) => kind ? <span data-syntax={kind}>{text}</span> : text)}</code></pre>
+      <p class="widget-code__status" data-copy-status role="status"></p>
+      <a class="widget-code__docs" href={docsUrl}>Инструкция по установке</a>
+    </figure>
+  </section>
+
+</Base>
+
+<script>
+  import '../scripts/widget-configurator.ts';
+</script>

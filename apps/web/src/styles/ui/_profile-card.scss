@@ -55,7 +55,7 @@
 .profile-card__name {
   min-width: 0;
   color: var(--vr-text);
-  font-size: 19px;
+  font-size: 1.1875rem;
   font-weight: 600;
   letter-spacing: -0.02em;
 }
@@ -63,7 +63,7 @@
 .profile-card__handle {
   color: var(--vr-text-2);
   font-family: var(--font-mono);
-  font-size: 12.5px;
+  font-size: 0.78125rem;
 }
 
 .profile-card__since {
@@ -75,13 +75,13 @@
 }
 
 .profile-card__since-label {
-  color: var(--vr-text-3);
-  font-size: 12px;
+  color: var(--vr-text-muted);
+  font-size: 0.75rem;
 }
 
 .profile-card__since-value {
   color: var(--vr-text);
-  font-size: 13.5px;
+  font-size: 0.84375rem;
 }
 
 .profile-card__note {
@@ -90,7 +90,7 @@
   border-radius: 11px;
   background: var(--vr-hover);
   color: var(--vr-text-2);
-  font-size: 13px;
+  font-size: 0.8125rem;
   line-height: 1.45;
 }
 

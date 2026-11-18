@@ -127,8 +127,8 @@ export const CAMERA_SIMULCAST_LAYERS = [
   { width: 320, height: 180, bitrate: 150_000 },
   { width: 640, height: 360, bitrate: 450_000 }
 ] as const;
-/** Past critical CPU pressure the screen share sends at most this many frames a second. */
-export const RELIEVED_SCREEN_FRAME_RATE = 30;
+/** Sustained call strain lowers even the default 30 fps screen capture. */
+export const RELIEVED_SCREEN_FRAME_RATE = 15;
 export const SCREEN_STATS_INTERVAL_MS = 1500;
 export const SCREEN_VIDEO_BACKUP_CODEC: 'vp8' | 'h264' = 'vp8';
 /** What a viewer that cannot decode a camera's H.264 gets instead. */

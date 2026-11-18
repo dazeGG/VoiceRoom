@@ -1,0 +1,10 @@
+import { createApp } from 'vue';
+import { createPinia } from 'pinia';
+import { useLocaleStore } from '../../src/shared/i18n';
+import Fixture from './Fixture.vue';
+import '../../src/styles/main.scss';
+const pinia = createPinia();
+const app = createApp(Fixture).use(pinia);
+const locale = new URL(location.href).searchParams.get('locale');
+void useLocaleStore(pinia).select(locale === 'en' || locale === 'fr' ? locale : 'ru');
+app.mount('#app');

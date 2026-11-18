@@ -71,6 +71,7 @@ function sendRefusal(reply: FastifyReply, roomId: string, refusal: Refusal) {
 
 export function registerRoomChatRoutes(root: FastifyInstance, ctx: ApiContext, chat: RoomChatService): void {
   const app = root.withTypeProvider<TypeBoxTypeProvider>();
+  const messagePath = '/api/rooms/:roomId/chat';
 
   async function caller(raw: Parameters<ApiContext['resolveSession']>[0]): Promise<Caller> {
     const session = await ctx.resolveSession(raw);
@@ -78,7 +79,7 @@ export function registerRoomChatRoutes(root: FastifyInstance, ctx: ApiContext, c
   }
 
   app.get(
-    '/api/rooms/:roomId/chat',
+    messagePath,
     {
       schema: {
         params: RoomIdParams,
@@ -94,7 +95,7 @@ export function registerRoomChatRoutes(root: FastifyInstance, ctx: ApiContext, c
   );
 
   app.post(
-    '/api/rooms/:roomId/chat',
+    messagePath,
     {
       preValidation: optionalJsonBody,
       schema: {
@@ -126,7 +127,7 @@ export function registerRoomChatRoutes(root: FastifyInstance, ctx: ApiContext, c
   );
 
   app.patch(
-    '/api/rooms/:roomId/chat/:messageId',
+    `${messagePath}/:messageId`,
     {
       preValidation: optionalJsonBody,
       schema: {
@@ -151,7 +152,7 @@ export function registerRoomChatRoutes(root: FastifyInstance, ctx: ApiContext, c
   );
 
   app.delete(
-    '/api/rooms/:roomId/chat/:messageId',
+    `${messagePath}/:messageId`,
     {
       preValidation: optionalJsonBody,
       schema: {

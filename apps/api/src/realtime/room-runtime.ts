@@ -230,7 +230,10 @@ function createRoomRealtimeRuntime(deps: RoomRuntimeDeps) {
   ): Promise<RoomSnapshot | null> {
     const dbRoom = await getRoomStore().getRoom(roomId);
     if (!dbRoom) return null;
-    const recentMessages = (await getRoomStore().listMessages(roomId, { limit: 100 })).map(publicChatMessage);
+    const recentMessages =
+      dbRoom.kind === 'widget'
+        ? []
+        : (await getRoomStore().listMessages(roomId, { limit: 100 })).map(publicChatMessage);
     // Presence is the last synchronous read: no awaited work may let this
     // snapshot overwrite a newer peer update that was already broadcast.
     const presence = presenceRooms.get(roomId);
@@ -247,34 +250,50 @@ function createRoomRealtimeRuntime(deps: RoomRuntimeDeps) {
 
   async function subscribePreview(connection: WsConnection, roomId: string): Promise<void> {
     if (connection.closed) return;
-    const roomBan = await findRoomBan(roomId, connection.userId, connection.clientIp || connection.guestIp || '');
-    if (connection.closed) return;
-    if (roomBan) {
-      wsRegistry.sendToConnection(connection, buildServerEnvelope('room.banned', { roomId }));
-      return;
-    }
-    connection.previewRoomIds.add(roomId);
-    wsRegistry.registerConnectionForRoom(connection, roomId);
-    let snapshot: Awaited<ReturnType<typeof buildRoomSnapshot>>;
+    const token = Symbol(roomId);
+    const userId = connection.userId;
+    const pending = (connection.pendingPreviews ||= new Map());
+    const owners = (connection.previewOwners ||= new Map());
+    pending.set(roomId, token);
+    const current = () => !connection.closed && connection.userId === userId && pending.get(roomId) === token;
+    const undo = () => {
+      if (owners.get(roomId) !== token) return;
+      owners.delete(roomId);
+      connection.previewRoomIds.delete(roomId);
+      if (connection.activeVoice?.roomId !== roomId) wsRegistry.unregisterConnectionForRoom(connection, roomId);
+    };
     try {
-      snapshot = await buildRoomSnapshot(roomId, 'preview');
+      const boundary = await getRoomStore().getRoom(roomId);
+      if (!current()) return;
+      if (!boundary || (boundary.kind ?? 'main') !== 'main' || connection.roomSurface === 'widget') return;
+      const roomBan = await findRoomBan(roomId, userId, connection.clientIp || connection.guestIp || '');
+      if (!current()) return;
+      if (roomBan) {
+        wsRegistry.sendToConnection(connection, buildServerEnvelope('room.banned', { roomId }));
+        return;
+      }
+      owners.set(roomId, token);
+      connection.previewRoomIds.add(roomId);
+      wsRegistry.registerConnectionForRoom(connection, roomId);
+      const snapshot = await buildRoomSnapshot(roomId, 'preview');
+      if (!current()) return;
+      if (!snapshot) {
+        wsRegistry.sendToConnection(connection, buildServerEnvelope('room.not_found', { roomId }));
+        undo();
+        return;
+      }
+      wsRegistry.sendToConnection(connection, buildServerEnvelope('room.snapshot', snapshot));
     } catch (error) {
-      unsubscribePreview(connection, roomId);
+      undo();
       throw error;
+    } finally {
+      if (pending.get(roomId) === token) pending.delete(roomId);
     }
-    if (connection.closed) {
-      unsubscribePreview(connection, roomId);
-      return;
-    }
-    if (!snapshot) {
-      wsRegistry.sendToConnection(connection, buildServerEnvelope('room.not_found', { roomId }));
-      unsubscribePreview(connection, roomId);
-      return;
-    }
-    wsRegistry.sendToConnection(connection, buildServerEnvelope('room.snapshot', snapshot));
   }
 
   function unsubscribePreview(connection: WsConnection, roomId: string): void {
+    connection.pendingPreviews?.delete(roomId);
+    connection.previewOwners?.delete(roomId);
     connection.previewRoomIds.delete(roomId);
     if (connection.activeVoice?.roomId !== roomId) wsRegistry.unregisterConnectionForRoom(connection, roomId);
   }
@@ -467,7 +486,7 @@ function createRoomRealtimeRuntime(deps: RoomRuntimeDeps) {
           evt: LOG_EVENTS.ROOM_MIC_STALL_RECOVERY,
           connId: connection.id,
           userId: connection.userId || undefined,
-          roomId,
+          roomId: connection.roomSurface === 'widget' ? undefined : roomId,
           mic
         },
         'a client recovered a stalled microphone'

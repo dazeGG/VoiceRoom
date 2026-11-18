@@ -96,7 +96,7 @@
   margin: 0 0 8px;
   color: var(--vr-accent);
   font-family: var(--font-ui);
-  font-size: 12.5px;
+  font-size: 0.78125rem;
   font-weight: 500;
 }
 
@@ -113,7 +113,7 @@
   margin: 0;
   color: var(--vr-text);
   font-family: var(--font-ui);
-  font-size: 26px;
+  font-size: 1.625rem;
   font-weight: 600;
   letter-spacing: -0.025em;
 }
@@ -121,7 +121,7 @@
 .auth-dialog__subtitle {
   margin: 8px 0 0;
   color: var(--vr-text-2);
-  font-size: 14px;
+  font-size: 0.875rem;
   line-height: 1.5;
 }
 
@@ -147,12 +147,12 @@
   margin-bottom: 8px;
   color: var(--vr-text-2);
   font-family: var(--font-ui);
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 500;
 }
 
 .auth-dialog__label-soft {
-  color: var(--vr-text-3);
+  color: var(--vr-text-muted);
 }
 
 .auth-dialog__input {
@@ -165,12 +165,12 @@
   background: var(--vr-surface-2);
   color: var(--vr-text);
   font-family: var(--font-ui);
-  font-size: 15px;
+  font-size: 0.9375rem;
   outline: none;
   transition: border-color 0.15s ease;
 
   &::placeholder {
-    color: var(--vr-text-3);
+    color: var(--vr-text-muted);
   }
 
   &:hover {
@@ -196,7 +196,7 @@
   background: none;
   padding: 0;
   color: var(--vr-text-2);
-  font: 500 13px var(--font-ui);
+  font: 500 0.8125rem var(--font-ui);
   cursor: pointer;
 
   &:hover {
@@ -206,8 +206,8 @@
 
 .auth-dialog__consent {
   margin: 0;
-  color: var(--vr-text-3);
-  font-size: 12.5px;
+  color: var(--vr-text-muted);
+  font-size: 0.78125rem;
   line-height: 1.45;
 
   a {
@@ -229,7 +229,7 @@
   background: var(--vr-accent);
   color: var(--vr-accent-ink);
   font-family: var(--font-ui);
-  font-size: 15px;
+  font-size: 0.9375rem;
   font-weight: 600;
   cursor: pointer;
   transition: background 0.15s ease;
@@ -254,7 +254,7 @@
   padding: 10px 13px;
   background: var(--vr-danger-soft);
   color: var(--vr-danger);
-  font-size: 13px;
+  font-size: 0.8125rem;
   line-height: 1.45;
 }
 
@@ -269,7 +269,7 @@
   p {
     margin: 0;
     color: var(--vr-text);
-    font-size: 13.5px;
+    font-size: 0.84375rem;
     line-height: 1.45;
   }
 
@@ -282,7 +282,7 @@
   margin-top: 22px;
   text-align: center;
   color: var(--vr-text-2);
-  font-size: 13.5px;
+  font-size: 0.84375rem;
 }
 
 .auth-dialog__link {

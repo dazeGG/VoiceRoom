@@ -22,6 +22,7 @@ test('the sitemap lists every page at its canonical address', () => {
     'https://voiceroom.ru/discord-alternative',
     'https://voiceroom.ru/screen-sharing',
     'https://voiceroom.ru/voice-chat-for-games',
+    'https://voiceroom.ru/widgets',
     'https://voiceroom.ru/download'
   ]);
   assert.match(

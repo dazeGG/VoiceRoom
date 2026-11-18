@@ -14,9 +14,32 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  changes:
+    name: Detect changed components
+    runs-on: ubuntu-latest
+    outputs:
+      app: ${{ steps.route.outputs.app }}
+      site: ${{ steps.route.outputs.site }}
+      docs: ${{ steps.route.outputs.docs }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+      - name: Route the changes to their consumers
+        id: route
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          node --test scripts/test/changed-components.test.mts
+          node scripts/ci/changed-components.mts "$BASE_SHA" "$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+
   policy:
     name: Git Flow policy
-    if: github.event_name == 'pull_request'
+    needs: [changes, site, docs]
+    if: always() && github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - name: Validate source branch and Conventional Commit PR title
@@ -44,12 +67,35 @@ jobs:
               ;;
           esac
 
+      # This check already protects main. Validate the routed static jobs so an
+      # unrelated app job can skip without making site or docs checks optional.
+      - name: Require each selected static check
+        env:
+          ROUTING_RESULT: ${{ needs.changes.result }}
+          APP_CHANGED: ${{ needs.changes.outputs.app }}
+          SITE_CHANGED: ${{ needs.changes.outputs.site }}
+          SITE_RESULT: ${{ needs.site.result }}
+          DOCS_CHANGED: ${{ needs.changes.outputs.docs }}
+          DOCS_RESULT: ${{ needs.docs.result }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$ROUTING_RESULT" != success || ! "$APP_CHANGED" =~ ^(true|false)$ ]]; then
+            echo "::error::Could not determine the changes that need checks."
+            exit 1
+          fi
+          for lane in "site:$SITE_CHANGED:$SITE_RESULT" "docs:$DOCS_CHANGED:$DOCS_RESULT"; do
+            case "$lane" in
+              *:true:success|*:false:skipped) ;;
+              *) echo "::error::Unexpected check result: $lane"; exit 1 ;;
+            esac
+          done
+
   check:
     name: Lint, typecheck & build
+    needs: changes
+    if: needs.changes.outputs.app == 'true'
     runs-on: ubuntu-latest
-    # astro check and astro build (apps/site) would otherwise send usage telemetry.
-    env:
-      ASTRO_TELEMETRY_DISABLED: 1
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
@@ -57,12 +103,14 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci
-      - run: npm run check
-      - run: npm run build
+      - run: npm run check:app
+      - run: npm run build:app
 
   # API and web tests run as separate jobs so neither waits for the other.
   test:
     name: API tests
+    needs: changes
+    if: needs.changes.outputs.app == 'true'
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -100,6 +148,8 @@ jobs:
 
   test-web:
     name: Web tests
+    needs: changes
+    if: needs.changes.outputs.app == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -110,10 +160,11 @@ jobs:
       - run: npm ci
       - run: npm --workspace @voice-room/web run test
       - run: npm --workspace @voice-room/admin run test
-      - run: npm --workspace @voice-room/site run test
 
   voice-join:
     name: Voice room join smoke
+    needs: changes
+    if: needs.changes.outputs.app == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -139,6 +190,8 @@ jobs:
 
   goal-g05:
     name: G05 strict LiveKit gate proof
+    needs: changes
+    if: needs.changes.outputs.app == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -154,7 +207,8 @@ jobs:
 
   goal-g08:
     name: G08 measured coverage gate
-    if: github.event_name == 'pull_request'
+    needs: changes
+    if: github.event_name == 'pull_request' && needs.changes.outputs.app == 'true'
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -222,8 +276,8 @@ jobs:
 
   images:
     name: Publish images
-    needs: [check, test, test-web, voice-join, goal-g05]
-    if: github.event_name == 'push'
+    needs: [changes, check, test, test-web, voice-join, goal-g05]
+    if: github.event_name == 'push' && needs.changes.outputs.app == 'true'
     permissions:
       contents: read
       packages: write
@@ -237,4 +291,40 @@ jobs:
     with:
       environment: dev
       url: https://dev.voiceroom.ru
+    secrets: inherit
+
+  site:
+    name: Site checks
+    needs: changes
+    if: needs.changes.outputs.site == 'true'
+    uses: ./.github/workflows/build-static.yml
+    with:
+      component: site
+
+  docs:
+    name: Docs checks
+    needs: changes
+    if: needs.changes.outputs.docs == 'true'
+    uses: ./.github/workflows/build-static.yml
+    with:
+      component: docs
+
+  deploy-site-dev:
+    name: Deploy site to dev
+    needs: site
+    if: github.event_name == 'push'
+    uses: ./.github/workflows/deploy-static.yml
+    with:
+      component: site
+      environment: dev
+    secrets: inherit
+
+  deploy-docs-dev:
+    name: Deploy docs to dev
+    needs: docs
+    if: github.event_name == 'push'
+    uses: ./.github/workflows/deploy-static.yml
+    with:
+      component: docs
+      environment: dev
     secrets: inherit

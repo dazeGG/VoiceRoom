@@ -71,6 +71,7 @@ services:
       NODE_ENV: production
       HOST: 0.0.0.0
       PORT: 3000
+      WIDGET_ENABLED: ${WIDGET_ENABLED:-false}
       LOG_LEVEL: ${LOG_LEVEL:-info}
       TRUST_PROXY: ${TRUST_PROXY:-true}
       DATABASE_URL: ${DATABASE_URL:-postgres://${POSTGRES_USER:-voice_room}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:-voice_room}}
@@ -130,7 +131,7 @@ services:
       # Comma-separated account ids that review reports at /admin/reports.
       PLATFORM_ADMIN_USER_IDS: ${PLATFORM_ADMIN_USER_IDS:-}
       # The main site and the admin app, for the admin app's sign-in handoff.
-      SITE_ORIGIN: https://${DOMAIN}
+      SITE_ORIGIN: https://${APP_DOMAIN:-${DOMAIN}}
       ADMIN_ORIGIN: https://${ADMIN_DOMAIN:-admin.${DOMAIN}}
       REPORT_RATE_LIMIT: ${REPORT_RATE_LIMIT:-10}
       REPORT_RATE_WINDOW_MS: ${REPORT_RATE_WINDOW_MS:-60000}
@@ -292,6 +293,9 @@ services:
         condition: service_started
     environment:
       DOMAIN: ${DOMAIN:?set DOMAIN in .env}
+      # Optional public origins. The host edge must serve their DNS names and TLS.
+      APP_DOMAIN: ${APP_DOMAIN:-}
+      DOCS_DOMAIN: ${DOCS_DOMAIN:-}
       # The admin app; needs a DNS record pointing at this host (docs/SELF_HOSTING.md).
       ADMIN_DOMAIN: ${ADMIN_DOMAIN:-admin.${DOMAIN}}
       LIVEKIT_DOMAIN: ${LIVEKIT_DOMAIN:-livekit.${DOMAIN}}
@@ -314,6 +318,7 @@ services:
       - caddy_config:/config
       # Web chunks of earlier releases, for tabs opened before a deploy.
       - web_archive:/srv/archive
+      - ./static:/srv/static:ro
       # Extra sites managed on the host, imported by the Caddyfile.
       - ./config/caddy/sites.d:/etc/caddy/sites.d:ro
 
@@ -334,8 +339,8 @@ services:
         log_level: info
         prometheus_port: ${LIVEKIT_METRICS_PORT:-6789}
         rtc:
-          tcp_port: 7881
-          udp_port: 7882
+          tcp_port: ${LIVEKIT_RTC_TCP_PORT:-7881}
+          udp_port: ${LIVEKIT_RTC_UDP_PORT:-7882}
           use_external_ip: true
         # The API admits at most MAX_ROOM_PEERS; the SFU cap is a backstop with
         # room for a reconnecting peer's old and new session to overlap.
@@ -353,12 +358,12 @@ services:
           enabled: ${TURN_ENABLED:-false}
           domain: "${TURN_DOMAIN:-}"
           tls_port: 5349
-          udp_port: 3478
+          udp_port: ${LIVEKIT_TURN_UDP_PORT:-3478}
           external_tls: true
           # Relayed media comes back to the node IP, so the relay ports must be
           # published like the RTC ports (one port per relayed participant).
-          relay_range_start: 30000
-          relay_range_end: 30099
+          relay_range_start: ${LIVEKIT_RELAY_PORT_FIRST:-30000}
+          relay_range_end: ${LIVEKIT_RELAY_PORT_LAST:-30099}
         keys:
           "${LIVEKIT_API_KEY:?set LIVEKIT_API_KEY in .env}": "${LIVEKIT_API_SECRET:?set LIVEKIT_API_SECRET in .env}"
     expose:
@@ -367,10 +372,12 @@ services:
       - "${LIVEKIT_METRICS_PORT:-6789}"
     ports:
       - "${LIVEKIT_METRICS_BIND_ADDRESS:-127.0.0.1}:${LIVEKIT_METRICS_PORT:-6789}:${LIVEKIT_METRICS_PORT:-6789}"
-      - "7881:7881/tcp"
-      - "7882:7882/udp"
-      - "3478:3478/udp"
-      - "30000-30099:30000-30099/udp"
+      # The same number inside and out: LiveKit advertises the port it listens
+      # on. A second stack on this host takes others (docker-compose.behind-edge.yml).
+      - "${LIVEKIT_RTC_TCP_PORT:-7881}:${LIVEKIT_RTC_TCP_PORT:-7881}/tcp"
+      - "${LIVEKIT_RTC_UDP_PORT:-7882}:${LIVEKIT_RTC_UDP_PORT:-7882}/udp"
+      - "${LIVEKIT_TURN_UDP_PORT:-3478}:${LIVEKIT_TURN_UDP_PORT:-3478}/udp"
+      - "${LIVEKIT_RELAY_PORT_FIRST:-30000}-${LIVEKIT_RELAY_PORT_LAST:-30099}:${LIVEKIT_RELAY_PORT_FIRST:-30000}-${LIVEKIT_RELAY_PORT_LAST:-30099}/udp"
 
   livekit-gate:
     logging: *logging

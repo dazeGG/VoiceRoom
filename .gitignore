@@ -31,8 +31,10 @@ apps/api/uploads/
 # Docker/Caddy local state
 caddy_data/
 caddy_config/
+/static/
 # Host-installed persistent logging override must survive Git checkouts.
 /docker-compose.override.yml
+/docker-compose.edge.yml
 
 # Test and coverage output
 coverage/
@@ -50,6 +52,10 @@ playwright-report/
 # Generated emoji artwork (see apps/web/scripts/build-emoji-assets.ts)
 apps/web/public/emoji/
 apps/site/.astro/
+
+# Python helper bytecode
+__pycache__/
+*.pyc
 
 # Host-managed extra Caddy sites (config/caddy/sites.d/README.md)
 config/caddy/sites.d/*.caddy

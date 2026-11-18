@@ -1,6 +1,6 @@
 {
   "name": "@voice-room/shared",
-  "version": "2.13.0",
+  "version": "2.14.0",
   "private": true,
   "type": "module",
   "exports": {
@@ -33,6 +33,7 @@
     "./emoji-skin-tones": "./src/emoji-skin-tones.ts",
     "./account-security": "./src/account-security.ts",
     "./client-version": "./src/client-version.ts",
+    "./contracts/widget": "./src/contracts/widget.ts",
     "./contracts/http": "./src/contracts/http.ts",
     "./contracts/users": "./src/contracts/users.ts",
     "./contracts/social": "./src/contracts/social.ts",

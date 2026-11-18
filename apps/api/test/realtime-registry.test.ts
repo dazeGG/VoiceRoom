@@ -136,3 +136,24 @@ test('the registry counts its sockets and takes a finished voice seat off every 
   assert.deepEqual([...registry.roomDetailSubscribers('room-1')], [guest]);
   assert.equal(guest.activeVoice?.peerId, 'peer-2');
 });
+
+test('old peer cleanup cannot detach a socket holding a replacement transport', () => {
+  const registry = createConnectionRegistry({
+    maxConnectionsPerUser: 4,
+    keepaliveMs: 15000,
+    getFriendIds: async () => []
+  });
+  const connection = registry.addConnection('B', socket());
+  connection.activeVoice = { roomId: 'room', peerId: 'peer', sessionToken: 'token', transportId: 'new' };
+  registry.registerConnectionForRoom(connection, 'room');
+  try {
+    registry.detachVoicePeer('room', 'peer', 'old');
+    assert.equal(connection.activeVoice?.transportId, 'new');
+    assert.equal(registry.roomDetailSubscribers('room').has(connection), true);
+    registry.detachVoicePeer('room', 'peer', 'new');
+    assert.equal(connection.activeVoice, null);
+    assert.equal(registry.roomDetailSubscribers('room').size, 0);
+  } finally {
+    registry.removeConnection(connection);
+  }
+});

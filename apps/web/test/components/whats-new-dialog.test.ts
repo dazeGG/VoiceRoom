@@ -5,6 +5,8 @@
 import { fireEvent, screen } from '@testing-library/vue';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, expect, test, vi } from 'vitest';
+import { defineComponent, h, ref, type VNode } from 'vue';
+import Dialog from '@/shared/ui/Dialog/Dialog.vue';
 import { WHATS_NEW_VERSION } from '@voice-room/shared/account-security';
 import WhatsNewDialog from '@/features/home/components/WhatsNewDialog.vue';
 import { WHATS_NEW_SLIDES } from '@/features/home/model/whats-new';
@@ -24,13 +26,20 @@ function stubRelease(lastSeen: string | null) {
   });
 }
 
-const title = () => document.querySelector('#whatsNewSlideTitle')?.textContent;
+function host(render: () => VNode[]) {
+  return defineComponent({ setup: () => render });
+}
+
+const title = () => document.querySelector('.stories__title')?.textContent;
 const runningFill = () => document.querySelector('.stories__fill--run');
 
 test('slides turn on their own and hold while the pointer is over the card', async () => {
   stubRelease(null);
   await renderWithApp(WhatsNewDialog, { props: { onOpenAppearance: vi.fn() } });
-  await screen.findByRole('dialog');
+  const dialog = await screen.findByRole('dialog', { name: WHATS_NEW_SLIDES[0].title });
+  expect(document.getElementById(dialog.getAttribute('aria-describedby') ?? '')?.textContent).toBe(
+    WHATS_NEW_SLIDES[0].text
+  );
   expect(title()).toBe(WHATS_NEW_SLIDES[0].title);
 
   await fireEvent.animationEnd(defined(runningFill(), 'running fill'));
@@ -84,4 +93,39 @@ test('a release already seen is not shown', async () => {
   await renderWithApp(WhatsNewDialog, { props: { onOpenAppearance: vi.fn() } });
   await new Promise((resolve) => setTimeout(resolve, 50));
   expect(screen.queryByRole('dialog')).toBeNull();
+});
+
+test('reverse Tab from the focused final slide stays inside the modal', async () => {
+  stubRelease(null);
+  const Host = host(() => [h('button', 'Background action'), h(WhatsNewDialog)]);
+  await renderWithApp(Host);
+  const dialog = await screen.findByRole('dialog');
+  await vi.waitFor(() => expect(document.activeElement).toBe(dialog.querySelector('.stories__stage')));
+  for (let i = 1; i < WHATS_NEW_SLIDES.length; i += 1) await userEvent.keyboard('{ArrowRight}');
+  await userEvent.tab({ shift: true });
+  expect(dialog.contains(document.activeElement)).toBe(true);
+});
+
+test('pausing for a real dialog does not mark seen and appearance receives final focus', async () => {
+  const { calls } = stubRelease(null);
+  const urgent = ref(false);
+  const appearance = ref(false);
+  const Host = host(() => [
+    h(WhatsNewDialog, { paused: urgent.value, onOpenAppearance: () => (appearance.value = true) }),
+    h(Dialog, { open: urgent.value, title: 'Urgent', onClose: () => (urgent.value = false) }),
+    h(Dialog, { open: appearance.value, title: 'Appearance', onClose: () => (appearance.value = false) })
+  ]);
+  await renderWithApp(Host);
+  await screen.findByRole('dialog');
+  urgent.value = true;
+  const urgentDialog = await screen.findByRole('dialog', { name: 'Urgent' });
+  await vi.waitFor(() => expect(urgentDialog.contains(document.activeElement)).toBe(true));
+  expect(calls.filter((call) => call.url === '/api/auth/whats-new/seen')).toHaveLength(0);
+  await userEvent.keyboard('{Escape}');
+  await vi.waitFor(() => expect(document.activeElement).toBe(document.querySelector('.stories__stage')));
+  for (let i = 1; i < WHATS_NEW_SLIDES.length; i += 1) await userEvent.keyboard('{ArrowRight}');
+  await userEvent.click(screen.getByRole('button', { name: 'Настроить' }));
+  const settings = await screen.findByRole('dialog', { name: 'Appearance' });
+  await vi.waitFor(() => expect(settings.contains(document.activeElement)).toBe(true));
+  expect(calls.filter((call) => call.url === '/api/auth/whats-new/seen')).toHaveLength(1);
 });

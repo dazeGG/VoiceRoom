@@ -87,7 +87,8 @@ function createMediaService({
   quotaService: quotas,
   storage: files,
   maxUploadBytes = MAX_UPLOAD_BYTES,
-  maxInputPixels = MAX_INPUT_PIXELS
+  maxInputPixels = MAX_INPUT_PIXELS,
+  isRoomAttachmentAllowed = async () => false
 }: {
   attachmentRepository: Pick<
     AttachmentRepository,
@@ -105,10 +106,18 @@ function createMediaService({
   storage: Pick<MediaStorage, 'openRead' | 'save' | 'removeAttachment'>;
   maxUploadBytes?: number;
   maxInputPixels?: number;
+  isRoomAttachmentAllowed?: (messageId: string) => Promise<boolean>;
 }) {
   async function owned(id: string, ownerId: string, client?: Client): Promise<Attachment> {
     const attachment = await attachments.findById(id, { client });
     if (!ownsAttachment(attachment, ownerId) || attachment.deletedAt) {
+      throw new DomainError('media_not_found', 404, 'Attachment not found');
+    }
+    if (
+      attachment.context === 'room' &&
+      attachment.roomMessageId &&
+      !(await isRoomAttachmentAllowed(attachment.roomMessageId))
+    ) {
       throw new DomainError('media_not_found', 404, 'Attachment not found');
     }
     return attachment;

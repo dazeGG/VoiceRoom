@@ -50,6 +50,7 @@ export function GlobalSearch({
     const onKey = (event: globalThis.KeyboardEvent) => {
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
         event.preventDefault();
+        if (document.querySelector('dialog[open]')) return;
         input.current?.focus();
         input.current?.select();
       }

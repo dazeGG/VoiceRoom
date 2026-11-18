@@ -1,0 +1,25 @@
+/* Frozen initial v1 compatibility baseline. This is not a historical production release. */
+(() => {
+  const container = document.querySelector('[data-v1-baseline]');
+  if (!(container instanceof HTMLElement)) throw new Error('Missing v1 fixture');
+  const origin = new URL(container.dataset.serviceOrigin).origin;
+  const nonce = Array.from(crypto.getRandomValues(new Uint8Array(24)), (byte) =>
+    byte.toString(16).padStart(2, '0')
+  ).join('');
+  const frame = document.createElement('iframe');
+  frame.title = 'Frozen v1 VoiceRoom';
+  frame.allow = 'microphone; camera; autoplay';
+  frame.referrerPolicy = 'no-referrer';
+  frame.src = `${origin}/embed/v1#${new URLSearchParams({ config: container.dataset.config, parentOrigin: location.origin, nonce })}`;
+  window.addEventListener('message', (event) => {
+    if (
+      event.origin !== origin ||
+      event.source !== frame.contentWindow ||
+      event.data?.version !== 1 ||
+      event.data?.nonce !== nonce
+    )
+      return;
+    if (event.data.type === 'ready') frame.contentWindow.postMessage({ version: 1, nonce, type: 'initialize' }, origin);
+  });
+  container.append(frame);
+})();

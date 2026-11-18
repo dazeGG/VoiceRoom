@@ -121,18 +121,30 @@ test('a desktop session stamps the account once, and the marker outlives every s
   assert.ok(user);
   assert.equal(selfUser(user).hasUsedDesktopApp, false);
 
-  await store.createSession({ userId: user.id, userAgent: CHROME, now: 1_000 });
+  await store.createSession({
+    credentialProof: { userId: user.id, passwordHash: user.passwordHash },
+    userAgent: CHROME,
+    now: 1_000
+  });
   assert.equal(
     (await metadataOf(pool, user.id)).metadata.desktopAppSeenAt,
     undefined,
     'a browser session does not stamp'
   );
 
-  const first = await store.createSession({ userId: user.id, userAgent: DESKTOP_APP, now: 2_000 });
+  const first = await store.createSession({
+    credentialProof: { userId: user.id, passwordHash: user.passwordHash },
+    userAgent: DESKTOP_APP,
+    now: 2_000
+  });
   const stamped = await metadataOf(pool, user.id);
   assert.equal(stamped.metadata.desktopAppSeenAt, 2_000);
 
-  await store.createSession({ userId: user.id, userAgent: DESKTOP_APP, now: 3_000 });
+  await store.createSession({
+    credentialProof: { userId: user.id, passwordHash: user.passwordHash },
+    userAgent: DESKTOP_APP,
+    now: 3_000
+  });
   assert.deepEqual(await metadataOf(pool, user.id), stamped, 'a second desktop login rewrites nothing');
 
   // Sessions go away on logout, expiry and password change; the marker stays.
@@ -150,7 +162,10 @@ test('the hourly touch stamps a session that predates the marker, without rewrit
   const { pool, store } = await setup(t);
   const { user } = await store.createUser({ login: 'linus', password: 'password123' });
   assert.ok(user);
-  const session = await store.createSession({ userId: user.id, userAgent: CHROME });
+  const session = await store.createSession({
+    credentialProof: { userId: user.id, passwordHash: user.passwordHash },
+    userAgent: CHROME
+  });
   await pool.query(`UPDATE sessions SET last_seen_at = now() - interval '2 hours' WHERE id = $1`, [
     hashSessionToken(session.token)
   ]);

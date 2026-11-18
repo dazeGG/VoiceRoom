@@ -1,6 +1,8 @@
 // Every HTTP and WebSocket route of the API, registered on one app with the
 // shared context and the services each group needs.
 
+import { roomAllowsSurface } from '../domains/rooms/room-surface.policy.ts';
+import { registerWidgetRoomRoutes } from '../domains/rooms/widget.routes.ts';
 import type { FastifyInstance } from 'fastify';
 import { outdatedAndroidVersion } from '@voice-room/shared/client-version';
 import type { ApiContext } from './context.ts';
@@ -45,6 +47,7 @@ type OpsRouteDeps = Parameters<typeof registerOpsRoutes>[2];
 export interface ApiRouteDeps {
   config: Pick<
     ReturnType<typeof readApiConfig>,
+    | 'WIDGET_ENABLED'
     | 'MAX_ROOMS'
     | 'MAX_ROOM_PEERS'
     | 'ROOM_CREATE_POW_DIFFICULTY'
@@ -85,16 +88,43 @@ export interface ApiRouteDeps {
   presenceRooms: Map<string, { peers: Map<string, PresencePeer> }>;
   roomRuntime: RoomRealtimeRuntime;
   wsHandler: ReturnType<typeof createWsHandler>;
+  widgetWsHandler: ReturnType<typeof createWsHandler>;
+  widgetCanAdmit(): Promise<boolean>;
   livekitEnabled: () => boolean;
   renderMetrics: OpsRouteDeps['renderMetrics'];
 }
 
 export function registerApiRoutes(app: FastifyInstance, ctx: ApiContext, deps: ApiRouteDeps): void {
   registerAdmissionRoutes(app, ctx, deps.domain.admission);
+  app.register(async (widget) => {
+    widget.addHook('preHandler', async (_request, reply) => {
+      if (!(await deps.widgetCanAdmit()))
+        return reply.code(404).send({ ok: false, code: 'room_not_found', error: 'Room not found' });
+    });
+    registerWidgetRoomRoutes(widget, ctx, {
+      rooms: deps.domain.rooms,
+      getRoom: deps.getRoom,
+      createLimiter: deps.limits.roomCreate,
+      pow: deps.limits.pow,
+      ipKeyOf: deps.services.ipKeyOf,
+      maxRoomPeers: deps.config.MAX_ROOM_PEERS
+    });
+    registerAdmissionRoutes(widget, ctx, deps.domain.admission, 'widget');
+    widget.get('/api/widget/ws', { websocket: true }, (socket, request) => {
+      if (!deps.config.WIDGET_ENABLED) {
+        socket.close(1008, 'Widget unavailable');
+        return;
+      }
+      void deps.widgetWsHandler.handleConnection(socket, request.raw);
+    });
+  });
   registerRoomRoutes(app, ctx, {
     rooms: deps.domain.rooms,
     store: deps.services.getRoomStore,
-    getRoom: deps.getRoom,
+    getRoom: async (roomId) => {
+      const room = await deps.getRoom(roomId);
+      return roomAllowsSurface(room, 'main') ? room : null;
+    },
     findRoomBan: deps.findRoomBan,
     findAuthorizedPeer: (roomId, peerId, sessionToken) => {
       const peer = deps.presenceRooms.get(roomId)?.peers.get(peerId);

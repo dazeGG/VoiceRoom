@@ -30,13 +30,13 @@
   width: 20px;
   padding-top: 2px;
   font-family: var(--font-ui);
-  font-size: 12px;
-  color: var(--feature-num-ink, var(--vr-text-3));
+  font-size: 0.75rem;
+  color: var(--feature-num-ink, var(--vr-text-muted));
 }
 
 .feature-list__title {
   margin: 0;
-  font-size: 15px;
+  font-size: 0.9375rem;
   font-weight: 600;
   color: var(--feature-title-ink, var(--vr-text));
   letter-spacing: -0.01em;
@@ -44,7 +44,7 @@
 
 .feature-list__desc {
   margin: 3px 0 0;
-  font-size: 14px;
-  color: var(--feature-desc-ink, var(--vr-text-3));
+  font-size: 0.875rem;
+  color: var(--feature-desc-ink, var(--vr-text-muted));
   line-height: 1.5;
 }

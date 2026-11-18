@@ -1,0 +1,87 @@
+@use '../mixins' as *;
+
+.widget-entry__title {
+  margin: 0 0 16px;
+  font-size: 1.125rem;
+  font-weight: 650;
+  line-height: 1.25;
+}
+
+.widget-shell__status ~ .widget-entry .widget-entry__title {
+  margin-block-start: 12px;
+}
+
+.widget-entry__field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-block-end: 16px;
+  font-size: 0.8125rem;
+
+  input {
+    width: 100%;
+  }
+}
+
+.widget-entry__form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.widget-entry .widget-entry__create {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: var(--vr-accent);
+  color: var(--vr-bg);
+  font-weight: 650;
+}
+
+.widget-entry__divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: color-mix(in srgb, var(--vr-text) 55%, transparent);
+  font-size: 0.6875rem;
+
+  &::before,
+  &::after {
+    height: 1px;
+    flex: 1;
+    background: color-mix(in srgb, var(--vr-text) 12%, transparent);
+    content: '';
+  }
+}
+
+.widget-entry__join {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.widget-entry__code {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  align-items: center;
+
+  > svg {
+    position: absolute;
+    inset-inline-start: 12px;
+    color: color-mix(in srgb, var(--vr-text) 55%, transparent);
+  }
+
+  input {
+    width: 100%;
+    min-width: 0;
+    padding-inline-start: 38px;
+  }
+}
+
+.widget-entry__sr-only {
+  @include visually-hidden;
+}

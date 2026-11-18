@@ -6,6 +6,7 @@
 import type { PeerLeaveReason } from '@voice-room/shared/contracts/realtime';
 import type { ServerEnvelope } from '@voice-room/shared/realtime';
 import type { Logger } from 'pino';
+import type { AdmissionPeer } from '../domains/admission/admission.service.ts';
 import { LOG_EVENTS } from '../lib/log-events.ts';
 import { publicPeer, type PresencePeer } from '../domains/rooms/room-views.ts';
 import type { FinishedVoiceSession, VoiceSessionRepository } from '../domains/rooms/voice-session.repository.ts';
@@ -19,6 +20,8 @@ export interface RosterPeer extends PresencePeer {
 }
 
 export interface PresenceRoom {
+  kind?: 'main' | 'widget';
+  widgetChatEnabled?: boolean;
   id: string;
   peers: Map<string, RosterPeer>;
   updatedAt?: number;
@@ -66,11 +69,12 @@ export function createRoomPresence(deps: RoomPresenceDeps) {
   }
 
   /** Joins a stored room with its live roster (the roster object is shared, not copied). */
-  function attach<T extends { id: string; peers?: Map<string, RosterPeer> }>(
+  function attach<T extends { id: string; kind?: 'main' | 'widget'; peers?: Map<string, RosterPeer> }>(
     dbRoom: T | null
   ): (T & { peers: Map<string, RosterPeer> }) | null {
     if (!dbRoom) return null;
     const presence = room(dbRoom.id);
+    presence.kind = dbRoom.kind ?? 'main';
     if (dbRoom.peers instanceof Map && dbRoom.peers !== presence.peers) {
       for (const [peerId, peer] of dbRoom.peers) {
         if (!presence.peers.has(peerId)) presence.peers.set(peerId, peer);
@@ -96,12 +100,13 @@ export function createRoomPresence(deps: RoomPresenceDeps) {
       if (occupancyRetries.get(roomId) !== retry) return;
       retry.timer = null;
       void queueOccupancy(roomId).catch((error: unknown) => {
-        deps
-          .logger()
-          .error(
-            { evt: LOG_EVENTS.ROOM_OCCUPANCY_RETRY_FAILED, err: error },
-            'failed to retry room occupancy persistence'
-          );
+        deps.logger().error(
+          {
+            evt: LOG_EVENTS.ROOM_OCCUPANCY_RETRY_FAILED,
+            err: rooms.get(roomId)?.kind === 'widget' ? undefined : error
+          },
+          'failed to retry room occupancy persistence'
+        );
       });
     }, delay);
     retry.timer?.unref?.();
@@ -258,16 +263,37 @@ export function createRoomPresence(deps: RoomPresenceDeps) {
       // The call ended: reset the in-memory call clock (never persisted).
       target.voiceActiveSince = null;
       void queueOccupancy(roomId).catch((error: unknown) => {
-        deps
-          .logger()
-          .error(
-            { evt: LOG_EVENTS.ROOM_OCCUPANCY_PERSIST_FAILED, roomId, err: error },
-            'failed to persist room occupancy'
-          );
+        deps.logger().error(
+          {
+            evt: LOG_EVENTS.ROOM_OCCUPANCY_PERSIST_FAILED,
+            roomId: target.kind === 'widget' ? undefined : roomId,
+            err: target.kind === 'widget' ? undefined : error
+          },
+          'failed to persist room occupancy'
+        );
       });
     } else {
       target.updatedAt = Date.now();
     }
+  }
+
+  function currentRosterPeer(roomId: string, peerId: string): AdmissionPeer | null {
+    const peer = rooms.get(roomId)?.peers.get(peerId);
+    if (
+      !peer ||
+      peer.closed ||
+      peer.replaced ||
+      !peer.transport?.id ||
+      !peer.transport.connection ||
+      peer.transport.connection.closed
+    )
+      return null;
+    return Object.freeze({
+      sessionToken: peer.sessionToken || '',
+      accountUserId: peer.accountUserId || null,
+      gateGuestPrincipalId: peer.gateGuestPrincipalId || '',
+      transportId: peer.transport.id
+    });
   }
 
   // The client sends its realtime join just before asking for a media token,
@@ -276,10 +302,10 @@ export function createRoomPresence(deps: RoomPresenceDeps) {
     roomId: string,
     peerId: string,
     timeoutMs = deps.roster.waitMs
-  ): Promise<RosterPeer | null> {
+  ): Promise<AdmissionPeer | null> {
     const deadline = Date.now() + timeoutMs;
     for (;;) {
-      const peer = rooms.get(roomId)?.peers?.get(peerId);
+      const peer = currentRosterPeer(roomId, peerId);
       if (peer || Date.now() >= deadline) return peer || null;
       await new Promise((resolve) => setTimeout(resolve, deps.roster.pollMs));
     }
@@ -322,6 +348,7 @@ export function createRoomPresence(deps: RoomPresenceDeps) {
     closePeer,
     queueOccupancy,
     waitForRosterPeer,
+    currentRosterPeer,
     prune,
     reset,
     clearOccupancyRetries,

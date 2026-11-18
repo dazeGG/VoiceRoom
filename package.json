@@ -1,10 +1,13 @@
 {
   "name": "voice-room",
-  "version": "2.13.0",
+  "version": "2.14.0",
   "private": true,
   "description": "Simple link-based LiveKit voice chat with screen sharing.",
   "workspaces": [
-    "apps/*",
+    "apps/admin",
+    "apps/api",
+    "apps/site",
+    "apps/web",
     "packages/*"
   ],
   "scripts": {
@@ -24,13 +27,17 @@
     "dev:host:admin": "npm --workspace @voice-room/admin run dev",
     "dev:host:site": "npm --workspace @voice-room/site run dev",
     "dev:host:livekit": "docker run --rm -e LIVEKIT_KEYS=\"devkey: devsecret\" -p 7880:7880 -p 7881:7881 -p 7882:7882/udp livekit/livekit-server:v1.13.2 --dev --bind 0.0.0.0",
-    "build": "npm --workspace @voice-room/web run build && npm --workspace @voice-room/admin run build && npm --workspace @voice-room/site run build",
-    "check": "npm --workspace @voice-room/shared run check && npm --workspace @voice-room/api run check && npm --workspace @voice-room/web run check && npm --workspace @voice-room/admin run check && npm --workspace @voice-room/site run check && tsc -p scripts/tsconfig.json && node scripts/check-web-palette.mts && node scripts/check-web-styles.mts && node scripts/check-test-source-reads.mts && node scripts/check-type-coverage.mts && npm run lint && npm run format:check",
+    "build": "npm run build:app && npm --workspace @voice-room/site run build",
+    "build:app": "npm --workspace @voice-room/web run build && npm --workspace @voice-room/admin run build",
+    "check": "npm run check:app && npm run check:site && npm run format:check",
+    "check:app": "npm --workspace @voice-room/shared run check && npm --workspace @voice-room/api run check && npm --workspace @voice-room/web run check && npm --workspace @voice-room/admin run check && tsc -p scripts/tsconfig.json && node scripts/check-web-palette.mts && node scripts/check-web-styles.mts && node scripts/check-test-source-reads.mts --app && node scripts/check-type-coverage.mts --app && npm run lint -- --ignore-pattern \"apps/site/**\" && prettier --check apps/admin apps/api apps/web packages scripts --log-level warn --cache --cache-location node_modules/.cache/prettier/",
+    "check:site": "npm --workspace @voice-room/site run check && node scripts/check-test-source-reads.mts --site && node scripts/check-type-coverage.mts --site && eslint apps/site --cache --cache-location node_modules/.cache/eslint-site/ && prettier --check apps/site --log-level warn --cache --cache-location node_modules/.cache/prettier/",
     "lint": "eslint . --cache --cache-location node_modules/.cache/eslint/",
     "format": "prettier --write .",
     "format:check": "prettier --check . --log-level warn --cache --cache-location node_modules/.cache/prettier/",
     "lint:baseline": "eslint . --suppress-all",
-    "test": "npm --workspace @voice-room/shared run test && npm --workspace @voice-room/api run test && npm --workspace @voice-room/web run test && npm --workspace @voice-room/admin run test && npm --workspace @voice-room/site run test && node --test scripts/test/*.test.mts",
+    "test": "npm --workspace @voice-room/shared run test && npm --workspace @voice-room/api run test && npm --workspace @voice-room/web run test && npm --workspace @voice-room/admin run test && npm run test:site && node --test scripts/test/*.test.mts",
+    "test:site": "npm --workspace @voice-room/site run test && node scripts/test/web-text-contrast.test.mts --site",
     "e2e": "npm --workspace @voice-room/web run e2e",
     "coverage:g08": "node scripts/coverage/run-g08.mts"
   },

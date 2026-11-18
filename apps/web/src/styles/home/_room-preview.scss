@@ -107,8 +107,8 @@
 
 .room-preview__empty-note {
   margin: 0;
-  font-size: 15px;
-  color: var(--vr-text-3);
+  font-size: 0.9375rem;
+  color: var(--vr-text-muted);
 }
 
 .room-preview__error {
@@ -122,7 +122,7 @@
   background: var(--vr-danger-soft);
   color: var(--vr-danger);
   padding: 8px 13px;
-  font-size: 12.5px;
+  font-size: 0.78125rem;
   font-weight: 600;
 }
 

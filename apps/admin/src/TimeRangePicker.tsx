@@ -72,9 +72,9 @@ export function TimeRangePicker({
             aria-expanded={open}
             data-active={custom}
             aria-label={custom ? `Свой период: ${rangeLabel(value, presets, withTime)}` : 'Свой период'}
-            onClick={() => {
+            onClick={(event) => {
               if (!open) prefill();
-              toggle();
+              toggle(event);
             }}
           >
             <Calendar size={15} aria-hidden="true" />

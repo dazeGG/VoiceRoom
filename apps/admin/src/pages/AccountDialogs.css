@@ -6,7 +6,7 @@
 .account-dialog-text,
 .account-dialog-error {
   margin: 0;
-  font-size: 14px;
+  font-size: 0.875rem;
   line-height: 1.45;
 }
 
@@ -22,7 +22,7 @@
   display: block;
   margin-bottom: 4px;
   color: var(--vr-text-2);
-  font-size: 12.5px;
+  font-size: 0.78125rem;
 }
 
 .account-dialog-input {
@@ -33,7 +33,7 @@
   background: var(--vr-surface);
   color: var(--vr-text);
   font: inherit;
-  font-size: 13.5px;
+  font-size: 0.84375rem;
 }
 
 .account-dialog-input:focus-visible {

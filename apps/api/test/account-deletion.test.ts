@@ -67,7 +67,10 @@ test('a deletion request hides the account at once and a restore brings it back 
   await pool.query(`UPDATE users SET avatar_key = 'user-ada-avatar', avatar_accent = '#123456' WHERE id = $1`, [
     user.id
   ]);
-  const session = await users.createSession({ userId: user.id, now: 1_000 });
+  const session = await users.createSession({
+    credentialProof: { userId: user.id, passwordHash: user.passwordHash },
+    now: 1_000
+  });
   const now = 10 * DAY;
 
   assert.deepEqual(await deletion.requestDeletion({ userId: user.id, currentPassword: 'wrong', now }), {
@@ -100,7 +103,8 @@ test('a deletion request hides the account at once and a restore brings it back 
   });
   assert.deepEqual(await deletion.restoreAccount({ login: 'ada', password: 'lovelace-1843', now: now + DAY }), {
     status: 'restored',
-    userId: user.id
+    userId: user.id,
+    passwordHash: user.passwordHash
   });
 
   const restored = await users.getUserById(user.id);

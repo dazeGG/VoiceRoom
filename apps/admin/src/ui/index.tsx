@@ -5,12 +5,15 @@
 
 import { BadgeCheck, X } from 'lucide-react';
 import {
+  useCallback,
   useEffect,
   useId,
+  useLayoutEffect,
   useRef,
   useState,
   type ButtonHTMLAttributes,
   type CSSProperties,
+  type MouseEvent as ReactMouseEvent,
   type ReactNode,
   type SelectHTMLAttributes
 } from 'react';
@@ -35,37 +38,41 @@ export interface SegmentOption<Value extends string> {
   suffix?: ReactNode;
 }
 
-/** A row of choices; `kind="tabs"` makes it a tab list. */
+/** Native choices, grouped independently for each mounted instance. */
 export function Segment<Value extends string>({
   options,
   value,
   onChange,
-  ariaLabel,
-  kind = 'segment'
+  ariaLabel
 }: {
   options: readonly SegmentOption<Value>[];
   value: Value;
   onChange: (value: Value) => void;
   ariaLabel: string;
-  kind?: 'segment' | 'tabs';
 }) {
-  const tabs = kind === 'tabs';
+  const group = useId();
   return (
-    <div className="ui-segment" role={tabs ? 'tablist' : 'radiogroup'} aria-label={ariaLabel}>
-      {options.map((option) => (
-        <button
+    <div className="ui-segment" role="radiogroup" aria-label={ariaLabel}>
+      {options.map((option, index) => (
+        <label
           key={option.value}
-          type="button"
+          htmlFor={`${group}-${index}`}
           className="ui-segment-option"
-          role={tabs ? 'tab' : 'radio'}
-          {...(tabs ? { 'aria-selected': option.value === value } : { 'aria-checked': option.value === value })}
           data-active={option.value === value}
-          onClick={() => onChange(option.value)}
         >
+          <input
+            id={`${group}-${index}`}
+            className="ui-segment-input"
+            type="radio"
+            name={group}
+            value={option.value}
+            checked={option.value === value}
+            onChange={() => onChange(option.value)}
+          />
           {option.icon}
           {option.label}
           {option.suffix}
-        </button>
+        </label>
       ))}
     </div>
   );
@@ -351,8 +358,6 @@ export function AccountBadge({ userId }: { userId: string }) {
   );
 }
 
-const FOCUSABLE = 'input, textarea, select, button, a[href], [tabindex]:not([tabindex="-1"])';
-
 /**
  * A modal dialog: Escape, the backdrop and the cross close it, focus goes into
  * it and Tab keeps it there. `wide` is for a table rather than a form.
@@ -375,52 +380,72 @@ export function Dialog({
   wide?: boolean;
 }) {
   const titleId = useId();
-  const panel = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!open) return;
-    const previous = document.activeElement;
-    panel.current?.querySelector<HTMLElement>(FOCUSABLE)?.focus();
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
-      if (event.key !== 'Tab' || !panel.current) return;
-      const inside = [...panel.current.querySelectorAll<HTMLElement>(FOCUSABLE)].filter(
-        (element) => !element.hasAttribute('disabled')
-      );
-      const first = inside[0];
-      const last = inside.at(-1);
-      if (!first || !last) return;
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first.focus();
-      }
-    };
-    document.addEventListener('keydown', onKey);
+  const panel = useRef<HTMLDialogElement>(null);
+  const notified = useRef(false);
+  const active = useRef(false);
+  const pressedOutside = useRef(false);
+  useLayoutEffect(() => {
+    const dialog = panel.current;
+    if (!open || !dialog) return;
+    active.current = true;
+    notified.current = false;
+    dialog.showModal();
     return () => {
-      document.removeEventListener('keydown', onKey);
-      if (previous instanceof HTMLElement) previous.focus();
+      active.current = false;
+      if (dialog.open) dialog.close();
     };
-  }, [open, onClose]);
+  }, [open]);
+  function dismiss(): void {
+    if (notified.current) return;
+    notified.current = true;
+    panel.current?.close();
+    onClose();
+  }
+  function outside(event: { clientX: number; clientY: number }): boolean {
+    const r = panel.current?.getBoundingClientRect();
+    return (
+      !!r && (event.clientX < r.left || event.clientX > r.right || event.clientY < r.top || event.clientY > r.bottom)
+    );
+  }
   if (!open) return null;
   return (
-    <div className="ui-dialog-backdrop" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
-      <div className="ui-dialog" data-wide={wide} role="dialog" aria-modal="true" aria-labelledby={titleId} ref={panel}>
-        <header className="ui-dialog-head">
-          <h2 id={titleId} className="ui-dialog-title">
-            {title}
-          </h2>
-          {description ? <p className="ui-dialog-description">{description}</p> : null}
-        </header>
-        <div className="ui-dialog-body">{children}</div>
-        {footer ? <div className="ui-dialog-footer">{footer}</div> : null}
-        {/* Last in the order, so a form's first field takes the focus on opening. */}
-        <button type="button" className="ui-dialog-close" aria-label="Закрыть" title="Закрыть" onClick={onClose}>
-          <X size={18} aria-hidden="true" />
-        </button>
-      </div>
-    </div>
+    <dialog
+      className="ui-dialog"
+      data-wide={wide}
+      aria-labelledby={titleId}
+      ref={panel}
+      onCancel={(event) => {
+        event.preventDefault();
+        dismiss();
+      }}
+      onClose={(event) => {
+        if (active.current && event.currentTarget.isConnected && !event.currentTarget.open) dismiss();
+      }}
+      onPointerDown={(event) => {
+        pressedOutside.current = event.button === 0 && outside(event);
+      }}
+      onPointerCancel={() => {
+        pressedOutside.current = false;
+      }}
+      onPointerUp={(event) => {
+        const shouldClose = pressedOutside.current && outside(event);
+        pressedOutside.current = false;
+        if (shouldClose) dismiss();
+      }}
+    >
+      <header className="ui-dialog-head">
+        <h2 id={titleId} className="ui-dialog-title">
+          {title}
+        </h2>
+        {description ? <p className="ui-dialog-description">{description}</p> : null}
+      </header>
+      <div className="ui-dialog-body">{children}</div>
+      {footer ? <div className="ui-dialog-footer">{footer}</div> : null}
+      {/* Last in the order, so a form's first field takes the focus on opening. */}
+      <button type="button" className="ui-dialog-close" aria-label="Закрыть" title="Закрыть" onClick={dismiss}>
+        <X size={18} aria-hidden="true" />
+      </button>
+    </dialog>
   );
 }
 
@@ -460,33 +485,50 @@ export function Popover({
   children,
   label
 }: {
-  trigger: (props: { open: boolean; toggle: () => void }) => ReactNode;
+  trigger: (props: { open: boolean; toggle: (event: ReactMouseEvent<HTMLElement>) => void }) => ReactNode;
   children: (close: () => void) => ReactNode;
   label: string;
 }) {
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
+  const [panel, setPanel] = useState<HTMLDivElement | null>(null);
+  const [opener, setOpener] = useState<HTMLElement | null>(null);
+  const close = useCallback(() => {
+    if (panel?.contains(document.activeElement) && opener?.isConnected) opener.focus();
+    setOpen(false);
+  }, [panel, opener]);
+  const toggle = useCallback(
+    (event: ReactMouseEvent<HTMLElement>) => {
+      if (!open) setOpener(event.currentTarget);
+      setOpen(!open);
+    },
+    [open]
+  );
   useEffect(() => {
     if (!open) return;
     const onDown = (event: MouseEvent) => {
       if (event.target instanceof Node && !root.current?.contains(event.target)) setOpen(false);
     };
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setOpen(false);
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        event.stopPropagation();
+        close();
+      }
     };
     document.addEventListener('mousedown', onDown);
-    document.addEventListener('keydown', onKey);
+    document.addEventListener('keydown', onKey, true);
     return () => {
       document.removeEventListener('mousedown', onDown);
-      document.removeEventListener('keydown', onKey);
+      document.removeEventListener('keydown', onKey, true);
     };
-  }, [open]);
+  }, [open, close]);
   return (
     <div className="ui-popover" ref={root}>
-      {trigger({ open, toggle: () => setOpen((value) => !value) })}
+      {trigger({ open, toggle })}
       {open ? (
-        <div className="ui-popover-panel" role="dialog" aria-label={label}>
-          {children(() => setOpen(false))}
+        <div ref={setPanel} className="ui-popover-panel" role="dialog" aria-label={label}>
+          {children(close)}
         </div>
       ) : null}
     </div>

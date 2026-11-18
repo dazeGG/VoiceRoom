@@ -96,6 +96,9 @@ function createMembershipRepository({ pool }: { pool: QueryClient }) {
       .selectAll()
       .where('room_id', '=', roomId)
       .where('user_id', '=', userId)
+      .where('room_id', 'in', (eb) =>
+        eb.selectFrom('rooms').select('id').where('kind', '=', 'main').where('deleted_at', 'is', null)
+      )
       .limit(1)
       .executeTakeFirst();
     return mapMembership(row);
@@ -125,6 +128,7 @@ function createMembershipRepository({ pool }: { pool: QueryClient }) {
       .selectFrom('rooms')
       .select('id')
       .where('id', '=', roomId)
+      .where('kind', '=', 'main')
       .where('deleted_at', 'is', null)
       .executeTakeFirst();
     return Boolean(row);
@@ -147,6 +151,7 @@ function createMembershipRepository({ pool }: { pool: QueryClient }) {
     client?: Client;
   }): Promise<Membership | null> {
     if (!roomId || !userId) return null;
+    if (!(await roomExists(roomId, { client }))) return null;
     const date = new Date(Number.isFinite(Number(at)) ? Number(at) : Date.now());
     const row = await on(client)
       .insertInto('room_memberships')
@@ -203,7 +208,8 @@ function createMembershipRepository({ pool }: { pool: QueryClient }) {
         'u.avatar_accent'
       ])
       .where('rm.room_id', '=', roomId)
-      .where('r.deleted_at', 'is', null);
+      .where('r.deleted_at', 'is', null)
+      .where('r.kind', '=', 'main');
     if (normalizedQuery) {
       page = page.where(
         sql<boolean>`(lower(COALESCE(NULLIF(u.display_name, ''), u.login)) LIKE lower(${normalizedQuery}) || '%'

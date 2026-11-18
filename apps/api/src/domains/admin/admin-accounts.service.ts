@@ -178,18 +178,21 @@ export function createAdminAccountsService(deps: AdminAccountsDeps) {
       if (!reason) return { status: 'invalid_reason' };
       const span = BLOCK_SPANS[input.duration];
       const until = span === null ? null : now() + span;
-      if (!(await deps.standing().block({ userId, until, reason, now: now() }))) return null;
+      const result = await deps
+        .standing()
+        .block({ userId, until, reason, canManage: await deps.staff.can(adminId, 'accounts.manage'), now: now() });
+      if (result !== 'updated') return { status: result };
       await deps.endSessionConnections({ userId });
       return { adminUserId: adminId, targetUserId: userId, action: 'block', reason, until };
     });
   }
 
   async function unblock(adminId: string, userId: string): Promise<AccountAction> {
-    // A block for good is lifted by those who may give one.
-    const blocked = (await deps.accounts().detail(userId, now()))?.account.blocked;
-    const permission = blocked && blocked.until === null ? 'accounts.manage' : 'accounts.moderate';
-    return act(adminId, userId, 'unblock', permission, async () => {
-      if (!(await deps.standing().unblock({ userId, now: now() }))) return null;
+    return act(adminId, userId, 'unblock', 'accounts.moderate', async () => {
+      const result = await deps
+        .standing()
+        .unblock({ userId, canManage: await deps.staff.can(adminId, 'accounts.manage'), now: now() });
+      if (result !== 'updated') return { status: result };
       return { adminUserId: adminId, targetUserId: userId, action: 'unblock' };
     });
   }
@@ -222,7 +225,7 @@ export function createAdminAccountsService(deps: AdminAccountsDeps) {
       // Already leaving at the owner's request: the deletion keeps its date,
       // but a block for good takes the restore away.
       if (result.status === 'already_requested')
-        await deps.standing().block({ userId, until: null, reason, now: now() });
+        await deps.standing().block({ userId, until: null, reason, canManage: true, now: now() });
       await deps.endSessionConnections({ userId });
       if (result.status === 'requested') await deps.profileChanged(userId);
       return { adminUserId: adminId, targetUserId: userId, action: 'delete', reason };

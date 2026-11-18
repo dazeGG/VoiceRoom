@@ -1,0 +1,9 @@
+:root {
+  color-scheme: only dark;
+  --sl-color-accent-low: oklch(25% 0.06 125);
+  --sl-color-accent: oklch(86% 0.18 125);
+  --sl-color-accent-high: oklch(93% 0.15 125);
+  --sl-color-gray-5: oklch(29% 0.006 260);
+  --sl-color-gray-6: oklch(19.5% 0.006 260);
+  --sl-color-black: oklch(15.5% 0.005 260);
+}

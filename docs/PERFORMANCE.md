@@ -133,3 +133,44 @@ user-visible backlog: cleanup bookkeeping for already-deleted media is not a
 pending upload. A responding health/metrics endpoint does not alone prove that
 every queue is making progress. Production inspection should remain bounded and
 read-only; run artificial overload and fault injection on an isolated stand.
+
+## Screen relief under sustained call strain
+
+The existing call-strain detector, not a fixed app-CPU percentage, requests a
+15 FPS capture limit for the rest of the call. This reduces the default 30 FPS
+workload; an already selected 5 or 15 FPS profile stays unchanged. The chosen
+profile, content hint, resolution constraints and audio tracks are retained.
+Publishing a new screen or republishing it reapplies relief after publication;
+this does not guarantee the very first frame is limited.
+
+Desktop relief uses the existing acknowledged native capture-profile bridge.
+Refusal falls back to browser constraints and is logged, not treated as proof of
+actual work reduction. Native `source-60` is an explicit exception: changing its
+profile to `source-15` would raise the helper's size ceiling from 1440p to 4K.
+It therefore gets only the best-effort browser fallback until the desktop bridge
+supports a genuinely FPS-only update. No CPU-pressure or network-classification
+thresholds change with this limiter.
+
+Run the bounded, isolated measurement when no builds or tests are competing:
+
+```powershell
+$env:RESULTS = '.omx/logs/screen-relief-abba.json'
+node scripts/voice-bench/screen-relief-bench.mts
+Remove-Item Env:RESULTS
+```
+
+It uses a synthetic camera at 720p/30, oscillator audio and a local peer pair,
+never a real microphone, screen, account or production room. Four ABBA phases
+invoke the real relief function on a flowing track and measure capture, encode
+and rendered FPS, resolution, received audio, encoder cost and browser-process
+CPU. Raw failed phases are retained too. Missing measurements are inconclusive,
+not zero. Use a new output path for each run.
+
+The work/voice gate requires 25–35 FPS before relief and 12–17 afterwards, with
+unchanged 720p, track identity and codec, and positive received audio without
+concealment. The separate CPU gate requires both relieved repetitions to be at
+least 10% below both baselines with the same encoder and stable process counters.
+CPU is milliseconds per wall second across browser processes, including sender
+and receiver, not the app's percentage of the whole machine. This stand does not
+prove native-helper savings, microphone DSP cost, low-end physical hardware,
+Internet resilience or the cause of a particular user's high CPU.

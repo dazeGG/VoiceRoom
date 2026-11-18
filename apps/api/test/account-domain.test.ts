@@ -158,7 +158,7 @@ function harness(
     missing: { status: 'not_found' }
   };
   const restores: Record<string, AccountRestore> = {
-    ok: { status: 'restored', userId: 'user-1' },
+    ok: { status: 'restored', userId: 'user-1', passwordHash: USER.passwordHash },
     old: { status: 'expired', userId: null }
   };
   const repository: AccountDeletionRepository = {
@@ -227,7 +227,10 @@ test('registration validates, keeps deleted logins taken and survives a failed s
   assert.equal(created.status, 'signed_in');
   assert.equal(created.token, 'tok');
   assert.equal(created.user?.login, 'reloaded');
-  assert.deepEqual(calls.sessions[0], { userId: 'new-1', ...DEVICE });
+  assert.deepEqual(calls.sessions[0], {
+    credentialProof: { userId: 'new-1', passwordHash: storedUser().passwordHash },
+    ...DEVICE
+  });
   assert.equal(calls.errors.length, 1);
   assert.equal((await harness({}, { noDeletions: true }).service.register(base)).status, 'signed_in');
 });
@@ -525,6 +528,7 @@ test('entry routes set the cookie and map every refusal', async (t) => {
     ],
     [{ register: { status: 'password_mismatch' } }, '/api/auth/register', 400, 'Пароли не совпадают'],
     [{ register: { status: 'login_taken' } }, '/api/auth/register', 409, 'Этот логин уже занят'],
+    [{ register: { status: 'invalid_credentials' } }, '/api/auth/register', 401, 'Неверный логин или пароль'],
     [{ login: { status: 'invalid_credentials' } }, '/api/auth/login', 401, 'Неверный логин или пароль'],
     [
       { login: { status: 'throttled', retryAfterSeconds: 4 } },
@@ -545,6 +549,7 @@ test('entry routes set the cookie and map every refusal', async (t) => {
   for (const [outcome, url, status, error] of cases) {
     const response = await call(routeApp(t, outcome).app, 'POST', url, {});
     assert.deepEqual([response.status, response.body.error], [status, error], JSON.stringify(outcome));
+    assert.equal(response.cookie, undefined);
   }
   const pending = await call(
     routeApp(t, { login: { status: 'deletion_pending', deletionScheduledFor: 77 } }).app,

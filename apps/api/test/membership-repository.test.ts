@@ -134,3 +134,15 @@ test('a member row with no stored colour is listed with the default colour', () 
   });
   assert.equal(member.avatarColorKey, 'blurple');
 });
+
+test('corrupt widget membership is invisible and cannot be upserted through account APIs', { skip }, async (t) => {
+  const { pool, memberships } = await setup(t);
+  await pool.query(
+    "UPDATE widget_boundary_activation SET widget_boundary_required=true,widget_admission_enabled=true; INSERT INTO rooms(id,kind) VALUES('widget-members','widget'); INSERT INTO room_memberships(id,room_id,user_id,role) VALUES('corrupt-widget','widget-members','ada','member')"
+  );
+  assert.equal(await memberships.roomExists('widget-members'), false);
+  assert.equal(await memberships.getActive('widget-members', 'ada'), null);
+  assert.equal(await memberships.isActive('widget-members', 'ada'), false);
+  assert.deepEqual(await memberships.listDirectoryPage({ roomId: 'widget-members' }), { members: [], hasMore: false });
+  assert.equal(await memberships.upsertActive({ roomId: 'widget-members', userId: 'bob' }), null);
+});

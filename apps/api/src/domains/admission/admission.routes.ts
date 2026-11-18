@@ -14,6 +14,7 @@ import {
 } from '@voice-room/shared/validation';
 import type { ApiContext } from '../../app/context.ts';
 import { failure, type Failure } from '../../platform/http/http-kit.ts';
+import type { RoomSurface } from '../rooms/room-surface.policy.ts';
 import type { AdmissionService, RefusalReason } from './admission.service.ts';
 
 const ROOM_BANNED_ERROR = 'Вы заблокированы в этой комнате';
@@ -60,11 +61,16 @@ const REFUSALS: Record<RefusalReason, { status: 400 | 403 | 404 | 409 | 503; bod
   }
 };
 
-export function registerAdmissionRoutes(root: FastifyInstance, ctx: ApiContext, admission: AdmissionService): void {
+export function registerAdmissionRoutes(
+  root: FastifyInstance,
+  ctx: ApiContext,
+  admission: AdmissionService,
+  surface: RoomSurface = 'main'
+): void {
   const app = root.withTypeProvider<TypeBoxTypeProvider>();
 
   app.post(
-    '/api/livekit-token',
+    surface === 'widget' ? '/api/widget/livekit-token' : '/api/livekit-token',
     {
       schema: {
         body: LiveKitTokenBody,
@@ -85,15 +91,19 @@ export function registerAdmissionRoutes(root: FastifyInstance, ctx: ApiContext, 
       // `auth-<userId>` is the API's own account peer id and never a voice peer.
       if (!roomId || !peerId || !sessionToken || isReservedPeerId(peerId)) return refuse('invalid_request');
 
-      const session = await ctx.resolveSession(request.raw);
+      const session = surface === 'widget' ? null : await ctx.resolveSession(request.raw);
       const result = await admission.admit({
+        surface,
         roomId,
         peerId,
         sessionToken,
         name: cleanGuestName(request.body.name),
         user: session?.user ?? null,
         clientIp: ctx.clientIp(request.raw),
-        log: request.log
+        log:
+          surface === 'widget'
+            ? request.log.child({}, { redact: { paths: ['roomId', 'peerId', 'credentialId', 'err'], remove: true } })
+            : request.log
       });
       if (result.status === 'refused') return refuse(result.reason);
       return { ok: true as const, ...result.admission };

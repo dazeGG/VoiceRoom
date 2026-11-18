@@ -1,0 +1,84 @@
+# A second VoiceRoom stack on a host whose own VoiceRoom Caddy already owns
+# 80/443: the dev stand on the production server (docs/SELF_HOSTING.md,
+# "Дев-стенд на хосте прода"). That stack's .env turns it on:
+#
+#   COMPOSE_PROJECT_NAME=voiceroom-dev
+#   COMPOSE_FILE=docker-compose.yml:docker-compose.behind-edge.yml
+#
+# Its Caddy publishes no ports and answers plain HTTP on the shared `edge`
+# network, where only the two Caddys meet: on the host's own network the
+# names `api` and `livekit-gate` would resolve to both stacks. The host's
+# Caddy terminates TLS and proxies this stack's names here (config/caddy/sites.d).
+#
+# The limits keep a runaway dev from starving production, and the raised OOM
+# score makes the kernel kill this stack first when memory runs out.
+
+x-guest: &guest
+  oom_score_adj: 500
+
+x-worker: &worker
+  <<: *guest
+  mem_limit: 128m
+  cpus: 0.25
+
+services:
+  postgres:
+    <<: *guest
+    mem_limit: 256m
+    cpus: 0.5
+
+  migrate:
+    <<: *guest
+    mem_limit: 256m
+    cpus: 0.5
+
+  media-init:
+    <<: *guest
+    mem_limit: 64m
+    cpus: 0.25
+
+  api:
+    <<: *guest
+    mem_limit: 384m
+    cpus: 0.5
+
+  message-delivery: *worker
+  notification-delivery: *worker
+  media-processing: *worker
+  media-maintenance: *worker
+  media-reconciliation: *worker
+
+  livekit-gate:
+    <<: *guest
+    mem_limit: 128m
+    cpus: 0.25
+
+  livekit:
+    <<: *guest
+    mem_limit: 256m
+    cpus: 0.5
+
+  caddy:
+    <<: *guest
+    mem_limit: 96m
+    cpus: 0.25
+    ports: !reset []
+    volumes:
+      # Infrastructure config follows this checkout even during bootstrap from
+      # an existing immutable web image built before the shared-host profile.
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./config/caddy/behind-edge.headers:/etc/caddy/proxy.d/behind-edge.caddy:ro
+    # Plain HTTP site addresses: no certificates here, the host's Caddy has them.
+    environment:
+      # Keep the domain values bare: CSP also expands LIVEKIT_DOMAIN.
+      SITE_SCHEME: http://
+    networks:
+      default:
+      edge:
+        aliases:
+          - ${EDGE_UPSTREAM:-voiceroom-dev-edge}
+
+networks:
+  edge:
+    name: ${EDGE_NETWORK:-voiceroom-edge}
+    external: true

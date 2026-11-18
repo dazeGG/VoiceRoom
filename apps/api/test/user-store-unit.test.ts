@@ -95,7 +95,10 @@ test('sessions store only token hashes in the database', { skip }, async (t) => 
   assert.ok(user);
   const rawToken = 'session-token-for-cookie-only';
 
-  const session = await store.createSession({ userId: user.id, token: rawToken });
+  const session = await store.createSession({
+    credentialProof: { userId: user.id, passwordHash: user.passwordHash },
+    token: rawToken
+  });
   assert.equal(session.token, rawToken);
   const stored = await pool.query<{ id: string }>('SELECT id FROM sessions');
   assert.deepEqual(

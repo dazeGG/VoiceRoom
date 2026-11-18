@@ -97,7 +97,10 @@ export function createFastifyApp(options: FastifyAppOptions): FastifyInstance {
     recordRequest: recordHttpRequest,
     logRequest: options.logRequest,
     logHandlerFailure: (request, route, error) => {
-      request.log?.error?.({ evt: LOG_EVENTS.HTTP_HANDLER_FAILED, route, err: error }, 'route handler failed');
+      request.log?.error?.(
+        { evt: LOG_EVENTS.HTTP_HANDLER_FAILED, route, err: route.startsWith('/api/widget/') ? undefined : error },
+        'route handler failed'
+      );
     }
   });
 

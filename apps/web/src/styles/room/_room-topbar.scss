@@ -80,7 +80,7 @@ body.screen--room .room-topbar__heading {
 .room-topbar__heading-title {
   max-width: min(46vw, 28ch);
   font-family: var(--font-ui);
-  font-size: 17px;
+  font-size: 1.0625rem;
   font-weight: 600;
   letter-spacing: -0.015em;
   line-height: 1.2;
@@ -89,7 +89,7 @@ body.screen--room .room-topbar__heading {
 .room-topbar__heading-chevron {
   flex: none;
   display: inline-flex;
-  color: var(--vr-text-3);
+  color: var(--vr-text-muted);
   transition: transform 0.16s ease;
 }
 
@@ -117,7 +117,7 @@ body.screen--room .room-topbar__heading {
   background: transparent;
   color: var(--vr-text);
   font-family: var(--font-ui);
-  font-size: 13.5px;
+  font-size: 0.84375rem;
   font-weight: 500;
   cursor: pointer;
   transition: background 0.15s ease;

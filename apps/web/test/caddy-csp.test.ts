@@ -60,7 +60,20 @@ test('Caddy imports the generated policy and the image builds it', () => {
   const caddyfile = readRepo('Caddyfile');
   const dockerfile = readRepo('Dockerfile');
   assert.match(caddyfile, /import \/etc\/caddy\/csp\.caddy/);
-  assert.doesNotMatch(caddyfile, /Content-Security-Policy "/);
+  const embedStart = caddyfile.indexOf('  @widget_embed path');
+  const embedEnd = caddyfile.indexOf('  handle /widget/v1/loader.js', embedStart);
+  assert.ok(embedStart >= 0 && embedEnd > embedStart, 'one dedicated embed response block');
+  const embed = caddyfile.slice(embedStart, embedEnd);
+  const ordinary = caddyfile.slice(0, embedStart) + caddyfile.slice(embedEnd);
+  assert.doesNotMatch(ordinary, /Content-Security-Policy "/, 'ordinary pages retain generated policy');
+  assert.match(ordinary, /X-Frame-Options "DENY"/);
+  assert.match(embed, /@widget_embed path \/embed\/v1 \/embed\/v1\/ \/embed\/v1\/index\.html/);
+  assert.match(embed, /header\s*\{\s*defer\s*-X-Frame-Options/);
+  assert.match(
+    embed,
+    /Content-Security-Policy "[^"\n]*script-src 'self' 'wasm-unsafe-eval'[^"\n]*frame-ancestors https:"/
+  );
+  assert.match(embed, /display-capture=\(\)/);
   assert.match(dockerfile, /emit-caddy-csp\.ts apps\/web\/dist\/index\.html > \/app\/csp\.caddy/);
   assert.match(dockerfile, /COPY --from=web-build \/app\/csp\.caddy \/etc\/caddy\/csp\.caddy/);
 });

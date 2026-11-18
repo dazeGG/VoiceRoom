@@ -293,6 +293,7 @@ function evictionHarness({
   const eviction = createPeerEviction({
     store: () => store,
     runtime: () => ({
+      async cancelAccountReconnectLeases() {},
       async finalizeReconnectPeers(input) {
         log.push(`finalize:${input.roomId}:${input.reason}`);
         for (const peerId of [...input.peerIds, ...extraPeerIds]) {
@@ -440,6 +441,7 @@ function moderationHarness({
 } = {}) {
   const calls: {
     evicted: Array<{ peers: string[]; type: string; gateAlreadyRevoked?: boolean | undefined }>;
+    detached: string[];
     disconnected: unknown[];
     revoked: string[];
     sfu: unknown[];
@@ -449,8 +451,9 @@ function moderationHarness({
     ban?: unknown;
     strictBan?: { principals?: unknown[] } | undefined;
     undo?: unknown;
-  } = { evicted: [], disconnected: [], revoked: [], sfu: [], announced: [] };
+  } = { evicted: [], detached: [], disconnected: [], revoked: [], sfu: [], announced: [] };
   const eviction = fake<PeerEviction>({
+    async finalizeAccount() {},
     // The service ignores what finalize resolves to; a scripted finalize
     // stands for the eviction's work and the fake resolves to null after it.
     async finalize<T = null>(
@@ -497,6 +500,7 @@ function moderationHarness({
       ...store
     }),
     eviction,
+    detachAccountRoom: (roomId, userId) => calls.detached.push(`${roomId}:${userId}`),
     gatePrincipalForPeer: principal,
     livekitConfig: () => livekit,
     revokeForServerMute: async (input) => {
@@ -585,6 +589,7 @@ test('an account ban covers every tab of the account and never its IP', async ()
   const room = liveRoom({}, [accountPeer, secondTab, guestPeer]);
   assert.deepEqual(await service.ban(room, accountPeer.id), { status: 'banned', banId: 'ban-1', cleanupFailed: false });
   assert.deepEqual(calls.ban, { roomId: 'room-1', userId: 'user-1', ip: '', maxBans: 5 });
+  assert.deepEqual(calls.detached, ['room-1:user-1']);
   assert.deepEqual(calls.evicted, [
     { peers: [accountPeer.id, secondTab.id], type: 'room.banned', gateAlreadyRevoked: false }
   ]);
@@ -608,6 +613,7 @@ test('with the strict gate the ban and the revocations commit together', async (
     { principalType: 'account', principalId: 'user-1' }
   ]);
   assert.equal(calls.evicted[0]?.gateAlreadyRevoked, true);
+  assert.deepEqual(calls.detached, ['room-1:user-1']);
 });
 
 test('strict ban refusals: a peer without a principal, nobody to revoke, no transactional store', async () => {
@@ -658,10 +664,11 @@ test('ban persistence refusals map to limit, rejected and failed', async () => {
   });
   assert.equal((await broken.service.ban(room(), accountPeer.id)).status, 'ban_failed');
   assert.equal(failure.error?.rollbackTerminal, true);
+  for (const harness of [limit, rejected, noRevocations, broken]) assert.deepEqual(harness.calls.detached, []);
 });
 
 test('a durable ban whose peer cleanup failed is still reported as banned', async () => {
-  const { service } = moderationHarness({
+  const { service, calls } = moderationHarness({
     finalize: async (options) => {
       await options.beforeFinalize?.();
       throw new Error('cleanup failed');
@@ -672,6 +679,7 @@ test('a durable ban whose peer cleanup failed is still reported as banned', asyn
     banId: 'ban-1',
     cleanupFailed: true
   });
+  assert.deepEqual(calls.detached, ['room-1:user-1']);
 });
 
 test('a ban that never reached persistence is a failure', async () => {
@@ -700,6 +708,8 @@ function listedRoom(room: StoredRoom): ListedRoom {
     emptySince: room.emptySince ?? null,
     id: room.id,
     isStatic: room.isStatic,
+    kind: room.kind ?? 'main',
+    widgetChatEnabled: room.widgetChatEnabled ?? false,
     lastMessageAt: room.lastMessageAt,
     name: room.name,
     ownerId: room.ownerId ?? null,
@@ -991,7 +1001,7 @@ test('GET /api/rooms/:roomId/peers hides the roster from banned viewers', async 
 test('POST /api/state reads the peer and refuses writes, bans and foreign sessions', async (t) => {
   const peer: PresencePeer = { ...accountPeer, id: 'peer0001', sessionToken: 't'.repeat(32) };
   const request = { roomId: 'room-1', peerId: 'peer0001', sessionToken: 't'.repeat(32) };
-  const { app } = routeApp(t, { peer });
+  const { app } = routeApp(t, { peer, room: liveRoom() });
   const read = await call(app, 'POST', '/api/state', request);
   assert.equal(read.status, 200);
   assert.equal(read.body.peer?.id, 'peer0001');
@@ -1007,11 +1017,12 @@ test('POST /api/state reads the peer and refuses writes, bans and foreign sessio
   );
   assert.equal((await call(app, 'POST', '/api/state')).status, 403);
 
-  const requesterBanned = routeApp(t, { peer, bans: (userId) => userId === null });
+  const requesterBanned = routeApp(t, { peer, room: liveRoom(), bans: (userId) => userId === null });
   assert.equal((await call(requesterBanned.app, 'POST', '/api/state', request)).body.code, 'room_banned');
-  const peerBanned = routeApp(t, { peer, bans: (userId) => userId === 'user-1' });
+  const peerBanned = routeApp(t, { peer, room: liveRoom(), bans: (userId) => userId === 'user-1' });
   assert.equal((await call(peerBanned.app, 'POST', '/api/state', request)).body.code, 'room_banned');
   const peerWithoutIp = routeApp(t, {
+    room: liveRoom(),
     peer: { ...peer, ip: undefined },
     bans: (userId, ip) => userId === 'user-1' && ip !== ''
   });
@@ -1125,4 +1136,19 @@ test('the owner menu maps every moderation outcome to its HTTP answer', async (t
     await call(cleanup.app, 'DELETE', '/api/rooms/room-1/bans/ban-9').then((r) => [r.status, r.body.error]),
     [404, 'Блокировка не найдена']
   );
+});
+
+test('empty-peer eviction runs its persistence prerequisite exactly once', async () => {
+  const { eviction } = evictionHarness();
+  let calls = 0;
+  assert.equal(
+    await eviction.finalize({ id: 'room-1' }, [], 'room.banned', {
+      beforeFinalize: async () => {
+        calls++;
+        return 'persisted';
+      }
+    }),
+    'persisted'
+  );
+  assert.equal(calls, 1);
 });

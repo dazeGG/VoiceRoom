@@ -6,6 +6,7 @@
 // What the domains need from the realtime layer (rooms with their roster,
 // socket fan-out) comes in through `deps`.
 
+import { roomAllowsSurface } from '../domains/rooms/room-surface.policy.ts';
 import { type ServerEnvelope } from '@voice-room/shared/realtime';
 import pg from 'pg';
 import { createDbPool } from '../platform/db/pool.ts';
@@ -117,6 +118,8 @@ export type ServiceRegistryDeps = {
   /** Sends a server event to every socket of an account; answers how many took it. */
   sendToUser: (userId: string, envelope: ServerEnvelope) => number;
   attachMediaProjectionMany: ReturnType<typeof createMessageProjection>['projectMediaMany'];
+  detachAccountRoom: (roomId: string, userId: string) => void;
+  disconnectModeratedAccount: (roomId: string, userId: string) => Promise<void>;
   disconnectModeratedPeer: (
     room: Room,
     peer: PresencePeer,
@@ -339,7 +342,7 @@ export function createServiceRegistry(config: ServiceRegistryConfig, deps: Servi
     createReactionsModule({
       pool,
       cursorCodec: history.get().cursorCodec,
-      roomExists: async (roomId) => Boolean(await getRoom(roomId)),
+      roomExists: async (roomId) => roomAllowsSurface(await getRoom(roomId), 'main'),
       roomMessageExists: async (roomId, messageId) =>
         Boolean(await messageService.get().room.getMessage(roomId, messageId)),
       directMessageVisible: async (userId, peerId, messageId) =>
@@ -351,7 +354,11 @@ export function createServiceRegistry(config: ServiceRegistryConfig, deps: Servi
     })
   );
   const pins = pooled((pool) =>
-    createPinsModule({ pool, roomExists: async (roomId) => Boolean(await getRoom(roomId)), broadcastRoomDetail })
+    createPinsModule({
+      pool,
+      roomExists: async (roomId) => roomAllowsSurface(await getRoom(roomId), 'main'),
+      broadcastRoomDetail
+    })
   );
   const notifications = pooled((pool) =>
     createNotificationsModule({
@@ -371,6 +378,8 @@ export function createServiceRegistry(config: ServiceRegistryConfig, deps: Servi
       getRoom,
       gatePrincipalForPeer: deps.liveKitGatePrincipalForPeer,
       disconnectPeer: deps.disconnectModeratedPeer,
+      detachAccountRoom: deps.detachAccountRoom,
+      disconnectAccount: deps.disconnectModeratedAccount,
       broadcastRoomDetail
     })
   );

@@ -40,7 +40,7 @@ test('the participants tab lists the roster from the server, split into online a
   });
 
   const { pinia } = await renderWithApp(RoomMemberList, { props: { roomId: 'room-a' } });
-  useSessionStore(pinia).user = authUser();
+  useSessionStore(pinia).setUser(authUser());
 
   expect(await screen.findByRole('heading', { name: 'В сети 2' })).toBeTruthy();
   expect(screen.getByRole('heading', { name: 'Не в сети 1' })).toBeTruthy();
@@ -56,4 +56,28 @@ test('a guest is told the roster needs an account instead of getting an error', 
   expect(screen.getByText('Список участников виден после входа в аккаунт.')).toBeTruthy();
   expect(screen.queryByRole('button', { name: 'Повторить' })).toBeNull();
   expect(calls).toEqual([]);
+});
+
+test('direct A to B identity transition hides A and reloads while both accounts are signed in', async () => {
+  let name = 'Account A';
+  const { calls } = stubFetch({
+    '/api/rooms/room-switch/members?limit=50': () => ({
+      body: {
+        contractVersion: 1,
+        roomId: 'room-switch',
+        members: [member('00000000-0000-4000-8000-000000000001', name, 'online')],
+        pageInfo: { hasMore: false },
+        presenceRevision: 1
+      }
+    })
+  });
+  const { pinia } = await renderWithApp(RoomMemberList, { props: { roomId: 'room-switch' } });
+  const session = useSessionStore(pinia);
+  session.setUser(authUser());
+  expect(await screen.findByText('Account A')).toBeTruthy();
+  name = 'Account B';
+  session.setUser(authUser({ id: '22222222-2222-4222-222222222222' }));
+  expect(await screen.findByText('Account B')).toBeTruthy();
+  expect(screen.queryByText('Account A')).toBeNull();
+  expect(calls).toHaveLength(2);
 });

@@ -483,15 +483,7 @@ export async function applyScreenCaptureProfile(stream: MediaStream, profile: Sc
     videoTrack.contentHint = profile.contentHint;
   }
 
-  const bridge = window.voiceRoomDesktopCapture;
-  if (typeof bridge?.applyProfile === 'function') {
-    try {
-      const result = await bridge.applyProfile({ fpsId: profile.fpsId, qualityId: profile.qualityId });
-      if (result?.ok) return;
-    } catch (error) {
-      log.warn('desktop applyProfile failed, falling back to constraints', errorContext(error));
-    }
-  }
+  if (await applyDesktopCaptureProfile(profile)) return;
 
   try {
     const constraints: MediaTrackConstraints = {
@@ -504,5 +496,57 @@ export async function applyScreenCaptureProfile(stream: MediaStream, profile: Sc
     await videoTrack.applyConstraints(constraints);
   } catch (error) {
     log.warn('screen capture constraints unavailable', errorContext(error));
+  }
+}
+
+async function applyDesktopCaptureProfile(profile: { fpsId: string; qualityId: string }): Promise<boolean> {
+  const bridge = window.voiceRoomDesktopCapture;
+  if (typeof bridge?.applyProfile !== 'function') return false;
+  try {
+    const result = await bridge.applyProfile({ fpsId: profile.fpsId, qualityId: profile.qualityId });
+    if (!result?.ok) {
+      log.info('desktop capture profile not applied', { ...profile, reason: result?.reason ?? 'unacknowledged' });
+    }
+    return result?.ok === true;
+  } catch (error) {
+    log.warn('desktop applyProfile failed, falling back to constraints', errorContext(error));
+    return false;
+  }
+}
+
+/** Limit capture work without changing the chosen mode, resolution, hint or audio. */
+export async function limitScreenCaptureFrameRate(
+  stream: MediaStream,
+  profile: ScreenProfile,
+  maxFrameRate: number
+): Promise<void> {
+  const [track] = stream.getVideoTracks();
+  if (!track || profile.frameRate <= maxFrameRate) return;
+  // Native IPC controls the current capture globally, not an arbitrary track.
+  const isCurrent = () => state.localScreenStream === stream && track.readyState !== 'ended';
+  if (!isCurrent()) return;
+  const frameRate = track.getSettings().frameRate;
+  if (frameRate !== undefined && Number.isFinite(frameRate) && frameRate > 0 && frameRate <= maxFrameRate) return;
+
+  // The existing desktop bridge expands source-60's 1440p ceiling to 4K at
+  // lower rates. Do not increase its capture work while trying to relieve it.
+  // That native profile needs an FPS-only desktop API; browser constraints
+  // remain best effort, including when an older desktop refuses the request.
+  const keepsNativeSize = profile.qualityId !== 'source' || profile.frameRate <= 30;
+  if (!keepsNativeSize && window.voiceRoomDesktopCapture?.applyProfile) {
+    log.info('native screen rate kept to preserve source size', { profileId: profile.id });
+  }
+  if (
+    keepsNativeSize &&
+    (await applyDesktopCaptureProfile({ fpsId: String(maxFrameRate), qualityId: profile.qualityId }))
+  )
+    return;
+  if (!isCurrent()) return;
+  try {
+    // applyConstraints replaces the constraint set; retain the existing size
+    // ceiling rather than accidentally increasing pixels as FPS comes down.
+    await track.applyConstraints({ ...track.getConstraints(), frameRate: { max: maxFrameRate } });
+  } catch (error) {
+    log.info('screen frame rate kept', errorContext(error));
   }
 }

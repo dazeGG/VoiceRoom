@@ -6,7 +6,8 @@ import assert from 'node:assert/strict';
 const { createApiApp, createApiServer } = await import('../src/server.ts');
 const { withRosterPeer } = await import('./roster-harness.ts');
 import { PUBLIC_CAPABILITY_KEYS } from '@voice-room/shared/contracts/ops';
-import { notificationPreferences } from './fakes/index.ts';
+import type { WsConnection } from '../src/realtime/registry.ts';
+import { fake, notificationPreferences } from './fakes/index.ts';
 import { checked } from './helpers/checked.ts';
 import { Failure } from '@voice-room/shared/contracts/http';
 import { Health } from '@voice-room/shared/contracts/ops';
@@ -1001,6 +1002,8 @@ test('livekit token uses authenticated user avatar color for room peer identity'
 
   const store = withRosterPeer(createFakeStore(), {
     id: 'peer0001',
+    accountUserId: 'user-1',
+    transport: { id: 'peer-transport', connection: fake<WsConnection>({ closed: false, userId: 'user-1' }) },
     sessionToken: 'goodtoken123456789012345678901234'
   });
   const seen: { identity: Parameters<NonNullable<RoomStoreFake['getOrCreatePeerIdentity']>>[0] | null } = {
@@ -1080,12 +1083,27 @@ test('livekit token validates persisted anonymous peer identity before issuing v
   process.env.LIVEKIT_API_KEY = 'devkey';
   process.env.LIVEKIT_API_SECRET = 'devsecretdevsecretdevsecret';
 
+  let identityLookups = 0;
+  let admissions = 0;
+  const store = createFakeStore();
+  store.getOrCreatePeerIdentity = async ({ peerId, sessionToken }) => {
+    identityLookups++;
+    assert.equal(sessionToken, 'badtoken123456789012345678901234');
+    return { identity: { id: 'guest-identity', peerId, avatarColorKey: 'blurple' }, status: 'token_mismatch' };
+  };
   const app = createApiApp({
     // The roster knows the peer with this token; the persisted identity says
     // the token is not the one it was first bound to.
-    store: withRosterPeer(createFakeStore(), { id: 'peer0001', sessionToken: 'badtoken123456789012345678901234' }),
+    store: withRosterPeer(store, {
+      id: 'peer0001',
+      accountUserId: null,
+      gateGuestPrincipalId: 'guest-identity',
+      transport: { id: 'guest-transport', connection: fake<WsConnection>({ closed: false, userId: null }) },
+      sessionToken: 'badtoken123456789012345678901234'
+    }),
     liveKitCredentials: {
       async issueAdmission() {
+        admissions++;
         return {
           status: 'issued',
           admission: {
@@ -1124,5 +1142,7 @@ test('livekit token validates persisted anonymous peer identity before issuing v
   });
 
   assert.equal(response.statusCode, 403);
+  assert.equal(identityLookups, 1);
+  assert.equal(admissions, 0);
   assert.match(checked(Failure, response.json()).error, /недействительна/i);
 });

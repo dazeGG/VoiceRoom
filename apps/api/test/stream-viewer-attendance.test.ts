@@ -783,6 +783,11 @@ test('closed connection cannot subscribe after a delayed ban lookup', async () =
   const subscribers = new Set();
   let releaseBanLookup: Resolve<ActiveBanRecord | null> | undefined;
   const runtime = createRuntime(room, [], {
+    store: {
+      async getRoom() {
+        return dbRoom(ROOM_ID);
+      }
+    },
     findRoomBan: async () =>
       new Promise((resolve) => {
         releaseBanLookup = resolve;
@@ -802,7 +807,8 @@ test('closed connection cannot subscribe after a delayed ban lookup', async () =
   const connection = fake<WsConnection>({ activeVoice: null, closed: false, previewRoomIds: new Set() });
 
   const subscription = runtime.subscribePreview(connection, ROOM_ID);
-  while (!releaseBanLookup) await Promise.resolve();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.ok(releaseBanLookup, 'the main-room boundary must allow the delayed ban check');
   connection.closed = true;
   runtime.cleanupConnection(connection);
   releaseBanLookup?.(null);
@@ -817,9 +823,11 @@ test('closed connection rolls back preview subscription during snapshot build', 
   const subscribers = new Set();
   const sentEnvelopes: Array<{ type?: string; id?: string }> = [];
   let releaseRoomLookup: Resolve<StoreRoom> | undefined;
+  let roomLookups = 0;
   const runtime = createRuntime(room, [], {
     store: {
       async getRoom() {
+        if (++roomLookups === 1) return dbRoom(ROOM_ID);
         return new Promise((resolve) => {
           releaseRoomLookup = resolve;
         });
@@ -844,7 +852,8 @@ test('closed connection rolls back preview subscription during snapshot build', 
   const connection = fake<WsConnection>({ activeVoice: null, closed: false, previewRoomIds: new Set() });
 
   const subscription = runtime.subscribePreview(connection, ROOM_ID);
-  while (!releaseRoomLookup) await Promise.resolve();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.ok(releaseRoomLookup, 'the subscription must reach the delayed snapshot read');
   assert.equal(subscribers.has(connection), true);
   connection.closed = true;
   runtime.cleanupConnection(connection);

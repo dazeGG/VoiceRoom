@@ -23,7 +23,7 @@
   background: transparent;
   color: var(--vr-text);
   font-family: var(--font-ui);
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 400;
   text-align: left;
   cursor: pointer;
@@ -62,9 +62,9 @@
 
 .popover-menu-item__hint {
   flex: none;
-  color: var(--vr-text-3);
+  color: var(--vr-text-muted);
   font-family: var(--font-mono);
-  font-size: 11.5px;
+  font-size: 0.71875rem;
   font-weight: 500;
 }
 
@@ -72,7 +72,7 @@
 .popover-menu-item__chevron {
   flex: none;
   display: inline-flex;
-  color: var(--vr-text-3);
+  color: var(--vr-text-muted);
 }
 
 .popover-menu-item__check,

@@ -30,10 +30,10 @@ test('the product section loads the last 30 days, a ready-made span reloads it, 
   const last = () => must(calls.at(-1), 'a request').url.searchParams;
 
   const spans = screen.getByRole('radiogroup', { name: 'Период' });
-  expect(within(spans).getByRole('radio', { name: '30 дней' }).getAttribute('aria-checked')).toBe('true');
+  expect(within(spans).getByRole('radio', { name: '30 дней', checked: true })).toBeTruthy();
   await userEvent.click(within(spans).getByRole('radio', { name: 'Всё время' }));
   await waitFor(() => expect(last().get('from')).toBe('2000-01-01'));
-  expect(within(spans).getByRole('radio', { name: 'Всё время' }).getAttribute('aria-checked')).toBe('true');
+  expect(within(spans).getByRole('radio', { name: 'Всё время', checked: true })).toBeTruthy();
 
   await userEvent.click(screen.getByRole('button', { name: 'Свой период' }));
   const dialog = await screen.findByRole('dialog', { name: 'Период' });

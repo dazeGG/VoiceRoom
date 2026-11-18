@@ -64,7 +64,9 @@ test('a stay in voice is recorded when the peer leaves and when the API stops', 
     .getUserStore()
     .createUser({ login: 'ada', displayName: 'Ада', password: 'lovelace-1843' });
   assert.ok(user);
-  const { token } = await runtime.services.getUserStore().createSession({ userId: user.id, now: Date.now() });
+  const { token } = await runtime.services
+    .getUserStore()
+    .createSession({ credentialProof: { userId: user.id, passwordHash: user.passwordHash }, now: Date.now() });
 
   const ada = openWs(port, { cookie: `vr_session=${encodeURIComponent(token)}` });
   const guest = openWs(port);

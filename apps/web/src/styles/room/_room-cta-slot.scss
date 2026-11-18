@@ -54,7 +54,7 @@ body.lobby--embedded .room-cta-slot {
   border-radius: var(--radius-pill);
   background: color-mix(in srgb, var(--vr-surface-2) 88%, transparent);
   color: var(--vr-text-2);
-  font-size: 12px;
+  font-size: 0.75rem;
   text-align: center;
 }
 
@@ -97,7 +97,7 @@ body.lobby--embedded .room-cta-slot {
 
 .room-cta-slot__title {
   color: var(--vr-text);
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 700;
   letter-spacing: -0.01em;
   line-height: 1.25;
@@ -105,7 +105,7 @@ body.lobby--embedded .room-cta-slot {
 
 .room-cta-slot__text {
   color: var(--vr-text-2);
-  font-size: 12.5px;
+  font-size: 0.78125rem;
   line-height: 1.35;
 }
 
@@ -118,7 +118,7 @@ body.lobby--embedded .room-cta-slot {
   border: 0;
   border-radius: 11px;
   background: transparent;
-  color: var(--vr-text-3);
+  color: var(--vr-text-muted);
   cursor: pointer;
   transition:
     background 150ms var(--ease-out),

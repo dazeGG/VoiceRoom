@@ -91,3 +91,44 @@ test('new Ring routes authorize actors, replay safely and retain the exact legac
     ['accepted', 'pending']
   );
 });
+
+test('both Ring HTTP entry points reject widgets without invitation side effects', async (t) => {
+  const { socketPath, databaseUrl, beforeCleanup } = await startApiServer(t, {
+    env: { AUTH_RATE_LIMIT: '0', RING_RATE_LIMIT: '0' }
+  });
+  const pool = new Pool({ connectionString: databaseUrl });
+  beforeCleanup(() => pool.end());
+  const alice = await registerAccount(socketPath, 'widget-ring-alice');
+  const bob = await registerAccount(socketPath, 'widget-ring-bob');
+  const a = (await request(socketPath, { pathname: '/api/auth/me', cookie: alice }, Me)).body.user;
+  const b = (await request(socketPath, { pathname: '/api/auth/me', cookie: bob }, Me)).body.user;
+  assert.ok(a && b);
+  const [low, high] = [a.id, b.id].sort();
+  await pool.query('INSERT INTO friendships(id,user_a_id,user_b_id) VALUES($1,$2,$3)', [
+    crypto.randomUUID(),
+    low,
+    high
+  ]);
+  await pool.query(
+    "UPDATE widget_boundary_activation SET widget_boundary_required=true,widget_admission_enabled=true; INSERT INTO rooms(id,kind) VALUES('widget-http-ring','widget')"
+  );
+  for (const pathname of ['/api/rings', '/api/rooms/widget-http-ring/ring']) {
+    const result: { status: number } = await request(socketPath, {
+      method: 'POST',
+      pathname,
+      cookie: alice,
+      body: { roomId: 'widget-http-ring', userId: b.id, clientRequestId: crypto.randomUUID() }
+    });
+    assert.equal(result.status, 404, pathname);
+  }
+  for (const table of ['direct_messages', 'room_rings', 'ring_delivery_outbox'])
+    assert.equal((await pool.query(`SELECT * FROM ${table}`)).rowCount, 0, table);
+  await pool.query(
+    "INSERT INTO room_memberships(id,room_id,user_id,role) VALUES('corrupt-http-widget','widget-http-ring',$1,'member')",
+    [a.id]
+  );
+  assert.equal(
+    (await request(socketPath, { pathname: '/api/rooms/widget-http-ring/members', cookie: alice })).status,
+    403
+  );
+});

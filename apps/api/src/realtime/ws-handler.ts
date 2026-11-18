@@ -1,3 +1,4 @@
+import { roomAllowsSurface, type RoomBoundary, type RoomSurface } from '../domains/rooms/room-surface.policy.ts';
 import type { JoinResult, JoinUser } from './voice-join.ts';
 import type { IncomingMessage } from 'node:http';
 import { clientKind, describeUserAgent } from '@voice-room/shared/account-security';
@@ -68,6 +69,10 @@ function closeReasonText(reason: unknown): string {
 function createWsHandler({
   registry,
   roomRuntime,
+  surface = 'main',
+  getBoundary,
+  widgetAdmissionEnabled,
+  widgetLocalAllowed,
   resolveSessionUser,
   getFriendIds,
   isUserOnline,
@@ -77,6 +82,10 @@ function createWsHandler({
   logger = createLogger({ name: 'api' })
 }: {
   registry: ConnectionRegistry;
+  surface?: RoomSurface;
+  getBoundary?: (roomId: string) => Promise<RoomBoundary | null>;
+  widgetAdmissionEnabled?: () => Promise<boolean>;
+  widgetLocalAllowed?: () => boolean;
   roomRuntime: WsRoomRuntime;
   resolveSessionUser: (req: IncomingMessage) => Promise<ResolvedSession | null>;
   getFriendIds: (userId: string) => Promise<string[]>;
@@ -96,7 +105,7 @@ function createWsHandler({
         connId: connection?.id,
         userId: connection?.userId || undefined,
         type: type || undefined,
-        err: error
+        err: surface === 'widget' ? undefined : error
       },
       'ws message handler failed'
     );
@@ -161,6 +170,52 @@ function createWsHandler({
     envelope: InboundEnvelope,
     req: IncomingMessage
   ): Promise<void> {
+    if (
+      surface === 'widget' &&
+      envelope.type === 'room.join' &&
+      widgetAdmissionEnabled &&
+      !(await widgetAdmissionEnabled())
+    ) {
+      registry.sendToConnection(connection, buildServerErrorEnvelope('room_not_found', 'Room not found', envelope.id));
+      return;
+    }
+    if (
+      surface === 'widget' &&
+      ![
+        'hello',
+        'ping',
+        'room.join',
+        'room.leave',
+        'room.peer.update',
+        'room.voice.report',
+        'room.media.request'
+      ].includes(envelope.type)
+    ) {
+      registry.sendToConnection(connection, buildServerErrorEnvelope('forbidden', 'Command unavailable', envelope.id));
+      return;
+    }
+    if (
+      'roomId' in envelope.payload &&
+      getBoundary &&
+      !roomAllowsSurface(await getBoundary(envelope.payload.roomId), surface)
+    ) {
+      registry.sendToConnection(connection, buildServerErrorEnvelope('room_not_found', 'Room not found', envelope.id));
+      return;
+    }
+    if (
+      surface === 'widget' &&
+      ((envelope.type === 'room.media.request' && envelope.payload.kind !== 'camera') ||
+        (envelope.type === 'room.peer.update' &&
+          ['screen', 'screenAudio', 'screenProfileId', 'screenStreamId', 'viewedScreenPeerId'].some((key) =>
+            Object.hasOwn(envelope.payload.patch, key)
+          )))
+    ) {
+      registry.sendToConnection(
+        connection,
+        buildServerErrorEnvelope('forbidden', 'Screen sharing unavailable', envelope.id)
+      );
+      return;
+    }
     switch (envelope.type) {
       case 'hello': {
         registry.touch(connection);
@@ -187,7 +242,7 @@ function createWsHandler({
         // A WebSocket can stay open while the account profile changes. Resolve the
         // session again at join time so a newly uploaded/deleted avatar is not
         // overwritten by the user snapshot captured when the socket first opened.
-        const currentSession = await resolveSessionUser(req);
+        const currentSession = surface === 'widget' ? null : await resolveSessionUser(req);
         if (connection.closed) return;
         const result = await roomRuntime.joinVoiceRoom(
           connection,
@@ -203,7 +258,7 @@ function createWsHandler({
               evt: LOG_EVENTS.ROOM_JOINED,
               connId: connection.id,
               userId: connection.userId || undefined,
-              roomId: joinRoomId,
+              roomId: surface === 'widget' ? undefined : joinRoomId,
               guest: connection.guest
             },
             'room joined'
@@ -214,7 +269,7 @@ function createWsHandler({
               evt: LOG_EVENTS.ROOM_JOIN_REJECTED,
               connId: connection.id,
               userId: connection.userId || undefined,
-              roomId: joinRoomId,
+              roomId: surface === 'widget' ? undefined : joinRoomId,
               code: result.code
             },
             'room join rejected'
@@ -238,7 +293,7 @@ function createWsHandler({
             evt: LOG_EVENTS.ROOM_LEFT,
             connId: connection.id,
             userId: connection.userId || undefined,
-            roomId: envelope.payload.roomId
+            roomId: surface === 'widget' ? undefined : envelope.payload.roomId
           },
           'room left'
         );
@@ -277,7 +332,7 @@ function createWsHandler({
             {
               evt: LOG_EVENTS.ROOM_MEDIA_REFUSED,
               connId: connection.id,
-              roomId: result.grant.roomId,
+              roomId: surface === 'widget' ? undefined : result.grant.roomId,
               kind: result.grant.kind,
               reason: result.grant.reason
             },
@@ -349,7 +404,7 @@ function createWsHandler({
           code: Number(code) || 0,
           reason: closeReasonText(reason).slice(0, 120) || undefined,
           durationMs: now() - connection.openedAt,
-          err: error || undefined
+          err: surface === 'widget' ? undefined : error || undefined
         },
         error ? 'ws closed after a socket error' : 'ws closed'
       );
@@ -371,7 +426,7 @@ function createWsHandler({
     // reject: an unhandled rejection ends the process and every call on it. A
     // failed session lookup (a pool timeout) costs only this socket.
     try {
-      const session = await resolveSessionUser(req);
+      const session = surface === 'widget' ? null : await resolveSessionUser(req);
       if (endedEarly) return;
       const sessionUser = session?.user || null;
 
@@ -407,6 +462,10 @@ function createWsHandler({
         return;
       }
 
+      if (surface === 'widget' && widgetLocalAllowed && !widgetLocalAllowed()) {
+        socket.close(1008, 'Widget unavailable');
+        return;
+      }
       const clientIp = getClientIp(req);
       const opened = sessionUser
         ? registry.addConnection(
@@ -417,6 +476,7 @@ function createWsHandler({
             session?.session?.tokenHash
           )
         : registry.addGuestConnection(socket, guestIp);
+      opened.roomSurface = surface;
       connection = opened;
       opened.client = clientKind(req.headers?.['user-agent']);
       const described = describeUserAgent(req.headers?.['user-agent']);

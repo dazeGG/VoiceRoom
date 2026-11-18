@@ -6,6 +6,7 @@ import { Type } from 'typebox';
 import { Value } from 'typebox/value';
 import { MembershipMember } from '@voice-room/shared/contracts/membership';
 import { fetchRoomMemberships, leaveRoomMembership } from '@/api/memberships';
+import { ApiError } from '@/api/client';
 import { removeStorage } from '@/shared/storage';
 
 interface RoomMembershipEntry {
@@ -22,9 +23,18 @@ interface RoomMembershipEntry {
   setError: (source: () => string) => void;
 }
 
-const CACHE_PREFIX = 'voice-room:membership:v1:';
+const LEGACY_PREFIX = 'voice-room:membership:v1:';
+const CACHE_PREFIX = 'voice-room:membership:v2:';
+function purge(prefix: string): void {
+  try {
+    for (const key of Object.keys(localStorage)) if (key.startsWith(prefix)) localStorage.removeItem(key);
+  } catch {
+    /* Storage is optional. */
+  }
+}
 /** What persist() writes; a revision that does not read as a number counts as none. */
 const CachedMembership = Type.Object({
+  viewerId: Type.String(),
   members: Type.Array(MembershipMember),
   presenceRevision: Type.Optional(Type.Unknown())
 });
@@ -52,14 +62,14 @@ function emptyEntry(): RoomMembershipEntry {
   };
 }
 
-function cacheKey(roomId: string): string {
-  return `${CACHE_PREFIX}${roomId}`;
+function cacheKey(viewerId: string, roomId: string): string {
+  return `${CACHE_PREFIX}${encodeURIComponent(viewerId)}:${encodeURIComponent(roomId)}`;
 }
 
-function readCache(roomId: string): RoomMembershipEntry | null {
+function readCache(viewerId: string, roomId: string): RoomMembershipEntry | null {
   try {
-    const parsed: unknown = JSON.parse(localStorage.getItem(cacheKey(roomId)) || 'null');
-    if (!Value.Check(CachedMembership, parsed)) return null;
+    const parsed: unknown = JSON.parse(localStorage.getItem(cacheKey(viewerId, roomId)) || 'null');
+    if (!Value.Check(CachedMembership, parsed) || parsed.viewerId !== viewerId) return null;
     return Object.assign(emptyEntry(), {
       cachedMembers: parsed.members,
       members: parsed.members,
@@ -71,11 +81,12 @@ function readCache(roomId: string): RoomMembershipEntry | null {
   }
 }
 
-function persist(roomId: string, entry: RoomMembershipEntry): void {
+function persist(viewerId: string, roomId: string, entry: RoomMembershipEntry): void {
   try {
     localStorage.setItem(
-      cacheKey(roomId),
+      cacheKey(viewerId, roomId),
       JSON.stringify({
+        viewerId,
         members: entry.cachedMembers,
         presenceRevision: entry.presenceRevision
       })
@@ -98,13 +109,31 @@ function mergeMembers(current: MembershipMember[], incoming: MembershipMember[])
 }
 
 export const useRoomMembershipStore = defineStore('room-membership', () => {
+  purge(LEGACY_PREFIX);
+  let viewerId: string | null = null;
+  let authGeneration = 0;
   const byRoomId = ref<Record<string, RoomMembershipEntry>>({});
+
+  function resetViewer(next: string | null, generation: number): void {
+    if (viewerId) purge(`${CACHE_PREFIX}${encodeURIComponent(viewerId)}:`);
+    for (const entry of Object.values(byRoomId.value)) entry.requestGeneration++;
+    byRoomId.value = {};
+    viewerId = next;
+    authGeneration = generation;
+  }
+
+  function guard(roomId: string, entry: RoomMembershipEntry): () => boolean {
+    const viewer = viewerId;
+    const generation = authGeneration;
+    return () =>
+      viewer !== null && viewerId === viewer && authGeneration === generation && byRoomId.value[roomId] === entry;
+  }
 
   /** The entry is returned through the store, so the changes made to it reach components. */
   function getRoomMembership(roomId: string): RoomMembershipEntry {
     const known = byRoomId.value[roomId];
     if (known) return known;
-    const created = readCache(roomId) || emptyEntry();
+    const created = (viewerId && readCache(viewerId, roomId)) || emptyEntry();
     byRoomId.value = { ...byRoomId.value, [roomId]: created };
     // Read back through the store: the reactive entry is the one whose changes components see.
     return byRoomId.value[roomId] ?? created;
@@ -114,8 +143,12 @@ export const useRoomMembershipStore = defineStore('room-membership', () => {
     roomId: string,
     { append = false, query = '' }: { append?: boolean; query?: string } = {}
   ): Promise<void> {
+    if (!viewerId) return;
+    const viewer = viewerId;
     const entry = getRoomMembership(roomId);
-    const requestGeneration = ++entry.requestGeneration;
+    const request = ++entry.requestGeneration;
+    const sameViewer = guard(roomId, entry);
+    const current = () => sameViewer() && entry.requestGeneration === request;
     entry.loading = true;
     entry.error = '';
     try {
@@ -123,7 +156,7 @@ export const useRoomMembershipStore = defineStore('room-membership', () => {
         cursor: append && query === entry.query ? entry.nextCursor : undefined,
         query
       });
-      if (requestGeneration !== entry.requestGeneration) return;
+      if (!current()) return;
       entry.members = mergeMembers(append && query === entry.query ? entry.members : [], envelope.members);
       entry.query = query;
       if (!query) entry.cachedMembers = entry.members;
@@ -131,26 +164,42 @@ export const useRoomMembershipStore = defineStore('room-membership', () => {
       entry.hasMore = envelope.pageInfo.hasMore;
       entry.presenceRevision = envelope.presenceRevision;
       entry.loaded = true;
-      persist(roomId, entry);
+      persist(viewer, roomId, entry);
     } catch (error) {
-      if (requestGeneration !== entry.requestGeneration) return;
+      if (!current()) return;
+      const transient = error instanceof ApiError && (error.status === 0 || error.status >= 500);
+      if (!transient) {
+        entry.cachedMembers = [];
+        entry.members = [];
+        entry.hasMore = false;
+        entry.nextCursor = undefined;
+        entry.presenceRevision = 0;
+        entry.loaded = false;
+        removeStorage(cacheKey(viewer, roomId));
+      }
       entry.setError(() =>
         error instanceof Error ? currentErrorMessage(error) : t('Не удалось загрузить участников')
       );
-      if (!query && entry.cachedMembers.length > 0) entry.members = entry.cachedMembers;
+      if (transient && !query && entry.cachedMembers.length > 0) entry.members = entry.cachedMembers;
     } finally {
-      if (requestGeneration === entry.requestGeneration) entry.loading = false;
+      if (current()) entry.loading = false;
     }
   }
 
   function clearRoomMembership(roomId: string): void {
+    const entry = byRoomId.value[roomId];
+    if (entry) entry.requestGeneration++;
     const { [roomId]: _removed, ...remaining } = byRoomId.value;
     byRoomId.value = remaining;
-    removeStorage(cacheKey(roomId));
+    if (viewerId) removeStorage(cacheKey(viewerId, roomId));
   }
 
   async function leaveActiveRoomMembership(roomId: string): Promise<boolean> {
+    if (!viewerId) return false;
+    const entry = getRoomMembership(roomId);
+    const current = guard(roomId, entry);
     const result = await leaveRoomMembership(roomId);
+    if (!current()) return false;
     clearRoomMembership(roomId);
     return result.left;
   }
@@ -169,6 +218,8 @@ export const useRoomMembershipStore = defineStore('room-membership', () => {
 
   return {
     byRoomId,
+    resetViewer,
+    clearRoomMembership,
     getRoomMembership,
     loadRoomMembership,
     leaveActiveRoomMembership,

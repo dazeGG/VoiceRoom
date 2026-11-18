@@ -134,6 +134,8 @@ export function registerAccountRoutes(root: FastifyInstance, ctx: ApiContext, de
         device: device(request)
       });
       switch (result.status) {
+        case 'invalid_credentials':
+          return reply.code(401).send(WRONG_CREDENTIALS);
         case 'invalid_login':
           return reply
             .code(400)

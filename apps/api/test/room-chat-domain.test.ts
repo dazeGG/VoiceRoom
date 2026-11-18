@@ -421,6 +421,25 @@ const postBase: PostInput = {
   idempotencyKey: ''
 };
 
+test('widget rooms block every chat operation for both surfaces, including legacy chat-enabled rooms', async () => {
+  for (const enabled of [false, true]) {
+    const { service, calls } = harness({ room: room([guest], { kind: 'widget', widgetChatEnabled: enabled }) });
+    const claim = { ...postBase, peerId: guest.id, sessionToken: TOKEN };
+    assert.equal((await service.list('room-1', claim)).status, 'room_not_found');
+    assert.equal((await service.post(claim)).status, 'room_not_found');
+    assert.equal((await service.edit({ ...claim, messageId: UUID_A })).status, 'room_not_found');
+    assert.equal((await service.remove({ ...claim, messageId: UUID_A })).status, 'room_not_found');
+    assert.equal((await service.markRead('room-1', ACCOUNT.id, '')).status, 'room_not_found');
+    const widget = { ...claim, surface: 'widget' as const };
+    assert.equal((await service.list('room-1', widget)).status, 'room_not_found');
+    assert.equal((await service.post(widget)).status, 'room_not_found');
+    assert.equal((await service.edit({ ...widget, messageId: UUID_A })).status, 'room_not_found');
+    assert.equal((await service.remove({ ...widget, messageId: UUID_A })).status, 'room_not_found');
+    assert.deepEqual(calls.appended, []);
+    assert.deepEqual(calls.deleted, []);
+  }
+});
+
 test('the list refuses missing rooms and banned viewers and projects media and replies', async () => {
   assert.equal(
     (await harness({ room: null }).service.list('room-1', { user: null, clientIp: 'ip' })).status,

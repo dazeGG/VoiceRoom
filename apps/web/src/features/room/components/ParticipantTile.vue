@@ -1,8 +1,7 @@
 <script setup lang="ts">
 import { t } from '@/shared/i18n';
-import { HeadphoneOff, MicOff, MonitorPlay } from '@lucide/vue';
+import { MonitorPlay } from '@lucide/vue';
 import { computed, ref, watch } from 'vue';
-import EmojiText from '@/shared/chat/EmojiText.vue';
 import { createLogger, errorContext } from '@/shared/log';
 import { AccountBadge } from '@/shared/ui';
 import { getAvatarPresentation } from '@/shared/ui/avatar-presentation';
@@ -13,6 +12,7 @@ import { enterScreenView, leaveScreenView } from '../client/ui/screen-view';
 import { keepVideoFitted } from '../client/ui/video-fit';
 import { useParticipantContextUiStore } from '../participant-context-ui.store';
 import { useParticipantsUiStore } from '../participants-ui.store';
+import ParticipantTileFace from './ParticipantTileFace.vue';
 
 const log = createLogger('room:participant');
 
@@ -26,11 +26,7 @@ const participantsUi = useParticipantsUiStore();
 
 const tile = ref<HTMLElement | null>(null);
 const cameraVideo = ref<HTMLVideoElement | null>(null);
-// A new avatar gets a fresh attempt: only the URL that failed stays hidden.
-const failedAvatarUrl = ref<string | null>(null);
-
 const avatar = computed(() => getAvatarPresentation(participant));
-const imageFailed = computed(() => failedAvatarUrl.value !== null && failedAvatarUrl.value === avatar.value.src);
 const viewing = computed(() => roomState.viewedScreenPeerId === participant.id);
 const canWatch = computed(() => !participant.isLocal && participant.screen && !viewing.value);
 const screenActionLabel = computed(() => (roomState.screenRequesting ? t('Подключение') : t('Смотреть экран')));
@@ -148,26 +144,14 @@ function handleKeydown(event: KeyboardEvent): void {
       playsinline
       muted
     ></video>
-    <div class="participant__ring" aria-hidden="true">
-      <span class="participant__avatar">
-        <img v-if="avatar.src && !imageFailed" :src="avatar.src" alt="" @error="failedAvatarUrl = avatar.src" />
-        <template v-else>{{ avatar.initials }}</template>
-      </span>
-    </div>
-    <div class="participant__copy">
-      <h2 class="participant__heading">
-        <span class="participant__name"><EmojiText :text="participant.name" /></span>
-        <AccountBadge :user-id="participant.accountUserId" />
-        <span v-if="participant.isLocal" class="participant__you">{{ t('вы') }}</span>
-        <span class="participant__muted-icon" :aria-label="t('Микрофон выключен')" :title="t('Микрофон выключен')"
-          ><MicOff v-bind="iconSm"
-        /></span>
-        <span class="participant__deafened-icon" :aria-label="t('Звук выключен')" :title="t('Звук выключен')"
-          ><HeadphoneOff v-bind="iconSm"
-        /></span>
-      </h2>
-      <p v-if="participant.statusLabel" class="participant__status">{{ participant.statusLabel }}</p>
-      <p v-else class="participant__status" hidden></p>
+    <ParticipantTileFace
+      :name="participant.name"
+      :initials="avatar.initials"
+      :avatar-src="avatar.src"
+      :local="participant.isLocal"
+      :status-label="participant.statusLabel"
+    >
+      <template #badge><AccountBadge :user-id="participant.accountUserId" /></template>
       <button
         class="participant__screen-action"
         type="button"
@@ -178,6 +162,6 @@ function handleKeydown(event: KeyboardEvent): void {
         <MonitorPlay v-bind="iconSm" aria-hidden="true" />
         <span>{{ screenActionLabel }}</span>
       </button>
-    </div>
+    </ParticipantTileFace>
   </div>
 </template>
