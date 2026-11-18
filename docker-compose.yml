@@ -131,7 +131,7 @@ services:
       # Comma-separated account ids that review reports at /admin/reports.
       PLATFORM_ADMIN_USER_IDS: ${PLATFORM_ADMIN_USER_IDS:-}
       # The main site and the admin app, for the admin app's sign-in handoff.
-      SITE_ORIGIN: https://${DOMAIN}
+      SITE_ORIGIN: https://${APP_DOMAIN:-${DOMAIN}}
       ADMIN_ORIGIN: https://${ADMIN_DOMAIN:-admin.${DOMAIN}}
       REPORT_RATE_LIMIT: ${REPORT_RATE_LIMIT:-10}
       REPORT_RATE_WINDOW_MS: ${REPORT_RATE_WINDOW_MS:-60000}
@@ -293,6 +293,9 @@ services:
         condition: service_started
     environment:
       DOMAIN: ${DOMAIN:?set DOMAIN in .env}
+      # Optional public origins. The host edge must serve their DNS names and TLS.
+      APP_DOMAIN: ${APP_DOMAIN:-}
+      DOCS_DOMAIN: ${DOCS_DOMAIN:-}
       # The admin app; needs a DNS record pointing at this host (docs/SELF_HOSTING.md).
       ADMIN_DOMAIN: ${ADMIN_DOMAIN:-admin.${DOMAIN}}
       LIVEKIT_DOMAIN: ${LIVEKIT_DOMAIN:-livekit.${DOMAIN}}
@@ -315,6 +318,7 @@ services:
       - caddy_config:/config
       # Web chunks of earlier releases, for tabs opened before a deploy.
       - web_archive:/srv/archive
+      - ./static:/srv/static:ro
       # Extra sites managed on the host, imported by the Caddyfile.
       - ./config/caddy/sites.d:/etc/caddy/sites.d:ro
 

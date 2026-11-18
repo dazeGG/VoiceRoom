@@ -68,11 +68,10 @@ const overlays = [
   '--vr-danger-off',
   '--vr-danger-hover'
 ];
-for (const path of [
-  'apps/web/src/styles/_tokens.scss',
-  'apps/admin/src/styles/theme.css',
-  'apps/site/src/styles/site.scss'
-]) {
+const styles = process.argv.includes('--site')
+  ? ['apps/site/src/styles/site.scss']
+  : ['apps/web/src/styles/_tokens.scss', 'apps/admin/src/styles/theme.css'];
+for (const path of styles) {
   const css = sass.compile(resolve(root, path)).css;
   const blocks = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((match) => ({
     selector: match[1] ?? '',

@@ -10,6 +10,7 @@ import HomePage from '@/features/home/HomePage.vue';
 import MobileStartScreen from '@/features/home/components/MobileStartScreen.vue';
 import { isMobileRoute } from '@/platform/mobile-routes';
 import { createAppRouter } from '@/router';
+import { appHomeForHost } from '@/shared/app-home';
 import { stubFetch } from '../fixtures/fetch';
 import { installFakeWebSocket } from '../fixtures/fake-websocket';
 import { authUser } from '../fixtures/users';
@@ -41,6 +42,16 @@ test('a navigation to `/` lands on /app with its query, as an old link or a noti
   expect(router.currentRoute.value.fullPath).toBe('/app');
   await router.push('/r/abc');
   expect(router.currentRoute.value.params.roomId).toBe('abc');
+});
+
+test('the dedicated app host uses / and preserves legacy query and hash', async () => {
+  expect(appHomeForHost('voiceroom.ru')).toBe('/app');
+  expect(appHomeForHost('dev.voiceroom.ru')).toBe('/app');
+  expect(appHomeForHost('app.dev.voiceroom.ru')).toBe('/');
+  const router = createAppRouter(createMemoryHistory(), appHomeForHost('APP.VoiceRoom.ru'));
+  await router.push('/app?auth=login#room');
+  expect(router.currentRoute.value.fullPath).toBe('/?auth=login#room');
+  expect(isMobileRoute(router.currentRoute.value.meta.routeId)).toBe(true);
 });
 
 test('a phone may open /app, the room page and the legal pages', () => {

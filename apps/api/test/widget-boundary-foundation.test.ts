@@ -19,11 +19,10 @@ test('trusted room surface defaults legacy objects to main and denies cross-surf
     assert.equal(roomAllowsSurface(widget, 'main'), false);
     assert.equal(roomAllowsSurface(widget, 'widget'), true);
     assert.equal(roomAllowsChat(widget, 'main'), false);
+    assert.equal(roomAllowsChat(widget, 'widget'), false);
     assert.equal(roomAllowsAttachments(widget, 'widget'), false);
     assert.equal(roomAllowsAttachments(widget, 'main'), false);
   }
-  assert.equal(roomAllowsChat(off, 'widget'), false);
-  assert.equal(roomAllowsChat(on, 'widget'), true);
 });
 
 test(

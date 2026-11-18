@@ -1,9 +1,15 @@
 @use 'entry';
 
 .widget-shell {
+  --widget-radius: 16px;
+  --widget-control-radius: calc(var(--widget-radius) * 0.75);
+  --widget-small-radius: calc(var(--widget-radius) * 0.5);
+  container-type: inline-size;
+  display: flex;
+  flex-direction: column;
   box-sizing: border-box;
   min-height: 100dvh;
-  padding: 24px;
+  padding: 24px 24px 6px;
   overflow-wrap: anywhere;
   background: var(--vr-bg);
   color: var(--vr-text);
@@ -17,11 +23,11 @@
     box-sizing: border-box;
   }
 
-  :where(button, input, select) {
+  :where(button, input, select):not(:where(.room-dock__button, .room-dock__menu-button)) {
     max-width: 100%;
     min-height: 48px;
     border: 1px solid color-mix(in srgb, var(--vr-text) 15%, transparent);
-    border-radius: 12px;
+    border-radius: var(--widget-control-radius);
     padding: 10px 12px;
     background: color-mix(in srgb, var(--vr-text) 5%, var(--vr-bg));
     color: inherit;
@@ -38,7 +44,7 @@
     color: color-mix(in srgb, var(--vr-text) 50%, transparent);
   }
 
-  :where(button) {
+  :where(button):not(:where(.room-dock__button, .room-dock__menu-button)) {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -46,7 +52,7 @@
     cursor: pointer;
   }
 
-  :where(button):hover:not(:disabled) {
+  :where(button):hover:not(:disabled, .room-dock__button, .room-dock__menu-button) {
     filter: brightness(1.08);
   }
 
@@ -55,58 +61,10 @@
     outline-offset: 3px;
   }
 
-  > label,
-  details label {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    margin-block: 12px;
-    font-size: 0.8125rem;
-  }
-
-  > button {
-    margin-block-end: 8px;
-    margin-inline-end: 6px;
-  }
-
-  details {
-    margin-block: 16px;
-    padding: 12px;
-    border: 1px solid color-mix(in srgb, var(--vr-text) 12%, transparent);
-    border-radius: 12px;
-  }
-
-  summary {
-    padding-block: 8px;
-    cursor: pointer;
-  }
-
-  > ul {
-    display: grid;
-    padding: 0;
-    gap: 8px;
-    list-style: none;
-  }
-
-  > ul > li {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr);
-    gap: 8px;
-    padding: 12px;
-    border: 1px solid color-mix(in srgb, var(--vr-text) 10%, transparent);
-    border-radius: 12px;
-  }
-
-  input[type='range'] {
-    min-height: 32px;
-    padding: 0;
-    accent-color: var(--vr-accent);
-  }
-
   [role='alert'] {
     padding: 10px 12px;
     border: 1px solid var(--vr-accent);
-    border-radius: 10px;
+    border-radius: var(--widget-control-radius);
     font-size: 0.8125rem;
   }
 }
@@ -122,19 +80,7 @@
 
 .widget-shell__header {
   display: flex;
-  min-height: 28px;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-
-  strong {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 0.9375rem;
-    font-weight: 650;
-    letter-spacing: -0.03em;
-  }
+  justify-content: flex-end;
 
   button {
     min-height: 32px;
@@ -143,19 +89,22 @@
   }
 }
 
-.widget-shell__brand-mark {
-  width: 17px;
-  height: 17px;
-  border: 4px solid var(--vr-accent);
-  border-radius: 6px;
-}
+.widget-shell__credit {
+  margin-block-start: auto;
+  padding-block-start: 16px;
+  color: color-mix(in srgb, var(--vr-text) 73%, var(--vr-bg));
+  font-size: 0.75rem;
+  text-align: center;
 
-.widget-shell__guest {
-  border: 1px solid color-mix(in srgb, var(--vr-text) 12%, transparent);
-  border-radius: 6px;
-  padding: 2px 7px;
-  color: color-mix(in srgb, var(--vr-text) 65%, transparent);
-  font-size: 0.6875rem;
+  a {
+    color: inherit;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
+  a:is(:hover, :focus-visible) {
+    color: var(--vr-accent);
+  }
 }
 
 .widget-shell__status {
@@ -174,49 +123,4 @@
     background: var(--vr-accent);
     content: '';
   }
-}
-
-.widget-shell__chat-hint {
-  margin-block: 24px 0;
-  color: color-mix(in srgb, var(--vr-text) 60%, transparent);
-  font-size: 0.75rem;
-}
-
-.widget-shell__chat {
-  margin-block: 16px;
-  border-block-start: 1px solid color-mix(in srgb, var(--vr-text) 12%, transparent);
-
-  ol {
-    display: grid;
-    padding: 0;
-    gap: 12px;
-    list-style: none;
-  }
-
-  li button {
-    min-height: 32px;
-    margin-inline-start: 8px;
-    padding: 4px 8px;
-    font-size: 0.75rem;
-  }
-
-  form {
-    display: grid;
-    gap: 8px;
-  }
-
-  label {
-    display: grid;
-    gap: 6px;
-  }
-}
-
-.widget-media video {
-  display: block;
-  width: 100%;
-  max-height: 16rem;
-  margin-block: 8px;
-  border-radius: 12px;
-  aspect-ratio: 16 / 9;
-  object-fit: contain;
 }

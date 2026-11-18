@@ -69,9 +69,14 @@ if (!Value.Check(Type.Record(Type.String(), Type.Number()), baseline)) {
 }
 const update = process.argv.includes('--update');
 const verbose = process.argv.includes('--list');
+const selectedTrees = process.argv.includes('--site')
+  ? TREES.filter((tree) => tree.startsWith('apps/site/'))
+  : process.argv.includes('--app')
+    ? TREES.filter((tree) => !tree.startsWith('apps/site/'))
+    : TREES;
 let failed = false;
 
-for (const tree of TREES) {
+for (const tree of selectedTrees) {
   const reads = sourceReads(tree);
   const allowed = baseline[tree] ?? 0;
   if (verbose) for (const entry of reads) process.stdout.write(`${entry}\n`);

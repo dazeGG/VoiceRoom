@@ -1,0 +1,22 @@
+{$SITE_SCHEME}{$APP_DOMAIN} {
+  import voice_web_headers
+  import voice_runtime_config
+  import voice_android_links
+  import voice_web_api
+  import voice_web_chunks
+
+  header X-Robots-Tag "noindex"
+
+  # The configurator and its public widget stay on the original origin.
+  @public_widget path /widgets /widgets/ /widgets/*
+  redir @public_widget https://{$DOMAIN}{uri} 302
+
+  @app_page path / /app /app/ /r/* /login /login/ /register /register/ /privacy /terms /licenses
+  handle @app_page {
+    rewrite * /index.html
+    import voice_web_files
+  }
+  handle {
+    import voice_web_files
+  }
+}

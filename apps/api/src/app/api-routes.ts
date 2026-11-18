@@ -110,7 +110,6 @@ export function registerApiRoutes(app: FastifyInstance, ctx: ApiContext, deps: A
       maxRoomPeers: deps.config.MAX_ROOM_PEERS
     });
     registerAdmissionRoutes(widget, ctx, deps.domain.admission, 'widget');
-    registerRoomChatRoutes(widget, ctx, deps.domain.roomChat, 'widget');
     widget.get('/api/widget/ws', { websocket: true }, (socket, request) => {
       if (!deps.config.WIDGET_ENABLED) {
         socket.close(1008, 'Widget unavailable');

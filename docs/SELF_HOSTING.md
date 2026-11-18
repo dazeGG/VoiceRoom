@@ -33,7 +33,9 @@ GitHub-аналог GitLab CI/CD variables находится здесь:
 
 | Name | Default/пример | Комментарий |
 | --- | --- | --- |
-| `DOMAIN` | `voice.example.com` | Основной домен web-приложения. |
+| `DOMAIN` | `voice.example.com` | Публичный домен VoiceRoom. По умолчанию также обслуживает веб-приложение. |
+| `APP_DOMAIN` | optional | Отдельный хост веб-приложения. Укажите после настройки DNS и проверки ссылок и клиентов. |
+| `DOCS_DOMAIN` | optional | Отдельный хост статической документации. Укажите после настройки DNS. |
 | `LIVEKIT_DOMAIN` | `livekit.${DOMAIN}` | Домен LiveKit. |
 | `LIVEKIT_GATE_PUBLIC_URL` | `wss://livekit.example.com` | Публичный browser-facing URL auth-gate. По умолчанию собирается из `LIVEKIT_DOMAIN`. |
 | `LIVEKIT_INTERNAL_URL` | `ws://livekit:7880` | Внутренний адрес LiveKit SFU для API при запуске без production compose. Production compose фиксирует service URL сам. |
@@ -185,6 +187,35 @@ VAPID_SUBJECT
 - Для protected branches включите required reviewers; сделайте `policy`, `check` и `test` обязательными проверками для PR в `develop` и `main`.
 - Не печатайте secrets в workflow logs; передавайте их через `with:`/`env:` только в нужные jobs/steps.
 
+### Static site and documentation
+
+Caddy serves the public site from `static/site/current` and documentation from
+`static/docs/current` in the deploy checkout. The static publication workflow uploads
+the built files and atomically points `current` at `releases/<commit>`. Publishing static
+files leaves the running containers and database in place. The first application
+rollout copies the public site out of the legacy Caddy image when a site release has
+yet to be published.
+
+On a new self-host install, build and publish the site files once:
+
+```bash
+npm ci
+npm --workspace @voice-room/site run build
+tar -cf - -C apps/site/dist . | bash scripts/cd/publish-static.sh "$PWD" site "$(git rev-parse HEAD)"
+```
+
+To serve documentation, add its DNS record and set `DOCS_DOMAIN` in Compose. Supply
+the build from `apps/docs/dist` using the same publisher with `docs` as the component.
+For the hosted project, the static workflows use the existing `dev` and `production`
+environments and their SSH settings. Set the environment's `DOCS_URL` or `SITE_URL` if
+the public health check for that dev component should use a custom URL.
+
+Set `APP_DOMAIN` after verifying the new host's TLS, sign-in, voice, admin handoff and
+native clients. Existing sessions remain scoped to the old host and users sign in
+again at the new host. The public widget loader and frame keep the public site's
+origin. Leave both optional hosts unset for an installation using only the public
+domain.
+
 ## Миграции
 
 ```bash
@@ -290,9 +321,9 @@ docker compose exec caddy caddy reload --config /etc/caddy/Caddyfile --adapter c
 The permanent dev stack uses `/home/daze/VoiceRoom-dev` on the production host,
 with Compose project `voiceroom-dev`. It has independent PostgreSQL, uploads,
 media, web archives and secrets. Production data is never copied into dev.
-The production Caddy terminates HTTPS for `dev.voiceroom.ru`,
-`admin.dev.voiceroom.ru` and `livekit.dev.voiceroom.ru`; all three A records point
-at the host. The inner Caddy serves HTTP without publishing host ports.
+The production Caddy terminates HTTPS for the dev site, app, docs, admin and
+LiveKit hosts. Their A records point at the same host. The inner Caddy serves
+HTTP without publishing host ports.
 
 Use this non-secret part of the dev `.env`, plus fresh independent values for
 `POSTGRES_PASSWORD`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`,
@@ -302,6 +333,8 @@ Use this non-secret part of the dev `.env`, plus fresh independent values for
 COMPOSE_PROJECT_NAME=voiceroom-dev
 COMPOSE_FILE=docker-compose.yml:docker-compose.behind-edge.yml
 DOMAIN=dev.voiceroom.ru
+APP_DOMAIN=app.dev.voiceroom.ru
+DOCS_DOMAIN=docs.dev.voiceroom.ru
 ADMIN_DOMAIN=admin.dev.voiceroom.ru
 LIVEKIT_DOMAIN=livekit.dev.voiceroom.ru
 LIVEKIT_RTC_TCP_PORT=7891
@@ -349,7 +382,7 @@ membership when a future deployment recreates it.
 Add `config/caddy/sites.d/voiceroom-dev.caddy` in the production checkout:
 
 ```caddy
-dev.voiceroom.ru, admin.dev.voiceroom.ru, livekit.dev.voiceroom.ru {
+dev.voiceroom.ru, app.dev.voiceroom.ru, docs.dev.voiceroom.ru, admin.dev.voiceroom.ru, livekit.dev.voiceroom.ru {
   reverse_proxy voiceroom-dev-edge:80 {
     header_up X-VoiceRoom-Client-IP {remote_host}
   }

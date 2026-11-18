@@ -179,6 +179,18 @@ main() {
   echo "== checking out $commit"
   git checkout --quiet --detach "$commit"
 
+  # Preserve the existing marketing site on the first rollout that separates
+  # static publication from the app image. The publisher takes the same site
+  # lock as independent releases and never overrides one that won the race.
+  if [ ! -s static/site/current/index.html ]; then
+    local previous_caddy
+    previous_caddy=$(docker compose ps --quiet caddy)
+    if [ -n "$previous_caddy" ] && docker exec "$previous_caddy" test -s /srv/site/index.html; then
+      docker cp "$previous_caddy:/srv/site/." - |
+        bash scripts/cd/publish-static.sh "$PWD" site "$previous_commit" --if-empty
+    fi
+  fi
+
   echo "== pulling images"
 
   set_env VOICEROOM_API_IMAGE "$api_image"

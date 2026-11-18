@@ -160,9 +160,6 @@ export interface PostInput extends Caller, PeerClaim {
 }
 
 export function createRoomChatService(deps: RoomChatDeps) {
-  function widgetText(message: RoomChatMessage): RoomChatMessage {
-    return { ...message, content: null, attachments: [], linkPreview: null, replyTo: null, replyPreview: null };
-  }
   function rateLimited(clientIp: string, roomId: string): ChatRefusal | null {
     const rate = deps.limiter.check(`${clientIp}:${roomId}`);
     return rate.allowed ? null : { status: 'rate_limited', retryAfterSeconds: rate.retryAfterSeconds };
@@ -184,11 +181,7 @@ export function createRoomChatService(deps: RoomChatDeps) {
     if (await deps.findRoomBan(roomId, caller.user?.id, caller.clientIp)) return { status: 'room_banned' };
     const stored = await deps.messages().room.listMessages(roomId, { limit: 100 });
     const messages = await Promise.all(
-      stored.map(async (message) =>
-        room.kind === 'widget'
-          ? widgetText(message)
-          : deps.projectReply('room', await deps.projectMedia('room', message), { roomId })
-      )
+      stored.map(async (message) => deps.projectReply('room', await deps.projectMedia('room', message), { roomId }))
     );
     return { status: 'listed', messages };
   }
@@ -197,9 +190,6 @@ export function createRoomChatService(deps: RoomChatDeps) {
     const { roomId, clientIp, user: sessionUser } = input;
     const room = await deps.getRoom(roomId);
     if (!room || !roomAllowsChat(room, input.surface ?? 'main')) return { status: 'room_not_found' };
-    if (room.kind === 'widget' && input.user) return { status: 'invalid_session' };
-    if (room.kind === 'widget' && (input.content != null || input.replyTo != null || input.replyToMessageId))
-      return { status: 'invalid_content' };
     let text = cleanChatText(input.text);
     let content: unknown;
     let mentionUserIds: string[] = [];
@@ -218,10 +208,8 @@ export function createRoomChatService(deps: RoomChatDeps) {
     const attachmentIds = normalizeAttachmentIds(input.attachmentIds);
     const { replyToMessageId, idempotencyKey } = input;
 
-    if (!room) return { status: 'room_not_found' };
     if (await deps.findRoomBan(roomId, sessionUser?.id, clientIp)) return { status: 'room_banned' };
     if (attachmentIds === null) return { status: 'invalid_attachments' };
-    if (room.kind === 'widget' && attachmentIds.length > 0) return { status: 'invalid_attachments' };
     if (input.replyTo != null && !replyToMessageId) return { status: 'reply_unavailable' };
     if (!text && attachmentIds.length === 0) return { status: 'empty' };
     const limited = rateLimited(clientIp, roomId);
@@ -331,17 +319,14 @@ export function createRoomChatService(deps: RoomChatDeps) {
     });
     if (!message) return { status: 'empty' };
 
-    const projectedBase = room.kind === 'widget' ? message : await deps.projectMedia('room', message);
-    const projected =
-      room.kind === 'widget'
-        ? widgetText(message)
-        : message.idempotencyReplay
-          ? await deps.projectReply('room', projectedBase, { roomId })
-          : { ...projectedBase, replyPreview: send.replyPreview() };
+    const projectedBase = await deps.projectMedia('room', message);
+    const projected = message.idempotencyReplay
+      ? await deps.projectReply('room', projectedBase, { roomId })
+      : { ...projectedBase, replyPreview: send.replyPreview() };
     const published: RoomChatMessage = { ...projected, name, avatarAccent, avatarColorKey, avatarUrl };
     if (!message.idempotencyReplay) {
       if (deps.directEmit) deps.broadcastChatMessage(roomId, published);
-      if (room.kind !== 'widget') deps.scheduleLinkPreview(roomId, message.id, text);
+      deps.scheduleLinkPreview(roomId, message.id, text);
     }
     return { status: 'created', message: published };
   }
@@ -357,7 +342,6 @@ export function createRoomChatService(deps: RoomChatDeps) {
     const { roomId, messageId, clientIp, user } = input;
     const room = await deps.getRoom(roomId);
     if (!room || !roomAllowsChat(room, input.surface ?? 'main')) return { status: 'room_not_found' };
-    if (room.kind === 'widget' && input.user) return { status: 'invalid_session' };
     if (await deps.findRoomBan(roomId, user?.id, clientIp)) return { status: 'room_banned' };
     const text = cleanChatText(input.text);
     if (!text) return { status: 'empty' };
@@ -381,8 +365,8 @@ export function createRoomChatService(deps: RoomChatDeps) {
     if (!message) return { status: 'message_not_found' };
     const publicMessage = publicChatMessage(message);
     deps.broadcastRoomDetail(roomId, deps.roomDetailEvent('room.chat.edited', { roomId, message: publicMessage }));
-    if (room.kind !== 'widget') await deps.refreshPins(roomId, 'message-edited', messageId);
-    if (room.kind !== 'widget') deps.scheduleLinkPreview(roomId, messageId, text, { edited: true });
+    await deps.refreshPins(roomId, 'message-edited', messageId);
+    deps.scheduleLinkPreview(roomId, messageId, text, { edited: true });
     return { status: 'edited', message: publicMessage };
   }
 
@@ -395,7 +379,6 @@ export function createRoomChatService(deps: RoomChatDeps) {
     const { roomId, messageId, user } = input;
     const room = await deps.getRoom(roomId);
     if (!room || !roomAllowsChat(room, input.surface ?? 'main')) return { status: 'room_not_found' };
-    if (room.kind === 'widget' && input.user) return { status: 'invalid_session' };
     const current = await deps.messages().room.getMessage(roomId, messageId);
     if (!current) return { status: 'message_not_found' };
 
@@ -415,7 +398,7 @@ export function createRoomChatService(deps: RoomChatDeps) {
     // Voice peers and preview watchers both get it as a room-detail envelope:
     // the legacy peer broadcast treats unknown event names as failures.
     deps.broadcastRoomDetail(roomId, deps.roomDetailEvent('room.chat.deleted', { roomId, messageId }));
-    if (room.kind !== 'widget') await deps.refreshPins(roomId, 'message-deleted', messageId);
+    await deps.refreshPins(roomId, 'message-deleted', messageId);
     return { status: 'deleted' };
   }
 

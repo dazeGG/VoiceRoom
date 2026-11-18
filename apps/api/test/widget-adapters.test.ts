@@ -6,7 +6,6 @@ import { Pool } from 'pg';
 import { createRoomStore } from '../src/app/room-store.ts';
 import { WidgetRoomCreated, WidgetRoomInfo } from '@voice-room/shared/contracts/widget';
 import { RoomCreated } from '@voice-room/shared/contracts/rooms';
-import { RoomMessageAnswer, RoomChat } from '@voice-room/shared/contracts/messages';
 import { startApiServer, request, registerAccount } from './fakes/server-process.ts';
 import { openWs, joinVoiceRoom, waitForWsType, sendWs } from './ws-harness.ts';
 
@@ -30,15 +29,20 @@ test('real widget adapters ignore account cookies and isolate room lookup, WS, s
     WidgetRoomCreated
   );
   assert.equal(off.status, 201);
+  assert.equal(off.body.chat, false);
   const on = await request(
     server.socketPath,
     { method: 'POST', pathname: '/api/widget/rooms', body: { chat: true } },
     WidgetRoomCreated
   );
   assert.equal(on.status, 201);
+  assert.equal(on.body.chat, false);
   const store = createRoomStore({ pool });
-  await store.appendMessage(off.body.roomId, {
-    id: 'legacy-off-message',
+  assert.equal((await store.getRoom(on.body.roomId))?.widgetChatEnabled, false);
+  const legacy = await store.createRoom({ creatorIp: '', kind: 'widget', widgetChatEnabled: true });
+  assert.equal(legacy.widgetChatEnabled, true);
+  await store.appendMessage(legacy.id, {
+    id: 'legacy-widget-message',
     peerId: 'legacy-peer',
     authorUserId: null,
     name: 'Legacy',
@@ -50,7 +54,7 @@ test('real widget adapters ignore account cookies and isolate room lookup, WS, s
   assert.equal((await request(server.socketPath, { pathname: `/api/rooms/${off.body.roomId}` })).status, 404);
   assert.equal((await request(server.socketPath, { pathname: `/api/widget/rooms/${main.body.roomId}` })).status, 404);
   assert.equal(
-    (await request(server.socketPath, { pathname: `/api/widget/rooms/${off.body.roomId}` }, WidgetRoomInfo)).body.chat,
+    (await request(server.socketPath, { pathname: `/api/widget/rooms/${legacy.id}` }, WidgetRoomInfo)).body.chat,
     false
   );
   const widget = openWs(server.socketPath, { path: '/api/widget/ws', cookie });
@@ -89,33 +93,21 @@ test('real widget adapters ignore account cookies and isolate room lookup, WS, s
   const talk = openWs(server.socketPath, { path: '/api/widget/ws', cookie });
   t.after(() => talk.ws.close());
   await talk.ready;
-  const writer = { ...join, roomId: on.body.roomId, peerId: 'widget-peer2', sessionToken: 'v'.repeat(32) };
-  await joinVoiceRoom(talk, writer);
-  assert.equal(
-    (
-      await request(
-        server.socketPath,
-        {
-          method: 'POST',
-          pathname: `/api/widget/rooms/${on.body.roomId}/messages`,
-          body: { ...writer, text: 'hello' },
-          cookie
-        },
-        RoomMessageAnswer
-      )
-    ).status,
-    201
-  );
-  const history = await request(
-    server.socketPath,
-    { pathname: `/api/widget/rooms/${on.body.roomId}/messages` },
-    RoomChat
-  );
-  assert.equal(history.body.messages[0]?.text, 'hello');
+  const writer = { ...join, roomId: legacy.id, peerId: 'widget-peer2', sessionToken: 'v'.repeat(32) };
+  assert.deepEqual((await joinVoiceRoom(talk, writer)).payload.recentMessages, []);
+  const messages = `/api/widget/rooms/${legacy.id}/messages`;
+  for (const method of ['GET', 'POST', 'PATCH', 'DELETE']) {
+    const pathname = method === 'PATCH' || method === 'DELETE' ? `${messages}/legacy-widget-message` : messages;
+    const body = method === 'GET' ? undefined : { ...writer, text: 'hello' };
+    assert.equal((await request(server.socketPath, { method, pathname, body, cookie })).status, 404);
+  }
+  assert.equal((await store.listMessages(legacy.id, { limit: 10 }))[0]?.text, 'must stay hidden');
+  sendWs(talk.ws, 'room.chat.typing', { roomId: legacy.id });
+  assert.equal((await waitForWsType(talk.frames, 'error')).error.code, 'forbidden');
   for (const path of ['chat', 'chat/history', 'pins', 'members', 'peers'])
     assert.ok(
       [403, 404].includes(
-        (await request(server.socketPath, { pathname: `/api/rooms/${on.body.roomId}/${path}`, cookie })).status
+        (await request(server.socketPath, { pathname: `/api/rooms/${legacy.id}/${path}`, cookie })).status
       ),
       path
     );
@@ -144,7 +136,7 @@ test('real widget adapters ignore account cookies and isolate room lookup, WS, s
     .find((record) => record.evt === LOG_EVENTS.ROOM_JOIN_REJECTED && record.code === 'invalid_session');
   assert.ok(rejected, 'actual failed guest join must be observed without exposing its room code');
   assert.equal(Object.hasOwn(rejected, 'roomId'), false);
-  assert.equal(server.logs.stdout.includes(on.body.roomId), false, 'failed join logs must not expose widget room code');
+  assert.equal(server.logs.stdout.includes(legacy.id), false, 'failed join logs must not expose widget room code');
   assert.equal(server.logs.stdout.includes('z'.repeat(32)), false, 'failed join logs must not expose guest secret');
   const replacement = openWs(server.socketPath, { path: '/api/widget/ws', cookie });
   t.after(() => replacement.ws.close());
@@ -152,5 +144,5 @@ test('real widget adapters ignore account cookies and isolate room lookup, WS, s
   const resumed = await joinVoiceRoom(replacement, writer);
   assert.equal(resumed.payload.peers.filter((peer) => peer.id === writer.peerId).length, 1);
   await pool.query('UPDATE widget_boundary_activation SET widget_admission_enabled=false');
-  assert.equal((await request(server.socketPath, { pathname: `/api/widget/rooms/${on.body.roomId}` })).status, 404);
+  assert.equal((await request(server.socketPath, { pathname: `/api/widget/rooms/${legacy.id}` })).status, 404);
 });

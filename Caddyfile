@@ -26,7 +26,7 @@ import /etc/caddy/turn.d/*.site
 # empty by default.
 import /etc/caddy/sites.d/*.caddy
 
-{$SITE_SCHEME}{$DOMAIN} {
+(voice_web_headers) {
   encode zstd gzip
 
   header {
@@ -65,37 +65,17 @@ import /etc/caddy/sites.d/*.caddy
   header @versioned_audio Cache-Control "public, max-age=31536000, immutable"
   header @emoji Cache-Control "public, max-age=2592000"
   header @web_fallback Cache-Control "no-cache"
+}
 
-  # The app's pages are not search results: the lobby, a room, a sign-in form.
-  # They stay crawlable (robots.txt), so a crawler sees this and leaves them out.
-  @app_private path /app /r/* /login /register
-  header @app_private X-Robots-Tag "noindex"
-  # Only the public host is indexed. Its pages name it as canonical anyway; a
-  # dev host or a self-hosted copy is kept out of search altogether.
-  @foreign_host not host {$CANONICAL_HOST:voiceroom.ru}
-  header @foreign_host X-Robots-Tag "noindex"
-
-  # `/` is the public site for a visitor. A signed-in browser (the session
-  # cookie, apps/api/src/app/config.ts SESSION_COOKIE_NAME) and the app's old
-  # links (?dm=, ?room=&message= from notifications, ?auth=) go on to the app,
-  # query kept. Any other query (utm_*, yclid, gclid) stays on the site.
-  @to_app_query {
-    path /
-    expression `{http.request.uri.query}.matches("(^|&)(dm|room|message|auth)=")`
-  }
-  @to_app_session {
-    path /
-    header_regexp Cookie `(?:^|[;\s])vr_session=[^;\s]`
-  }
-  redir @to_app_query /app?{query} 302
-  redir @to_app_session /app 302
-
+(voice_runtime_config) {
   handle /runtime-config.json {
     header Content-Type "application/json; charset=utf-8"
     header Cache-Control "no-store"
     respond `{"contractVersion":"voice-room.runtime-config/v1","schemaVersion":1,"livekit":{"wsUrl":"{$LIVEKIT_GATE_PUBLIC_URL}","connectFallbacks":[]}}` 200
   }
+}
 
+(voice_widget_entry_only) {
   # Only the compact guest entry may be framed by external HTTPS hosts.
   @widget_embed path /embed/v1 /embed/v1/ /embed/v1/index.html
   handle @widget_embed {
@@ -123,10 +103,10 @@ import /etc/caddy/sites.d/*.caddy
       precompressed br gzip
     }
   }
+}
 
-  # Android App Links for the RuStore app (package voiceroom.app). Only a
-  # well-formed signing key fingerprint is published; otherwise the file is a
-  # 404, never the web page. Both matchers are named so they keep this order.
+(voice_android_links) {
+  # Both the old and new app origins may be verified by the native client.
   @assetlinks {
     path /.well-known/assetlinks.json
     expression `'{$ANDROID_RELEASE_CERT_SHA256}'.matches('^([0-9A-F]{2}:){31}[0-9A-F]{2}$')`
@@ -139,6 +119,9 @@ import /etc/caddy/sites.d/*.caddy
   handle @assetlinks_missing {
     respond 404
   }
+}
+
+(voice_web_api) {
 
   @api_metrics_allowed {
     path /api/metrics
@@ -168,7 +151,9 @@ import /etc/caddy/sites.d/*.caddy
       flush_interval -1
     }
   }
+}
 
+(voice_web_chunks) {
   # This release's chunks and those of earlier ones still running in open tabs
   # (config/caddy/archive-assets.sh). A missing chunk is a 404, never
   # index.html, so the client reloads instead of running HTML as a script.
@@ -178,11 +163,80 @@ import /etc/caddy/sites.d/*.caddy
       precompressed br gzip
     }
   }
+}
+
+(voice_web_files) {
+  root * /srv/web
+  file_server {
+    precompressed br gzip
+  }
+}
+
+import /etc/caddy/domains.d/*.caddy
+
+{$SITE_SCHEME}{$DOMAIN} {
+  import voice_web_headers
+  import voice_runtime_config
+  import voice_widget_entry_only
+  import voice_android_links
+  import voice_web_api
+  import voice_web_chunks
+
+  # Legacy pages remain crawlable so crawlers see the noindex response.
+  @app_private path /app /app/ /r/* /login /login/ /register /register/
+  header @app_private X-Robots-Tag "noindex"
+  @foreign_host not host {$CANONICAL_HOST:voiceroom.ru}
+  header @foreign_host X-Robots-Tag "noindex"
+
+  # Released Electron clients trust the original origin. Leave their legacy
+  # navigations on it while redirecting ordinary browser links.
+  @legacy_app_variant {
+    path /app /app/ /r/* /login /login/ /register /register/
+    expression `"{$APP_DOMAIN:}" != ""`
+  }
+  header @legacy_app_variant +Vary User-Agent
+  @legacy_app_page {
+    path /app /app/ /r/* /login /login/ /register /register/
+    expression `"{$APP_DOMAIN:}" != ""`
+    not header_regexp User-Agent `(?i)\bElectron/`
+  }
+  redir @legacy_app_page https://{$APP_DOMAIN:}{uri} 302
+  @to_app_query {
+    path /
+    expression `{http.request.uri.query}.matches("(^|&)(dm|room|message|auth)=")`
+  }
+  @to_app_session {
+    path /
+    header_regexp Cookie `(?:^|[;\s])vr_session=[^;\s]`
+  }
+  redir @to_app_query /app?{query} 302
+  redir @to_app_session /app 302
+
+  @old_widget_docs {
+    path /widgets/docs /widgets/docs/
+    expression `"{$DOCS_DOMAIN:}" != ""`
+  }
+  redir @old_widget_docs https://{$DOCS_DOMAIN:}/widgets/install 308
+  @old_docs_home {
+    path /docs /docs/
+    expression `"{$DOCS_DOMAIN:}" != ""`
+  }
+  redir @old_docs_home https://{$DOCS_DOMAIN:}/ 308
+  @old_doc_subpage {
+    path /docs/*
+    expression `"{$DOCS_DOMAIN:}" != ""`
+  }
+  handle @old_doc_subpage {
+    route {
+      uri strip_prefix /docs
+      redir https://{$DOCS_DOMAIN:}{uri} 308
+    }
+  }
 
   # The app's addresses (apps/web/src/router.ts) answer with its page. The
   # build's .br and .gz (precompressPlugin) when there are any; encode above
   # compresses the rest on the fly.
-  @app_page path /app /r/* /login /register /privacy /terms /licenses /widgets
+  @app_page path /app /app/ /r/* /login /login/ /register /register/ /privacy /terms /licenses /widgets
   handle @app_page {
     root * /srv/web
     rewrite * /index.html
@@ -196,23 +250,32 @@ import /etc/caddy/sites.d/*.caddy
   @site_file {
     not path /404 /404.html /index /index.html
     file {
-      root /srv/site
+      root /srv/static/site/current
       try_files {path} {path}.html {path}index.html
     }
   }
   handle @site_file {
-    root * /srv/site
+    root * /srv/static/site/current
     rewrite * {file_match.relative}
     file_server
+  }
+
+  # A new self-hosted instance can run rooms before publishing its site.
+  @empty_site_home {
+    path /
+    not file {
+      root /srv/static/site/current
+      try_files /index.html
+    }
+  }
+  handle @empty_site_home {
+    redir /app 302
   }
 
   # Anything else is a file of the app's build (the service worker, icons,
   # worklets) or does not exist.
   handle {
-    root * /srv/web
-    file_server {
-      precompressed br gzip
-    }
+    import voice_web_files
   }
 
   # A missing page answers with the site's 404 page. A missing script, style,
@@ -220,7 +283,7 @@ import /etc/caddy/sites.d/*.caddy
   handle_errors 404 {
     @missing_page not path /api/* /_app/* /_astro/* *.js *.mjs *.css *.json *.wasm *.map *.woff2
     handle @missing_page {
-      root * /srv/site
+      root * /srv/static/site/current
       rewrite * /404.html
       file_server {
         status 404

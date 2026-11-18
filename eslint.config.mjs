@@ -34,6 +34,7 @@ export default tseslint.config(
       'apps/web/public/**',
       'apps/site/public/**',
       'apps/site/.astro/**',
+      'apps/docs/**',
       'packages/shared/src/emoji.ts',
       'scripts/geoip/**',
       '**/*.cjs',

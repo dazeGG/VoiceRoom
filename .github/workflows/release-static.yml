@@ -1,0 +1,89 @@
+name: Release public site or docs
+
+on:
+  push:
+    # The production environment must allow each static component's tag pattern.
+    tags: ['site/v*', 'docs/v*']
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    outputs:
+      component: ${{ steps.tag.outputs.component }}
+      version: ${{ steps.tag.outputs.version }}
+      url: ${{ steps.tag.outputs.url }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Validate release tag and source
+        id: tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_REF_NAME" =~ ^(site|docs)/v([0-9]+\.[0-9]+\.[0-9]+)$ ]]
+          component="${BASH_REMATCH[1]}"
+          version="${BASH_REMATCH[2]}"
+          [ "$version" = "$(node -p "require('./apps/$component/package.json').version")" ]
+          git rev-list --first-parent origin/main | grep -Fx "$GITHUB_SHA" > /dev/null
+          case "$component" in
+            site) url=https://voiceroom.ru ;;
+            docs) url=https://docs.voiceroom.ru ;;
+          esac
+          printf 'component=%s\nversion=%s\nurl=%s\n' "$component" "$version" "$url" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: validate
+    uses: ./.github/workflows/build-static.yml
+    with:
+      component: ${{ needs.validate.outputs.component }}
+
+  deploy:
+    needs: [validate, build]
+    uses: ./.github/workflows/deploy-static.yml
+    with:
+      component: ${{ needs.validate.outputs.component }}
+      environment: production
+      url: ${{ needs.validate.outputs.url }}
+    secrets: inherit
+
+  release:
+    needs: [validate, deploy]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      COMPONENT: ${{ needs.validate.outputs.component }}
+      VERSION: ${{ needs.validate.outputs.version }}
+      PUBLIC_URL: ${{ needs.validate.outputs.url }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: actions/download-artifact@v5
+        with:
+          name: ${{ needs.validate.outputs.component }}-dist
+          path: static-dist
+      - name: Publish component release notes and build
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "$COMPONENT" in
+            site) title="VoiceRoom Site" ;;
+            docs) title="VoiceRoom Docs" ;;
+          esac
+          if gh release view "$GITHUB_REF_NAME" > /dev/null 2>&1; then exit 0; fi
+          previous="$(git tag --list "$COMPONENT/v*" --merged "$GITHUB_SHA" --sort=-version:refname |
+            awk -v current="$GITHUB_REF_NAME" '$0 != current && !seen { print; seen=1 }')"
+          range="${previous:+$previous..}$GITHUB_SHA"
+          notes="$RUNNER_TEMP/static-release.md"
+          printf 'Published to %s.\n\n' "$PUBLIC_URL" > "$notes"
+          git log -20 --format='- %s' --no-merges "$range" -- "apps/$COMPONENT" >> "$notes"
+          artifact="voiceroom-$COMPONENT-$VERSION.tar.gz"
+          tar -czf "$artifact" -C static-dist .
+          gh release create "$GITHUB_REF_NAME" "$artifact" --verify-tag --latest=false \
+            --title "$title $VERSION" --notes-file "$notes"

@@ -11,7 +11,7 @@ import {
   type RouterHistory
 } from 'vue-router';
 import { isShallowEntry } from '@/shared/utils/shallow-routing';
-import { APP_HOME } from './shared/app-home';
+import { APP_HOME, LEGACY_APP_HOME } from './shared/app-home';
 import MainRoute from './pages/MainRoute.vue';
 
 declare module 'vue-router' {
@@ -21,12 +21,8 @@ declare module 'vue-router' {
   }
 }
 
-export const routes: RouteRecordRaw[] = [
-  // `/` is the public site; the app starts at /app (app-home.ts). A navigation
-  // here to `/` (an old link, a notification's route) lands there with its query.
-  { path: '/', redirect: (to) => ({ path: APP_HOME, query: to.query, hash: to.hash }), meta: { routeId: '/' } },
-  // /app and `/r/:roomId` share one component so the lobby's address changes keep it (MainRoute.vue).
-  { path: APP_HOME, component: MainRoute, meta: { routeId: APP_HOME } },
+// Home and `/r/:roomId` share one component so lobby navigation keeps it mounted.
+const openAppRoutes: RouteRecordRaw[] = [
   { path: '/r/:roomId', component: MainRoute, meta: { routeId: '/r/[roomId]' } },
   { path: '/widgets', component: () => import('./pages/WidgetsPage.vue'), meta: { routeId: '/widgets' } },
   { path: '/login', component: () => import('./pages/LoginPage.vue'), meta: { routeId: '/login' } },
@@ -37,10 +33,21 @@ export const routes: RouteRecordRaw[] = [
   { path: '/:unknown(.*)*', component: () => import('./pages/NotFoundPage.vue'), meta: { routeId: null } }
 ];
 
-export function createAppRouter(history: RouterHistory = createWebHistory()): Router {
+function routesForHome(home: typeof APP_HOME): RouteRecordRaw[] {
+  const alias = home === '/' ? LEGACY_APP_HOME : '/';
+  return [
+    { path: alias, redirect: (to) => ({ path: home, query: to.query, hash: to.hash }), meta: { routeId: alias } },
+    { path: home, component: MainRoute, meta: { routeId: LEGACY_APP_HOME } },
+    ...openAppRoutes
+  ];
+}
+
+export const routes = routesForHome(APP_HOME);
+
+export function createAppRouter(history: RouterHistory = createWebHistory(), home = APP_HOME): Router {
   return createRouter({
     history,
-    routes,
+    routes: home === APP_HOME ? routes : routesForHome(home),
     // SvelteKit scrolled to the top on a navigation, kept the place on the back
     // button, and left it alone for a shallow entry or a `noScroll` change of
     // the query (the landing's ?auth=).

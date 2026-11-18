@@ -1,0 +1,28 @@
+{$SITE_SCHEME}{$DOCS_DOMAIN} {
+  encode zstd gzip
+  header {
+    Strict-Transport-Security "max-age=31536000"
+    X-Frame-Options "DENY"
+    X-Content-Type-Options "nosniff"
+    Referrer-Policy "strict-origin-when-cross-origin"
+    Permissions-Policy "microphone=(), camera=(), display-capture=(), geolocation=(), payment=()"
+    Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+  }
+  @foreign_docs_host not host docs.voiceroom.ru
+  header @foreign_docs_host X-Robots-Tag "noindex"
+  header Cache-Control "no-cache"
+
+  root * /srv/static/docs/current
+  try_files {path} {path}/index.html
+  file_server
+
+  handle_errors 404 {
+    @missing_page not path /_astro/* /pagefind/* *.js *.mjs *.css *.json *.wasm *.map *.woff2
+    handle @missing_page {
+      rewrite * /404.html
+      file_server {
+        status 404
+      }
+    }
+  }
+}

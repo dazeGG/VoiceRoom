@@ -109,18 +109,33 @@ test('a query past its time limit fails instead of holding its connection', { sk
   }
 });
 
-test('a pool with every connection taken fails a request instead of keeping it waiting', { skip }, async (t) => {
-  const { cleanup, databaseUrl } = await createTestDatabase(t);
-  t.after(cleanup);
-  const pool = createDbPool({ databaseUrl, logger: { error() {} }, max: 1, connectionWaitMs: 100 });
-  const held = await pool.connect();
-  try {
-    await assert.rejects(pool.query('SELECT 1'), /timeout/i);
-  } finally {
-    held.release();
-    await pool.end();
+test(
+  'a pool with every connection taken fails a request instead of keeping it waiting',
+  { skip, timeout: 15_000 },
+  async (t) => {
+    const { cleanup, databaseUrl } = await createTestDatabase(t);
+    t.after(cleanup);
+    const connectionWaitMs = 5_000;
+    const pool = createDbPool({ databaseUrl, logger: { error() {} }, max: 1, connectionWaitMs });
+    try {
+      const held = await pool.connect();
+      try {
+        // Measure the queue timeout after the only connection has been established.
+        t.mock.timers.enable({ apis: ['setTimeout'] });
+        const rejected = assert.rejects(pool.query('SELECT 1'), /timeout exceeded when trying to connect/);
+        assert.equal(pool.waitingCount, 1);
+        t.mock.timers.tick(connectionWaitMs);
+        await rejected;
+        assert.equal(pool.waitingCount, 0);
+      } finally {
+        t.mock.timers.reset();
+        held.release();
+      }
+    } finally {
+      await pool.end();
+    }
   }
-});
+);
 
 test('production Postgres names its slow queries, without the values bound to them', () => {
   const compose = readFileSync(new URL('../../../docker-compose.yml', import.meta.url), 'utf8');

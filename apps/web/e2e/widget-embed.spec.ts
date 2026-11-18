@@ -122,7 +122,7 @@ test.describe('guest widget across independent HTTPS parents', () => {
       await required(frames[0]).getByLabel('Ваше имя').fill('Player One');
       await required(frames[0]).getByRole('button', { name: 'Создать комнату', exact: true }).click();
       await expect(required(frames[0]).getByRole('status')).toHaveText('В комнате', { timeout: 30_000 });
-      const code = await required(frames[0]).locator('p strong').textContent();
+      const code = await required(frames[0]).locator('.widget-call__code').textContent();
       expect(code).toBeTruthy();
       createdCode = code;
       await required(frames[1]).getByLabel('Ваше имя').fill('Player Two');
@@ -130,7 +130,9 @@ test.describe('guest widget across independent HTTPS parents', () => {
       await required(frames[1]).getByRole('button', { name: 'Войти', exact: true }).click();
       await expect(required(frames[1]).getByRole('status')).toHaveText('В комнате', { timeout: 30_000 });
       for (const frame of frames) {
-        await frame.getByRole('button', { name: 'Включить звук', exact: true }).click();
+        await frame.locator('.widget-shell').hover();
+        const enableAudio = frame.getByRole('button', { name: 'Включить звук', exact: true });
+        if (await enableAudio.isVisible()) await enableAudio.click();
         await expect
           .poll(
             () =>
@@ -149,12 +151,13 @@ test.describe('guest widget across independent HTTPS parents', () => {
           )
           .toBe(true);
       }
+      await required(frames[0]).locator('.widget-shell').hover();
       await required(frames[0]).getByRole('button', { name: 'Включить камеру', exact: true }).click();
       await expect
         .poll(
           () =>
             required(frames[1])
-              .locator('video')
+              .locator('.participant video')
               .evaluateAll((elements) =>
                 elements.some(
                   (element) =>
@@ -166,15 +169,15 @@ test.describe('guest widget across independent HTTPS parents', () => {
           { timeout: 30_000 }
         )
         .toBe(true);
-      await required(frames[0]).getByLabel('Сообщение', { exact: true }).fill('Guest cross-origin proof');
-      await required(frames[0]).getByRole('button', { name: 'Отправить', exact: true }).click();
-      await expect(required(frames[1]).getByText('Guest cross-origin proof', { exact: true })).toBeVisible();
+      for (const frame of frames) {
+        await expect(frame.getByRole('button', { name: 'Текстовый чат', exact: true })).toHaveCount(0);
+      }
       for (let count = 0; count < 10; count++) {
         await required(pages[0]).getByRole('button', { name: 'VoiceRoom • В звонке', exact: true }).click();
         await required(pages[0]).getByRole('button', { name: 'VoiceRoom • В звонке', exact: true }).click();
       }
       await expect(required(frames[0]).getByRole('status')).toHaveText('В комнате');
-      await expect(required(frames[0]).locator('p strong')).toHaveText(required(code));
+      await expect(required(frames[0]).locator('.widget-call__code')).toHaveText(required(code));
       await expect
         .poll(() =>
           required(frames[1])
@@ -219,6 +222,7 @@ test.describe('guest widget across independent HTTPS parents', () => {
             .toBe(false);
         }
       } else {
+        await required(frames[0]).locator('.widget-shell').hover();
         await required(frames[0]).getByRole('button', { name: 'Выйти', exact: true }).click();
         await expect(required(frames[0]).getByRole('status')).toHaveText('Готов к подключению');
       }
@@ -273,7 +277,7 @@ test.describe('guest widget across independent HTTPS parents', () => {
     page
   }) => {
     await page.goto(required(widgetParents[0]));
-    const config = { ...defaultWidgetConfig, background: '#123456', radius: 7, width: 444 };
+    const config = { ...defaultWidgetConfig, background: '#123456', radius: 7, width: 444, height: 520 };
     await page.evaluate(
       ({ origin, serialized }) => {
         document.body.replaceChildren();

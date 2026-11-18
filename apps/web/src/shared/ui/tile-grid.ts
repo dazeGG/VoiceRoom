@@ -14,17 +14,14 @@ export interface TileGridFit {
   scroll: boolean;
 }
 
-export function fitTileGrid({
-  width,
-  height,
-  count,
-  gap
-}: {
+interface TileGridBox {
   width: number;
   height: number;
   count: number;
   gap: number;
-}): TileGridFit {
+}
+
+export function fitTileGrid({ width, height, count, gap }: TileGridBox, minTileWidth = MIN_TILE_WIDTH): TileGridFit {
   const across = (columns: number): number => (width - gap * (columns - 1)) / columns;
   let best = { columns: 1, tileWidth: 0, empty: Infinity };
   for (let columns = 1; columns <= Math.max(1, count); columns += 1) {
@@ -36,30 +33,55 @@ export function fitTileGrid({
     const tie = Math.abs(tileWidth - best.tileWidth) <= 0.5;
     if ((!tie && tileWidth > best.tileWidth) || (tie && empty < best.empty)) best = { columns, tileWidth, empty };
   }
-  if (best.tileWidth >= MIN_TILE_WIDTH)
+  if (best.tileWidth >= minTileWidth)
     return { columns: best.columns, tileWidth: Math.floor(best.tileWidth), scroll: false };
-  const columns = Math.max(1, Math.min(count, Math.floor((width + gap) / (MIN_TILE_WIDTH + gap))));
+  const columns = Math.max(1, Math.min(count, Math.floor((width + gap) / (minTileWidth + gap))));
   return { columns, tileWidth: Math.floor(across(columns)), scroll: true };
 }
 
+export function fitWidgetTileGrid(box: TileGridBox): TileGridFit {
+  const { count, width, height, gap } = box;
+  const minWidth = 32;
+  if (count < 9 || width < 3 * minWidth + 2 * gap) return fitTileGrid(box, minWidth);
+  const columns = 3;
+  const rows = Math.ceil(count / columns);
+  const byWidth = (width - gap * (columns - 1)) / columns;
+  const byHeight = ((height - gap * (rows - 1)) / rows) * TILE_ASPECT;
+  return {
+    columns,
+    tileWidth: Math.floor(Math.min(byWidth, Math.max(minWidth, byHeight))),
+    scroll: byHeight < minWidth
+  };
+}
+
 /** Sizes the tiles of a grid to its own box, again whenever it resizes or a tile comes or goes. */
-export function fitTiles(grid: HTMLElement): () => void {
+export function fitTiles(grid: HTMLElement, fitGrid = fitTileGrid): () => void {
+  const widget = fitGrid === fitWidgetTileGrid;
   const apply = (): void => {
     // The size is read once, before anything is written: a new tile width lays
     // the grid out again, which can bring its scrollbar in or out and change
     // clientWidth. A margin taken from that second width no longer matches the
     // columns, the row wraps, the scrollbar flips and the grid refits forever.
-    const width = grid.clientWidth;
+    let width = widget ? grid.offsetWidth : grid.clientWidth;
     const height = grid.clientHeight;
     // A hidden grid has no size to fit to; the tiles keep the stylesheet's own.
     if (width === 0 || height === 0) return;
     const gap = Number.parseFloat(getComputedStyle(grid).columnGap) || 0;
-    const fit = fitTileGrid({ width, height, count: grid.childElementCount, gap });
+    const count = grid.childElementCount;
+    let fit = fitGrid({ width, height, count, gap });
+    // Fit against the full widget width first. Only a stage that must scroll uses the narrower scrollport.
+    if (widget && fit.scroll && grid.clientWidth > 0 && grid.clientWidth < width) {
+      width = grid.clientWidth;
+      fit = fitGrid({ width, height, count, gap });
+    }
     const row = fit.columns * fit.tileWidth + (fit.columns - 1) * gap;
     grid.style.setProperty('--tile-width', `${fit.tileWidth}px`);
-    // The rows are held to the chosen columns, or the tiles would fill them past it.
     grid.style.setProperty('--tile-gutter', `${Math.floor((width - row) / 2)}px`);
     grid.dataset.scroll = String(fit.scroll);
+    if (widget) {
+      grid.classList.toggle('tile-grid--scroll', fit.scroll);
+      grid.classList.toggle('widget-call__tiles--fit', !fit.scroll);
+    }
   };
   const resize = new ResizeObserver(apply);
   const tiles = new MutationObserver(apply);
@@ -72,5 +94,10 @@ export function fitTiles(grid: HTMLElement): () => void {
     grid.style.removeProperty('--tile-width');
     grid.style.removeProperty('--tile-gutter');
     delete grid.dataset.scroll;
+    if (widget) grid.classList.remove('tile-grid--scroll', 'widget-call__tiles--fit');
   };
+}
+
+export function fitWidgetTiles(grid: HTMLElement): () => void {
+  return fitTiles(grid, fitWidgetTileGrid);
 }

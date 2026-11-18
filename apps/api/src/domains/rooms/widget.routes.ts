@@ -43,7 +43,7 @@ export function registerWidgetRoomRoutes(
         ownerId: null,
         name: '',
         kind: 'widget',
-        widgetChatEnabled: request.body.chat
+        widgetChatEnabled: false
       });
       if (created.status === 'quota_exceeded')
         return reply.code(429).send(failure('Too many temporary rooms', { code: 'temporary_room_quota' }));
@@ -52,7 +52,7 @@ export function registerWidgetRoomRoutes(
       return reply.code(201).send({
         ok: true as const,
         roomId: created.room.id,
-        chat: created.room.widgetChatEnabled === true,
+        chat: false,
         maxRoomPeers: deps.maxRoomPeers
       });
     }
@@ -67,7 +67,7 @@ export function registerWidgetRoomRoutes(
       return {
         ok: true as const,
         roomId: room.id,
-        chat: room.widgetChatEnabled === true,
+        chat: false,
         maxRoomPeers: deps.maxRoomPeers,
         peers: room.peers.size
       };

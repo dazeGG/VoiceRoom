@@ -39,8 +39,12 @@ export function createRoomFanout(deps: RoomFanoutDeps) {
     envelope: ServerEnvelope,
     { except = null }: { except?: WsConnection | null } = {}
   ): void {
+    const chatEvent =
+      envelope.type.startsWith('room.chat.') || envelope.type === 'room.pins' || envelope.type === 'reaction.updated';
     for (const connection of wsRegistry.roomDetailSubscribers(roomId)) {
       if (connection === except || !connectionWantsRoomDetail(connection, roomId)) continue;
+      // Old widget rooms can still have queued deliveries or stored messages under moderation.
+      if (chatEvent && connection.roomSurface === 'widget') continue;
       wsRegistry.sendToConnection(connection, envelope);
     }
   }
