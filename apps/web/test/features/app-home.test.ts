@@ -47,6 +47,7 @@ test('a navigation to `/` lands on /app with its query, as an old link or a noti
 test('the dedicated app host uses / and preserves legacy query and hash', async () => {
   expect(appHomeForHost('voiceroom.ru')).toBe('/app');
   expect(appHomeForHost('dev.voiceroom.ru')).toBe('/app');
+  expect(appHomeForHost('app.dev.voiceroom.ru')).toBe('/');
   const router = createAppRouter(createMemoryHistory(), appHomeForHost('APP.VoiceRoom.ru'));
   await router.push('/app?auth=login#room');
   expect(router.currentRoute.value.fullPath).toBe('/?auth=login#room');

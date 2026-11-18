@@ -321,9 +321,9 @@ docker compose exec caddy caddy reload --config /etc/caddy/Caddyfile --adapter c
 The permanent dev stack uses `/home/daze/VoiceRoom-dev` on the production host,
 with Compose project `voiceroom-dev`. It has independent PostgreSQL, uploads,
 media, web archives and secrets. Production data is never copied into dev.
-The production Caddy terminates HTTPS for `dev.voiceroom.ru`,
-`admin.dev.voiceroom.ru` and `livekit.dev.voiceroom.ru`; all three A records point
-at the host. The inner Caddy serves HTTP without publishing host ports.
+The production Caddy terminates HTTPS for the dev site, app, docs, admin and
+LiveKit hosts. Their A records point at the same host. The inner Caddy serves
+HTTP without publishing host ports.
 
 Use this non-secret part of the dev `.env`, plus fresh independent values for
 `POSTGRES_PASSWORD`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`,
@@ -333,6 +333,8 @@ Use this non-secret part of the dev `.env`, plus fresh independent values for
 COMPOSE_PROJECT_NAME=voiceroom-dev
 COMPOSE_FILE=docker-compose.yml:docker-compose.behind-edge.yml
 DOMAIN=dev.voiceroom.ru
+APP_DOMAIN=app.dev.voiceroom.ru
+DOCS_DOMAIN=docs.dev.voiceroom.ru
 ADMIN_DOMAIN=admin.dev.voiceroom.ru
 LIVEKIT_DOMAIN=livekit.dev.voiceroom.ru
 LIVEKIT_RTC_TCP_PORT=7891
@@ -380,7 +382,7 @@ membership when a future deployment recreates it.
 Add `config/caddy/sites.d/voiceroom-dev.caddy` in the production checkout:
 
 ```caddy
-dev.voiceroom.ru, admin.dev.voiceroom.ru, livekit.dev.voiceroom.ru {
+dev.voiceroom.ru, app.dev.voiceroom.ru, docs.dev.voiceroom.ru, admin.dev.voiceroom.ru, livekit.dev.voiceroom.ru {
   reverse_proxy voiceroom-dev-edge:80 {
     header_up X-VoiceRoom-Client-IP {remote_host}
   }
