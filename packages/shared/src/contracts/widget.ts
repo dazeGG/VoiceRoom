@@ -72,7 +72,7 @@ export function decodeWidgetEmbedConfig(attribute: string): WidgetConfig {
 export function widgetEmbedMarkup(config: WidgetConfig, origin = WIDGET_SERVICE_ORIGIN): string {
   const base = widgetOrigin(origin);
   // A single-quoted HTML attribute keeps the JSON quotes readable.
-  const value = encodeWidgetConfig(config)
+  const value = JSON.stringify(parseWidgetConfig(config), null, 2)
     .replaceAll('&', '&amp;')
     .replaceAll("'", '&#39;')
     .replaceAll('<', '&lt;')

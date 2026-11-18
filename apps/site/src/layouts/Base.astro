@@ -5,6 +5,7 @@ import '../styles/site.scss';
 import Icon from '../components/Icon.astro';
 import {
   APP_HREF,
+  DESKTOP_SOURCE_URL,
   LEGAL_LINKS,
   NAV_PAGES,
   OG_IMAGE,
@@ -76,9 +77,9 @@ const current = Astro.url.pathname.replace(/\.html$/, '');
             ))
           }
         </nav>
-        <a class="site-button site-button--small" href={APP_HREF}
-          >Открыть<span class="site-header__app-name"> VoiceRoom</span></a
-        >
+        <a class="site-button site-button--small" href={APP_HREF}>
+          <span>Открыть<span class="site-header__app-name"> VoiceRoom</span></span>
+        </a>
         <details class="site-menu">
           <summary class="site-menu__toggle">
             <Icon name="menu" />
@@ -117,7 +118,8 @@ const current = Astro.url.pathname.replace(/\.html$/, '');
         </nav>
         <nav class="site-footer__column" aria-label="Проект">
           <p class="site-footer__heading">Проект</p>
-          <a href={SOURCE_URL}>Исходный код на GitHub</a>
+          <a href={SOURCE_URL}>Веб-версия на GitHub</a>
+          <a href={DESKTOP_SOURCE_URL}>Приложение на GitHub</a>
           <a href={SELF_HOSTING_URL}>Развернуть у себя</a>
           {LEGAL_LINKS.map((link) => <a href={link.href}>{link.label}</a>)}
         </nav>

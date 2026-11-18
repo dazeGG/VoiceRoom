@@ -17,6 +17,10 @@ export default defineConfig({
       favicon: '/voiceroom-icon.svg',
       logo: { src: './public/voiceroom-icon.svg', replacesTitle: false },
       customCss: ['./src/styles/voice-room.css'],
+      components: {
+        ThemeProvider: './src/components/FixedTheme.astro',
+        ThemeSelect: './src/components/FixedTheme.astro'
+      },
       sidebar: [
         { label: 'Главная', slug: '' },
         { label: 'Виджет для сайта', items: [{ label: 'Установка виджета', slug: 'widgets/install' }] },

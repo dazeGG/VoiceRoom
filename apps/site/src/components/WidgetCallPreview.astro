@@ -1,0 +1,126 @@
+---
+import { avatarInitial } from '../../../web/src/shared/utils/avatar-initial';
+import Icon from './Icon.astro';
+
+interface Props {
+  guests: readonly string[];
+}
+
+const { guests } = Astro.props;
+const devices = [
+  {
+    id: 'mic',
+    toggle: 'Выключить микрофон',
+    label: 'Выбрать микрофон',
+    heading: 'Настройки микрофона',
+    panel: 'Микрофон',
+    icon: 'mic',
+    example: 'Встроенный микрофон'
+  },
+  {
+    id: 'output',
+    toggle: 'Выключить звук',
+    label: 'Выбрать динамик',
+    heading: 'Настройки динамика',
+    panel: 'Вывод звука',
+    icon: 'headphones',
+    example: 'Встроенные динамики'
+  },
+  {
+    id: 'camera',
+    toggle: 'Включить камеру',
+    label: 'Выбрать камеру',
+    heading: 'Настройки камеры',
+    panel: 'Камера',
+    icon: 'video-off',
+    example: 'Встроенная камера'
+  }
+] as const;
+---
+
+<div class="widget-preview__call" data-preview-call hidden>
+  <div class="widget-preview__call-header">
+    <div class="widget-preview__room-id">
+      <button type="button" class="widget-preview__room-code" aria-label="Скопировать код комнаты" data-preview-copy-room-code>
+        <code data-preview-room-code></code>
+        <span class="widget-preview__copy-icon"><Icon name="copy" size={14} stroke={2} /></span>
+        <span data-preview-copy-check hidden><Icon name="check" size={14} stroke={2} /></span>
+      </button>
+      <span class="widget-preview__copy-feedback" data-preview-copy-feedback role="status"></span>
+    </div>
+  </div>
+  <ul class="tile-grid widget-preview__tiles" tabindex="0" aria-label="Участники комнаты">
+    {guests.map((name, index) => (
+      <li
+        class:list={['participant', 'participant--grid', { 'participant--speaking': index === 1, 'participant--local': index === 0 }]}
+        data-preview-peer
+        hidden={index >= 4}
+      >
+        <div class="participant__ring" aria-hidden="true">
+          <span class="participant__avatar">{avatarInitial(name)}</span>
+        </div>
+        <div class="participant__copy">
+          <h2 class="participant__heading">
+            <span class="participant__name">{name}</span>
+          </h2>
+        </div>
+      </li>
+    ))}
+  </ul>
+  <div class="room-dock widget-preview__dock" role="group" aria-label="Управление звонком">
+    <div class="room-dock__shell">
+      {devices.map(({ id, toggle, label, icon }) => (
+        <div class="room-dock__cluster" data-preview-camera-group={id === 'camera' ? '' : undefined}>
+          <div class="room-dock__split">
+            <button type="button" class:list={['room-dock__button', `room-dock__button--${id}`]} aria-label={toggle} disabled>
+              <Icon name={icon} stroke={2} />
+            </button>
+            <button
+              type="button"
+              class="room-dock__menu-button"
+              aria-label={label}
+              aria-expanded="false"
+              aria-controls={`widget-preview-device-${id}`}
+              data-preview-device={id}
+            ><Icon name="chevron-down" stroke={2} /></button>
+          </div>
+        </div>
+      ))}
+      <div class="room-dock__connection-wrap">
+        <div class="room-dock__connection room-dock__connection--connected" aria-label="Хорошая связь" title="Хорошая связь" role="img">
+          <span class="room-dock__bar" aria-hidden="true"></span>
+          <span class="room-dock__bar" aria-hidden="true"></span>
+          <span class="room-dock__bar" aria-hidden="true"></span>
+        </div>
+      </div>
+      <button type="button" class="room-dock__button room-dock__button--leave" aria-label="Покинуть звонок" disabled>
+        <Icon name="phone-off" stroke={2} />
+      </button>
+    </div>
+  </div>
+  {devices.map(({ id, heading, panel, example }) => (
+    <div id={`widget-preview-device-${id}`} class="widget-preview__device-panel" data-preview-device-panel={id} hidden>
+      <div class="widget-preview__device-header">
+        <strong>{heading}</strong>
+        <button type="button" aria-label="Закрыть" data-preview-device-close><Icon name="x" size={16} stroke={2} /></button>
+      </div>
+      <label class="room-dock__field">
+        <span>{panel}</span>
+        <select aria-label={panel}>
+          <option>По умолчанию</option>
+          <option>{example}</option>
+        </select>
+      </label>
+      {id === 'mic' && (
+        <label class="room-dock__field">
+          <span>Шумоподавление</span>
+          <select aria-label="Шумоподавление">
+            <option>RNNoise</option>
+            <option>Браузерное</option>
+            <option>Выкл.</option>
+          </select>
+        </label>
+      )}
+    </div>
+  ))}
+</div>

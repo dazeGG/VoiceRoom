@@ -1,0 +1,37 @@
+---
+interface Props {
+  id: string;
+  label: string;
+  min: number;
+  max: number;
+  value: number;
+  name?: string;
+  previewControl?: 'width' | 'height' | 'count';
+  unit?: string;
+}
+
+const { id, label, min, max, value, name, previewControl, unit = 'px' } = Astro.props;
+const percent = ((value - min) / (max - min)) * 100;
+const valueText = unit ? `${value} ${unit}` : String(value);
+---
+
+<div class="widget-builder__slider" data-size-slider>
+  <div class="widget-builder__slider-label">
+    <label for={id}>{label}</label>
+    <output for={id} aria-hidden="true">{valueText}</output>
+  </div>
+  <input
+    id={id}
+    type="range"
+    {name}
+    {min}
+    {max}
+    {value}
+    aria-valuetext={valueText}
+    style={`--widget-slider-position: ${percent}%`}
+    data-slider-unit={unit}
+    data-preview-width={previewControl === 'width' ? '' : undefined}
+    data-preview-height={previewControl === 'height' ? '' : undefined}
+    data-preview-count={previewControl === 'count' ? '' : undefined}
+  />
+</div>

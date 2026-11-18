@@ -12,8 +12,9 @@ export const APP_HREF = APP_HOME;
 /** The app makes a temporary room as soon as it opens (apps/web/src/features/home/model/start-room-request.ts). */
 export { START_ROOM_HREF };
 
-export const RELEASES_URL = 'https://github.com/dazeGG/VoiceRoomDesktop/releases/latest';
 export const SOURCE_URL = 'https://github.com/dazeGG/VoiceRoom';
+export const DESKTOP_SOURCE_URL = 'https://github.com/dazeGG/VoiceRoomDesktop';
+export const RELEASES_URL = `${DESKTOP_SOURCE_URL}/releases/latest`;
 export const SELF_HOSTING_URL = 'https://github.com/dazeGG/VoiceRoom/blob/main/docs/SELF_HOSTING.md';
 /** The command an unsigned macOS build needs once (apps/web/src/platform/desktop-builds.ts). */
 export const QUARANTINE_CMD = 'sudo xattr -rd com.apple.quarantine /Applications/VoiceRoom.app';
@@ -56,6 +57,13 @@ export const PAGES = {
     description:
       'Голосовой чат для игр: шумоподавление, push-to-talk, хоткеи поверх игры и оверлей с говорящими. Друзья заходят по ссылке без регистрации.',
     nav: 'Для игр'
+  },
+  widgets: {
+    path: '/widgets',
+    title: 'Голосовой виджет для сайта — VoiceRoom',
+    description:
+      'Настройте голосовой виджет VoiceRoom и вставьте его на свой сайт. Гости смогут создавать комнаты и подключаться к ним по коду без регистрации.',
+    nav: 'Виджеты'
   },
   download: {
     path: '/download',

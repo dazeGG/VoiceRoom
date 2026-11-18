@@ -54,6 +54,7 @@ test(
         LIVEKIT_DOMAIN: 'livekit.voiceroom.ru'
       },
       files: { 'embed/v1/index.html': 'guest embed', 'widget/v1/loader.js': 'widget module' },
+      siteFiles: { 'index.html': 'site home', 'widgets.html': 'public widget configurator' },
       docsFiles: {
         'index.html': 'documentation',
         'widgets/install/index.html': 'widget guide',
@@ -78,7 +79,9 @@ test(
       (await get(origin, 'voiceroom.ru', invite, { 'User-Agent': 'VoiceRoom/1.0 Electron/40.0' })).status,
       200
     );
-    assert.equal((await get(origin, 'voiceroom.ru', '/widgets')).status, 200);
+    const widgets = await get(origin, 'voiceroom.ru', '/widgets');
+    assert.equal(widgets.status, 200);
+    assert.equal(widgets.body, 'public widget configurator');
     const embed = await get(origin, 'voiceroom.ru', '/embed/v1');
     assert.equal(embed.body, 'guest embed');
     assert.match(embed.csp, /frame-ancestors https:/);
@@ -127,6 +130,9 @@ test(
     assert.equal(config.livekit.wsUrl, 'wss://livekit.dev.example.test');
     // Plain HTTP, not a redirect to HTTPS: the host's Caddy already terminated TLS.
     assert.equal((await get(origin, 'dev.example.test', '/')).status, 200);
+    const legacyWidgets = await get(origin, 'dev.example.test', '/widgets');
+    assert.equal(legacyWidgets.status, 200);
+    assert.match(legacyWidgets.body, /web/);
     // The LiveKit name routes to the gate, absent in this test.
     assert.equal((await get(origin, 'livekit.dev.example.test', '/')).status, 502);
   }

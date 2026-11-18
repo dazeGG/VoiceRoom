@@ -28,6 +28,10 @@ test('routes shared dependencies and validation files to their consumers', () =>
   assert.deepEqual(changedComponents(['packages/shared/package.json']), appAndSite);
   assert.deepEqual(changedComponents(['apps/web/src/styles/_tokens.scss']), appAndSite);
   assert.deepEqual(changedComponents(['apps/web/src/assets/fonts/onest-latin.woff2']), appAndSite);
+  assert.deepEqual(changedComponents(['apps/web/src/styles/room/_room-dock.scss']), appAndSite);
+  assert.deepEqual(changedComponents(['apps/web/src/styles/_mixins.scss']), appAndSite);
+  assert.deepEqual(changedComponents(['apps/web/src/shared/ui/tile-grid.ts']), appAndSite);
+  assert.deepEqual(changedComponents(['apps/web/src/shared/utils/avatar-initial.ts']), appAndSite);
   assert.deepEqual(changedComponents(['scripts/check-type-coverage.mts']), appAndSite);
   assert.deepEqual(changedComponents(['scripts/test/web-text-contrast.test.mts']), appAndSite);
   assert.deepEqual(changedComponents(['.github/workflows/ci.yml']), everyLane);
