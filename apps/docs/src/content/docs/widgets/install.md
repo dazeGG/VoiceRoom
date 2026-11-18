@@ -18,8 +18,17 @@ description: Настройка голосового виджета для са�
 
 Пример кода для блока на странице:
 
-```html
-<div data-voiceroom-widget data-config='{"version":1,"mode":"inline","background":"#171923","text":"#ffffff","accent":"#a5b4fc","radius":16,"corner":"bottom-right","offset":16}'></div>
+```html wrap
+<div data-voiceroom-widget data-config='{
+  "version": 1,
+  "mode": "inline",
+  "background": "#171923",
+  "text": "#ffffff",
+  "accent": "#a5b4fc",
+  "radius": 16,
+  "corner": "bottom-right",
+  "offset": 16
+}'></div>
 <script type="module" src="https://voiceroom.ru/widget/v1/loader.js" defer></script>
 ```
 

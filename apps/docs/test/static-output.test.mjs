@@ -39,3 +39,11 @@ test('Pagefind generated a local Russian search index', () => {
   assert.ok(metadata.languages.ru, 'The index must include Russian pages');
   assert.ok(existsSync(join(dist, 'pagefind/pagefind.js')));
 });
+
+test('every documentation page renders dark without theme selection or preference scripts', () => {
+  for (const page of globSync('**/*.html', { cwd: dist })) {
+    const html = readPage(page);
+    assert.match(html, /<html\b[^>]*\bdata-theme="dark"/);
+    assert.doesNotMatch(html, /starlight-theme/);
+  }
+});

@@ -233,10 +233,24 @@ import /etc/caddy/domains.d/*.caddy
     }
   }
 
+  # Prefer the public widget configurator once the site has published it.
+  @site_widget {
+    path /widgets /widgets/
+    file {
+      root /srv/static/site/current
+      try_files /widgets.html
+    }
+  }
+  handle @site_widget {
+    root * /srv/static/site/current
+    rewrite * {file_match.relative}
+    file_server
+  }
+
   # The app's addresses (apps/web/src/router.ts) answer with its page. The
   # build's .br and .gz (precompressPlugin) when there are any; encode above
   # compresses the rest on the fly.
-  @app_page path /app /app/ /r/* /login /login/ /register /register/ /privacy /terms /licenses /widgets
+  @app_page path /app /app/ /r/* /login /login/ /register /register/ /privacy /terms /licenses /widgets /widgets/
   handle @app_page {
     root * /srv/web
     rewrite * /index.html
