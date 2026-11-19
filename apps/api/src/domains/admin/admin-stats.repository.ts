@@ -14,6 +14,9 @@ import { kyselyOn } from '../../platform/db/kysely.ts';
 const MSK = sql.lit('Europe/Moscow');
 const mskDay = (column: string) => sql`(${sql.ref(column)} AT TIME ZONE ${MSK})::date`;
 
+/** Today's finished calls in widget rooms (AdminWidgets.today). */
+export type WidgetDay = { calls: number; guests: number; distinctIpKeys: number; voiceMinutes: number };
+
 export type OverviewCounts = {
   day: string;
   activeToday: number;
@@ -30,6 +33,8 @@ export type OverviewCounts = {
   openReports: number;
   callsToday: number;
   callsYesterday: number;
+  widgetCallsToday: number;
+  widgetGuestsToday: number;
   oldestOpenReportAt: number | null;
   openReportReasons: ReportReason[];
 };
@@ -58,6 +63,8 @@ type OverviewRow = {
   open_reports: Count;
   calls_today: Count;
   calls_yesterday: Count;
+  widget_calls_today: Count;
+  widget_guests_today: Count;
   oldest_open_report: Date | null;
   open_report_reasons: string[] | null;
 };
@@ -114,40 +121,67 @@ const liveRetention = sql`
   GROUP BY c.week
 `;
 
+/** A call still going on: its room, and when it began. */
+export type LiveCall = { roomId: string; since: number };
+
+const today = sql`(now() AT TIME ZONE ${MSK})::date`;
+const dayStart = (day: unknown) => sql`(${day})::timestamp AT TIME ZONE ${MSK}`;
+const yesterdayStart = dayStart(sql`${today} - 1`);
+
+/**
+ * The calls of yesterday and today gathered from their stays, as `finished`
+ * (those not still going on), and today's finished calls in widget rooms as
+ * `widget_today` with their stays as `widget_stays`. A call's kind is its
+ * first stay's; a person is an account, else a browser, else the stay itself.
+ */
+function dayCalls(liveCalls: readonly LiveCall[]) {
+  const live = liveCalls.length
+    ? sql`(VALUES ${sql.join(liveCalls.map((call) => sql`(${call.roomId}::text, ${new Date(call.since)}::timestamptz)`))}) AS l(room_id, since)`
+    : sql`(SELECT NULL::text AS room_id, NULL::timestamptz AS since WHERE false) AS l`;
+  return sql`
+    WITH stays AS (
+      SELECT id, room_id, room_kind, user_id, client_id, guest_id, ip_key, joined_at, left_at,
+        max(left_at) OVER (
+          PARTITION BY room_id ORDER BY joined_at, id ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING
+        ) AS earlier_end
+      FROM voice_sessions
+      WHERE room_id IS NOT NULL AND room_id <> '' AND left_at >= ${yesterdayStart} - interval '1 day'
+    ),
+    numbered AS (
+      SELECT *, sum(CASE WHEN earlier_end IS NULL OR joined_at > earlier_end THEN 1 ELSE 0 END) OVER (
+        PARTITION BY room_id ORDER BY joined_at, id
+      ) AS call_no
+      FROM stays
+    ),
+    calls AS (
+      SELECT room_id, call_no, min(joined_at) AS started_at, max(left_at) AS ended_at,
+        (array_agg(room_kind ORDER BY joined_at, id))[1] AS kind
+      FROM numbered GROUP BY room_id, call_no
+    ),
+    finished AS (
+      SELECT c.* FROM calls c
+      WHERE NOT EXISTS (SELECT 1 FROM ${live} WHERE l.room_id = c.room_id AND c.ended_at >= l.since)
+    ),
+    widget_today AS (
+      SELECT * FROM finished
+      WHERE kind = 'widget' AND ended_at >= ${dayStart(today)} AND started_at < ${dayStart(sql`${today} + 1`)}
+    ),
+    widget_stays AS (
+      SELECT n.*, coalesce(n.user_id, n.client_id::text, n.guest_id::text, n.id::text) AS person
+      FROM numbered n JOIN widget_today w USING (room_id, call_no)
+    )`;
+}
+
 export function createAdminStatsRepository({ pool }: { pool: pg.Pool }) {
   const db = kyselyOn(pool);
 
   /** `liveCalls` are the calls still going on: their stays already over count with them, not as a call of their own. */
-  async function overview(liveCalls: readonly { roomId: string; since: number }[] = []): Promise<OverviewCounts> {
-    const today = sql`(now() AT TIME ZONE ${MSK})::date`;
-    const dayStart = (day: unknown) => sql`(${day})::timestamp AT TIME ZONE ${MSK}`;
-    const yesterdayStart = dayStart(sql`${today} - 1`);
-    const live = liveCalls.length
-      ? sql`(VALUES ${sql.join(liveCalls.map((call) => sql`(${call.roomId}::text, ${new Date(call.since)}::timestamptz)`))}) AS l(room_id, since)`
-      : sql`(SELECT NULL::text AS room_id, NULL::timestamptz AS since WHERE false) AS l`;
+  async function overview(liveCalls: readonly LiveCall[] = []): Promise<OverviewCounts> {
     const result = await sql<OverviewRow>`
-      WITH stays AS (
-        SELECT id, room_id, joined_at, left_at,
-          max(left_at) OVER (
-            PARTITION BY room_id ORDER BY joined_at, id ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING
-          ) AS earlier_end
-        FROM voice_sessions
-        WHERE room_id IS NOT NULL AND room_id <> '' AND left_at >= ${yesterdayStart} - interval '1 day'
-      ),
-      numbered AS (
-        SELECT *, sum(CASE WHEN earlier_end IS NULL OR joined_at > earlier_end THEN 1 ELSE 0 END) OVER (
-          PARTITION BY room_id ORDER BY joined_at, id
-        ) AS call_no
-        FROM stays
-      ),
-      calls AS (
-        SELECT room_id, min(joined_at) AS started_at, max(left_at) AS ended_at FROM numbered GROUP BY room_id, call_no
-      ),
-      finished AS (
-        SELECT c.* FROM calls c
-        WHERE NOT EXISTS (SELECT 1 FROM ${live} WHERE l.room_id = c.room_id AND c.ended_at >= l.since)
-      )
+      ${dayCalls(liveCalls)}
       SELECT
+        (SELECT count(*) FROM widget_today) AS widget_calls_today,
+        (SELECT count(DISTINCT person) FROM widget_stays) AS widget_guests_today,
         (SELECT count(*) FROM finished WHERE ended_at >= ${dayStart(today)} AND started_at < ${dayStart(sql`${today} + 1`)}) AS calls_today,
         (SELECT count(*) FROM finished WHERE ended_at >= ${yesterdayStart} AND started_at < ${dayStart(today)}) AS calls_yesterday,
         (SELECT min(created_at) FROM content_reports WHERE status = 'open') AS oldest_open_report,
@@ -185,8 +219,29 @@ export function createAdminStatsRepository({ pool }: { pool: pg.Pool }) {
       openReports: n(row?.open_reports),
       callsToday: n(row?.calls_today),
       callsYesterday: n(row?.calls_yesterday),
+      widgetCallsToday: n(row?.widget_calls_today),
+      widgetGuestsToday: n(row?.widget_guests_today),
       oldestOpenReportAt: row?.oldest_open_report ? row.oldest_open_report.getTime() : null,
       openReportReasons: (row?.open_report_reasons ?? []).filter(isReason)
+    };
+  }
+
+  /** Today's finished calls in widget rooms: how many, the people in them, their distinct addresses and minutes. */
+  async function widgetToday(liveCalls: readonly LiveCall[] = []): Promise<WidgetDay> {
+    const result = await sql<{ calls: Count; guests: Count; ip_keys: Count; minutes: Count }>`
+      ${dayCalls(liveCalls)}
+      SELECT
+        (SELECT count(*) FROM widget_today) AS calls,
+        (SELECT count(DISTINCT person) FROM widget_stays) AS guests,
+        (SELECT count(DISTINCT ip_key) FROM widget_stays) AS ip_keys,
+        (SELECT coalesce(sum(extract(epoch FROM left_at - joined_at)), 0) / 60.0 FROM widget_stays) AS minutes
+    `.execute(db);
+    const row = result.rows[0];
+    return {
+      calls: n(row?.calls),
+      guests: n(row?.guests),
+      distinctIpKeys: n(row?.ip_keys),
+      voiceMinutes: Math.round(n(row?.minutes))
     };
   }
 
@@ -379,7 +434,7 @@ export function createAdminStatsRepository({ pool }: { pool: pg.Pool }) {
     });
   }
 
-  return Object.freeze({ overview, productDays, retention, rollUp, openReports, firstAccountDay });
+  return Object.freeze({ overview, widgetToday, productDays, retention, rollUp, openReports, firstAccountDay });
 }
 
 export type AdminStatsRepository = ReturnType<typeof createAdminStatsRepository>;

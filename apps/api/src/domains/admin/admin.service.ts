@@ -132,7 +132,9 @@ export function createAdminService(deps: AdminServiceDeps) {
         voiceJoins: counts.voiceJoinsToday,
         voiceMinutes: counts.voiceMinutesToday,
         calls: counts.callsToday,
-        callsYesterday: counts.callsYesterday
+        callsYesterday: counts.callsYesterday,
+        widgetCalls: counts.widgetCallsToday,
+        widgetGuests: counts.widgetGuestsToday
       },
       totals: {
         accounts: counts.accounts,

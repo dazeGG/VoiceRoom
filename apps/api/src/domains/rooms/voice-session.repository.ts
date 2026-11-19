@@ -63,6 +63,8 @@ export type StayEvent = { at: number; kind: StayEventKind };
 
 export type FinishedVoiceSession = {
   roomId: string;
+  /** The kind of the room; null when the roster never learnt it. */
+  roomKind?: 'main' | 'widget' | null;
   /** The account, or null for a guest. */
   userId: string | null;
   /** The name a guest gave; null for an account. */
@@ -112,6 +114,7 @@ export function createVoiceSessionRepository({
           sessions.map((session, index) => ({
             id: ids[index],
             room_id: session.roomId,
+            room_kind: session.roomKind ?? null,
             user_id: session.userId,
             guest_name: session.userId ? null : session.guestName,
             guest_id: (!session.userId && session.guestId) || null,

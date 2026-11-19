@@ -14,6 +14,7 @@ import { createAccountService } from '../domains/account/account.service.ts';
 import { createAdminService } from '../domains/admin/admin.service.ts';
 import { createAdminAccountsService } from '../domains/admin/admin-accounts.service.ts';
 import { callSince, createAdminRoomsService } from '../domains/admin/admin-rooms.service.ts';
+import { createAdminWidgetsService } from '../domains/admin/admin-widgets.service.ts';
 import { createSessionCookies } from '../domains/account/session-cookie.ts';
 import type { AdmissionService } from '../domains/admission/admission.service.ts';
 import { createAvatarsService } from '../domains/media/avatars.service.ts';
@@ -270,16 +271,17 @@ export function createDomainServices(deps: DomainServiceDeps) {
     stays: (asks) => required(services.getAdminRoomsRepository()).lastStays(asks)
   });
 
+  const liveCalls = () =>
+    [...hub.presenceRooms.values()].flatMap((room) => {
+      const since = room.peers.size > 0 ? callSince(room) : null;
+      return since === null ? [] : [{ roomId: room.id, since }];
+    });
   const admin = createAdminService({
     staff,
     stats: () => required(services.getAdminStatsRepository()),
     systemSnapshots: () => required(services.getSystemSnapshotRepository()),
     live: deps.liveNumbers,
-    liveCalls: () =>
-      [...hub.presenceRooms.values()].flatMap((room) => {
-        const since = room.peers.size > 0 ? callSince(room) : null;
-        return since === null ? [] : [{ roomId: room.id, since }];
-      }),
+    liveCalls,
     feedback: () => required(services.getCallFeedbackRepository()),
     livekitEnabled: () => deps.liveKit.config().enabled,
     version: packageJson.version,
@@ -314,6 +316,20 @@ export function createDomainServices(deps: DomainServiceDeps) {
       ).map(({ userId: _userId, guestId: _guestId, ...answer }) => answer)
   });
 
+  const adminWidgets = createAdminWidgetsService({
+    staff,
+    rooms: () => required(services.getAdminRoomsRepository()),
+    stats: () => required(services.getAdminStatsRepository()),
+    liveCalls,
+    flagEnabled: config.WIDGET_ENABLED,
+    limits: {
+      maxRoomPeers: config.MAX_ROOM_PEERS,
+      createRateLimit: config.ROOM_CREATE_RATE_LIMIT,
+      createRateWindowMs: config.ROOM_CREATE_RATE_WINDOW_MS,
+      powDifficulty: config.ROOM_CREATE_POW_DIFFICULTY
+    }
+  });
+
   const desktopReleaseService = createDesktopReleaseService({
     repo: config.DESKTOP_RELEASE_REPO,
     cacheMs: config.DESKTOP_RELEASE_CACHE_MS,
@@ -346,6 +362,7 @@ export function createDomainServices(deps: DomainServiceDeps) {
     admin,
     adminAccounts,
     adminRooms,
+    adminWidgets,
     staff,
     desktopRelease: desktopReleaseService
   };
