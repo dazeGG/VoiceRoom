@@ -24,4 +24,6 @@ description: Руководства по VoiceRoom для пользовател
 - [Выбрать размещение и оформление](/widgets/customize)
 - [Виджет не загрузился или не подключается](/widgets/troubleshooting)
 
-[Развернуть VoiceRoom у себя](https://github.com/dazeGG/VoiceRoom/blob/main/docs/SELF_HOSTING.md)
+## Развернуть VoiceRoom у себя
+
+- [Установить VoiceRoom на своём сервере](/self-hosting/install)

@@ -2,6 +2,8 @@
 
 Как поднять VoiceRoom на своём сервере: окружение и секреты, Docker, TURN, CI/CD и миграции. Обзор продукта и быстрый локальный запуск — в [`README.md`](../README.md).
 
+Первый запуск на чистом сервере описан в [быстром старте](../apps/docs/src/content/docs/self-hosting/install.md). Он использует готовые образы и автоматически создаёт `.env`.
+
 ## Environment и секреты
 
 `.env`, `.env.*` и любые реальные значения окружения не хранятся в Git. Для локального запуска создайте `.env` вручную из защищённого источника: password manager, серверный vault или приватная заметка владельца проекта. GitHub Secrets/Variables используйте для CI/CD и protected deploy environments; после сохранения GitHub не показывает secret-значения обратно, поэтому это не удобный источник для локального копирования.
@@ -24,6 +26,7 @@ GitHub-аналог GitLab CI/CD variables находится здесь:
 | `LIVEKIT_API_KEY` | API / LiveKit | Ключ LiveKit. |
 | `LIVEKIT_API_SECRET` | API / LiveKit | Секрет LiveKit. Сгенерировать случайным значением. |
 | `LIVEKIT_GATE_SECRET` | API / LiveKit gate | Отдельный случайный секрет длиной не менее 32 символов. Не должен совпадать с `LIVEKIT_API_SECRET`. |
+| `VOICE_ROOM_CURSOR_HMAC_KEYS` | API production | Стабильный ключ подписи курсоров. Для новой установки подойдёт отдельное значение `openssl rand -hex 32`. |
 | `VAPID_PRIVATE_KEY` | API / Web Push | Приватная часть стабильной VAPID-пары. Никогда не публиковать и не хранить в Git. |
 | `RUSTORE_PUSH_SERVICE_TOKEN` | API и notification worker / RuStore Push | Сервисный ключ проекта push-уведомлений из консоли RuStore. Никогда не публиковать и не хранить в Git. |
 | `GITHUB_TOKEN` | API desktop release endpoint, optional | Нужен только если хочется повысить лимит GitHub API. |
@@ -145,19 +148,21 @@ DATABASE_URL=postgres://voice_room:<local-random-password>@127.0.0.1:5432/voice_
 
 ### Минимальный production набор
 
-Для production compose обычно достаточно задать:
+Для первого запуска production Compose нужны:
 
 ```text
 DOMAIN
-LIVEKIT_DOMAIN
 POSTGRES_PASSWORD
 LIVEKIT_API_KEY
 LIVEKIT_API_SECRET
 LIVEKIT_GATE_SECRET
-VAPID_PUBLIC_KEY
-VAPID_PRIVATE_KEY
-VAPID_SUBJECT
+VOICE_ROOM_CURSOR_HMAC_KEYS
+VOICEROOM_API_IMAGE
+VOICEROOM_WORKER_IMAGE
+VOICEROOM_WEB_IMAGE
 ```
+
+`LIVEKIT_DOMAIN` по умолчанию равен `livekit.${DOMAIN}`. Версии трёх образов должны соответствовать одному релизу и используемому файлу Compose.
 
 `DATABASE_URL` в compose соберётся автоматически из `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` и service name `postgres`. Если деплой не через compose — задайте `DATABASE_URL` явно как secret.
 Если Web Push намеренно не используется, `VAPID_*` можно опустить — API продолжит работать,
@@ -196,7 +201,7 @@ files leaves the running containers and database in place. The first application
 rollout copies the public site out of the legacy Caddy image when a site release has
 yet to be published.
 
-On a new self-host install, build and publish the site files once:
+To add the public landing page to a self-hosted instance, build and publish the site files:
 
 ```bash
 npm ci
@@ -244,17 +249,17 @@ Production compose запускает образы `api`, `worker` и `web` из
 - `caddy` — frontend static build из `apps/web/dist`, reverse proxy для `/api/*` и отдельный reverse proxy для LiveKit domain. JS-чанки прошлых релизов он держит в volume `web_archive` 30 дней, чтобы вкладки, открытые до выкатки, продолжали работать;
 - `livekit` — LiveKit SFU, `livekit-gate` — auth-gate перед ним (см. [`LIVEKIT_GATE.md`](./LIVEKIT_GATE.md)).
 
-Production-like запуск:
+Запуск после подготовки `.env`:
 
 ```bash
-# Создайте production .env на сервере из приватного vault/секретов деплоя, затем:
-npm start
+docker compose config --quiet
+docker compose up -d --wait
 ```
 
-Остановить production-like stack:
+Остановить стек:
 
 ```bash
-npm run stop
+docker compose stop
 ```
 
 Dev compose через npm scripts:

@@ -92,7 +92,7 @@ API-тестам нужна PostgreSQL в `TEST_DATABASE_URL`: на каждый
 
 ## Self-hosting
 
-Production-стек — это `docker-compose.yml`: PostgreSQL, API, воркеры, Caddy, LiveKit и его auth-gate. Минимальный `.env` содержит `DOMAIN`, `POSTGRES_PASSWORD`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`, `LIVEKIT_GATE_SECRET` и, для Web Push, `VAPID_*`.
+Для установки на своём Linux-сервере используйте готовые образы и Docker Compose. В [быстром старте](./apps/docs/src/content/docs/self-hosting/install.md) описаны DNS, генерация `.env` и проверка первого звонка.
 
 Все переменные окружения, Docker, TURN, бэкапы, CI/CD и миграции описаны в [`docs/SELF_HOSTING.md`](./docs/SELF_HOSTING.md). Модель доступа и подробности про аккаунты — в [`docs/SECURITY.md`](./docs/SECURITY.md).
 

@@ -59,6 +59,7 @@ export default defineConfig({
             { label: 'Проблемы со встраиванием', slug: 'widgets/troubleshooting' }
           ]
         },
+        { label: 'Развёртывание на своём сервере', slug: 'self-hosting/install' },
         { label: 'Сайт VoiceRoom', link: 'https://voiceroom.ru/' }
       ]
     })
