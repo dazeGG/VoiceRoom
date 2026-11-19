@@ -132,7 +132,9 @@ test.skipIf(deployContractMode === 'checked')(
     vi.stubEnv('LIVEKIT_DOMAIN', livekitDomain);
     // Vitest's test environment would leave import.meta.env.PROD false.
     vi.stubEnv('NODE_ENV', 'production');
-    onTestFinished(() => vi.unstubAllEnvs());
+    onTestFinished(() => {
+      vi.unstubAllEnvs();
+    });
     try {
       await build({ root: webRoot, logLevel: 'silent', build: { outDir, emptyOutDir: true } });
       verifyDeployArtifacts(outDir);
