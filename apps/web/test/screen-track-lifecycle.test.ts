@@ -1,3 +1,4 @@
+import { installWebCallPortsForTest } from './helpers/call-ports';
 import { createPinia, setActivePinia } from 'pinia';
 import { afterEach, test, vi } from 'vitest';
 import type { Participant } from '@/features/room/client/core/types.ts';
@@ -15,6 +16,7 @@ import assert from 'node:assert/strict';
 async function loadParticipantScreenLifecycle() {
   vi.resetModules();
   setActivePinia(createPinia());
+  await installWebCallPortsForTest();
   const testState = { stageRefreshes: 0 };
   vi.doMock('@/features/room/client/services/media-playback-service', () => ({
     applyRemoteParticipantAudioPreferences: () => {},

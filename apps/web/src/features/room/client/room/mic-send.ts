@@ -1,3 +1,4 @@
+import { getCallPorts } from '../ports';
 // Whether the microphone still reaches its encoder. Its sound can stop on the
 // way there while the connection stays perfectly healthy: no packet is lost
 // because none is sent, no track ends and nothing reconnects, so only the
@@ -13,7 +14,6 @@
 // from one that ran and gave nothing.
 
 import type { MicPoll } from '@voice-room/shared/contracts/realtime';
-import { getDesktopBoundaryPolicy } from '@/platform/desktop-boundary';
 import { createLogger, reportClientLogs } from '@/shared/log';
 import { LOSS_WINDOW_POLLS, createRatioWindow } from './loss-window';
 
@@ -105,7 +105,7 @@ export interface MicRecoveryActions {
  */
 export function canRecoverMic(): boolean {
   if (!/\bChrome\//.test(navigator.userAgent)) return false;
-  return !document.hidden || getDesktopBoundaryPolicy().platformClass !== 'mobile';
+  return !document.hidden || getCallPorts().platform.policy().platformClass !== 'mobile';
 }
 
 // The call's watch: one tracker, the way up the ladder and what the next poll reports.

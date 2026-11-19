@@ -1,5 +1,5 @@
+import { getCallPorts } from '../ports';
 import { t } from '@/shared/i18n';
-import { usePageStore } from '@/stores/page.store';
 import { showToast } from './toast';
 import { state } from '../core/room-runtime.store';
 import { postState } from '../room/presence';
@@ -191,7 +191,7 @@ export function refreshScreenStage(): void {
 
 function showScreenStage({ peer, stream }: { peer: Participant; stream: MediaStream | null }): void {
   state.sharedScreenPeerId = peer.id;
-  usePageStore().screenView = true;
+  getCallPorts().platform.page.patch({ screenView: true });
   useScreenUiStore().stageVisible = true;
   useScreenUiStore().activeStream = stream;
   useScreenUiStore().hideLeaveButton = true;
@@ -218,7 +218,7 @@ function showScreenStage({ peer, stream }: { peer: Participant; stream: MediaStr
 
 export function hideScreenStage(): void {
   state.sharedScreenPeerId = '';
-  usePageStore().screenView = false;
+  getCallPorts().platform.page.patch({ screenView: false });
   stopScreenStageIdleUi();
   useScreenUiStore().stageVisible = false;
   useScreenUiStore().showMeta = false;
@@ -237,7 +237,7 @@ export function hideScreenStage(): void {
   if (stage && document.fullscreenElement === stage) {
     document.exitFullscreen().catch(() => {});
   }
-  if (usePageStore().desktopScreenFullscreen) {
+  if (getCallPorts().platform.page.read().desktopScreenFullscreen) {
     setDesktopScreenFullscreen(false).catch((error: unknown) =>
       log.error('screen view action failed', errorContext(error))
     );

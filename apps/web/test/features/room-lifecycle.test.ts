@@ -2,6 +2,7 @@
 // reach a client on more than one channel; each takes effect once and only
 // for the room this client is in.
 
+import { installWebCallPortsForTest } from '../helpers/call-ports';
 import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, expect, test, vi } from 'vitest';
 import { lobbyRoom } from '../fixtures/answers';
@@ -14,6 +15,7 @@ vi.mock('@/features/room/client/ui/toast', () => ({ showToast: vi.fn() }));
 async function load() {
   vi.resetModules();
   setActivePinia(createPinia());
+  await installWebCallPortsForTest();
   const lifecycle = await import('@/features/room/client/room/lifecycle');
   const { state } = await import('@/features/room/client/core/room-runtime.store');
   const { useRoomSettingsStore } = await import('@/features/room/room-settings.store');

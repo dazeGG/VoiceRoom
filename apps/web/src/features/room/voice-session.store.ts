@@ -4,7 +4,7 @@ import { wait } from './client/core/utils';
 import { playPeerCue } from './client/media/cues';
 import { useRoomMembershipStore } from '@/entities/room/room-membership.store';
 import { useCallActivityStore } from '@/shared/call-activity.store';
-import { useCallFeedbackStore } from '@/features/call-feedback/call-feedback.store';
+import { getCallPorts } from './client/ports';
 
 type LeaveHandler = () => void;
 type ControlHandler = () => void;
@@ -62,7 +62,7 @@ export const useVoiceSessionStore = defineStore('voice-session', () => {
     playPeerCue('leave');
     await wait(180);
     activeLeaveHandler();
-    useCallFeedbackStore().offerCallFeedback();
+    getCallPorts().feedback.offer();
   }
 
   async function leaveConnectedRoomMembership(): Promise<boolean> {

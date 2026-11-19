@@ -1,6 +1,7 @@
 // Joining a room downloads the LiveKit library while the microphone opens,
 // which can wait on a permission prompt, instead of after the token arrives.
 
+import { installWebCallPortsForTest } from '../helpers/call-ports';
 import { createPinia, setActivePinia } from 'pinia';
 import { expect, test, vi } from 'vitest';
 import { stubFetch } from '../fixtures/fetch';
@@ -33,6 +34,7 @@ vi.mock('@/features/room/client/media/livekit-runtime', () => ({
 test('LiveKit starts loading while the microphone permission is still pending', async () => {
   vi.resetModules();
   setActivePinia(createPinia());
+  await installWebCallPortsForTest();
   vi.stubGlobal('WebSocket', FakeWebSocket);
   stubFetch({
     '/api/rooms/abc123': {

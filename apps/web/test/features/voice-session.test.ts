@@ -1,3 +1,4 @@
+import { installWebCallPortsForTest } from '../helpers/call-ports';
 import { createPinia, setActivePinia } from 'pinia';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 
@@ -12,8 +13,9 @@ const { useVoiceSessionStore } = await import('@/features/room/voice-session.sto
 // A new Pinia per test: a store is cached per Pinia, so no test sees a handler or room an earlier one left.
 let voice: ReturnType<typeof useVoiceSessionStore>;
 
-beforeEach(() => {
+beforeEach(async () => {
   setActivePinia(createPinia());
+  await installWebCallPortsForTest();
   voice = useVoiceSessionStore();
 });
 

@@ -1,3 +1,4 @@
+import { installWebCallPortsForTest } from '../helpers/call-ports';
 import { createPinia, disposePinia, setActivePinia, type Pinia } from 'pinia';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import {
@@ -43,11 +44,12 @@ function deferred<T>() {
   });
   return { promise, resolve };
 }
-beforeEach(() => {
+beforeEach(async () => {
   vi.resetAllMocks();
   localStorage.clear();
   pinia = createPinia();
   setActivePinia(pinia);
+  await installWebCallPortsForTest();
   state.roomId = 'room';
   state.roomIsStatic = true;
 });

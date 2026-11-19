@@ -1,7 +1,5 @@
+import { getCallPorts } from '../ports';
 import { t } from '@/shared/i18n';
-import { useSessionStore } from '@/features/auth/session.store';
-import { APP_HOME } from '@/shared/app-home';
-import { usePageStore } from '@/stores/page.store';
 import { useStartUiStore } from '../../start-ui.store';
 import { useVoiceSessionStore } from '../../voice-session.store';
 import { state } from '../core/room-runtime.store';
@@ -12,12 +10,9 @@ import { finishJoinTiming, lastJoinStage, markJoinStage, startJoinTiming } from 
 import { postState } from './presence';
 import { UserFacingError, wait } from '../core/utils';
 import { rotateStoredPeerSession } from '../core/session';
-import { guestBrowserId } from '@/entities/room/guest-id';
 import { getRoomShell, isRoomEmbedded } from '../core/embed';
 import { useLeaveScreenStore } from '../../leave-screen.store';
 import { CALL_FEEDBACK_MAX_DURATION_S } from '@voice-room/shared/contracts/feedback';
-import { useCallFeedbackStore } from '@/features/call-feedback/call-feedback.store';
-import { getDesktopBoundaryPolicy } from '@/platform/desktop-boundary';
 import { getDisplayName, updateNameStatuses } from '../ui/names';
 import { resetConnectionStatus, setServerConnectionStatus, setVoiceConnectionStatus } from '../ui/status';
 import { resetPushToTalkState } from '../ui/controls';
@@ -28,7 +23,6 @@ import { createParticipant, removeAudioElements, updatePeerStatus } from './part
 import { connectLiveKitRoom, disconnectLiveKitRoom, syncRemoteVideoVisibility } from '../services/livekit-service';
 import { LiveKitTransportError } from '../services/livekit/transport';
 import { loadLiveKitClient } from '../media/livekit-runtime';
-import { onAppVisibilityChange } from '@/platform/app-visibility';
 import {
   describeMicrophoneError,
   getLocalMicrophoneCapture,
@@ -88,7 +82,6 @@ import {
 } from '@/entities/room/room-realtime';
 import { resolveRoomEntryName } from './room-entry';
 import { createVoiceEventHandler } from './voice-events';
-import { markInAppRoomNavigation } from '@/platform/open-in-app';
 import { isMicrophoneShownMuted } from '../core/microphone-mute';
 import type { MicrophoneCapture } from '../core/types';
 import {
@@ -126,13 +119,13 @@ function isCurrentJoinAttempt(generation: number): boolean {
 }
 
 export function showStartScreen(): void {
-  usePageStore().screen = 'start';
+  getCallPorts().platform.page.patch({ screen: 'start' });
   document.title = 'VoiceRoom';
   updateNameStatuses();
 }
 
 export async function showRoomRoute(): Promise<boolean> {
-  usePageStore().screen = 'checking';
+  getCallPorts().platform.page.patch({ screen: 'checking' });
 
   const exists = await checkRoomExists(state.roomId);
   if (!exists) {
@@ -160,7 +153,7 @@ export function refreshRoomHeading(): void {
 }
 
 function showRoomScreen(): void {
-  usePageStore().screen = 'room';
+  getCallPorts().platform.page.patch({ screen: 'room' });
   refreshRoomHeading();
   resetConnectionStatus();
 
@@ -170,14 +163,14 @@ function showRoomScreen(): void {
 
 export function showRoomEntryFailure(): void {
   leaveRoom();
-  usePageStore().screen = 'entry-error';
+  getCallPorts().platform.page.patch({ screen: 'entry-error' });
   document.title = t('Не удалось проверить вход · VoiceRoom');
 }
 
 export function showRoomNotFound(): void {
   finishJoinTelemetry?.('failure');
   leaveRoom();
-  usePageStore().screen = 'not-found';
+  getCallPorts().platform.page.patch({ screen: 'not-found' });
   document.title = t('Комната не найдена · VoiceRoom');
   useStartUiStore().missingRoomCode = state.roomId || getMissingRoomLabel();
 }
@@ -189,7 +182,7 @@ function showRoomModerationScreen(reason: 'banned' | 'kicked'): void {
   state.peerId = nextSession.peerId;
   state.sessionToken = nextSession.sessionToken;
   state.moderationReason = reason;
-  usePageStore().screen = 'moderation';
+  getCallPorts().platform.page.patch({ screen: 'moderation' });
   document.title = reason === 'banned' ? t('Доступ к комнате закрыт · VoiceRoom') : t('Вы исключены · VoiceRoom');
 }
 
@@ -226,7 +219,7 @@ async function performJoinRoom(generation: number): Promise<void> {
   // Keep the original attempt's context if navigation or sign-in changes while
   // the microphone/network is pending. Reuse the guest id already sent on joins.
   const roomId = state.roomId;
-  const reportedGuestId = useSessionStore().user ? '' : guestBrowserId();
+  const reportedGuestId = getCallPorts().identity.current().feedbackGuestId || '';
   let reported = false;
   const reportOutcome = (outcome: 'success' | 'failure' | 'cancel'): void => {
     if (reported) return;
@@ -306,9 +299,9 @@ async function performJoinRoom(generation: number): Promise<void> {
       joinedAt: Date.now(),
       muted: isMicrophoneShownMuted(),
       name,
-      avatarAccent: useSessionStore().user?.avatarAccent || '',
-      avatarColorKey: useSessionStore().user?.avatarColorKey || '',
-      avatarUrl: useSessionStore().user?.avatarUrl || ''
+      avatarAccent: getCallPorts().identity.current().profile?.avatarAccent || '',
+      avatarColorKey: getCallPorts().identity.current().profile?.avatarColorKey || '',
+      avatarUrl: getCallPorts().identity.current().profile?.avatarUrl || ''
     });
     updatePeerStatus(state.self);
 
@@ -371,10 +364,10 @@ async function performJoinRoom(generation: number): Promise<void> {
     startPeerLatencyStats();
     // Remote video pauses while the app cannot be seen (tray, minimized, background tab).
     stopVideoVisibilitySync?.();
-    stopVideoVisibilitySync = onAppVisibilityChange(() => syncRemoteVideoVisibility());
+    stopVideoVisibilitySync = getCallPorts().platform.onVisibilityChange(() => syncRemoteVideoVisibility());
     syncRemoteVideoVisibility();
     // A question still open about an earlier call would now be about this one.
-    useCallFeedbackStore().dropCallFeedback();
+    getCallPorts().feedback.drop();
     startCallQuality();
     recordPeerCount(state.peers.size);
     // Relief comes from the call showing strain (call-strain.ts), not from a busy system alone.
@@ -566,18 +559,25 @@ export function leaveRoom(): void {
 }
 
 // What "how was the call?" sends along with an answer, should the leave ask it.
+function feedbackGuestIdentity(): { guestId?: string } {
+  const identity = getCallPorts().identity.current();
+  if (identity.kind === 'account') return {};
+  const guestId = identity.feedbackGuestId;
+  return guestId === undefined ? {} : { guestId };
+}
+
 function noteFinishedCall(roomId: string, summary: CallQualitySummary | null): void {
   if (!roomId || !summary) {
-    useCallFeedbackStore().noteCallFinished(null);
+    getCallPorts().feedback.finished(null);
     return;
   }
   const { stats } = summary;
   const desktopApp = Boolean(window.voiceRoomRuntime?.isDesktop);
-  useCallFeedbackStore().noteCallFinished({
+  getCallPorts().feedback.finished({
     roomId,
     durationS: Math.min(stats.durationS, CALL_FEEDBACK_MAX_DURATION_S),
     peers: stats.peersMax,
-    platform: desktopApp ? 'desktop_app' : getDesktopBoundaryPolicy().desktopAllowed ? 'browser' : 'mobile',
+    platform: desktopApp ? 'desktop_app' : getCallPorts().platform.policy().desktopAllowed ? 'browser' : 'mobile',
     quality: {
       rttAvgMs: stats.rttAvgMs,
       inboundLossAvgPct: stats.inboundLossAvgPct,
@@ -602,7 +602,7 @@ function noteFinishedCall(roomId: string, summary: CallQualitySummary | null): v
       appCpuMaxPct: stats.appCpuMaxPct,
       systemCpuAvgPct: stats.systemCpuAvgPct
     },
-    ...(useSessionStore().user ? {} : { guestId: guestBrowserId() })
+    ...feedbackGuestIdentity()
   });
 }
 
@@ -617,14 +617,14 @@ function stopLocalStream(): void {
 export async function handleLeaveButtonClick(): Promise<void> {
   // Read before leaving: leaveRoom forgets who was in the call.
   const roomId = state.roomId;
-  const guest = !isRoomEmbedded() && !useSessionStore().user;
+  const guest = !isRoomEmbedded() && getCallPorts().identity.current().kind === 'guest';
   // The lobby is desktop-only, so leaving on a phone stays on the room page.
-  const mobile = !getDesktopBoundaryPolicy().desktopAllowed;
+  const mobile = !getCallPorts().platform.policy().desktopAllowed;
   if (state.joined || state.localStream || state.connecting) {
     playPeerCue('leave');
     await wait(180);
     leaveRoom();
-    useCallFeedbackStore().offerCallFeedback();
+    getCallPorts().feedback.offer();
   }
 
   if (isRoomEmbedded()) {
@@ -637,7 +637,7 @@ export async function handleLeaveButtonClick(): Promise<void> {
     return;
   }
 
-  window.location.href = APP_HOME;
+  getCallPorts().platform.goHome();
 }
 
 /**
@@ -648,7 +648,7 @@ export async function handleLeaveButtonClick(): Promise<void> {
  * the reload joins in the browser.
  */
 export async function rejoinRoomSignedIn(roomId: string): Promise<void> {
-  markInAppRoomNavigation();
+  getCallPorts().platform.prepareRoomNavigation();
   try {
     if (state.joined || state.localStream || state.connecting) {
       playPeerCue('leave');
@@ -658,5 +658,5 @@ export async function rejoinRoomSignedIn(roomId: string): Promise<void> {
   } catch (error) {
     log.error('guest register rejoin failed', errorContext(error));
   }
-  window.location.assign(`/r/${encodeURIComponent(roomId)}`);
+  getCallPorts().platform.navigateToRoom(roomId, 'assign');
 }

@@ -1,5 +1,5 @@
+import { getCallPorts } from '../ports';
 import { t } from '@/shared/i18n';
-import { usePageStore } from '@/stores/page.store';
 import { state } from '../core/room-runtime.store';
 import { showToast } from './toast';
 import { clampStreamVolume, normalizeStoredStreamVolume, storeStreamVolume } from '../core/settings';
@@ -79,8 +79,8 @@ export function refreshScreenStreamControls(_participant: Participant | null): v
 
 export function refreshStageStripControls(): void {
   state.stripCollapsed = false;
-  usePageStore().stripCollapsed = false;
-  usePageStore().stageSummary = 'hidden';
+  getCallPorts().platform.page.patch({ stripCollapsed: false });
+  getCallPorts().platform.page.patch({ stageSummary: 'hidden' });
 }
 
 export function syncScreenVideoAudio(): void {
@@ -148,7 +148,7 @@ export async function toggleScreenFullscreen(): Promise<void> {
       return;
     }
 
-    if (usePageStore().desktopScreenFullscreen) {
+    if (getCallPorts().platform.page.read().desktopScreenFullscreen) {
       await setDesktopScreenFullscreen(false);
       return;
     }
@@ -184,9 +184,9 @@ export async function setDesktopScreenFullscreen(fullscreen: boolean): Promise<v
   if (!desktopWindow) throw new Error('Desktop window controls are unavailable.');
   const active = await desktopWindow.setFullscreen(fullscreen);
   if (active) {
-    usePageStore().desktopScreenFullscreen = true;
+    getCallPorts().platform.page.patch({ desktopScreenFullscreen: true });
   } else {
-    usePageStore().desktopScreenFullscreen = false;
+    getCallPorts().platform.page.patch({ desktopScreenFullscreen: false });
   }
   setScreenFullscreenState(active || document.fullscreenElement === stage);
 }
@@ -194,12 +194,12 @@ export async function setDesktopScreenFullscreen(fullscreen: boolean): Promise<v
 export function updateScreenFullscreenState(): void {
   const stage = useScreenUiStore().getScreenStage();
   const fullscreen = Boolean(stage && document.fullscreenElement === stage);
-  if (!fullscreen && !usePageStore().desktopScreenFullscreen) {
+  if (!fullscreen && !getCallPorts().platform.page.read().desktopScreenFullscreen) {
     setScreenFullscreenState(false);
     return;
   }
 
-  setScreenFullscreenState(fullscreen || usePageStore().desktopScreenFullscreen);
+  setScreenFullscreenState(fullscreen || getCallPorts().platform.page.read().desktopScreenFullscreen);
   if (useScreenUiStore().stageVisible) {
     syncScreenStagePointerState();
   }

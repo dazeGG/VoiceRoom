@@ -1,6 +1,7 @@
 // The watch a joined call runs: its rebuild is the real microphone restart and its
 // replacement the optional one, which a refusal cannot turn into a failed recovery.
 
+import { installWebCallPortsForTest } from '../helpers/call-ports';
 import { createPinia, setActivePinia } from 'pinia';
 import { expect, test, vi } from 'vitest';
 import { stubFetch } from '../fixtures/fetch';
@@ -36,6 +37,7 @@ const settled = () => new Promise((resolve) => setTimeout(resolve, 0));
 test('a joined call rebuilds a stalled microphone, then replaces the connection, and stops watching on leaving', async () => {
   vi.resetModules();
   setActivePinia(createPinia());
+  await installWebCallPortsForTest();
   vi.stubGlobal('WebSocket', FakeWebSocket);
   const userAgent = vi
     .spyOn(window.navigator, 'userAgent', 'get')
