@@ -240,7 +240,7 @@ test('production visibility combines browser and desktop visibility and unsubscr
   const { setDesktopWindowVisible } = await import('@/platform/app-visibility');
   const platform = createWebCallPorts(createPinia()).platform;
   vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
-  const listener = vi.fn();
+  const listener = vi.fn<(visible: boolean) => void>();
   const unsubscribe = platform.onVisibilityChange(listener);
   onTestFinished(unsubscribe);
   expect(platform.isVisible()).toBe(true);
