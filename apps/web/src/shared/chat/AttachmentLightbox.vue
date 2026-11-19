@@ -5,11 +5,10 @@
 // opens a picture already in the chat and one still sitting in the composer —
 // the moment you most want a closer look is before you send it.
 //
-// Not the shared Dialog: that one is a titled card, this is a full-screen
-// viewer with its own toolbar. Focus is kept inside and handed back on close here.
+// The native modal puts the viewer above the room, regardless of the chat's stacking context.
 import { t } from '@/shared/i18n';
 import { Download, Minus, Plus, RotateCcw, X } from '@lucide/vue';
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { iconSm } from '@/shared/ui/icons';
 
 export interface LightboxItem {
@@ -38,8 +37,7 @@ const offsetY = ref(0);
 const dragging = ref(false);
 let dragStartX = 0;
 let dragStartY = 0;
-const dialog = ref<HTMLDivElement | null>(null);
-let previousFocus: HTMLElement | null = null;
+const dialog = ref<HTMLDialogElement | null>(null);
 
 const item = computed(() => items[current.value]);
 const zoomed = computed(() => scale.value > MIN_SCALE + 0.001);
@@ -95,10 +93,7 @@ function onPointerUp(event: PointerEvent): void {
 }
 
 function keydown(event: KeyboardEvent): void {
-  if (event.key === 'Escape') {
-    event.preventDefault();
-    emit('close');
-  } else if (event.key === 'ArrowLeft' && items.length > 1) {
+  if (event.key === 'ArrowLeft' && items.length > 1) {
     event.preventDefault();
     move(-1);
   } else if (event.key === 'ArrowRight' && items.length > 1) {
@@ -113,44 +108,27 @@ function keydown(event: KeyboardEvent): void {
   } else if (event.key === '0') {
     event.preventDefault();
     reset();
-  } else if (event.key === 'Tab') {
-    const controls = Array.from(dialog.value?.querySelectorAll<HTMLElement>('button:not(:disabled),a[href]') ?? []);
-    const first = controls[0];
-    const last = controls.at(-1);
-    if (!first || !last) return;
-    if (event.shiftKey && document.activeElement === first) {
-      event.preventDefault();
-      last.focus();
-    } else if (!event.shiftKey && document.activeElement === last) {
-      event.preventDefault();
-      first.focus();
-    }
   }
 }
 
 function onBackdropClick(event: MouseEvent): void {
-  if (event.target === event.currentTarget) emit('close');
+  if (event.target === event.currentTarget) dialog.value?.close();
 }
 
-onMounted(() => {
-  previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-  dialog.value?.querySelector<HTMLElement>('button')?.focus();
-});
-
-onBeforeUnmount(() => previousFocus?.focus());
+onMounted(() => dialog.value?.showModal());
 </script>
 
 <template>
-  <div class="attachment-lightbox__backdrop" role="presentation" @click="onBackdropClick">
-    <div
-      ref="dialog"
-      class="attachment-lightbox"
-      role="dialog"
-      aria-modal="true"
-      tabindex="-1"
-      :aria-label="t('Изображение {p0} из {p1}', { p0: current + 1, p1: items.length })"
-      @keydown="keydown"
-    >
+  <dialog
+    ref="dialog"
+    class="attachment-lightbox__backdrop"
+    :aria-label="t('Изображение {p0} из {p1}', { p0: current + 1, p1: items.length })"
+    @keydown="keydown"
+    @click="onBackdropClick"
+    @contextmenu.stop
+    @close="emit('close')"
+  >
+    <div class="attachment-lightbox">
       <header class="attachment-lightbox__header">
         <span class="attachment-lightbox__counter">{{ current + 1 }} / {{ items.length }}</span>
         <div class="attachment-lightbox__tools">
@@ -177,7 +155,7 @@ onBeforeUnmount(() => previousFocus?.focus());
           <a v-if="item?.downloadHref" :href="item.downloadHref" download rel="external" :aria-label="t('Скачать')"
             ><Download v-bind="iconSm" aria-hidden="true"
           /></a>
-          <button type="button" :aria-label="t('Закрыть просмотр')" @click="emit('close')">
+          <button type="button" autofocus :aria-label="t('Закрыть просмотр')" @click="dialog?.close()">
             <X v-bind="iconSm" aria-hidden="true" />
           </button>
         </div>
@@ -226,5 +204,5 @@ onBeforeUnmount(() => previousFocus?.focus());
         </button>
       </template>
     </div>
-  </div>
+  </dialog>
 </template>

@@ -6,6 +6,9 @@ on:
       component:
         required: true
         type: string
+      check-publication:
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -27,6 +30,7 @@ jobs:
           cache: npm
           cache-dependency-path: ${{ inputs.component == 'docs' && 'apps/docs/package-lock.json' || 'package-lock.json' }}
       - name: Check static publication
+        if: inputs.check-publication
         run: bash scripts/test/static-publication.sh
       - name: Check and build the public site
         if: inputs.component == 'site'

@@ -48,6 +48,7 @@ const roomPresence = useRoomPresenceStore();
 const peers = ref<RoomPeer[]>([]);
 const loading = ref(true);
 const activePanel = ref<Panel | null>(null);
+const focusComposerOnOpen = ref(false);
 // A picture that failed to load stays hidden; a new URL gets a fresh attempt.
 const failedAvatarUrls = reactive(new Set<string>());
 
@@ -104,6 +105,7 @@ watch(
     // Read once: the subscription belongs to the room, and a new anchor remounts
     // this view instead of resubscribing the preview for nothing.
     activePanel.value = props.initialPanel;
+    focusComposerOnOpen.value = false;
     onCleanup(subscribeRoomPreview(roomId, handlePreviewEvent));
   },
   { immediate: true }
@@ -149,6 +151,7 @@ function peerAvatar(peer: RoomPeer, name: string): ReturnType<typeof getAvatarPr
 }
 
 function selectPanel(panel: Panel): void {
+  focusComposerOnOpen.value = panel === 'chat';
   activePanel.value = panel;
 }
 </script>
@@ -261,6 +264,7 @@ function selectPanel(panel: Panel): void {
         :room-id="previewRoomId"
         :user="user"
         :around-message-id="aroundMessageId"
+        :focus-composer-on-open="focusComposerOnOpen"
         :can-moderate="room.relationship === 'owner'"
         :participant-count="memberTotal"
         @toast="(message: string) => emit('toast', message)"

@@ -219,6 +219,7 @@ function switchAuthMode(mode: AuthMode): void {
   </div>
   <LobbyPage
     v-else-if="user"
+    :key="user.id"
     :user="user"
     :logging-out="loggingOut"
     :create-room-on-open="createRoomInLobby"

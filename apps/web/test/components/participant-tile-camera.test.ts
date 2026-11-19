@@ -3,7 +3,7 @@
 // avatar back.
 
 import { createPinia, setActivePinia } from 'pinia';
-import { render } from '@testing-library/vue';
+import { fireEvent, render, screen } from '@testing-library/vue';
 import { nextTick } from 'vue';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import ParticipantTile from '@/features/room/components/ParticipantTile.vue';
@@ -11,6 +11,7 @@ import { state } from '@/features/room/client/core/room-runtime.store';
 import { createInitialRoomState } from '@/features/room/client/model/room-state';
 import { createParticipant } from '@/features/room/client/room/participants';
 import type { Participant } from '@/features/room/client/core/types';
+import { useParticipantContextUiStore } from '@/features/room/participant-context-ui.store';
 import { defined, instanceOf } from '../helpers/assert';
 
 // A class instance, like a real MediaStream: Vue does not proxy it.
@@ -45,6 +46,20 @@ function participant(extra: Partial<Participant> = {}): Participant {
 function renderTile(person: Participant) {
   return render(ParticipantTile, { props: { participant: person } });
 }
+
+test('a right-click on a remote tile opens the participant controls at the pointer', async () => {
+  renderTile(participant());
+  const tile = screen.getByRole('button', { name: /Вася.*контекстное меню/ });
+  await fireEvent.contextMenu(tile, { clientX: 70, clientY: 90 });
+  expect(useParticipantContextUiStore()).toMatchObject({
+    open: true,
+    peerId: 'peer-a',
+    variant: 'tile',
+    restoreFocus: tile,
+    x: 70,
+    y: 90
+  });
+});
 
 test('a camera replaces the avatar and goes away when it is turned off', async () => {
   vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue(undefined);

@@ -26,14 +26,14 @@ test('the first load asks the server once, even for concurrent callers', async (
   expect(calls).toHaveLength(1);
 });
 
-test('a signed-in account fills the voice room name; there is no local session hint', async () => {
+test('reading the signed-in account fills the room name without announcing an account change', async () => {
   stubFetch({ '/api/auth/me': { body: { ok: true, user: authUser({ displayName: '  ', login: 'boris' }) } } });
   const { loadSession } = await loadSessionModule();
 
   await loadSession();
 
   expect(localStorage.getItem('voice-room:name')).toBe('boris');
-  expect(Object.keys(localStorage).sort()).toEqual(['voice-room:auth-invalidation', 'voice-room:name']);
+  expect(Object.keys(localStorage).sort()).toEqual(['voice-room:name']);
 });
 
 test('a failed session check is reported, not shown as a signed-out visitor', async () => {

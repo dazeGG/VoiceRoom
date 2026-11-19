@@ -13,6 +13,7 @@ const props = withDefaults(
     user: AuthUser;
     /** Scroll the preview chat to this message, e.g. when opened from a mention. */
     aroundMessageId?: string | undefined;
+    focusComposerOnOpen?: boolean;
     /** The viewer owns the room and may delete anyone's message. */
     canModerate?: boolean;
     participantCount?: number;
@@ -35,6 +36,7 @@ function resolveDisplayName(): string {
     root-class="room-preview__chat"
     :aria-label="t('Чат комнаты')"
     :around-message-id="aroundMessageId"
+    :focus-composer-on-open="focusComposerOnOpen"
     :can-moderate="canModerate"
     :participant-count="participantCount"
     @select-participants="emit('selectParticipants')"

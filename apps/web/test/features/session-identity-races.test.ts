@@ -192,6 +192,21 @@ test('visibility return clears immediately even when browser storage is unavaila
   await vi.waitFor(() => expect(session.user?.id).toBe(B.id));
 });
 
+test('visibility return clears immediately when the invalidation marker changed while hidden', async () => {
+  const session = useSessionStore();
+  session.setUser(A);
+  const response = deferred<AuthUser | null>();
+  vi.mocked(fetchMe).mockReturnValueOnce(response.promise);
+  vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
+  document.dispatchEvent(new Event('visibilitychange'));
+  localStorage.setItem(AUTH_INVALIDATION_KEY, 'new-account-in-another-tab');
+  vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
+  document.dispatchEvent(new Event('visibilitychange'));
+  expect(session.user).toBeNull();
+  response.resolve(B);
+  await vi.waitFor(() => expect(session.user?.id).toBe(B.id));
+});
+
 for (const trigger of ['storage', 'visibility']) {
   test(`${trigger} revalidation failure settles loading and allows a fresh retry`, async () => {
     const session = useSessionStore();
@@ -205,8 +220,8 @@ for (const trigger of ['storage', 'visibility']) {
       vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
       document.dispatchEvent(new Event('visibilitychange'));
     }
-    await vi.waitFor(() => expect(session.loaded).toBe(true));
-    expect(session.loadError).toBe(true);
+    await vi.waitFor(() => expect(session.loadError).toBe(true));
+    expect(session.loaded).toBe(true);
     expect(session.user).toBeNull();
     expect(useRoomMembershipStore().byRoomId).toEqual({});
     vi.mocked(fetchMe).mockResolvedValueOnce(B);

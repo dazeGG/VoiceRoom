@@ -43,12 +43,13 @@ function peer(id: string, name: string, extra: Partial<PublicPeer> = {}): Public
 beforeEach(() => {
   installFakeWebSocket();
   stubMatchMedia();
-  stubFetch({});
+  stubFetch({ 'GET /api/rooms/kitchen/chat': { body: { ok: true, roomId: room.roomId, messages: [] } } });
   // The tile grid sizes itself to its box; jsdom has no layout to watch.
   vi.stubGlobal(
     'ResizeObserver',
     class {
       observe(): void {}
+      unobserve(): void {}
       disconnect(): void {}
     }
   );
@@ -61,13 +62,32 @@ async function openSocket(): Promise<FakeWebSocket> {
   return socket;
 }
 
-function renderPreview(onEnter = vi.fn()) {
+function renderPreview(onEnter = vi.fn(), initialPanel: 'chat' | null = null) {
   const Host = defineComponent(() => {
     provideLobby(useLobbyStore());
-    return () => h(RoomPreviewView, { room, user: authUser(), onEnter, onBack: vi.fn() });
+    return () => h(RoomPreviewView, { room, user: authUser(), onEnter, onBack: vi.fn(), initialPanel });
   });
   return renderWithApp(Host);
 }
+
+test('opening and reopening the preview chat focuses the message composer', async () => {
+  await renderPreview();
+  const chat = screen.getByRole('button', { name: 'Чат' });
+  const composer = () => screen.getByRole('textbox', { name: 'Написать в комнату…' });
+  await userEvent.click(chat);
+  expect(document.activeElement).toBe(composer());
+  await userEvent.click(screen.getByRole('button', { name: 'Свернуть панель' }));
+  await userEvent.click(chat);
+  expect(document.activeElement).toBe(composer());
+});
+
+test('a preview that starts with chat open waits for an explicit action before focusing the composer', async () => {
+  await renderPreview(vi.fn(), 'chat');
+  const composer = screen.getByRole('textbox', { name: 'Написать в комнату…' });
+  expect(document.activeElement).not.toBe(composer);
+  await userEvent.click(screen.getByRole('button', { name: 'Чат' }));
+  expect(document.activeElement).toBe(composer);
+});
 
 test('a shared screen gets its own tile that enters the room, and goes when the share stops', async () => {
   const onEnter = vi.fn();

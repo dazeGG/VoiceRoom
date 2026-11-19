@@ -1,0 +1,140 @@
+<script setup lang="ts">
+import { Ban, Bell, BellOff, MessageSquare, UserRound, UserMinus } from '@lucide/vue';
+import { computed, ref } from 'vue';
+import type { Friend } from '@/api/friends';
+import { useProfileCardUiStore } from '@/entities/profile-card/profile-card-ui.store';
+import { t } from '@/shared/i18n';
+import { useNotificationPreferencesStore } from '@/shared/notifications/preferences.store';
+import { effectivePresenceStatus } from '@/shared/presence';
+import { Button, ContextMenu, Dialog, PopoverDivider, PopoverMenuItem, PopoverMenuLabel } from '@/shared/ui';
+import { iconSm } from '@/shared/ui/icons';
+import { displayNameOf } from '@/shared/utils/display-name';
+import type { FriendMenuTarget } from '../../model/friend-menu';
+import { useLobby } from '../../model/lobby-context';
+
+const target = defineModel<FriendMenuTarget | null>({ required: true });
+const emit = defineEmits<{ toast: [message: string] }>();
+const lobby = useLobby();
+const preferences = useNotificationPreferencesStore();
+const { openProfileCardFor } = useProfileCardUiStore();
+const blockTarget = ref<Friend['user'] | null>(null);
+const friend = computed(() => target.value?.friend.user);
+const name = computed(() => (friend.value ? displayNameOf(friend.value) : ''));
+const muted = computed(() => Boolean(friend.value && preferences.isPeerNotificationsMuted(friend.value.id)));
+
+async function run(action: () => Promise<void>, failure: string): Promise<void> {
+  try {
+    await action();
+  } catch (error) {
+    emit('toast', error instanceof Error && error.message ? error.message : failure);
+  }
+}
+
+function message(close: (restoreFocus?: boolean) => void): void {
+  const userId = friend.value?.id;
+  if (!userId) return;
+  close(false);
+  void run(() => lobby.openDm(userId), t('Не удалось открыть личные сообщения'));
+}
+
+function profile(close: (restoreFocus?: boolean) => void): void {
+  const current = target.value;
+  if (!current) return;
+  const { friend: entry, anchor } = current;
+  const { id, login, avatarUrl, avatarColorKey, avatarAccent } = entry.user;
+  const presence = effectivePresenceStatus(entry.online, entry.user.presenceStatus, entry.user.doNotDisturb);
+  close(false);
+  queueMicrotask(() =>
+    openProfileCardFor(
+      { userId: id, name: displayNameOf(entry.user), login, avatarUrl, avatarColorKey, avatarAccent, presence },
+      anchor
+    )
+  );
+}
+
+function toggleMute(close: () => void): void {
+  const userId = friend.value?.id;
+  if (!userId) return;
+  const nextMuted = !muted.value;
+  close();
+  void run(() => preferences.updatePeerNotificationsMuted(userId, nextMuted), t('Не удалось изменить уведомления'));
+}
+
+function remove(close: () => void): void {
+  const userId = friend.value?.id;
+  const friendName = name.value;
+  if (!userId) return;
+  close();
+  void run(async () => {
+    await lobby.removeFriend(userId);
+    emit('toast', t('{p0} удалён из друзей', { p0: friendName }));
+  }, t('Не удалось удалить друга'));
+}
+
+function requestBlock(close: (restoreFocus?: boolean) => void): void {
+  if (!friend.value) return;
+  blockTarget.value = friend.value;
+  close(false);
+}
+
+function confirmBlock(): void {
+  const user = blockTarget.value;
+  blockTarget.value = null;
+  if (!user) return;
+  void run(async () => {
+    await lobby.blockUser(user.id);
+    emit('toast', t('{p0} заблокирован', { p0: displayNameOf(user) }));
+  }, t('Не удалось заблокировать пользователя'));
+}
+</script>
+
+<template>
+  <ContextMenu
+    v-if="target"
+    open
+    :x="target.x"
+    :y="target.y"
+    v-bind="{ ariaLabel: t('Действия для {p0}', { p0: name }) }"
+    :restore-focus="target.anchor"
+    @close="target = null"
+  >
+    <template #default="{ close }">
+      <PopoverMenuLabel :text="name" />
+      <PopoverMenuItem :label="t('Написать')" @click="message(close)">
+        <template #icon><MessageSquare v-bind="iconSm" /></template>
+      </PopoverMenuItem>
+      <PopoverMenuItem :label="t('Профиль')" @click="profile(close)">
+        <template #icon><UserRound v-bind="iconSm" /></template>
+      </PopoverMenuItem>
+      <PopoverMenuItem
+        :label="muted ? t('Включить уведомления') : t('Выключить уведомления')"
+        @click="toggleMute(close)"
+      >
+        <template #icon><component :is="muted ? BellOff : Bell" v-bind="iconSm" /></template>
+      </PopoverMenuItem>
+      <PopoverDivider />
+      <PopoverMenuItem :label="t('Удалить из друзей')" variant="danger" @click="remove(close)">
+        <template #icon><UserMinus v-bind="iconSm" /></template>
+      </PopoverMenuItem>
+      <PopoverMenuItem :label="t('Заблокировать')" variant="danger" @click="requestBlock(close)">
+        <template #icon><Ban v-bind="iconSm" /></template>
+      </PopoverMenuItem>
+    </template>
+  </ContextMenu>
+
+  <Dialog
+    v-if="blockTarget"
+    open
+    :title="t('Заблокировать {p0}?', { p0: displayNameOf(blockTarget) })"
+    :on-close="() => (blockTarget = null)"
+    initial-focus="[data-friend-block-cancel]"
+  >
+    <p>{{ t('Пользователь больше не сможет писать вам и звать в комнаты. Дружба будет разорвана.') }}</p>
+    <div class="home-dialog__actions">
+      <Button variant="ghost" type="button" data-friend-block-cancel @click="blockTarget = null">{{
+        t('Отмена')
+      }}</Button>
+      <Button variant="danger" type="button" @click="confirmBlock">{{ t('Заблокировать') }}</Button>
+    </div>
+  </Dialog>
+</template>

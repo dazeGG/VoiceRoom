@@ -70,7 +70,7 @@ test('room context menu supports pointer, keyboard navigation, focus restore, an
   await expect(menu).toBeVisible();
 });
 
-test('friend rows open only the direct-message thread and do not expose a context menu', async ({
+test('friend rows open an actions menu with a context click or keyboard and open DMs with a left click', async ({
   browser,
   page,
   baseURL
@@ -102,10 +102,70 @@ test('friend rows open only the direct-message thread and do not expose a contex
     const friendRow = page.locator('.sidebar__row', { hasText: secondLogin }).first();
     await expect(friendRow).toBeVisible();
 
+    const profile = page.getByRole('dialog', { name: `Профиль ${secondLogin}` });
+    const menu = page.getByRole('menu', { name: `Действия для ${secondLogin}` });
     await friendRow.click({ button: 'right' });
-    await expect(page.getByRole('menu', { name: `Действия для ${secondLogin}` })).toHaveCount(0);
+    await expect(menu.getByRole('menuitem', { name: 'Написать', exact: true })).toBeFocused();
+    await expect(menu.getByRole('menuitem', { name: 'Удалить из друзей' })).toBeVisible();
+    await expect(menu.getByRole('menuitem', { name: 'Выключить уведомления' })).toBeVisible();
+    await expect(menu.getByRole('menuitem', { name: 'Заблокировать' })).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(menu).toBeHidden();
+    await expect(friendRow).toBeFocused();
+
+    await friendRow.press('Shift+F10');
+    await menu.getByRole('menuitem', { name: 'Профиль' }).click();
+    await expect(profile).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(profile).toBeHidden();
+    await friendRow.click({ button: 'right' });
+    const muted = page.waitForResponse(
+      (response) =>
+        response.request().method() === 'PUT' && /\/api\/notifications\/dm\/[^/]+\/mute$/.test(response.url())
+    );
+    await menu.getByRole('menuitem', { name: 'Выключить уведомления' }).click();
+    expect((await muted).ok()).toBe(true);
+    await friendRow.click({ button: 'right' });
+    await expect(menu.getByRole('menuitem', { name: 'Включить уведомления' })).toBeVisible();
+    await menu.getByRole('menuitem', { name: 'Заблокировать' }).click();
+    const confirm = page.getByRole('dialog', { name: `Заблокировать ${secondLogin}?` });
+    await expect(confirm.getByRole('button', { name: 'Отмена' })).toBeFocused();
+    await confirm.getByRole('button', { name: 'Отмена' }).click();
+    await expect(confirm).toBeHidden();
     await friendRow.click();
     await expect(page.getByPlaceholder('Написать сообщение…')).toBeVisible();
+
+    const separator = page.getByRole('separator', { name: 'Ширина боковой панели' });
+    const restingColor = await separator.evaluate((element) => getComputedStyle(element, '::after').backgroundColor);
+    await separator.hover();
+    const hoveredColor = await separator.evaluate((element) => getComputedStyle(element, '::after').backgroundColor);
+    expect(hoveredColor).not.toBe(restingColor);
+    await separator.focus();
+    await expect(separator).toHaveCSS('outline-style', 'none');
+
+    await page.getByRole('button', { name: 'Свернуть боковую панель' }).click();
+    await expect(separator).toBeHidden();
+    await page.locator('.lobby-shell__sidebar-rail').locator('.sidebar__brand-mark').hover({ force: true });
+    await expect(page.locator('#lobby-sidebar')).toHaveCSS('opacity', '1');
+    await friendRow.click({ button: 'right' });
+    await expect(menu).toBeVisible();
+    await expect(separator).toBeHidden();
+    await menu.hover();
+    await expect(friendRow).toBeVisible();
+    await menu.getByRole('menuitem', { name: 'Написать', exact: true }).click();
+    await expect(menu).toBeHidden();
+    await expect(friendRow).toBeHidden();
+
+    await page.locator('.lobby-shell__sidebar-rail').hover({ force: true, position: { x: 24, y: 28 } });
+    await expect(page.locator('#lobby-sidebar')).toHaveCSS('opacity', '1');
+    await friendRow.click({ button: 'right' });
+    await menu.getByRole('menuitem', { name: 'Заблокировать' }).click();
+    const blocked = page.waitForResponse(
+      (response) => response.request().method() === 'PUT' && /\/api\/blocks\/[^/]+$/.test(response.url())
+    );
+    await confirm.getByRole('button', { name: 'Заблокировать', exact: true }).click();
+    expect((await blocked).ok()).toBe(true);
+    await expect(friendRow).toHaveCount(0);
   } finally {
     await secondContext.close();
   }
