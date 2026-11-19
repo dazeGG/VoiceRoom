@@ -22,6 +22,61 @@ const OVERLOAD_CAST = [
   message: 'Overloads over an unknown-returning implementation are a cast; prove the type with a guard instead.'
 }));
 
+const ROOM_LOBBY_IMPORTS = {
+  group: ['@/features/home', '@/features/home/**', '**/features/home/**'],
+  message: 'A room does not import the lobby: use @/entities or the room social context.'
+};
+const CALL_HOST_IMPORTS = ['features/call-feedback', 'features/room/adapters'];
+const CALL_APP_IMPORTS = [
+  'features/auth',
+  'api/auth',
+  ...CALL_HOST_IMPORTS,
+  'stores/page.store',
+  'platform/desktop-boundary',
+  'platform/open-in-app',
+  'platform/app-visibility'
+];
+
+// Relative imports may omit features/ or features/room/ from the alias path.
+function callImportRules(targets) {
+  const relativeTargets = [
+    ...new Set(
+      targets.flatMap((target) => [target, target.replace(/^features\//, ''), target.replace(/^features\/room\//, '')])
+    )
+  ];
+  const message = 'Call code uses installed call ports, not web application dependencies or adapters.';
+  const escapeSelectorPath = (target) => target.replaceAll('.', '\\.').replaceAll('/', '\\/');
+  return {
+    'no-restricted-imports': [
+      'error',
+      {
+        patterns: [
+          ROOM_LOBBY_IMPORTS,
+          {
+            group: [
+              ...targets.flatMap((target) => [`@/${target}`, `@/${target}.ts`, `@/${target}/**`]),
+              ...relativeTargets.flatMap((target) => [`**/${target}`, `**/${target}.ts`, `**/${target}/**`])
+            ],
+            message
+          }
+        ]
+      }
+    ],
+    'no-restricted-syntax': [
+      'error',
+      ...OVERLOAD_CAST,
+      {
+        selector: `ImportExpression[source.value=/^@\\/(?:${targets.map(escapeSelectorPath).join('|')})(?:\\.ts)?(?:\\/|$)/]`,
+        message
+      },
+      {
+        selector: `ImportExpression[source.value=/^\\./][source.value=/(?:^|\\/)(?:${relativeTargets.map(escapeSelectorPath).join('|')})(?:\\.ts)?(?:\\/|$)/]`,
+        message
+      }
+    ]
+  };
+}
+
 export default tseslint.config(
   {
     ignores: [
@@ -170,15 +225,20 @@ export default tseslint.config(
       'no-restricted-imports': [
         'error',
         {
-          patterns: [
-            {
-              group: ['@/features/home', '@/features/home/**', '**/features/home/**'],
-              message: 'A room does not import the lobby: use @/entities or the room social context.'
-            }
-          ]
+          patterns: [ROOM_LOBBY_IMPORTS]
         }
       ]
     }
+  },
+  {
+    // PR1's checked cut: web identity, feedback and shell policy stay in adapters.
+    files: ['apps/web/src/features/room/client/**/*.{ts,vue}'],
+    rules: callImportRules(CALL_APP_IMPORTS)
+  },
+  {
+    // Lobby leave shares the call feedback port without importing its adapter.
+    files: ['apps/web/src/features/room/voice-session.store.ts'],
+    rules: callImportRules(CALL_HOST_IMPORTS)
   },
   {
     // Layers below the features never reach up into one.
