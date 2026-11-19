@@ -6,7 +6,7 @@ import crypto from 'node:crypto';
 import { sql, type Selectable } from 'kysely';
 import type pg from 'pg';
 import { normalizeLinkPreview } from '@voice-room/shared/link-preview';
-import { contentFromPlainText } from '@voice-room/shared/room-message-content';
+import { contentFromPlainText, type RoomMessageContentV1 } from '@voice-room/shared/room-message-content';
 import { MessageContent } from '@voice-room/shared/contracts/messages';
 import { isRecord } from '@voice-room/shared/guards';
 import { Value } from 'typebox/value';
@@ -211,10 +211,12 @@ export function createRoomChatRepository({ db, pool }: { db: Database; pool: pg.
     });
   }
 
-  // An edit is plain text, so the structured content is rebuilt from it:
-  // clients show the content first, and a stale one hid the edit.
-  async function editMessage(roomId: string, messageId: string, text: string) {
-    const content = contentFromPlainText(text);
+  async function editMessage(
+    roomId: string,
+    messageId: string,
+    text: string,
+    content: RoomMessageContentV1 | null = contentFromPlainText(text)
+  ) {
     const row = await db
       .with('updated', (qb) =>
         qb

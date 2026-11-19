@@ -52,6 +52,23 @@ test('clearing the value from outside (after sending) empties the field', async 
   expect(field().querySelectorAll('img')).toHaveLength(0);
 });
 
+test('deleting the last character discards the browser’s empty-editor line break', async () => {
+  await renderHarness({ initial: 'a' });
+  field().replaceChildren(document.createElement('br'));
+  field().dispatchEvent(new InputEvent('input', { inputType: 'deleteContentBackward' }));
+  await nextTick();
+  expect(value()).toBe('');
+  expect(field().childNodes).toHaveLength(0);
+});
+
+test('an intentional line break stays in the draft', async () => {
+  const component = await renderHarness({ initial: '' });
+  expect(component.insert('\n', 0)).toBe(true);
+  field().dispatchEvent(new InputEvent('input'));
+  await nextTick();
+  expect(value()).toBe('\n');
+});
+
 test('pasting rich content inserts plain text only', async () => {
   await renderWithApp(composerHarness({ initial: '' }));
   const data = {

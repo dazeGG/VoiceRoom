@@ -92,6 +92,7 @@ function openAuthorMenu(authorPeerId: string, event: MouseEvent): void {
     :hidden="!roomUi.chatOpen"
     :active-tab="roomUi.activePanel === 'participants' ? 'participants' : 'chat'"
     :visible="roomUi.chatOpen"
+    focus-composer-on-open
     :unread="roomUi.unreadChat"
     :participant-count="membership.roomMemberTotal(roomId, participantsUi.getParticipantCount())"
     chat-tab-id="room-panel-chat-tab"

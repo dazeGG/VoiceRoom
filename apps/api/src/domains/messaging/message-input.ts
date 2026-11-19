@@ -4,6 +4,7 @@
 import crypto from 'node:crypto';
 import { MAX_ATTACHMENTS } from '@voice-room/shared/contracts/messages';
 import { isArray, textOf } from '@voice-room/shared/guards';
+import { MAX_ROOM_MESSAGE_LENGTH } from '@voice-room/shared/room-message-content';
 import { isUuid } from '@voice-room/shared/validation';
 
 export function cleanUuid(value: unknown): string {
@@ -33,24 +34,13 @@ export function messageFingerprint(value: unknown): string {
   return crypto.createHash('sha256').update(JSON.stringify(value)).digest('hex');
 }
 
-// Multiline since 2.4.0: horizontal whitespace runs collapse and blank lines
-// are capped at one; at most maxLines lines and maxChars characters survive.
-export function cleanMessageText(
-  value: unknown,
-  { maxChars, maxLines }: { maxChars: number; maxLines?: number }
-): string {
-  let text = textOf(value)
-    .replace(/[^\S\n]+/g, ' ')
-    .replace(/ *\n */g, '\n')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
-  if (maxLines !== undefined) {
-    const lines = text.split('\n');
-    if (lines.length > maxLines) text = lines.slice(0, maxLines).join('\n');
-  }
-  return text.slice(0, maxChars);
+// Markdown source keeps indentation and blank lines. Whitespace alone still
+// counts as an empty message.
+export function cleanMessageText(value: unknown, maxChars: number): string {
+  const text = textOf(value).replace(/\r\n?/g, '\n').slice(0, maxChars);
+  return text.trim() ? text : '';
 }
 
 export function cleanChatText(value: unknown): string {
-  return cleanMessageText(value, { maxChars: 500, maxLines: 20 });
+  return cleanMessageText(value, MAX_ROOM_MESSAGE_LENGTH);
 }

@@ -148,7 +148,7 @@ describe('fitTiles', () => {
   test('sizes the tiles to the grid, again when it resizes and when someone joins', async () => {
     const { grid, resizeTo } = makeGrid(1200, 600, 2);
     const stop = fitTiles(grid);
-    expect(grid.style.getPropertyValue('--tile-width')).toBe('592px');
+    expect(grid.style.getPropertyValue('--tile-width')).toBe('591px');
     expect(grid.style.getPropertyValue('--tile-gutter')).toBe('0px');
     expect(grid.dataset.scroll).toBe('false');
 
@@ -157,11 +157,11 @@ describe('fitTiles', () => {
       height: 800
     });
     resized?.();
-    expect(grid.style.getPropertyValue('--tile-width')).toBe('400px');
+    expect(grid.style.getPropertyValue('--tile-width')).toBe('399px');
 
     grid.append(document.createElement('div'), document.createElement('div'));
-    await vi.waitFor(() => expect(grid.style.getPropertyValue('--tile-width')).toBe('334px'));
-    // One column of 334px in 400px: the row is held to it and centred by its margins.
+    await vi.waitFor(() => expect(grid.style.getPropertyValue('--tile-width')).toBe('333px'));
+    // One column of 333px in 400px: the row is held to it and centred by its margins.
     expect(grid.style.getPropertyValue('--tile-gutter')).toBe('33px');
     for (let index = 0; index < 21; index += 1) grid.append(document.createElement('div'));
     await vi.waitFor(() => expect(grid.dataset.scroll).toBe('true'));
@@ -176,5 +176,17 @@ describe('fitTiles', () => {
     const { grid } = makeGrid(0, 0, 3);
     fitTiles(grid);
     expect(grid.style.getPropertyValue('--tile-width')).toBe('');
+  });
+
+  test('keeps two tiles on the first row when the measured stage width rounds up', () => {
+    const actualWidth = 1033.75;
+    const { grid } = makeGrid(Math.round(actualWidth), 886, 3);
+    const stop = fitTiles(grid);
+
+    const tileWidth = Number.parseFloat(grid.style.getPropertyValue('--tile-width'));
+    const gutter = Number.parseFloat(grid.style.getPropertyValue('--tile-gutter'));
+    expect(2 * tileWidth + GAP + 2 * gutter).toBeLessThanOrEqual(actualWidth);
+    expect(grid.dataset.scroll).toBe('false');
+    stop();
   });
 });

@@ -8,6 +8,70 @@
 .structured-message {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+
+  &--inline {
+    display: inline;
+  }
+
+  &:not(&--inline) > .structured-message__paragraph {
+    display: block;
+  }
+
+  blockquote {
+    margin: 0;
+    padding-inline-start: 0.75em;
+    border-inline-start: 3px solid var(--vr-line-strong);
+  }
+
+  :is(ul, ol) {
+    margin: 0;
+    padding-inline-start: 1.5em;
+  }
+
+  code {
+    font-family: var(--font-mono);
+    font-size: 0.9em;
+  }
+
+  :not(pre) > code {
+    border-radius: 4px;
+    padding-inline: 0.25em;
+    background: var(--vr-surface-2);
+  }
+}
+
+.structured-message__code {
+  min-width: 0;
+  max-width: 100%;
+  border: 1px solid var(--vr-line);
+  border-radius: 8px;
+  background: var(--vr-surface-2);
+
+  button {
+    display: block;
+    margin-inline-start: auto;
+    border: 0;
+    border-radius: 7px;
+    padding: 4px 8px;
+    background: transparent;
+    color: var(--vr-text-muted);
+    font: inherit;
+    font-size: 0.75em;
+    cursor: pointer;
+
+    &:hover {
+      background: var(--vr-hover);
+      color: var(--vr-text);
+    }
+  }
+
+  pre {
+    overflow-x: auto;
+    margin: 0;
+    padding: 0 8px 8px;
+    white-space: pre;
+    overflow-wrap: normal;
+  }
 }
 
 .structured-message__mention {

@@ -36,9 +36,10 @@ test('the row margin comes from the width the columns were fitted to, even when 
 
   const stop = fitTiles(grid);
 
-  const fit = fitTileGrid({ width: 620, height: 235, count: 3, gap: GAP });
+  const fittingWidth = 619;
+  const fit = fitTileGrid({ width: fittingWidth, height: 234, count: 3, gap: GAP });
   const row = fit.columns * fit.tileWidth + (fit.columns - 1) * GAP;
   expect(grid.style.getPropertyValue('--tile-width')).toBe(`${fit.tileWidth}px`);
-  expect(grid.style.getPropertyValue('--tile-gutter')).toBe(`${Math.floor((620 - row) / 2)}px`);
+  expect(grid.style.getPropertyValue('--tile-gutter')).toBe(`${Math.floor((fittingWidth - row) / 2)}px`);
   stop();
 });
