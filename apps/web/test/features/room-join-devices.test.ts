@@ -1,3 +1,4 @@
+import { installWebCallPortsForTest } from '../helpers/call-ports';
 import { createPinia, setActivePinia } from 'pinia';
 import { expect, test, vi } from 'vitest';
 import { roomStatus } from '../fixtures/answers';
@@ -78,6 +79,7 @@ vi.mock('@/features/room/client/services/livekit-service', async (original) => (
 
 test('device enumeration failure does not prevent joining', async () => {
   setActivePinia(createPinia());
+  await installWebCallPortsForTest();
   vi.stubGlobal('WebSocket', FakeWebSocket);
   stubFetch({ '/api/rooms/abc123': { body: roomStatus({ roomId: 'abc123' }) } });
   const room = await import('@/features/room/client/room/room');
@@ -95,6 +97,7 @@ test('a slow permission prompt explains listen-only join and late permission is 
   vi.resetModules();
   vi.useFakeTimers();
   setActivePinia(createPinia());
+  await installWebCallPortsForTest();
   vi.stubGlobal('WebSocket', FakeWebSocket);
   stubFetch({ '/api/rooms/abc123': { body: roomStatus({ roomId: 'abc123' }) } });
   const room = await import('@/features/room/client/room/room');
@@ -123,6 +126,7 @@ test('a cancelled permission prompt does not show a stale timeout explanation', 
   vi.resetModules();
   vi.useFakeTimers();
   setActivePinia(createPinia());
+  await installWebCallPortsForTest();
   vi.stubGlobal('WebSocket', FakeWebSocket);
   stubFetch({ '/api/rooms/abc123': { body: roomStatus({ roomId: 'abc123' }) } });
   const room = await import('@/features/room/client/room/room');
@@ -150,6 +154,7 @@ test('a cancelled permission prompt does not show a stale timeout explanation', 
 test('a server refusal during a pending connection is failure, not cancellation', async () => {
   vi.resetModules();
   setActivePinia(createPinia());
+  await installWebCallPortsForTest();
   vi.stubGlobal('WebSocket', FakeWebSocket);
   stubFetch({ '/api/rooms/abc123': { body: roomStatus({ roomId: 'abc123' }) } });
   const room = await import('@/features/room/client/room/room');
@@ -177,6 +182,7 @@ test('a server refusal during a pending connection is failure, not cancellation'
 test('leaving during deferred device enumeration disposes a prepared candidate immediately', async () => {
   vi.resetModules();
   setActivePinia(createPinia());
+  await installWebCallPortsForTest();
   vi.stubGlobal('WebSocket', FakeWebSocket);
   stubFetch({ '/api/rooms/abc123': { body: roomStatus({ roomId: 'abc123' }) } });
   const room = await import('@/features/room/client/room/room');
@@ -204,6 +210,7 @@ test('leaving during deferred device enumeration disposes a prepared candidate i
 test('token or transport rejection disposes the uncommitted join candidate', async () => {
   vi.resetModules();
   setActivePinia(createPinia());
+  await installWebCallPortsForTest();
   vi.stubGlobal('WebSocket', FakeWebSocket);
   stubFetch({ '/api/rooms/abc123': { body: roomStatus({ roomId: 'abc123' }) } });
   const room = await import('@/features/room/client/room/room');
@@ -225,6 +232,7 @@ test('token or transport rejection disposes the uncommitted join candidate', asy
 test('a confirmed join publication keeps its committed capture until leave', async () => {
   vi.resetModules();
   setActivePinia(createPinia());
+  await installWebCallPortsForTest();
   vi.stubGlobal('WebSocket', FakeWebSocket);
   stubFetch({ '/api/rooms/abc123': { body: roomStatus({ roomId: 'abc123' }) } });
   const room = await import('@/features/room/client/room/room');
@@ -251,6 +259,7 @@ test('a confirmed join publication keeps its committed capture until leave', asy
 test('old deferred relief completion cannot update a new call or its diagnostics', async () => {
   vi.resetModules();
   setActivePinia(createPinia());
+  await installWebCallPortsForTest();
   vi.stubGlobal('WebSocket', FakeWebSocket);
   stubFetch({ '/api/rooms/abc123': { body: roomStatus({ roomId: 'abc123' }) } });
   const room = await import('@/features/room/client/room/room');

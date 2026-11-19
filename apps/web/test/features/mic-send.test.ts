@@ -4,7 +4,10 @@
 // microphone, a poll after the computer slept and a browser that does not count
 // the sound are not stalls. Each poll tells the server what it saw.
 
-import { afterEach, expect, test, vi } from 'vitest';
+import { afterEach, beforeEach, expect, onTestFinished, test, vi } from 'vitest';
+import { createPinia, setActivePinia } from 'pinia';
+import { createWebCallPorts } from '@/features/room/adapters/web-call-ports';
+import { installCallPorts } from '@/features/room/client/ports';
 import {
   MIC_HEALTHY_POLLS,
   MIC_RECOVERIES_PER_CALL,
@@ -21,6 +24,11 @@ import {
 import { resolveDesktopBoundaryPolicy } from '@/platform/desktop-boundary';
 import { freshImport } from '../helpers/fresh-module';
 import { defined } from '../helpers/assert';
+
+beforeEach(() => {
+  const pinia = setActivePinia(createPinia());
+  onTestFinished(installCallPorts(createWebCallPorts(pinia)));
+});
 
 afterEach(() => {
   stopMicSendWatch();

@@ -1,3 +1,4 @@
+import { getCallPorts } from '../ports';
 // Shared room-updated/room-deleted dispatcher. Lifecycle frames arrive over the
 // app WebSocket (room.updated/room.deleted, handleServerMessage in room.ts), and
 // may reach a client on more than one logical channel, so the reaction lives
@@ -5,7 +6,6 @@
 import { t } from '@/shared/i18n';
 import type { RoomLifecycleSummary } from '../core/types';
 import { useRoomSettingsStore } from '../../room-settings.store';
-import { usePageStore } from '@/stores/page.store';
 import { state } from '../core/room-runtime.store';
 import { showToast } from '../ui/toast';
 
@@ -24,14 +24,14 @@ export function applyRoomUpdated(room: RoomLifecycleSummary): void {
   state.roomName = room.name || '';
   state.roomAvatarUrl = room.avatarUrl || '';
   state.roomIsStatic = room.isStatic === true;
-  if (usePageStore().screen === 'room') {
+  if (getCallPorts().platform.page.read().screen === 'room') {
     refreshRoomHeadingSoon();
   }
 }
 
 export function applyRoomNotFound(roomId: string): void {
   if (roomId !== state.roomId) return;
-  if (usePageStore().screen === 'not-found') return;
+  if (getCallPorts().platform.page.read().screen === 'not-found') return;
   showRoomNotFoundSoon();
 }
 
@@ -42,7 +42,7 @@ export function applyRoomDeleted(roomId: string): void {
   if (useRoomSettingsStore().deleting) return;
   // A lifecycle frame may be delivered more than once; handle it a single time.
   if (handledRoomDeletedId === roomId) return;
-  if (usePageStore().screen === 'not-found') return;
+  if (getCallPorts().platform.page.read().screen === 'not-found') return;
   handledRoomDeletedId = roomId;
   showToast(t('Комната удалена владельцем'));
   showRoomNotFoundSoon();

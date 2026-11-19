@@ -2,6 +2,7 @@
 // the browser handing over no audio track) shows that message, not the
 // generic "could not connect".
 
+import { installWebCallPortsForTest } from '../helpers/call-ports';
 import { createPinia, setActivePinia } from 'pinia';
 import { expect, test, vi } from 'vitest';
 import { stubFetch } from '../fixtures/fetch';
@@ -27,6 +28,7 @@ vi.mock('@/features/room/client/services/livekit-service', async (importOriginal
 test('a join failure meant for the user shows its own message', async () => {
   vi.resetModules();
   setActivePinia(createPinia());
+  await installWebCallPortsForTest();
   vi.stubGlobal('WebSocket', FakeWebSocket);
   stubFetch({
     '/api/rooms/abc123': {

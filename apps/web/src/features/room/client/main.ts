@@ -1,9 +1,9 @@
+import { getCallPorts } from './ports';
 import { t } from '@/shared/i18n';
 import { GATE_THRESHOLD_MIN_DB } from './core/config';
 import { useRoomDeviceUiStore } from '@/features/room/room-device-ui.store';
 import { useStartUiStore } from '@/features/room/start-ui.store';
 import { useVoiceSessionStore } from '@/features/room/voice-session.store';
-import { isRoomClientAllowed } from '@/platform/desktop-boundary';
 
 import { state } from './core/room-runtime.store';
 import { getStoredPeerSession } from './core/session';
@@ -57,7 +57,7 @@ export function mountRoomClient(
   _root: ParentNode = document,
   options: { roomId?: string; embeddedRoomId?: string; autoJoin?: boolean } = {}
 ): () => void {
-  if (!isRoomClientAllowed()) return () => {};
+  if (!getCallPorts().platform.policy().roomClientAllowed) return () => {};
   if (mounted) return unmountRoomClient;
   mounted = true;
   // The room is where the failures that matter happen, so the capture starts

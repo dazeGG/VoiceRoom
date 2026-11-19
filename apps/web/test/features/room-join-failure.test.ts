@@ -2,6 +2,7 @@
 // that voice is unreachable, and the status pill says there is no route to
 // voice rather than a generic connection error.
 
+import { installWebCallPortsForTest } from '../helpers/call-ports';
 import { createPinia, setActivePinia } from 'pinia';
 import { expect, test, vi } from 'vitest';
 import { stubFetch } from '../fixtures/fetch';
@@ -28,6 +29,7 @@ vi.mock('@/features/room/client/media/livekit-runtime', () => ({
 test('LiveKit being unreachable shows a Russian toast and "no route to voice"', async () => {
   vi.resetModules();
   setActivePinia(createPinia());
+  await installWebCallPortsForTest();
   vi.stubGlobal('WebSocket', FakeWebSocket);
   stubFetch({
     '/api/rooms/abc123': {

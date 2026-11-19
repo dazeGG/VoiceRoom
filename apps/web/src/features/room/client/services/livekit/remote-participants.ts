@@ -1,3 +1,4 @@
+import { getCallPorts } from '../../ports';
 // The other people in the call as LiveKit reports them: their participants,
 // which of their tracks to subscribe to, and what to do as tracks come and go.
 // Screens get a grace period through reconnects before they count as gone.
@@ -32,7 +33,6 @@ import { refreshScreenStage, refreshScreenTiles } from '../../ui/screen-view';
 import type { Participant } from '../../core/types';
 import { subscribeRoomRecoveryTransitions } from '../../recovery/room-recovery';
 import { ScreenRecoveryGraceController } from '../../recovery/screen-recovery-grace';
-import { isAppVisible } from '@/platform/app-visibility';
 
 import {
   isCameraPublication,
@@ -251,7 +251,7 @@ function applyRemoteVideoVisibility(publication: RemoteTrackPublication): void {
   if (!isCameraPublication(publication) && !isScreenVideoPublication(publication)) return;
   // setEnabled only works on a publication we subscribe to.
   if (typeof publication.setEnabled !== 'function' || publication.isDesired === false) return;
-  const visible = isAppVisible();
+  const visible = getCallPorts().platform.isVisible();
   if (publication.isEnabled === visible) return;
   publication.setEnabled(visible);
 }

@@ -3,6 +3,7 @@
 
 import { createPinia, setActivePinia } from 'pinia';
 import { onTestFinished, vi } from 'vitest';
+import { installWebCallPortsForTest } from './call-ports';
 
 const stubbed = new Map<string, PropertyDescriptor | undefined>();
 
@@ -45,6 +46,7 @@ export function stubWindow(props: Record<string, unknown>): void {
 export async function freshImport<T>(load: () => Promise<T>): Promise<T> {
   vi.resetModules();
   setActivePinia(createPinia());
+  if (typeof window !== 'undefined' && typeof document !== 'undefined') await installWebCallPortsForTest();
   return load();
 }
 

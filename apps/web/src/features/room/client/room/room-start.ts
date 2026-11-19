@@ -1,9 +1,9 @@
+import { getCallPorts } from '../ports';
 // The start screen's actions: create a room or open one by its code. Both
 // navigate to the room's page, which then checks entry and joins.
 
 import { t } from '@/shared/i18n';
 import { createRoom } from '@/api/rooms';
-import { markInAppRoomNavigation } from '@/platform/open-in-app';
 import { createLogger, errorContext } from '@/shared/log';
 import { useStartUiStore } from '../../start-ui.store';
 import { extractRoomId } from '@/shared/utils/room';
@@ -48,6 +48,6 @@ export function handleRoomCodeKeydown(event: KeyboardEvent): void {
 }
 
 function openRoom(roomId: string): void {
-  markInAppRoomNavigation();
-  window.location.href = `/r/${encodeURIComponent(roomId)}`;
+  getCallPorts().platform.prepareRoomNavigation();
+  getCallPorts().platform.navigateToRoom(roomId);
 }

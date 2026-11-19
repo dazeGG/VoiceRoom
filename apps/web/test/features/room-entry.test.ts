@@ -2,6 +2,7 @@
 // a signed-in account enters under its own name and saves the room, a guest
 // is asked for a name, and a failed account check stops entry.
 
+import { installWebCallPortsForTest } from '../helpers/call-ports';
 import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, expect, test, vi } from 'vitest';
 import { stubFetch, type Reply } from '../fixtures/fetch';
@@ -17,6 +18,7 @@ vi.mock('@/features/room/client/ui/toast', () => ({ showToast: vi.fn() }));
 async function load(routes: Record<string, Reply>) {
   vi.resetModules();
   setActivePinia(createPinia());
+  await installWebCallPortsForTest();
   const fetchStub = stubFetch(routes);
   const shell = { roomLeft: vi.fn<(roomId: string) => void>(), roomsChanged: vi.fn<(roomId: string) => void>() };
   const { setRoomShell } = await import('@/features/room/client/core/embed');

@@ -5,6 +5,7 @@
 import type { RoomOptions } from 'livekit-client';
 import { createPinia, setActivePinia } from 'pinia';
 import { vi } from 'vitest';
+import { installWebCallPortsForTest } from './call-ports';
 import type { Participant } from '@/features/room/client/core/types.ts';
 import type * as LiveKitServiceModule from '@/features/room/client/services/livekit-service.ts';
 import type * as ScreenProfilesModule from '@/features/room/client/media/profiles';
@@ -96,6 +97,7 @@ export async function loadLiveKitHarness(
 ): Promise<LiveKitHarness> {
   vi.resetModules();
   setActivePinia(createPinia());
+  await installWebCallPortsForTest();
 
   const state: LiveKitHarness['state'] = {
     outputMuted: false,

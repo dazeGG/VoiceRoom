@@ -2,6 +2,7 @@
 // and a visitor far from the server pays each one in full. The room check runs
 // beside the microphone, and is not repeated right after the room page made it.
 
+import { installWebCallPortsForTest } from '../helpers/call-ports';
 import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, expect, test, vi } from 'vitest';
 import { roomStatus } from '../fixtures/answers';
@@ -55,6 +56,7 @@ const ROOM = { body: roomStatus({ roomId: 'abc123', name: 'Планёрка', is
 async function loadRoom(routes: Record<string, Reply>) {
   vi.resetModules();
   setActivePinia(createPinia());
+  await installWebCallPortsForTest();
   vi.stubGlobal('WebSocket', FakeWebSocket);
   const { calls, fetchMock } = stubFetch(routes);
   const room = await import('@/features/room/client/room/room');

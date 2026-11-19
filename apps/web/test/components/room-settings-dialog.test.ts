@@ -11,6 +11,7 @@ import { useRoomSettingsStore } from '@/features/room/room-settings.store';
 import { ROOM_SHELL_KEY } from '@/features/room/shell';
 import { stubFetch } from '../fixtures/fetch.ts';
 import { renderWithApp } from '../helpers/render.ts';
+import { installWebCallPortsForTest } from '../helpers/call-ports';
 
 afterEach(() => {
   roomClientState.roomId = '';
@@ -42,6 +43,7 @@ test('a saved rename tells the host that the room changed', async () => {
     return () => h(RoomSettingsDialog);
   });
   const { pinia } = await renderWithApp(Host);
+  await installWebCallPortsForTest();
   useRoomSettingsStore(pinia).openRoomSettings();
 
   const name = await screen.findByPlaceholderText('Название комнаты');
