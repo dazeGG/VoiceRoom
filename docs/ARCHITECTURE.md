@@ -1,20 +1,24 @@
 # VoiceRoom architecture
 
 Rules for new code, the current state of the code, and where the two still
-differ. Import rules live in `config/import-boundaries.v1.json`. The history of how the API got here
+differ. Import rules live in `config/import-boundaries.v1.json` and `eslint.config.mjs`. The history of how the API got here
 (`server.js` split, CommonJS → ES modules, JavaScript → TypeScript) is in git.
 
 ## 1. Repository shape: one monorepo
 
-API, web, admin and `packages/shared` stay in one repository. `apps/admin` is
+API, web, site, admin, and the shared workspaces stay in one repository. `apps/admin` is
 the React staff console (admin.voiceroom.ru), signed in by handoff from the
 main site; it talks to the API's admin routes.
 
 - `packages/shared` is a live contract (validators, realtime envelopes, screen
   profile ids, reserved peer ids). One change updates the contract and both
   consumers atomically.
-- Versions move in lockstep (the root and every workspace share one version),
-  and CI boots the whole stack for the voice-join smoke test.
+- `packages/ui` owns portable call UI primitives, preview utilities and shared
+  theme styles. The web app, embedded widget and site consume its package
+  exports. The package imports no app code. Web owns product stores, locale
+  registration and the client log reporting sink.
+- The application workspaces version together. The site and documentation
+  release independently. CI boots the whole stack for the voice-join smoke test.
 - Deployables are already separate: the `api`, `worker` and `web` images are
   built and rolled out independently.
 - The desktop shell is its own repository (own release cadence and signing).
@@ -27,7 +31,8 @@ public API with third-party clients.
 - Everything is strict TypeScript. The API and `packages/shared` run on Node 24
   type stripping with no build step: erasable syntax only, imports with
   explicit `.ts` extensions, `tsc` in `npm run check`. The web (Vue 3) is
-  compiled by Vite and checked by `vue-tsc`.
+  compiled by Vite and checked by `vue-tsc`. `packages/ui` exports TypeScript
+  source for each Vite consumer to compile and keeps Vue and Pinia as peers.
 - JavaScript stays only where it must: the byte-pinned `.cjs` migrations,
   `scripts/geoip/fetch-dbip-city-lite.mjs` (host crontabs run it by path) and
   the AudioWorklet modules in `apps/web/public` (served unbundled).
@@ -208,9 +213,9 @@ styles/                 SCSS: tokens, mixins and one partial per BEM block
   `lobby/dm/*` for the direct thread, `RoomChatComposer` and pure layout in
   `room-chat-view.ts` for the room chat, `services/livekit/*` behind
   `livekit-service.ts`.
-- Styles: no `<style>` in `.vue` files. Each BEM block has a partial in
-  `styles/<area>/_<block>.scss`; colours come from the `--vr-*` tokens in
-  `styles/_tokens.scss`, not raw values. State is `aria-*` or a BEM modifier
+- Styles: no `<style>` in `.vue` files. Each BEM block has a partial in web's
+  `styles/<area>` or `packages/ui/src/styles`. Colours use the `--vr-*` tokens
+  in `packages/ui/src/styles/_tokens.scss`. State is `aria-*` or a BEM modifier
   class, never a `[data-*]` selector. `scripts/check-web-styles.mts` and
   `scripts/check-web-palette.mts` enforce this in `npm run check`.
 - Browser, desktop, media and LiveKit fallbacks stay explicit and testable.

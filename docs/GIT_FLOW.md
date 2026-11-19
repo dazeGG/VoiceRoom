@@ -56,9 +56,9 @@ same Releases page while they share a repository.
 
 The GitHub `production` environment must allow the tag patterns `v*`,
 `site/v*` and `docs/v*`. Release PRs carry the version changes and matching
-lockfiles. For an application release, bump the root, API, web, admin and
-shared workspace versions together. The public site and documentation each
-keep an independent version.
+lockfiles. For an application release, bump the root, API, web, admin, shared
+and UI workspace versions together. The site and documentation each keep an
+independent version.
 
 Use `npm version` to update the manifests and lockfiles in the release branch.
 Replace the example versions with the intended versions and run the command for
@@ -67,13 +67,13 @@ the component being released.
 ```bash
 npm version 2.14.0 --no-git-tag-version --ignore-scripts --include-workspace-root \
   --workspace @voice-room/api --workspace @voice-room/web \
-  --workspace @voice-room/admin --workspace @voice-room/shared
+  --workspace @voice-room/admin --workspace @voice-room/shared --workspace @voice-room/ui
 npm version 1.0.1 --no-git-tag-version --ignore-scripts --workspace @voice-room/site
 npm --prefix apps/docs version 1.0.1 --no-git-tag-version --ignore-scripts
 ```
 
 Changes in `apps/site` and `apps/docs` run their respective CI jobs. Changes to shared
-contracts also check the consumers. The Git Flow policy check waits for every applicable
+contracts or portable UI also check their consumers. The Git Flow policy check waits for every applicable
 lane on a pull request. A successful push to `develop` deploys each affected component
 independently. Merging a release into `main` prepares it for tagging.
 

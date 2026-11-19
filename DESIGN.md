@@ -40,7 +40,7 @@
 - Room settings opened from the lobby and from an active room must expose the same avatar edit/remove behavior and the same destructive-action hierarchy.
 
 ## Visual language
-- Color: graphite neutral surfaces (`--vr-*` tokens in `apps/web/src/styles/_tokens.scss`) with one accent per theme (Volt by default, Ice, Coral); components never use raw colours.
+- Color: graphite neutral surfaces (`--vr-*` tokens in `packages/ui/src/styles/_tokens.scss`) with one accent per theme (Volt by default, Ice, Coral); components never use raw colours.
 - Typography: Onest is the UI face (400-700, self-hosted). JetBrains Mono is reserved for room codes, handles, timestamps, and technical text.
 - Spacing/layout rhythm: 4pt scale; common gaps 8/10/12/16px; action rails use 52px large height.
 - Shape/radius/elevation: 14px default interactive radius, pill only for deliberate pill affordances. Room avatars are squircle-shaped and use the neutral `--room-avatar-bg` fallback until an image is uploaded.
@@ -52,7 +52,7 @@
 - Existing components to reuse: shared `Button`, shared app tokens, room dock controls, Select/Popover primitives.
 - New/changed components: interaction sizing tokens (`--interactive-*`) in `_tokens.scss`; shared Button now defaults to large action sizing; settings notification-target rows, a compact profile identity row, room-avatar editing in every room-settings entry point, and a single sequential sound-set preview action.
 - Variants and states: 36px small, 40px medium, 52px large; 46px reserved for dock; disabled/hover/focus must be visible.
-- Token/component ownership: `apps/web/src/styles/_tokens.scss` owns sizing tokens; shared primitives consume them.
+- Token/component ownership: `packages/ui/src/styles/_tokens.scss` defines sizing tokens for the shared primitives.
 - Widget configuration uses existing SegmentControl, Switch and Button primitives. A shared presentation-only WidgetJoinControls keeps the preview and actual guest entry consistent. Widget colours belong inside the configured card; the builder retains the app theme.
 
 ## Accessibility
@@ -84,7 +84,7 @@
 - Microcopy rules: helper hints should not disrupt control geometry.
 
 ## Implementation constraints
-- Framework/styling system: Vue 3 with SCSS partials (one per BEM block, `apps/web/src/styles`) and shared CSS variables in `_tokens.scss`.
+- Framework/styling system: Vue 3 with one SCSS partial per BEM block in `apps/web/src/styles` or `packages/ui/src/styles`. Shared CSS variables come from `pkg:@voice-room/ui/styles/tokens`.
 - Design-token constraints: use existing `--space-*`, `--radius-*`, `--interactive-*` tokens.
 - Performance constraints: CSS-only standardization; no extra dependencies.
 - Compatibility constraints: no new package/browser APIs. Microphone mode and configurable hotkeys are desktop-app controls; browser sessions always use the open-microphone mode and do not register voice hotkeys.
