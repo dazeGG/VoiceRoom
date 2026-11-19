@@ -1,6 +1,7 @@
 import { fireEvent, screen } from '@testing-library/vue';
 import { expect, test } from 'vitest';
 import { nextTick } from 'vue';
+import EmojiPickerPanel from '@/shared/chat/EmojiPickerPanel.vue';
 import { defined } from '../helpers/assert.ts';
 import { renderWithApp } from '../helpers/render.ts';
 import { composerHarness, type ComposerApi } from './harness/ComposerHarness.ts';
@@ -20,6 +21,13 @@ async function renderHarness(props: { initial?: string; maxlength?: number }): P
 
 const field = () => screen.getByRole('textbox', { name: 'Сообщение' });
 const value = () => screen.getByTestId('value').textContent;
+
+test('right-clicking an emoji opens its skin tone choices', async () => {
+  await renderWithApp(EmojiPickerPanel, { props: { frequentEmoji: ['👍'] } });
+  const option = defined(screen.getAllByRole('gridcell', { name: 'Реакция 👍' })[0], 'thumbs-up emoji');
+  await fireEvent.contextMenu(option);
+  expect(screen.getByRole('group', { name: 'Цвет кожи для этой реакции' }).querySelectorAll('button')).toHaveLength(6);
+});
 
 test('emoji show as artwork while the value stays plain text', async () => {
   await renderWithApp(composerHarness({ initial: 'привет 😀!' }));

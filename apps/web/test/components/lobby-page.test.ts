@@ -3,7 +3,7 @@
 // ?dm= link lands on that conversation. An administrator gets the panel in
 // the header, at its own address, and a new report as a notice that stays.
 
-import { screen, within } from '@testing-library/vue';
+import { fireEvent, screen, within } from '@testing-library/vue';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import LobbyPage from '@/features/home/LobbyPage.vue';
@@ -30,6 +30,8 @@ beforeEach(() => {
 });
 afterEach(() => {
   window.history.replaceState(null, '', '/app');
+  localStorage.removeItem('voice-room:lobby-sidebar-width');
+  localStorage.removeItem('voice-room:lobby-sidebar-collapsed');
   roomClientState.roomId = '';
   roomClientState.roomName = '';
 });
@@ -72,6 +74,69 @@ async function socket(): Promise<FakeWebSocket> {
   current.open();
   return current;
 }
+
+test('the sidebar clamps drag widths, cancels interrupted drags and restores its saved width after collapse', async () => {
+  stubLobby();
+  const view = await renderLobby();
+  const separator = screen.getByRole('separator', { name: 'Ширина боковой панели' });
+  const pointer = { button: 0, pointerId: 1, isPrimary: true };
+  const width = () => Number(separator.getAttribute('aria-valuenow'));
+  const maxWidth = Number(separator.getAttribute('aria-valuemax'));
+  expect(width()).toBe(280);
+
+  await fireEvent.pointerDown(separator, { ...pointer, clientX: 280 });
+  await fireEvent.pointerMove(separator, { ...pointer, clientX: 600 });
+  expect(width()).toBe(maxWidth);
+  await fireEvent.pointerCancel(separator, pointer);
+  expect(width()).toBe(280);
+
+  await fireEvent.pointerDown(separator, { ...pointer, clientX: 280 });
+  await fireEvent.pointerUp(separator, { ...pointer, clientX: 320 });
+  expect(width()).toBe(320);
+
+  await fireEvent.pointerDown(separator, { ...pointer, clientX: 320 });
+  await fireEvent.pointerMove(separator, { ...pointer, clientX: 200 });
+  expect(width()).toBe(240);
+  await fireEvent.pointerMove(separator, { ...pointer, clientX: 100 });
+  expect(width()).toBe(0);
+  expect(screen.queryByRole('complementary')).toBeNull();
+  await fireEvent.pointerMove(separator, { ...pointer, clientX: 220 });
+  expect(width()).toBe(240);
+  await fireEvent.pointerMove(separator, { ...pointer, clientX: 100 });
+  await fireEvent.pointerUp(separator, { ...pointer, clientX: 100 });
+  expect(width()).toBe(0);
+  expect(screen.queryByRole('complementary')).toBeNull();
+
+  view.unmount();
+  const reopened = await renderLobby();
+  const rail = defined(reopened.container.querySelector('.lobby-shell__sidebar'), 'sidebar rail');
+  expect(rail.querySelector('.lobby-shell__sidebar-rail .sidebar__brand-mark')).toBeTruthy();
+  expect(rail.querySelector('.lobby-shell__sidebar-account .ui-avatar')).toBeTruthy();
+  await vi.waitFor(() =>
+    expect(rail.querySelector('.lobby-shell__sidebar-avatars .ui-avatar__dot--online')).toBeTruthy()
+  );
+  expect(rail.querySelector('.lobby-shell__sidebar-unread')?.textContent).toBe('2');
+  expect(screen.queryByRole('separator')).toBeNull();
+  await fireEvent.pointerEnter(rail, { pointerType: 'mouse' });
+  expect(screen.getByRole('complementary')).toBeTruthy();
+  expect(screen.queryByRole('separator')).toBeNull();
+  expect(rail.parentElement?.classList.contains('lobby-shell--sidebar-collapsed')).toBe(true);
+  await fireEvent.pointerLeave(rail, { pointerType: 'mouse' });
+  expect(screen.queryByRole('complementary')).toBeNull();
+  await fireEvent.pointerEnter(rail, { pointerType: 'mouse' });
+  await fireEvent.keyDown(screen.getByRole('button', { name: 'Развернуть боковую панель' }), { key: 'Escape' });
+  expect(screen.queryByRole('complementary')).toBeNull();
+  await fireEvent.pointerEnter(rail, { pointerType: 'mouse' });
+  await userEvent.click(screen.getByRole('button', { name: 'Развернуть боковую панель' }));
+  await fireEvent.pointerLeave(rail, { pointerType: 'mouse' });
+  expect(screen.getByRole('complementary')).toBeTruthy();
+  const restored = screen.getByRole('separator', { name: 'Ширина боковой панели' });
+  expect(restored.getAttribute('aria-valuenow')).toBe('320');
+  await fireEvent.keyDown(restored, { key: 'ArrowRight' });
+  expect(restored.getAttribute('aria-valuenow')).toBe('336');
+  await userEvent.click(screen.getByRole('button', { name: 'Свернуть боковую панель' }));
+  expect(restored.getAttribute('aria-valuenow')).toBe('0');
+});
 
 test('a session ended on another device signs out with a message', async () => {
   stubLobby();
