@@ -27,7 +27,7 @@
 //   .auth-foot            -> .auth-dialog__foot
 //   .auth-link            -> .auth-dialog__link
 //   @keyframes auth-spin  -> @keyframes auth-dialog-spin
-@use '../mixins' as *;
+@use 'pkg:@voice-room/ui/styles/mixins' as *;
 
 .auth-dialog {
   width: min(430px, calc(100vw - 32px));

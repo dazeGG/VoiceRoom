@@ -6,7 +6,7 @@ import { fireEvent, screen } from '@testing-library/vue';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, expect, test, vi } from 'vitest';
 import { defineComponent, h, ref, type VNode } from 'vue';
-import Dialog from '@/shared/ui/Dialog/Dialog.vue';
+import { Dialog } from '@voice-room/ui/components';
 import { WHATS_NEW_VERSION } from '@voice-room/shared/account-security';
 import WhatsNewDialog from '@/features/home/components/WhatsNewDialog.vue';
 import { WHATS_NEW_SLIDES } from '@/features/home/model/whats-new';

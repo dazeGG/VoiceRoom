@@ -2,7 +2,7 @@ import { t } from '@/shared/i18n';
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
 import { GATE_THRESHOLD_MIN_DB } from './client/core/config';
-import type { SelectOption } from '@/shared/ui/Select/types';
+import type { SelectOption } from '@voice-room/ui/components';
 
 export const NOISE_MODE_SELECT_OPTIONS: SelectOption[] = [
   {

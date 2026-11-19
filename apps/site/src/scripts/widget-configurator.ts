@@ -7,7 +7,7 @@ import {
   widgetEmbedMarkup
 } from '@voice-room/shared/contracts/widget';
 import { createRoomCode } from '@voice-room/shared/validation';
-import { fitWidgetTiles } from '../../../web/src/shared/ui/tile-grid';
+import { fitWidgetTiles } from '@voice-room/ui/tile-grid';
 import { widgetCodeParts } from './widget-code-syntax.ts';
 
 const settings = document.querySelector<HTMLFormElement>('[data-widget-settings]');

@@ -37,6 +37,8 @@ const CALL_APP_IMPORTS = [
   'platform/app-visibility'
 ];
 const CALL_IMPORT_MESSAGE = 'Call code uses installed call ports, not web application dependencies or adapters.';
+const UI_IMPORT_MESSAGE = 'Portable UI cannot import applications or application aliases.';
+const UI_APP_IMPORTS = '^@(?:/|$)|^@voice-room/(?:admin|api|docs|site|web)(?:/|$)|(?:^|/)apps(?:/|$)';
 const escapeRegex = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const aliasRegex = (targets) => `^@/(?:${targets.map(escapeRegex).join('|')})(?:\\.ts)?(?:/|$)`;
 const UP = '(?:\\.\\./)';
@@ -101,10 +103,10 @@ export default tseslint.config(
   },
   js.configs.recommended,
   ...tseslint.configs.strictTypeChecked,
-  // Vue rules apply to the web app only.
+  // Vue rules apply to the web app and the portable UI package.
   ...vue.configs['flat/recommended-error'].map((config) => ({
     ...config,
-    files: config.files ?? ['apps/web/**/*.{ts,vue}']
+    files: config.files ?? ['apps/web/**/*.{ts,vue}', 'packages/ui/**/*.{ts,vue}']
   })),
   {
     languageOptions: {
@@ -118,6 +120,7 @@ export default tseslint.config(
           './apps/site/tsconfig.json',
           './apps/web/tsconfig.test.json',
           './packages/shared/tsconfig.test.json',
+          './packages/ui/tsconfig.json',
           './scripts/tsconfig.json'
         ],
         tsconfigRootDir: import.meta.dirname,
@@ -218,6 +221,24 @@ export default tseslint.config(
     files: ['apps/web/src/**/*.{ts,vue}'],
     ignores: ['apps/web/src/shared/log.ts'],
     rules: { 'no-console': 'error' }
+  },
+  {
+    files: ['packages/ui/**/*.{ts,tsx,mts,js,jsx,mjs,vue}'],
+    rules: {
+      'no-restricted-imports': ['error', { patterns: [{ regex: UI_APP_IMPORTS, message: UI_IMPORT_MESSAGE }] }],
+      'no-restricted-syntax': [
+        'error',
+        ...OVERLOAD_CAST,
+        ...[
+          'ImportExpression[source.value',
+          'ImportExpression[source.quasis.0.value.cooked',
+          'TSImportType[source.value'
+        ].map((selector) => ({
+          selector: `${selector}=/${UI_APP_IMPORTS.replaceAll('/', '\\/')}/]`,
+          message: UI_IMPORT_MESSAGE
+        }))
+      ]
+    }
   },
   {
     // docs/ARCHITECTURE.md section 5: the lobby shows rooms, never the other way

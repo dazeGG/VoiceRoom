@@ -1,3 +1,4 @@
+import { NodePackageImporter } from 'sass';
 import { fileURLToPath } from 'node:url';
 import vue from '@vitejs/plugin-vue';
 import { configDefaults, defineConfig } from 'vitest/config';
@@ -94,6 +95,7 @@ export default defineConfig({
     strictPort: true,
     proxy: API_PROXY
   },
+  css: { preprocessorOptions: { scss: { importers: [new NodePackageImporter()] } } },
   build: {
     outDir: 'dist',
     emptyOutDir: true,

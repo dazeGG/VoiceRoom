@@ -25,7 +25,7 @@
 //   .notification-inbox-skeleton-lines -> .notification-inbox__skeleton-lines
 //   ...-lines span / span.is-short    -> .notification-inbox__skeleton-line / --short
 //   .notification-inbox-retry/-more   -> .notification-inbox__retry/__more
-@use '../mixins' as *;
+@use 'pkg:@voice-room/ui/styles/mixins' as *;
 
 .notification-inbox {
   display: flex;

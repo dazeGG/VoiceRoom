@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { t } from '@/shared/i18n';
+import { t } from '../../i18n';
 import { X } from '@lucide/vue';
 import { DialogContent, DialogPortal, DialogRoot, DialogTitle } from 'reka-ui';
-import { iconSm } from '@/shared/ui/icons';
+import { iconSm } from '../../icon-defaults';
 import { isToastPress } from './toast-press';
 import type { DialogProps } from './types';
 

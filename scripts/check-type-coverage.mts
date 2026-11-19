@@ -42,6 +42,7 @@ const AREAS: ReadonlyArray<{ folder: string; project: string; ignore?: readonly 
   // The emoji corpus is byte-pinned (G07) and stays as it is.
   { folder: 'packages/shared/src', project: '../tsconfig.test.json', ignore: ['emoji.ts'] },
   { folder: 'packages/shared/test', project: '../tsconfig.test.json' },
+  { folder: 'packages/ui/src', project: '../tsconfig.json' },
   { folder: 'scripts', project: 'tsconfig.json' }
 ];
 

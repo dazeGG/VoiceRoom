@@ -2,8 +2,8 @@ import { fireEvent, render, screen } from '@testing-library/vue';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, test, vi } from 'vitest';
 import { defineComponent, h, ref } from 'vue';
-import { ContextMenu } from '@/shared/ui/ContextMenu';
-import { PopoverMenuItem } from '@/shared/ui/Popover';
+import { ContextMenu } from '@voice-room/ui/components';
+import { PopoverMenuItem } from '@voice-room/ui/components';
 import { settle, stubOverlayDom } from '../helpers/overlay-dom';
 
 stubOverlayDom();

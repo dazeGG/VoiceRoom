@@ -1,7 +1,7 @@
-@use '../room/participant';
-@use '../room/room-dock';
-@use '../room/tile-grid';
-@use '../mixins' as *;
+@use 'pkg:@voice-room/ui/styles/room/participant';
+@use 'pkg:@voice-room/ui/styles/room/room-dock';
+@use 'pkg:@voice-room/ui/styles/room/tile-grid';
+@use 'pkg:@voice-room/ui/styles/mixins' as *;
 
 .widget-shell.widget-shell--call {
   height: 100dvh;

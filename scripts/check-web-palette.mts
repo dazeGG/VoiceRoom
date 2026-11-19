@@ -1,34 +1,16 @@
 #!/usr/bin/env node
-// Style check for the web app, run by `npm run check`: backgrounds use the
+// Style check for web and portable UI, run by `npm run check`: backgrounds use the
 // canonical palette tokens declared in _tokens.scss instead of one-off colours.
 // Exits 1 and lists every violation as `file:line selector -> value`.
 
-import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
-import { basename, relative, resolve } from 'node:path';
+import { existsSync, readFileSync } from 'node:fs';
+import { relative, resolve } from 'node:path';
 
 import { blankComments } from './lib/blank-comments.mts';
+import { walkFiles } from './lib/glob.mts';
 
-/** The app whose styles are checked. */
-export interface PaletteApp {
-  /** App directory; reported paths are relative to it. */
-  root: string;
-  /** Directory scanned for backgrounds, relative to `root`. */
-  sourceDir: string;
-  /** File that declares the surface tokens, relative to `root`. */
-  tokensFile: string;
-  /** Extensions scanned for backgrounds. */
-  sources: RegExp;
-  /** First line of the report when the app has violations. */
-  heading: string;
-}
-
-export const webApp = (root: string): PaletteApp => ({
-  root,
-  sourceDir: 'src',
-  tokensFile: 'src/styles/_tokens.scss',
-  sources: /\.(?:scss|vue)$/,
-  heading: 'Backgrounds must use the palette tokens in _tokens.scss'
-});
+const SOURCE_ROOTS = ['apps/web/src', 'packages/ui/src'];
+const TOKENS_FILE = 'packages/ui/src/styles/_tokens.scss';
 
 // Surface tokens of the default theme; the tokens file must declare exactly these.
 const SURFACE_TOKEN_VALUES: Record<string, string> = {
@@ -58,16 +40,6 @@ interface Declaration {
   value: string;
   /** Offset of the declaration in the fragment body. */
   index: number;
-}
-
-function sourceFiles(path: string, sources: RegExp): string[] {
-  const files: string[] = [];
-  for (const entry of readdirSync(path)) {
-    const absolute = resolve(path, entry);
-    if (statSync(absolute).isDirectory()) files.push(...sourceFiles(absolute, sources));
-    else if (sources.test(entry)) files.push(absolute);
-  }
-  return files;
 }
 
 const lineAt = (source: string, index: number) => source.slice(0, index).split('\n').length;
@@ -158,22 +130,24 @@ function nestedDeclarations(fragment: Fragment): Declaration[] {
   return found;
 }
 
-/** Every palette violation of one app as `file:line selector -> value`, unsorted. */
-export function paletteProblems(app: PaletteApp): string[] {
+/** Every web or portable UI palette violation as `file:line selector -> value`, unsorted. */
+export function paletteProblems(repoRoot: string): string[] {
   const problems: string[] = [];
-  const tokensName = basename(app.tokensFile);
 
-  const tokensPath = resolve(app.root, app.tokensFile);
+  const tokensPath = resolve(repoRoot, TOKENS_FILE);
   const tokens = existsSync(tokensPath) ? readFileSync(tokensPath, 'utf8') : '';
   for (const token of Object.keys(SURFACE_TOKEN_VALUES)) {
     const value = tokens.match(new RegExp(`${token}\\s*:\\s*([^;]+)`))?.[1]?.trim();
-    if (!value) problems.push(`${tokensName} does not declare ${token}`);
+    if (!value) problems.push(`${TOKENS_FILE} does not declare ${token}`);
     else if (value !== SURFACE_TOKEN_VALUES[token])
       problems.push(`${token}: expected ${SURFACE_TOKEN_VALUES[token]}, found ${value}`);
   }
 
-  for (const absolute of sourceFiles(resolve(app.root, app.sourceDir), app.sources)) {
-    const path = relative(app.root, absolute).split('\\').join('/');
+  const files = SOURCE_ROOTS.flatMap((root) =>
+    walkFiles(resolve(repoRoot, root), (file) => /\.(?:scss|vue)$/.test(file))
+  );
+  for (const absolute of files) {
+    const path = relative(repoRoot, absolute).split('\\').join('/');
     const source = readFileSync(absolute, 'utf8');
     for (const fragment of styleFragments(path, source)) {
       const declarations = fragment.context ? inlineDeclarations(fragment) : nestedDeclarations(fragment);
@@ -190,10 +164,9 @@ export function paletteProblems(app: PaletteApp): string[] {
 
 if (import.meta.main) {
   const repoRoot = resolve(import.meta.dirname, '..');
-  const app = webApp(resolve(repoRoot, 'apps/web'));
-  const problems = paletteProblems(app);
+  const problems = paletteProblems(repoRoot);
   if (problems.length > 0) {
-    process.stderr.write(`${app.heading}:\n${problems.sort().join('\n')}\n`);
+    process.stderr.write(`Backgrounds must use the palette tokens in ${TOKENS_FILE}:\n${problems.sort().join('\n')}\n`);
     process.exit(1);
   }
 }

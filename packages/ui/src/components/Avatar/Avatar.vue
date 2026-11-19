@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 
-import { avatarInitial } from '@/shared/utils/avatar-initial';
-import { getAvatarColor } from '@/visual/tokens';
+import { avatarInitial } from '../../avatar-initial';
+import { getAvatarColor } from '../../avatar-colors';
 
 import type { AvatarProps } from './types';
 

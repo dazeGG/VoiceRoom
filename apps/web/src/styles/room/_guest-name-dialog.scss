@@ -14,7 +14,7 @@
 //   .guest-name-error               -> .guest-name-dialog__error
 //   .primary-button#guestNameSubmitButton -> .guest-name-dialog__submit
 //   .guest-name-legal               -> .guest-name-dialog__legal
-@use '../mixins' as *;
+@use 'pkg:@voice-room/ui/styles/mixins' as *;
 
 .guest-name-dialog {
   position: fixed;

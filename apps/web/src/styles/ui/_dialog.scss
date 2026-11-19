@@ -26,7 +26,7 @@
 // [data-*] -> aria
 //   .dialog-tab[data-active='true']  -> .dialog__tab[aria-selected='true']
 //     (tabs carry role="tab" and aria-selected; the Svelte markup sets both)
-@use '../mixins' as *;
+@use 'pkg:@voice-room/ui/styles/mixins' as *;
 
 .dialog__overlay {
   @include modal-overlay(40, 24px);

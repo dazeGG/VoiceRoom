@@ -3,7 +3,7 @@ import { t } from '@/shared/i18n';
 import { computed, onMounted, ref } from 'vue';
 import EmojiText from './EmojiText.vue';
 import Emoji from './Emoji.vue';
-import { avatarInitial } from '@/shared/utils/avatar-initial';
+import { avatarInitial } from '@voice-room/ui/avatar-initial';
 import type { ReactionStore } from './reaction-store';
 
 const { store, messageId, emoji } = defineProps<{

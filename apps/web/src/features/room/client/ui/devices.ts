@@ -9,7 +9,7 @@ import {
   OUTPUT_DEVICE_STORAGE_KEY
 } from '../core/config';
 import type { NoiseMode } from '../core/config';
-import type { SelectOption } from '@/shared/ui/Select/types';
+import type { SelectOption } from '@voice-room/ui/components';
 import { listPhysicalDevices, withSavedDeviceMissing } from '@/shared/audio/device-list';
 import { removeStorage, writeStorage } from '@/shared/storage';
 import { useRoomDeviceUiStore } from '@/features/room/room-device-ui.store';

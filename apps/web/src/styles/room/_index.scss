@@ -4,9 +4,9 @@
 @forward 'room-member-list';
 @forward 'stage';
 @forward 'stage-strip';
-@forward 'tile-grid';
+@forward 'pkg:@voice-room/ui/styles/room/tile-grid';
 @forward 'participant-carousel';
-@forward 'participant';
+@forward 'pkg:@voice-room/ui/styles/room/participant';
 @forward 'stream-tile';
 @forward 'screen-stage';
 @forward 'screen-meta';
@@ -33,7 +33,7 @@
 @forward 'mobile-call-flip';
 @forward 'room-call-timer';
 @forward 'room-topbar';
-@forward 'room-dock';
+@forward 'pkg:@voice-room/ui/styles/room/room-dock';
 @forward 'participant-menu';
 @forward 'room-cta-slot';
 @forward 'room-settings';

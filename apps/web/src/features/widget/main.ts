@@ -1,5 +1,5 @@
-import '@/styles/_tokens.scss';
-import '@/styles/_typography.scss';
+import '@voice-room/ui/styles/tokens';
+import '@voice-room/ui/styles/typography';
 import '@/styles/widget/_shell.scss';
 import { createApp } from 'vue';
 import { parseWidgetBootstrap, parseWidgetMessage } from '@voice-room/shared/contracts/widget';

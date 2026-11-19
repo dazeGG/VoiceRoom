@@ -12,7 +12,7 @@
 //   .recovery-confirm                -> .recovery-dialog__confirm
 //   [data-recovery-codes]            -> .recovery-dialog__codes (focus target)
 //   .settings-field-label, .settings-input -> settings__field-label, settings__input
-@use '../mixins' as *;
+@use 'pkg:@voice-room/ui/styles/mixins' as *;
 
 .ui-dialog__overlay:has(.recovery-dialog) {
   z-index: 100;

@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/vue';
 import userEvent from '@testing-library/user-event';
 import { expect, test, vi } from 'vitest';
-import Button from '@/shared/ui/Button/Button.vue';
+import { Button } from '@voice-room/ui/components';
 
 test('a button is disabled and does not fire its handler while disabled', async () => {
   const onclick = vi.fn();

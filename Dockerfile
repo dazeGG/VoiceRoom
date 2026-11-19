@@ -8,8 +8,9 @@ COPY apps/web/package.json ./apps/web/package.json
 COPY apps/admin/package.json ./apps/admin/package.json
 COPY apps/site/package.json ./apps/site/package.json
 COPY packages/shared/package.json ./packages/shared/package.json
+COPY packages/ui/package.json ./packages/ui/package.json
 RUN npm ci --workspace @voice-room/api --workspace @voice-room/web --workspace @voice-room/admin \
-  --workspace @voice-room/shared --include-workspace-root
+  --workspace @voice-room/shared --workspace @voice-room/ui --include-workspace-root
 
 FROM deps AS web-build
 
@@ -32,6 +33,7 @@ COPY apps/web/package.json ./apps/web/package.json
 COPY apps/admin/package.json ./apps/admin/package.json
 COPY apps/site/package.json ./apps/site/package.json
 COPY packages/shared/package.json ./packages/shared/package.json
+COPY packages/ui/package.json ./packages/ui/package.json
 RUN npm ci --omit=dev --workspace @voice-room/api --workspace @voice-room/shared
 
 COPY apps/api ./apps/api

@@ -9,7 +9,7 @@
 //   .reaction-count              -> .reaction-summary__count
 //   .sr-only (role="alert")      -> .reaction-summary__error
 
-@use '../mixins' as *;
+@use 'pkg:@voice-room/ui/styles/mixins' as *;
 
 .reaction-summary {
   display: flex;
