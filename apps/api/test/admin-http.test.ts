@@ -148,7 +148,10 @@ test('only a platform administrator reads the panel, and its numbers come from t
       voiceJoins: 2,
       voiceMinutes: 45,
       calls: 2,
-      callsYesterday: 0
+      callsYesterday: 0,
+      // The calls above are in rooms of the app itself.
+      widgetCalls: 0,
+      widgetGuests: 0
     }
   );
   assert.match(overview.today.day, /^\d{4}-\d{2}-\d{2}$/);

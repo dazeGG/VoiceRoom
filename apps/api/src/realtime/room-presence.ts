@@ -143,11 +143,12 @@ export function createRoomPresence(deps: RoomPresenceDeps) {
     return transition;
   }
 
-  function finishedSession(roomId: string, peer: RosterPeer, leftAt: number): FinishedVoiceSession | null {
+  function finishedSession(target: PresenceRoom, peer: RosterPeer, leftAt: number): FinishedVoiceSession | null {
     if (!peer.joinedAt) return null;
     const userId = peer.accountUserId || null;
     return {
-      roomId,
+      roomId: target.id,
+      roomKind: target.kind ?? null,
       userId,
       guestName: userId ? null : peer.name || null,
       guestId: userId ? null : peer.guestId || null,
@@ -191,7 +192,7 @@ export function createRoomPresence(deps: RoomPresenceDeps) {
       const open: FinishedVoiceSession[] = [];
       for (const current of rooms.values()) {
         for (const peer of current.peers.values()) {
-          const session = finishedSession(current.id, peer, leftAt);
+          const session = finishedSession(current, peer, leftAt);
           if (session) open.push(session);
         }
       }
@@ -253,7 +254,7 @@ export function createRoomPresence(deps: RoomPresenceDeps) {
     target.peers.delete(peerId);
     if (!current.replaced) {
       // A reconnect keeps the seat (and its joinedAt), so this is the end of the stay.
-      const session = sessionsClosed ? null : finishedSession(roomId, current, now());
+      const session = sessionsClosed ? null : finishedSession(target, current, now());
       if (session) recordSessions([session]);
       publishClearedScreenViewers(target, peerId);
       publish(roomId, buildServerEnvelope('room.peer.left', { roomId, peerId, reason }));

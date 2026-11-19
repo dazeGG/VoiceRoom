@@ -47,6 +47,7 @@ type Payload<T> = Omit<T, 'ok'>;
 
 interface PresenceRoom {
   id: string;
+  kind?: 'main' | 'widget';
   peers: Map<string, PresencePeer>;
   /** The call clock the room screen counts from (RoomSnapshot.voiceActiveSince). */
   voiceActiveSince?: number | null;
@@ -146,7 +147,8 @@ export function createAdminRoomsService(deps: AdminRoomsServiceDeps) {
         avatarUrl: row?.avatarUrl ?? null,
         owner: row?.owner ?? null,
         since: callSince(room),
-        peers
+        peers,
+        kind: row?.kind ?? room.kind ?? 'main'
       };
     });
     rooms.sort((a, b) => b.peers.length - a.peers.length || (a.since ?? Infinity) - (b.since ?? Infinity));
@@ -187,6 +189,7 @@ export function createAdminRoomsService(deps: AdminRoomsServiceDeps) {
       accountId: query.accountId,
       clientId: query.clientId,
       ipKey: query.ipKey,
+      kind: query.kind,
       after: parseCursor(query.after),
       from: query.from === undefined ? undefined : Number(query.from),
       to: query.to === undefined ? undefined : Number(query.to)
@@ -320,7 +323,8 @@ export function createAdminRoomsService(deps: AdminRoomsServiceDeps) {
       avatarUrl: row?.avatarUrl ?? null,
       startedAt: since,
       endedAt: at,
-      stays
+      stays,
+      kind: row?.kind ?? room.kind ?? 'main'
     };
     return detailOf(userId, liveCallRow, kept, new Set(peers.map((peer) => peer.id)), at + 1);
   }

@@ -1,0 +1,56 @@
+/* The widgets section: the state and limits beside each other; the live calls
+   and the history share the rooms section's styles (RoomsPage.css). */
+
+.widgets-state {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 360px), 1fr));
+  gap: 12px 32px;
+}
+
+.widgets-kv {
+  margin: 0;
+}
+
+.widgets-kv-title {
+  border-bottom: 1px solid var(--vr-line);
+  padding-bottom: 6px;
+  color: var(--vr-text-muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.widgets-kv-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 0;
+  font-size: 0.84375rem;
+}
+
+.widgets-kv-row + .widgets-kv-row {
+  border-top: 1px solid oklch(100% 0 0 / 0.05);
+}
+
+.widgets-kv-row dt {
+  color: var(--vr-text-2);
+}
+
+.widgets-kv-row dd {
+  display: inline-flex;
+  align-items: center;
+  justify-self: end;
+  gap: 8px;
+  margin: 0;
+  text-align: right;
+}
+
+.widgets-kv-row dd.ui-mono {
+  font-size: 0.78125rem;
+}
+
+.widgets-kv-sub {
+  color: var(--vr-text-muted);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+}

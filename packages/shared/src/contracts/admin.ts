@@ -101,7 +101,10 @@ export const AdminOverview = Ok({
     voiceMinutes: Type.Number(),
     /** Calls that went on today and are over, and the same of yesterday. Optional for an API a release behind. */
     calls: Type.Optional(Type.Number()),
-    callsYesterday: Type.Optional(Type.Number())
+    callsYesterday: Type.Optional(Type.Number()),
+    /** Of today's finished calls, those in a widget room, and the guests in them. Optional for an API a release behind. */
+    widgetCalls: Type.Optional(Type.Number()),
+    widgetGuests: Type.Optional(Type.Number())
   }),
   totals: Type.Object({
     accounts: Type.Number(),
@@ -428,6 +431,10 @@ export type BadgeBody = Static<typeof BadgeBody>;
 
 // --- rooms --------------------------------------------------------------------
 
+/** A room of the app itself, or one a website's widget made (temporary, unowned, without chat). */
+export const RoomKind = Type.Union([Type.Literal('main'), Type.Literal('widget')]);
+export type RoomKind = Static<typeof RoomKind>;
+
 /**
  * How long a stay in voice keeps the room it was in. Past it the stay only
  * counts towards the usage numbers: who talked with whom is forgotten.
@@ -519,7 +526,9 @@ export const LiveRoom = Type.Object({
   owner: Nullable(RoomAccount),
   /** When the call began: the server's call clock, the one the room screen counts from. */
   since: Nullable(Type.Number()),
-  peers: Type.Array(LiveRoomPeer)
+  peers: Type.Array(LiveRoomPeer),
+  /** Optional for an API a release behind. */
+  kind: Type.Optional(RoomKind)
 });
 export type LiveRoom = Static<typeof LiveRoom>;
 
@@ -716,6 +725,8 @@ export const RoomCallsQuery = Type.Object({
   accountId: Type.Optional(Type.String({ minLength: 1, maxLength: 64 })),
   clientId: Type.Optional(Type.String({ pattern: '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' })),
   ipKey: Type.Optional(Type.String({ pattern: '^[0-9a-f]{16}$' })),
+  /** Keeps the calls in that kind of room; calls recorded before the kind was kept have none and are left out. */
+  kind: Type.Optional(RoomKind),
   after: Type.Optional(HistoryCursor),
   from: Type.Optional(MillisString),
   to: Type.Optional(MillisString)
@@ -740,7 +751,9 @@ export const RoomCall = Type.Object({
   endedAt: Type.Number(),
   stays: Type.Array(RoomStay),
   /** Bad answers to "how was the call?" given about it. Optional for an API a release behind. */
-  badFeedback: Type.Optional(Type.Number())
+  badFeedback: Type.Optional(Type.Number()),
+  /** The kind of its room, from its first stay; absent for calls recorded before it was kept, and from an API a release behind. */
+  kind: Type.Optional(RoomKind)
 });
 export type RoomCall = Static<typeof RoomCall>;
 
@@ -779,3 +792,46 @@ export const RoomCalls = Ok({
   keepDays: Type.Number()
 });
 export type RoomCalls = Static<typeof RoomCalls>;
+
+// --- widgets ------------------------------------------------------------------
+
+/** A process role that serves widget traffic, and the recovery generation it last confirmed (null: none yet). */
+export const WidgetRuntimeOwnerState = Type.Object({
+  role: Type.Union([Type.Literal('api'), Type.Literal('gate')]),
+  /** A running process holds the role. */
+  claimed: Type.Boolean(),
+  acknowledgedGeneration: Nullable(Type.Number())
+});
+export type WidgetRuntimeOwnerState = Static<typeof WidgetRuntimeOwnerState>;
+
+/**
+ * The widget rooms as the panel reads them: whether rooms are taken from
+ * websites (only an operator on the server turns that on or off), the limits
+ * the server runs with, and today's numbers (a Moscow day) of widget rooms only.
+ */
+export const AdminWidgets = Ok({
+  state: Type.Object({
+    admissionEnabled: Type.Boolean(),
+    /** Once required, the boundary never goes away. */
+    boundaryRequired: Type.Boolean(),
+    /** WIDGET_ENABLED of the running API. */
+    flagEnabled: Type.Boolean(),
+    recoveryGeneration: Type.Number(),
+    owners: Type.Array(WidgetRuntimeOwnerState)
+  }),
+  limits: Type.Object({
+    maxRoomPeers: Type.Number(),
+    createRateLimit: Type.Number(),
+    createRateWindowMs: Type.Number(),
+    powDifficulty: Type.Number()
+  }),
+  today: Type.Object({
+    /** Finished calls. */
+    calls: Type.Number(),
+    /** Distinct guests: by their browser, else by their stay. */
+    guests: Type.Number(),
+    distinctIpKeys: Type.Number(),
+    voiceMinutes: Type.Number()
+  })
+});
+export type AdminWidgets = Static<typeof AdminWidgets>;

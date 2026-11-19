@@ -1,65 +1,6 @@
 /* The rooms section: the table of calls going on now, the history of calls
    by day, and one day's timeline. */
 
-.call-filters {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: end;
-  gap: 12px;
-  margin-bottom: 16px;
-}
-
-.call-filters label {
-  display: grid;
-  flex: 1 1 240px;
-  gap: 6px;
-  color: var(--vr-text-2);
-  font-size: 0.78125rem;
-}
-
-.call-filters input {
-  width: 100%;
-  min-width: 0;
-  height: 36px;
-  border: 1px solid var(--vr-line-strong);
-  border-radius: 10px;
-  padding: 0 10px;
-  background: var(--vr-surface);
-  color: var(--vr-text);
-  font: inherit;
-  font-family: var(--font-mono);
-}
-
-.call-filters input:focus-visible {
-  outline: 2px solid var(--vr-accent-line);
-  outline-offset: 2px;
-}
-
-.call-filters .ui-footnote {
-  flex-basis: 100%;
-  margin: 0;
-}
-
-.rooms-origin-full-id {
-  display: block;
-  width: 100%;
-  min-width: 0;
-  max-width: 36ch;
-  border: 0;
-  border-bottom: 1px dotted var(--vr-line-strong);
-  padding: 2px 0;
-  background: transparent;
-  color: var(--vr-text-muted);
-  font: inherit;
-  font-size: 0.625rem;
-  cursor: text;
-}
-
-.rooms-origin-full-id:focus-visible {
-  outline: 2px solid var(--vr-accent-line);
-  outline-offset: 2px;
-}
-
 .rooms-picked-aside {
   display: inline-flex;
   flex-wrap: wrap;
@@ -297,28 +238,75 @@
 }
 
 .rooms-origin {
-  display: inline-flex;
+  display: flex;
   min-width: 0;
-  align-items: center;
-  gap: 7px;
+  flex-direction: column;
+  gap: 4px;
   color: var(--vr-text-2);
   font-size: 0.78125rem;
 }
 
-.rooms-origin-parts {
+.rooms-origin-line {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 7px;
+}
+
+.rooms-origin-text {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.rooms-origin-parts > span + span::before {
-  color: var(--vr-text-muted);
-  content: ' · ';
-  font-family: var(--font-ui);
+.rooms-origin-codes {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
 }
 
-.rooms-code {
-  font-size: 0.75rem;
+.origin-token {
+  display: inline-flex;
+  min-height: 24px;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid var(--vr-line-strong);
+  border-radius: 7px;
+  padding: 0 7px;
+  background: transparent;
+  color: var(--vr-text-2);
+  font-family: var(--font-mono);
+  font-size: 0.71875rem;
+}
+
+button.origin-token {
+  cursor: pointer;
+}
+
+button.origin-token:hover {
+  border-color: oklch(100% 0 0 / 0.24);
+  color: var(--vr-text);
+}
+
+.origin-token[data-shared='true'] {
+  border-color: color-mix(in oklch, var(--vr-warning) 40%, transparent);
+  color: var(--vr-warning);
+}
+
+.origin-token[data-on='true'] {
+  border-color: var(--vr-accent-line);
+  background: var(--vr-accent-soft);
+  color: var(--vr-accent);
+}
+
+.origin-token[data-none='true'] {
+  border-style: dashed;
+  color: var(--vr-text-muted);
+}
+
+.origin-token:focus-visible {
+  outline: 2px solid var(--vr-accent);
+  outline-offset: 1px;
 }
 
 /* --- now in calls ------------------------------------------------------------ */
@@ -407,14 +395,6 @@
   flex: 1;
 }
 
-.call-bad-feedback {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  color: var(--vr-danger);
-  font-size: 0.75rem;
-}
-
 .live-summary {
   display: inline-flex;
   flex-wrap: wrap;
@@ -442,47 +422,103 @@
 
 .live-peers {
   border-top: 1px solid oklch(100% 0 0 / 0.05);
-  padding: 4px 16px 8px 60px;
-  background: oklch(100% 0 0 / 0.025);
+  padding: 2px 16px 6px 56px;
+  background: oklch(100% 0 0 / 0.02);
 }
 
+.live-peers-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.live-peers-head,
 .live-peer {
   display: grid;
   grid-template-columns: var(--cols);
   align-items: center;
   gap: 12px;
-  padding: 8px 0;
+}
+
+.live-peers-head {
+  border-bottom: 1px solid oklch(100% 0 0 / 0.05);
+  padding: 8px 0 6px;
+  color: var(--vr-text-muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.live-peer {
+  padding: 9px 0;
 }
 
 .live-peer + .live-peer {
   border-top: 1px solid oklch(100% 0 0 / 0.05);
 }
 
-.live-peer-who,
-.live-peer-origin,
-.live-peer-state {
-  display: inline-flex;
+.live-peer-who {
+  display: flex;
   min-width: 0;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
 }
 
-.live-word {
-  color: var(--vr-danger);
+.live-peer-name {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.live-peer-name-line {
+  display: inline-flex;
+  min-width: 0;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.live-peer-media,
+.live-voice-flags {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.live-peer-origin {
+  min-width: 0;
+}
+
+.live-voice {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
   font-size: 0.78125rem;
-  white-space: nowrap;
 }
 
-.live-network {
+.live-voice-level {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
   color: var(--net-tone);
+  font-weight: 600;
+}
+
+.live-voice-level[data-net='good'],
+.live-voice-level[data-net='unknown'] {
+  color: var(--vr-text-2);
+  font-weight: 400;
+}
+
+.live-voice-cause {
+  color: var(--vr-text-2);
 }
 
 .live-peer-time {
   color: var(--vr-text-2);
   font-size: 0.78125rem;
+  white-space: nowrap;
 }
 
 /* --- the calls by day ---------------------------------------------------------- */
@@ -572,6 +608,41 @@
   background: oklch(100% 0 0 / 0.02);
 }
 
+/* In the history the people sit under the room, as the people of a call going on do. */
+.calls .call-detail {
+  padding-left: 56px;
+}
+
+.call-people-cell {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.call-match {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+  color: var(--vr-text-2);
+  font-size: 0.75rem;
+}
+
+.call-match-dot {
+  width: 6px;
+  height: 6px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--vr-accent);
+}
+
+.call-match-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* Who was in a call and when. */
 .call-people-head,
 .call-person {
@@ -599,6 +670,13 @@
 
 .call-person + .call-person {
   border-top: 1px solid oklch(100% 0 0 / 0.05);
+}
+
+.call-person[data-match='true'] {
+  margin: 0 -8px;
+  border-radius: 10px;
+  padding-inline: 8px;
+  background: var(--vr-accent-soft);
 }
 
 .call-person-who {

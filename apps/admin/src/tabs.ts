@@ -11,6 +11,7 @@ export const ADMIN_TABS = [
   'system',
   'accounts',
   'rooms',
+  'widgets',
   'reports',
   'staff'
 ] as const;
@@ -19,7 +20,7 @@ export type AdminTab = (typeof ADMIN_TABS)[number];
 /** The menu's groups; their sections follow the order of ADMIN_TABS. */
 export const TAB_GROUPS: readonly { label: string; tabs: readonly AdminTab[] }[] = [
   { label: 'Аналитика', tabs: ['overview', 'product', 'feedback', 'system'] },
-  { label: 'Модерация', tabs: ['accounts', 'rooms', 'reports'] },
+  { label: 'Модерация', tabs: ['accounts', 'rooms', 'widgets', 'reports'] },
   { label: 'Команда', tabs: ['staff'] }
 ];
 
@@ -31,6 +32,7 @@ export const TAB_TITLES: Record<AdminTab, string> = {
   system: 'Сервер',
   accounts: 'Пользователи',
   rooms: 'Комнаты',
+  widgets: 'Виджеты',
   reports: 'Жалобы',
   staff: 'Сотрудники'
 };
@@ -41,6 +43,7 @@ export const TAB_LABELS: Record<AdminTab, string> = {
   system: 'Сервер',
   accounts: 'Пользователи',
   rooms: 'Комнаты',
+  widgets: 'Виджеты',
   reports: 'Жалобы',
   feedback: 'Отзывы',
   staff: 'Сотрудники'
@@ -52,6 +55,7 @@ export const TAB_PERMISSIONS: Record<AdminTab, StaffPermission> = {
   system: 'stats.view',
   accounts: 'accounts.view',
   rooms: 'rooms.view',
+  widgets: 'rooms.view',
   reports: 'reports.review',
   feedback: 'stats.view',
   staff: 'staff.manage'
