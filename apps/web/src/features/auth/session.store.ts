@@ -14,6 +14,14 @@ export interface AuthContext {
   userId: string | null;
 }
 
+function readInvalidationMarker(): string | null | undefined {
+  try {
+    return localStorage.getItem(AUTH_INVALIDATION_KEY);
+  } catch {
+    return undefined;
+  }
+}
+
 // App-wide auth state. `loaded` flips true once the first /auth/me resolves so
 // the UI can avoid flashing the logged-out state before we know.
 export const useSessionStore = defineStore('session', () => {
@@ -24,6 +32,7 @@ export const useSessionStore = defineStore('session', () => {
   const membership = useRoomMembershipStore();
   let generation = 0;
   let inflight: Promise<AuthUser | null> | null = null;
+  let invalidationMarker = readInvalidationMarker();
 
   // Set right before a request that ends this device's own session (sign-out,
   // password change): the server then closes the realtime socket too, and that
@@ -66,12 +75,18 @@ export const useSessionStore = defineStore('session', () => {
     inflight = null;
     membership.resetViewer(null, generation);
   }
+  function publishInvalidation(): void {
+    const marker = crypto.randomUUID();
+    writeStorage(AUTH_INVALIDATION_KEY, marker);
+    invalidationMarker = marker;
+  }
+
   function applyUser(next: AuthUser | null, publish: boolean): void {
     const changed = (user.value?.id ?? null) !== (next?.id ?? null);
     if (changed) {
       invalidate();
       membership.resetViewer(next?.id ?? null, generation);
-      if (publish) writeStorage(AUTH_INVALIDATION_KEY, crypto.randomUUID());
+      if (publish) publishInvalidation();
     }
     sessionEndExpected = false;
     if (next) resumeChatDrafts();
@@ -92,17 +107,17 @@ export const useSessionStore = defineStore('session', () => {
     return true;
   }
 
-  async function verifySession(
-    publish = true
-  ): Promise<{ applied: true; user: AuthUser | null; context: AuthContext } | { applied: false }> {
+  async function verifySession(): Promise<
+    { applied: true; user: AuthUser | null; context: AuthContext } | { applied: false }
+  > {
     const captured = context();
     const me = await fetchMe();
     if (!isCurrent(captured)) return { applied: false };
-    applyUser(me, publish);
+    applyUser(me, false);
     return { applied: true, user: me, context: context() };
   }
 
-  async function loadSession(force = false): Promise<AuthUser | null> {
+  async function loadSession(force = false, visibilityRefresh = false): Promise<AuthUser | null> {
     if (loaded.value && !force) return user.value;
     if (inflight) return inflight;
     loadError.value = false;
@@ -111,6 +126,7 @@ export const useSessionStore = defineStore('session', () => {
       .then((result) => (result.applied && isCurrent(result.context) ? result.user : user.value))
       .catch((error: unknown) => {
         if (isCurrent(captured)) {
+          if (visibilityRefresh) resetUnverifiedSession();
           loaded.value = true;
           loadError.value = true;
         }
@@ -123,15 +139,19 @@ export const useSessionStore = defineStore('session', () => {
     return operation;
   }
 
-  function revalidate(): void {
+  function resetUnverifiedSession(): void {
     invalidate();
     user.value = null;
     loaded.value = false;
     loadError.value = false;
     syncRoomName(null);
+  }
+
+  function revalidate(): void {
+    resetUnverifiedSession();
     const captured = context();
     // Events carry no identity proof and must not echo another invalidation.
-    void verifySession(false).catch(() => {
+    void verifySession().catch(() => {
       if (!isCurrent(captured)) return;
       loaded.value = true;
       loadError.value = true;
@@ -140,13 +160,21 @@ export const useSessionStore = defineStore('session', () => {
   if (typeof window !== 'undefined') {
     let wasHidden = document.visibilityState === 'hidden';
     const onStorage = (event: StorageEvent): void => {
-      if (event.key === AUTH_INVALIDATION_KEY && event.newValue !== event.oldValue) revalidate();
+      if (event.key !== AUTH_INVALIDATION_KEY || event.newValue === event.oldValue) return;
+      invalidationMarker = readInvalidationMarker();
+      revalidate();
     };
     const onVisibility = (): void => {
       if (document.visibilityState === 'hidden') wasHidden = true;
       else if (wasHidden) {
         wasHidden = false;
-        revalidate();
+        const marker = readInvalidationMarker();
+        const needsReset = marker === undefined || marker !== invalidationMarker;
+        invalidationMarker = marker;
+        // With no sign of an identity change, keep the mounted room while
+        // checking the cookie. A failed check still clears the old identity.
+        if (needsReset || !loaded.value || loadError.value) revalidate();
+        else void loadSession(true, true).catch(() => {});
       }
     };
     window.addEventListener('storage', onStorage);
@@ -164,7 +192,7 @@ export const useSessionStore = defineStore('session', () => {
     clearAttachmentComposeStores();
     clearHistoryCache();
     invalidate();
-    writeStorage(AUTH_INVALIDATION_KEY, crypto.randomUUID());
+    publishInvalidation();
     user.value = null;
     loaded.value = true;
     loadError.value = false;

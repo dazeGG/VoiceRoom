@@ -115,13 +115,26 @@
   color: color-mix(in srgb, currentColor 70%, transparent);
 }
 
-.attachment-lightbox__backdrop {
+.attachment-lightbox__backdrop[open] {
   position: fixed;
   inset: 0;
-  z-index: 1000;
+  margin: 0;
+  border: 0;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
   display: grid;
   place-items: center;
+  overscroll-behavior: contain;
+  box-sizing: border-box;
   padding: 20px;
+  background: transparent;
+}
+
+.attachment-lightbox__backdrop::backdrop {
+  overflow: hidden;
+  overscroll-behavior: contain;
   background: color-mix(in oklch, var(--vr-bg), transparent 6%);
 }
 
@@ -146,7 +159,7 @@
 }
 
 @media (max-width: 520px) {
-  .attachment-lightbox__backdrop {
+  .attachment-lightbox__backdrop[open] {
     padding: 8px;
   }
 

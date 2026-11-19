@@ -53,14 +53,13 @@
   flex-direction: column;
   overflow: hidden;
   background: var(--vr-surface);
-  border-right: 1px solid var(--vr-line);
 }
 
 .sidebar__top {
   display: flex;
   align-items: center;
   gap: 2px;
-  margin: 8px 12px 4px 8px;
+  margin: 8px 42px 4px 8px;
   flex: none;
 }
 
@@ -70,6 +69,7 @@
   gap: 10px;
   margin: 0;
   padding: 12px;
+  padding-inline-end: 4px;
   flex: 1;
   min-width: 0;
   border: none;
@@ -100,6 +100,9 @@
 
 .sidebar__brand-name {
   min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   color: var(--vr-text);
   font-size: 0.9375rem;
   font-weight: 600;
@@ -126,7 +129,7 @@
     color: var(--vr-text);
   }
 
-  &[aria-expanded='true'] {
+  &[aria-expanded='true']:not(.lobby-shell__sidebar-toggle) {
     background: var(--vr-surface-3);
     color: var(--vr-text);
   }

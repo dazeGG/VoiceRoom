@@ -40,7 +40,6 @@ const desktopAllowed = ref(false);
 // signed-in phone gets the standalone room, never the desktop lobby.
 const roomAllowed = ref(false);
 const loggingOut = ref(false);
-const authLoadError = ref(false);
 const guestContinuedInBrowser = ref(false);
 let guestAppLaunched = false;
 const inAppNavigation = ref(false);
@@ -51,7 +50,7 @@ const guestOpenInApp = computed(
     boundaryReady.value &&
     session.loaded &&
     !session.user &&
-    !authLoadError.value &&
+    !session.loadError &&
     Boolean(props.roomId) &&
     !guestContinuedInBrowser.value &&
     !inAppNavigation.value &&
@@ -80,9 +79,7 @@ onMounted(() => {
   if (!policy.roomClientAllowed) return;
   loadRoomPage().catch(() => {});
 
-  void session.loadSession().catch(() => {
-    authLoadError.value = true;
-  });
+  void session.loadSession().catch(() => {});
 });
 
 function showToast(message: string, options?: ToastOptions): void {
@@ -91,11 +88,8 @@ function showToast(message: string, options?: ToastOptions): void {
 
 function retrySessionLoad(): void {
   if (!session.loaded) return;
-  authLoadError.value = false;
   session.loaded = false;
-  void session.loadSession(true).catch(() => {
-    authLoadError.value = true;
-  });
+  void session.loadSession(true).catch(() => {});
 }
 
 async function handleLogout(): Promise<void> {
@@ -142,7 +136,7 @@ async function handleLogout(): Promise<void> {
       </div>
     </main>
   </div>
-  <div v-else-if="authLoadError" class="app-shell">
+  <div v-else-if="session.loadError" class="app-shell">
     <main class="auth-session-error" :aria-label="t('Ошибка проверки аккаунта')" aria-live="polite">
       <div class="auth-session-error__card">
         <p class="auth-session-error__kicker">{{ t('Сессия не проверена') }}</p>
@@ -160,6 +154,7 @@ async function handleLogout(): Promise<void> {
   </div>
   <LobbyPage
     v-else-if="session.user && desktopAllowed"
+    :key="session.user.id"
     :user="session.user"
     :logging-out="loggingOut"
     @logout="handleLogout"
@@ -167,7 +162,7 @@ async function handleLogout(): Promise<void> {
   />
   <OpenInAppScreen v-else-if="guestOpenInApp" @retry="openGuestRoomInApp" @continue="guestContinuedInBrowser = true" />
   <template v-else>
-    <RoomPage :key="roomId" :room-id="roomId" auto-join />
+    <RoomPage :key="`${roomId}:${session.user?.id ?? ''}`" :room-id="roomId" auto-join />
     <!-- The lobby mounts its own host; a second one would fight it for the card. -->
     <ProfileCardHost @toast="(message: string) => showToast(message)" />
   </template>

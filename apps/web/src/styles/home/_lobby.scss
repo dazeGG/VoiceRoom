@@ -17,12 +17,14 @@
 // resolve to auto and collapse the shell, and the embedded room with it. Do not add height elsewhere.
 .lobby-shell {
   --lv-side-w: 280px;
+  --lobby-sidebar-width: var(--lv-side-w);
   --lv-row-pad: 0 10px;
   --lv-name: 0.84375rem;
   --lv-sub: 0.71875rem;
   --lv-gap: 16px;
 
   height: 100vh;
+  position: relative;
   display: flex;
   overflow: hidden;
   font-family: var(--font-ui);
@@ -31,6 +33,152 @@
     radial-gradient(55% 60% at 80% 6%, color-mix(in oklch, var(--vr-surface-3), transparent 78%), transparent 55%),
     radial-gradient(50% 60% at 0% 100%, color-mix(in oklch, var(--vr-surface), transparent 84%), transparent 55%),
     var(--vr-bg);
+}
+
+.lobby-shell--sidebar-collapsed {
+  --lobby-sidebar-width: 48px;
+}
+
+.lobby-shell__sidebar {
+  position: relative;
+  display: flex;
+  flex: 0 0 var(--lobby-sidebar-width);
+}
+
+.lobby-shell--sidebar-collapsed {
+  .lobby-shell__sidebar {
+    z-index: 40;
+  }
+
+  .sidebar {
+    position: absolute;
+    inset-block: 0;
+    inset-inline-start: 0;
+    box-shadow: var(--vr-shadow-popover);
+  }
+
+  .lobby-shell__sidebar-resizer {
+    opacity: 0;
+    pointer-events: none;
+  }
+}
+
+.lobby-shell--sidebar-peeking {
+  --lobby-sidebar-toggle-edge: var(--lv-side-w);
+}
+
+.lobby-shell__sidebar-rail {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding-block-start: 20px;
+  background: var(--vr-surface);
+  pointer-events: none;
+}
+
+.lobby-shell__sidebar-avatars {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  inline-size: 100%;
+  overflow: clip;
+}
+
+.lobby-shell__sidebar-avatar {
+  position: relative;
+  display: grid;
+  flex: none;
+  inline-size: 100%;
+  place-items: center;
+  padding-block: 3px;
+}
+
+.lobby-shell__sidebar-avatar .lobby-shell__sidebar-unread {
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline-end: 2px;
+  min-inline-size: 16px;
+  block-size: 16px;
+  padding-inline: 3px;
+  font-size: 0.625rem;
+  box-shadow: 0 0 0 2px var(--vr-surface);
+}
+
+.lobby-shell__sidebar-account {
+  display: grid;
+  flex: none;
+  inline-size: 100%;
+  place-items: center;
+  padding-block: 12px;
+  border-block-start: 1px solid var(--vr-line);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .lobby-sidebar-peek-enter-active,
+  .lobby-sidebar-peek-leave-active {
+    transition:
+      opacity 150ms var(--ease-out),
+      translate 150ms var(--ease-out);
+  }
+
+  .lobby-sidebar-peek-enter-from,
+  .lobby-sidebar-peek-leave-to {
+    opacity: 0;
+    translate: -12px;
+  }
+}
+
+.lobby-shell--resizing {
+  user-select: none;
+}
+
+.lobby-shell .lobby-shell__sidebar-toggle {
+  position: absolute;
+  z-index: 2;
+  inset-block-start: 15px;
+  inset-inline-start: calc(var(--lobby-sidebar-toggle-edge, var(--lobby-sidebar-width)) - 40px);
+
+  &:focus-visible {
+    outline: 2px solid var(--vr-accent);
+    outline-offset: -2px;
+  }
+}
+
+@media (hover: hover) {
+  .lobby-shell--sidebar-collapsed:not(.lobby-shell--sidebar-peeking) .lobby-shell__sidebar-toggle:not(:focus-visible) {
+    opacity: 0;
+    pointer-events: none;
+  }
+}
+
+.lobby-shell__sidebar-resizer {
+  position: absolute;
+  z-index: 2;
+  inset-block: 0;
+  inset-inline-start: calc(var(--lobby-sidebar-width) - 5px);
+  inline-size: 9px;
+  outline: none;
+  cursor: col-resize;
+  touch-action: none;
+
+  &::after {
+    position: absolute;
+    inset-block: 0;
+    inset-inline-start: 4px;
+    inline-size: 2px;
+    background: var(--vr-line);
+    content: '';
+  }
+
+  &:hover::after,
+  &:focus-visible::after,
+  .lobby-shell--resizing &::after {
+    background: var(--vr-accent);
+  }
 }
 
 .lobby-shell__main {
@@ -57,10 +205,10 @@
 .lobby-shell__inbox {
   position: fixed;
   z-index: 71;
-  left: 292px;
+  left: calc(var(--lobby-sidebar-width) + 12px);
   bottom: 16px;
   display: flex;
-  width: min(420px, calc(100vw - 316px));
+  width: min(420px, calc(100vw - var(--lobby-sidebar-width) - 36px));
   max-height: min(620px, calc(100vh - 32px));
   overflow: hidden;
   border: 1px solid var(--vr-line-strong);

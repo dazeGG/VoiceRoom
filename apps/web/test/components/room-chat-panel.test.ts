@@ -1,4 +1,4 @@
-import { cleanup, render, screen, within } from '@testing-library/vue';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/vue';
 import userEvent from '@testing-library/user-event';
 import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, expect, test, vi } from 'vitest';
@@ -70,6 +70,18 @@ function renderPanel(props: Record<string, unknown> = {}, options: { signedIn?: 
 const composer = () => screen.getByRole('textbox', { name: 'Написать в комнату…' });
 const editor = () => screen.queryByRole('textbox', { name: 'Текст сообщения' });
 const MESSAGE_TEXT = '.room-chat-group__content *, .room-chat-group__content';
+
+test('right-clicks on the room chat author name and avatar ask for that participant menu', async () => {
+  stubRoom();
+  const onAuthorContextMenu = vi.fn<(peerId: string, event: MouseEvent) => void>();
+  renderPanel({ onAuthorContextMenu });
+  const triggers = await screen.findAllByRole('button', { name: 'Профиль Ада' });
+  expect(triggers).toHaveLength(2);
+  for (const trigger of triggers) {
+    await fireEvent.contextMenu(trigger);
+  }
+  expect(onAuthorContextMenu.mock.calls.map(([id]) => id)).toEqual(['ada', 'ada']);
+});
 
 test('opening and reopening the room chat focuses its composer', async () => {
   stubRoom({ 'GET /api/rooms/room/chat': { body: { ok: true, roomId: 'room', messages: [] } } });

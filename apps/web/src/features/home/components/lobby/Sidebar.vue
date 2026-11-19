@@ -12,13 +12,16 @@ import { AccountBadge, Avatar, Badge, Button, Popover, PopoverMenuLabel } from '
 import { iconSm } from '@/shared/ui/icons';
 import { displayNameOf } from '@/shared/utils/display-name';
 import type { ActiveVoice } from '../../model/active-voice';
+import type { FriendMenuTarget } from '../../model/friend-menu';
 import { useLobby } from '../../model/lobby-context';
 import SidebarDownload from '../SidebarDownload.vue';
+import FriendContextMenu from './FriendContextMenu.vue';
 import VoiceCallWidget from './VoiceCallWidget.vue';
 
 const lobby = useLobby();
 const preferences = useNotificationPreferencesStore();
 const { notificationPreferences } = preferences;
+const friendMenu = defineModel<FriendMenuTarget | null>('friendMenu', { required: true });
 
 const props = withDefaults(
   defineProps<{
@@ -89,6 +92,23 @@ onBeforeUnmount(() => {
 
 function friendPresence(entry: Friend): PresenceStatus {
   return effectivePresenceStatus(entry.online, entry.user.presenceStatus, entry.user.doNotDisturb);
+}
+
+function openFriendMenu(event: MouseEvent | KeyboardEvent, friend: Friend): void {
+  if (event instanceof KeyboardEvent && event.key !== 'ContextMenu' && !(event.shiftKey && event.key === 'F10')) {
+    return;
+  }
+  const anchor = event.currentTarget;
+  if (!(anchor instanceof HTMLElement)) return;
+  event.preventDefault();
+  event.stopPropagation();
+  const rect = anchor.getBoundingClientRect();
+  friendMenu.value = {
+    friend,
+    anchor,
+    x: event instanceof MouseEvent ? event.clientX : rect.left + 16,
+    y: event instanceof MouseEvent ? event.clientY : rect.bottom
+  };
 }
 
 function countLabel(count: number): string | number {
@@ -265,8 +285,11 @@ async function selectStatus(status: PresenceStatus, close: () => void): Promise<
           :key="entry.user.id"
           class="sidebar__row"
           type="button"
+          aria-haspopup="menu"
           :aria-current="lobby.selectedFriendId === entry.user.id && lobby.view === 'dm' ? 'true' : undefined"
           @click="lobby.openDm(entry.user.id)"
+          @contextmenu="openFriendMenu($event, entry)"
+          @keydown="openFriendMenu($event, entry)"
         >
           <Avatar
             :name="displayNameOf(entry.user)"
@@ -403,5 +426,6 @@ async function selectStatus(status: PresenceStatus, close: () => void): Promise<
         </button>
       </div>
     </div>
+    <FriendContextMenu v-model="friendMenu" @toast="emit('toast', $event)" />
   </aside>
 </template>

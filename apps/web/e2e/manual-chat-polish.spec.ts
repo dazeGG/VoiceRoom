@@ -132,6 +132,10 @@ test('manual polish renders direct messages with the shared flat chat row and ar
     await more.click();
     const menu = page.getByRole('menu', { name: 'Действия с сообщением' });
     await expect(menu.getByRole('menuitem', { name: 'Изменить' })).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(menu).toBeHidden();
+    await message.click({ button: 'right' });
+    await expect(menu.getByRole('menuitem', { name: 'Изменить' })).toBeVisible();
     await page.keyboard.press('e');
     await expect(message.getByRole('textbox', { name: 'Текст сообщения' })).toBeVisible();
   } finally {
@@ -164,9 +168,14 @@ test('the lobby preview runs the same room chat as the rail, with jumpable quote
   await row.hover();
   await expect(row.getByRole('button', { name: 'Открыть выбор эмодзи' })).toBeVisible();
   await expect(row.getByRole('button', { name: /Добавить быструю реакцию/ })).toHaveCount(0);
+  await expect(row.getByRole('toolbar')).toHaveCSS('opacity', '1');
   await row.getByRole('button', { name: 'Больше действий' }).click();
   const menu = page.getByRole('menu', { name: 'Действия с сообщением' });
   await expect(menu.getByRole('menuitem', { name: /Реакция/ })).toHaveCount(3);
+  await expect(menu.getByRole('menuitem', { name: 'Поставить реакцию' })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(menu).toHaveCount(0);
+  await row.click({ button: 'right' });
   await expect(menu.getByRole('menuitem', { name: 'Поставить реакцию' })).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(menu).toHaveCount(0);
