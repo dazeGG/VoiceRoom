@@ -35,13 +35,13 @@ test('the room kind of a stay migrates forward empty, holds two kinds and rolls 
   );
 
   await rollBackThrough(databaseUrl, MIGRATION);
-  const column = await pool.query(
-    `SELECT 1 FROM information_schema.columns WHERE table_name = 'voice_sessions' AND column_name = 'room_kind'`
+  const column = await pool.query<{ present: number }>(
+    `SELECT 1 AS present FROM information_schema.columns WHERE table_name = 'voice_sessions' AND column_name = 'room_kind'`
   );
   assert.equal(column.rowCount, 0);
-  const rows = await pool.query(`SELECT room_id FROM voice_sessions ORDER BY room_id`);
+  const rows = await pool.query<{ room_id: string }>(`SELECT room_id FROM voice_sessions ORDER BY room_id`);
   assert.deepEqual(
-    rows.rows.map((row: { room_id: string }) => row.room_id),
+    rows.rows.map((row) => row.room_id),
     ['app', 'before', 'site'],
     'the stays outlive the rollback'
   );
