@@ -77,8 +77,8 @@ onBeforeUnmount(() => {
 // thread's outbox, which shows it until the server has it, so the next one
 // can be written and sent while the previous is still on its way.
 async function submit(): Promise<void> {
-  const text = draftText.value.trim();
-  if (!text && !media?.canSend) return;
+  const text = draftText.value;
+  if (!text.trim() && !media?.canSend) return;
   // Images still uploading would be left behind.
   if (media?.drafts.length && !media.canSend) return;
   lobby.outboxFor(conversation.id).enqueue({
@@ -135,6 +135,8 @@ function insertEmoji(emoji: string): void {
           ref="input"
           v-model="draftText"
           class="dm-composer__input"
+          :maxlength="2000"
+          markdown
           :placeholder="t('Написать сообщение…')"
           @keydown="onKeydown"
           @input="onInput"

@@ -538,7 +538,7 @@ test('message edit routes reuse send validation and never grant room owners an a
     text: ' updated \n\n\n line '
   });
   assert.equal(authorRoomEdit.statusCode, 200);
-  assert.deepEqual(roomEdit, { roomId, messageId: 'room-message-1', text: 'updated\n\nline' });
+  assert.deepEqual(roomEdit, { roomId, messageId: 'room-message-1', text: ' updated \n\n\n line ' });
   const authorRoomEdited = checked(RoomMessageAnswer, authorRoomEdit.json());
   assert.equal(authorRoomEdited.message.editedAt, 200);
   assert.equal(authorRoomEdited.message.authorUserId, authorId);
@@ -561,7 +561,7 @@ test('message edit routes reuse send validation and never grant room owners an a
     messageId: 'dm-message-1',
     senderId: authorId,
     recipientId: peerId,
-    body: 'updated\n\nline'
+    body: ' updated \n\n\n line '
   });
   assert.equal(checked(DirectMessageAnswer, authorDmEdit.json()).message.editedAt, 200);
 });

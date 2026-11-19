@@ -1,7 +1,11 @@
 import { reactive } from 'vue';
 import type { MembershipMember } from '@voice-room/shared/contracts/membership';
 import { MAX_MENTION_CANDIDATES, MAX_MENTIONS_PER_MESSAGE } from '@voice-room/shared/mentions';
-import type { RoomMessageContentV1, RoomMessageSegmentV1 } from '@voice-room/shared/room-message-content';
+import {
+  MAX_ROOM_MESSAGE_LENGTH,
+  type RoomMessageContentV1,
+  type RoomMessageSegmentV1
+} from '@voice-room/shared/room-message-content';
 import { keysOf } from '@/shared/utils/collections';
 
 export type SelectedMention = Pick<MembershipMember, 'userId' | 'displayName' | 'login'>;
@@ -45,6 +49,7 @@ export function createMentionComposer() {
     if (!member || state.anchorStart < 0 || state.selected.length >= MAX_MENTIONS_PER_MESSAGE) return null;
     const replacement = `${mentionToken(member)} `;
     const next = text.slice(0, state.anchorStart) + replacement + text.slice(caret);
+    if (next.length > MAX_ROOM_MESSAGE_LENGTH) return null;
     // Computed before close(), which resets the anchor.
     const nextCaret = state.anchorStart + replacement.length;
     if (!state.selected.some((item) => item.userId === member.userId)) state.selected = [...state.selected, member];
@@ -77,6 +82,9 @@ export function createMentionComposer() {
       if (nextIndex > offset) segments.push({ type: 'text', text: text.slice(offset, nextIndex) });
       segments.push({ type: 'mention', userId: match.member.userId, label: match.token });
       offset = nextIndex + match.token.length;
+      // Selection adds a space so the user can keep typing after the mention.
+      // Omit that separator if the message ends immediately after the mention.
+      if (offset === text.length - 1 && text[offset] === ' ') break;
     }
     if (segments.length === 0) segments.push({ type: 'text', text });
     return { version: 1, segments };

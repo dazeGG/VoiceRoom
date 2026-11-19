@@ -3,6 +3,7 @@
 // open the author's profile), then each message as a MessageBubble.
 import { t } from '@/shared/i18n';
 import { computed } from 'vue';
+import { MAX_ROOM_MESSAGE_LENGTH } from '@voice-room/shared/room-message-content';
 import type { ChatMessage } from '@/api/rooms';
 import { useSessionStore } from '@/features/auth/session.store';
 import EmojiText from '@/shared/chat/EmojiText.vue';
@@ -10,7 +11,6 @@ import MessageBubble from '@/shared/chat/MessageBubble.vue';
 import type { MessageMenuState } from '@/shared/chat/message-menu-state';
 import type { ReactionStore } from '@/shared/chat/reaction-store';
 import StructuredMessageContent from '@/shared/chat/StructuredMessageContent.vue';
-import ChatText from '@/shared/components/ChatText.vue';
 import { AccountBadge, Avatar } from '@/shared/ui';
 import { clockTime } from '@/shared/utils/date-format';
 import { mentionsUser, type ChatGroup } from '../room-chat-view';
@@ -94,7 +94,7 @@ const profileLabel = computed(() =>
         :message="message"
         :text="message.text"
         variant="chat-msg"
-        :maxlength="500"
+        :maxlength="MAX_ROOM_MESSAGE_LENGTH"
         :first="message.id === group.messages[0].id"
         :editing="menu.editingId === message.id"
         :menu-open="menu.opened?.message.id === message.id"
@@ -109,16 +109,13 @@ const profileLabel = computed(() =>
         @close-edit="menu.stopEditing()"
       >
         <template #content>
-          <span class="room-chat-group__content"
-            ><StructuredMessageContent
-              v-if="message.content"
-              :content="message.content"
-              :fallback="message.text"
-              :onmention="onMention"
-            /><ChatText v-else :text="message.text" /><span v-if="message.editedAt" class="room-chat-group__edited">{{
-              t('(изменено)')
-            }}</span></span
-          >
+          <div class="room-chat-group__content">
+            <StructuredMessageContent :content="message.content" :fallback="message.text" :onmention="onMention" /><span
+              v-if="message.editedAt"
+              class="room-chat-group__edited"
+              >{{ t('(изменено)') }}</span
+            >
+          </div>
         </template>
       </MessageBubble>
     </div>

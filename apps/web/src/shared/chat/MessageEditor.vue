@@ -45,11 +45,10 @@ function onKeydown(event: KeyboardEvent): void {
 }
 
 async function save(): Promise<void> {
-  const trimmed = text.value.trim();
-  if (!trimmed || saving.value) return;
+  if (!text.value.trim() || saving.value) return;
   saving.value = true;
   try {
-    await onSave(trimmed);
+    await onSave(text.value);
     emit('close');
   } catch {
     saving.value = false;
@@ -64,6 +63,7 @@ async function save(): Promise<void> {
       v-model="text"
       class="message-editor__input"
       :maxlength="maxlength"
+      markdown
       :aria-label="t('Текст сообщения')"
       :disabled="saving"
       @keydown="onKeydown"

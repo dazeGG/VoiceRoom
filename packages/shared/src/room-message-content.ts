@@ -1,6 +1,6 @@
 // Structured room message content (v1): text, link and mention segments,
-// capped in size, never HTML, with a plain-text projection for everything
-// that shows only text.
+// capped in size, with a plain-text projection for everything that shows
+// only text. Text segments carry literal Markdown source, never trusted HTML.
 
 import { isArray, isRecord, textOf } from './guards.ts';
 
@@ -11,6 +11,7 @@ export type RoomMessageSegmentV1 = RoomMessageTextSegmentV1 | RoomMessageLinkSeg
 export type RoomMessageContentV1 = { version: 1; segments: RoomMessageSegmentV1[] };
 
 export const CONTENT_VERSION = 1 as const;
+export const MAX_ROOM_MESSAGE_LENGTH = 2_000;
 export const MAX_CONTENT_BYTES: number = 16 * 1024;
 export const MAX_SEGMENTS: number = 100;
 const MAX_TEXT_LENGTH = 8_000;
@@ -20,11 +21,13 @@ const HTML_TAG = /<\s*\/?\s*[a-z][^>]*>/i;
 function cleanString(
   value: unknown,
   maxLength: number,
-  { allowEmpty = false }: { allowEmpty?: boolean } = {}
+  { allowEmpty = false, literal = false }: { allowEmpty?: boolean; literal?: boolean } = {}
 ): string | null {
   if (typeof value !== 'string') return null;
-  const normalized = value.replace(/\r\n?/g, '\n').normalize('NFC');
-  if ((!allowEmpty && !normalized) || normalized.length > maxLength || HTML_TAG.test(normalized)) return null;
+  const text = value.replace(/\r\n?/g, '\n');
+  const normalized = literal ? text : text.normalize('NFC');
+  if ((!allowEmpty && !normalized) || normalized.length > maxLength || (!literal && HTML_TAG.test(normalized)))
+    return null;
   return normalized;
 }
 
@@ -49,7 +52,7 @@ function normalizeSegment(input: unknown): RoomMessageSegmentV1 | null {
   if (!isRecord(input)) return null;
   const segment = input;
   if (segment.type === 'text') {
-    const text = cleanString(segment.text, MAX_TEXT_LENGTH, { allowEmpty: true });
+    const text = cleanString(segment.text, MAX_TEXT_LENGTH, { allowEmpty: true, literal: true });
     return text === null ? null : { type: 'text', text };
   }
   if (segment.type === 'link') {
@@ -95,6 +98,6 @@ export function projectRoomMessageContent(value: unknown, plainText: unknown = '
 }
 
 export function contentFromPlainText(value: unknown): RoomMessageContentV1 | null {
-  const text = cleanString(value, MAX_TEXT_LENGTH);
-  return text ? { version: CONTENT_VERSION, segments: [{ type: 'text', text }] } : null;
+  const text = cleanString(value, MAX_TEXT_LENGTH, { literal: true });
+  return text?.trim() ? { version: CONTENT_VERSION, segments: [{ type: 'text', text }] } : null;
 }

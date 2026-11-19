@@ -45,6 +45,7 @@ const props = withDefaults(
     hidden?: boolean;
     activeTab?: 'chat' | 'participants';
     visible?: boolean;
+    focusComposerOnOpen?: boolean;
     unread?: number;
     participantCount?: number;
     chatTabId?: string | undefined;
@@ -70,6 +71,7 @@ const props = withDefaults(
     hidden: false,
     activeTab: 'chat',
     visible: true,
+    focusComposerOnOpen: false,
     unread: 0,
     participantCount: 0,
     chatTabId: undefined,
@@ -158,6 +160,13 @@ onBeforeUnmount(() => menu.dispose());
 
 const composer = ref<{ focus(): void } | null>(null);
 watch(composer, (handle) => (menu.composer = handle), { immediate: true });
+watch(
+  [() => props.focusComposerOnOpen && chatVisible.value && !props.hidden, composer],
+  ([shouldFocus, handle]) => {
+    if (shouldFocus) handle?.focus();
+  },
+  { flush: 'post' }
+);
 
 // The scrolling body and each day section tell the scroll helper when their
 // height changes, so a reader at the newest message stays on it.

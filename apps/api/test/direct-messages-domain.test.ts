@@ -29,9 +29,11 @@ const ME = storedUser({ id: 'user-1', login: 'alice', displayName: 'Alice' });
 const PEER = '22222222-2222-4222-8222-222222222222';
 const UUID_A = '11111111-1111-4111-8111-111111111111';
 
-test('DM text keeps lines, collapses runs and caps at 2000 characters', () => {
-  assert.equal(cleanDmText('  a \t b \n\n\n c '), 'a b\n\nc');
+test('DM text preserves Markdown whitespace and caps at 2000 characters', () => {
+  const markdown = '  a \t b \n\n\n c ';
+  assert.equal(cleanDmText(markdown.replaceAll('\n', '\r\n')), markdown);
   assert.equal(cleanDmText('x'.repeat(2100)).length, 2000);
+  assert.equal(cleanDmText(' \t\n'), '');
   assert.equal(cleanDmText(null), '');
 });
 

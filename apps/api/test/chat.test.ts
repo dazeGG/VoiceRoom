@@ -102,6 +102,7 @@ test('chat API persists, streams, and respects room auth', async (t) => {
     );
     assert.equal(rejectedEdit.status, 403);
 
+    const editedText = '  Изменено\n\n\n```html\n  <article>x</article>\n```\n';
     const edited = await patchJson(
       socketPath,
       `/api/rooms/${created.body.roomId}/chat/${posted.body.message.id}`,
@@ -109,11 +110,12 @@ test('chat API persists, streams, and respects room auth', async (t) => {
       {
         peerId: PEER_ID,
         sessionToken: TOKEN,
-        text: '  Изменено\n\n\nс сохранением строк  '
+        text: editedText
       }
     );
     assert.equal(edited.status, 200);
-    assert.equal(edited.body.message.text, 'Изменено\n\nс сохранением строк');
+    assert.equal(edited.body.message.text, editedText);
+    assert.deepEqual(edited.body.message.content, { version: 1, segments: [{ type: 'text', text: editedText }] });
     assert.equal(typeof edited.body.message.editedAt, 'number');
 
     const streamedEdit = await waitForWsType(
@@ -121,25 +123,25 @@ test('chat API persists, streams, and respects room auth', async (t) => {
       'room.chat.edited',
       (frame) => frame.payload.message.id === posted.body.message.id
     );
-    assert.equal(streamedEdit.payload.message.text, 'Изменено\n\nс сохранением строк');
+    assert.equal(streamedEdit.payload.message.text, editedText);
     assert.equal(streamedEdit.payload.message.editedAt, edited.body.message.editedAt);
 
     const after = await getJson(socketPath, `/api/rooms/${created.body.roomId}/chat`, RoomChat);
     assert.equal(after.status, 200);
     assert.equal(after.body.messages.length, 1);
-    assert.equal(after.body.messages[0]?.text, 'Изменено\n\nс сохранением строк');
+    assert.equal(after.body.messages[0]?.text, editedText);
     assert.equal(after.body.messages[0]?.editedAt, edited.body.message.editedAt);
 
-    // 2.4.0: multiline preserved (newlines, limited blank lines, line count cap)
+    // Blank lines and indentation are part of Markdown source.
+    const markdown = 'line1\n\n\n  line2\nline3';
     const multi = await postJson(socketPath, `/api/rooms/${created.body.roomId}/chat`, RoomMessageAnswer, {
       name: 'Alice',
       peerId: PEER_ID,
       sessionToken: TOKEN,
-      text: 'line1\n\n\nline2\nline3'
+      text: markdown
     });
     assert.equal(multi.status, 201);
-    // collapses 3+ \n to 2, keeps \n
-    assert.equal(multi.body.message.text, 'line1\n\nline2\nline3');
+    assert.equal(multi.body.message.text, markdown);
 
     voice.ws.close();
   } catch (error) {

@@ -16,6 +16,7 @@ import { avatarColorForPeerId } from '../rooms/avatar-color.ts';
 import { tokensMatch } from '../../platform/crypto/tokens-match.ts';
 import type { LiveRoom, PresencePeer } from '../rooms/room-views.ts';
 import { cleanChatText, messageFingerprint, normalizeAttachmentIds } from './message-input.ts';
+import { contentFromEditedText } from './content.repository.ts';
 import { sendUnitOfWork, type DbClient, type SendDelivery } from './message-send.ts';
 import type { RoomReplyTarget } from './reply.repository.ts';
 import type { AttachmentRepository } from '../media/attachment.repository.ts';
@@ -63,7 +64,12 @@ export interface RoomMessages {
     messageId: string,
     options?: { unitOfWork?: DeleteUnitOfWork | null }
   ): Promise<unknown>;
-  editMessage(roomId: string, messageId: string, text: string): Promise<RoomChatMessage | null>;
+  editMessage(
+    roomId: string,
+    messageId: string,
+    text: string,
+    content?: RoomChatMessage['content']
+  ): Promise<RoomChatMessage | null>;
   markRoomChatRead(roomId: string, userId: string): Promise<number | null | undefined>;
 }
 
@@ -361,7 +367,8 @@ export function createRoomChatService(deps: RoomChatDeps) {
     const limited = rateLimited(clientIp, roomId);
     if (limited) return limited;
 
-    const message = await deps.messages().room.editMessage(roomId, messageId, text);
+    const content = contentFromEditedText(text, current.content);
+    const message = await deps.messages().room.editMessage(roomId, messageId, text, content);
     if (!message) return { status: 'message_not_found' };
     const publicMessage = publicChatMessage(message);
     deps.broadcastRoomDetail(roomId, deps.roomDetailEvent('room.chat.edited', { roomId, message: publicMessage }));
