@@ -343,7 +343,8 @@ jobs:
   deploy-dev:
     name: Deploy dev
     needs: images
-    if: github.event_name == 'push'
+    # Publication can succeed after skipping the individual app checks.
+    if: ${{ !cancelled() && github.event_name == 'push' && needs.images.result == 'success' }}
     uses: ./.github/workflows/deploy.yml
     with:
       environment: dev
