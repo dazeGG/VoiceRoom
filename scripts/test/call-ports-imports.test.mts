@@ -22,22 +22,28 @@ const aliases = [
   '@/features/room/adapters',
   '@/features/room/adapters/web-call-ports'
 ];
-const relativeImports = [
-  '../../auth',
-  '../../auth/session.store',
-  '../../../../api/auth',
-  '../../call-feedback',
-  '../../call-feedback/call-feedback.store',
-  '../../../../stores/page.store',
-  '../../../../platform/desktop-boundary',
-  '../../../../platform/open-in-app',
-  '../../../../platform/app-visibility',
-  '../adapters',
-  '../adapters/web-call-ports',
-  '../../../../features/auth/session.store',
-  '../../../../features/room/adapters/web-call-ports',
-  '../../room/adapters/web-call-ports'
+// The protected targets as seen from features/room; a client file d levels below
+// features/room/client reaches them with d + 1 more climbs.
+const roomRelativeTargets = [
+  '../auth',
+  '../auth/session.store',
+  '../../api/auth',
+  '../call-feedback',
+  '../call-feedback/call-feedback.store',
+  '../../stores/page.store',
+  '../../platform/desktop-boundary',
+  '../../platform/open-in-app',
+  '../../platform/app-visibility',
+  './adapters',
+  './adapters/web-call-ports'
 ];
+const relativeFrom = (depth: number) =>
+  roomRelativeTargets.map((target) => '../'.repeat(depth + 1) + target.replace(/^\.\//, ''));
+const clientDepths = new Map([
+  [clientRootPath, 0],
+  ['apps/web/src/features/room/client/room/room.ts', 1]
+]);
+const relativeImportsFor = (filePath: string) => relativeFrom(clientDepths.get(filePath) ?? 0);
 const forms = [
   { name: 'value imports', source: (target: string) => `import { value } from '${target}';` },
   { name: 'type imports', source: (target: string) => `import type { Value } from '${target}';` },
@@ -64,7 +70,7 @@ for (const form of forms) {
   test(`call client rejects forbidden alias and relative ${form.name} at both depths`, async () => {
     const rule = form.name === 'dynamic imports' ? 'no-restricted-syntax' : 'no-restricted-imports';
     for (const filePath of clientPaths) {
-      for (const target of [...aliases, ...relativeImports]) {
+      for (const target of [...aliases, ...relativeImportsFor(filePath)]) {
         const messages = await boundaryMessages(form.source(target), filePath);
         assert.equal(messages.length, 1, `${filePath}: ${target}`);
         assert.equal(messages[0]?.ruleId, rule, `${filePath}: ${target}`);
@@ -74,7 +80,7 @@ for (const form of forms) {
 }
 
 test('explicit .ts extensions do not bypass call import restrictions', async () => {
-  for (const target of ['@/stores/page.store.ts', '../../../../platform/app-visibility.ts']) {
+  for (const target of ['@/stores/page.store.ts', '../../../platform/app-visibility.ts']) {
     for (const form of [forms[0], forms[4]]) {
       assert.ok(form);
       assert.equal((await boundaryMessages(form.source(target), clientRootPath)).length, 1, target);
@@ -129,7 +135,7 @@ test('voice session accepts membership and the call ports', async () => {
 
 test('client Vue scripts cannot bypass static or dynamic import restrictions', async () => {
   const filePath = 'apps/web/src/features/room/client/ui/PortFixture.vue';
-  for (const target of [...aliases, ...relativeImports]) {
+  for (const target of [...aliases, ...relativeFrom(1)]) {
     for (const form of forms) {
       const source = `<script setup lang="ts">${form.source(target)}</script>`;
       assert.equal((await boundaryMessages(source, filePath)).length, 1, target);
@@ -147,7 +153,7 @@ test('similarly named modules are not mistaken for protected imports', async () 
 
 test('web adapters outside the client may import application dependencies', async () => {
   const filePath = 'apps/web/src/features/room/adapters/web-call-ports.ts';
-  for (const target of [...aliases, ...relativeImports]) {
+  for (const target of [...aliases, ...relativeFrom(0)]) {
     for (const form of forms) {
       assert.deepEqual(await boundaryMessages(form.source(target), filePath), [], target);
     }
@@ -157,5 +163,28 @@ test('web adapters outside the client may import application dependencies', asyn
 test('the existing room-to-lobby restriction remains active inside narrower scopes', async () => {
   for (const filePath of [...clientPaths, lobbyPath]) {
     assert.equal((await boundaryMessages("import '@/features/home/rooms';", filePath)).length, 1, filePath);
+  }
+});
+
+test('relative imports that climb out of features/room are refused at every client depth', async () => {
+  const cases: Array<[string, string]> = [
+    [clientRootPath, '../../../shared/log'],
+    ['apps/web/src/features/room/client/room/room.ts', '../../../../shared/log'],
+    ['apps/web/src/features/room/client/services/livekit/remote-participants.ts', '../../../../../shared/log'],
+    ['apps/web/src/features/room/client/a/b/c/deep.ts', '../../../../../../shared/log']
+  ];
+  for (const [filePath, target] of cases) {
+    for (const form of forms) {
+      assert.equal((await boundaryMessages(form.source(target), filePath)).length, 1, `${filePath}: ${target}`);
+    }
+  }
+});
+
+test('client modules named like protected targets are not mistaken for them', async () => {
+  const filePath = 'apps/web/src/features/room/client/room/room.ts';
+  for (const target of ['../auth/token', '../adapters/local', '../../auth/x', '../../call-feedback/x']) {
+    for (const form of forms) {
+      assert.deepEqual(await boundaryMessages(form.source(target), filePath), [], target);
+    }
   }
 });
