@@ -122,7 +122,13 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run check:app
-      - run: npm run build:app
+      - name: Build the app and verify its deployment artifacts
+        env:
+          LIVEKIT_DOMAIN: "lk$&x$'y.example.com"
+        run: |
+          npm run build:app
+          WEB_DEPLOY_CONTRACT=built npm --workspace @voice-room/web run test -- \
+            test/deploy-contract.test.ts -t 'a production build keeps the deployment contract'
 
   # API and web tests run as separate jobs so neither waits for the other.
   test:
@@ -234,6 +240,8 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm --workspace @voice-room/web run test
+        env:
+          WEB_DEPLOY_CONTRACT: checked
       - run: npm --workspace @voice-room/admin run test
 
   voice-join:
@@ -342,21 +350,32 @@ jobs:
       url: https://dev.voiceroom.ru
     secrets: inherit
 
+  static-publication:
+    name: Static publication checks
+    needs: changes
+    if: needs.changes.outputs.site == 'true' || needs.changes.outputs.docs == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - run: bash scripts/test/static-publication.sh
+
   site:
     name: Site checks
-    needs: changes
+    needs: [changes, static-publication]
     if: needs.changes.outputs.site == 'true'
     uses: ./.github/workflows/build-static.yml
     with:
       component: site
+      check-publication: false
 
   docs:
     name: Docs checks
-    needs: changes
+    needs: [changes, static-publication]
     if: needs.changes.outputs.docs == 'true'
     uses: ./.github/workflows/build-static.yml
     with:
       component: docs
+      check-publication: false
 
   deploy-site-dev:
     name: Deploy site to dev
