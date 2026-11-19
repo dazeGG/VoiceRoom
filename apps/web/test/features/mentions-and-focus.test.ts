@@ -52,6 +52,16 @@ test('someone already mentioned is not offered again', () => {
   expect(mentions.candidates.map((candidate) => candidate.userId)).toEqual(['u-alex']);
 });
 
+test('a mention-only message omits the separator inserted by the picker', () => {
+  const mentions = createMentionComposer();
+  mentions.update('@a', 2);
+  const chosen = mentions.choose('@a', 2, member('u-anna', 'anna'));
+  expect(chosen?.text).toBe('@anna ');
+  expect(mentions.toContent(chosen?.text ?? '').segments).toEqual([
+    { type: 'mention', userId: 'u-anna', label: '@anna' }
+  ]);
+});
+
 let participantsUi: ReturnType<typeof useParticipantsUiStore>;
 
 beforeEach(() => {

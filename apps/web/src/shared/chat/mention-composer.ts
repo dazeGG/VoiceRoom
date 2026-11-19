@@ -82,6 +82,9 @@ export function createMentionComposer() {
       if (nextIndex > offset) segments.push({ type: 'text', text: text.slice(offset, nextIndex) });
       segments.push({ type: 'mention', userId: match.member.userId, label: match.token });
       offset = nextIndex + match.token.length;
+      // Selection adds a space so the user can keep typing after the mention.
+      // Omit that separator if the message ends immediately after the mention.
+      if (offset === text.length - 1 && text[offset] === ' ') break;
     }
     if (segments.length === 0) segments.push({ type: 'text', text });
     return { version: 1, segments };

@@ -5,7 +5,11 @@ import { t } from '@/shared/i18n';
 import { onBeforeUnmount, onMounted, ref, nextTick } from 'vue';
 import { ArrowUp } from '@lucide/vue';
 import type { MembershipMember } from '@voice-room/shared/contracts/membership';
-import { contentFromPlainText, MAX_ROOM_MESSAGE_LENGTH } from '@voice-room/shared/room-message-content';
+import {
+  contentFromPlainText,
+  MAX_ROOM_MESSAGE_LENGTH,
+  projectRoomMessageContent
+} from '@voice-room/shared/room-message-content';
 import type { ChatMessage } from '@/api/rooms';
 import { getAppRealtime } from '@/api/realtime';
 import { useRoomMembershipStore } from '@/entities/room/room-membership.store';
@@ -113,9 +117,10 @@ async function submit(event?: SubmitEvent): Promise<void> {
   // Images still uploading would be left behind.
   if (props.media?.drafts.length && !props.media.canSend) return;
 
+  const mentionContent = mentions.selected.length ? mentions.toContent(message) : undefined;
   emit('send', {
-    text: message,
-    content: mentions.selected.length ? mentions.toContent(message) : (contentFromPlainText(message) ?? undefined),
+    text: mentionContent ? projectRoomMessageContent(mentionContent, message) : message,
+    content: mentionContent ?? contentFromPlainText(message) ?? undefined,
     attachmentIds: withMedia ? (props.media?.readyIds ?? []) : [],
     replyTo: replyTarget.value ? { messageId: replyTarget.value.id } : undefined
   });

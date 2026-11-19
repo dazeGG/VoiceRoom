@@ -286,6 +286,7 @@ test('manual polish keeps the newest mention query, emits login-bound segments, 
   );
   await composer.press('Enter');
   const payload = parse(PostRoomMessageBody, (await mentionRequest).postDataJSON());
+  expect(payload.text).toBe('@stable_login');
   expect(parse(MessageContent, payload.content).segments).toEqual([
     { type: 'mention', userId: 'stable-user', label: '@stable_login' }
   ]);
