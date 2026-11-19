@@ -76,6 +76,7 @@ export interface ApiRouteDeps {
     admin: Parameters<typeof registerAdminRoutes>[2]['admin'];
     adminAccounts: Parameters<typeof registerAdminRoutes>[2]['accounts'];
     adminRooms: Parameters<typeof registerAdminRoutes>[2]['rooms'];
+    adminWidgets: Parameters<typeof registerAdminRoutes>[2]['widgets'];
     staff: Parameters<typeof registerStaffRoutes>[2]['staff'];
     desktopRelease: OpsRouteDeps['desktopRelease'];
   };
@@ -225,6 +226,7 @@ export function registerApiRoutes(app: FastifyInstance, ctx: ApiContext, deps: A
     admin: deps.domain.admin,
     accounts: deps.domain.adminAccounts,
     rooms: deps.domain.adminRooms,
+    widgets: deps.domain.adminWidgets,
     staffUserId
   });
   registerMediaRoutes(app, ctx, {

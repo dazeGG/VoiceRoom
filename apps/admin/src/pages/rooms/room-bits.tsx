@@ -3,10 +3,18 @@
 // or code, and a call's stays folded into the people who made them.
 
 import { AppWindow, Globe, Smartphone, type LucideIcon } from 'lucide-react';
-import type { ClientKind, RoomAccount, RoomCall, RoomStay, VoiceMinute } from '@voice-room/shared/contracts/admin';
+import type {
+  ClientKind,
+  RoomAccount,
+  RoomCall,
+  RoomKind,
+  RoomStay,
+  VoiceMinute
+} from '@voice-room/shared/contracts/admin';
 import type { NetworkPoint } from '@voice-room/shared/contracts/rooms';
 import { deviceLabel, shortGuestId, shortIpKey } from '../../origin.ts';
 import { AccountBadge, Pill, RoomAvatar } from '../../ui/index.tsx';
+import { seatMatches, toggledFilter, type CallOriginFilters, type OriginPick } from './CallFilters.tsx';
 
 export const CLIENTS: Record<ClientKind, { label: string; icon: LucideIcon }> = {
   desktop_app: { label: 'приложение', icon: AppWindow },
@@ -65,51 +73,120 @@ export function AccountName({
 
 type Seat = Pick<RoomStay, 'client' | 'os' | 'browser' | 'guestId' | 'clientId' | 'ipKey' | 'location'>;
 
-function OriginId({ title, value, short }: { title: string; value: string; short: string }) {
+/**
+ * An address key or a browser id in short. With a pick it is a button that
+ * narrows the call history to it (pressed while it does); the full value is in
+ * its title either way.
+ */
+function OriginToken({
+  label,
+  value,
+  short,
+  field,
+  pick,
+  shared = false
+}: {
+  label: string;
+  value: string;
+  short: string;
+  field: keyof CallOriginFilters;
+  pick?: OriginPick | undefined;
+  shared?: boolean;
+}) {
+  if (!pick) {
+    return (
+      <span className="origin-token" data-static="true" data-shared={shared} title={`${label} ${value}`}>
+        {short}
+      </span>
+    );
+  }
+  const on = pick.filters[field] === value;
   return (
-    <span className="rooms-code ui-mono" title={`${title} ${value}`}>
-      <span>{short}</span>
-      <input
-        className="rooms-origin-full-id"
-        aria-label={title}
-        title="Выделить полный ID для копирования"
-        value={value}
-        readOnly
-        onFocus={(event) => event.currentTarget.select()}
-        onClick={(event) => {
-          event.stopPropagation();
-          event.currentTarget.select();
-        }}
-      />
+    <button
+      type="button"
+      className="origin-token"
+      data-on={on}
+      data-shared={!on && shared}
+      aria-pressed={on}
+      title={`${label} ${value}${shared ? ' · тот же IP у другого участника' : ''}`}
+      onClick={(event) => {
+        event.stopPropagation();
+        pick.onChange(toggledFilter(pick.filters, field, value));
+      }}
+    >
+      {short}
+    </button>
+  );
+}
+
+/**
+ * The device and the place, never the address; under them the address key
+ * (equal ip· keys are the same address) and the browser or app id. With a
+ * pick both narrow the call history; `shared` marks an address someone else in
+ * the call came from too.
+ */
+export function Origin({
+  seat,
+  pick,
+  shared = false
+}: {
+  seat: Seat;
+  pick?: OriginPick | undefined;
+  shared?: boolean;
+}) {
+  const clientId = seat.clientId ?? seat.guestId;
+  const line = [deviceLabel(seat), seat.location].filter((part): part is string => Boolean(part)).join(' · ');
+  const codes = Boolean(seat.ipKey || clientId || pick);
+  if (!line && !seat.client && !codes) return null;
+  return (
+    <span className="rooms-origin">
+      {line || seat.client ? (
+        <span className="rooms-origin-line">
+          <ClientIcon client={seat.client} size={14} />
+          {line ? <span className="rooms-origin-text">{line}</span> : null}
+        </span>
+      ) : null}
+      {codes ? (
+        <span className="rooms-origin-codes">
+          {seat.ipKey ? (
+            <OriginToken
+              label="Ключ адреса"
+              value={seat.ipKey}
+              short={shortIpKey(seat.ipKey)}
+              field="ipKey"
+              pick={pick}
+              shared={shared}
+            />
+          ) : (
+            <span className="origin-token" data-none="true">
+              нет IP
+            </span>
+          )}
+          {clientId ? (
+            <OriginToken
+              label={seat.clientId ? 'ID браузера / приложения' : 'Браузер гостя'}
+              value={clientId}
+              short={shortGuestId(clientId)}
+              field="clientId"
+              pick={pick}
+            />
+          ) : null}
+        </span>
+      ) : null}
     </span>
   );
 }
 
-/** The device and the place, never the address: equal ip· keys are the same address. */
-export function Origin({ seat }: { seat: Seat }) {
-  const device = deviceLabel(seat);
-  const clientId = seat.clientId ?? seat.guestId;
-  const parts = [device, seat.location].filter((part): part is string => Boolean(part));
-  if (!parts.length && !seat.ipKey && !clientId) return null;
-  // The dots between the parts are drawn by the stylesheet.
-  return (
-    <span className="rooms-origin">
-      <ClientIcon client={seat.client} size={14} />
-      <span className="rooms-origin-parts">
-        {parts.map((part) => (
-          <span key={part}>{part}</span>
-        ))}
-        {seat.ipKey ? <OriginId title="Ключ адреса" value={seat.ipKey} short={shortIpKey(seat.ipKey)} /> : null}
-        {clientId ? (
-          <OriginId
-            title={seat.clientId ? 'ID браузера / приложения' : 'Браузер гостя'}
-            value={clientId}
-            short={shortGuestId(clientId)}
-          />
-        ) : null}
-      </span>
-    </span>
-  );
+/** The address keys more than one of these came from: the same IP. */
+export function sharedIpKeys(seats: readonly { key: string; ipKey: string | null }[]): Set<string> {
+  const owners = new Map<string, Set<string>>();
+  for (const seat of seats) {
+    if (!seat.ipKey) continue;
+    const keys = owners.get(seat.ipKey) ?? new Set<string>();
+    keys.add(seat.key);
+    owners.set(seat.ipKey, keys);
+  }
+  return new Set([...owners].filter(([, keys]) => keys.size > 1).map(([ipKey]) => ipKey));
 }
 
 /**
@@ -121,6 +198,7 @@ export function RoomTitle({
   name,
   isStatic,
   avatarUrl = null,
+  kind,
   size = 34
 }: {
   roomId: string;
@@ -128,6 +206,8 @@ export function RoomTitle({
   name: string | null;
   isStatic: boolean | null;
   avatarUrl?: string | null;
+  /** A widget room says so in place of temporary. */
+  kind?: RoomKind | undefined;
   size?: number;
 }) {
   const named = Boolean(name) && name !== roomId;
@@ -138,6 +218,10 @@ export function RoomTitle({
       {name === null ? (
         <Pill tone="danger" compact>
           удалена
+        </Pill>
+      ) : kind === 'widget' ? (
+        <Pill tone="info" compact>
+          виджет
         </Pill>
       ) : isStatic ? (
         <Pill tone="accent" compact>
@@ -166,7 +250,7 @@ export interface CallPerson {
 }
 
 /** The same account, the same guest browser or else the same guest name is one person. */
-function personKey(stay: RoomStay): string {
+export function personKey(stay: RoomStay): string {
   if (stay.account) return `a:${stay.account.id}`;
   if (stay.guestId) return `g:${stay.guestId}`;
   if (stay.guestName) return `n:${stay.guestName}`;
@@ -197,4 +281,9 @@ export function peopleOf(call: Pick<RoomCall, 'stays'>): CallPerson[] {
     }
   }
   return [...people.values()];
+}
+
+/** The people of a call one of whose stays the history's filters describe. */
+export function matchedPeople(call: Pick<RoomCall, 'stays'>, filters: CallOriginFilters): Set<string> {
+  return new Set(call.stays.filter((stay) => seatMatches(stay, filters)).map(personKey));
 }

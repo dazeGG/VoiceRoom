@@ -14,6 +14,7 @@ import {
   TROUBLE_BAD_PCT,
   type ClientKind,
   type RoomAccount,
+  type RoomKind,
   type StaticRoomRow,
   type StaticRoomsFilter,
   type StaticRoomsSort,
@@ -38,6 +39,7 @@ export interface AdminRoomRow {
   id: string;
   name: string;
   isStatic: boolean;
+  kind: RoomKind;
   avatarUrl: string | null;
   owner: RoomAccount | null;
 }
@@ -75,6 +77,16 @@ export interface StoredCall {
   badFeedback?: number;
   /** Answers about it come before this moment: FEEDBACK_AFTER_CALL_MS after it, or the room's next call. */
   feedbackUntil?: number;
+  /** Its first stay's room kind; absent for stays recorded before it was kept. */
+  kind?: RoomKind;
+}
+
+/** What the database holds of the widget boundary and the processes serving it. */
+export interface WidgetStateRow {
+  admissionEnabled: boolean;
+  boundaryRequired: boolean;
+  recoveryGeneration: number;
+  owners: { role: 'api' | 'gate'; claimed: boolean; acknowledgedGeneration: number | null }[];
 }
 
 export interface StaticRoomsListQuery {
@@ -131,6 +143,9 @@ export interface HistoryAfter {
   leftAt: number;
   id: string;
 }
+
+// The columns only ever hold these two (rooms_kind_check, voice_sessions_room_kind_check).
+const roomKindOf = (value: string | null): RoomKind | null => (value === 'main' || value === 'widget' ? value : null);
 
 // The column only ever holds these four (voice_sessions_client_check).
 function clientOf(value: string | null): ClientKind | null {
@@ -283,6 +298,7 @@ export function createAdminRoomsRepository({ pool }: { pool: pg.Pool }) {
         'r.id as room_id',
         'r.name',
         'r.is_static',
+        'r.kind',
         'r.avatar_key as room_avatar_key',
         'u.id',
         'u.login',
@@ -297,6 +313,7 @@ export function createAdminRoomsRepository({ pool }: { pool: pg.Pool }) {
       id: row.room_id,
       name: row.name,
       isStatic: row.is_static,
+      kind: roomKindOf(row.kind) ?? 'main',
       avatarUrl: avatarUrl(row.room_avatar_key),
       owner: account(row)
     }));
@@ -476,6 +493,7 @@ export function createAdminRoomsRepository({ pool }: { pool: pg.Pool }) {
     accountId?: string | undefined;
     clientId?: string | undefined;
     ipKey?: string | undefined;
+    kind?: RoomKind | undefined;
     /** One call by its first stay's id. */
     callId?: string | undefined;
     after?: HistoryAfter | undefined;
@@ -496,6 +514,7 @@ export function createAdminRoomsRepository({ pool }: { pool: pg.Pool }) {
           .select([
             'id',
             'room_id',
+            'room_kind',
             'user_id',
             'client_id',
             'guest_id',
@@ -510,6 +529,13 @@ export function createAdminRoomsRepository({ pool }: { pool: pg.Pool }) {
           .where('room_id', 'is not', null)
           .where('room_id', '!=', '');
         if (roomId) base = base.where('room_id', '=', roomId);
+        // Only the rooms that held that kind; the call's own kind is checked once it is gathered.
+        if (query.kind) {
+          const { kind } = query;
+          base = base.where('room_id', 'in', (eb) =>
+            eb.selectFrom('voice_sessions').select('room_id').where('room_kind', '=', kind)
+          );
+        }
         if (query.accountId) {
           const { accountId } = query;
           base = base.where('room_id', 'in', (eb) =>
@@ -537,6 +563,7 @@ export function createAdminRoomsRepository({ pool }: { pool: pg.Pool }) {
         qb.selectFrom('ordered').select([
           'id',
           'room_id',
+          'room_kind',
           'user_id',
           'client_id',
           'guest_id',
@@ -555,6 +582,7 @@ export function createAdminRoomsRepository({ pool }: { pool: pg.Pool }) {
             'room_id',
             'call_no',
             sql<string>`(array_agg(id order by joined_at, id))[1]`.as('call_id'),
+            sql<string | null>`(array_agg(room_kind order by joined_at, id))[1]`.as('call_kind'),
             sql<Date>`min(joined_at)`.as('started_at'),
             sql<Date>`max(left_at)`.as('ended_at'),
             sql<Date | null>`lead(min(joined_at)) over (partition by room_id order by min(joined_at))`.as(
@@ -577,6 +605,7 @@ export function createAdminRoomsRepository({ pool }: { pool: pg.Pool }) {
         'c.started_at',
         'c.ended_at',
         'c.next_started_at',
+        'c.call_kind',
         'r.name as room_name',
         'r.deleted_at as room_deleted_at',
         'r.is_static',
@@ -585,6 +614,7 @@ export function createAdminRoomsRepository({ pool }: { pool: pg.Pool }) {
     if (query.accountId) pageQuery = pageQuery.where('c.has_account', '=', true);
     if (query.clientId || query.ipKey) pageQuery = pageQuery.where('c.has_origin', '=', true);
     if (query.callId) pageQuery = pageQuery.where('c.call_id', '=', query.callId);
+    if (query.kind) pageQuery = pageQuery.where('c.call_kind', '=', query.kind);
     if (query.from !== undefined) pageQuery = pageQuery.where('c.ended_at', '>', new Date(query.from));
     if (query.to !== undefined) pageQuery = pageQuery.where('c.started_at', '<', new Date(query.to));
     const after = query.after;
@@ -599,16 +629,23 @@ export function createAdminRoomsRepository({ pool }: { pool: pg.Pool }) {
       .orderBy('c.call_id', 'desc')
       .limit(ROOM_CALLS_PAGE_SIZE + 1)
       .execute();
-    const page = rows.slice(0, ROOM_CALLS_PAGE_SIZE).map((row) => ({
-      id: row.call_id,
-      roomId: row.room_id ?? '',
-      roomName: roomNameOf(row),
-      isStatic: row.is_static,
-      avatarUrl: row.room_deleted_at === null ? avatarUrl(row.room_avatar_key) : null,
-      startedAt: toMillis(row.started_at),
-      endedAt: toMillis(row.ended_at),
-      feedbackUntil: feedbackUntil(toMillis(row.ended_at), row.next_started_at ? toMillis(row.next_started_at) : null)
-    }));
+    const page = rows.slice(0, ROOM_CALLS_PAGE_SIZE).map((row) => {
+      const kind = roomKindOf(row.call_kind);
+      return {
+        id: row.call_id,
+        roomId: row.room_id ?? '',
+        roomName: roomNameOf(row),
+        isStatic: row.is_static,
+        avatarUrl: row.room_deleted_at === null ? avatarUrl(row.room_avatar_key) : null,
+        startedAt: toMillis(row.started_at),
+        endedAt: toMillis(row.ended_at),
+        feedbackUntil: feedbackUntil(
+          toMillis(row.ended_at),
+          row.next_started_at ? toMillis(row.next_started_at) : null
+        ),
+        ...(kind ? { kind } : {})
+      };
+    });
     if (page.length === 0) return { calls: [], more: false };
 
     const bad = await db
@@ -838,7 +875,49 @@ export function createAdminRoomsRepository({ pool }: { pool: pg.Pool }) {
     return asks.map((_ask, n) => byAsk.get(n) ?? null);
   }
 
-  return Object.freeze({ rooms, accounts, history, calls, staysSince, stayEvents, staticRooms, lastStays });
+  /** The widget boundary's switches and the processes that serve widget traffic, read only. */
+  async function widgetState(): Promise<WidgetStateRow> {
+    const [activation, owners] = await Promise.all([
+      db
+        .selectFrom('widget_boundary_activation')
+        .select(['widget_admission_enabled', 'widget_boundary_required', 'recovery_generation'])
+        .executeTakeFirst(),
+      db
+        .selectFrom('widget_runtime_owners')
+        .select(['role', 'owner_id', 'acknowledged_generation'])
+        .orderBy('role')
+        .execute()
+    ]);
+    return {
+      admissionEnabled: activation?.widget_admission_enabled ?? false,
+      boundaryRequired: activation?.widget_boundary_required ?? false,
+      recoveryGeneration: Number(activation?.recovery_generation ?? 0),
+      owners: owners.flatMap((row) =>
+        row.role === 'api' || row.role === 'gate'
+          ? [
+              {
+                role: row.role,
+                claimed: row.owner_id !== null,
+                acknowledgedGeneration:
+                  row.acknowledged_generation === null ? null : Number(row.acknowledged_generation)
+              }
+            ]
+          : []
+      )
+    };
+  }
+
+  return Object.freeze({
+    rooms,
+    accounts,
+    history,
+    calls,
+    staysSince,
+    stayEvents,
+    staticRooms,
+    lastStays,
+    widgetState
+  });
 }
 
 export type AdminRoomsRepository = ReturnType<typeof createAdminRoomsRepository>;

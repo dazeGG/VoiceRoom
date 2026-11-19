@@ -2,7 +2,8 @@
 // seconds, the persistent rooms with their last 30 days, and the finished calls
 // before: by day, a page at a time, or the timeline of a day picked on the
 // calendar. Names, accounts, times and the kind of client only: nothing said in
-// a room. An account opens its card; a room narrows the history to it; a call
+// a room. An account opens its card; a room narrows the history to it, and a
+// participant's ip· or # to the calls of that address or browser; a call
 // opens its page.
 
 import { ArrowUpRight, ChartGantt, ChevronLeft, ChevronRight, List, X } from 'lucide-react';
@@ -23,7 +24,7 @@ import type { CallRef } from '../tabs.ts';
 import { Button, Empty, Panel, Pill, Segment, Stat, Stats } from '../ui/index.tsx';
 import { Section, useSectionState } from '../ui/Section.tsx';
 import { CallList } from './rooms/CallList.tsx';
-import { CallFilters, type CallOriginFilters } from './rooms/CallFilters.tsx';
+import { FilterChips, type CallOriginFilters, type OriginPick } from './rooms/CallFilters.tsx';
 import { CallPeople } from './rooms/CallPeople.tsx';
 import { DayPicker, shiftDay, startOfDay } from './rooms/DayPicker.tsx';
 import { DayTimeline } from './rooms/DayTimeline.tsx';
@@ -44,6 +45,8 @@ export interface HistoryRoom {
 type HistoryView = 'calls' | 'timeline';
 
 const startOfToday = () => startOfDay(Date.now());
+
+const formatGuests = (count: number) => `${formatCount(count)} ${plural(count, ['гость', 'гостя', 'гостей'])}`;
 
 /** Adds or removes one value of a set, as a new set. */
 function toggled(set: ReadonlySet<string>, value: string): Set<string> {
@@ -224,6 +227,23 @@ export function RoomsPage({
     if (scroll) historySection.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
   }
 
+  /** Narrows the history to a participant's address or browser, or widens it again. */
+  function showFilters(filters: CallOriginFilters, scroll = false): void {
+    setPicked(null);
+    setHistoryQuery(firstPage(view, historyQuery.room, historyQuery.dayStart, filters));
+    if (filters.ipKey || filters.clientId) {
+      historyFold.setOpen(true);
+      if (scroll) historySection.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+    }
+  }
+  // Only those who may see where people came from narrow by it.
+  const historyPick: OriginPick | undefined = canOrigin
+    ? { filters: historyQuery.filters, onChange: (filters) => showFilters(filters) }
+    : undefined;
+  const livePick: OriginPick | undefined = canOrigin
+    ? { filters: historyQuery.filters, onChange: (filters) => showFilters(filters, true) }
+    : undefined;
+
   function changeView(next: HistoryView): void {
     setPicked(null);
     setHistoryQuery(firstPage(next, historyRoom, historyQuery.dayStart, historyQuery.filters));
@@ -270,6 +290,8 @@ export function RoomsPage({
   }, [focusLive, openLiveFold, onLiveFocused]);
 
   const peopleInVoice = (rooms ?? []).reduce((count, room) => count + room.peers.length, 0);
+  const liveWidgetRooms = (rooms ?? []).filter((room) => room.kind === 'widget');
+  const liveWidgetGuests = liveWidgetRooms.reduce((count, room) => count + room.peers.length, 0);
   const livePeers = (rooms ?? []).flatMap((room) => room.peers);
   const badPeers = livePeers.filter((peer) => peer.network === 'bad').length;
   const unstablePeers = livePeers.filter((peer) => peer.network === 'unstable').length;
@@ -341,6 +363,14 @@ export function RoomsPage({
             note="минуты всех участников"
           />
         ) : null}
+        {today?.widgetCalls !== undefined ? (
+          <Stat
+            label="Из виджетов сегодня"
+            dot="info"
+            value={formatCount(today.widgetCalls + liveWidgetRooms.length)}
+            note={`${formatCount(liveWidgetRooms.length)} ${plural(liveWidgetRooms.length, ['идёт', 'идут', 'идут'])} · ${formatGuests((today.widgetGuests ?? 0) + liveWidgetGuests)}`}
+          />
+        ) : null}
       </Stats>
 
       <Section
@@ -383,6 +413,7 @@ export function RoomsPage({
                   onShowHistory={(room) => showRoomHistory({ id: room.roomId, name: room.name }, true)}
                   onOpenCall={(room) => onOpenCall({ kind: 'live', roomId: room.roomId })}
                   onOpenAccount={onOpenAccount}
+                  pick={livePick}
                 />
               )}
             </Panel>
@@ -418,24 +449,14 @@ export function RoomsPage({
         sectionRef={historySection}
         summary={
           <>
-            {canOrigin && shown?.filters.clientId ? (
-              <Pill title={`Фильтр ID браузера / приложения: ${shown.filters.clientId}`}>
-                ID #{shown.filters.clientId.slice(0, 6)}
-              </Pill>
-            ) : null}
-            {canOrigin && shown?.filters.ipKey ? (
-              <Pill title={`Фильтр ключа IP: ${shown.filters.ipKey}`}>IP · {shown.filters.ipKey.slice(0, 6)}</Pill>
+            {canOrigin && shown ? (
+              <FilterChips filters={shown.filters} onChange={(filters) => showFilters(filters)} />
             ) : null}
             {historyRoom ? (
               <button type="button" className="rooms-filter" onClick={() => showRoomHistory(null)}>
                 {historyRoom.name || historyRoom.id}
                 <X size={13} aria-label="Показать все комнаты" />
               </button>
-            ) : null}
-            {today?.calls !== undefined && today.callsYesterday !== undefined ? (
-              <span className="ui-toolbar-note">
-                {`сегодня ${formatCount(today.calls)} · вчера ${formatCount(today.callsYesterday)}`}
-              </span>
             ) : null}
           </>
         }
@@ -461,15 +482,6 @@ export function RoomsPage({
           </>
         }
       >
-        {canOrigin ? (
-          <CallFilters
-            filters={historyQuery.filters}
-            onChange={(filters) => {
-              setPicked(null);
-              setHistoryQuery(firstPage(view, historyQuery.room, historyQuery.dayStart, filters));
-            }}
-          />
-        ) : null}
         {history.failure && !(view === 'calls' ? callsPage : day) ? (
           <Notice failure={history.failure} onRetry={() => showRoomHistory(historyRoom)} />
         ) : !shown ? (
@@ -499,6 +511,7 @@ export function RoomsPage({
                     onFilterRoom={(call) => showRoomHistory({ id: call.roomId, name: call.roomName || null })}
                     onOpen={(call) => onOpenCall({ kind: 'finished', callId: call.id })}
                     onOpenAccount={onOpenAccount}
+                    pick={historyPick}
                   />
                   {pageIndex > 0 || hasNextPage ? (
                     <nav className="rooms-pager" aria-label="Страницы истории">
@@ -559,7 +572,7 @@ export function RoomsPage({
                     flush
                   >
                     <div className="call-detail">
-                      <CallPeople call={pickedCall} onOpenAccount={onOpenAccount} />
+                      <CallPeople call={pickedCall} onOpenAccount={onOpenAccount} pick={historyPick} />
                     </div>
                   </Panel>
                 ) : null}

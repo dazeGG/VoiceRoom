@@ -35,11 +35,18 @@ async function stay(
   roomId: string,
   from: number,
   to: number,
-  who: { userId?: string; guestName?: string; ipKey?: string; clientId?: string; guestId?: string } = {}
+  who: {
+    userId?: string;
+    guestName?: string;
+    ipKey?: string;
+    clientId?: string;
+    guestId?: string;
+    roomKind?: 'main' | 'widget';
+  } = {}
 ): Promise<string> {
   const { rows } = await pool.query<{ id: string }>(
-    `INSERT INTO voice_sessions (room_id, user_id, guest_name, ip_key, location, joined_at, left_at, client_id, guest_id)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
+    `INSERT INTO voice_sessions (room_id, user_id, guest_name, ip_key, location, joined_at, left_at, client_id, guest_id, room_kind)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id`,
     [
       roomId,
       who.userId ?? null,
@@ -49,13 +56,17 @@ async function stay(
       at(from),
       at(to),
       who.clientId ?? null,
-      who.guestId ?? null
+      who.guestId ?? null,
+      who.roomKind ?? null
     ]
   );
   return defined(rows[0], 'the stay').id;
 }
 
-function serviceOver(pool: Pool, presence: { id: string; peers: Map<string, PresencePeer> }[] = []) {
+function serviceOver(
+  pool: Pool,
+  presence: { id: string; kind?: 'main' | 'widget'; peers: Map<string, PresencePeer> }[] = []
+) {
   const permissions: Record<string, readonly StaffPermission[]> = {
     admin: ['rooms.view', 'origin.view'],
     moderator: ['rooms.view']
@@ -287,4 +298,58 @@ test('filtered calls keep a stable cursor across pages', { skip }, async (t) => 
   assert.equal(second.calls.length, 1);
   assert.equal(second.next, null);
   assert.equal(new Set([...first.calls, ...second.calls].map((call) => call.id)).size, ROOM_CALLS_PAGE_SIZE + 1);
+});
+
+test('a call carries the kind of its room, and the kind narrows the history to it', { skip }, async (t) => {
+  const { cleanup, databaseUrl, pool } = await createTestDatabase(t);
+  t.after(cleanup);
+  await runMigrations({ databaseUrl, logger: SILENT });
+  const widget = await stay(pool, 'P8NZ4T', 0, 20, { guestName: 'Гость', roomKind: 'widget' });
+  await stay(pool, 'P8NZ4T', 10, 25, { guestName: 'Ещё гость', roomKind: 'widget' });
+  const main = await stay(pool, 'kitchen', 30, 40, { guestName: 'Петя', roomKind: 'main' });
+  const old = await stay(pool, 'attic', 50, 60, { guestName: 'Оля' });
+  const service = serviceOver(pool);
+
+  const all = defined(await service.calls('admin', {}), 'every call');
+  assert.deepEqual(
+    all.calls.map((call) => [call.id, call.kind]),
+    [
+      [old, undefined],
+      [main, 'main'],
+      [widget, 'widget']
+    ]
+  );
+  assert.equal(
+    'kind' in defined(all.calls[0], 'the old call'),
+    false,
+    'a stay without a kind gives a call without one'
+  );
+
+  const widgets = defined(await service.calls('admin', { kind: 'widget' }), 'the widget calls');
+  assert.deepEqual(
+    widgets.calls.map((call) => [call.id, call.stays.length]),
+    [[widget, 2]]
+  );
+  const mains = defined(await service.calls('admin', { kind: 'main' }), 'the main calls');
+  assert.deepEqual(
+    mains.calls.map((call) => call.id),
+    [main]
+  );
+});
+
+test('a live room says its kind: the stored one, else the roster’s', { skip }, async (t) => {
+  const { cleanup, databaseUrl, pool } = await createTestDatabase(t);
+  t.after(cleanup);
+  await runMigrations({ databaseUrl, logger: SILENT });
+  await pool.query(`INSERT INTO rooms (id, creator_ip, is_static, name) VALUES ('kitchen', '', true, 'Кухня')`);
+  const peer = (id: string): PresencePeer => ({ id, joinedAt: Date.now() - MINUTE });
+  const service = serviceOver(pool, [
+    { id: 'kitchen', peers: new Map([['a', peer('a')]]) },
+    { id: 'P8NZ4T', kind: 'widget', peers: new Map([['b', peer('b')]]) }
+  ]);
+  const live = defined(await service.live('admin'), 'the live rooms');
+  assert.deepEqual(live.rooms.map((room) => [room.roomId, room.kind]).sort(), [
+    ['P8NZ4T', 'widget'],
+    ['kitchen', 'main']
+  ]);
 });

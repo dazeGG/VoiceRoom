@@ -696,6 +696,7 @@ export interface VoiceSessions {
   network: Json | null;
   os: string | null;
   room_id: string | null;
+  room_kind: string | null;
   user_id: string | null;
 }
 

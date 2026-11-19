@@ -135,10 +135,6 @@
   overflow: hidden;
 }
 
-.call-person-origin-code .rooms-origin-parts {
-  white-space: normal;
-}
-
 .call-shared {
   margin: 0;
   border-top: 1px solid var(--vr-line);
@@ -504,9 +500,4 @@
 .call-person-pick:focus-visible {
   outline: 2px solid var(--vr-accent);
   outline-offset: 2px;
-}
-
-.call-person-origin-code[data-shared='true'] .rooms-code {
-  border-color: color-mix(in oklch, var(--vr-warning) 40%, transparent);
-  color: var(--vr-warning);
 }

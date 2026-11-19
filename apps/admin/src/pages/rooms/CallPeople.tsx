@@ -1,16 +1,18 @@
 // Who was in one call and when: a row per person with a bar of the call's
 // length, lit from each time they came in to when they left in the colour of
 // how their voice went, minute by minute (network-bar.tsx). On a call's page a
-// row picks the person, and those from one address are marked.
+// row picks the person, and those from one address are marked. In the history
+// a participant's ip· and # narrow it, and the people it is narrowed to are lit.
 
 import type { ReactNode } from 'react';
 import type { RoomCall } from '@voice-room/shared/contracts/admin';
 import { formatClock, formatDuration } from '../../format.ts';
 import { Avatar, Pill } from '../../ui/index.tsx';
-import { AccountName, Origin, peopleOf } from './room-bits.tsx';
+import type { OriginPick } from './CallFilters.tsx';
+import { AccountName, Origin, matchedPeople, peopleOf, sharedIpKeys } from './room-bits.tsx';
 import { NetworkLegend, NetworkSpan } from './network-bar.tsx';
 
-const COLUMNS = 'minmax(130px, 1fr) minmax(100px, 2fr) 70px minmax(110px, 1.1fr)';
+const COLUMNS = 'minmax(130px, 1fr) minmax(100px, 1.6fr) 70px minmax(230px, 1.4fr)';
 
 export function CallPeople({
   call,
@@ -19,7 +21,8 @@ export function CallPeople({
   onSelect,
   sharedKeys,
   axis,
-  columns = COLUMNS
+  columns = COLUMNS,
+  pick
 }: {
   call: RoomCall;
   onOpenAccount: (accountId: string) => void;
@@ -31,7 +34,12 @@ export function CallPeople({
   /** In place of the plain ends of the call over the bars. */
   axis?: ReactNode;
   columns?: string;
+  /** The history's filters, which each participant's ip· and # toggle. */
+  pick?: OriginPick | undefined;
 }) {
+  const people = peopleOf(call);
+  const shared = sharedKeys ?? sharedIpKeys(people.map((person) => ({ key: person.key, ipKey: person.seat.ipKey })));
+  const matched = pick ? matchedPeople(call, pick.filters) : new Set<string>();
   const length = Math.max(1, call.endedAt - call.startedAt);
   const share = (at: number) => ((at - call.startedAt) / length) * 100;
   return (
@@ -52,7 +60,7 @@ export function CallPeople({
         </span>
         <span role="columnheader">Откуда</span>
       </div>
-      {peopleOf(call).map((person) => {
+      {people.map((person) => {
         const name = person.account ? person.account.displayName : (person.guestName ?? 'Гость');
         const avatar = (
           <Avatar
@@ -69,7 +77,8 @@ export function CallPeople({
             className="call-person"
             role="row"
             data-selected={selected === person.key}
-            style={{ '--cols': COLUMNS }}
+            data-match={matched.has(person.key)}
+            style={{ '--cols': columns }}
           >
             <span role="cell" className="call-person-who">
               {onSelect ? (
@@ -123,7 +132,11 @@ export function CallPeople({
               className="call-person-origin-code"
               data-shared={Boolean(person.seat.ipKey && sharedKeys?.has(person.seat.ipKey))}
             >
-              <Origin seat={person.seat} />
+              <Origin
+                seat={person.seat}
+                pick={pick}
+                shared={Boolean(person.seat.ipKey && shared.has(person.seat.ipKey))}
+              />
             </span>
           </div>
         );

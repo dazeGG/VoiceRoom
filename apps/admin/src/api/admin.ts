@@ -5,6 +5,7 @@ import {
   AccountDetail,
   AccountsPage,
   AdminOverview,
+  AdminWidgets,
   LiveRooms,
   ProductStats,
   RoomCalls,
@@ -42,6 +43,8 @@ export const fetchSystemStats = (query: SystemQuery = {}) =>
   api.get(`/api/admin/system${search(query)}`, SystemStats, 'Не удалось загрузить данные сервера');
 
 export const fetchLiveRooms = () => api.get('/api/admin/rooms', LiveRooms, 'Не удалось загрузить комнаты');
+
+export const fetchWidgets = () => api.get('/api/admin/widgets', AdminWidgets, 'Не удалось загрузить виджеты');
 
 export const fetchRoomCalls = (query: RoomCallsQuery = {}) =>
   api.get(`/api/admin/rooms/calls${search(query)}`, RoomCalls, 'Не удалось загрузить историю');

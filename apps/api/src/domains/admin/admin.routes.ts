@@ -12,6 +12,7 @@ import {
   AccountsPage,
   AccountsQuery,
   AdminOverview,
+  AdminWidgets,
   BadgeBody,
   BlockBody,
   CallIdParams,
@@ -34,6 +35,7 @@ import type { ApiContext } from '../../app/context.ts';
 import { failure, optionalJsonBody } from '../../platform/http/http-kit.ts';
 import type { AccountAction, AdminAccountsService } from './admin-accounts.service.ts';
 import type { AdminRoomsService } from './admin-rooms.service.ts';
+import type { AdminWidgetsService } from './admin-widgets.service.ts';
 import type { AdminService } from './admin.service.ts';
 
 const ADMIN_REQUIRED = failure('Platform administrator access required', { code: 'platform_admin_required' });
@@ -61,6 +63,7 @@ export interface AdminRoutesDeps {
     'list' | 'detail' | 'block' | 'unblock' | 'signOutEverywhere' | 'remove' | 'cancelDeletion' | 'setBadge' | 'badges'
   >;
   rooms: Pick<AdminRoomsService, 'live' | 'history' | 'calls' | 'staticRooms' | 'call' | 'liveCall'>;
+  widgets: Pick<AdminWidgetsService, 'widgets'>;
   /** The staff member behind the admin-app session, or null with the 401 sent. */
   staffUserId(request: FastifyRequest, reply: FastifyReply): Promise<string | null>;
 }
@@ -175,6 +178,19 @@ export function registerAdminRoutes(root: FastifyInstance, ctx: ApiContext, deps
       if (detail === null) return reply.code(403).send(ADMIN_REQUIRED);
       if (detail === undefined) return reply.code(404).send(CALL_NOT_FOUND);
       return { ok: true as const, ...detail };
+    }
+  );
+
+  // Read only: admission is switched by an operator on the server, never over HTTP.
+  app.get(
+    '/api/admin/widgets',
+    { schema: { response: { 200: AdminWidgets, '4xx': Failure } } },
+    async (request, reply) => {
+      const userId = await actor(request, reply);
+      if (!userId) return reply;
+      const widgets = await deps.widgets.widgets(userId);
+      if (!widgets) return reply.code(403).send(ADMIN_REQUIRED);
+      return { ok: true as const, ...widgets };
     }
   );
 
