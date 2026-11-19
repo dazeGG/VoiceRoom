@@ -71,6 +71,25 @@ const composer = () => screen.getByRole('textbox', { name: 'Написать в 
 const editor = () => screen.queryByRole('textbox', { name: 'Текст сообщения' });
 const MESSAGE_TEXT = '.room-chat-group__content *, .room-chat-group__content';
 
+test('opening and reopening the room chat focuses its composer', async () => {
+  stubRoom({ 'GET /api/rooms/room/chat': { body: { ok: true, roomId: 'room', messages: [] } } });
+  const view = renderPanel({ focusComposerOnOpen: true, hidden: true, visible: false });
+  expect(screen.queryByRole('textbox')).toBeNull();
+
+  const open = { ...view.props, hidden: false, visible: true, activeTab: 'chat' };
+  await view.rerender(open);
+  expect(document.activeElement).toBe(composer());
+
+  await view.rerender(view.props);
+  await view.rerender(open);
+  expect(document.activeElement).toBe(composer());
+
+  await view.rerender({ ...open, activeTab: 'participants' });
+  expect(screen.queryByRole('textbox')).toBeNull();
+  await view.rerender(open);
+  expect(document.activeElement).toBe(composer());
+});
+
 test('ArrowUp in an empty composer edits the latest own message and saves it as the viewing peer', async () => {
   const edited = roomMessage('m2', 'me', 'исправлено', { editedAt: NOW + 1 });
   const { calls } = stubRoom({ 'PATCH /api/rooms/room/chat/m2': { body: { ok: true, message: edited } } });

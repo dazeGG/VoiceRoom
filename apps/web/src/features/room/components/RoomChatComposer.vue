@@ -5,7 +5,7 @@ import { t } from '@/shared/i18n';
 import { onBeforeUnmount, onMounted, ref, nextTick } from 'vue';
 import { ArrowUp } from '@lucide/vue';
 import type { MembershipMember } from '@voice-room/shared/contracts/membership';
-import { contentFromPlainText } from '@voice-room/shared/room-message-content';
+import { contentFromPlainText, MAX_ROOM_MESSAGE_LENGTH } from '@voice-room/shared/room-message-content';
 import type { ChatMessage } from '@/api/rooms';
 import { getAppRealtime } from '@/api/realtime';
 import { useRoomMembershipStore } from '@/entities/room/room-membership.store';
@@ -107,9 +107,9 @@ async function submit(event?: SubmitEvent): Promise<void> {
   event?.preventDefault();
   if (!props.roomId) return;
   // Do not collapse whitespace; newlines are intentional.
-  const message = text.value.trim();
+  const message = text.value;
   const withMedia = Boolean(props.media?.canSend);
-  if (!message && !withMedia) return;
+  if (!message.trim() && !withMedia) return;
   // Images still uploading would be left behind.
   if (props.media?.drafts.length && !props.media.canSend) return;
 
@@ -180,7 +180,8 @@ const onPaste = (event: ClipboardEvent): Promise<void> =>
           ref="input"
           v-model="text"
           class="room-chat-composer__input"
-          :maxlength="500"
+          :maxlength="MAX_ROOM_MESSAGE_LENGTH"
+          markdown
           :placeholder="t('Написать в комнату…')"
           @keydown="onKeydown"
           @input="onInput"

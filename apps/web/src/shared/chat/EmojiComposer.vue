@@ -8,9 +8,11 @@
 // The DOM is rebuilt only when what is shown no longer matches the text —
 // an emoji was typed or pasted, or the value was set from outside — so plain
 // typing keeps the browser's own undo history.
-import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import type { TextSelection } from './composer-handle';
 import { insertIntoDraft } from './composer-insert';
+import ComposerFormatToolbar from './ComposerFormatToolbar.vue';
+import { formattingAt, type ComposerEdit, type MarkdownFormat } from './composer-markdown';
 import { emojiAssetUrl } from './emoji-asset';
 import { splitEmoji } from './emoji-text';
 
@@ -18,12 +20,14 @@ const {
   placeholder = '',
   ariaLabel = '',
   maxlength = Number.POSITIVE_INFINITY,
-  disabled
+  disabled,
+  markdown
 } = defineProps<{
   placeholder?: string;
   ariaLabel?: string;
   maxlength?: number;
   disabled?: boolean;
+  markdown?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -36,6 +40,21 @@ const emit = defineEmits<{
 const value = defineModel<string>({ default: '' });
 
 const root = ref<HTMLDivElement | null>(null);
+const formatting = ref<{ selection: TextSelection; anchor: { x: number; top: number; bottom: number } } | null>(null);
+const formatLimit = ref<number | null>(null);
+const formatActions: readonly MarkdownFormat[] = ['bold', 'italic', 'strike', 'code'];
+const activeFormats = computed(() => {
+  if (!formatting.value) return [];
+  const edit = { text: value.value, selection: formatting.value.selection };
+  return formatActions.filter((format) => formattingAt(edit, format)?.active);
+});
+interface FormatChange {
+  before: ComposerEdit;
+  after: ComposerEdit;
+  format: MarkdownFormat;
+}
+const undoFormats: FormatChange[] = [];
+const redoFormats: FormatChange[] = [];
 let composing = false;
 // What the DOM shows right now, so an outside change to `value` can be told
 // apart from the echo of our own input.
@@ -180,6 +199,98 @@ function setSelection(start: number, end = start, length = value.value.length): 
   lastSelection = { start: Math.min(start, length), end: Math.min(end, length) };
 }
 
+function updateFormatting(): void {
+  const element = root.value;
+  const selection = document.getSelection();
+  if (!element || !markdown || disabled || composing || window.matchMedia?.('(pointer: coarse)').matches) {
+    formatting.value = null;
+    return;
+  }
+  const focused = document.activeElement;
+  if (
+    focused !== element &&
+    element.nextElementSibling?.matches('.composer-format') &&
+    element.nextElementSibling.contains(focused)
+  )
+    return;
+  const inside = focused === element && selectionInside();
+  if (!inside || !selection || !value.value.slice(inside.start, inside.end).trim()) {
+    formatting.value = null;
+    formatLimit.value = null;
+    return;
+  }
+  const range = selection.getRangeAt(0);
+  const rect = range.getBoundingClientRect?.();
+  const field = element.getBoundingClientRect();
+  if (!rect || rect.bottom <= field.top || rect.top >= field.bottom) {
+    formatting.value = null;
+    return;
+  }
+  if (inside.start !== formatting.value?.selection.start || inside.end !== formatting.value.selection.end)
+    formatLimit.value = null;
+  const left = Math.max(field.left, rect.left);
+  const right = Math.min(field.right, rect.right);
+  formatting.value = {
+    selection: inside,
+    anchor: { x: (left + right) / 2, top: Math.max(field.top, rect.top), bottom: Math.min(field.bottom, rect.bottom) }
+  };
+}
+
+function dismissFormatting(): void {
+  const end = formatting.value?.selection.end;
+  formatting.value = null;
+  formatLimit.value = null;
+  if (end === undefined) return;
+  focus();
+  setSelection(end);
+}
+
+function replaceFormatting(edit: ComposerEdit): void {
+  render(edit.text);
+  value.value = edit.text;
+  focus();
+  setSelection(edit.selection.start, edit.selection.end, edit.text.length);
+  emit('input');
+}
+
+function applyFormat(format: MarkdownFormat): boolean {
+  const selection = formatting.value?.selection ?? selectionInside();
+  if (!selection || !markdown || disabled) return false;
+  const before = { text: value.value, selection };
+  const result = formattingAt(before, format);
+  if (!result) return false;
+  const previous = undoFormats.at(-1);
+  const undoToggle =
+    previous?.format === format &&
+    previous.after.text === before.text &&
+    previous.after.selection.start === selection.start &&
+    previous.after.selection.end === selection.end &&
+    result.active;
+  const after = undoToggle ? previous.before : result.edit;
+  if (after.text.length > maxlength) {
+    formatLimit.value = maxlength;
+    return true;
+  }
+  if (previous?.after.text !== before.text) undoFormats.length = 0;
+  undoFormats.push({ before, after, format });
+  redoFormats.length = 0;
+  formatLimit.value = null;
+  replaceFormatting(after);
+  return true;
+}
+
+function undoFormat(redo: boolean): boolean {
+  const source = redo ? redoFormats : undoFormats;
+  const change = source.at(-1);
+  if (!change || value.value !== (redo ? change.before.text : change.after.text)) return false;
+  const destination = redo ? undoFormats : redoFormats;
+  source.pop();
+  destination.push(change);
+  formatLimit.value = null;
+  replaceFormatting(redo ? change.after : change.before);
+  return true;
+}
+
 /** Puts text where the caret was, replacing a selection, like typing it. */
 function insertText(text: string): boolean {
   if (!root.value || disabled) return false;
@@ -195,9 +306,15 @@ function insertText(text: string): boolean {
 }
 
 function sync(): void {
-  if (!root.value || composing) return;
-  let text = serialize(root.value);
+  const element = root.value;
+  if (!element || composing) return;
+  // Browsers leave a lone <br> to hold the caret after the last character is
+  // deleted. An explicit newline is rendered as text followed by a marked break.
+  const emptyBreak = element.childNodes.length === 1 && element.firstChild instanceof HTMLBRElement;
+  const current = emptyBreak ? '' : serialize(element);
+  let text = current;
   let selection = selectionInside();
+  if (emptyBreak && selection) selection = { start: 0, end: 0 };
   if (text.length > maxlength) {
     text = text.slice(0, maxlength);
     selection = selection && {
@@ -205,7 +322,7 @@ function sync(): void {
       end: Math.min(selection.end, text.length)
     };
   }
-  if (!showsText(text) || text !== serialize(root.value)) {
+  if (!showsText(text) || text !== current) {
     render(text);
     if (selection) setSelection(selection.start, selection.end);
   } else {
@@ -237,8 +354,35 @@ function onBeforeInput(event: InputEvent): void {
 }
 
 function onKeydown(event: KeyboardEvent): void {
+  if (markdown && !event.isComposing && !composing) {
+    if (event.key === 'Escape' && formatting.value) {
+      event.preventDefault();
+      dismissFormatting();
+      return;
+    }
+    if ((event.ctrlKey || event.metaKey) && !event.altKey) {
+      const key = event.key.toLowerCase();
+      const handled =
+        ((key === 'z' || key === 'y') && undoFormat(event.shiftKey || key === 'y')) ||
+        (key === 'b' && applyFormat('bold')) ||
+        (key === 'i' && applyFormat('italic'));
+      if (handled) {
+        event.preventDefault();
+        return;
+      }
+    }
+  }
   emit('keydown', event);
   if (event.defaultPrevented || event.isComposing) return;
+  if (event.key === 'Tab' && !event.shiftKey && formatting.value) {
+    const toolbar = root.value?.nextElementSibling;
+    const button = toolbar?.querySelector<HTMLButtonElement>('button[tabindex="0"], button:not([tabindex])');
+    if (button) {
+      event.preventDefault();
+      button.focus();
+      return;
+    }
+  }
   // Rich-text shortcuts would add markup the message cannot carry.
   if ((event.ctrlKey || event.metaKey) && ['b', 'i', 'u'].includes(event.key.toLowerCase())) event.preventDefault();
 }
@@ -274,6 +418,7 @@ function copySelection(event: ClipboardEvent, cut: boolean): void {
 
 function onCompositionStart(): void {
   composing = true;
+  updateFormatting();
   emit('compositionstart');
 }
 
@@ -292,6 +437,8 @@ watch(
     const focused = document.activeElement === element;
     render(next);
     lastSelection = null;
+    undoFormats.length = 0;
+    redoFormats.length = 0;
     if (focused) setSelection(next.length);
   },
   { flush: 'post', immediate: true }
@@ -300,17 +447,34 @@ watch(
 function rememberSelection(): void {
   const inside = selectionInside();
   if (inside) lastSelection = inside;
+  updateFormatting();
 }
 
-onMounted(() => document.addEventListener('selectionchange', rememberSelection));
-onBeforeUnmount(() => document.removeEventListener('selectionchange', rememberSelection));
+function onFocusOut(): void {
+  queueMicrotask(updateFormatting);
+}
+
+onMounted(() => {
+  document.addEventListener('selectionchange', rememberSelection);
+  if (markdown) {
+    window.addEventListener('resize', updateFormatting);
+    window.addEventListener('scroll', updateFormatting, { capture: true, passive: true });
+  }
+});
+onBeforeUnmount(() => {
+  document.removeEventListener('selectionchange', rememberSelection);
+  window.removeEventListener('resize', updateFormatting);
+  window.removeEventListener('scroll', updateFormatting, true);
+});
 
 defineExpose({ focus, getSelection, setSelection, insertText });
+defineOptions({ inheritAttrs: false });
 </script>
 
 <template>
   <div
     ref="root"
+    v-bind="$attrs"
     class="emoji-composer"
     :class="{ 'emoji-composer--empty': !value, 'emoji-composer--disabled': disabled }"
     role="textbox"
@@ -325,6 +489,7 @@ defineExpose({ focus, getSelection, setSelection, insertText });
     @beforeinput="onBeforeInput"
     @input="sync"
     @keydown="onKeydown"
+    @focusout="onFocusOut"
     @paste="onPaste"
     @drop="onDrop"
     @copy="copySelection($event, false)"
@@ -332,4 +497,13 @@ defineExpose({ focus, getSelection, setSelection, insertText });
     @compositionstart="onCompositionStart"
     @compositionend="onCompositionEnd"
   ></div>
+  <ComposerFormatToolbar
+    v-if="formatting && !disabled"
+    :anchor="formatting.anchor"
+    :active="activeFormats"
+    :limit="formatLimit"
+    @focusout="onFocusOut"
+    @apply="applyFormat"
+    @dismiss="dismissFormatting"
+  />
 </template>

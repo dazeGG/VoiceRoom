@@ -1,7 +1,11 @@
 import { reactive } from 'vue';
 import type { MembershipMember } from '@voice-room/shared/contracts/membership';
 import { MAX_MENTION_CANDIDATES, MAX_MENTIONS_PER_MESSAGE } from '@voice-room/shared/mentions';
-import type { RoomMessageContentV1, RoomMessageSegmentV1 } from '@voice-room/shared/room-message-content';
+import {
+  MAX_ROOM_MESSAGE_LENGTH,
+  type RoomMessageContentV1,
+  type RoomMessageSegmentV1
+} from '@voice-room/shared/room-message-content';
 import { keysOf } from '@/shared/utils/collections';
 
 export type SelectedMention = Pick<MembershipMember, 'userId' | 'displayName' | 'login'>;
@@ -45,6 +49,7 @@ export function createMentionComposer() {
     if (!member || state.anchorStart < 0 || state.selected.length >= MAX_MENTIONS_PER_MESSAGE) return null;
     const replacement = `${mentionToken(member)} `;
     const next = text.slice(0, state.anchorStart) + replacement + text.slice(caret);
+    if (next.length > MAX_ROOM_MESSAGE_LENGTH) return null;
     // Computed before close(), which resets the anchor.
     const nextCaret = state.anchorStart + replacement.length;
     if (!state.selected.some((item) => item.userId === member.userId)) state.selected = [...state.selected, member];

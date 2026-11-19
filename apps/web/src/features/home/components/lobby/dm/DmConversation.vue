@@ -20,7 +20,7 @@ import { createReactionStore } from '@/shared/chat/reaction-store';
 import ReportMessageDialog from '@/shared/chat/ReportMessageDialog.vue';
 import { formatTypingLabel } from '@/shared/chat/typing';
 import { copyMessageImage, copyMessageText, useChatScroll } from '@/shared/chat/use-chat-scroll';
-import ChatText from '@/shared/components/ChatText.vue';
+import StructuredMessageContent from '@/shared/chat/StructuredMessageContent.vue';
 import type { ProfileCardPerson } from '@/shared/components/profile-card';
 import type { PresenceStatus } from '@/shared/presence';
 import { AccountBadge, Avatar } from '@/shared/ui';
@@ -362,11 +362,13 @@ function onMenuImage(action: (image: NonNullable<typeof menuImage.value>) => voi
                 />
               </template>
               <template #content>
-                <span v-if="bubble.body.trim()" class="dm-group__content"
-                  ><ChatText :text="bubble.body" /><span v-if="bubble.editedAt" class="dm-group__edited">{{
-                    t('(изменено)')
-                  }}</span></span
-                >
+                <div v-if="bubble.body.trim()" class="dm-group__content">
+                  <StructuredMessageContent :fallback="bubble.body" /><span
+                    v-if="bubble.editedAt"
+                    class="dm-group__edited"
+                    >{{ t('(изменено)') }}</span
+                  >
+                </div>
               </template>
             </MessageBubble>
           </div>

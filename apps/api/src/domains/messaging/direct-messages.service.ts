@@ -106,9 +106,8 @@ export interface DirectMessagesDeps {
   }): void;
 }
 
-// Multiline like room chat, but up to 2000 characters and no line cap.
 export function cleanDmText(value: unknown): string {
-  return cleanMessageText(value, { maxChars: 2000 });
+  return cleanMessageText(value, 2_000);
 }
 
 // The stored shape is stricter than the service's, so a message that passes it is one.

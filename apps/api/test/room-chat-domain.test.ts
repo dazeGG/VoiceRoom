@@ -100,10 +100,15 @@ test('message input helpers normalise what clients send', () => {
   assert.equal(requestIdempotencyKey(null, null), '');
   assert.equal(messageFingerprint({ a: 1 }), messageFingerprint({ a: 1 }));
   assert.notEqual(messageFingerprint({ a: 1 }), messageFingerprint({ a: 2 }));
-  assert.equal(cleanChatText('  a \t b \n\n\n\n c  '), 'a b\n\nc');
-  assert.equal(cleanChatText(Array.from({ length: 25 }, (_, i) => `l${i}`).join('\n')).split('\n').length, 20);
-  assert.equal(cleanChatText('x'.repeat(600)).length, 500);
+  assert.equal(cleanChatText('x'.repeat(2_001)), 'x'.repeat(2_000));
+  assert.equal(cleanChatText('\t\n '), '');
   assert.equal(cleanChatText(undefined), '');
+});
+
+test('room chat text preserves Markdown indentation, trailing spaces and more than 20 lines', () => {
+  const code = Array.from({ length: 25 }, (_, index) => `  <li>${index}</li>`).join('\n');
+  const markdown = ['  text  ', '', '', '```html', code, '```', ''].join('\n');
+  assert.equal(cleanChatText(markdown.replaceAll('\n', '\r\n')), markdown);
 });
 
 test('a public chat message fills avatar and defaults', () => {
@@ -245,11 +250,16 @@ function harness(options: HarnessOptions = {}) {
       calls.deleted.push(messageId);
       return options.softDeleteResult ?? true;
     },
-    async editMessage(_roomId, messageId, text) {
+    async editMessage(_roomId, messageId, text, content) {
       calls.edited.push(text);
       return options.editResult === null
         ? null
-        : { ...defined(options.messages?.[messageId], 'the edited message'), text, editedAt: 9 };
+        : {
+            ...defined(options.messages?.[messageId], 'the edited message'),
+            text,
+            content: content ?? null,
+            editedAt: 9
+          };
     },
     async markRoomChatRead() {
       return options.lastReadAt === undefined ? 5 : options.lastReadAt;
@@ -697,6 +707,26 @@ test('an edit is published, refreshes pins and reschedules the link preview', as
   assert.equal(calls.detail[0]?.type, 'room.chat.edited');
   assert.deepEqual(calls.pins, ['message-edited']);
   assert.deepEqual(calls.previews, [{ messageId: 'm-guest', edited: true }]);
+});
+
+test('formatting an existing mention keeps its identity without addressing new mentions', async () => {
+  const mention = { type: 'mention', label: '@anna', userId: 'anna' } as const;
+  const message: RoomChatMessage = {
+    ...accountMessage,
+    text: '@anna',
+    content: { version: 1, segments: [mention] }
+  };
+  const { calls, service } = harness({ messages: { [message.id]: message } });
+  const text = '**@anna** and @anna2 and @new';
+  const edited = await service.edit({ ...editBase, messageId: message.id, text, user: ACCOUNT });
+  assert.equal(edited.status, 'edited');
+  assert.equal(edited.message.text, text);
+  assert.deepEqual(edited.message.content?.segments, [
+    { type: 'text', text: '**' },
+    mention,
+    { type: 'text', text: '** and @anna2 and @new' }
+  ]);
+  assert.deepEqual(calls.addressed, []);
 });
 
 test('delete: author, live guest session or the persistent room owner', async () => {

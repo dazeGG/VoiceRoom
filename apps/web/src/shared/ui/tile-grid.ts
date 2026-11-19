@@ -63,9 +63,15 @@ export function fitTiles(grid: HTMLElement, fitGrid = fitTileGrid): () => void {
     // clientWidth. A margin taken from that second width no longer matches the
     // columns, the row wraps, the scrollbar flips and the grid refits forever.
     let width = widget ? grid.offsetWidth : grid.clientWidth;
-    const height = grid.clientHeight;
+    let height = grid.clientHeight;
     // A hidden grid has no size to fit to; the tiles keep the stylesheet's own.
     if (width === 0 || height === 0) return;
+    if (!widget) {
+      // Client dimensions can round a fractional box up. Keep enough room
+      // for the chosen columns and gutter to fit without an extra flex row.
+      width -= 1;
+      height -= 1;
+    }
     const gap = Number.parseFloat(getComputedStyle(grid).columnGap) || 0;
     const count = grid.childElementCount;
     let fit = fitGrid({ width, height, count, gap });
