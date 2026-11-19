@@ -1,0 +1,414 @@
+/* The menu on the left, as the app's own lobby menu
+   (apps/web/.../styles/home/_sidebar.scss, _lobby.scss): the width is dragged
+   at the edge; folded, a rail of icons stays and the whole menu opens over the
+   content while the mouse is on it. */
+
+.lobby-side {
+  --lv-side-w: 280px;
+  --lobby-sidebar-width: var(--lv-side-w);
+  position: relative;
+  z-index: 30;
+  display: flex;
+  height: 100%;
+  flex: 0 0 var(--lobby-sidebar-width);
+  align-items: stretch;
+  background: var(--vr-surface);
+}
+
+.lobby-side[data-collapsed='true'] {
+  --lobby-sidebar-width: 48px;
+}
+
+.lobby-side[data-collapsed='true'] .sidebar {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  box-shadow: 0 24px 64px oklch(0% 0 0 / 0.55);
+  animation: lobby-peek 150ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.lobby-side[data-peek='true'] {
+  --lobby-sidebar-toggle-edge: var(--lv-side-w);
+}
+
+.lobby-side[data-resizing='true'] {
+  cursor: col-resize;
+  user-select: none;
+}
+
+@keyframes lobby-peek {
+  from {
+    opacity: 0;
+    translate: -12px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lobby-side .sidebar {
+    animation: none;
+  }
+}
+
+/* --- folded: the rail ------------------------------------------------------ */
+
+.lobby-side__rail {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding-top: 20px;
+  background: var(--vr-surface);
+  color: var(--vr-accent);
+}
+
+.lobby-side__rail-icons {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  padding-top: 16px;
+  overflow: auto;
+}
+
+.lobby-side__rail-icon {
+  position: relative;
+  display: grid;
+  width: 36px;
+  height: 36px;
+  flex: none;
+  place-items: center;
+  border-radius: 10px;
+  color: var(--vr-text-2);
+}
+
+.lobby-side__rail-icon:hover {
+  background: var(--vr-hover);
+  color: var(--vr-text);
+}
+
+.lobby-side__rail-icon[aria-current='page'] {
+  background: var(--vr-accent-soft);
+  color: var(--vr-accent);
+}
+
+.lobby-side__rail-badge {
+  position: absolute;
+  top: -3px;
+  right: -5px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 3px;
+  box-shadow: 0 0 0 2px var(--vr-surface);
+  font-size: 0.625rem;
+}
+
+.lobby-side__rail-account {
+  display: grid;
+  width: 100%;
+  place-items: center;
+  margin-top: auto;
+  border-top: 1px solid var(--vr-line);
+  padding-block: 12px;
+}
+
+/* --- the toggle and the edge ----------------------------------------------- */
+
+.lobby-side .lobby-side__toggle {
+  position: absolute;
+  z-index: 2;
+  top: 15px;
+  left: calc(var(--lobby-sidebar-toggle-edge, var(--lobby-sidebar-width)) - 40px);
+}
+
+.lobby-side[data-collapsed='true'][data-peek='false'] .lobby-side__toggle:not(:focus-visible) {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.lobby-side__resizer {
+  position: absolute;
+  z-index: 2;
+  top: 0;
+  bottom: 0;
+  left: calc(var(--lobby-sidebar-width) - 5px);
+  width: 9px;
+  outline: none;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.lobby-side__resizer::after {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 4px;
+  width: 2px;
+  background: var(--vr-line);
+  content: '';
+}
+
+.lobby-side__resizer:hover::after,
+.lobby-side__resizer:focus-visible::after,
+.lobby-side[data-resizing='true'] .lobby-side__resizer::after {
+  background: var(--vr-accent);
+}
+
+/* --- open: the menu -------------------------------------------------------- */
+
+.sidebar {
+  position: relative;
+  display: flex;
+  width: var(--lv-side-w);
+  height: 100%;
+  flex: none;
+  flex-direction: column;
+  overflow: clip;
+  background: var(--vr-surface);
+  color: var(--vr-text);
+}
+
+.sidebar__main {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+}
+
+.sidebar__top {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 2px;
+  margin: 8px 42px 4px 8px;
+}
+
+.sidebar__head {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  gap: 10px;
+  border-radius: 12px;
+  padding: 12px;
+  padding-inline-end: 4px;
+  color: inherit;
+  text-decoration: none;
+  transition: background 0.15s ease;
+}
+
+.sidebar__head:hover {
+  background: var(--vr-hover);
+}
+
+.sidebar__brand-mark {
+  width: 22px;
+  height: 22px;
+  flex: none;
+  color: var(--vr-accent);
+}
+
+.sidebar__brand {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  line-height: 1.2;
+}
+
+.sidebar__brand-name {
+  overflow: hidden;
+  color: var(--vr-text);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sidebar__brand-sub {
+  color: var(--vr-text-muted);
+  font-size: 0.75rem;
+}
+
+.sidebar__icon-button {
+  position: relative;
+  display: flex;
+  width: 32px;
+  height: 32px;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 9px;
+  padding: 0;
+  background: transparent;
+  color: var(--vr-text-2);
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.sidebar__icon-button:hover {
+  background: var(--vr-hover);
+  color: var(--vr-text);
+}
+
+.sidebar__scroll {
+  min-height: 0;
+  flex: 1;
+  overflow: auto;
+  padding: 4px 10px;
+}
+
+.sidebar__section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 10px 6px;
+  color: var(--vr-text-2);
+  font-size: 0.78125rem;
+  font-weight: 500;
+}
+
+.sidebar__row {
+  display: flex;
+  width: 100%;
+  height: 42px;
+  align-items: center;
+  gap: 10px;
+  border-radius: 10px;
+  padding: 0 10px;
+  color: inherit;
+  text-decoration: none;
+  transition: background 0.13s ease;
+}
+
+.sidebar__row:hover {
+  background: var(--vr-hover);
+}
+
+.sidebar__row[aria-current='page'] {
+  background: var(--vr-accent-soft);
+}
+
+.sidebar__row-icon {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  flex: none;
+  place-items: center;
+  color: var(--vr-text-2);
+}
+
+.sidebar__row[aria-current='page'] .sidebar__row-icon {
+  color: var(--vr-accent);
+}
+
+.sidebar__row-name {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  color: var(--vr-text);
+  font-size: 0.875rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ui-badge {
+  display: inline-flex;
+  min-width: 20px;
+  height: 20px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  padding: 0 6px;
+  font-size: 0.71875rem;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.ui-badge--default {
+  background: var(--vr-accent);
+  color: var(--vr-accent-ink);
+}
+
+/* --- who is signed in ------------------------------------------------------ */
+
+.sidebar__profile {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 10px;
+  border-top: 1px solid var(--vr-line);
+  padding: 12px 16px;
+  background: var(--vr-surface);
+}
+
+.sidebar__profile-user {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  gap: 10px;
+}
+
+.sidebar__avatar-wrap {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+}
+
+.ui-avatar__dot {
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  width: 11px;
+  height: 11px;
+  border: 2px solid var(--vr-surface);
+  border-radius: 50%;
+  background: var(--vr-accent);
+}
+
+.sidebar__profile-names {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  line-height: 1.35;
+}
+
+.sidebar__profile-name {
+  overflow: hidden;
+  font-size: 0.875rem;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sidebar__profile-handle {
+  overflow: hidden;
+  color: var(--vr-text-muted);
+  font-family: var(--font-mono);
+  font-size: 0.71875rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sidebar__profile-actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 2px;
+}
+
+.sidebar__head:focus-visible,
+.sidebar__row:focus-visible,
+.sidebar__icon-button:focus-visible,
+.lobby-side__rail-icon:focus-visible {
+  outline: 2px solid var(--vr-accent);
+  outline-offset: -2px;
+}

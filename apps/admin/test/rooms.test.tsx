@@ -2,7 +2,8 @@
 // opens its people: accounts by login, guests by the name they gave),
 // refreshed every few seconds; an account opens its card; the finished calls
 // load by day a page at a time, open to who was there and when, and narrow to
-// one room; one day's timeline shows the calls on a line; each seat says what
+// one room or, by a click on a participant's ip· or #, to one address or
+// browser; one day's timeline shows the calls on a line; each seat says what
 // its role may know of where it came from.
 
 import { act, cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
@@ -172,9 +173,11 @@ test('a live room opens its people: accounts by login, guests by name, and an ac
   expect(within(guestPeer).getByText('экран')).toBeTruthy();
   expect(within(guestPeer).getByText('камера')).toBeTruthy();
   expect(within(alicePeer).queryByText('камера')).toBeNull();
-  // A shaky voice is said with whose side it is on; a good one stays quiet.
-  expect(within(guestPeer).getByText('голос нестабилен · плохо слышит других')).toBeTruthy();
-  expect(within(alicePeer).queryByText(/голос|связь/)).toBeNull();
+  // A shaky voice is said with whose side it is on, a line below; a good one says only that.
+  expect(within(guestPeer).getByText('голос нестабилен')).toBeTruthy();
+  expect(within(guestPeer).getByText('плохо слышит других')).toBeTruthy();
+  expect(within(alicePeer).getByText('голос в порядке')).toBeTruthy();
+  expect(within(alicePeer).queryByText(/слыш|задержка/)).toBeNull();
   // Where each one sits: the desktop app, a phone or a browser.
   expect(within(alicePeer).getByLabelText('приложение')).toBeTruthy();
   expect(within(guestPeer).getByLabelText('телефон')).toBeTruthy();
@@ -463,8 +466,7 @@ test('each seat says its device and where from, by place and address key, never 
   const [alicePeer, guestPeer] = within(people).getAllByRole('listitem');
   if (!alicePeer || !guestPeer) throw new Error('two people expected');
   // The desktop app names only its system; a browser names system and browser.
-  expect(within(alicePeer).getByText('Windows')).toBeTruthy();
-  expect(within(alicePeer).getByText('Москва, Россия')).toBeTruthy();
+  expect(within(alicePeer).getByText('Windows · Москва, Россия')).toBeTruthy();
   expect(within(alicePeer).getByText('ip·012345')).toBeTruthy();
   expect(within(guestPeer).getByText('iOS · Safari')).toBeTruthy();
   expect(within(guestPeer).getByText('#6f1c2a')).toBeTruthy();
@@ -473,8 +475,7 @@ test('each seat says its device and where from, by place and address key, never 
   const [, row] = within(screen.getByRole('table', { name: 'Участники звонка' })).getAllByRole('row');
   if (!row) throw new Error('no person in the call');
   expect(within(row).getByText('Петя')).toBeTruthy();
-  expect(within(row).getByText('Windows · Chrome')).toBeTruthy();
-  expect(within(row).getByText('Казань, Россия')).toBeTruthy();
+  expect(within(row).getByText('Windows · Chrome · Казань, Россия')).toBeTruthy();
   // The same address key live and in the history: the guest came from the same address.
   expect(within(row).getByText('ip·fedcba')).toBeTruthy();
 });
@@ -492,9 +493,9 @@ test('a role that is not told where people came from sees only what the server s
   });
   renderAs(<RoomsPage onOpenCall={vi.fn()} onOpenAccount={vi.fn()} />, 'moderator');
 
-  expect(screen.queryByRole('form', { name: 'Фильтры участников звонков' })).toBeNull();
-
   const people = await openLiveRoom('Кухня');
+  // Nothing to narrow the history by.
+  expect(within(people).queryByRole('button', { name: /ip·|#/ })).toBeNull();
   expect(within(people).getByText('Петя')).toBeTruthy();
   expect(within(people).queryByText(/ip·/)).toBeNull();
   expect(within(people).queryByText(/#/)).toBeNull();
@@ -739,42 +740,55 @@ test("a room picked elsewhere while the day's timeline is on screen narrows the 
 const CLIENT_ID = '6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b';
 const IP_KEY = 'fedcba9876543210';
 
-async function applyOriginFilters(clientId = CLIENT_ID, ipKey = IP_KEY) {
-  fireEvent.change(screen.getByRole('textbox', { name: 'ID браузера / приложения' }), { target: { value: clientId } });
-  fireEvent.change(screen.getByRole('textbox', { name: 'Ключ IP' }), { target: { value: ipKey } });
-  await userEvent.click(screen.getByRole('button', { name: 'Применить' }));
-}
+const ipToken = (scope: HTMLElement) => within(scope).getByRole('button', { name: `ip·${IP_KEY.slice(0, 6)}` });
+const clientToken = (scope: HTMLElement) => within(scope).getByRole('button', { name: `#${CLIENT_ID.slice(0, 6)}` });
 
-test('full client and IP filters reset pagination, remain on later pages and clear together', async () => {
+test("a participant's ip· and # narrow the history from the first page on, and the chips take them off", async () => {
   const calls = stubApi({
-    'GET /api/admin/rooms': live([]),
+    'GET /api/admin/rooms': live([kitchen()]),
     'GET /api/admin/rooms/calls': (url) =>
       history([call('c-page', [stay('s-page')])], url.searchParams.has('after') ? null : NEXT_PAGE)
   });
   renderAs(<RoomsPage onOpenCall={vi.fn()} onOpenAccount={vi.fn()} />);
   await userEvent.click(await screen.findByRole('button', { name: 'Дальше' }));
   await screen.findByText('Страница 2');
+  const params = () => callRequests(calls).at(-1)?.url.searchParams;
 
-  await applyOriginFilters(CLIENT_ID.toUpperCase(), IP_KEY.toUpperCase());
-  await waitFor(() => expect(callRequests(calls).at(-1)?.url.searchParams.get('clientId')).toBe(CLIENT_ID));
-  expect(callRequests(calls).at(-1)?.url.searchParams.get('ipKey')).toBe(IP_KEY);
-  expect(callRequests(calls).at(-1)?.url.searchParams.has('after')).toBe(false);
+  const people = await openLiveRoom('Кухня');
+  const guest = within(people).getAllByRole('listitem')[1];
+  if (!guest) throw new Error('the guest expected');
+  // The full value is in the title; the short one on the button.
+  expect(ipToken(guest).getAttribute('title')).toContain(IP_KEY);
+  expect(clientToken(guest).getAttribute('title')).toContain(CLIENT_ID);
+  await userEvent.click(ipToken(guest));
+  await waitFor(() => expect(params()?.get('ipKey')).toBe(IP_KEY));
+  expect(params()?.has('after')).toBe(false);
   await screen.findByText('Страница 1');
-  expect(screen.getByTitle(`Фильтр ID браузера / приложения: ${CLIENT_ID}`)).toBeTruthy();
-  expect(screen.getByTitle(`Фильтр ключа IP: ${IP_KEY}`)).toBeTruthy();
+  expect(ipToken(guest).getAttribute('aria-pressed')).toBe('true');
+  // Picking a filter does not fold the room it was picked in.
+  expect(screen.getByRole('list', { name: 'В звонке: Кухня' })).toBeTruthy();
+  await userEvent.click(clientToken(guest));
+  await waitFor(() => expect(params()?.get('clientId')).toBe(CLIENT_ID));
+  expect(params()?.get('ipKey')).toBe(IP_KEY);
+  expect(await screen.findByRole('button', { name: /Снять фильтр по IP/ })).toBeTruthy();
+  expect(screen.getByRole('button', { name: /Снять фильтр по ID/ })).toBeTruthy();
+  // There is no form to type them in any more.
+  expect(screen.queryByRole('textbox')).toBeNull();
+
   await userEvent.click(screen.getByRole('button', { name: 'Дальше' }));
   await screen.findByText('Страница 2');
-  const paged = callRequests(calls).at(-1)?.url.searchParams;
-  expect(paged?.get('after')).toBe(NEXT_PAGE);
-  expect(paged?.get('clientId')).toBe(CLIENT_ID);
-  expect(paged?.get('ipKey')).toBe(IP_KEY);
+  expect(params()?.get('after')).toBe(NEXT_PAGE);
+  expect(params()?.get('clientId')).toBe(CLIENT_ID);
+  expect(params()?.get('ipKey')).toBe(IP_KEY);
 
-  await userEvent.click(screen.getByRole('button', { name: 'Сбросить фильтры' }));
-  await waitFor(() => expect(callRequests(calls).at(-1)?.url.searchParams.has('clientId')).toBe(false));
-  expect(callRequests(calls).at(-1)?.url.searchParams.has('ipKey')).toBe(false);
-  expect(callRequests(calls).at(-1)?.url.searchParams.has('after')).toBe(false);
-  expect(screen.getByRole<HTMLInputElement>('textbox', { name: 'Ключ IP' }).value).toBe('');
-  expect(screen.queryByTitle(`Фильтр ID браузера / приложения: ${CLIENT_ID}`)).toBeNull();
+  await userEvent.click(screen.getByRole('button', { name: /Снять фильтр по IP/ }));
+  await waitFor(() => expect(params()?.has('ipKey')).toBe(false));
+  expect(params()?.get('clientId')).toBe(CLIENT_ID);
+  expect(params()?.has('after')).toBe(false);
+  // Pressed again, a code takes its filter off.
+  await userEvent.click(clientToken(guest));
+  await waitFor(() => expect(params()?.has('clientId')).toBe(false));
+  expect(screen.queryByRole('button', { name: /Снять фильтр/ })).toBeNull();
 });
 
 test('filters survive room narrowing, timeline and day changes, matching both IDs on one live peer', async () => {
@@ -803,7 +817,10 @@ test('filters survive room narrowing, timeline and day changes, matching both ID
   });
   renderAs(<RoomsPage onOpenCall={vi.fn()} onOpenAccount={vi.fn()} />);
   await screen.findByText('Завершённых звонков пока нет');
-  await applyOriginFilters();
+  const people = await openLiveRoom('Подходит');
+  await userEvent.click(ipToken(people));
+  await userEvent.click(clientToken(people));
+  await waitFor(() => expect(callRequests(calls).at(-1)?.url.searchParams.get('clientId')).toBe(CLIENT_ID));
   await userEvent.click(screen.getByRole('radio', { name: 'Лента дня' }));
   const timeline = await screen.findByRole('list', { name: 'Звонки за день' });
   expect(within(timeline).getByText('Подходит')).toBeTruthy();
@@ -826,25 +843,106 @@ test('filters survive room narrowing, timeline and day changes, matching both ID
   expect(params()?.has('from')).toBe(false);
 });
 
-test('full application and address identifiers can be selected for copying', async () => {
+test('an address someone else in the call came from too is marked on both', async () => {
   const room = kitchen();
-  const peer = room.peers[0];
-  if (!peer) throw new Error('peer required');
+  const [first, second] = room.peers;
+  if (!first || !second) throw new Error('two peers required');
   stubApi({
-    'GET /api/admin/rooms': live([{ ...room, peers: [{ ...peer, clientId: CLIENT_ID, ipKey: IP_KEY }] }]),
+    'GET /api/admin/rooms': live([{ ...room, peers: [first, { ...second, ipKey: first.ipKey }] }]),
     'GET /api/admin/rooms/calls': history([])
   });
   renderAs(<RoomsPage onOpenCall={vi.fn()} onOpenAccount={vi.fn()} />);
   const people = await openLiveRoom('Кухня');
-  const client = within(people).getByRole<HTMLInputElement>('textbox', { name: 'ID браузера / приложения' });
-  const address = within(people).getByRole<HTMLInputElement>('textbox', { name: 'Ключ адреса' });
-  expect(client.value).toBe(CLIENT_ID);
-  expect(address.value).toBe(IP_KEY);
-  await userEvent.click(client);
-  expect(client.selectionStart).toBe(0);
-  expect(client.selectionEnd).toBe(CLIENT_ID.length);
-  expect(client.readOnly).toBe(true);
-  expect(screen.getByRole('list', { name: 'В звонке: Кухня' })).toBeTruthy();
+  for (const peer of within(people).getAllByRole('listitem')) {
+    expect(within(peer).getByRole('button', { name: 'ip·012345' }).getAttribute('title')).toContain(
+      'тот же IP у другого участника'
+    );
+  }
+});
+
+test('a call row opens its people, the arrow its page, and a filtered row names who matched', async () => {
+  const startedAt = new Date(2026, 9, 15, 14, 30).getTime();
+  const guest = stay('s-guest', {
+    guestName: 'Петя',
+    guestId: CLIENT_ID,
+    clientId: CLIENT_ID,
+    ipKey: IP_KEY,
+    joinedAt: startedAt,
+    leftAt: startedAt + 20 * MINUTE
+  });
+  const other = stay('s-other', {
+    guestName: 'Оля',
+    ipKey: '0123456789abcdef',
+    joinedAt: startedAt + 5 * MINUTE,
+    leftAt: startedAt + 20 * MINUTE
+  });
+  const onOpenCall = vi.fn();
+  stubApi({
+    'GET /api/admin/rooms': live([]),
+    'GET /api/admin/rooms/calls': history([
+      call('c-widget', [guest, other], { roomId: 'P8NZ4T', roomName: '', isStatic: false, kind: 'widget' })
+    ])
+  });
+  renderAs(<RoomsPage onOpenCall={onOpenCall} onOpenAccount={vi.fn()} />);
+
+  const row = (await screen.findByText('14:30–14:50')).closest('li');
+  if (!(row instanceof HTMLElement)) throw new Error('the call row expected');
+  expect(within(row).getByText('виджет')).toBeTruthy();
+  expect(within(row).queryByText('временная')).toBeNull();
+  // A click on the row opens the people, not the call's page.
+  await userEvent.click(within(row).getByText('14:30–14:50'));
+  expect(screen.getByRole('table', { name: 'Участники звонка' })).toBeTruthy();
+  expect(onOpenCall).not.toHaveBeenCalled();
+  await userEvent.click(within(row).getByRole('button', { name: 'Подробно о звонке 14:30–14:50' }));
+  expect(onOpenCall).toHaveBeenCalledWith({ kind: 'finished', callId: 'c-widget' });
+
+  // Narrowed to the guest's address from the call's own people, the row names them.
+  const table = screen.getByRole('table', { name: 'Участники звонка' });
+  await userEvent.click(ipToken(table));
+  expect(await within(row).findByText('совпадение: Петя')).toBeTruthy();
+});
+
+test('the widget calls of today show beside the other numbers', async () => {
+  const room = kitchen();
+  stubApi({
+    'GET /api/admin/rooms': live([room, { ...room, roomId: 'P8NZ4T', name: 'P8NZ4T', kind: 'widget' }]),
+    'GET /api/admin/rooms/calls': history([]),
+    'GET /api/admin/overview': {
+      body: {
+        ok: true,
+        live: { onlineAccounts: 0, guestConnections: 0, voicePeers: 0, voiceRooms: 0 },
+        today: {
+          day: '2026-11-19',
+          activeAccounts: 0,
+          newAccounts: 0,
+          messages: 0,
+          voiceJoins: 0,
+          voiceMinutes: 0,
+          calls: 9,
+          callsYesterday: 4,
+          widgetCalls: 6,
+          widgetGuests: 10
+        },
+        totals: { accounts: 0, staticRooms: 0, temporaryRooms: 0, messages: 0, weeklyActive: 0, monthlyActive: 0 },
+        openReports: 0,
+        livekit: true,
+        version: 'test',
+        startedAt: 0,
+        system: null
+      }
+    }
+  });
+  renderAs(<RoomsPage onOpenCall={vi.fn()} onOpenAccount={vi.fn()} />);
+  const stats = await screen.findByRole('list', { name: 'Главное о комнатах' });
+  const widgets = await within(stats).findByText('Из виджетов сегодня');
+  const cell = widgets.closest('[role="listitem"]');
+  if (!(cell instanceof HTMLElement)) throw new Error('the widgets cell expected');
+  expect(within(cell).getByText('7')).toBeTruthy();
+  expect(within(cell).getByText('1 идёт · 12 гостей')).toBeTruthy();
+  // The live widget room says what it is.
+  expect(within(liveTable()).getByText('виджет')).toBeTruthy();
+  // Yesterday's count is no longer over the history.
+  expect(screen.queryByText(/вчера 4/)).toBeNull();
 });
 
 test('clearing a filter drops its late response and keeps the newer unfiltered calls', async () => {
@@ -853,14 +951,15 @@ test('clearing a filter drops its late response and keeps the newer unfiltered c
     release = resolve;
   });
   const calls = stubApi({
-    'GET /api/admin/rooms': live([]),
+    'GET /api/admin/rooms': live([kitchen()]),
     'GET /api/admin/rooms/calls': (url) => (url.searchParams.has('clientId') ? pending : history([]))
   });
   renderAs(<RoomsPage onOpenCall={vi.fn()} onOpenAccount={vi.fn()} />);
   await screen.findByText('Завершённых звонков пока нет');
-  await applyOriginFilters(CLIENT_ID, '');
+  const people = await openLiveRoom('Кухня');
+  await userEvent.click(clientToken(people));
   await waitFor(() => expect(callRequests(calls).at(-1)?.url.searchParams.get('clientId')).toBe(CLIENT_ID));
-  await userEvent.click(screen.getByRole('button', { name: 'Сбросить фильтры' }));
+  await userEvent.click(clientToken(people));
   await waitFor(() => expect(callRequests(calls).at(-1)?.url.searchParams.has('clientId')).toBe(false));
   await act(async () => {
     release(history([call('c-late', [stay('s-late', { roomName: 'Устаревшая комната' })])]));

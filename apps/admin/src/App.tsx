@@ -14,6 +14,7 @@ import { OverviewPage } from './pages/OverviewPage.tsx';
 import { ProductPage } from './pages/ProductPage.tsx';
 import { ReportsPage } from './pages/ReportsPage.tsx';
 import { RoomsPage, type HistoryRoom } from './pages/RoomsPage.tsx';
+import { WidgetsPage } from './pages/WidgetsPage.tsx';
 import { StaffPage } from './pages/StaffPage.tsx';
 import { SystemPage } from './pages/SystemPage.tsx';
 import { GlobalSearch } from './shell/GlobalSearch.tsx';
@@ -196,6 +197,7 @@ export function App() {
                     onLiveFocused={clearLiveFocus}
                   />
                 ) : null}
+                {tab === 'widgets' ? <WidgetsPage onOpenAccount={openAccount} onOpenCall={openCall} /> : null}
                 {tab === 'reports' ? <ReportsPage onResolved={setOpenReports} onOpenAccount={openAccount} /> : null}
                 {tab === 'feedback' ? <FeedbackPage /> : null}
                 {tab === 'staff' ? <StaffPage /> : null}

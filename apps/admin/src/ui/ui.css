@@ -408,6 +408,10 @@
   background: var(--vr-danger);
 }
 
+.ui-stat-dot[data-tone='info'] {
+  background: var(--vr-info);
+}
+
 .ui-stat-value {
   font-size: 1.375rem;
   font-weight: 700;

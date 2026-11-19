@@ -99,18 +99,18 @@ async function menu(): Promise<HTMLElement> {
 async function sections(): Promise<string[]> {
   return within(await menu())
     .getAllByRole('link')
-    .map((link) => link.getAttribute('title') ?? '');
+    .map((link) => (link.textContent ?? '').replace(/\d+$/, ''));
 }
 
 test('a moderator sees accounts, rooms and reports, and no numbers or staff', async () => {
   signedInAs('moderator');
   render(<App />);
-  expect(await sections()).toEqual(['Пользователи', 'Комнаты', 'Жалобы']);
+  expect(await sections()).toEqual(['Пользователи', 'Комнаты', 'Виджеты', 'Жалобы']);
   // A group with nothing the role may open is not shown at all.
   expect(within(await menu()).queryByText('Аналитика')).toBeNull();
   // "/" is the overview, which a moderator may not open: the first allowed section opens instead.
   await waitFor(() => expect(window.location.pathname).toBe('/accounts'));
-  expect(screen.getByText('Модератор')).toBeTruthy();
+  expect(screen.getByText('@staff · модератор')).toBeTruthy();
 });
 
 test('a superadmin sees every section in the menu order, the staff one included', async () => {
@@ -123,6 +123,7 @@ test('a superadmin sees every section in the menu order, the staff one included'
     'Сервер',
     'Пользователи',
     'Комнаты',
+    'Виджеты',
     'Жалобы',
     'Сотрудники'
   ]);
@@ -205,18 +206,21 @@ test('the reports item keeps the fresh poll count while the reports page stays o
   expect(screen.getByLabelText('открытых: 3')).toBeTruthy();
 });
 
-test('the menu folds and stays folded after a reload', async () => {
+test('the menu folds to a rail and stays folded after a reload', async () => {
   signedInAs('moderator');
   const first = render(<App />);
-  await userEvent.click(await screen.findByRole('button', { name: 'Свернуть меню' }));
-  expect(screen.getByRole('button', { name: 'Закрепить меню открытым' })).toBeTruthy();
+  await userEvent.click(await screen.findByRole('button', { name: 'Свернуть боковую панель' }));
+  expect(screen.queryByRole('navigation', { name: 'Разделы' })).toBeNull();
+  // The rail still opens every section.
+  const rail = screen.getByRole('navigation', { name: 'Разделы, кратко' });
+  expect(within(rail).getByRole('link', { name: 'Комнаты' })).toBeTruthy();
   first.unmount();
 
   const second = render(<App />);
-  await userEvent.click(await screen.findByRole('button', { name: 'Закрепить меню открытым' }));
+  await userEvent.click(await screen.findByRole('button', { name: 'Развернуть боковую панель' }));
   second.unmount();
   render(<App />);
-  expect(await screen.findByRole('button', { name: 'Свернуть меню' })).toBeTruthy();
+  expect(await screen.findByRole('button', { name: 'Свернуть боковую панель' })).toBeTruthy();
 });
 
 test('a narrow window starts with the menu folded', async () => {
@@ -225,10 +229,73 @@ test('a narrow window starts with the menu folded', async () => {
   try {
     signedInAs('moderator');
     render(<App />);
-    expect(await screen.findByRole('button', { name: 'Закрепить меню открытым' })).toBeTruthy();
+    expect(await screen.findByRole('button', { name: 'Развернуть боковую панель' })).toBeTruthy();
   } finally {
     window.innerWidth = width;
   }
+});
+
+test('the folded menu opens over the content under the mouse, and Escape closes it', async () => {
+  window.localStorage.setItem('vr-admin-sidebar-collapsed', 'true');
+  signedInAs('moderator', 2);
+  render(<App />);
+  const rail = await screen.findByRole('navigation', { name: 'Разделы, кратко' });
+  expect(await within(rail).findByRole('link', { name: 'Жалобы, открытых: 2' })).toBeTruthy();
+  expect(screen.queryByRole('navigation', { name: 'Разделы' })).toBeNull();
+
+  await userEvent.hover(rail);
+  expect(await screen.findByRole('navigation', { name: 'Разделы' })).toBeTruthy();
+  await userEvent.keyboard('{Escape}');
+  await waitFor(() => expect(screen.queryByRole('navigation', { name: 'Разделы' })).toBeNull());
+
+  await userEvent.hover(rail);
+  await userEvent.click(within(await menu()).getByRole('link', { name: 'Комнаты' }));
+  await waitFor(() => expect(window.location.pathname).toBe('/rooms'));
+  expect(screen.queryByRole('navigation', { name: 'Разделы' })).toBeNull();
+  expect(window.localStorage.getItem('vr-admin-sidebar-collapsed')).toBe('true');
+});
+
+test('the menu edge is resized from the keyboard and folds with Home', async () => {
+  signedInAs('moderator');
+  render(<App />);
+  const edge = await screen.findByRole('separator', { name: 'Ширина боковой панели' });
+  expect(edge.getAttribute('aria-valuenow')).toBe('280');
+  edge.focus();
+  await userEvent.keyboard('{ArrowRight}{ArrowRight}');
+  expect(edge.getAttribute('aria-valuenow')).toBe('312');
+  await userEvent.keyboard('{ArrowLeft}');
+  expect(edge.getAttribute('aria-valuenow')).toBe('296');
+  expect(window.localStorage.getItem('vr-admin-sidebar-width')).toBe('296');
+  // Never narrower than the menu's least width.
+  for (let step = 0; step < 10; step += 1) await userEvent.keyboard('{ArrowLeft}');
+  expect(edge.getAttribute('aria-valuenow')).toBe('240');
+
+  await userEvent.keyboard('{Home}');
+  expect(await screen.findByRole('button', { name: 'Развернуть боковую панель' })).toBeTruthy();
+  expect(screen.queryByRole('separator', { name: 'Ширина боковой панели' })).toBeNull();
+  expect(window.localStorage.getItem('vr-admin-sidebar-collapsed')).toBe('true');
+});
+
+test('the width saved before comes back, and the profile names the login and role', async () => {
+  window.localStorage.setItem('vr-admin-sidebar-width', '360');
+  signedInAs('admin');
+  render(<App />);
+  const edge = await screen.findByRole('separator', { name: 'Ширина боковой панели' });
+  expect(edge.getAttribute('aria-valuenow')).toBe('360');
+  expect(screen.getByText('@staff · админ')).toBeTruthy();
+  expect(screen.getByRole('link', { name: 'Открыть VoiceRoom' }).getAttribute('href')).toBe('https://site.test');
+});
+
+test('the widgets section is in the menu only for those who may see the rooms', async () => {
+  stubApi({
+    'GET /api/staff/me': {
+      body: { ok: true, ...staffOf('moderator'), permissions: ['reports.review', 'accounts.view'] }
+    },
+    'GET /api/admin/user-reports': { body: { ok: true, reports: [] } },
+    'GET /api/admin/reports': { body: { ok: true, reports: [] } }
+  });
+  render(<App />);
+  expect(await sections()).toEqual(['Пользователи', 'Жалобы']);
 });
 
 test("an account's card puts the account's name in the top bar under the accounts", async () => {
