@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import type { MemberPage } from '@voice-room/shared/contracts/membership';
 import {
   MessageContent,
@@ -15,9 +15,19 @@ import {
   enableCapabilities,
   enterRoom,
   incomingFriendRequestIds,
-  registerViaUi,
+  PASSWORD,
   uniqueLogin
 } from './helpers';
+
+async function openLobbyAsNewAccount(page: Page, login: string): Promise<void> {
+  const response = await page.context().request.post('/api/auth/register', {
+    data: { login, password: PASSWORD, passwordConfirm: PASSWORD }
+  });
+  expect(response.ok(), `Registration failed with HTTP ${response.status()}`).toBe(true);
+
+  await page.goto('/app');
+  await expect(page.getByRole('button', { name: 'Создать комнату' })).toBeVisible({ timeout: 15_000 });
+}
 
 test('manual polish renders the inbox between download/settings and opens it locally', async ({ page }) => {
   await enableCapabilities(page, ['engagement']);
@@ -30,7 +40,7 @@ test('manual polish renders the inbox between download/settings and opens it loc
     firstUnread: null
   };
   await page.route('**/api/notifications/inbox*', (route) => route.fulfill({ json: inbox }));
-  await registerViaUi(page, uniqueLogin('inboxplacement'));
+  await openLobbyAsNewAccount(page, uniqueLogin('inboxplacement'));
 
   const download = page.getByRole('button', { name: 'Скачать приложение' });
   const notifications = page.getByRole('button', { name: 'Открыть уведомления' });
@@ -61,11 +71,11 @@ test('manual polish renders direct messages with the shared flat chat row and ar
   await enableCapabilities(page, ['replies']);
   const firstLogin = uniqueLogin('dmflatone');
   const secondLogin = uniqueLogin('dmflattwo');
-  await registerViaUi(page, firstLogin);
+  await openLobbyAsNewAccount(page, firstLogin);
   const secondContext = await browser.newContext(baseURL ? { baseURL } : {});
   const second = await secondContext.newPage();
   try {
-    await registerViaUi(second, secondLogin);
+    await openLobbyAsNewAccount(second, secondLogin);
     const request = await secondContext.request.post('/api/friends/requests', { data: { login: firstLogin } });
     expect(request.ok()).toBe(true);
     const [requestId] = await incomingFriendRequestIds(page);
@@ -134,7 +144,7 @@ test('the lobby preview runs the same room chat as the rail, with jumpable quote
 }) => {
   await enableCapabilities(page, ['reactions', 'replies']);
   const login = uniqueLogin('chatparity');
-  await registerViaUi(page, login);
+  await openLobbyAsNewAccount(page, login);
   const roomName = `Parity ${login}`;
   const roomId = await createPermanentRoom(page, roomName);
 
@@ -199,7 +209,7 @@ test('manual polish keeps the newest mention query, emits login-bound segments, 
 }) => {
   await enableCapabilities(page, ['engagement', 'reactions']);
   const login = uniqueLogin('mentionrace');
-  await registerViaUi(page, login);
+  await openLobbyAsNewAccount(page, login);
   const roomId = await createPermanentRoom(page, `Mention race ${login}`);
 
   const { promise: slowResponse, resolve: releaseSlow } = Promise.withResolvers<void>();
@@ -344,12 +354,12 @@ test('room members panel releases navigation, switches to chat, collapses, and k
 
   const ownerLogin = uniqueLogin('roomnavowner');
   const friendLogin = uniqueLogin('roomnavfriend');
-  await registerViaUi(page, ownerLogin);
+  await openLobbyAsNewAccount(page, ownerLogin);
 
   const friendContext = await browser.newContext(baseURL ? { baseURL } : {});
   const friendPage = await friendContext.newPage();
   try {
-    await registerViaUi(friendPage, friendLogin);
+    await openLobbyAsNewAccount(friendPage, friendLogin);
     const request = await friendContext.request.post('/api/friends/requests', { data: { login: ownerLogin } });
     expect(request.ok()).toBe(true);
     const [requestId] = await incomingFriendRequestIds(page);

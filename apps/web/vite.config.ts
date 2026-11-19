@@ -1,6 +1,6 @@
 import { fileURLToPath } from 'node:url';
 import vue from '@vitejs/plugin-vue';
-import { defineConfig } from 'vitest/config';
+import { configDefaults, defineConfig } from 'vitest/config';
 
 import {
   buildVersion,
@@ -30,6 +30,52 @@ const API_PROXY = {
 
 // One id for the bundle (the update check compares against it) and /_app/version.json.
 const APP_VERSION = buildVersion();
+
+// Suites that can run in Node. The other suites use the browser setup.
+const nodeTestFiles = [
+  'test/audio-gate-worklet.test.ts',
+  'test/avatar-initial.test.ts',
+  'test/caddy-admin-gate.test.ts',
+  'test/caddy-assetlinks.test.ts',
+  'test/caddy-behind-edge.test.ts',
+  'test/caddy-csp.test.ts',
+  'test/caddy-extra-sites.test.ts',
+  'test/caddy-static-cache.test.ts',
+  'test/chat-drafts.test.ts',
+  'test/chat-typing.test.ts',
+  'test/composer-emoji.test.ts',
+  'test/composer-markdown.test.ts',
+  'test/date-format.test.ts',
+  'test/deploy-contract.test.ts',
+  'test/desktop-audio-source-worklet.test.ts',
+  'test/desktop-autostart.test.ts',
+  'test/desktop-hotkey-service.test.ts',
+  'test/display-name.test.ts',
+  'test/dm-pagination.test.ts',
+  'test/emoji-artwork.test.ts',
+  'test/emoji-text.test.ts',
+  'test/features/contract-violations.test.ts',
+  'test/features/dm-invite-view.test.ts',
+  'test/features/error-texts.test.ts',
+  'test/features/friend-presence.test.ts',
+  'test/features/join-timing.test.ts',
+  'test/features/loss-window.test.ts',
+  'test/features/notification-inbox.test.ts',
+  'test/features/rnnoise-worklet.test.ts',
+  'test/features/room-cta.test.ts',
+  'test/features/screen-profiles.test.ts',
+  'test/features/trailing-task.test.ts',
+  'test/network-stats.test.ts',
+  'test/new-id.test.ts',
+  'test/popover-placement.test.ts',
+  'test/push-localization.test.ts',
+  'test/reaction-reconciliation.test.ts',
+  'test/read-reconciliation.test.ts',
+  'test/room-pagination.test.ts',
+  'test/runtime-config.test.ts',
+  'test/turn-edge.test.ts',
+  'test/widget-edge.test.ts'
+];
 
 export default defineConfig({
   plugins: [vue(), cspMetaPlugin(), versionFilePlugin(APP_VERSION), serviceWorkerPlugin(), precompressPlugin()],
@@ -67,12 +113,23 @@ export default defineConfig({
     assetsDir: '_app/immutable'
   },
   test: {
-    include: ['test/**/*.test.ts'],
-    environment: 'jsdom',
-    setupFiles: ['test/setup.ts'],
     testTimeout: 20000,
     // vi.stubGlobal() is undone after every test.
-    unstubGlobals: true
+    unstubGlobals: true,
+    projects: [
+      {
+        test: { name: 'node', environment: 'node', include: nodeTestFiles }
+      },
+      {
+        test: {
+          name: 'jsdom',
+          environment: 'jsdom',
+          include: ['test/**/*.test.ts'],
+          exclude: [...configDefaults.exclude, ...nodeTestFiles],
+          setupFiles: ['test/setup.ts']
+        }
+      }
+    ]
   },
   preview: {
     host: DEV_HOST,
