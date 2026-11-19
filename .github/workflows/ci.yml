@@ -17,7 +17,12 @@ jobs:
   changes:
     name: Detect changed components
     runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      pull-requests: read
     outputs:
+      verified: ${{ steps.reuse.outputs.verified }}
       app: ${{ steps.route.outputs.app }}
       site: ${{ steps.route.outputs.site }}
       docs: ${{ steps.route.outputs.docs }}
@@ -34,7 +39,20 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
         run: |
           node --test scripts/test/changed-components.test.mts
+          bash scripts/test/reuse-app-checks.sh
           node scripts/ci/changed-components.mts "$BASE_SHA" "$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Look for already verified application changes
+        id: reuse
+        if: github.event_name == 'push' && steps.route.outputs.app == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BEFORE_SHA: ${{ github.event.before }}
+        run: |
+          if ! timeout 25s bash scripts/ci/reuse-app-checks.sh; then
+            echo "PR verification lookup failed. Running app checks."
+            echo 'verified=false' >> "$GITHUB_OUTPUT"
+          fi
 
   policy:
     name: Git Flow policy
@@ -94,7 +112,7 @@ jobs:
   check:
     name: Lint, typecheck & build
     needs: changes
-    if: needs.changes.outputs.app == 'true'
+    if: needs.changes.outputs.app == 'true' && needs.changes.outputs.verified != 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -110,7 +128,7 @@ jobs:
   test:
     name: API tests
     needs: changes
-    if: needs.changes.outputs.app == 'true'
+    if: needs.changes.outputs.app == 'true' && needs.changes.outputs.verified != 'true'
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -132,112 +150,37 @@ jobs:
       TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres
     steps:
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: ${{ github.event_name == 'pull_request' && '0' || '1' }}
       - uses: actions/setup-node@v5
         with:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci
-      - run: npm --workspace @voice-room/shared run test
-      - run: npm --workspace @voice-room/api run test
+      - name: Run shared and API tests without coverage on push
+        if: github.event_name == 'push'
+        run: |
+          npm --workspace @voice-room/shared run test
+          npm --workspace @voice-room/api run test
       - name: Script tests and real Caddy log-redaction regression
         env:
           CADDY_TEST_IMAGE: caddy:2.11.4-alpine
         run: |
           docker pull "$CADDY_TEST_IMAGE"
-          node --test scripts/test/*.test.mts
-
-  test-web:
-    name: Web tests
-    needs: changes
-    if: needs.changes.outputs.app == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
-        with:
-          node-version-file: .nvmrc
-          cache: npm
-      - run: npm ci
-      - run: npm --workspace @voice-room/web run test
-      - run: npm --workspace @voice-room/admin run test
-
-  voice-join:
-    name: Voice room join smoke
-    needs: changes
-    if: needs.changes.outputs.app == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
-        with:
-          node-version-file: .nvmrc
-          cache: npm
-      - run: npm ci
-      - name: Install Chromium
-        run: npx playwright install --with-deps chromium
-      - name: Start production-like voice stack
-        run: docker compose -f docker-compose.ci.yml up -d --build --wait --wait-timeout 180
-      - name: Join voice and verify chat behavior through production-like services
-        run: npm --workspace @voice-room/web run e2e -- e2e/room-voice.spec.ts e2e/rnnoise-assets.spec.ts e2e/microphone-recovery.spec.ts e2e/chat-image-paste.spec.ts e2e/manual-chat-polish.spec.ts e2e/chat-drafts.spec.ts e2e/chat-typing.spec.ts e2e/guest-account-cta.spec.ts e2e/mobile-room.spec.ts --project=chromium --retries=0
-      # No teardown step: a hosted runner is discarded after the job together
-      # with its containers and volumes.
-      - name: Capture voice stack diagnostics
-        if: failure()
-        run: |
-          docker compose -f docker-compose.ci.yml ps
-          docker compose -f docker-compose.ci.yml logs --no-color --tail=250
-
-  goal-g05:
-    name: G05 strict LiveKit gate proof
-    needs: changes
-    if: needs.changes.outputs.app == 'true'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
-        with:
-          node-version-file: .nvmrc
-          cache: npm
-      - run: npm ci
-      - run: npm --workspace @voice-room/api run test:g05
-      - run: G05_SELECTED_MECHANISM=external-auth-gate node scripts/lkv/run-strict-boundary-proof.mts --json --fail-on-blocked
-
-  goal-g08:
-    name: G08 measured coverage gate
-    needs: changes
-    if: github.event_name == 'pull_request' && needs.changes.outputs.app == 'true'
-    runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:16-alpine
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: postgres
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U postgres"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-    permissions:
-      contents: read
-    env:
-      TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          fetch-depth: 0
-      - uses: actions/setup-node@v5
-        with:
-          node-version-file: .nvmrc
-          cache: npm
-      - run: npm ci
+          tests=()
+          for test in scripts/test/*.test.mts; do
+            # The routing job already runs its regression tests.
+            if [[ "$test" == scripts/test/changed-components.test.mts ]]; then
+              continue
+            fi
+            if [[ "$GITHUB_EVENT_NAME" == pull_request && "$test" == scripts/test/coverage-gate.test.mts ]]; then
+              continue
+            fi
+            tests+=("$test")
+          done
+          node --test "${tests[@]}"
       - name: Capture protected-base coverage policy and changed files
+        if: github.event_name == 'pull_request'
         shell: bash
         run: |
           set -euo pipefail
@@ -252,8 +195,11 @@ jobs:
           else
             echo "G08_BASELINE_ARGS=--base-thresholds-absent" >> "$GITHUB_ENV"
           fi
-      - run: npm run coverage:g08
+      - name: Run shared and API tests with G08 coverage
+        if: github.event_name == 'pull_request'
+        run: npm run coverage:g08
       - name: Enforce G08 coverage and protected-base ratchet
+        if: github.event_name == 'pull_request'
         shell: bash
         run: |
           read -r -a baseline_args <<< "$G08_BASELINE_ARGS"
@@ -263,6 +209,7 @@ jobs:
             --changed-diff coverage/release-250-changed.diff \
             "${baseline_args[@]}"
       - name: Persist G08 measured coverage artifact
+        if: github.event_name == 'pull_request'
         uses: actions/upload-artifact@v5
         with:
           name: g08-release-250-coverage-run-${{ github.run_id }}-attempt-${{ github.run_attempt }}-head-${{ github.event.pull_request.head.sha }}
@@ -274,10 +221,112 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
+  test-web:
+    name: Web tests
+    needs: changes
+    if: needs.changes.outputs.app == 'true' && needs.changes.outputs.verified != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm --workspace @voice-room/web run test
+      - run: npm --workspace @voice-room/admin run test
+
+  voice-join:
+    name: Voice room join smoke
+    needs: changes
+    if: needs.changes.outputs.app == 'true' && needs.changes.outputs.verified != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci --workspace @voice-room/web --workspace @voice-room/shared
+      - name: Start the voice stack and pull the Playwright image
+        run: |
+          version=$(node -p "require('./package-lock.json').packages['node_modules/@playwright/test'].version")
+          image="mcr.microsoft.com/playwright:v${version}-noble"
+          docker pull "$image" &
+          browser_pull=$!
+          docker compose -f docker-compose.ci.yml up -d --build --wait --wait-timeout 180
+          wait "$browser_pull"
+          echo "PLAYWRIGHT_IMAGE=$image" >> "$GITHUB_ENV"
+      - name: Join voice and verify chat behavior through production-like services
+        run: |
+          docker run --rm --init --network host --ipc host --user "$(id -u):$(id -g)" \
+            -e HOME=/tmp -e CI -v "$GITHUB_WORKSPACE:/work" -w /work "$PLAYWRIGHT_IMAGE" \
+            npm --workspace @voice-room/web run e2e -- \
+            e2e/room-voice.spec.ts e2e/rnnoise-assets.spec.ts e2e/microphone-recovery.spec.ts \
+            e2e/chat-image-paste.spec.ts e2e/manual-chat-polish.spec.ts e2e/chat-drafts.spec.ts \
+            e2e/chat-typing.spec.ts e2e/guest-account-cta.spec.ts e2e/mobile-room.spec.ts \
+            --project=chromium --retries=0
+      # No teardown step: a hosted runner is discarded after the job together
+      # with its containers and volumes.
+      - name: Capture voice stack diagnostics
+        if: failure()
+        run: |
+          docker compose -f docker-compose.ci.yml ps
+          docker compose -f docker-compose.ci.yml logs --no-color --tail=250
+
+  goal-g05:
+    name: G05 strict LiveKit gate proof
+    needs: changes
+    if: needs.changes.outputs.app == 'true' && needs.changes.outputs.verified != 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      # The API test job already runs the LiveKit boundary test file.
+      - run: G05_SELECTED_MECHANISM=external-auth-gate node scripts/lkv/run-strict-boundary-proof.mts --json --fail-on-blocked
+
+  record-app-checks:
+    name: Record verified application tree
+    needs: [changes, policy, check, test, test-web, voice-join, goal-g05]
+    if: github.event_name == 'pull_request' && github.base_ref == 'develop' && needs.changes.outputs.app == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Record the tested tree
+        id: tree
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          tree=$(git rev-parse 'HEAD^{tree}')
+          echo "name=verified-dev-pr-$PR_NUMBER-$BASE_SHA-$tree-$GITHUB_RUN_ATTEMPT" >> "$GITHUB_OUTPUT"
+          printf '%s\n' "$tree" > verified-tree.txt
+      - uses: actions/upload-artifact@v6
+        # A storage failure only disables check reuse on the subsequent push.
+        continue-on-error: true
+        with:
+          name: ${{ steps.tree.outputs.name }}
+          path: verified-tree.txt
+          if-no-files-found: error
+          retention-days: 7
+
   images:
     name: Publish images
     needs: [changes, check, test, test-web, voice-join, goal-g05]
-    if: github.event_name == 'push' && needs.changes.outputs.app == 'true'
+    if: >-
+      !cancelled() && github.event_name == 'push' && needs.changes.result == 'success' &&
+      needs.changes.outputs.app == 'true' &&
+      (needs.changes.outputs.verified == 'true' ||
+      (needs.check.result == 'success' && needs.test.result == 'success' &&
+      needs.test-web.result == 'success' && needs.voice-join.result == 'success' &&
+      needs.goal-g05.result == 'success'))
     permissions:
       contents: read
       packages: write

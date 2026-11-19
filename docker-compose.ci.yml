@@ -5,14 +5,28 @@ services:
     build:
       context: .
       target: deps
-    command: npm ci
-    working_dir: /app
+    # Keep the workspace bind for the API and Vite without reinstalling packages
+    # or falling back to native modules from the host.
+    command:
+      - sh
+      - -eu
+      - -c
+      - |
+        copy_deps() {
+          find "$$2" -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +
+          if [ -d "$$1" ]; then
+            cp -a "$$1/." "$$2/"
+          fi
+        }
+        copy_deps /app/node_modules /dependencies/root
+        copy_deps /app/apps/api/node_modules /dependencies/api
+        copy_deps /app/apps/web/node_modules /dependencies/web
+        copy_deps /app/packages/shared/node_modules /dependencies/shared
     volumes:
-      - .:/app
-      - node_modules:/app/node_modules
-      - api_node_modules:/app/apps/api/node_modules
-      - web_node_modules:/app/apps/web/node_modules
-      - shared_node_modules:/app/packages/shared/node_modules
+      - node_modules:/dependencies/root
+      - api_node_modules:/dependencies/api
+      - web_node_modules:/dependencies/web
+      - shared_node_modules:/dependencies/shared
 
   postgres:
     image: postgres:16-alpine

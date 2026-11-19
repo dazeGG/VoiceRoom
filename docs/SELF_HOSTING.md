@@ -165,17 +165,17 @@ VAPID_SUBJECT
 
 ## CI/CD (GitHub Actions)
 
-Пайплайн описан в `.github/workflows/ci.yml`. Проверки запускаются для pull request и push в `develop`. `main` и теги их не повторяют: защита `main` принимает только PR, голова которого прошла проверки и актуальна относительно `main`. Для них работает отдельный `.github/workflows/release.yml`. Ветки, PR, коммиты, hotfix и релизы ведутся по [`GIT_FLOW.md`](./GIT_FLOW.md):
+Пайплайн описан в `.github/workflows/ci.yml`. Проверки запускаются для pull request в `develop` и `main`. После push в `develop` повторный CI приложения пропускается, если успешный PR в `develop` проверил то же Git-дерево на той же базе. При прямом push, изменении базы или отсутствии подтверждения запускается полный набор проверок приложения для push. Сайт и документация по-прежнему проверяются и собираются независимо по затронутым компонентам. Production-релиз приложения запускается по тегу в `.github/workflows/release.yml`. Ветки, PR, коммиты, hotfix и релизы ведутся по [`GIT_FLOW.md`](./GIT_FLOW.md):
 
 - **policy** — проверяет допустимый Git Flow маршрут PR и Conventional Commit формат PR title.
 - **check** — `npm ci`, `npm run check` (tsc, vue-tsc, ESLint и Prettier по shared, api и web), `npm run build` (Vite).
-- **test** — тесты shared и API против эфемерного PostgreSQL service-контейнера, файлы API-тестов идут в 4 потока, каждый тест получает копию шаблонной базы. **test-web** — тесты веба (Vitest) отдельным job параллельно с API. `TEST_DATABASE_URL` задаётся прямо в workflow одноразовым значением — секрет для этого **не нужен** (test harness создаёт/удаляет временную БД на каждый тест).
+- **test** — тесты shared и API против эфемерного PostgreSQL service-контейнера. На PR этот же прогон собирает покрытие G08 и проверяет пороги для изменённого кода. CI запускает API-тесты с параллелизмом 4, каждый интеграционный тест получает копию шаблонной базы. **test-web** — тесты веба (Vitest) отдельным job параллельно с API. `TEST_DATABASE_URL` задаётся прямо в workflow одноразовым значением — секрет для этого **не нужен** (test harness создаёт/удаляет временную БД на каждый тест).
 - **voice-join** — проверка входа в голосовую комнату через LiveKit.
-- **G05 / G08** — строгий LiveKit-профиль и порог покрытия изменённого кода.
+- **G05** — строгий LiveKit-профиль.
 
-**Деплой** (`.github/workflows/deploy.yml`, вызывается после публикации образов; на `develop` образы собираются только после зелёных `check`, `test`, `test-web`, `voice-join` и G05):
+**Деплой** (`.github/workflows/deploy.yml`, вызывается после публикации образов; на `develop` сборка образов начинается после подтверждения проверенного Git-дерева или успешных `check`, `test`, `test-web`, `voice-join` и G05 на push):
 
-- **images** — на каждый push в `develop`, `main` и тег `v*` собирает таргеты `api`, `worker`, `web` и публикует `ghcr.io/dazegg/voiceroom-<target>:<commit-sha>`.
+- **images** — для изменений приложения в `develop` и тегов приложения `v*` собирает таргеты `api`, `worker`, `web` и публикует `ghcr.io/dazegg/voiceroom-<target>:<commit-sha>`.
 - **deploy-production** — тег `v*` на коммите, влитом в `main` (первый родитель), совпадающий с версией в `package.json`, сразу выкатывается на прод без ручного подтверждения: environment `production` только ограничивает деплой тегами `v*` (https://voiceroom.ru).
 
 Выкатку делает `scripts/cd/remote-deploy.sh` на сервере по SSH: бэкап `.env` и `pg_dump` в `deploy-backups/ci/` (хранятся 5 последних, а дампы и копии `.env` старше 30 дней удаляются и в `deploy-backups/ci/`, и в `deploy-backups/manual/`), `git checkout` коммита, `docker pull` образов, подстановка `VOICEROOM_*_IMAGE` в `.env`, `docker compose config`, `docker compose up -d --wait`. Если любой шаг падает, возвращаются прежние коммит, `.env` и контейнеры. Миграции при этом **не откатываются** — после неудачной миграции восстанавливайте БД из дампа (см. «Миграции» ниже).

@@ -12,6 +12,13 @@ set -Eeuo pipefail
 # command that could consume the rest (docker compose exec, ssh, ...).
 main() {
   local deploy_path=$1 commit=$2 api_image=$3 worker_image=$4 web_image=$5
+  local phase_started=$SECONDS
+  report_phase() {
+    local now=$SECONDS
+    printf 'timing: %s %ss\n' "$1" "$((now - phase_started))"
+    phase_started=$now
+  }
+
   command -v python3 > /dev/null || {
     echo 'deployment requires Python 3 for the widget compatibility preflight; no changes made' >&2
     exit 1
@@ -73,6 +80,7 @@ main() {
     ' < /dev/null
   }
   check_logging_activation_idle
+  report_phase initial-preflight
   backup_dir=deploy-backups/ci
   mkdir -p "$backup_dir"
   chmod 700 "$backup_dir"
@@ -87,6 +95,7 @@ main() {
   mkdir -p "$HOME/.cache/voiceroom"
   exec 8>"$HOME/.cache/voiceroom/deploy.lock"
   flock 8
+  report_phase deployment-lock
 
   stamp=$(date -u +%Y%m%dT%H%M%SZ)
   previous_commit=$(git rev-parse HEAD)
@@ -113,6 +122,7 @@ main() {
     exit 1
   fi
   chmod 600 "$db_dump"
+  report_phase backup
 
   local rollout_started=false
   # Pin recovery logic outside the checkout before any checkout/env mutation.
@@ -128,9 +138,13 @@ main() {
   previous_api=$(sed -n 's/^VOICEROOM_API_IMAGE=//p' "$env_backup")
   previous_worker=$(sed -n 's/^VOICEROOM_WORKER_IMAGE=//p' "$env_backup")
   previous_web=$(sed -n 's/^VOICEROOM_WEB_IMAGE=//p' "$env_backup")
+  report_phase fetch-and-prepare
+
+  echo "== pulling images"
   docker pull --quiet "$api_image"
   docker pull --quiet "$worker_image"
   docker pull --quiet "$web_image"
+  report_phase image-pull
   python3 "$manifest_helper" "$boundary_manifest" \
     "$api_image" "$worker_image" "$web_image" \
     "$previous_api" "$previous_worker" "$previous_web" < /dev/null
@@ -140,6 +154,7 @@ main() {
       "$previous_api" "$previous_worker" "$previous_web" < /dev/null
   }
   boundary_preflight
+  report_phase compatibility-preflight
   rollback() {
     trap - ERR
     log_deploy deployment.rollback_requested
@@ -191,8 +206,6 @@ main() {
     fi
   fi
 
-  echo "== pulling images"
-
   set_env VOICEROOM_API_IMAGE "$api_image"
   set_env VOICEROOM_WORKER_IMAGE "$worker_image"
   set_env VOICEROOM_WEB_IMAGE "$web_image"
@@ -208,11 +221,13 @@ main() {
     python3 scripts/logging/archive-current.py "$PWD"
     check_logging_activation_idle
   fi
+  report_phase checkout-and-configure
 
   echo "== rolling out"
   rollout_started=true
   docker compose up -d --remove-orphans --wait --wait-timeout 300
   trap - ERR
+  report_phase compose-rollout-and-health
   log_deploy deployment.completed
 
   echo "== cleaning up"
@@ -264,6 +279,7 @@ main() {
   # --all would discard them (and unrelated stacks' images) host-wide.
   docker image prune -f --filter 'until=72h' > /dev/null || true
   docker builder prune -af --filter 'until=72h' > /dev/null || true
+  report_phase cleanup
 
   docker compose ps --format '{{.Service}}\t{{.Status}}'
   echo "deployed $commit"
