@@ -58,6 +58,7 @@ apps/
   api/        Fastify API, WebSocket realtime, воркеры доставки и медиа, auth-gate LiveKit
   web/        клиент на Vue 3 (статическая сборка Vite), открывается на /app
   site/       публичный сайт на Astro: главная и страницы для поисковиков
+  docs/       публичная справка для пользователей и владельцев сайтов
   admin/      админка на React, отдельный сайт на admin.<домен>
 packages/
   shared/     общие контракты HTTP и realtime для API и веба
@@ -97,6 +98,7 @@ Production-стек — это `docker-compose.yml`: PostgreSQL, API, ворке
 
 ## Документация
 
+- [Публичная справка VoiceRoom](https://docs.voiceroom.ru) содержит инструкции по звонкам, комнатам, звуку и экрану, приложению для компьютера и виджету.
 - Архитектура и разработка: [архитектура](./docs/ARCHITECTURE.md), [Git Flow](./docs/GIT_FLOW.md), [производительность](./docs/PERFORMANCE.md), [логирование](./docs/LOGGING.md).
 - Эксплуатация и безопасность: [self-hosting](./docs/SELF_HOSTING.md), [безопасность](./docs/SECURITY.md), [LiveKit gate](./docs/LIVEKIT_GATE.md), [юридические вопросы](./docs/LEGAL.md).
 - Медиа: [запуск и диагностика трансляций](./docs/SCREEN_STARTUP.md).
