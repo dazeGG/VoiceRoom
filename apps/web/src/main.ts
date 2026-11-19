@@ -2,6 +2,8 @@ import { createPinia, setActivePinia } from 'pinia';
 import { createApp } from 'vue';
 
 import App from './App.vue';
+import { installCallPorts } from './features/room/client/ports';
+import { createWebCallPorts } from './features/room/adapters/web-call-ports';
 import { createAppRouter, loadFailedPagesInFull } from './router';
 import { startWebVitals } from './platform/web-vitals';
 import { whenIdle } from './shared/utils/idle';
@@ -12,6 +14,7 @@ import './styles/main.scss';
 const pinia = createPinia();
 // Imperative code (the room client, services) reads stores outside components.
 setActivePinia(pinia);
+installCallPorts(createWebCallPorts(pinia));
 installBodyClasses();
 
 const router = createAppRouter();
