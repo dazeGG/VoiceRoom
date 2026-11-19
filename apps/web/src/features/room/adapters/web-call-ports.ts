@@ -10,10 +10,10 @@ import { APP_HOME } from '@/shared/app-home';
 import { displayNameOf } from '@/shared/utils/display-name';
 import { createLogger, errorContext } from '@/shared/log';
 import { usePageStore } from '@/stores/page.store';
-import { useRoomSettingsStore } from '../room-settings.store';
-import { getRoomShell } from '../client/core/embed';
-import { state } from '../client/core/room-runtime.store';
 import type { CallIdentity, CallPorts, EntryIdentity } from '../client/ports';
+
+// main.ts installs this adapter, so everything imported here lands in the first
+// chunk of every page. Room modules load lazily, where only a room needs them.
 
 const log = createLogger('room');
 
@@ -44,33 +44,34 @@ export function createWebCallPorts(pinia: Pinia): CallPorts {
   return {
     identity: {
       current: () => identityOf(useSessionStore(pinia).user),
-      verifyEntry({ embedded }) {
+      knownEntry({ embedded }) {
         const session = useSessionStore(pinia);
-        if (embedded && session.user) {
-          const context = session.context();
-          return { identity: identityOf(session.user), isCurrent: () => session.isCurrent(context) };
-        }
-        return session.verifySession().then((result): EntryIdentity => {
-          if (!result.applied) return { identity: identityOf(null), isCurrent: () => false };
-          return { identity: identityOf(result.user), isCurrent: () => session.isCurrent(result.context) };
-        });
+        if (!embedded || !session.user) return null;
+        const context = session.context();
+        return { identity: identityOf(session.user), isCurrent: () => session.isCurrent(context) };
+      },
+      async verifyEntry(): Promise<EntryIdentity> {
+        const session = useSessionStore(pinia);
+        const result = await session.verifySession();
+        if (!result.applied) return { identity: identityOf(null), isCurrent: () => false };
+        return { identity: identityOf(result.user), isCurrent: () => session.isCurrent(result.context) };
       }
     },
     host: {
-      entered({ roomId, isStatic, entry }) {
-        const current = () => entry.isCurrent() && state.roomId === roomId;
+      entered({ roomId, isStatic, isCurrent, roomsChanged }) {
         // Keep bookmark and owner lookup independent and nonblocking, in that order.
-        if (current() && roomId && isStatic) {
+        if (isCurrent() && roomId && isStatic) {
           void addRoomByCode(roomId)
             .then(() => {
-              if (current()) getRoomShell().roomsChanged(roomId);
+              if (isCurrent()) roomsChanged();
             })
             .catch((error: unknown) => log.debug('room auto-save skipped', errorContext(error)));
         }
-        if (!current()) return;
-        void fetchOwnedRooms()
-          .then((owned) => {
-            if (!current()) return;
+        if (!isCurrent()) return;
+        // Settings/delete UI is owner-only; nothing in a join waits for the answer.
+        void Promise.all([fetchOwnedRooms(), import('../room-settings.store')])
+          .then(([owned, { useRoomSettingsStore }]) => {
+            if (!isCurrent()) return;
             useRoomSettingsStore(pinia).isOwner = owned.some(
               (room) => room.roomId === roomId && room.relationship === 'owner'
             );

@@ -54,6 +54,7 @@ function fakePorts(identity: CallIdentity = { kind: 'guest', profile: null, feed
   const ports: CallPorts = {
     identity: {
       current: () => identity,
+      knownEntry: () => null,
       verifyEntry: vi.fn(async () => ({ identity, isCurrent: () => true }))
     },
     host: { entered: hostEntered },
@@ -390,3 +391,26 @@ test.each([
     expect(fixture.feedbackEvents).toEqual([]);
   }
 );
+
+// main.ts installs the web ports on every page, so the adapter must not pull the
+// lazily loaded room code into the first chunk.
+test('creating the web call ports loads no room module', async () => {
+  const loaded: string[] = [];
+  const track = (name: string) => async (original: () => Promise<object>) => {
+    loaded.push(name);
+    return original();
+  };
+  vi.doMock('@/features/room/client/core/room-runtime.store', track('room runtime'));
+  vi.doMock('@/features/room/client/core/embed', track('room shell'));
+  vi.doMock('@/features/room/room-settings.store', track('room settings'));
+  onTestFinished(() => {
+    vi.doUnmock('@/features/room/client/core/room-runtime.store');
+    vi.doUnmock('@/features/room/client/core/embed');
+    vi.doUnmock('@/features/room/room-settings.store');
+  });
+
+  const { createWebCallPorts } = await import('@/features/room/adapters/web-call-ports');
+  createWebCallPorts(createPinia());
+
+  expect(loaded).toEqual([]);
+});

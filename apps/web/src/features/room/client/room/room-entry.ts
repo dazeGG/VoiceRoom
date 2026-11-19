@@ -3,7 +3,7 @@
 
 import { t } from '@/shared/i18n';
 import { createLogger, errorContext } from '@/shared/log';
-import { isRoomEmbedded } from '../core/embed';
+import { getRoomShell, isRoomEmbedded } from '../core/embed';
 import { getCallPorts } from '../ports';
 import { state } from '../core/room-runtime.store';
 import { persistName, requestGuestNameForRoom } from '../ui/names';
@@ -23,14 +23,20 @@ export async function resolveRoomEntryName(): Promise<RoomEntryGateResult> {
   // checks it on the server either way.
   try {
     const roomId = state.roomId;
-    const verification = getCallPorts().identity.verifyEntry({ embedded: isRoomEmbedded() });
-    const entry = verification instanceof Promise ? await verification : verification;
+    const { identity } = getCallPorts();
+    // A known account enters without an await, so its effects stay synchronous.
+    const entry = identity.knownEntry({ embedded: isRoomEmbedded() }) ?? (await identity.verifyEntry());
     if (state.roomId !== roomId) return 'failure';
     current = () => entry.isCurrent() && state.roomId === roomId;
     if (!current()) return 'failure';
     if (entry.identity.kind === 'account') {
       persistName(entry.identity.profile?.displayName || '');
-      getCallPorts().host.entered({ roomId, isStatic: state.roomIsStatic, entry });
+      getCallPorts().host.entered({
+        roomId,
+        isStatic: state.roomIsStatic,
+        isCurrent: current,
+        roomsChanged: () => getRoomShell().roomsChanged(roomId)
+      });
       return 'authenticated';
     }
   } catch (error) {

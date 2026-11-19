@@ -22,12 +22,22 @@ export type EntryIdentity = Readonly<{
 
 export interface IdentityPort {
   current(): CallIdentity;
-  /** Embedded cached accounts retain their synchronous entry shortcut. */
-  verifyEntry(input: { embedded: boolean }): EntryIdentity | Promise<EntryIdentity>;
+  /** The account an embedded room already knows, entered without a round trip; null otherwise. */
+  knownEntry(input: { embedded: boolean }): EntryIdentity | null;
+  /** A fresh session check, for a standalone room or an embedded one without a known account. */
+  verifyEntry(): Promise<EntryIdentity>;
 }
 
 export interface HostHooks {
-  entered(input: { roomId: string; isStatic: boolean; entry: EntryIdentity }): void;
+  /** Fire-and-forget after an account enters; never delays entry. */
+  entered(input: {
+    roomId: string;
+    isStatic: boolean;
+    /** The entry's session and room are still the ones this call is entering. */
+    isCurrent: () => boolean;
+    /** Tell the shell the account's room list changed. */
+    roomsChanged: () => void;
+  }): void;
 }
 
 export interface FeedbackPort {

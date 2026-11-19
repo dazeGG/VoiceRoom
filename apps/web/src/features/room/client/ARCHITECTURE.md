@@ -37,18 +37,20 @@ The binding survives room unmounts because lobby settings and leave actions use
 it between calls. Tests install a production adapter or explicit fake and release
 the binding on teardown.
 
-Identity exposes call profiles rather than account DTOs. Entry verification keeps
-the synchronous embedded account shortcut and standalone fresh session check. It
-returns an entry directly for the cached shortcut and a Promise for fresh
-verification, so the engine does not insert an await into the shortcut. Its returned
-`isCurrent()` retains the session guard, while the engine retains its room-id
-guard. Guest feedback IDs remain distinct from realtime/profile identity and are
+Identity exposes call profiles rather than account DTOs. `knownEntry` returns the
+account an embedded room already knows (or null) synchronously, so that shortcut
+gains no await; otherwise the engine awaits `verifyEntry`, the fresh session check.
+The returned `isCurrent()` retains the session guard, while the engine retains its
+room-id guard. Guest feedback IDs remain distinct from realtime/profile identity and are
 read only where reports previously read the browser ID.
 
 The nonblocking `host.entered` hook owns permanent-room bookmarks and independent
-ownership lookup. The adapter also owns the successful bookmark's `roomsChanged`
-emission: it still happens after the bookmark completes and only while the same
-entry and room are current. Ownership updates use the same guards; failures keep
+ownership lookup. The engine hands it `isCurrent()` (session and room guard) and
+`roomsChanged()`, so the adapter never reads runtime state or the room shell: it is
+installed by `main.ts`, and whatever it imports loads on every page. The successful
+bookmark's `roomsChanged` still happens after the bookmark completes and only while
+the same entry and room are current. The room settings store is imported lazily
+inside the hook for the same reason. Ownership updates use the same guards; failures keep
 the existing debug/warn logging and never delay entry.
 
 Feedback maps directly to the existing store's drop/finished/offer actions; timing,
