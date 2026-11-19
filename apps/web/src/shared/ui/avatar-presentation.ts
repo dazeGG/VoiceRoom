@@ -1,6 +1,6 @@
 import { t } from '@/shared/i18n';
-import { getAvatarColor } from '@/visual/tokens';
-import { avatarInitial } from '@/shared/utils/avatar-initial';
+import { getAvatarColor } from '@voice-room/ui/avatar-colors';
+import { avatarInitial } from '@voice-room/ui/avatar-initial';
 
 export function getAvatarPresentation(participant: {
   avatarColorKey: string;

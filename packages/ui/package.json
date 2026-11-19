@@ -1,0 +1,36 @@
+{
+  "name": "@voice-room/ui",
+  "version": "2.14.3",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./components": "./src/components.ts",
+    "./avatar-colors": "./src/avatar-colors.ts",
+    "./avatar-initial": "./src/avatar-initial.ts",
+    "./icon-defaults": "./src/icon-defaults.ts",
+    "./i18n": "./src/i18n.ts",
+    "./log": "./src/log.ts",
+    "./storage": "./src/storage.ts",
+    "./tile-grid": "./src/tile-grid.ts",
+    "./fonts/*": "./src/assets/fonts/*",
+    "./styles/components/*": "./src/styles/components/_*.scss",
+    "./styles/room/*": "./src/styles/room/_*.scss",
+    "./styles/*": "./src/styles/_*.scss"
+  },
+  "scripts": {
+    "check": "vue-tsc --noEmit"
+  },
+  "dependencies": {
+    "@lucide/vue": "^1.61.0",
+    "@voice-room/shared": "file:../shared",
+    "reka-ui": "^2.11.0"
+  },
+  "peerDependencies": {
+    "pinia": "^4.1.0",
+    "vue": "^3.5.44"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0",
+    "vue-tsc": "^3.3.13"
+  }
+}

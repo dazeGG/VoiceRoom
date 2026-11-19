@@ -28,7 +28,7 @@
 //   body[data-lobby-embedded='true']      -> body.lobby--embedded
 //   body[data-screen-view='true']         -> body.screen-view--open
 //   html[data-platform-class='mobile']    -> html.platform--mobile
-@use '../mixins' as *;
+@use 'pkg:@voice-room/ui/styles/mixins' as *;
 
 body.screen--room .topbar__brand {
   display: none;

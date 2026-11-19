@@ -2,7 +2,7 @@
 import { t } from '@/shared/i18n';
 import { ChevronDown, ChevronLeft, ChevronRight } from '@lucide/vue';
 import { computed, ref, watch } from 'vue';
-import { fitTiles } from '@/shared/ui/tile-grid';
+import { fitTiles } from '@voice-room/ui/tile-grid';
 import { state as roomState } from '../client/core/room-runtime.store';
 import { getScreenParticipants } from '../client/ui/screen-view';
 import { useParticipantsUiStore } from '../participants-ui.store';

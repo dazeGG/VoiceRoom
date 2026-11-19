@@ -103,7 +103,7 @@
 //   .settings-notification-dependent[data-disabled='true'] -> .settings__notification-dependent--disabled
 //   .settings-overlay-games[data-disabled='true']   -> .settings__overlay-games--disabled
 //     (these wrappers are plain divs/sections with no aria state of their own)
-@use '../mixins' as *;
+@use 'pkg:@voice-room/ui/styles/mixins' as *;
 
 .settings__overlay {
   @include modal-overlay(60, 32px);

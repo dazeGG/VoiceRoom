@@ -1,17 +1,19 @@
+import { formatNumber, getLocale, setLocaleReader, setMessageReader, t as translate } from '@voice-room/ui/i18n';
 import type { AppLocale } from '@voice-room/shared/localization';
-import { localeTag } from '@voice-room/shared/localization';
 import { english, french, russian, type MessageKey } from './catalog.ts';
 
-// Node callers use Russian until the browser adapter supplies its reactive reader.
-let readLocale: () => AppLocale = () => 'ru';
+const catalogs: Readonly<Record<AppLocale, Readonly<Record<string, string | undefined>>>> = {
+  en: english,
+  fr: french,
+  ru: russian
+};
 
-export function setLocaleReader(reader: () => AppLocale): void {
-  readLocale = reader;
-}
+setMessageReader((locale, key) => {
+  const catalog = catalogs[locale];
+  return Object.hasOwn(catalog, key) ? catalog[key] : undefined;
+});
 
-export function getLocale(): AppLocale {
-  return readLocale();
-}
+export { formatNumber, getLocale, setLocaleReader };
 
 type Placeholder<Key extends string> = Key extends `${string}{${infer Name}}${infer Rest}`
   ? Name | Placeholder<Rest>
@@ -24,32 +26,5 @@ export function t<Key extends MessageKey>(
     ? [parameters?: Readonly<Record<string, unknown>>]
     : [parameters: Readonly<Record<Placeholder<Key>, unknown>>]
 ): string {
-  const locale = getLocale();
-  let translated: string | undefined;
-  switch (locale) {
-    case 'en':
-      translated = english[key];
-      break;
-    case 'fr':
-      translated = french[key];
-      break;
-    default:
-      translated = russian[key];
-  }
-  const text = translated ?? key;
-  const values = new Map(Object.entries(parameters ?? {}));
-  // Split only the app template once: inserted user text is never another placeholder.
-  return text
-    .split(/(\{[a-zA-Z0-9_]+\})/g)
-    .map((part) => {
-      const name = part.slice(1, -1);
-      if (!part.startsWith('{') || !part.endsWith('}') || !values.has(name)) return part;
-      const value = values.get(name);
-      return typeof value === 'number' ? formatNumber(value) : String(value);
-    })
-    .join('');
-}
-
-export function formatNumber(value: number): string {
-  return new Intl.NumberFormat(localeTag(getLocale())).format(value);
+  return translate(key, parameters);
 }

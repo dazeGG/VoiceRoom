@@ -1,5 +1,5 @@
 import { t } from '@/shared/i18n';
-import type { SelectOption } from '@/shared/ui/Select/types';
+import type { SelectOption } from '@voice-room/ui/components';
 
 // Chrome on Windows lists two aliases next to the real devices: "default"
 // (the system default) and "communications" (the Windows communications

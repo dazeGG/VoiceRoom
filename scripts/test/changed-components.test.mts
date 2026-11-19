@@ -26,12 +26,6 @@ test('routes application, public site and documentation changes independently', 
 test('routes shared dependencies and validation files to their consumers', () => {
   assert.deepEqual(changedComponents(['packages/shared/src/app-home.ts']), appAndSite);
   assert.deepEqual(changedComponents(['packages/shared/package.json']), appAndSite);
-  assert.deepEqual(changedComponents(['apps/web/src/styles/_tokens.scss']), appAndSite);
-  assert.deepEqual(changedComponents(['apps/web/src/assets/fonts/onest-latin.woff2']), appAndSite);
-  assert.deepEqual(changedComponents(['apps/web/src/styles/room/_room-dock.scss']), appAndSite);
-  assert.deepEqual(changedComponents(['apps/web/src/styles/_mixins.scss']), appAndSite);
-  assert.deepEqual(changedComponents(['apps/web/src/shared/ui/tile-grid.ts']), appAndSite);
-  assert.deepEqual(changedComponents(['apps/web/src/shared/utils/avatar-initial.ts']), appAndSite);
   assert.deepEqual(changedComponents(['scripts/check-type-coverage.mts']), appAndSite);
   assert.deepEqual(changedComponents(['scripts/test/web-text-contrast.test.mts']), appAndSite);
   assert.deepEqual(changedComponents(['.github/workflows/ci.yml']), everyLane);
@@ -41,6 +35,12 @@ test('routes shared dependencies and validation files to their consumers', () =>
   assert.deepEqual(changedComponents(['scripts/test/static-publication.sh']), everyLane);
   assert.deepEqual(changedComponents(['.github/workflows/build-static.yml']), { ...site, docs: true });
   assert.deepEqual(changedComponents(['.github/workflows/release.yml', 'Dockerfile']), app);
+});
+
+test('routes UI package changes to the web and site checks', () => {
+  assert.deepEqual(changedComponents(['packages/ui/package.json']), appAndSite);
+  assert.deepEqual(changedComponents(['packages/ui/src/styles/_tokens.scss']), appAndSite);
+  assert.deepEqual(changedComponents(['packages/ui/src/tile-grid.ts']), appAndSite);
 });
 
 test('manifest and lock version bumps stay in their release lane', () => {

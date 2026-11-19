@@ -20,11 +20,11 @@ import { widgetSnippet } from '@/features/widget/snippet';
 import WidgetJoinControls from '@/features/widget/WidgetJoinControls.vue';
 import WidgetCallLayout from '@/features/widget/WidgetCallLayout.vue';
 import { createWidgetFrameExpansion } from '@/features/widget/frame-expansion';
-import { Button } from '@/shared/ui/Button';
+import { Button } from '@voice-room/ui/components';
 import { SegmentControl } from '@/shared/ui/SegmentControl';
 import type { SegmentOption } from '@/shared/ui/SegmentControl/types';
 import { Switch } from '@/shared/ui/Switch';
-import { Slider } from '@/shared/ui/Slider';
+import { Slider } from '@voice-room/ui/components';
 import { copyText } from '@/shared/utils/clipboard';
 
 const config = reactive({ ...defaultWidgetConfig });

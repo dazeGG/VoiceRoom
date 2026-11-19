@@ -20,7 +20,7 @@
 //   .crop-error                      -> .avatar-crop__error
 //   .crop-actions                    -> .avatar-crop__actions
 //   .crop-cancel / .crop-save        -> .avatar-crop__cancel / .avatar-crop__save
-@use '../mixins' as *;
+@use 'pkg:@voice-room/ui/styles/mixins' as *;
 
 .avatar-crop__overlay {
   position: fixed;

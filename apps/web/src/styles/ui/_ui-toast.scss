@@ -16,7 +16,7 @@
 // State -> modifier class
 //   Svelte: variant attribute error/success/warning/info -> .ui-toast--error / --success / --warning / --info
 //   Svelte: body screen room/checking                    -> body.screen--room / body.screen--checking
-@use '../mixins' as *;
+@use 'pkg:@voice-room/ui/styles/mixins' as *;
 
 .ui-toaststack {
   position: fixed;

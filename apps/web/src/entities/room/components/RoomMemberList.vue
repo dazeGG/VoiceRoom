@@ -8,7 +8,7 @@ import { useProfileCardUiStore } from '@/entities/profile-card/profile-card-ui.s
 import { useSessionStore } from '@/features/auth/session.store';
 import type { ProfileCardPerson } from '@/shared/components/profile-card';
 import { AccountBadge, Popover, PopoverDivider, PopoverMenuItem, PopoverSubmenu } from '@/shared/ui';
-import Avatar from '@/shared/ui/Avatar/Avatar.vue';
+import { Avatar } from '@voice-room/ui/components';
 import { iconMd } from '@/shared/ui/icons';
 import { displayNameOf } from '@/shared/utils/display-name';
 import { BAN_DURATIONS, banRoomMember, kickRoomMember, type ModerationNotice } from '../room-moderation';

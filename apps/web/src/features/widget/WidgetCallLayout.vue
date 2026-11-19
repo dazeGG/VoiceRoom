@@ -16,8 +16,8 @@ import {
 } from '@lucide/vue';
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import ParticipantTileFace from '@/features/room/components/ParticipantTileFace.vue';
-import { fitWidgetTiles } from '@/shared/ui/tile-grid';
-import { avatarInitial } from '@/shared/utils/avatar-initial';
+import { fitWidgetTiles } from '@voice-room/ui/tile-grid';
+import { avatarInitial } from '@voice-room/ui/avatar-initial';
 import { copyText } from '@/shared/utils/clipboard';
 
 type Device = 'input' | 'output' | 'camera';

@@ -3,7 +3,7 @@ import { defineStore } from 'pinia';
 import { computed, ref, shallowRef } from 'vue';
 import { state } from './client/core/room-runtime.store';
 import { getAvatarPresentation } from '@/shared/ui/avatar-presentation';
-import type { AvatarStackItem } from '@/shared/ui/AvatarStack/types';
+import type { AvatarStackItem } from '@voice-room/ui/components';
 import { getScreenProfileLabels } from './client/media/profiles';
 import { getAllParticipants, getParticipantById } from './client/room/participants';
 import type { Participant } from './client/core/types';

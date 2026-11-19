@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { resolvePopoverPlacement } from '@/shared/ui/Popover/popover-placement';
+import { resolvePopoverPlacement } from '@voice-room/ui/components';
 
 const VIEWPORT = 800;
 const rect = (top: number, height: number): DOMRect => ({

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { t } from '@/shared/i18n';
+import { t } from '../../i18n';
 import { SliderRoot, SliderThumb, SliderTrack } from 'reka-ui';
 import { computed, ref } from 'vue';
 import type { SliderProps } from './types';

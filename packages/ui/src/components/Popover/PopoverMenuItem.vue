@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Check, ChevronRight } from '@lucide/vue';
-import { iconSm } from '@/shared/ui/icons';
+import { iconSm } from '../../icon-defaults';
 import type { PopoverMenuItemProps } from './types';
 
 withDefaults(defineProps<PopoverMenuItemProps>(), {

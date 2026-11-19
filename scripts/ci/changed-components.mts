@@ -87,11 +87,8 @@ export function changedComponents(paths: string[], versionChanges: VersionChange
     } else if (/^\.github\/workflows\/(?:build|deploy|release)-static\.yml$/.test(path)) {
       lanes.site = lanes.docs = true;
     } else if (
+      // Shared packages, including UI and its Sass assets, feed both build lanes.
       path.startsWith('packages/') ||
-      /^apps\/web\/src\/(?:styles\/(?:_tokens|_typography)\.scss$|assets\/fonts\/)/.test(path) ||
-      /^apps\/web\/src\/styles\/(?:_mixins|room\/_(?:participant|room-dock|tile-grid))\.scss$/.test(path) ||
-      path === 'apps/web/src/shared/ui/tile-grid.ts' ||
-      path === 'apps/web/src/shared/utils/avatar-initial.ts' ||
       /^(?:package(?:-lock)?\.json|\.nvmrc|\.npmrc|\.prettier.*|eslint\..*|eslint-suppressions\.json)$/.test(path) ||
       /^scripts\/(?:check-(?:type-coverage|test-source-reads)|test\/web-text-contrast\.test)\.mts$/.test(path) ||
       path === 'config/test-source-reads.json'

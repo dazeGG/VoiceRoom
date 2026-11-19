@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { t } from '@/shared/i18n';
+import { t } from '../../i18n';
 import { computed } from 'vue';
 
 import Avatar from '../Avatar/Avatar.vue';

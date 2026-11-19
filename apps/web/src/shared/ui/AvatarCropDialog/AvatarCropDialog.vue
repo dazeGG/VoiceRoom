@@ -7,8 +7,7 @@ import { deriveAvatarAccent, dominantAvatarColor } from '@voice-room/shared/avat
 import { DialogContent, DialogPortal, DialogRoot, DialogTitle } from 'reka-ui';
 import { ref, shallowRef, watch } from 'vue';
 import EmojiText from '@/shared/chat/EmojiText.vue';
-import { isToastPress } from '../Dialog/toast-press';
-import Avatar from '../Avatar/Avatar.vue';
+import { Avatar, isToastPress } from '@voice-room/ui/components';
 import type { AvatarCropDialogProps } from './types';
 import { context2d, type Canvas2D } from './canvas-2d';
 
