@@ -7,8 +7,9 @@ import { parseServerFrame } from '@voice-room/shared/realtime';
 import { Pool } from 'pg';
 import { createRoomStore } from '../src/app/room-store.ts';
 import { createConnectionRegistry } from '../src/realtime/registry.ts';
-import { createRoomPresence } from '../src/realtime/room-presence.ts';
+import { createRoomPresence, type PresenceRoom } from '../src/realtime/room-presence.ts';
 import { createRoomRealtimeRuntime } from '../src/realtime/room-runtime.ts';
+import { createVoiceStays } from '../src/realtime/voice-stays.ts';
 import { createWsHandler } from '../src/realtime/ws-handler.ts';
 import { dbRoom, fake, recordingLogger } from './fakes/index.ts';
 import { runtimeDeps } from './fakes/room-runtime.ts';
@@ -25,9 +26,9 @@ class MeetSocket extends EventEmitter {
     this.frames.push(result.frame);
   }
 
-  close(code = 1000) {
+  close(code = 1000, reason = '') {
     this.readyState = 3;
-    this.emit('close', code, '');
+    this.emit('close', code, reason);
   }
 
   command(frame: ClientCommand) {
@@ -49,17 +50,21 @@ test('Meet shares roster capacity and media grants while refusing persistent cha
     getFriendIds: async () => [],
     logger
   });
-  const presence = createRoomPresence({
-    sockets: registry,
-    runtime: () => runtime,
+  const stays = createVoiceStays({
+    rooms: (): Iterable<PresenceRoom> => presence.rooms.values(),
     logger: () => logger,
-    roster: { waitMs: 10, pollMs: 1 },
-    occupancyRetry: { baseMs: 1, maxMs: 2 },
     sessions: () => ({
       async recordSessions(sessions) {
         recordedRoomIds.push(...sessions.map((session) => session.roomId));
       }
-    }),
+    })
+  });
+  const presence = createRoomPresence({
+    sockets: registry,
+    onPeerLeft: stays.recordPeerLeft,
+    logger: () => logger,
+    roster: { waitMs: 10, pollMs: 1 },
+    occupancyRetry: { baseMs: 1, maxMs: 2 },
     store: () => ({
       getRoom,
       markRoomActive: async () => {},
@@ -167,6 +172,22 @@ test('Meet shares roster capacity and media grants while refusing persistent cha
   const update = (await waitForWsType(second.frames, 'room.peer.updated')).payload.peer;
   assert.equal(update.id, alice.peerId);
   assert.equal(update.screen, true);
+  second.command({
+    type: 'room.voice.report',
+    payload: {
+      ...bob,
+      rttMs: 40,
+      jitterBufferMs: 30,
+      transport: 'udp',
+      uplink: { packets: 150, lost: 0 },
+      heard: [{ peerId: alice.peerId, packets: 150, lost: 0, concealedSamples: 0, gaps: 0 }]
+    }
+  });
+  assert.equal((await waitForWsType(second.frames, 'room.voice.quality')).payload.level, 'good');
+  for (const peer of presence.room(meet.id).peers.values()) {
+    assert.deepEqual(peer.voice?.minutes, []);
+    assert.deepEqual(peer.voice?.events, []);
+  }
   second.command({ id: 'screen-full', type: 'room.media.request', payload: { ...bob, kind: 'screen' } });
   assert.deepEqual((await waitForWsType(second.frames, 'room.media.grant', ({ id }) => id === 'screen-full')).payload, {
     roomId: meet.id,
@@ -184,7 +205,9 @@ test('Meet shares roster capacity and media grants while refusing persistent cha
     first.command({ id: roomId, type: 'room.join', payload: { ...alice, roomId } });
     assert.equal((await waitForWsType(first.frames, 'error', ({ id }) => id === roomId)).error.code, 'room_not_found');
   }
-  await presence.recordOpenSessions();
+  first.close(1000, 'guest-controlled private contents');
+  assert.doesNotMatch(JSON.stringify(logger.records), /guest-controlled private contents/);
+  await stays.recordOpenSessions();
   assert.deepEqual(recordedRoomIds, []);
 });
 

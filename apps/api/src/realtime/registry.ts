@@ -113,7 +113,7 @@ function createConnectionRegistry({
   keepaliveMs: number;
   onPresenceChange?: ((friendId: string, userId: string, online: boolean) => void) | null;
   onConnectionClose?: ((connection: WsConnection) => void) | null;
-  getFriendIds: (userId: string) => Promise<string[]>;
+  getFriendIds?: (userId: string) => Promise<string[]>;
   logger?: Pick<Logger, 'error'>;
 }) {
   const userConnections = new Map<string, Set<WsConnection>>();
@@ -207,7 +207,7 @@ function createConnectionRegistry({
   }
 
   async function notifyFriendsPresence(userId: string, online: boolean): Promise<void> {
-    if (!onPresenceChange || !userId) return;
+    if (!onPresenceChange || !getFriendIds || !userId) return;
     let friendIds: string[];
     try {
       friendIds = await getFriendIds(userId);

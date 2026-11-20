@@ -4,16 +4,26 @@
 
 import { publicLobbyRoom, publicPeer, type StoredRoom } from '../../src/domains/rooms/room-views.ts';
 import { publicChatMessage } from '../../src/domains/messaging/room-chat-views.ts';
+import { createFullRoomRealtime } from '../../src/app/full-room-realtime.ts';
+import { createLogger } from '../../src/lib/logger.ts';
 import type { ConnectionRegistry } from '../../src/realtime/registry.ts';
-import type { RoomRuntimeDeps, RuntimeRoomStore } from '../../src/realtime/room-runtime.ts';
+import {
+  createRoomRealtimeRuntime,
+  type RoomRuntimeDeps,
+  type RuntimeRoomStore
+} from '../../src/realtime/room-runtime.ts';
 import { fake } from './index.ts';
 
-export type RuntimeDepsOverrides = Omit<Partial<RoomRuntimeDeps>, 'wsRegistry'> & {
+export type RuntimeDepsOverrides = Omit<Partial<TestRuntimeDeps>, 'wsRegistry' | 'getRoomStore'> & {
   store?: Partial<RuntimeRoomStore>;
   wsRegistry?: Partial<ConnectionRegistry>;
 };
 
-export function runtimeDeps({ store = {}, wsRegistry = {}, ...overrides }: RuntimeDepsOverrides = {}): RoomRuntimeDeps {
+type TestRuntimeDeps = Omit<RoomRuntimeDeps, 'getRoomStore'> & {
+  getRoomStore(): RuntimeRoomStore;
+};
+
+export function runtimeDeps({ store = {}, wsRegistry = {}, ...overrides }: RuntimeDepsOverrides = {}): TestRuntimeDeps {
   const roomStore = fake<RuntimeRoomStore>({
     async getRoom() {
       return null;
@@ -26,7 +36,7 @@ export function runtimeDeps({ store = {}, wsRegistry = {}, ...overrides }: Runti
     },
     ...store
   });
-  return {
+  const deps: TestRuntimeDeps = {
     presenceRooms: new Map(),
     wsRegistry: fake<ConnectionRegistry>({
       detachVoicePeer() {},
@@ -48,7 +58,8 @@ export function runtimeDeps({ store = {}, wsRegistry = {}, ...overrides }: Runti
     getRoom: async () => null,
     publicPeer,
     publicLobbyRoom: (room: StoredRoom) => publicLobbyRoom(room, 0),
-    publicChatMessage,
+    readHistory: async (room) =>
+      (await deps.getRoomStore().listMessages(room.id, { limit: 100 })).map(publicChatMessage),
     publishRoomEvent() {},
     closePeer() {},
     avatarColorForPeerId: () => 'blue',
@@ -59,4 +70,15 @@ export function runtimeDeps({ store = {}, wsRegistry = {}, ...overrides }: Runti
     credentialBoundary: null,
     ...overrides
   };
+  return deps;
+}
+
+export function createFullTestRuntime(deps: ReturnType<typeof runtimeDeps>) {
+  const product = createFullRoomRealtime({
+    ...deps,
+    limits: deps,
+    now: deps.now ?? Date.now,
+    logger: deps.logger ?? createLogger({ name: 'api' })
+  });
+  return { ...createRoomRealtimeRuntime({ ...deps, ...product.callEffects }), ...product.handlers };
 }

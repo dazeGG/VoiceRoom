@@ -27,7 +27,6 @@ import {
 } from '../../apps/api/src/domains/admission/livekit-auth-gate.service.ts';
 import type { GateRoomStore } from '../../apps/api/src/domains/admission/credential-boundary.service.ts';
 import { normalizeGatePrincipal } from '../../apps/api/src/domains/admission/gate-credential.repository.ts';
-import { publicChatMessage } from '../../apps/api/src/domains/messaging/room-chat-views.ts';
 import { publicLobbyRoom, publicPeer } from '../../apps/api/src/domains/rooms/room-views.ts';
 import { createRoomRealtimeRuntime, type RuntimeRoomStore } from '../../apps/api/src/realtime/room-runtime.ts';
 import { createConnectionRegistry } from '../../apps/api/src/realtime/registry.ts';
@@ -1079,7 +1078,6 @@ test('G08 realtime join retains and revokes the exact gate principal', async () 
     getRoom: async () => room,
     publicPeer,
     publicLobbyRoom: (value) => publicLobbyRoom(value, 0),
-    publicChatMessage,
     publishRoomEvent() {},
     closePeer() {},
     avatarColorForPeerId: () => 'blue',

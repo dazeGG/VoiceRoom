@@ -7,6 +7,7 @@
 
 import { VOICE_HISTORY_KEEP_DAYS } from '@voice-room/shared/contracts/admin';
 import type { MaintenanceTask } from '../platform/maintenance.ts';
+import { roomPruneTask } from './room-prune.ts';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 /** Moscow keeps UTC+3 all year: its day is the UTC day three hours on. */
@@ -38,12 +39,7 @@ export function apiMaintenanceTasks(deps: ApiMaintenanceDeps): MaintenanceTask[]
   // The cutoff moves once a day, so the roll-up runs once a Moscow day (and at start).
   let rolledUpOn = '';
   return [
-    {
-      name: 'room_prune',
-      label: 'room-prune',
-      failureMessage: 'room prune timer failed',
-      run: () => deps.pruneRooms()
-    },
+    roomPruneTask(() => deps.pruneRooms()),
     {
       name: 'product_snapshot',
       label: 'product-snapshot',

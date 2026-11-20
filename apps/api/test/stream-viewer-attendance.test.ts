@@ -146,7 +146,7 @@ function createRuntime(room: TestRoom, broadcasts: unknown[], overrides: Runtime
     getRoom: overrides.getRoom || (async () => room),
     publicPeer,
     publicLobbyRoom: (value: StoredRoom) => publicLobbyRoom(value, 0),
-    publicChatMessage,
+    readHistory: async (room) => (await store.listMessages(room.id, { limit: 100 })).map(publicChatMessage),
     publishRoomEvent: (_roomId, envelope) => broadcasts.push(structuredClone(envelope)),
     closePeer: overrides.closePeer || (() => {}),
     avatarColorForPeerId: () => 'blue',

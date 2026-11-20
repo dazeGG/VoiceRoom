@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createConnectionRegistry } from '../src/realtime/registry.ts';
 import type { RosterPeer } from '../src/realtime/room-presence.ts';
 import { createRoomRealtimeRuntime } from '../src/realtime/room-runtime.ts';
-import { runtimeDeps } from './fakes/room-runtime.ts';
+import { createFullTestRuntime, runtimeDeps } from './fakes/room-runtime.ts';
 import { dbRoom } from './fakes/index.ts';
 import { buildServerEnvelope } from '@voice-room/shared/realtime';
 
@@ -145,7 +145,7 @@ test('account detach covers voice and two previews while preserving other rooms 
   const preview2 = add('A', 'preview2');
   const other = add('B', 'other');
   const connections = [h.connection, preview1, preview2, other];
-  const runtime = createRoomRealtimeRuntime(h.deps);
+  const runtime = createFullTestRuntime(h.deps);
   try {
     for (const connection of connections) await runtime.subscribePreview(connection, 'room');
     await runtime.subscribePreview(preview1, 'other-room');

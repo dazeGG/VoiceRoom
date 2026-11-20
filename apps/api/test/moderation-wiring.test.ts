@@ -12,8 +12,7 @@ import { runMigrations } from '../src/lib/migrate.ts';
 import { createTestDatabase } from './db-harness.ts';
 import { fake, dbRoom } from './fakes/index.ts';
 import { createConnectionRegistry } from '../src/realtime/registry.ts';
-import { createRoomRealtimeRuntime } from '../src/realtime/room-runtime.ts';
-import { runtimeDeps } from './fakes/room-runtime.ts';
+import { createFullTestRuntime, runtimeDeps } from './fakes/room-runtime.ts';
 
 const OWNER = '11111111-1111-4111-8111-111111111111';
 const ROOM = 'moderated';
@@ -96,7 +95,7 @@ test(
     const release = Promise.withResolvers<void>();
     let roomLookups = 0;
     t.after(() => release.resolve());
-    const runtime = createRoomRealtimeRuntime(
+    const runtime = createFullTestRuntime(
       runtimeDeps({
         wsRegistry: sockets,
         store: {
