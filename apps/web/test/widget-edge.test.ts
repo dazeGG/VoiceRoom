@@ -7,12 +7,12 @@ test(
   { skip: !dockerAvailable, timeout: 60_000 },
   async () => {
     const origin = await startCaddyEdge({
-      files: {
+      widgetFiles: {
         'embed/v1/index.html': '<!doctype html><html><body>guest</body></html>',
         'widget/v1/loader.js': '// loader',
         '_app/immutable/widget/current.js': '// current widget frame'
       },
-      archivedFiles: {
+      widgetArchiveFiles: {
         '_app/immutable/widget/older.js': '// older widget frame',
         '_app/immutable/legacy-loader-dependency.js': '// older public loader dependency'
       }
@@ -51,5 +51,45 @@ test(
     assert.equal(oldDependency.headers.get('access-control-allow-origin'), '*');
     assert.equal(oldDependency.headers.get('cross-origin-resource-policy'), 'cross-origin');
     assert.equal((await fetch(`${origin}/_app/immutable/widget/missing.js`)).status, 404);
+  }
+);
+
+test(
+  'web and widget release hashes serve their own worklet and WASM bytes',
+  {
+    skip: !dockerAvailable,
+    timeout: 60_000
+  },
+  async () => {
+    const webVersion = 'f0e1d2c3b4a5';
+    const widgetVersion = '0123456789ab';
+    const voiceFiles = {
+      'audio-gate.worklet.js': '// worklet',
+      'rnnoise/rnnoise.wasm': 'wasm'
+    };
+    const origin = await startCaddyEdge({
+      files: voiceFiles,
+      archivedFiles: Object.fromEntries(
+        Object.entries(voiceFiles).map(([file, bytes]) => [`_voice/${webVersion}/${file}`, `${bytes} web`])
+      ),
+      widgetArchiveFiles: Object.fromEntries(
+        Object.entries(voiceFiles).map(([file, bytes]) => [`_voice/${widgetVersion}/${file}`, `${bytes} widget`])
+      )
+    });
+    for (const [version, client] of [
+      [webVersion, 'web'],
+      [widgetVersion, 'widget']
+    ]) {
+      for (const [file, bytes] of Object.entries(voiceFiles)) {
+        const response = await fetch(`${origin}/${file}?v=${version}`);
+        assert.equal(response.status, 200, file);
+        assert.equal(await response.text(), `${bytes} ${client}`);
+        assert.match(
+          response.headers.get('content-type') ?? '',
+          file.endsWith('.wasm') ? /application\/wasm/ : /javascript/
+        );
+        assert.equal(response.headers.get('cache-control'), 'public, max-age=31536000, immutable');
+      }
+    }
   }
 );

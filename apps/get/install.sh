@@ -27,8 +27,8 @@ fail() { say "VoiceRoom: $*"; exit 1; }
 
 usage() {
   cat <<'EOF'
-voiceroom install [--version vX.Y.Z] [--provider duckdns|desec|own] [--domain NAME] [--replace-dns]
-voiceroom upgrade [vX.Y.Z] [--replace-dns]
+voiceroom install [--version meet/vX.Y.Z] [--provider duckdns|desec|own] [--domain NAME] [--replace-dns]
+voiceroom upgrade [meet/vX.Y.Z] [--replace-dns]
 voiceroom domain set [--provider duckdns|desec|own] [--domain NAME] [--replace-dns]
 voiceroom domain show
 voiceroom status
@@ -159,8 +159,16 @@ pull_images() {
 }
 
 version_valid() {
-  case $1 in ''|*[!v0-9.]*) return 1 ;; esac
-  printf '%s\n' "$1" | grep -Exq 'v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)'
+  case ${1#meet/} in ''|*[!v0-9.]*) return 1 ;; esac
+  printf '%s\n' "${1#meet/}" | grep -Exq 'v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)'
+}
+
+version_is_newer() {
+  case $1:$2 in
+    meet/*:v*) return 0 ;;
+    v*:meet/*) return 1 ;;
+  esac
+  [ "$1" != "$2" ] && [ "$(printf '%s\n' "$1" "$2" | sort -V | tail -n 1)" = "$1" ]
 }
 
 manifest_version() {
@@ -194,7 +202,7 @@ fetch_bundle() {
       fail 'No current installer release is available.'
     requested=$(manifest_version "$work/latest.json") || fail 'Invalid latest release manifest.'
   fi
-  version_valid "$requested" || fail 'Use a release version such as v2.15.0.'
+  version_valid "$requested" || fail 'Use a release version such as meet/v1.0.0.'
   mkdir "$work/bundle"
   for asset in manifest.json docker-compose.personal.yml install.sh; do
     download_release "$release_base/download/$requested/$asset" -o "$work/bundle/$asset" ||
@@ -209,7 +217,7 @@ fetch_bundle() {
       fail "Cached bundle for $requested differs from the release."
     fi
   else
-    mkdir -p "$install_dir/bundles"
+    mkdir -p "${candidate%/*}"
     mv "$work/bundle" "$candidate"
   fi
 }
@@ -628,9 +636,12 @@ doctor_versions() {
 
   if download_release --noproxy '*' "$release_base/latest/download/manifest.json" -o "$work/latest.json" &&
     latest=$(manifest_version "$work/latest.json") && version_valid "$latest"; then
-    if [ -n "$bundle_version" ] && [ "$bundle_version" != "$latest" ] &&
-      [ "$(printf '%s\n' "$bundle_version" "$latest" | sort -V | tail -n 1)" = "$latest" ]; then
-      doctor_result WARN 'Latest release' "$latest is available. Run sudo voiceroom upgrade when nobody is in a meeting."
+    if [ -n "$bundle_version" ] && version_is_newer "$latest" "$bundle_version"; then
+      case $latest:$bundle_version in
+        meet/*:v*) upgrade_command='curl -fsSL https://get.voiceroom.ru | sudo sh -s -- upgrade' ;;
+        *) upgrade_command='sudo voiceroom upgrade' ;;
+      esac
+      doctor_result WARN 'Latest release' "$latest is available. Run $upgrade_command when nobody is in a meeting."
     else
       doctor_result OK 'Latest release' "$latest"
     fi
@@ -1429,8 +1440,8 @@ main() {
         case $argument in
           --replace-dns) replace_dns=true ;;
           *)
-            [ -z "$version" ] || fail 'Usage: voiceroom upgrade [vX.Y.Z] [--replace-dns]'
-            version_valid "$argument" || fail 'Use a release version such as v2.15.0.'
+            [ -z "$version" ] || fail 'Usage: voiceroom upgrade [meet/vX.Y.Z] [--replace-dns]'
+            version_valid "$argument" || fail 'Use a release version such as meet/v1.0.0.'
             version=$argument
             ;;
         esac

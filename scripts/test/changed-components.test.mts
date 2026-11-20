@@ -36,7 +36,7 @@ test('routes shared dependencies and validation files to their consumers', () =>
   assert.deepEqual(changedComponents(['scripts/cd/publish-static.sh']), everyLane);
   assert.deepEqual(changedComponents(['scripts/test/static-publication.sh']), everyLane);
   assert.deepEqual(changedComponents(['.github/workflows/build-static.yml']), { ...site, docs: true });
-  assert.deepEqual(changedComponents(['.github/workflows/release.yml', 'Dockerfile']), app);
+  assert.deepEqual(changedComponents(['.github/workflows/release-api.yml', 'Dockerfile']), app);
 });
 
 test('routes UI package changes to the web and site checks', () => {
@@ -57,7 +57,7 @@ test('routes the call package to the application checks and voice and widget e2e
 });
 
 test('manifest and lock version bumps stay in their release lane', () => {
-  const lock = (siteVersion: string, appVersion = '2.13.0', astroVersion = '7.4.2') =>
+  const lock = (siteVersion: string, appVersion = '1.0.0', astroVersion = '7.4.2', widgetVersion = appVersion) =>
     JSON.stringify({
       lockfileVersion: 3,
       version: appVersion,
@@ -66,17 +66,21 @@ test('manifest and lock version bumps stay in their release lane', () => {
         'apps/web': { version: appVersion },
         'apps/admin': { version: appVersion },
         'apps/api': { version: appVersion },
+        'apps/meet': { version: appVersion },
+        'apps/widget': { version: widgetVersion },
         'packages/shared': { version: appVersion },
         'packages/call': { version: appVersion },
+        'packages/ui': { version: appVersion },
         'apps/site': { name: '@voice-room/site', version: siteVersion, devDependencies: { astro: astroVersion } },
         'node_modules/astro': { version: astroVersion }
       }
     });
   const before = lock('1.0.0');
   assert.equal(lockVersionComponent(before, lock('1.0.1')), 'site');
-  assert.equal(lockVersionComponent(before, lock('1.0.0', '2.13.1')), 'app');
-  assert.equal(lockVersionComponent(before, lock('1.0.1', '2.13.1')), undefined);
-  assert.equal(lockVersionComponent(before, lock('1.0.1', '2.13.0', '7.4.3')), undefined);
+  assert.equal(lockVersionComponent(before, lock('1.0.0', '1.0.1')), 'app');
+  assert.equal(lockVersionComponent(before, lock('1.0.0', '1.0.0', '7.4.2', '1.0.1')), 'app');
+  assert.equal(lockVersionComponent(before, lock('1.0.1', '1.0.1')), undefined);
+  assert.equal(lockVersionComponent(before, lock('1.0.1', '1.0.0', '7.4.3')), undefined);
   assert.equal(lockVersionComponent(before, before), undefined);
   assert.equal(lockVersionComponent(before, '{}'), undefined);
   assert.equal(lockVersionComponent('broken json', lock('1.0.1')), undefined);

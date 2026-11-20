@@ -21,8 +21,8 @@ SERVER_IP = '198.51.100.48'
 OLD_IP = '198.51.100.59'
 OLD_IPV6 = '2001:db8::59'
 TOKEN = 'private-dns-token-for-test'
-V1 = 'v1.0.0'
-V2 = 'v1.0.1'
+V1 = 'meet/v1.0.0'
+V2 = 'meet/v1.0.1'
 
 
 def digest(content):
@@ -182,7 +182,9 @@ class InstallerTest(unittest.TestCase):
             shutil.copyfile(Path(__file__).with_name('fake_command.py'), target)
             target.chmod(0o700)
 
-    def publish(self, version, *, bad_image=False, turn=True):
+    def publish(self, version, *, bad_image=False, turn=True, installer=None):
+        if installer is None:
+            installer = self.bootstrap
         images = {name: image(name, version) for name in ('api', 'caddy', 'livekit', 'postgres')}
         services = {key: {'image': value} for key, value in images.items()}
         services['migrate'] = {'image': images['api']}
@@ -196,18 +198,19 @@ class InstallerTest(unittest.TestCase):
         services['livekit']['ports'] = [{'protocol': 'udp', 'published': str(port)} for port in udp_ports]
         compose = json.dumps({'name': 'voiceroom-personal', 'services': services}).encode()
         manifest = {'schemaVersion': 1, 'version': version, 'images': images, 'files': {
-            COMPOSE: digest(compose), 'install.sh': digest(self.bootstrap),
+            COMPOSE: digest(compose), 'install.sh': digest(installer),
         }}
         self.server.assets.update({
             f'/releases/download/{version}/manifest.json': json.dumps(manifest).encode(),
             f'/releases/download/{version}/{COMPOSE}': compose,
-            f'/releases/download/{version}/install.sh': self.bootstrap,
+            f'/releases/download/{version}/install.sh': installer,
         })
 
     def run_cli(self, *args, bootstrap=False, ok=True, **env_vars):
         command = ['sh', '-s', '--', *args] if bootstrap else [str(self.cli), *args]
+        script = self.bootstrap if bootstrap is True else bootstrap
         result = subprocess.run(
-            command, input=self.bootstrap if bootstrap else b'', env=self.env | env_vars,
+            command, input=script or b'', env=self.env | env_vars,
             capture_output=True, timeout=20,
         )
         output = (result.stdout + result.stderr).decode()
@@ -666,6 +669,30 @@ class InstallerTest(unittest.TestCase):
         self.assertEqual(self.state()['schema'], image('api', V2))
         self.assertIn(V2, self.run_cli('status'))
         self.assertFalse(list(self.home.rglob('*.dump')))
+
+    def test_bootstrapped_upgrade_from_the_published_legacy_cli_to_meet(self):
+        legacy_version = 'v2.15.0'
+        repo = INSTALLER.parents[2]
+        legacy = subprocess.check_output(
+            ['git', '-c', f'safe.directory={repo}', 'show', f'{legacy_version}:apps/get/install.sh'], cwd=repo,
+        )
+        self.publish(legacy_version, turn=False, installer=legacy)
+        self.server.latest = legacy_version
+        self.run_cli('install', '--provider', 'own', '--domain', 'meet.example.test', bootstrap=legacy)
+        self.assertEqual(self.cli.read_bytes(), legacy)
+        saved_env = self.environment()
+
+        self.server.latest = V1
+        output = self.run_doctor(bootstrap=True)
+        self.assert_doctor_status(output, 'OK', 'Installed version', legacy_version)
+        self.assert_doctor_status(output, 'WARN', 'Latest release', V1, 'sh -s -- upgrade')
+        output = self.run_cli('upgrade', bootstrap=True)
+        self.assertIn(f'Upgraded to {V1}.', output)
+        self.assertEqual(self.cli.read_bytes(), self.bootstrap)
+        self.assertEqual(self.environment(), saved_env)
+        self.assertEqual(self.state()['schema'], image('api', V1))
+        self.assertIn(f'Version: {V1}', self.run_cli('status'))
+        self.assertIn(f'{V1} is already installed.', self.run_cli('upgrade'))
 
     def test_install_retries_a_transient_compose_pull_failure(self):
         self.fail_readiness(pull_failures=1)

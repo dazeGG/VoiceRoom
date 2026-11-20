@@ -87,12 +87,12 @@ import /etc/caddy/sites.d/*.caddy
     header {
       defer
       -X-Frame-Options
-      import /etc/caddy/widget-csp.caddy
+      import {$WIDGET_POLICY:/etc/caddy/widget-csp.caddy}
       Permissions-Policy "microphone=(self), camera=(self), display-capture=(), geolocation=(), payment=()"
       Cache-Control "no-cache"
       X-Robots-Tag "noindex"
     }
-    root * /srv/web
+    root * {$WIDGET_RELEASE_DIR:/srv/web}
     rewrite * /embed/v1/index.html
     file_server {
       precompressed br gzip
@@ -103,7 +103,7 @@ import /etc/caddy/sites.d/*.caddy
     header Cache-Control "no-cache"
     header Cross-Origin-Resource-Policy "cross-origin"
     header Access-Control-Allow-Origin "*"
-    root * /srv/web
+    root * {$WIDGET_RELEASE_DIR:/srv/web}
     file_server {
       precompressed br gzip
     }
@@ -159,13 +159,65 @@ import /etc/caddy/sites.d/*.caddy
 }
 
 (voice_web_chunks) {
-  # This release's chunks and those of earlier ones still running in open tabs
-  # (config/caddy/archive-assets.sh). A missing chunk is a 404, never
-  # index.html, so the client reloads instead of running HTML as a script.
+  # Separate builds share the original URL namespace. The widget-specific
+  # path keeps its existing no-CORS policy, including archived frame chunks.
+  handle /_app/immutable/widget/* {
+    route {
+      file_server {
+        root {$WIDGET_RELEASE_DIR:/srv/web}
+        precompressed br gzip
+        pass_thru
+      }
+      file_server {
+        root /srv/static/widget/archive
+        precompressed br gzip
+        pass_thru
+      }
+      file_server {
+        root /srv/archive
+        precompressed br gzip
+      }
+    }
+  }
   handle /_app/immutable/* {
-    root * /srv/archive
-    file_server {
-      precompressed br gzip
+    route {
+      file_server {
+        root /srv/archive
+        precompressed br gzip
+        pass_thru
+      }
+      # A frozen loader from before the widget-specific path can still import
+      # its public, hashed dependency.
+      file_server {
+        root /srv/static/widget/archive
+        precompressed br gzip
+      }
+    }
+  }
+
+  @versioned_voice {
+    path /audio-gate.worklet.js /desktop-audio-source.worklet.js /rnnoise/rnnoise.mjs /rnnoise/rnnoise.wasm /rnnoise/rnnoise.worklet.js
+    expression `{query.v}.matches('^[a-f0-9]{12}$')`
+  }
+  handle @versioned_voice {
+    route {
+      rewrite * /_voice/{query.v}{path}
+      file_server {
+        root /srv/archive
+        precompressed br gzip
+        pass_thru
+      }
+      file_server {
+        root /srv/static/widget/archive
+        precompressed br gzip
+        pass_thru
+      }
+      # Older full-stack installs served these from the web root for any v.
+      rewrite * {orig_path}
+      file_server {
+        root /srv/web
+        precompressed br gzip
+      }
     }
   }
 }
@@ -323,7 +375,7 @@ import /etc/caddy/domains.d/*.caddy
   header {
     defer
     Strict-Transport-Security "max-age=31536000; includeSubDomains"
-    import /etc/caddy/admin-csp.caddy
+    import {$ADMIN_POLICY:/etc/caddy/admin-csp.caddy}
     Cross-Origin-Opener-Policy "same-origin"
     X-Frame-Options "DENY"
     X-Content-Type-Options "nosniff"
@@ -377,8 +429,13 @@ import /etc/caddy/domains.d/*.caddy
         Cache-Control "private, max-age=31536000, immutable"
         match status 200
       }
-      root * /srv/admin
-      file_server
+      file_server {
+        root {$ADMIN_RELEASE_DIR:/srv/admin}
+        pass_thru
+      }
+      file_server {
+        root /srv/static/admin/archive
+      }
     }
   }
 
@@ -390,9 +447,11 @@ import /etc/caddy/domains.d/*.caddy
         uri /api/staff/check
       }
       header Cache-Control "no-cache"
-      root * /srv/admin
+      root * {$ADMIN_RELEASE_DIR:/srv/admin}
       try_files {path} /index.html
-      file_server
+      file_server {
+        hide csp.caddy
+      }
     }
   }
 }

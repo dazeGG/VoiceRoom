@@ -52,6 +52,8 @@ export async function startCaddyEdge({
   env = {},
   files = {},
   binaryFiles = {},
+  widgetFiles,
+  widgetArchiveFiles,
   archivedFiles,
   siteFiles = DEFAULT_SITE_FILES,
   docsFiles = {},
@@ -64,6 +66,9 @@ export async function startCaddyEdge({
   /** Files of the web root by path, next to index.html. */
   files?: Record<string, string>;
   binaryFiles?: Record<string, Uint8Array>;
+  /** Files in a separately deployed widget release and its persistent archive. */
+  widgetFiles?: Record<string, string>;
+  widgetArchiveFiles?: Record<string, string>;
   /** Files left in the immutable archive by an older release. */
   archivedFiles?: Record<string, string>;
   /** Files of the public site's root (apps/site/dist). */
@@ -100,9 +105,21 @@ export async function startCaddyEdge({
   const sitesDir = mkdtempSync(path.join(os.tmpdir(), 'voiceroom-sites-'));
   for (const [file, content] of Object.entries(sites)) writeFileSync(path.join(sitesDir, file), content);
   const archiveRoot = archivedFiles ? writeRoot('voiceroom-archive-', archivedFiles) : undefined;
+  const widgetRoot = widgetFiles ? writeRoot('voiceroom-widget-', widgetFiles) : undefined;
+  const widgetArchive = widgetArchiveFiles ? writeRoot('voiceroom-widget-archive-', widgetArchiveFiles) : undefined;
   onTestFinished(() => {
     spawnSync('docker', ['rm', '-f', name], { encoding: 'utf8' });
-    for (const directory of [archiveRoot, cspDirectory, webRoot, siteRoot, docsRoot, domainsDir, sitesDir]) {
+    for (const directory of [
+      archiveRoot,
+      cspDirectory,
+      webRoot,
+      siteRoot,
+      docsRoot,
+      domainsDir,
+      sitesDir,
+      widgetRoot,
+      widgetArchive
+    ]) {
       if (directory) rmSync(directory, { recursive: true, force: true });
     }
   });
@@ -134,6 +151,10 @@ export async function startCaddyEdge({
       `${policies.widget}:/etc/caddy/widget-csp.caddy:ro`,
       '-v',
       `${webRoot}:/srv/web:ro`,
+      ...(widgetRoot
+        ? ['-e', 'WIDGET_RELEASE_DIR=/srv/widget-release', '-v', `${widgetRoot}:/srv/widget-release:ro`]
+        : []),
+      ...(widgetArchive ? ['-v', `${widgetArchive}:/srv/static/widget/archive:ro`] : []),
       '-v',
       `${siteRoot}:/srv/static/site/current:ro`,
       '-v',
@@ -150,16 +171,8 @@ export async function startCaddyEdge({
             `${path.join(repositoryRoot, 'config/caddy/behind-edge.headers')}:/etc/caddy/proxy.d/behind-edge.caddy:ro`
           ]
         : []),
-      ...(archiveRoot
-        ? [
-            '-v',
-            `${archiveRoot}:/srv/archive`,
-            '-v',
-            `${path.join(repositoryRoot, 'config/caddy/archive-assets.sh')}:/archive-assets.sh:ro`
-          ]
-        : []),
-      caddyImage,
-      ...(archiveRoot ? ['sh', '-c', 'sh /archive-assets.sh && exec caddy run --config /etc/caddy/Caddyfile'] : [])
+      ...(archiveRoot ? ['-v', `${archiveRoot}:/srv/archive:ro`] : []),
+      caddyImage
     ],
     { encoding: 'utf8' }
   );

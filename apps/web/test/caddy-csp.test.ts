@@ -69,15 +69,19 @@ test('Caddy imports the generated policy and the image builds it', () => {
   assert.match(ordinary, /X-Frame-Options "DENY"/);
   assert.match(embed, /@widget_embed path \/embed\/v1 \/embed\/v1\/ \/embed\/v1\/index\.html/);
   assert.match(embed, /header\s*\{\s*defer\s*-X-Frame-Options/);
-  assert.match(embed, /import \/etc\/caddy\/widget-csp\.caddy/);
+  assert.match(embed, /import \{\$WIDGET_POLICY:/);
   assert.match(embed, /display-capture=\(\)/);
   assert.match(dockerfile, /emit-caddy-csp\.ts apps\/web\/dist\/index\.html > \/app\/csp\.caddy/);
   assert.match(dockerfile, /COPY --from=web-build \/app\/csp\.caddy \/etc\/caddy\/csp\.caddy/);
   assert.match(
     dockerfile,
-    /emit-caddy-csp\.ts apps\/widget\/dist\/embed\/v1\/index\.html "" https: > \/app\/widget-csp\.caddy/
+    /emit-caddy-csp\.mts apps\/widget\/dist\/embed\/v1\/index\.html "" https: > apps\/widget\/dist\/csp\.caddy/
   );
-  assert.match(dockerfile, /COPY --from=web-build \/app\/widget-csp\.caddy \/etc\/caddy\/widget-csp\.caddy/);
+  assert.match(dockerfile, /FROM scratch AS widget\s+COPY --from=widget-build \/app\/apps\/widget\/dist \/dist/);
+  assert.match(dockerfile, /FROM scratch AS admin\s+COPY --from=admin-build \/app\/apps\/admin\/dist \/dist/);
+  const webImage = dockerfile.split('FROM caddy-runtime AS web')[1]?.split('\nFROM ')[0];
+  assert.ok(webImage);
+  assert.doesNotMatch(webImage, /(?:widget|admin)\/dist/);
 });
 
 test('page CSP supports runtime LiveKit origins while production Caddy narrows them', () => {

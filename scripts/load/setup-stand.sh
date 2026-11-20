@@ -3,12 +3,11 @@
 # the stand, from the directory that holds docker-compose.yml and
 # compose.loadtest.yml (copied there by the operator, see README.md).
 #
-# Usage: GENERATOR_IP=<ip> setup-stand.sh <image-commit-sha> [domain]
-# API_IMAGE and WORKER_IMAGE replace the published images with ones loaded
-# into the stand's Docker (code not published yet, see README.md).
+# Usage: GENERATOR_IP=<ip> WEB_IMAGE=<published-web-image> setup-stand.sh <api-commit-sha> [domain]
+# API_IMAGE can override the API with a locally built image.
 set -euo pipefail
 
-sha=${1:?usage: GENERATOR_IP=<ip> setup-stand.sh <image-commit-sha> [domain]}
+sha=${1:?usage: GENERATOR_IP=<ip> WEB_IMAGE=<published-web-image> setup-stand.sh <api-commit-sha> [domain]}
 domain=${2:-loadtest.invalid}
 generator=${GENERATOR_IP:?set GENERATOR_IP, the only address let through to LiveKit signalling and the API}
 
@@ -26,8 +25,7 @@ LIVEKIT_API_SECRET=$(secret)
 LIVEKIT_GATE_SECRET=$(secret)
 VOICE_ROOM_CURSOR_HMAC_KEYS=$(secret)
 VOICEROOM_API_IMAGE=${API_IMAGE:-ghcr.io/dazegg/voiceroom-api:$sha}
-VOICEROOM_WORKER_IMAGE=${WORKER_IMAGE:-ghcr.io/dazegg/voiceroom-worker:$sha}
-VOICEROOM_WEB_IMAGE=ghcr.io/dazegg/voiceroom-web:$sha
+VOICEROOM_WEB_IMAGE=${WEB_IMAGE:?set WEB_IMAGE to a compatible Web image}
 # The limits prod runs with (checked 2026-10-16).
 MAX_ROOM_PEERS=9
 MAX_ROOMS=50

@@ -1,0 +1,17 @@
+name: Release Admin
+
+on:
+  push:
+    tags: ['admin/v*']
+
+jobs:
+  release:
+    permissions:
+      contents: write
+      # The reusable workflow includes an image job gated to API and Web.
+      packages: write
+    uses: ./.github/workflows/release-component.yml
+    with:
+      component: admin
+      url: https://admin.voiceroom.ru
+    secrets: inherit

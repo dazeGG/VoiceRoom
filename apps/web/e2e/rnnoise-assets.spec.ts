@@ -99,11 +99,11 @@ test('the web origin loads and runs the versioned RNNoise assets under its page 
     newWorklet
   ];
   const query = `?v=${sha256(Buffer.concat(assets)).slice(0, 12)}`;
-  await page.goto('/');
-  await expect(page.locator('meta[http-equiv="content-security-policy"]')).toHaveAttribute(
-    'content',
-    /script-src 'self' 'wasm-unsafe-eval'/
-  );
+  const document = await page.goto('/');
+  const policy =
+    (await document?.headerValue('content-security-policy')) ??
+    (await page.locator('meta[http-equiv="content-security-policy"]').getAttribute('content'));
+  expect(policy).toMatch(/script-src 'self' 'wasm-unsafe-eval'/);
   const result = await page.evaluate(async (query) => {
     const rnnoise: unknown = await import(`/rnnoise/rnnoise.mjs${query}`);
     if (

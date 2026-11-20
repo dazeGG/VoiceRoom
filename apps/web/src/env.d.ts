@@ -9,6 +9,6 @@ declare module '*.vue' {
 }
 
 interface ImportMetaEnv {
-  /** The build id, the same one /_app/version.json carries (vite.config.ts). */
+  /** Opaque web build id, also carried by /_app/version.json (vite.config.ts). */
   readonly VITE_APP_VERSION: string;
 }

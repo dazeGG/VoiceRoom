@@ -88,7 +88,7 @@ npm run e2e     # Playwright, нужен запущенный dev-стек
 
 API-тестам нужна PostgreSQL в `TEST_DATABASE_URL`: на каждый тест создаётся отдельная временная база.
 
-Ветки, коммиты и релизы ведутся по [`docs/GIT_FLOW.md`](./docs/GIT_FLOW.md). Изменения по версиям — в [GitHub Releases](https://github.com/dazeGG/VoiceRoom/releases).
+API, Web, Admin, Widget и Meet выпускаются отдельными сериями. Ветки, коммиты и теги описаны в [`docs/GIT_FLOW.md`](./docs/GIT_FLOW.md). Изменения по версиям — в [GitHub Releases](https://github.com/dazeGG/VoiceRoom/releases).
 
 ## Self-hosting
 

@@ -40,15 +40,15 @@ export function buildPersonalRelease({
   caddy: string;
   pinImage: (image: string) => string;
 }) {
-  if (!/^v(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)$/u.test(version))
-    throw new Error('Expected a stable release tag');
+  if (!/^meet\/v(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)$/u.test(version))
+    throw new Error('Expected a stable Meet release tag');
   if (!isRecord(compose) || !isRecord(compose.services)) throw new Error('Missing personal Compose services');
   const { services } = compose;
   const expected = Object.entries(imageForService);
   if (Object.keys(services).length !== expected.length) throw new Error('Unexpected personal Compose services');
   const images = {
-    api: pinImage(api),
-    caddy: pinImage(caddy),
+    api,
+    caddy,
     postgres: pinImage(composeImage(services, 'postgres')),
     livekit: pinImage(composeImage(services, 'livekit'))
   };

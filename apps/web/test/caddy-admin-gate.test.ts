@@ -58,9 +58,12 @@ async function startEdge() {
   writeFileSync(fakeApi, FAKE_API);
   const policies = writePolicyFixtures(scratch);
   const admin = path.join(scratch, 'admin');
+  const archive = path.join(scratch, 'archive');
   mkdirSync(path.join(admin, 'assets'), { recursive: true });
   writeFileSync(path.join(admin, 'index.html'), '<!doctype html><html><body>admin app</body></html>');
   writeFileSync(path.join(admin, 'assets', 'app-1.js'), 'console.log("admin");');
+  mkdirSync(path.join(archive, 'assets'), { recursive: true });
+  writeFileSync(path.join(archive, 'assets', 'older-release.js'), 'console.log("older admin");');
 
   const close = () => {
     spawnSync('docker', ['rm', '-f', edge, api], { encoding: 'utf8' });
@@ -110,6 +113,8 @@ async function startEdge() {
       `${path.join(repositoryRoot, 'config/caddy/admin-csp.caddy')}:/etc/caddy/admin-csp.caddy:ro`,
       '-v',
       `${admin}:/srv/admin:ro`,
+      '-v',
+      `${archive}:/srv/static/admin/archive:ro`,
       caddyImage
     ]);
     const site = publishedPort(edge, '80');
@@ -155,6 +160,10 @@ test('the admin app is served only through the staff check', { skip: !dockerAvai
   const bundle = await fetch(`${edge.admin}/assets/app-1.js`, { headers: asStaff });
   assert.equal(bundle.status, 200);
   assert.equal(bundle.headers.get('cache-control'), 'private, max-age=31536000, immutable');
+  const older = await fetch(`${edge.admin}/assets/older-release.js`, { headers: asStaff });
+  assert.equal(older.status, 200);
+  assert.equal(await older.text(), 'console.log("older admin");');
+  assert.equal(older.headers.get('cache-control'), 'private, max-age=31536000, immutable');
   // A bundle a newer build no longer has is a 404, never the page cached as a script.
   const gone = await fetch(`${edge.admin}/assets/app-0.js`, { headers: asStaff });
   assert.equal(gone.status, 404);
@@ -166,7 +175,7 @@ test('the admin app is served only through the staff check', { skip: !dockerAvai
   assert.equal(visit.status, 302);
   assert.equal(visit.location, 'https://site.test/api/staff/handoff?back=/accounts/u-1');
   // Anything else gets the API's 404, and nothing of the app.
-  for (const pathname of ['/', '/assets/app-1.js']) {
+  for (const pathname of ['/', '/assets/app-1.js', '/assets/older-release.js']) {
     const refused = await fetch(`${edge.admin}${pathname}`);
     assert.equal(refused.status, 404, pathname);
     const body = await refused.text();

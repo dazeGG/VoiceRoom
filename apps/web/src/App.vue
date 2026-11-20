@@ -36,7 +36,7 @@ const roomClientAllowed = ref(false);
 // screen below.
 const allowed = computed(() => desktopAllowed.value || (roomClientAllowed.value && isMobileRoute(route.meta.routeId)));
 
-// A new deploy (the version check) or a downloaded desktop shell.
+// The build marker belongs to web. The desktop shell reports its own updates through the bridge.
 const versionCheck = createVersionCheck({
   version: import.meta.env.VITE_APP_VERSION,
   interval: 5 * 60_000,
@@ -95,10 +95,8 @@ onMounted(() => {
   // Emoji drawn as artwork copy as their characters anywhere in the app.
   cleanups.push(installEmojiCopy());
   cleanups.push(appUpdate.bind());
-  // Besides the periodic poll, look for a new version when the tab comes back
-  // into view, after the realtime socket reconnects (a deploy restarts the
-  // server, so a reconnect is when a new version is likely) and when the
-  // server sends data this build's contract does not know.
+  // Check the web build after visibility changes, realtime reconnects and
+  // contract mismatches. Each can occur without a web deploy.
   const onVisibility = () => {
     if (document.visibilityState === 'visible') checkForUpdate();
   };
