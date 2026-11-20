@@ -44,7 +44,7 @@ This repository uses Git Flow for all development and releases. This file is the
 
 | Component | Version source | Production tag | Release entry |
 | --- | --- | --- | --- |
-| VoiceRoom application (web, API, workers, admin) | `package.json` | `vX.Y.Z` | VoiceRoom X.Y.0, with patch notes on that release |
+| VoiceRoom application (web, API, workers, admin, Meet) | `package.json` | `vX.Y.Z` | Personal bundle on each tag, with series notes on `vX.Y.0` |
 | Public website | `apps/site/package.json` | `site/vX.Y.Z` | VoiceRoom Site X.Y.Z |
 | Public documentation | `apps/docs/package.json` | `docs/vX.Y.Z` | VoiceRoom Docs X.Y.Z |
 
@@ -56,8 +56,8 @@ same Releases page while they share a repository.
 
 The GitHub `production` environment must allow the tag patterns `v*`,
 `site/v*` and `docs/v*`. Release PRs carry the version changes and matching
-lockfiles. For an application release, bump the root, API, web, admin, shared,
-UI and call workspace versions together. The site and documentation each keep an
+lockfiles. For an application release, bump the root, API, web, admin, Meet,
+shared, UI and call workspace versions together. The site and documentation each keep an
 independent version.
 
 Use `npm version` to update the manifests and lockfiles in the release branch.
@@ -67,7 +67,8 @@ the component being released.
 ```bash
 npm version 2.14.0 --no-git-tag-version --ignore-scripts --include-workspace-root \
   --workspace @voice-room/api --workspace @voice-room/web \
-  --workspace @voice-room/admin --workspace @voice-room/shared --workspace @voice-room/ui --workspace @voice-room/call
+  --workspace @voice-room/admin --workspace @voice-room/meet --workspace @voice-room/shared \
+  --workspace @voice-room/ui --workspace @voice-room/call
 npm version 1.0.1 --no-git-tag-version --ignore-scripts --workspace @voice-room/site
 npm --prefix apps/docs version 1.0.1 --no-git-tag-version --ignore-scripts
 ```
@@ -85,7 +86,7 @@ independently. Merging a release into `main` prepares it for tagging.
 4. Run the applicable component gates, plus every gate of a matching `docs/RELEASE_<version>_PLAN.md` if the release has one; statements in a plan are requirements until fresh evidence proves them.
 5. Open the release PR into `main`. Do not merge it while required jobs or release gates are failing. Branch protection on `main` requires these jobs on a branch up to date with `main`, and the tag does not run them again.
 6. After explicit approval, merge into `main` and create the appropriate annotated component tag on the commit the merge left there. Pushing the tag deploys that component to production. Verify the deployed version.
-7. For the application, publish release notes on GitHub Releases in English. A minor or major version (`x.y.0`) gets a release titled `VoiceRoom x.y.0`. For a patch, add a `### x.y.z` entry under `## Patch releases` on the `x.y.0` release with `gh release edit`. For the site and docs, the release workflow publishes the entry after deployment.
+7. After an application tag deploys, the release workflow attaches the personal Compose, installer and manifest assets to that tag's GitHub Release. The installer defaults to the newest application release. Publish release notes on GitHub Releases in English. Update the `VoiceRoom x.y.0` release for a minor or major version. For a patch, add a `### x.y.z` entry under `## Patch releases` on the `x.y.0` release with `gh release edit`. The patch's asset entry links back to those notes. For the site and docs, the release workflow publishes the entry after deployment.
 8. Merge the release result back into `develop` so versioning and stabilization fixes are not lost.
 9. Delete the release branch only after both directions are complete and the tag is verified.
 

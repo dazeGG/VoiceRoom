@@ -26,6 +26,7 @@ jobs:
       app: ${{ steps.route.outputs.app }}
       site: ${{ steps.route.outputs.site }}
       docs: ${{ steps.route.outputs.docs }}
+      installer: ${{ steps.route.outputs.installer }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -41,6 +42,16 @@ jobs:
           node --test scripts/test/changed-components.test.mts
           bash scripts/test/reuse-app-checks.sh
           node scripts/ci/changed-components.mts "$BASE_SHA" "$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+          installer=false
+          if [[ "$BASE_SHA" =~ ^0+$ ]]; then
+            installer=true
+          else
+            installer_changes=$(git diff --name-only --no-renames "$BASE_SHA" "$GITHUB_SHA" -- apps/get/)
+            if [[ -n "$installer_changes" ]]; then
+              installer=true
+            fi
+          fi
+          echo "installer=$installer" >> "$GITHUB_OUTPUT"
 
       - name: Look for already verified application changes
         id: reuse
@@ -56,7 +67,7 @@ jobs:
 
   policy:
     name: Git Flow policy
-    needs: [changes, site, docs, personal-smoke]
+    needs: [changes, site, docs, personal-smoke, installer]
     if: always() && github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
@@ -87,7 +98,7 @@ jobs:
 
       # This check already protects main. Require each routed job while letting
       # jobs for unaffected components skip.
-      - name: Require each selected static and personal stack check
+      - name: Require each selected static, personal stack and installer check
         env:
           ROUTING_RESULT: ${{ needs.changes.result }}
           APP_CHANGED: ${{ needs.changes.outputs.app }}
@@ -96,6 +107,8 @@ jobs:
           SITE_RESULT: ${{ needs.site.result }}
           DOCS_CHANGED: ${{ needs.changes.outputs.docs }}
           DOCS_RESULT: ${{ needs.docs.result }}
+          INSTALLER_CHANGED: ${{ needs.changes.outputs.installer }}
+          INSTALLER_RESULT: ${{ needs.installer.result }}
         shell: bash
         run: |
           set -euo pipefail
@@ -103,7 +116,8 @@ jobs:
             echo "::error::Could not determine the changes that need checks."
             exit 1
           fi
-          for lane in "site:$SITE_CHANGED:$SITE_RESULT" "docs:$DOCS_CHANGED:$DOCS_RESULT" "personal:$APP_CHANGED:$PERSONAL_RESULT"; do
+          for lane in "site:$SITE_CHANGED:$SITE_RESULT" "docs:$DOCS_CHANGED:$DOCS_RESULT" \
+              "personal:$APP_CHANGED:$PERSONAL_RESULT" "installer:$INSTALLER_CHANGED:$INSTALLER_RESULT"; do
             case "$lane" in
               *:true:success|*:false:skipped) ;;
               *) echo "::error::Unexpected check result: $lane"; exit 1 ;;
@@ -349,6 +363,18 @@ jobs:
             docker image rm "$PERSONAL_SMOKE_PROJECT-api"
           fi
 
+  installer:
+    name: Meet installer and CLI tests
+    needs: changes
+    if: needs.changes.outputs.installer == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - run: sudo python3 -B -m unittest discover -s apps/get/test -v
+
   record-app-checks:
     name: Record verified application tree
     needs: [changes, policy, check, test, test-web, voice-join, goal-g05]
@@ -376,10 +402,11 @@ jobs:
 
   images:
     name: Publish images
-    needs: [changes, check, test, test-web, voice-join, goal-g05, personal-smoke]
+    needs: [changes, check, test, test-web, voice-join, goal-g05, personal-smoke, installer]
     if: >-
       !cancelled() && github.event_name == 'push' && needs.changes.result == 'success' &&
       needs.changes.outputs.app == 'true' &&
+      (needs.changes.outputs.installer == 'false' || needs.installer.result == 'success') &&
       (needs.changes.outputs.verified == 'true' ||
       (needs.check.result == 'success' && needs.test.result == 'success' &&
       needs.test-web.result == 'success' && needs.voice-join.result == 'success' &&
