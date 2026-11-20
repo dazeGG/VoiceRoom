@@ -39,6 +39,14 @@ main site; it talks to the API's admin routes.
   self-hosted Meet bundle have separate release series. The public site and
   docs keep their existing series. CI boots the whole stack for the voice-join
   smoke test.
+- An API rollout updates the host checkout and applies every Compose service
+  except `caddy`, removing orphaned services. The checkout owns the Caddy
+  service definition in `docker-compose.yml`, including environment, ports and
+  mounts. A Web rollout replaces the Caddy image using that definition. Release
+  the API checkout first when a new Web image needs a Caddy Compose change.
+  The host definition declares its contract version in
+  `org.voiceroom.caddy-compose`. The Web image declares its minimum in
+  `org.voiceroom.requires-caddy-compose`.
 
 ### Runtime versions
 

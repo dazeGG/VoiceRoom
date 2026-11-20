@@ -69,13 +69,9 @@ npm version 1.0.1 --workspace @voice-room/site --no-git-tag-version --ignore-scr
 npm --prefix apps/docs version 1.0.1 --no-git-tag-version --ignore-scripts
 ```
 
-Before publishing the split tags, replace the GitHub `production` environment's
-legacy `v*` rule with `api/v*`, `web/v*`, `admin/v*`, `widget/v*`, `site/v*`
-and `docs/v*`. This also blocks production deploys if GitHub evaluates a recreated
-historical tag against the workflow at that tag. App changes pushed to `develop` still
-deploy the API, Web, Admin and Widget together to dev. Site and docs publish to dev
-when their respective lanes run. Shared contracts and portable UI changes also
-check their consumers before merge.
+App changes pushed to `develop` deploy the API, Web, Admin and Widget together to
+dev. Site and docs publish to dev when their respective lanes run. Shared
+contracts and portable UI changes also check their consumers before merge.
 
 ## Release workflow
 
@@ -100,12 +96,59 @@ native clients. Add database migrations to the API release and use additive sche
 changes while previous readers and writers are still supported. Meet pins its own
 matching API and includes its migration runner in the bundle.
 
-Web owns the edge configuration because the same edge serves Web's routes, API
-proxy and TLS. Admin and Widget publish their own build and CSP to that edge. Its
-first split Web rollout takes the already served Admin and Widget files over from
-the old image. Complete that rollout before the first Admin and Widget releases.
-Subsequent Web releases preserve those selections, and Admin and Widget each
-switch only their own files and policy.
+Web owns the Caddy image and its routes, API proxy and TLS configuration. The API
+release moves the host checkout, which supplies the Caddy service definition in
+`docker-compose.yml` (environment, ports and mounts). The Web rollout applies
+that definition when it replaces Caddy. If a Web image needs a Compose change,
+ship the API release carrying it first. Set the Caddy service's
+`org.voiceroom.caddy-compose` label to the new contract version and set the Web
+image's `org.voiceroom.requires-caddy-compose` label to that minimum. The Web
+rollout stops before replacing Caddy if the host Compose contract is missing or
+below the image's requirement.
+
+Admin and Widget publish their own build and CSP to that edge. The first Web
+rollout seeds their files from the old image. Subsequent Web releases preserve
+the selections, and Admin and Widget each switch their own files and policy.
+
+### First split release
+
+Before pushing the first tag, open **Settings → Environments → production**.
+Under **Deployment branches and tags**, choose **Selected branches and tags**.
+Remove the legacy `v*` rule and add six **Tag** rules, one each for `api/v*`,
+`web/v*`, `admin/v*`, `widget/v*`, `site/v*` and `docs/v*`. Confirm that
+historical `v2.x` tags are excluded from production. Meet publishes release
+assets without using the production environment. [GitHub environment settings](https://docs.github.com/en/actions/how-tos/deploy/configure-and-manage-deployments/manage-environments)
+
+On the production host, verify the required [persistent logging profile](LOGGING.md)
+before the API rollout. If LiveKit still uses its legacy log driver, schedule
+the first rollout when the voice-peer count is zero.
+
+Push these tags individually from the approved first-parent commit on `main`.
+Wait for each workflow and its checks before pushing the next tag.
+
+1. Push `api/v1.0.0`. Confirm the host checkout matches the tag, migrations
+   completed, and PostgreSQL, API, LiveKit and its gate are running. Check
+   `/api/healthz` on production and join a test room from the existing Web client.
+2. Push `web/v1.0.0`. Check that `/app` loads over HTTPS and `/_app/version.json`
+   serves the new build ID. Verify the existing Admin and Widget still load from
+   their seeded files before publishing either new artifact.
+3. Push `admin/v1.0.0`. Confirm the publication succeeded, then open the staff
+   console from the main app and check that the staff sign-in handoff works.
+4. Push `widget/v1.0.0`. Confirm the publication succeeded. Load
+   `/widget/v1/loader.js` and `/embed/v1/` through an existing embed and run a
+   two-way voice check.
+5. Push `meet/v1.0.0`. Confirm GitHub marks it **Latest** with `install.sh`,
+   `manifest.json` and `docker-compose.personal.yml`, and check that
+   `https://get.voiceroom.ru` resolves to that installer. On a `v2.15.0` test
+   installation, run the one-time upgrade below. Verify `voiceroom status`
+   reports `meet/v1.0.0` and two guests can join a room with two-way audio.
+
+Existing `v2.15.0` Meet installations need this one-time upgrade to refresh the
+local CLI. Subsequent releases use `sudo voiceroom upgrade`.
+
+```sh
+curl -fsSL https://get.voiceroom.ru | sudo sh -s -- upgrade
+```
 
 ## Hotfix workflow
 
