@@ -1,5 +1,5 @@
 import { createPinia, setActivePinia } from 'pinia';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { shallowRef } from 'vue';
 import type { RoomCapabilities } from '@voice-room/shared/contracts/rooms';
 import { callPageState } from '@voice-room/call/engine/core/call-page.store';
@@ -7,6 +7,7 @@ import { state } from '@voice-room/call/engine/core/room-runtime.store';
 import { mountGuestRoomClient } from '@voice-room/call/engine/main';
 import { joinRoom } from '@voice-room/call/engine/room/room';
 import { createGuestJoinController } from '@voice-room/call/guest';
+import { createMeetApi } from '@/adapters/meet-api';
 
 vi.mock('@voice-room/call/engine/main', () => ({ mountGuestRoomClient: vi.fn() }));
 vi.mock('@voice-room/call/engine/room/room', () => ({ joinRoom: vi.fn() }));
@@ -20,7 +21,7 @@ const unmount = vi.fn(() => {
   state.joined = false;
 });
 
-function setup(status: (roomId: string) => Promise<typeof room | null> = async () => room) {
+function setup(status: Parameters<typeof createGuestJoinController>[0]['status'] = async () => room) {
   const setDisplayName = vi.fn();
   const admissionCapabilities = shallowRef<RoomCapabilities | null>(null);
   const controller = createGuestJoinController({
@@ -184,5 +185,84 @@ describe('guest join controller', () => {
     expect(controller.phase.value).toBe('left');
     expect(controller.failure.value).toBeNull();
     expect(unmount).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('Meet room status recovery', () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  it('keeps checking across network and server failures, then shows the name step', async () => {
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+      .mockResolvedValueOnce(new Response(null, { status: 503 }))
+      .mockResolvedValueOnce(Response.json({ ...room, ok: true }));
+    const { controller } = setup(createMeetApi(fetcher).status);
+    const checking = controller.check();
+
+    await vi.advanceTimersByTimeAsync(249);
+    expect(fetcher).toHaveBeenCalledOnce();
+    expect(controller.phase.value).toBe('checking');
+    expect(controller.failure.value).toBeNull();
+
+    await vi.advanceTimersByTimeAsync(1);
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(controller.phase.value).toBe('checking');
+    await vi.advanceTimersByTimeAsync(499);
+    expect(fetcher).toHaveBeenCalledTimes(2);
+
+    await vi.runAllTimersAsync();
+    await checking;
+    expect(fetcher).toHaveBeenCalledTimes(3);
+    expect(controller.phase.value).toBe('name');
+    expect(controller.room.value).toMatchObject(room);
+  });
+
+  it('shows the status error after exhausting retries and allows another check', async () => {
+    const fetcher = vi.fn<typeof fetch>(async () => new Response(null, { status: 502 }));
+    const { controller } = setup(createMeetApi(fetcher).status);
+    const checking = controller.check();
+
+    await vi.runAllTimersAsync();
+    await checking;
+    expect(fetcher).toHaveBeenCalledTimes(4);
+    expect(controller.phase.value).toBe('error');
+    expect(controller.failure.value).toBe('status');
+
+    fetcher.mockResolvedValueOnce(Response.json({ ...room, ok: true }));
+    await controller.check();
+    expect(fetcher).toHaveBeenCalledTimes(5);
+    expect(controller.phase.value).toBe('name');
+  });
+
+  it.each([404, 403])('does not retry an HTTP %s', async (status) => {
+    const fetcher = vi.fn<typeof fetch>(async () => new Response(null, { status }));
+    const { controller } = setup(createMeetApi(fetcher).status);
+    const checking = controller.check();
+
+    await vi.runAllTimersAsync();
+    await checking;
+    expect(fetcher).toHaveBeenCalledOnce();
+    expect(controller.phase.value).toBe(status === 404 ? 'not-found' : 'error');
+  });
+
+  it('stops retrying when the page is left during backoff', async () => {
+    const fetcher = vi.fn<typeof fetch>().mockRejectedValue(new TypeError('Failed to fetch'));
+    const lifetime = new AbortController();
+    const api = createMeetApi(fetcher);
+    const { controller } = setup((roomId) => api.status(roomId, lifetime.signal));
+    const checking = controller.check();
+
+    await vi.advanceTimersByTimeAsync(100);
+    expect(controller.phase.value).toBe('checking');
+    lifetime.abort();
+    controller.dispose();
+    await vi.runAllTimersAsync();
+    await checking;
+
+    expect(fetcher).toHaveBeenCalledOnce();
+    expect(fetcher.mock.calls[0]?.[1]?.signal?.aborted).toBe(true);
+    expect(controller.phase.value).toBe('left');
   });
 });

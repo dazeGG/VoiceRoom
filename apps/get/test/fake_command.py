@@ -74,6 +74,22 @@ def compose():
         print(json.dumps(config))
     elif action == 'pull':
         log('pull', image=image)
+        attempts = load('pull-attempts.json')
+        attempts[image] = attempts.get(image, 0) + 1
+        save('pull-attempts.json', attempts)
+        if attempts[image] <= load('faults.json').get('pull_failures', 0):
+            for line in range(20):
+                print(f'Pull progress line {line}', file=sys.stderr)
+            for key in ('PERSONAL_POSTGRES_PASSWORD', 'PERSONAL_GATE_SECRET',
+                        'PERSONAL_LIVEKIT_API_KEY', 'PERSONAL_LIVEKIT_API_SECRET'):
+                print(f'Compose diagnostic for value {values[key]}', file=sys.stderr)
+            print(f"Compose diagnostic for value {os.environ['GET_TEST_DNS_TOKEN']}", file=sys.stderr)
+            print(f"Resolved image at https://operator:private-registry-password@example.invalid/blob?{os.environ['GET_TEST_DNS_TOKEN']}",
+                  file=sys.stderr)
+            print('Authorization: Bearer private-registry-token', file=sys.stderr)
+            print('failed to fetch anonymous token: 502 Bad Gateway', file=sys.stderr)
+            print(f"failed to cleanup extract-attempt-{attempts[image]} snapshot", file=sys.stderr)
+            return 1
     elif action == 'up':
         assert '--wait' in args, args
         if args[-1] != 'postgres':

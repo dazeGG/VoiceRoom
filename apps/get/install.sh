@@ -19,15 +19,16 @@ rollback_upgrade=false
 rollback_domain=false
 rollback_dns=false
 terminal=false
+replace_dns=false
 
 say() { printf '%s\n' "$*" >&2; }
 fail() { say "VoiceRoom: $*"; exit 1; }
 
 usage() {
   cat <<'EOF'
-voiceroom install [--version vX.Y.Z] [--provider duckdns|desec|own] [--domain NAME]
-voiceroom upgrade [vX.Y.Z]
-voiceroom domain set [--provider duckdns|desec|own] [--domain NAME]
+voiceroom install [--version vX.Y.Z] [--provider duckdns|desec|own] [--domain NAME] [--replace-dns]
+voiceroom upgrade [vX.Y.Z] [--replace-dns]
+voiceroom domain set [--provider duckdns|desec|own] [--domain NAME] [--replace-dns]
 voiceroom domain show
 voiceroom status
 voiceroom owner-link [--rotate]
@@ -46,12 +47,17 @@ download_release() {
   esac
 }
 
-open_terminal() {
+try_terminal() {
   if [ "$terminal" = false ]; then
-    { exec 3<>/dev/tty; } 2>/dev/null ||
-      fail 'An interactive terminal is required. Run this command from an SSH session with a TTY.'
+    # A failed redirection on exec can terminate a noninteractive POSIX shell.
+    ( : <>/dev/tty ) 2>/dev/null || return 1
+    exec 3<>/dev/tty
     terminal=true
   fi
+}
+
+open_terminal() {
+  try_terminal || fail 'An interactive terminal is required. Run this command from an SSH session with a TTY.'
 }
 
 prompt() {
@@ -90,7 +96,7 @@ require_docker() {
     fail 'Update the Docker Compose plugin to a version that supports --wait and --wait-timeout.'
 }
 
-compose() (
+run_compose() (
   # Compose gives ambient variables precedence over --env-file.
   unset PERSONAL_DOMAIN PERSONAL_ORIGIN PERSONAL_CADDY_SITE PERSONAL_SIGNAL_URL PERSONAL_BIND_HOST \
     PERSONAL_HTTP_PORT PERSONAL_HTTPS_PORT PERSONAL_RTC_TCP_PORT PERSONAL_RTC_UDP_PORT \
@@ -101,9 +107,54 @@ compose() (
   compose_bundle=$1
   compose_env=$2
   shift 2
-  docker compose --project-name voiceroom-personal --env-file "$compose_env" \
-    -f "$compose_bundle/docker-compose.personal.yml" "$@" 2>/dev/null
+  docker compose --ansi never --project-name voiceroom-personal --env-file "$compose_env" \
+    -f "$compose_bundle/docker-compose.personal.yml" "$@"
 )
+
+compose() { run_compose "$@" 2>/dev/null; }
+
+pull_images() {
+  pull_attempt=1
+  while ! run_compose "$1" "$2" pull --quiet >/dev/null 2> "$work/pull.stderr"; do
+    if [ "$pull_attempt" -eq 3 ]; then
+      # Mask literal installation secrets and discard credential fields and signed URL details.
+      printf '%s\n' "$token" | awk '
+        function mask(line, value,    result, at) {
+          while ((at = index(line, value)) > 0) {
+            result = result substr(line, 1, at - 1) "[redacted]"
+            line = substr(line, at + length(value))
+          }
+          return result line
+        }
+        FILENAME == "-" { if (length) secrets[++count] = $0; next }
+        FILENAME == ARGV[2] {
+          if ($0 ~ /^(export[[:space:]]+)?[^=]*(PASSWORD|SECRET|TOKEN|API_KEY|CREDENTIAL)[^=]*=/) {
+            value = substr($0, index($0, "=") + 1)
+            sub(/^[[:space:]\047"]+/, "", value)
+            sub(/[[:space:]\047"]+$/, "", value)
+            if (length(value)) secrets[++count] = value
+          }
+          next
+        }
+        {
+          gsub(/[[:cntrl:]]/, "", $0)
+          message = tolower($0)
+          if (message ~ /authorization[" ]*:/ ||
+              message ~ /(password|secret|token|api[_ -]?key|credential|auth)[" ]*=/ ||
+              message ~ /(^[[:space:]]*|")(password|secret|token|api[_ -]?key|credential|auth)"?[[:space:]]*:/) next
+          gsub(/:\/\/[^\/[:space:]@]+@/, "://[redacted]@", $0)
+          gsub(/[?#][^[:space:]]+/, "[redacted]", $0)
+          for (i = 1; i <= count; i++) $0 = mask($0, secrets[i])
+          print
+        }
+      ' - "$2" "$work/pull.stderr" | tail -n 12 >&2
+      return 1
+    fi
+    say "Image pull attempt $pull_attempt of 3 failed. Retrying…"
+    sleep "$pull_attempt"
+    pull_attempt=$((pull_attempt + 1))
+  done
+}
 
 version_valid() {
   case $1 in ''|*[!v0-9.]*) return 1 ;; esac
@@ -201,6 +252,11 @@ settings() {
   domain=
   version=
   while [ "$#" -gt 0 ]; do
+    if [ "$1" = --replace-dns ]; then
+      replace_dns=true
+      shift
+      continue
+    fi
     [ "$#" -ge 2 ] || fail 'Missing option value. See voiceroom --help.'
     case $1 in
       --provider) provider=$2 ;;
@@ -262,13 +318,8 @@ valid_ipv4() {
 }
 
 duckdns_write() {
-  if [ -n "$1" ]; then
-    action="ip=$1"
-  else
-    action='clear=true'
-  fi
   response=$(printf 'data-urlencode = "token=%s"\n' "$token" |
-    http --config - --get --data-urlencode "domains=$label" --data-urlencode "$action" "$duckdns_url/update") ||
+    http --config - --get --data-urlencode "domains=$label" "$@" "$duckdns_url/update") ||
     return 1
   [ "$response" = OK ]
 }
@@ -295,16 +346,31 @@ desec_write() {
 }
 
 desec_snapshot() {
-  rr_name=$1
-  code=$(desec_request "$desec_url/domains/$zone/rrsets/${rr_name:-@}/A/") ||
+  code=$(desec_request "$desec_url/domains/$zone/rrsets/${1:-@}/$2/") ||
     fail 'Could not access the deSEC zone.'
   case $code in
-    200) jq -e --arg subname "$rr_name" 'select((.ttl | type == "number") and (.records | type == "array")) |
-      {subname: $subname, type: "A", ttl, records}' "$work/desec-response.json" 2>/dev/null ||
-      fail 'deSEC returned an invalid A record.' ;;
-    404) jq -n --arg subname "$rr_name" '{subname: $subname, type: "A", ttl: 3600, records: []}' ;;
-    *) fail 'deSEC could not read the A record. Check the domain and API token.' ;;
+    200) jq -e --arg subname "$1" --arg type "$2" '
+      select((.ttl | type == "number") and (.records | type == "array" and all(.[]; test("^[0-9A-Fa-f:.]+$")))) |
+      {subname: $subname, type: $type, ttl, records}' "$work/desec-response.json" 2>/dev/null ||
+      fail "deSEC returned an invalid $2 record." ;;
+    404) jq -n --arg subname "$1" --arg type "$2" '{subname: $subname, type: $type, ttl: 3600, records: []}' ;;
+    *) fail "deSEC could not read the $2 record. Check the domain and API token." ;;
   esac
+}
+
+confirm_dns_replacement() {
+  [ -s "$work/dns-conflicts" ] || return 0
+  if [ "$replace_dns" = true ]; then
+    cat "$work/dns-conflicts" >&2
+    return
+  fi
+  if ! try_terminal; then
+    cat "$work/dns-conflicts" >&2
+    fail 'DNS replacement requires confirmation on a terminal or --replace-dns.'
+  fi
+  cat "$work/dns-conflicts" >&3
+  prompt 'Replace these DNS records? [y/N] '
+  case $answer in y|Y|yes|YES) ;; *) fail 'DNS records were left unchanged.' ;; esac
 }
 
 dns_matches() {
@@ -327,6 +393,7 @@ prepare_dns() {
   elif [ -n "$turn_domain" ]; then
     dns_names="$domain $turn_domain"
   fi
+  : > "$work/dns-conflicts"
   case $provider in
     duckdns)
       # Nested names use the same address as the registered label.
@@ -336,10 +403,19 @@ prepare_dns() {
       if [ -z "$duckdns_ns" ] || ! old_a=$(duckdns_record A) || ! old_aaaa=$(duckdns_record AAAA); then
         fail 'Could not read the current DuckDNS records from an authoritative server.'
       fi
-      [ -z "$old_aaaa" ] || fail 'Remove the DuckDNS AAAA record before installing on this IPv4 server.'
       if [ -n "$old_a" ]; then valid_ipv4 "$old_a" || fail 'Unexpected DuckDNS A record.'; fi
+      case $old_aaaa in *[!0-9a-fA-F:.]*) fail 'Unexpected DuckDNS AAAA record.' ;; esac
+      for address in $old_a $old_aaaa; do
+        if [ "$address" != "$ip" ]; then
+          printf '%s currently points to %s, not this server (%s).\n' "$label.duckdns.org" "$address" "$ip" >> "$work/dns-conflicts"
+        fi
+      done
+      confirm_dns_replacement
       rollback_dns=true
-      duckdns_write "$ip" || fail 'DuckDNS rejected the update. Check the registered name and API token.'
+      if [ -n "$old_aaaa" ]; then
+        duckdns_write --data-urlencode 'clear=true' || fail 'DuckDNS rejected the IPv6 record removal.'
+      fi
+      duckdns_write --data-urlencode "ip=$ip" || fail 'DuckDNS rejected the update. Check the registered name and API token.'
       ;;
     desec)
       zone=$domain
@@ -351,12 +427,19 @@ prepare_dns() {
       esac
       for dns_name in $dns_names; do
         subname=${dns_name%"$zone"}
-        desec_snapshot "${subname%.}" >> "$work/dns-records.json"
+        desec_snapshot "${subname%.}" A >> "$work/dns-records.json"
+        desec_snapshot "${subname%.}" AAAA >> "$work/dns-records.json"
       done
-      jq -s '.' "$work/dns-records.json" > "$work/dns-before.json"
-      jq --arg ip "$ip" 'map(.records = [$ip])' "$work/dns-before.json" > "$work/dns-after.json"
+      jq -s 'map(select(.type == "A" or (.records | length > 0)))' "$work/dns-records.json" > "$work/dns-before.json"
+      jq -r --arg zone "$zone" --arg ip "$ip" '
+        .[] | ([.subname, $zone] | map(select(length > 0)) | join(".")) as $name |
+        .records[] | select(. != $ip) | "\($name) currently points to \(.), not this server (\($ip))."
+      ' "$work/dns-before.json" > "$work/dns-conflicts"
+      confirm_dns_replacement
+      jq --arg ip "$ip" 'map(.records = (if .type == "A" then [$ip] else [] end))' \
+        "$work/dns-before.json" > "$work/dns-after.json"
       rollback_dns=true
-      desec_write "$work/dns-after.json" || fail 'deSEC rejected the A record update. Check the token permissions.'
+      desec_write "$work/dns-after.json" || fail 'deSEC rejected the DNS update. Check the token permissions.'
       ;;
     own)
       for dns_name in $dns_names; do say "Set an A record for $dns_name to $ip. Remove any AAAA record."; done
@@ -379,7 +462,16 @@ prepare_dns() {
 
 restore_dns() {
   case $provider in
-    duckdns) duckdns_write "$old_a" ;;
+    duckdns)
+      if [ -n "$old_a" ]; then
+        set -- --data-urlencode "ip=$old_a"
+      else
+        duckdns_write --data-urlencode 'clear=true' || return 1
+        set --
+      fi
+      if [ -n "$old_aaaa" ]; then set -- "$@" --data-urlencode "ipv6=$old_aaaa"; fi
+      [ "$#" -eq 0 ] || duckdns_write "$@"
+      ;;
     desec) desec_write "$work/dns-before.json" ;;
   esac
 }
@@ -528,7 +620,7 @@ install_stack() {
     installed_domain=$domain
   fi
   say 'Pulling the pinned images and starting the personal stack…'
-  compose "$current" "$env_file" pull >/dev/null || fail 'Image pull failed. Check registry access and rerun install.'
+  pull_images "$current" "$env_file" || fail 'Image pull failed. Check registry access and rerun install.'
   start_stack "$current" "$env_file" || fail 'The stack did not become healthy. Run voiceroom status.'
   edge_ready "$installed_domain" ||
     fail 'HTTPS readiness failed. Check DNS, the TLS certificate and inbound TCP ports 80 and 443, then rerun install.'
@@ -588,7 +680,7 @@ upgrade_stack() {
   fi
   backup_config || fail 'Could not back up the installation environment and manifest.'
   say "Pulling $bundle_version. The server will stop accepting calls during the upgrade."
-  compose "$candidate" "$env_file" pull >/dev/null || fail 'Image pull failed. The previous release is still active.'
+  pull_images "$candidate" "$env_file" || fail 'Image pull failed. The previous release is still active.'
   mkdir "$work/upgrade"
   printf '%s\n' "$candidate" > "$work/upgrade/target"
   rollback_upgrade=true
@@ -707,8 +799,17 @@ main() {
   case $operation in
     install) settings "$@" ;;
     upgrade)
-      [ "$#" -le 1 ] || fail 'Usage: voiceroom upgrade [vX.Y.Z]'
-      if [ "$#" -eq 1 ]; then version_valid "$1" || fail 'Use a release version such as v2.15.0.'; fi
+      version=
+      for argument do
+        case $argument in
+          --replace-dns) replace_dns=true ;;
+          *)
+            [ -z "$version" ] || fail 'Usage: voiceroom upgrade [vX.Y.Z] [--replace-dns]'
+            version_valid "$argument" || fail 'Use a release version such as v2.15.0.'
+            version=$argument
+            ;;
+        esac
+      done
       ;;
     domain)
       case ${1:-} in
@@ -746,7 +847,7 @@ main() {
   fi
   case $operation in
     install) install_stack ;;
-    upgrade) upgrade_stack "$@" ;;
+    upgrade) upgrade_stack "$version" ;;
     domain) change_domain ;;
     status) status ;;
     owner-link) owner_link "$@" || fail 'Owner link unavailable. If it was used, pass --rotate to issue a new link.' ;;

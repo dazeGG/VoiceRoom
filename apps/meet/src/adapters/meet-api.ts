@@ -1,3 +1,4 @@
+import { wait } from '@voice-room/call/engine/core/utils';
 import { LiveKitAdmission, type LiveKitTokenBody } from '@voice-room/shared/contracts/admission';
 import { isErrorCode, type ErrorCode } from '@voice-room/shared/contracts/errors';
 import {
@@ -11,6 +12,8 @@ import { parseRuntimeConfig, resolveLiveKitConnectUrls, type RuntimeConfigV1 } f
 import { t } from '@voice-room/ui/i18n';
 import type { Static, TSchema } from 'typebox';
 import { Value } from 'typebox/value';
+
+const STATUS_RETRY_DELAYS_MS = [250, 500, 1_000];
 
 export function meetErrorMessage(code: string): string {
   switch (code) {
@@ -96,12 +99,20 @@ export function createMeetApi(fetcher: typeof fetch = fetch) {
   }
 
   return {
-    async status(roomId: string): Promise<MeetRoomStatus | null> {
-      try {
-        return await request(`/api/meet/rooms/${encodeURIComponent(roomId)}/status`, MeetRoomStatus);
-      } catch (error) {
-        if (error instanceof MeetApiError && error.status === 404) return null;
-        throw error;
+    async status(this: void, roomId: string, signal?: AbortSignal): Promise<MeetRoomStatus | null> {
+      const path = `/api/meet/rooms/${encodeURIComponent(roomId)}/status`;
+      for (let attempt = 0; ; attempt += 1) {
+        signal?.throwIfAborted();
+        try {
+          return await request(path, MeetRoomStatus, signal ? { signal } : {});
+        } catch (error) {
+          signal?.throwIfAborted();
+          if (!(error instanceof MeetApiError)) throw error;
+          if (error.status === 404) return null;
+          const delay = STATUS_RETRY_DELAYS_MS[attempt];
+          if (delay === undefined || (error.status !== 0 && error.status < 500)) throw error;
+          await wait(delay);
+        }
       }
     },
     async exchangeOwnerLink(token: string): Promise<void> {

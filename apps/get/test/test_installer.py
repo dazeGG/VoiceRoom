@@ -19,6 +19,7 @@ INSTALLER = Path(__file__).resolve().parents[1] / 'install.sh'
 COMPOSE = 'docker-compose.personal.yml'
 SERVER_IP = '198.51.100.48'
 OLD_IP = '198.51.100.59'
+OLD_IPV6 = '2001:db8::59'
 TOKEN = 'private-dns-token-for-test'
 V1 = 'v1.0.0'
 V2 = 'v1.0.1'
@@ -65,11 +66,11 @@ class Endpoints(BaseHTTPRequestHandler):
             return self.send_json(self.server.records.get((name, kind), {}).get('records', []))
         if path == '/update':
             return self.duckdns(query)
-        if path.startswith('/api/v1/domains/') and path.endswith('/A/'):
+        if path.startswith('/api/v1/domains/') and path.endswith(('/A/', '/AAAA/')):
             if self.headers.get('Authorization') != f'Token {TOKEN}':
                 return self.send_json({'detail': 'unauthorized'}, 401)
-            subname = path.split('/')[-3]
-            record = self.server.records.get((self.dns_name('' if subname == '@' else subname), 'A'))
+            subname, kind = path.rstrip('/').split('/')[-2:]
+            record = self.server.records.get((self.dns_name('' if subname == '@' else subname), kind))
             return self.send_json(record if record else {'detail': 'missing'}, 200 if record else 404)
         if path == '/releases/latest/download/manifest.json':
             self.send_response(302)
@@ -88,8 +89,10 @@ class Endpoints(BaseHTTPRequestHandler):
         if query.get('clear') == ['true']:
             for kind in ('A', 'AAAA'):
                 self.server.records.pop((name, kind), None)
-        elif 'ip' in query:
-            self.server.records[(name, 'A')] = {'records': query['ip']}
+        elif 'ip' in query or 'ipv6' in query:
+            for parameter, kind in (('ip', 'A'), ('ipv6', 'AAAA')):
+                if parameter in query:
+                    self.server.records[(name, kind)] = {'records': query[parameter]}
         else:
             return self.send_body(b'KO\n')
         return self.send_body(b'OK\n')
@@ -102,12 +105,12 @@ class Endpoints(BaseHTTPRequestHandler):
             return self.send_json({'detail': 'use the upsert endpoint'}, 404)
         body = json.loads(self.rfile.read(int(self.headers.get('Content-Length', 0))) or b'null')
         if not isinstance(body, list) or not body or any(
-            not isinstance(record.get('subname'), str) or record.get('type') != 'A' or record.get('ttl', 0) < 60
+            not isinstance(record.get('subname'), str) or record.get('type') not in ('A', 'AAAA') or record.get('ttl', 0) < 60
             for record in body
         ):
-            return self.send_json({'detail': 'expected valid A RRsets'}, 400)
+            return self.send_json({'detail': 'expected valid address RRsets'}, 400)
         for record in body:
-            key = (self.dns_name(record['subname']), 'A')
+            key = (self.dns_name(record['subname']), record['type'])
             if record['records']:
                 self.server.records[key] = record
             else:
@@ -157,6 +160,7 @@ class InstallerTest(unittest.TestCase):
             GET_TEST_REAL_CURL=shutil.which('curl'),
             GET_TEST_REAL_MV=shutil.which('mv'),
             GET_TEST_REAL_OPENSSL=shutil.which('openssl'),
+            GET_TEST_DNS_TOKEN=TOKEN,
             NO_PROXY='127.0.0.1,localhost',
             VOICEROOM_HOME=str(self.home),
             VOICEROOM_BIN_DIR=str(self.cli.parent),
@@ -263,7 +267,7 @@ class InstallerTest(unittest.TestCase):
         self.fail_readiness(turn='turn.meet.example.test')
         self.assertIn('TURN/TLS is not ready at turn.meet.example.test:443', self.run_cli('status', ok=False))
 
-    def test_piped_duckdns_install_reads_secret_from_terminal_without_echo(self):
+    def run_duckdns_install_on_terminal(self, confirmation, *, ok):
         master, slave = pty.openpty()
         self.addCleanup(os.close, master)
         self.addCleanup(os.close, slave)
@@ -281,31 +285,108 @@ class InstallerTest(unittest.TestCase):
                 process.stdin.write(self.bootstrap)
                 process.stdin.close()
                 output = bytearray()
-                selected_provider = False
+                responses = iter([
+                    (b'DuckDNS (default)', b'\n', False),
+                    (b'duckdns API token:', f'{TOKEN}\n'.encode(), True),
+                    (b'[y/N]', confirmation, False),
+                ])
+                pending = next(responses)
                 deadline = time.monotonic() + 15
                 while process.poll() is None:
                     if time.monotonic() > deadline:
-                        self.fail(f'Expected secure token prompt on /dev/tty, got {output.decode()}')
-                    if b'DuckDNS (default)' in output and not selected_provider:
-                        os.write(master, b'\n')
-                        selected_provider = True
-                    if selected_provider and not termios.tcgetattr(master)[3] & termios.ECHO:
-                        os.write(master, f'{TOKEN}\n'.encode())
-                        break
+                        self.fail(f'Expected DNS confirmation on /dev/tty, got {output.decode()}')
+                    if pending and pending[0] in output:
+                        prompt, response, hidden = pending
+                        if hidden:
+                            self.assertFalse(termios.tcgetattr(master)[3] & termios.ECHO)
+                        if prompt == b'[y/N]':
+                            self.assertNotIn('/update', self.server.requests)
+                        os.write(master, response)
+                        pending = next(responses, None)
                     if select.select([master], [], [], 0.025)[0]:
                         output.extend(os.read(master, 4096))
                 result = process.wait(timeout=15)
                 while select.select([master], [], [], 0)[0]:
                     output.extend(os.read(master, 4096))
-                self.assertEqual(result, 0, output.decode())
+                self.assertEqual(result == 0, ok, output.decode())
                 self.assertNotIn(TOKEN, output.decode())
+                self.assertIsNone(pending, output.decode())
+                return output.decode()
             finally:
                 if process.poll() is None:
                     process.kill()
+
+    def test_piped_duckdns_install_reads_secret_and_accepts_dns_confirmation_on_terminal(self):
+        self.server.records[('voice.duckdns.org', 'A')] = {'records': [OLD_IP]}
+        output = self.run_duckdns_install_on_terminal(b'y\n', ok=True)
+        self.assertIn(f'voice.duckdns.org currently points to {OLD_IP}, not this server ({SERVER_IP}).', output)
         self.assertEqual(self.server.records[('voice.duckdns.org', 'A')]['records'], [SERVER_IP])
         self.assertEqual(self.state()['origin'], 'https://meet.voice.duckdns.org')
         self.assertEqual(self.state()['turn_domain'], 'turn.meet.voice.duckdns.org')
         self.assertIn('/dns/turn.meet.voice.duckdns.org/A', self.server.requests)
+
+    def test_dns_confirmation_defaults_to_no(self):
+        previous = {'records': [OLD_IP]}
+        self.server.records[('voice.duckdns.org', 'A')] = previous
+        self.run_duckdns_install_on_terminal(b'\n', ok=False)
+        self.assertEqual(self.server.records[('voice.duckdns.org', 'A')], previous)
+        self.assertNotIn('/update', self.server.requests)
+        self.assertFalse(self.dotenv.exists())
+
+    def test_noninteractive_dns_conflicts_require_opt_in_for_install_and_domain_set(self):
+        domains = {'duckdns': 'voice.duckdns.org', 'desec': 'voice.dedyn.io'}
+        for provider, domain in domains.items():
+            self.server.records[(domain, 'A')] = {'ttl': 3600, 'records': [OLD_IP]}
+
+        for command in [('install',), ('domain', 'set')]:
+            bootstrap = command == ('install',)
+            if not bootstrap:
+                self.install()
+            for provider, domain in domains.items():
+                with self.subTest(command=command, provider=provider):
+                    events = self.events()
+                    output = self.run_cli(*command, '--provider', provider, '--domain', domain,
+                                          bootstrap=bootstrap, ok=False)
+                    self.assertIn(f'{domain} currently points to {OLD_IP}, not this server ({SERVER_IP}).', output)
+                    self.assertIn('--replace-dns', output)
+                    self.assertEqual(self.server.records[(domain, 'A')]['records'], [OLD_IP])
+                    self.assertNotIn('/update', self.server.requests)
+                    self.assertNotIn('/api/v1/domains/voice.dedyn.io/rrsets/', self.server.requests)
+                    self.assertEqual(self.events(), events)
+
+    def test_explicit_dns_replacement_installs_without_a_terminal(self):
+        domain = 'voice.duckdns.org'
+        self.server.records[(domain, 'A')] = {'records': [OLD_IP]}
+        self.server.records[(domain, 'AAAA')] = {'records': [OLD_IPV6]}
+        self.run_cli('--provider', 'duckdns', '--replace-dns', '--domain', domain, bootstrap=True)
+        self.assertEqual(self.server.records[(domain, 'A')]['records'], [SERVER_IP])
+        self.assertNotIn((domain, 'AAAA'), self.server.records)
+
+    def test_existing_ipv6_at_turn_requires_opt_in_before_any_desec_write(self):
+        self.install()
+        domain = 'voice.dedyn.io'
+        turn = f'turn.{domain}'
+        self.server.records[(turn, 'AAAA')] = {'ttl': 7200, 'records': [OLD_IPV6]}
+        output = self.run_cli('domain', 'set', '--provider', 'desec', '--domain', domain, ok=False)
+        self.assertIn(f'{turn} currently points to {OLD_IPV6}, not this server ({SERVER_IP}).', output)
+        self.assertIn('--replace-dns', output)
+        self.assertNotIn('/api/v1/domains/voice.dedyn.io/rrsets/', self.server.requests)
+        self.assertNotIn((domain, 'A'), self.server.records)
+        self.run_cli('domain', 'set', '--provider', 'desec', '--domain', domain, '--replace-dns')
+        self.assertEqual(self.server.records[(domain, 'A')]['records'], [SERVER_IP])
+        self.assertEqual(self.server.records[(turn, 'A')]['records'], [SERVER_IP])
+        self.assertNotIn((turn, 'AAAA'), self.server.records)
+
+    def test_failed_duckdns_domain_change_restores_ipv6_only_dns(self):
+        self.install()
+        domain = 'voice.duckdns.org'
+        previous = {'records': [OLD_IPV6]}
+        self.server.records[(domain, 'AAAA')] = previous
+        self.fail_readiness(origin=f'https://{domain}')
+        output = self.run_cli('domain', 'set', '--provider', 'duckdns', '--domain', domain, '--replace-dns', ok=False)
+        self.assertIn('Previous domain is healthy.', output)
+        self.assertEqual(self.server.records[(domain, 'AAAA')], previous)
+        self.assertNotIn((domain, 'A'), self.server.records)
 
     def test_rerun_preserves_existing_env_and_active_version(self):
         self.install()
@@ -332,6 +413,40 @@ class InstallerTest(unittest.TestCase):
         self.assertIn(V2, self.run_cli('status'))
         self.assertFalse(list(self.home.rglob('*.dump')))
 
+    def test_install_retries_a_transient_compose_pull_failure(self):
+        self.fail_readiness(pull_failures=1)
+        output = self.install()
+        self.assertEqual([event['image'] for event in self.events() if event['action'] == 'pull'], [image('api', V1)] * 2)
+        self.assertEqual(self.state()['image'], image('api', V1))
+        self.assertNotIn('failed to cleanup', output)
+
+    def test_upgrade_retries_compose_pull_before_it_stops_the_stack(self):
+        self.install()
+        self.publish(V2)
+        self.fail_readiness(pull_failures=2)
+        self.run_cli('upgrade', V2)
+        events = self.events()
+        candidate_pulls = [index for index, event in enumerate(events) if event == {'action': 'pull', 'image': image('api', V2)}]
+        self.assertEqual(len(candidate_pulls), 3)
+        self.assertLess(candidate_pulls[-1], next(index for index, event in enumerate(events) if event['action'] == 'stop'))
+        self.assertEqual(self.state()['image'], image('api', V2))
+
+    def test_pull_exhaustion_prints_only_final_stderr_tail_with_secrets_removed(self):
+        self.install()
+        self.publish(V2)
+        self.fail_readiness(pull_failures=3)
+        events = len(self.events())
+        output = self.run_cli('upgrade', V2, ok=False)
+        self.assertEqual(self.events()[events:], [{'action': 'pull', 'image': image('api', V2)}] * 3)
+        self.assertEqual(self.state()['image'], image('api', V1))
+        self.assertTrue(self.state()['running'])
+        self.assertIn('failed to fetch anonymous token: 502 Bad Gateway', output)
+        self.assertIn('failed to cleanup extract-attempt-3 snapshot', output)
+        self.assertIn('The previous release is still active.', output)
+        for hidden in ('extract-attempt-1', 'extract-attempt-2', 'Pull progress line 0',
+                       'private-registry-password', 'private-registry-token'):
+            self.assertNotIn(hidden, output)
+
     def test_upgrade_from_legacy_config_prepares_de_sec_turn_without_changing_env(self):
         self.publish(V1, turn=False)
         self.run_cli('install', '--provider', 'desec', '--domain', 'meet.voice.dedyn.io', bootstrap=True)
@@ -344,6 +459,23 @@ class InstallerTest(unittest.TestCase):
         self.assertEqual(self.server.records[('turn.meet.voice.dedyn.io', 'A')]['records'], [SERVER_IP])
         self.assertEqual(self.state()['turn_domain'], 'turn.meet.voice.dedyn.io')
         self.assertEqual(self.state()['schema'], image('api', V2))
+
+    def test_upgrade_requires_consent_to_replace_a_legacy_turn_address(self):
+        self.publish(V1, turn=False)
+        domain = 'voice.dedyn.io'
+        turn = f'turn.{domain}'
+        self.run_cli('install', '--provider', 'desec', '--domain', domain, bootstrap=True)
+        self.server.records[(turn, 'A')] = {'ttl': 3600, 'records': [OLD_IP]}
+        self.publish(V2)
+        events = self.events()
+        output = self.run_cli('upgrade', V2, ok=False)
+        self.assertIn(f'{turn} currently points to {OLD_IP}, not this server ({SERVER_IP}).', output)
+        self.assertIn('--replace-dns', output)
+        self.assertEqual(self.events(), events)
+        self.assertEqual(self.server.records[(turn, 'A')]['records'], [OLD_IP])
+        self.run_cli('upgrade', V2, '--replace-dns')
+        self.assertEqual(self.server.records[(turn, 'A')]['records'], [SERVER_IP])
+        self.assertEqual(self.state()['turn_domain'], turn)
 
     def test_upgrade_from_legacy_config_checks_new_ports_and_turn_dns_before_downtime(self):
         self.publish(V1, turn=False)
@@ -421,12 +553,16 @@ class InstallerTest(unittest.TestCase):
         saved = self.environment()
         previous = {'subname': '', 'type': 'A', 'ttl': 3600, 'records': [OLD_IP, '198.51.100.60']}
         previous_turn = {'subname': 'turn', 'type': 'A', 'ttl': 7200, 'records': [OLD_IP]}
+        previous_ipv6 = {'subname': 'turn', 'type': 'AAAA', 'ttl': 10800, 'records': [OLD_IPV6]}
         self.server.records[('voice.dedyn.io', 'A')] = previous
         self.server.records[('turn.voice.dedyn.io', 'A')] = previous_turn
+        self.server.records[('turn.voice.dedyn.io', 'AAAA')] = previous_ipv6
         self.fail_readiness(turn='turn.voice.dedyn.io')
-        output = self.run_cli('domain', 'set', '--provider', 'desec', '--domain', 'voice.dedyn.io', ok=False)
+        output = self.run_cli('domain', 'set', '--provider', 'desec', '--domain', 'voice.dedyn.io', '--replace-dns', ok=False)
+        self.assertIn('Previous domain is healthy.', output)
         self.assertEqual(self.server.records[('voice.dedyn.io', 'A')], previous)
         self.assertEqual(self.server.records[('turn.voice.dedyn.io', 'A')], previous_turn)
+        self.assertEqual(self.server.records[('turn.voice.dedyn.io', 'AAAA')], previous_ipv6)
         self.assertEqual(self.environment(), saved)
         self.assertEqual(self.state()['origin'], 'https://meet.example.test')
         self.assertEqual(self.state()['signal'], 'wss://meet.example.test')
