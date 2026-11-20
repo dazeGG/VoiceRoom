@@ -73,6 +73,9 @@ class Endpoints(BaseHTTPRequestHandler):
             record = self.server.records.get((self.dns_name('' if subname == '@' else subname), kind))
             return self.send_json(record if record else {'detail': 'missing'}, 200 if record else 404)
         if path == '/releases/latest/download/manifest.json':
+            if self.server.direct_release_manifest:
+                manifest = self.server.assets.get(f'/releases/download/{self.server.latest}/manifest.json')
+                return self.send_body(manifest if manifest else b'not found', 200 if manifest else 404)
             self.send_response(302)
             self.send_header('Location', f'/releases/download/{self.server.latest}/manifest.json')
             self.send_header('Content-Length', '0')
@@ -127,12 +130,9 @@ class InstallerTest(unittest.TestCase):
         self.dotenv = self.home / '.env'
         self.cli = self.root / 'bin' / 'voiceroom'
         self.cli.parent.mkdir()
-        doubles = self.root / 'fakes'
-        doubles.mkdir()
-        for command in ('docker', 'dig', 'curl', 'uname', 'ss', 'mv', 'openssl'):
-            target = doubles / command
-            shutil.copyfile(Path(__file__).with_name('fake_command.py'), target)
-            target.chmod(0o700)
+        self.doubles = self.root / 'fakes'
+        self.doubles.mkdir()
+        self.fake_commands('docker', 'dig', 'curl', 'uname', 'ss', 'mv', 'openssl')
 
         self.server = ThreadingHTTPServer(('127.0.0.1', 0), Endpoints)
         self.server.records = {(name, 'A'): {'records': [SERVER_IP]} for name in (
@@ -142,6 +142,7 @@ class InstallerTest(unittest.TestCase):
         self.server.assets = {}
         self.server.requests = []
         self.server.latest = V1
+        self.server.direct_release_manifest = False
         self.base = f'http://127.0.0.1:{self.server.server_port}'
         thread = threading.Thread(target=self.server.serve_forever, kwargs={'poll_interval': 0.05}, daemon=True)
         thread.start()
@@ -154,7 +155,7 @@ class InstallerTest(unittest.TestCase):
         self.addCleanup(stop_server)
         self.env = {key: value for key, value in os.environ.items() if not key.startswith(('VOICEROOM_', 'PERSONAL_'))}
         self.env.update(
-            PATH=f"{doubles}:{os.environ['PATH']}",
+            PATH=f"{self.doubles}:{os.environ['PATH']}",
             GET_TEST_ROOT=str(self.root),
             GET_TEST_HTTP=self.base,
             GET_TEST_REAL_CURL=shutil.which('curl'),
@@ -175,11 +176,19 @@ class InstallerTest(unittest.TestCase):
         self.bootstrap = INSTALLER.read_bytes()
         self.publish(V1)
 
+    def fake_commands(self, *commands):
+        for command in commands:
+            target = self.doubles / command
+            shutil.copyfile(Path(__file__).with_name('fake_command.py'), target)
+            target.chmod(0o700)
+
     def publish(self, version, *, bad_image=False, turn=True):
         images = {name: image(name, version) for name in ('api', 'caddy', 'livekit', 'postgres')}
         services = {key: {'image': value} for key, value in images.items()}
         services['migrate'] = {'image': images['api']}
         services['livekit-gate'] = {'image': image('api', V1) if bad_image else images['api']}
+        for name in ('api', 'livekit-gate', 'postgres'):
+            services[name]['healthcheck'] = {'test': ['CMD', 'true']}
         udp_ports = [7882]
         if turn:
             services['caddy']['environment'] = {'TURN_ENABLED': 'true'}
@@ -230,6 +239,251 @@ class InstallerTest(unittest.TestCase):
 
     def install(self):
         return self.run_cli('install', '--provider', 'own', '--domain', 'meet.example.test', bootstrap=True)
+
+    def run_doctor(self, *, ok=True, bootstrap=False):
+        self.fake_commands('df', 'free', 'timedatectl', 'chronyc', 'ufw', 'firewall-cmd', 'nft', 'iptables', 'ip6tables', 'ip')
+        self.server.direct_release_manifest = True
+        self.server.requests.clear()
+        event_count = len(self.events())
+        state_before = self.state()
+        environment_before = self.environment() if self.dotenv.exists() else None
+        try:
+            output = self.run_cli(
+                'doctor', ok=ok, bootstrap=bootstrap, GET_TEST_DOCTOR='1',
+                DOCKER_CONTEXT='remote-context', DOCKER_HOST='tcp://192.0.2.1:2376',
+            )
+        finally:
+            self.server.direct_release_manifest = False
+        self.assertEqual(self.state(), state_before)
+        self.assertEqual(self.environment() if self.dotenv.exists() else None, environment_before)
+        self.assertEqual(self.server.requests.count('/releases/latest/download/manifest.json'), 1)
+        self.assertEqual(self.server.requests.count('/public-ip'), 1)
+        for path in self.server.requests:
+            self.assertTrue(path in ('/public-ip', '/releases/latest/download/manifest.json') or path.startswith('/dns/'), path)
+        for event in self.events()[event_count:]:
+            self.assertIn(event['action'], ('dns-query', 'certificate', 'readyz', 'logs'), event)
+        self.assertIn('security group', output.lower())
+        return output
+
+    def assert_doctor_status(self, output, status, label, *details):
+        lines = [line for line in output.splitlines() if line.startswith(tuple(
+            f'{level} {label}:' for level in ('OK', 'WARN', 'FAIL')
+        ))]
+        self.assertEqual(len(lines), 1, output)
+        self.assertTrue(lines[0].startswith(f'{status} {label}:'), lines[0])
+        for detail in details:
+            self.assertIn(detail.lower(), lines[0].lower())
+
+    def test_doctor_reports_every_check_and_only_uses_existing_network_endpoints(self):
+        self.install()
+        output = self.run_doctor()
+        checks = {
+            'Installed version': V1,
+            'Latest release': V1,
+            'Docker Engine': '',
+            'Docker Compose': '2.38.1',
+            'Docker disk': '4096',
+            'Available memory': '2944',
+            'Clock sync': '',
+            'Public IPv4': SERVER_IP,
+            'Meet DNS': 'meet.example.test',
+            'TURN DNS': 'turn.meet.example.test',
+            'Meet HTTPS certificate': '60 days',
+            'TURN/TLS certificate': '60 days',
+            'Local TCP 80': '',
+            'Local TCP 443': '',
+            'Local TCP 7881': '',
+            'Local UDP 7882': '',
+            'Local UDP 3478': '',
+            'Local UDP 30000-30099': '',
+            'Host firewall': '',
+        }
+        for service in ('api', 'caddy', 'livekit', 'livekit-gate', 'migrate', 'postgres'):
+            checks[f'Container {service}'] = ''
+        for label, detail in checks.items():
+            self.assert_doctor_status(output, 'OK', label, detail)
+        self.assertEqual(sum(line.startswith('OK ') for line in output.splitlines()), len(checks), output)
+        self.assertNotIn('WARN ', output)
+        self.assertNotIn('FAIL ', output)
+        self.assertCountEqual([e['name'] for e in self.events() if e['action'] == 'certificate'],
+                              ['meet.example.test', 'turn.meet.example.test'])
+        for domain in ('meet.example.test', 'turn.meet.example.test'):
+            for record_type in ('A', 'AAAA'):
+                self.assertIn(f'/dns/{domain}/{record_type}', self.server.requests)
+
+    def test_doctor_warns_about_updates_low_resources_clock_and_expiring_certificates(self):
+        self.install()
+        self.publish(V2)
+        self.server.latest = V2
+        self.fail_readiness(
+            disk_mb=1500, memory_mb=299, clock='no', expiry_days={'meet.example.test': 13, 'turn.meet.example.test': 4},
+            containers={'postgres': {'Health': 'starting'}},
+        )
+        output = self.run_doctor()
+        self.assert_doctor_status(output, 'WARN', 'Latest release', V2, 'voiceroom upgrade')
+        self.assert_doctor_status(output, 'WARN', 'Docker disk', '1500')
+        self.assert_doctor_status(output, 'WARN', 'Available memory', '299')
+        self.assert_doctor_status(output, 'WARN', 'Clock sync')
+        self.assert_doctor_status(output, 'WARN', 'Meet HTTPS certificate', '13 days')
+        self.assert_doctor_status(output, 'WARN', 'TURN/TLS certificate', '4 days')
+        self.assert_doctor_status(output, 'WARN', 'Container postgres', 'starting')
+        self.assertNotIn('FAIL ', output)
+
+    def test_doctor_uses_chrony_and_warns_if_the_release_cannot_be_fetched(self):
+        self.install()
+        self.server.latest = 'missing-release'
+        self.fail_readiness(clock=None, chrony='Leap status     : Normal')
+        output = self.run_doctor()
+        self.assert_doctor_status(output, 'WARN', 'Latest release', 'GitHub')
+        self.assert_doctor_status(output, 'OK', 'Clock sync')
+
+    def test_doctor_still_runs_with_docker_unavailable(self):
+        self.install()
+        self.fail_readiness(engine=True, compose=True)
+        output = self.run_doctor(ok=False)
+        self.assert_doctor_status(output, 'FAIL', 'Docker Engine')
+        self.assert_doctor_status(output, 'FAIL', 'Docker Compose')
+        self.assert_doctor_status(output, 'OK', 'Installed version', V1)
+        self.assert_doctor_status(output, 'OK', 'Meet DNS')
+        self.assert_doctor_status(output, 'OK', 'Local TCP 443')
+        self.assert_doctor_status(output, 'OK', 'Host firewall')
+
+    def test_doctor_names_the_configured_dns_provider_and_both_records(self):
+        self.run_cli('install', '--provider', 'desec', '--domain', 'voice.dedyn.io', bootstrap=True)
+        self.server.records[('voice.dedyn.io', 'A')] = {'records': [OLD_IP]}
+        self.server.records[('turn.voice.dedyn.io', 'AAAA')] = {'records': [OLD_IPV6]}
+        output = self.run_doctor(ok=False)
+        self.assert_doctor_status(output, 'FAIL', 'Meet DNS', 'deSEC', 'voice.dedyn.io', 'A record', SERVER_IP)
+        self.assert_doctor_status(output, 'FAIL', 'TURN DNS', 'deSEC', 'turn.voice.dedyn.io', 'AAAA')
+        self.assertNotIn('Remove the AAAA record for voice.dedyn.io', output)
+        self.assertNotIn('Set the A record for turn.voice.dedyn.io', output)
+
+    def test_doctor_reports_unreadable_dns_and_socket_results(self):
+        self.install()
+        self.fail_readiness(
+            dns_unavailable=['meet.example.test/A'], dns_malformed=['turn.meet.example.test/A'],
+            sockets_unavailable=True,
+        )
+        output = self.run_doctor(ok=False)
+        self.assert_doctor_status(output, 'FAIL', 'Meet DNS', 'meet.example.test', 'DNS resolver')
+        self.assert_doctor_status(output, 'FAIL', 'TURN DNS', 'turn.meet.example.test', 'DNS resolver')
+        queried = [(e['name'], e['record_type']) for e in self.events() if e['action'] == 'dns-query']
+        self.assertCountEqual(queried, [(name, kind) for name in ('meet.example.test', 'turn.meet.example.test')
+                                       for kind in ('A', 'AAAA')])
+        self.assert_doctor_status(output, 'WARN', 'Local TCP 443', 'iproute2')
+        self.assert_doctor_status(output, 'WARN', 'Local UDP 30000-30099', 'iproute2')
+        self.assert_doctor_status(output, 'OK', 'Host firewall')
+
+    def test_doctor_accepts_a_legacy_bundle_without_turn(self):
+        self.publish(V1, turn=False)
+        self.install()
+        self.fail_readiness(missing_ports=[3478, *range(30000, 30100)])
+        output = self.run_doctor()
+        self.assert_doctor_status(output, 'OK', 'TURN DNS', 'disabled')
+        self.assert_doctor_status(output, 'OK', 'TURN/TLS certificate', 'disabled')
+        self.assertNotIn('3478', output)
+        self.assertNotIn('30000-30099', output)
+        self.assertEqual([e['name'] for e in self.events() if e['action'] == 'certificate'], ['meet.example.test'])
+
+    def test_doctor_reports_missing_installation_and_still_checks_host(self):
+        output = self.run_doctor(ok=False, bootstrap=True)
+        self.assert_doctor_status(output, 'FAIL', 'Installed version', 'voiceroom install')
+        self.assert_doctor_status(output, 'OK', 'Docker Engine')
+        self.assert_doctor_status(output, 'OK', 'Public IPv4', SERVER_IP)
+        self.assert_doctor_status(output, 'OK', 'Host firewall')
+
+    def test_doctor_reports_all_critical_failures_in_one_run_and_redacts_tail(self):
+        self.install()
+        self.server.records[('meet.example.test', 'A')] = {'records': [OLD_IP]}
+        self.server.records[('turn.meet.example.test', 'AAAA')] = {'records': [OLD_IPV6]}
+        self.fail_readiness(
+            disk_mb=499, certificates=['meet.example.test', 'turn.meet.example.test'],
+            containers={'api': {'State': 'restarting'}, 'livekit-gate': {'Health': 'unhealthy'}},
+            missing_services=['postgres'], missing_ports=[443, 7882, 30050],
+            firewall={'ufw status verbose': [0, 'Status: active\n'
+                      'Default: deny (incoming), allow (outgoing), disabled (routed)\n'
+                      '80/tcp ALLOW IN Anywhere']},
+        )
+        output = self.run_doctor(ok=False)
+        self.assert_doctor_status(output, 'FAIL', 'Docker disk', '499')
+        self.assert_doctor_status(output, 'FAIL', 'Meet DNS', 'meet.example.test', 'A record', SERVER_IP, 'DNS provider')
+        self.assert_doctor_status(output, 'FAIL', 'TURN DNS', 'turn.meet.example.test', 'AAAA', 'DNS provider')
+        self.assert_doctor_status(output, 'FAIL', 'Meet HTTPS certificate')
+        self.assert_doctor_status(output, 'FAIL', 'TURN/TLS certificate')
+        self.assert_doctor_status(output, 'FAIL', 'Container api', 'restarting')
+        self.assert_doctor_status(output, 'FAIL', 'Container livekit-gate', 'unhealthy')
+        self.assert_doctor_status(output, 'FAIL', 'Container postgres')
+        self.assert_doctor_status(output, 'FAIL', 'Local TCP 443')
+        self.assert_doctor_status(output, 'FAIL', 'Local UDP 7882')
+        self.assert_doctor_status(output, 'FAIL', 'Local UDP 30000-30099')
+        self.assert_doctor_status(output, 'FAIL', 'Host firewall', 'sudo ufw', '443/tcp', '30000:30099/udp')
+        self.assertCountEqual([e['service'] for e in self.events() if e['action'] == 'logs'], ['api', 'livekit-gate'])
+        self.assertEqual(sum(line.startswith('    ') for line in output.splitlines()), 10, output)
+        self.assertIn('recent crash while starting', output)
+        self.assertIn('[redacted]', output)
+        for sensitive in ('old log line that must remain private', 'another older log line', '#owner=',
+                          'private-owner-token-0', 'unrecognised-password', 'unrecognised-token'):
+            self.assertNotIn(sensitive, output)
+
+    def test_doctor_warns_instead_of_failing_ports_when_docker_publishes_without_a_listener(self):
+        self.install()
+        daemon_config = self.root / 'daemon.json'
+        daemon_config.write_text('{"userland-proxy": false}')
+        self.env['VOICEROOM_DOCKER_DAEMON_CONFIG'] = str(daemon_config)
+        self.fail_readiness(missing_ports=[7882])
+        output = self.run_doctor()
+        self.assert_doctor_status(output, 'WARN', 'Local UDP 7882', 'userland-proxy')
+
+    def test_doctor_warns_when_firewall_rules_cannot_be_read(self):
+        self.install()
+        self.fail_readiness(firewall={'nft -n list ruleset': [1, 'Operation not permitted']})
+        output = self.run_doctor()
+        self.assert_doctor_status(output, 'WARN', 'Host firewall', 'allow')
+
+    def test_doctor_reports_exact_commands_for_blocked_ports_across_firewall_backends(self):
+        self.install()
+        for backend, tool, open_port, fix in (
+            (
+                'firewalld', 'firewall-cmd --zone=public --list-all', '30000-30099/udp',
+                'sudo firewall-cmd --zone=public --add-port=30000-30099/udp',
+            ),
+            (
+                'nftables', 'nft -n list ruleset', 'udp dport 30000-30099 accept',
+                'sudo nft insert rule inet filter inbound udp dport 30000-30099 accept',
+            ),
+            (
+                'iptables', 'iptables -w 2 -S INPUT', '-A INPUT -p udp -m udp --dport 30000:30099 -j ACCEPT',
+                'sudo iptables -I INPUT 1 -p udp --dport 30000:30099 -j ACCEPT',
+            ),
+        ):
+            with self.subTest(backend=backend):
+                rules = {
+                    'firewalld': ('public\n  target: default\n  services: dhcpv6-client\n'
+                                  '  ports: 80/tcp 443/tcp 7881/tcp 7882/udp 3478/udp @relay@'),
+                    'nftables': ('table inet filter {\n  chain inbound {\n'
+                                 '    type filter hook input priority filter; policy drop;\n'
+                                 '    tcp dport { 80, 443, 7881 } accept\n'
+                                 '    udp dport { 7882, 3478 } accept\n    @relay@\n  }\n}'),
+                    'iptables': ('-P INPUT DROP\n-A INPUT -p tcp -m multiport --dports 80,443,7881 -j ACCEPT\n'
+                                 '-A INPUT -p udp -m multiport --dports 7882,3478 -j ACCEPT\n@relay@\n'
+                                 '-A INPUT -j REJECT --reject-with icmp-port-unreachable'),
+                }[backend]
+                firewall = {}
+                if backend == 'firewalld':
+                    firewall.update({
+                        'firewall-cmd --state': [0, 'running'],
+                        'firewall-cmd --get-zone-of-interface=eth0': [0, 'public'],
+                        'firewall-cmd --info-service=dhcpv6-client': [
+                            0, 'dhcpv6-client\n  ports: 546/udp\n  destination: ipv6:fe80::/64\n  includes:',
+                        ],
+                    })
+                firewall[tool] = [0, rules.replace('@relay@', '')]
+                self.fail_readiness(firewall=firewall)
+                output = self.run_doctor(ok=False)
+                self.assert_doctor_status(output, 'FAIL', 'Host firewall', fix)
+                firewall[tool][1] = rules.replace('@relay@', open_port)
+                self.fail_readiness(firewall=firewall)
+                self.assert_doctor_status(self.run_doctor(), 'OK', 'Host firewall')
 
     def test_piped_install_checks_dns_starts_waiting_stack_and_prints_owner_link(self):
         output = self.install()
