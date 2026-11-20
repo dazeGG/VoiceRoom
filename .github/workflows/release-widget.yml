@@ -1,0 +1,15 @@
+name: Release Widget
+
+on:
+  push:
+    tags: ['widget/v*']
+
+jobs:
+  release:
+    permissions:
+      contents: write
+    uses: ./.github/workflows/release-component.yml
+    with:
+      component: widget
+      url: https://voiceroom.ru/widget/v1/loader.js
+    secrets: inherit

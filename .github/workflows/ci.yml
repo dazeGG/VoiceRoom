@@ -415,6 +415,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
         with:
+          fetch-depth: 0
           persist-credentials: false
       - run: sudo python3 -B -m unittest discover -s apps/get/test -v
 
@@ -459,15 +460,35 @@ jobs:
       packages: write
     uses: ./.github/workflows/images.yml
 
+  client-artifacts:
+    needs: images
+    if: ${{ !cancelled() && github.event_name == 'push' && needs.images.result == 'success' }}
+    uses: ./.github/workflows/build-client.yml
+    with:
+      component: all
+
   deploy-dev:
     name: Deploy dev
-    needs: images
+    needs: [images, client-artifacts]
     # Publication can succeed after skipping the individual app checks.
-    if: ${{ !cancelled() && github.event_name == 'push' && needs.images.result == 'success' }}
+    if: ${{ !cancelled() && github.event_name == 'push' && needs.images.result == 'success' && needs.client-artifacts.result == 'success' }}
     uses: ./.github/workflows/deploy.yml
     with:
       environment: dev
       url: https://dev.voiceroom.ru
+    secrets: inherit
+
+  deploy-clients-dev:
+    name: Deploy dev ${{ matrix.component }}
+    needs: deploy-dev
+    strategy:
+      fail-fast: false
+      matrix:
+        component: [admin, widget]
+    uses: ./.github/workflows/deploy-client.yml
+    with:
+      component: ${{ matrix.component }}
+      environment: dev
     secrets: inherit
 
   static-publication:

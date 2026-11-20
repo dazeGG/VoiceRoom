@@ -13,9 +13,9 @@ if [ "${TURN_ENABLED:-false}" = "true" ]; then
   cp /etc/caddy/turn-available/turn.options /etc/caddy/turn-available/turn.site /etc/caddy/turn.d/
 fi
 
-# The main web image passes its additional site and asset preparation command.
+# The main web image passes a launcher that resolves its static releases.
 if [ "$#" -gt 0 ]; then
-  "$@"
+  exec "$@"
 fi
 
 exec caddy run --config /etc/caddy/Caddyfile --adapter caddyfile

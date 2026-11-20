@@ -8,6 +8,7 @@ COPY apps/web/package.json ./apps/web/package.json
 COPY apps/widget/package.json ./apps/widget/package.json
 COPY apps/admin/package.json ./apps/admin/package.json
 COPY apps/site/package.json ./apps/site/package.json
+COPY apps/meet/package.json ./apps/meet/package.json
 COPY packages/shared/package.json ./packages/shared/package.json
 COPY packages/ui/package.json ./packages/ui/package.json
 COPY packages/call/package.json ./packages/call/package.json
@@ -17,15 +18,30 @@ RUN npm ci --workspace @voice-room/api --workspace @voice-room/web --workspace @
 FROM deps AS web-build
 
 COPY apps/web ./apps/web
-COPY apps/widget ./apps/widget
-COPY apps/admin ./apps/admin
 COPY packages ./packages
 COPY scripts/build ./scripts/build
 RUN npm --workspace @voice-room/web run build \
-  && npm --workspace @voice-room/widget run build \
-  && npm --workspace @voice-room/admin run build \
-  && node apps/web/scripts/emit-caddy-csp.ts apps/web/dist/index.html > /app/csp.caddy \
-  && node apps/web/scripts/emit-caddy-csp.ts apps/widget/dist/embed/v1/index.html "" https: > /app/widget-csp.caddy
+  && node apps/web/scripts/emit-caddy-csp.ts apps/web/dist/index.html > /app/csp.caddy
+
+FROM deps AS widget-build
+COPY apps/widget ./apps/widget
+COPY packages ./packages
+COPY scripts/build ./scripts/build
+COPY apps/web/scripts/emit-caddy-csp.ts ./emit-caddy-csp.mts
+RUN npm --workspace @voice-room/widget run build \
+  && node emit-caddy-csp.mts apps/widget/dist/embed/v1/index.html "" https: > apps/widget/dist/csp.caddy
+
+FROM scratch AS widget
+COPY --from=widget-build /app/apps/widget/dist /dist
+
+FROM deps AS admin-build
+COPY apps/admin ./apps/admin
+COPY packages ./packages
+RUN npm --workspace @voice-room/admin run build
+
+FROM scratch AS admin
+COPY --from=admin-build /app/apps/admin/dist /dist
+COPY config/caddy/admin-csp.caddy /dist/csp.caddy
 
 FROM node:24.18.0-alpine3.23 AS api
 LABEL org.voiceroom.capabilities="widget-boundary-v1"
@@ -80,14 +96,13 @@ COPY Caddyfile /etc/caddy/Caddyfile
 COPY config/caddy/domains-available /etc/caddy/domains-available
 COPY --chmod=0755 config/caddy/prepare-web.sh /usr/local/bin/voiceroom-prepare-web
 COPY --chmod=0755 config/caddy/archive-assets.sh /usr/local/bin/voiceroom-archive-assets
+COPY --chmod=0755 config/caddy/archive-voice-assets.sh /usr/local/bin/voiceroom-archive-voice-assets
 COPY --from=web-build /app/csp.caddy /etc/caddy/csp.caddy
-COPY --from=web-build /app/widget-csp.caddy /etc/caddy/widget-csp.caddy
-COPY config/caddy/admin-csp.caddy /etc/caddy/admin-csp.caddy
+COPY config/caddy/empty-client-csp.caddy /etc/caddy/empty-client-csp.caddy
 COPY --from=web-build /app/apps/web/dist /srv/web
-COPY --from=web-build /app/apps/widget/dist /srv/web
-# The admin app, served only on ADMIN_DOMAIN behind the staff gate (Caddyfile).
-COPY --from=web-build /app/apps/admin/dist /srv/admin
 
+HEALTHCHECK --interval=10s --timeout=3s --start-period=10s --start-interval=1s --retries=3 \
+  CMD wget -q -O /dev/null http://127.0.0.1:2019/config/ || exit 1
 CMD ["voiceroom-caddy", "voiceroom-prepare-web"]
 
 FROM node:24.18.0-alpine3.23 AS meet-build

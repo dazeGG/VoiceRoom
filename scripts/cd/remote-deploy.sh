@@ -5,13 +5,18 @@
 # after a rollout was actually attempted, never after a failed preflight/pull.
 # Database migrations are not reverted: restore the dump taken here instead.
 #
-# Usage: remote-deploy.sh <deploy-path> <commit> <api-image> <worker-image> <web-image>
+# Usage: remote-deploy.sh <deploy-path> <commit> <api-image> <worker-image> <web-image> [all|api|web]
 set -Eeuo pipefail
 
 # The script arrives on stdin, so bash must read all of it before running any
 # command that could consume the rest (docker compose exec, ssh, ...).
 main() {
   local deploy_path=$1 commit=$2 api_image=$3 worker_image=$4 web_image=$5
+  local component=${6:-all}
+  case "$component" in
+    all|api|web) ;;
+    *) echo 'invalid image deployment component' >&2; exit 1 ;;
+  esac
   local phase_started=$SECONDS
   report_phase() {
     local now=$SECONDS
@@ -48,7 +53,7 @@ main() {
     exit 1
   fi
   local first_logging_activation=false
-  if [ "$persistent_logs" = true ]; then
+  if [ "$persistent_logs" = true ] && [ "$component" != web ]; then
     local livekit_id livekit_driver
     livekit_id=$(docker compose ps --all --quiet livekit)
     [[ "$livekit_id" =~ ^[a-f0-9]{12,64}$ ]] || {
@@ -112,16 +117,18 @@ main() {
     log_deploy deployment.logging_voice_interruption_approved
   fi
 
-  echo "== backing up .env and the database ($previous_commit -> $commit)"
+  echo "== backing up deployment state ($component: $previous_commit -> $commit)"
   cp .env "$env_backup"
   chmod 600 "$env_backup"
-  db_dump="$backup_dir/db-$stamp.dump"
-  if ! docker compose exec -T postgres sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc' < /dev/null > "$db_dump"; then
-    rm -f "$db_dump"
-    echo "database backup failed, nothing was changed" >&2
-    exit 1
+  if [ "$component" != web ]; then
+    db_dump="$backup_dir/db-$stamp.dump"
+    if ! docker compose exec -T postgres sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc' < /dev/null > "$db_dump"; then
+      rm -f "$db_dump"
+      echo "database backup failed, nothing was changed" >&2
+      exit 1
+    fi
+    chmod 600 "$db_dump"
   fi
-  chmod 600 "$db_dump"
   report_phase backup
 
   local rollout_started=false
@@ -138,12 +145,24 @@ main() {
   previous_api=$(sed -n 's/^VOICEROOM_API_IMAGE=//p' "$env_backup")
   previous_worker=$(sed -n 's/^VOICEROOM_WORKER_IMAGE=//p' "$env_backup")
   previous_web=$(sed -n 's/^VOICEROOM_WEB_IMAGE=//p' "$env_backup")
+  previous_worker=${previous_worker:-$previous_api}
   report_phase fetch-and-prepare
 
   echo "== pulling images"
-  docker pull --quiet "$api_image"
-  docker pull --quiet "$worker_image"
-  docker pull --quiet "$web_image"
+  if [ "$component" = web ]; then
+    api_image=$previous_api
+    worker_image=$previous_worker
+  else
+    docker pull --quiet "$api_image"
+    if [ "$worker_image" != "$api_image" ]; then
+      docker pull --quiet "$worker_image"
+    fi
+  fi
+  if [ "$component" = api ]; then
+    web_image=$previous_web
+  else
+    docker pull --quiet "$web_image"
+  fi
   report_phase image-pull
   python3 "$manifest_helper" "$boundary_manifest" \
     "$api_image" "$worker_image" "$web_image" \
@@ -155,12 +174,31 @@ main() {
   }
   boundary_preflight
   report_phase compatibility-preflight
+
+  if [ "$component" != api ]; then
+    # Seed the split edge under the existing locks before touching the
+    # checkout, env or containers. A failed copy can be retried as-is.
+    local client_publisher="$PWD/$backup_dir/publish-client-$stamp.sh"
+    git show "$commit:scripts/cd/publish-client.sh" > "$client_publisher"
+    bash "$client_publisher" "$PWD" widget "$previous_commit" --seed-legacy "$commit"
+    bash "$client_publisher" "$PWD" admin "$previous_commit" --seed-legacy "$commit"
+    rm -f "$client_publisher"
+  fi
+
+  local rollout_args=(--remove-orphans)
+  case "$component" in
+    api) rollout_args=(migrate media-init api livekit-gate message-delivery notification-delivery
+                        media-processing media-maintenance media-reconciliation) ;;
+    web) rollout_args=(--no-deps caddy) ;;
+  esac
   rollback() {
     trap - ERR
     log_deploy deployment.rollback_requested
     # Recheck persistent state even if the earlier preflight passed: a floor
     # activated during rollout must prevent restoration of legacy binaries.
-    if ! boundary_preflight --rollback; then
+    local recovery_args=()
+    if [ "$component" != web ]; then recovery_args=(--rollback); fi
+    if ! boundary_preflight "${recovery_args[@]}"; then
       echo 'rollback refused: leaving the last stack in place; operator recovery required' >&2
       exit 1
     fi
@@ -168,14 +206,12 @@ main() {
     cp "$env_backup" .env
     # Recovery proved persisted admission off. Never restore a backed-up flag
     # that could later enable entry unexpectedly on the compatible target.
-    if grep -q '^WIDGET_ENABLED=' .env; then
-      sed -i 's/^WIDGET_ENABLED=.*/WIDGET_ENABLED=false/' .env
-    else
-      printf 'WIDGET_ENABLED=false\n' >> .env
+    if [ "$component" != web ]; then
+      set_env WIDGET_ENABLED false
+      git checkout --quiet --detach "$previous_commit"
     fi
-    git checkout --quiet --detach "$previous_commit"
     if [ "$rollout_started" = true ]; then
-      if ! docker compose up -d --remove-orphans; then
+      if ! docker compose up -d "${rollout_args[@]}"; then
         echo 'rollback stack restoration failed; operator repair required' >&2
       fi
     fi
@@ -191,8 +227,10 @@ main() {
     fi
   }
 
-  echo "== checking out $commit"
-  git checkout --quiet --detach "$commit"
+  if [ "$component" != web ]; then
+    echo "== checking out $commit"
+    git checkout --quiet --detach "$commit"
+  fi
 
   # Preserve the existing marketing site on the first rollout that separates
   # static publication from the app image. The publisher takes the same site
@@ -202,13 +240,17 @@ main() {
     previous_caddy=$(docker compose ps --quiet caddy)
     if [ -n "$previous_caddy" ] && docker exec "$previous_caddy" test -s /srv/site/index.html; then
       docker cp "$previous_caddy:/srv/site/." - |
-        bash scripts/cd/publish-static.sh "$PWD" site "$previous_commit" --if-empty
+        bash <(git show "$commit:scripts/cd/publish-static.sh") "$PWD" site "$previous_commit" --if-empty
     fi
   fi
 
-  set_env VOICEROOM_API_IMAGE "$api_image"
-  set_env VOICEROOM_WORKER_IMAGE "$worker_image"
-  set_env VOICEROOM_WEB_IMAGE "$web_image"
+  if [ "$component" != web ]; then
+    set_env VOICEROOM_API_IMAGE "$api_image"
+    set_env VOICEROOM_WORKER_IMAGE "$worker_image"
+  fi
+  if [ "$component" != api ]; then
+    set_env VOICEROOM_WEB_IMAGE "$web_image"
+  fi
   docker compose config --quiet
   if [ "$persistent_logs" = true ]; then
     bash /etc/voiceroom/logging/preflight.sh "$PWD"
@@ -225,15 +267,13 @@ main() {
 
   echo "== rolling out"
   rollout_started=true
-  docker compose up -d --remove-orphans --wait --wait-timeout 300
+  docker compose up -d --wait --wait-timeout 300 "${rollout_args[@]}"
   trap - ERR
   report_phase compose-rollout-and-health
   log_deploy deployment.completed
 
   echo "== cleaning up"
-  # Every rollout pulls three new VoiceRoom images, so on a busy day the age
-  # filter below keeps all of them and a small disk fills up (dev hit 100% on
-  # 2026-09-13 and 2026-09-24). Keep only this release and the previous one,
+  # Keep this release and the previous one,
   # whose tags the .env backup holds, so a manual rollback needs no pull.
   # Prod and dev can share a host (docs/SELF_HOSTING.md), so the same pair of
   # every other compose stack here is kept too: its .env and newest backup.

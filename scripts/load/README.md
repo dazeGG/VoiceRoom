@@ -38,9 +38,9 @@ load it into the stand before `setup-stand.sh`:
 
 ```sh
 git archive HEAD | ssh root@$GENERATOR "mkdir -p /root/src && tar -x -C /root/src"
-ssh root@$GENERATOR "cd /root/src && docker build --target api -t voiceroom-api:lt . && docker build --target worker -t voiceroom-worker:lt ."
-ssh root@$GENERATOR "docker save voiceroom-api:lt voiceroom-worker:lt" | ssh root@$STAND docker load
-ssh root@$STAND "cd /srv/voiceroom-load && API_IMAGE=voiceroom-api:lt WORKER_IMAGE=voiceroom-worker:lt GENERATOR_IP=$GENERATOR bash setup-stand.sh <prod-commit-sha>"
+ssh root@$GENERATOR "cd /root/src && docker build --target api -t voiceroom-api:lt ."
+ssh root@$GENERATOR "docker save voiceroom-api:lt" | ssh root@$STAND docker load
+ssh root@$STAND "cd /srv/voiceroom-load && API_IMAGE=voiceroom-api:lt WEB_IMAGE=ghcr.io/dazegg/voiceroom-web:<web-commit-sha> GENERATOR_IP=$GENERATOR bash setup-stand.sh <api-commit-sha>"
 ```
 
 ### Media (`run-scenarios.sh`)

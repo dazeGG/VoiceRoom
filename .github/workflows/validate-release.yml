@@ -1,0 +1,32 @@
+name: Validate component release
+
+on:
+  workflow_call:
+    inputs:
+      component:
+        required: true
+        type: string
+    outputs:
+      version:
+        value: ${{ jobs.validate.outputs.version }}
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.tag.outputs.version }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+      - id: tag
+        env:
+          COMPONENT: ${{ inputs.component }}
+        run: node scripts/cd/validate-release.mts "$COMPONENT" "$GITHUB_REF_NAME" "$GITHUB_SHA" >> "$GITHUB_OUTPUT"

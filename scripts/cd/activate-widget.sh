@@ -21,10 +21,12 @@ main() {
   cp scripts/cd/widget-boundary-preflight.py "$helper"
   cp scripts/cd/widget-release-capabilities.py "$producer"
   chmod 700 "$helper" "$producer"
-  local images=() key value
+  local images=() key value api_image
   for source in .env "$rollback_env"; do
+    api_image=$(sed -n 's/^VOICEROOM_API_IMAGE=//p' "$source")
     for key in API WORKER WEB; do
       value=$(sed -n "s/^VOICEROOM_${key}_IMAGE=//p" "$source")
+      if [ "$key" = WORKER ]; then value=${value:-$api_image}; fi
       test -n "$value"
       images+=("$value")
     done

@@ -1,0 +1,2 @@
+# Restrictive policy before the first widget or admin release is installed.
+Content-Security-Policy "default-src 'none'; frame-ancestors 'none'"

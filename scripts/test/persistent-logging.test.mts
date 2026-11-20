@@ -395,6 +395,7 @@ if [[ "$1" == show ]]; then
   case "$2" in
     *:scripts/cd/widget-boundary-preflight.py) cat "$VR_CD_SCRIPTS/widget-boundary-preflight.py" ;;
     *:scripts/cd/widget-release-capabilities.py) cat "$VR_CD_SCRIPTS/widget-release-capabilities.py" ;;
+    *:scripts/cd/publish-client.sh) echo 'exit 0' ;;
     *) exit 99 ;;
   esac
 fi`,
