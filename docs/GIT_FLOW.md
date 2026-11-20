@@ -10,7 +10,7 @@ This repository uses Git Flow for all development and releases. This file is the
 ## Working branches
 
 - `feature/<short-name>` — all normal product work, UI/backend changes, documentation, chores, and planned fixes. Branch from `develop`; open PR back into `develop`.
-- `release/<version>` — release stabilization. Branch from `develop`; allow only versioning, QA fixes, and polish. Merge into `main` and back into `develop`.
+- `release/<scope>` — release stabilization. Branch from `develop`; allow only versioning, QA fixes, and polish. Merge into `main` and back into `develop`.
 - `hotfix/<short-name>` or `hotfix/<version>` — urgent production fixes. Branch from `main`; merge into `main` and back into `develop`.
 
 ## Pull request rules
@@ -42,53 +42,113 @@ This repository uses Git Flow for all development and releases. This file is the
 
 ## Component releases
 
-| Component | Version source | Production tag | Release entry |
-| --- | --- | --- | --- |
-| VoiceRoom application (web, API, workers, admin, Meet, widget) | `package.json` | `vX.Y.Z` | Personal bundle on each tag, with series notes on `vX.Y.0` |
-| Public website | `apps/site/package.json` | `site/vX.Y.Z` | VoiceRoom Site X.Y.Z |
-| Public documentation | `apps/docs/package.json` | `docs/vX.Y.Z` | VoiceRoom Docs X.Y.Z |
+| Component | Version source | Tag | Workflow | Release output |
+| --- | --- | --- | --- | --- |
+| API | `apps/api/package.json` | `api/vX.Y.Z` | `release-api.yml` | Production API image for the API, workers, LiveKit gate and migrations |
+| Web | `apps/web/package.json` | `web/vX.Y.Z` | `release-web.yml` | Production edge image and Web build |
+| Admin | `apps/admin/package.json` | `admin/vX.Y.Z` | `release-admin.yml` | Static build on the staff-only admin domain |
+| Widget | `apps/widget/package.json` | `widget/vX.Y.Z` | `release-widget.yml` | Static embed and loader at the existing v1 URLs |
+| Meet | `apps/meet/package.json` | `meet/vX.Y.Z` | `release-meet.yml` | Personal Compose, installer and manifest with images pinned by digest |
+| Public website | `apps/site/package.json` | `site/vX.Y.Z` | `release-static.yml` | Website and build archive |
+| Public documentation | `apps/docs/package.json` | `docs/vX.Y.Z` | `release-static.yml` | Documentation and build archive |
 
-Each tag targets a first-parent commit on `main` and must match its component's version.
-Static tags build, publish and verify just that component, then create a GitHub Release
-with its own notes and build archive. Static releases leave the repository's **Latest**
-release pointing to the application series. GitHub displays the three series on the
-same Releases page while they share a repository.
+Tags match their component's package version and point to first-parent commits on `main`.
+Each tag creates a GitHub Release with English notes for its own series. Only Meet
+sets GitHub's **Latest** release, used by the installer and get.voiceroom.ru.
+Meet builds its own API and personal edge from the tag and has no production rollout.
+Historical `v2.x` tags stay available for reference and their trigger is retired.
 
-The GitHub `production` environment must allow the tag patterns `v*`,
-`site/v*` and `docs/v*`. Release PRs carry the version changes and matching
-lockfiles. For an application release, bump the root, API, web, admin, Meet, widget,
-shared, UI and call workspace versions together. The site and documentation each keep an
-independent version.
-
-Use `npm version` to update the manifests and lockfiles in the release branch.
-Replace the example versions with the intended versions and run the command for
-the component being released.
+The root and the internal shared, call and UI packages are private and stay at
+`0.0.0`. The first API, Web, Admin, Widget and Meet releases are all `1.0.0`.
+For later releases, change only the versions being shipped and commit the matching
+lockfile. Run the appropriate example from the repository root.
 
 ```bash
-npm version 2.14.0 --no-git-tag-version --ignore-scripts --include-workspace-root \
-  --workspace @voice-room/api --workspace @voice-room/web \
-  --workspace @voice-room/admin --workspace @voice-room/meet --workspace @voice-room/widget --workspace @voice-room/shared \
-  --workspace @voice-room/ui --workspace @voice-room/call
-npm version 1.0.1 --no-git-tag-version --ignore-scripts --workspace @voice-room/site
+npm version 1.0.1 --workspace @voice-room/web --no-git-tag-version --ignore-scripts
+npm version 1.0.1 --workspace @voice-room/site --no-git-tag-version --ignore-scripts
 npm --prefix apps/docs version 1.0.1 --no-git-tag-version --ignore-scripts
 ```
 
-Changes in `apps/site` and `apps/docs` run their respective CI jobs. Changes to shared
-contracts, the call package or portable UI also check their consumers. The Git Flow policy check waits for every applicable
-lane on a pull request. A successful push to `develop` deploys each affected component
-independently. Merging a release into `main` prepares it for tagging.
+App changes pushed to `develop` deploy the API, Web, Admin and Widget together to
+dev. Site and docs publish to dev when their respective lanes run. Shared
+contracts and portable UI changes also check their consumers before merge.
 
 ## Release workflow
 
-1. Confirm `develop` is green and the preceding production tag exists.
-2. Create `release/<version>` from the audited `develop` commit.
-3. Allow only versioning, migrations, QA fixes, and release polish on the release branch. Migrations, new environment variables and rollback steps go into the release PR description.
-4. Run the applicable component gates, plus every gate of a matching `docs/RELEASE_<version>_PLAN.md` if the release has one; statements in a plan are requirements until fresh evidence proves them.
-5. Open the release PR into `main`. Do not merge it while required jobs or release gates are failing. Branch protection on `main` requires these jobs on a branch up to date with `main`, and the tag does not run them again.
-6. After explicit approval, merge into `main` and create the appropriate annotated component tag on the commit the merge left there. Pushing the tag deploys that component to production. Verify the deployed version.
-7. After an application tag deploys, the release workflow attaches the personal Compose, installer and manifest assets to that tag's GitHub Release. The installer defaults to the newest application release. Publish release notes on GitHub Releases in English. Update the `VoiceRoom x.y.0` release for a minor or major version. For a patch, add a `### x.y.z` entry under `## Patch releases` on the `x.y.0` release with `gh release edit`. The patch's asset entry links back to those notes. For the site and docs, the release workflow publishes the entry after deployment.
-8. Merge the release result back into `develop` so versioning and stabilization fixes are not lost.
-9. Delete the release branch only after both directions are complete and the tag is verified.
+1. Confirm `develop` is green. Create `release/<scope>` from the audited commit,
+   for example `release/web-1.0.1` or `release/november-apps`. One branch may carry
+   several component version bumps.
+2. Keep the branch focused on version bumps, migrations, QA fixes and release
+   polish. Document migrations, environment changes and rollback in the release PR.
+3. Run the applicable gates, including any matching release-plan gates. Open the PR
+   into `main`. Branch protection requires the checks on a branch up to date with
+   `main`.
+4. After approval and merge, create an annotated tag for each component being
+   released on the first-parent commit of `main`. Push each tag individually.
+   Verify each workflow and deployment before pushing dependent tags.
+5. Back-merge the main release commit into `develop` so it inherits each version
+   bump and stabilization fix. Delete the release branch after verification and the back-merge.
+
+Ship API before any client that needs its changes. Keep the current and previous
+released API and client versions interoperable in either direction. Evolve
+`packages/shared` contracts backward-compatibly, including older open tabs and
+native clients. Add database migrations to the API release and use additive schema
+changes while previous readers and writers are still supported. Meet pins its own
+matching API and includes its migration runner in the bundle.
+
+Web owns the Caddy image and its routes, API proxy and TLS configuration. The API
+release moves the host checkout, which supplies the Caddy service definition in
+`docker-compose.yml` (environment, ports and mounts). The Web rollout applies
+that definition when it replaces Caddy. If a Web image needs a Compose change,
+ship the API release carrying it first. Set the Caddy service's
+`org.voiceroom.caddy-compose` label to the new contract version and set the Web
+image's `org.voiceroom.requires-caddy-compose` label to that minimum. The Web
+rollout stops before replacing Caddy if the host Compose contract is missing or
+below the image's requirement.
+
+Admin and Widget publish their own build and CSP to that edge. The first Web
+rollout seeds their files from the old image. Subsequent Web releases preserve
+the selections, and Admin and Widget each switch their own files and policy.
+
+### First split release
+
+Before pushing the first tag, open **Settings → Environments → production**.
+Under **Deployment branches and tags**, choose **Selected branches and tags**.
+Remove the legacy `v*` rule and add six **Tag** rules, one each for `api/v*`,
+`web/v*`, `admin/v*`, `widget/v*`, `site/v*` and `docs/v*`. Confirm that
+historical `v2.x` tags are excluded from production. Meet publishes release
+assets without using the production environment. [GitHub environment settings](https://docs.github.com/en/actions/how-tos/deploy/configure-and-manage-deployments/manage-environments)
+
+On the production host, verify the required [persistent logging profile](LOGGING.md)
+before the API rollout. If LiveKit still uses its legacy log driver, schedule
+the first rollout when the voice-peer count is zero.
+
+Push these tags individually from the approved first-parent commit on `main`.
+Wait for each workflow and its checks before pushing the next tag.
+
+1. Push `api/v1.0.0`. Confirm the host checkout matches the tag, migrations
+   completed, and PostgreSQL, API, LiveKit and its gate are running. Check
+   `/api/healthz` on production and join a test room from the existing Web client.
+2. Push `web/v1.0.0`. Check that `/app` loads over HTTPS and `/_app/version.json`
+   serves the new build ID. Verify the existing Admin and Widget still load from
+   their seeded files before publishing either new artifact.
+3. Push `admin/v1.0.0`. Confirm the publication succeeded, then open the staff
+   console from the main app and check that the staff sign-in handoff works.
+4. Push `widget/v1.0.0`. Confirm the publication succeeded. Load
+   `/widget/v1/loader.js` and `/embed/v1/` through an existing embed and run a
+   two-way voice check.
+5. Push `meet/v1.0.0`. Confirm GitHub marks it **Latest** with `install.sh`,
+   `manifest.json` and `docker-compose.personal.yml`, and check that
+   `https://get.voiceroom.ru` resolves to that installer. On a `v2.15.0` test
+   installation, run the one-time upgrade below. Verify `voiceroom status`
+   reports `meet/v1.0.0` and two guests can join a room with two-way audio.
+
+Existing `v2.15.0` Meet installations need this one-time upgrade to refresh the
+local CLI. Subsequent releases use `sudo voiceroom upgrade`.
+
+```sh
+curl -fsSL https://get.voiceroom.ru | sudo sh -s -- upgrade
+```
 
 ## Hotfix workflow
 

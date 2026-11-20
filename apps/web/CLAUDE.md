@@ -45,7 +45,7 @@ Remove the old theme or screen class before adding the new one. Call page state 
 
 The composition root installs the web transport, identity/storage, diagnostics and desktop capabilities for `@voice-room/call`. The room page supplies route inputs and shell callbacks at mount. Web composes package views with product settings, persistent chat, account and moderation controls.
 
-The widget frame and v1 loader live in `../widget`. Web's widget configurator uses the presentational preview from `@voice-room/ui/widget`. The web image assembles both builds, and the widget's isolated browser suites live here under `e2e/widget-*.spec.ts`.
+The widget frame and v1 loader live in `../widget`. Web's widget configurator uses the presentational preview from `@voice-room/ui/widget`. The web image owns the edge routes for the independently deployed widget artifact. The widget's isolated browser suites live here under `e2e/widget-*.spec.ts`.
 
 ## Styles layout
 

@@ -3,7 +3,7 @@ set -euo pipefail
 
 version=${1:?Expected release tag}
 bundle=${2:?Expected bundle directory}
-[[ "$version" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+[[ "$version" =~ ^meet/v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]
 # Publish the manifest last on existing releases so it only advertises available files.
 files=(docker-compose.personal.yml install.sh manifest.json)
 for file in "${files[@]}"; do
@@ -20,18 +20,25 @@ if (( latest_status != 0 )); then
   latest=
 fi
 mark_latest=true
-if [[ "$latest" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] &&
+if [[ "$latest" =~ ^meet/v[0-9]+\.[0-9]+\.[0-9]+$ ]] &&
   [[ $(printf '%s\n' "$latest" "$version" | sort -V | tail -n 1) != "$version" ]]; then
   mark_latest=false
 fi
 
 if ! release=$(gh release view "$version" --json isDraft,isPrerelease,assets 2>/dev/null); then
-  notes="Personal server installer and deployment bundle for VoiceRoom ${version#v}."
-  if [[ "$version" != *.0 ]]; then
-    series=${version%.*}.0
-    notes+=$'\n\n'"See the [series release notes](https://github.com/$GITHUB_REPOSITORY/releases/tag/$series#patch-releases)."
+  previous=$(git tag --list 'meet/v*' --merged "$version" --sort=-version:refname |
+    awk -v current="$version" '$0 != current && !seen { print; seen=1 }')
+  # The initial Meet release starts where the old personal bundle stopped.
+  if [[ -z "$previous" ]] && git merge-base --is-ancestor v2.15.0 "$version"; then previous=v2.15.0; fi
+  range="${previous:+$previous..}$version"
+  notes="Personal server installer and deployment bundle for VoiceRoom Meet ${version#meet/v}."
+  changes=$(git log -20 --format='- %s' --no-merges "$range" -- \
+    apps/meet apps/get apps/api packages/call packages/shared packages/ui Dockerfile docker-compose.personal.yml)
+  if [[ -n "$changes" ]]; then notes+=$'\n\n'"$changes"; fi
+  if [[ "$previous" == v2.15.0 ]]; then
+    notes+=$'\n\n'"Upgrade an installation of v2.15.0 with \`curl -fsSL https://get.voiceroom.ru | sudo sh -s -- upgrade\`."
   fi
-  gh release create "$version" --verify-tag --draft --title "VoiceRoom ${version#v}" --notes "$notes"
+  gh release create "$version" --verify-tag --draft --title "VoiceRoom Meet ${version#meet/v}" --notes "$notes"
   release='{"isDraft":true,"isPrerelease":false,"assets":[]}'
 fi
 

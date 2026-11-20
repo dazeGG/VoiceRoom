@@ -1,12 +1,14 @@
+// @vitest-environment node
 // A tab opened before a deploy keeps loading its own hashed chunks after it,
 // so Caddy serves /_app/immutable/ from an archive that holds this release's
 // chunks and those of earlier releases for a while.
 
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { afterEach, expect, test } from 'vitest';
+import { voiceAssetDirectory, voiceAssetVersion } from '../../../scripts/build/voice-assets.ts';
 
 const script = resolve(import.meta.dirname, '../../../config/caddy/archive-assets.sh');
 const DAY = 24 * 60 * 60;
@@ -69,4 +71,21 @@ test('a release built longer ago than the retention still keeps its own chunks',
   archiveAssets(build, archive, 30);
 
   expect(existsSync(join(archive, 'chunks', 'long-lived.js'))).toBe(true);
+});
+
+test('the voice archive uses the same hash as client URLs and keeps the previous bytes', () => {
+  const { build, archive } = workspace();
+  const voiceScript = resolve(import.meta.dirname, '../../../config/caddy/archive-voice-assets.sh');
+  cpSync(voiceAssetDirectory, build, { recursive: true });
+  const oldVersion = voiceAssetVersion(build);
+  const worklet = 'audio-gate.worklet.js';
+  const oldBytes = readFileSync(join(build, worklet));
+  const first = spawnSync('sh', [voiceScript, build, archive], { encoding: 'utf8' });
+  expect(first.status, first.stderr).toBe(0);
+  writeFileSync(join(build, worklet), 'new worklet bytes');
+  const nextVersion = voiceAssetVersion(build);
+  const next = spawnSync('sh', [voiceScript, build, archive], { encoding: 'utf8' });
+  expect(next.status, next.stderr).toBe(0);
+  expect(readFileSync(join(archive, '_voice', oldVersion, worklet))).toEqual(oldBytes);
+  expect(readFileSync(join(archive, '_voice', nextVersion, worklet), 'utf8')).toBe('new worklet bytes');
 });

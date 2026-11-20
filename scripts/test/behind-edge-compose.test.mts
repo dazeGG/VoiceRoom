@@ -11,6 +11,9 @@ const root = path.resolve(import.meta.dirname, '../..');
 const compose = spawnSync('docker', ['compose', 'version'], { encoding: 'utf8' }).status === 0;
 
 const ServiceSchema = Type.Object({
+  image: Type.Optional(Type.String()),
+  command: Type.Optional(Type.Union([Type.Array(Type.String()), Type.Null()])),
+  volumes: Type.Optional(Type.Array(Type.Object({ target: Type.String() }))),
   ports: Type.Optional(
     Type.Array(Type.Object({ published: Type.String(), target: Type.Number(), protocol: Type.String() }))
   ),
@@ -29,7 +32,6 @@ type Config = Static<typeof ConfigSchema>;
 const required = {
   POSTGRES_PASSWORD: 'x',
   VOICEROOM_API_IMAGE: 'api',
-  VOICEROOM_WORKER_IMAGE: 'worker',
   VOICEROOM_WEB_IMAGE: 'web',
   LIVEKIT_GATE_SECRET: 'gate',
   VOICE_ROOM_CURSOR_HMAC_KEYS: 'hmac',
@@ -61,7 +63,7 @@ function resolve(files: string[], env: Record<string, string> = {}): Config {
   fs.rmSync(path.dirname(envFile), { recursive: true, force: true });
   assert.equal(run.status, 0, run.stderr);
   const config: unknown = JSON.parse(run.stdout);
-  assert.ok(Value.Check(ConfigSchema, config));
+  assert.ok(Value.Check(ConfigSchema, config), JSON.stringify([...Value.Errors(ConfigSchema, config)]));
   return config;
 }
 
@@ -107,6 +109,8 @@ test('a stack behind the edge publishes no web ports, joins the edge network and
   // Browsers still reach it over HTTPS, through the host's Caddy.
   assert.equal(caddy.environment.LIVEKIT_GATE_PUBLIC_URL, 'wss://livekit.dev.example.test');
   assert.equal(api.environment.SITE_ORIGIN, 'https://dev.example.test');
+  assert.ok(!caddy.volumes?.some(({ target }) => target === '/etc/caddy/Caddyfile'));
+  assert.ok(caddy.volumes?.some(({ target }) => target === '/srv/static'));
 
   // LiveKit advertises exactly the ports the host publishes, none of production's.
   assert.deepEqual(published(livekit).sort(), [
@@ -123,4 +127,22 @@ test('a stack behind the edge publishes no web ports, joins the edge network and
     assert.ok(Number(service.mem_limit) > 0, `${name} has a memory limit`);
     assert.ok((service.oom_score_adj ?? 0) > 0, `${name} goes before production under OOM`);
   }
+});
+
+test('the production API image also supplies migrations, the gate and worker processes', { skip: !compose }, () => {
+  const { services } = resolve(['docker-compose.yml']);
+  for (const name of ['api', 'migrate', 'media-init', 'livekit-gate']) {
+    assert.equal(services[name]?.image, 'api', name);
+  }
+  for (const name of [
+    'message-delivery',
+    'notification-delivery',
+    'media-processing',
+    'media-maintenance',
+    'media-reconciliation'
+  ]) {
+    assert.equal(services[name]?.image, 'api', name);
+    assert.deepEqual(services[name]?.command, ['node', 'apps/api/src/workers/main.ts'], name);
+  }
+  assert.equal(services.caddy?.image, 'web');
 });

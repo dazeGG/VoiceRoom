@@ -1,10 +1,14 @@
 name: Publish images
 
-# Called from ci.yml for develop and from release.yml for main and tags. The
+# Called from ci.yml for develop and from component releases for api/web tags. The
 # cache scope is the same everywhere: a tag can restore Docker layers from the
 # default branch but not from an earlier tag.
 on:
   workflow_call:
+    inputs:
+      component:
+        type: string
+        default: all
 
 permissions:
   contents: read
@@ -12,11 +16,11 @@ permissions:
 
 jobs:
   images:
-    name: Publish ${{ matrix.target == 'api' && 'api and worker images' || 'web image' }}
+    name: Publish ${{ matrix.target }} image
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        target: [api, web]
+        target: ${{ inputs.component == 'all' && fromJSON('["api","web"]') || fromJSON(format('["{0}"]', inputs.component)) }}
     env:
       # Keep build summaries without storing per-build record artifacts.
       DOCKER_BUILD_RECORD_UPLOAD: false
@@ -40,15 +44,3 @@ jobs:
           labels: org.opencontainers.image.source=https://github.com/${{ github.repository }}
           cache-from: type=gha,scope=${{ matrix.target }}
           cache-to: type=gha,mode=max,scope=${{ matrix.target }}
-      # The worker inherits the API filesystem and changes only its command.
-      # Use the same builder to reuse those layers without a second cache export.
-      - name: Publish worker image
-        if: matrix.target == 'api'
-        uses: docker/build-push-action@v7
-        with:
-          builder: ${{ steps.buildx.outputs.name }}
-          context: .
-          target: worker
-          push: true
-          tags: ghcr.io/dazegg/voiceroom-worker:${{ github.sha }}
-          labels: org.opencontainers.image.source=https://github.com/${{ github.repository }}

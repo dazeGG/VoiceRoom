@@ -1,9 +1,12 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { randomUUID } from 'node:crypto';
+import { createHash, createHmac, randomBytes, randomUUID } from 'node:crypto';
+import { createSocket } from 'node:dgram';
 import { once } from 'node:events';
 import test from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';
+import { connect, type TLSSocket } from 'node:tls';
+import { SignalResponse } from '@livekit/protocol';
 import { LiveKitAdmission } from '@voice-room/shared/contracts/admission';
 import type { ClientCommands, ClientCommandType, ServerFrame } from '@voice-room/shared/contracts/realtime';
 import { MeetOwnerAuthorization, MeetRoomCreated } from '@voice-room/shared/contracts/rooms';
@@ -104,6 +107,126 @@ function databaseSnapshot(): string {
   );
 }
 
+const stunCookie = 0x2112a442;
+
+function turnAttribute(type: number, value: Buffer | string): Buffer {
+  const bytes = Buffer.from(value);
+  const attribute = Buffer.alloc(4 + Math.ceil(bytes.length / 4) * 4);
+  attribute.writeUInt16BE(type);
+  attribute.writeUInt16BE(bytes.length, 2);
+  bytes.copy(attribute, 4);
+  return attribute;
+}
+
+// RFC 8656 Allocate with REQUESTED-TRANSPORT=UDP. The authenticated retry
+// uses the RFC 8489 long-term credential from LiveKit signaling.
+function allocateRequest(auth?: { username: string; realm: Buffer; nonce: Buffer; password: string }): Buffer {
+  const header = Buffer.alloc(20);
+  header.writeUInt16BE(0x0003);
+  header.writeUInt32BE(stunCookie, 4);
+  randomBytes(12).copy(header, 8);
+  const transport = turnAttribute(0x0019, Buffer.from([17, 0, 0, 0]));
+  header.writeUInt16BE(transport.length, 2);
+  if (!auth) return Buffer.concat([header, transport]);
+
+  const attributes = Buffer.concat([
+    transport,
+    turnAttribute(0x0006, auth.username),
+    turnAttribute(0x0014, auth.realm),
+    turnAttribute(0x0015, auth.nonce)
+  ]);
+  header.writeUInt16BE(attributes.length + 24, 2);
+  const key = createHash('md5').update(`${auth.username}:${auth.realm.toString()}:${auth.password}`).digest();
+  const body = Buffer.concat([header, attributes]);
+  const integrity = createHmac('sha1', key).update(body).digest();
+  return Buffer.concat([body, turnAttribute(0x0008, integrity)]);
+}
+
+function turnAttributes(response: Buffer, request: Buffer, type: number): Map<number, Buffer> {
+  assert.equal(response.readUInt16BE(), type);
+  assert.equal(response.readUInt32BE(4), stunCookie);
+  assert.deepEqual(response.subarray(8, 20), request.subarray(8, 20));
+  assert.equal(response.length, response.readUInt16BE(2) + 20);
+  const attributes = new Map<number, Buffer>();
+  for (let offset = 20; offset < response.length;) {
+    const length = response.readUInt16BE(offset + 2);
+    attributes.set(response.readUInt16BE(offset), response.subarray(offset + 4, offset + 4 + length));
+    offset += 4 + Math.ceil(length / 4) * 4;
+  }
+  return attributes;
+}
+
+async function sendTurn(socket: TLSSocket, request: Buffer): Promise<Buffer> {
+  socket.write(request);
+  let response = Buffer.alloc(0);
+  const chunks: AsyncIterable<unknown, unknown, unknown> = socket.iterator({ destroyOnReturn: false });
+  for await (const chunk of chunks) {
+    assert.ok(Buffer.isBuffer(chunk));
+    response = Buffer.concat([response, chunk]);
+    if (response.length >= 20 && response.length >= 20 + response.readUInt16BE(2)) return response;
+  }
+  return assert.fail('TURN closed the connection before replying');
+}
+
+async function verifyTurnRelay({
+  urls,
+  username,
+  credential
+}: {
+  urls: string[];
+  username: string;
+  credential: string;
+}): Promise<void> {
+  const servername = `turn.${process.env.PERSONAL_DOMAIN ?? 'localhost'}`;
+  const host = site.hostname;
+  const udpPort = Number(process.env.PERSONAL_TURN_UDP_PORT ?? '3478');
+  const relayFirst = Number(process.env.PERSONAL_RELAY_PORT_FIRST ?? '30000');
+  const relayLast = Number(process.env.PERSONAL_RELAY_PORT_LAST ?? '30099');
+  assert.ok(urls.includes(`turns:${servername}:443?transport=tcp`));
+  assert.ok(urls.includes(`turn:${host}:${udpPort}?transport=udp`));
+  assert.ok(username && credential, 'LiveKit supplies temporary TURN credentials');
+
+  const udp = createSocket('udp4');
+  try {
+    const request = allocateRequest();
+    const response: Promise<unknown[]> = once(udp, 'message', { signal: AbortSignal.timeout(7000) });
+    udp.send(request, udpPort, host);
+    const message = await response;
+    const [reply] = message;
+    assert.ok(Buffer.isBuffer(reply));
+    const error = turnAttributes(reply, request, 0x0113).get(0x0009);
+    assert.deepEqual(error?.subarray(2, 4), Buffer.from([4, 1]), 'TURN/UDP challenges the allocation');
+  } finally {
+    udp.close();
+  }
+
+  const ca = compose('exec', '-T', 'caddy', 'cat', '/data/caddy/pki/authorities/local/root.crt');
+  const port = Number(process.env.PERSONAL_HTTPS_PORT ?? '443');
+  const tls = connect({ host, port, servername, ca });
+  tls.setTimeout(7000, () => tls.destroy(new Error('TURN/TLS timed out')));
+  try {
+    await once(tls, 'secureConnect');
+    assert.ok(tls.authorized, 'SNI serves a certificate signed by Caddy for the TURN hostname');
+    const request = allocateRequest();
+    const challenge = turnAttributes(await sendTurn(tls, request), request, 0x0113);
+    const realm = challenge.get(0x0014);
+    const nonce = challenge.get(0x0015);
+    assert.ok(realm && nonce, 'TURN/TLS challenges the allocation');
+
+    const authenticated = allocateRequest({ username, realm, nonce, password: credential });
+    const allocated = turnAttributes(await sendTurn(tls, authenticated), authenticated, 0x0103);
+    const relayed = allocated.get(0x0016);
+    assert.ok(relayed, 'TURN/TLS allocates a relayed address');
+    const relayPort = relayed.readUInt16BE(2) ^ (stunCookie >>> 16);
+    assert.ok(
+      relayPort >= relayFirst && relayPort <= relayLast,
+      `Relay port ${relayPort} is outside the published range`
+    );
+  } finally {
+    tls.destroy();
+  }
+}
+
 test('personal edge serves a protected document and only the personal HTTP surface', async () => {
   await until(async () => {
     try {
@@ -159,7 +282,7 @@ test('personal edge serves a protected document and only the personal HTTP surfa
   });
 });
 
-test('owner, guest socket and signaling gate work together on a clean personal stack', async (t) => {
+test('owner, guest signaling and authenticated TURN work on a clean personal stack', async (t) => {
   assert.equal(databaseSnapshot(), '0|0|0|0|0|0|0|0');
   assert.equal((await post('/api/meet/rooms')).status, 401);
   const ownerToken = ownerLinkToken();
@@ -224,7 +347,14 @@ test('owner, guest socket and signaling gate work together on a clean personal s
   signalUrl.searchParams.set('protocol', '15');
   const signal = new WebSocket(signalUrl, { handshakeTimeout: 7000 });
   t.after(() => signal.terminate());
-  await once(signal, 'open');
+  const message: unknown[] = await once(signal, 'message', { signal: AbortSignal.timeout(7000) });
+  const [frame] = message;
+  assert.ok(Buffer.isBuffer(frame));
+  const response = SignalResponse.fromBinary(frame).message;
+  assert.equal(response.case, 'join');
+  const turn = response.value.iceServers.find(({ urls }) => urls.some((url) => url.startsWith('turns:')));
+  assert.ok(turn, 'LiveKit advertises TURN/TLS with the guest signaling response');
+  await verifyTurnRelay(turn);
   signal.close();
 
   send(socket, 'room.leave', guest);

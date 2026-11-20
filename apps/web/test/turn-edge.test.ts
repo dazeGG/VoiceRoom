@@ -42,6 +42,16 @@ test('the web image carries caddy-l4 and the TURN snippets', () => {
   assert.match(dockerfile, /CMD \["voiceroom-caddy"\]/);
 });
 
+test('the personal web image uses the same SNI routing and managed TURN site as the main image', () => {
+  const dockerfile = read('Dockerfile');
+  const caddyfile = read('config/personal/Caddyfile');
+
+  assert.match(dockerfile, /FROM caddy-runtime AS web/);
+  assert.match(dockerfile, /FROM caddy-runtime AS personal-web/);
+  assert.match(caddyfile, /^\{[\s\S]*?import \/etc\/caddy\/turn\.d\/\*\.options\s*\}/);
+  assert.match(caddyfile, /\nimport \/etc\/caddy\/turn\.d\/\*\.site\n/);
+});
+
 test('LiveKit runs embedded TURN behind external TLS with published UDP and relay ports', () => {
   const compose = read('docker-compose.yml');
   assert.match(
@@ -52,4 +62,19 @@ test('LiveKit runs embedded TURN behind external TLS with published UDP and rela
   // scripts/test/behind-edge-compose.test.mts through Docker Compose itself.
   assert.match(compose, /max_participants: \$\{LIVEKIT_MAX_PARTICIPANTS:-24\}/);
   assert.match(compose, /TURN_ENABLED: \$\{TURN_ENABLED:-false\}\n\s+TURN_DOMAIN: \$\{TURN_DOMAIN:-\}/);
+});
+
+test('the personal stack defaults to TURN with the same hostname in Caddy and LiveKit', () => {
+  const compose = read('docker-compose.personal.yml');
+  assert.match(
+    compose,
+    /turn:\n\s+enabled: \$\{PERSONAL_TURN_ENABLED:-true\}\n\s+domain: "turn\.\$\{PERSONAL_DOMAIN\}"\n\s+tls_port: 5349\n\s+udp_port: \$\{PERSONAL_TURN_UDP_PORT:-3478\}\n\s+external_tls: true\n\s+relay_range_start: \$\{PERSONAL_RELAY_PORT_FIRST:-30000\}\n\s+relay_range_end: \$\{PERSONAL_RELAY_PORT_LAST:-30099\}/
+  );
+  assert.match(compose, /TURN_ENABLED: \$\{PERSONAL_TURN_ENABLED:-true\}\n\s+TURN_DOMAIN: turn\.\$\{PERSONAL_DOMAIN\}/);
+  assert.ok(
+    compose.includes('${PERSONAL_TURN_UDP_PORT:-3478}:${PERSONAL_TURN_UDP_PORT:-3478}/udp'),
+    'TURN/UDP uses the same internal and published port'
+  );
+  const relayRange = '${PERSONAL_RELAY_PORT_FIRST:-30000}-${PERSONAL_RELAY_PORT_LAST:-30099}';
+  assert.ok(compose.includes(`${relayRange}:${relayRange}/udp`), 'all relay ports are published');
 });

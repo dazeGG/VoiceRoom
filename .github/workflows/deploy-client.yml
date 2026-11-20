@@ -1,0 +1,62 @@
+name: Deploy client artifact
+
+on:
+  workflow_call:
+    inputs:
+      component:
+        required: true
+        type: string
+      environment:
+        required: true
+        type: string
+      url:
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: ${{ inputs.environment }}
+      url: ${{ inputs.url }}
+    concurrency:
+      group: deploy-${{ inputs.environment }}
+      queue: max
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v5
+        with:
+          name: ${{ inputs.component }}-dist
+          path: client-dist
+      - name: Publish client files and reload the edge
+        env:
+          COMPONENT: ${{ inputs.component }}
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_KEY: ${{ secrets.SSH_KEY }}
+          SSH_FINGERPRINT: ${{ vars.SSH_FINGERPRINT }}
+          DEPLOY_PATH: ${{ vars.DEPLOY_PATH }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          : "${DEPLOY_PATH:?set DEPLOY_PATH on the deployment environment}"
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          ssh-keyscan -T 15 -t ed25519 "$SSH_HOST" > ~/.ssh/known_hosts 2>/dev/null
+          actual="$(ssh-keygen -lf ~/.ssh/known_hosts | awk '{print $2}')"
+          if [ -z "$SSH_FINGERPRINT" ] || [ "$actual" != "$SSH_FINGERPRINT" ]; then
+            echo '::error::client deploy host fingerprint does not match SSH_FINGERPRINT'
+            exit 1
+          fi
+          key="$RUNNER_TEMP/client_deploy_key"
+          install -m 600 /dev/null "$key"
+          trap 'rm -f -- "$key"' EXIT
+          printf '%s\n' "$SSH_KEY" > "$key"
+          remote="$(printf 'bash -c %q -- %q %q %q' "$(<scripts/cd/publish-client.sh)" "$DEPLOY_PATH" "$COMPONENT" "$GITHUB_SHA")"
+          tar -cf - -C client-dist . | ssh -i "$key" \
+            -o BatchMode=yes -o StrictHostKeyChecking=yes -o IdentitiesOnly=yes \
+            "$SSH_USER@$SSH_HOST" "$remote" | tee "$RUNNER_TEMP/client-rollout.log"
+          grep -Fx "published $COMPONENT $GITHUB_SHA" "$RUNNER_TEMP/client-rollout.log"

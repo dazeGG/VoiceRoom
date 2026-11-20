@@ -9,9 +9,10 @@ import { useMeetStore } from '@/meet.store';
 
 const props = defineProps<{ roomId: string }>();
 const meet = useMeetStore();
+const statusLifetime = new AbortController();
 const controller = createGuestJoinController({
   roomId: normalizeRoomId(props.roomId),
-  status: meet.api.status,
+  status: (roomId) => meet.api.status(roomId, statusLifetime.signal),
   setDisplayName: meet.identity.setDisplayName,
   admissionCapabilities: meet.transport.capabilities
 });
@@ -24,6 +25,7 @@ const inCall = computed(() => phase.value === 'call' || phase.value === 'reconne
 
 onMounted(() => void controller.check());
 onBeforeUnmount(() => {
+  statusLifetime.abort();
   controller.dispose();
   meet.transport.disconnect();
 });

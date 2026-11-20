@@ -3,6 +3,7 @@
 ## Repository map
 - `apps/api` is the Fastify/PostgreSQL/LiveKit backend.
 - `apps/web` is the Vue/Vite frontend.
+- `apps/admin` serves the staff console. `apps/widget` owns the public embed. `apps/meet` and `apps/get` make up the personal bundle.
 - `packages/shared` owns contracts shared by API and Web. Update shared contracts before their consumers.
 - `docs/GIT_FLOW.md` is the source of truth for branches, commits, pull requests, hotfixes, and releases.
 - A release may add a `docs/RELEASE_<version>_PLAN.md` target-state plan; none is active now. Do not describe an unmet gate as already implemented.
@@ -11,7 +12,7 @@
 - Before changing files, run `git status --short --branch` and preserve unrelated user changes.
 - Normal work starts from `develop` on `feature/<short-name>` and returns through a pull request to `develop`.
 - Never put feature commits directly on `develop` or `main`.
-- Release stabilization uses `release/<version>` from `develop`; merge it into `main`, tag `v<version>`, then merge the release result back into `develop`.
+- Release stabilization uses `release/<scope>` from `develop`. Merge it into `main`, tag each released component as `<component>/vX.Y.Z`, then back-merge into `develop`.
 - Production-only urgent fixes use `hotfix/<short-name>` from `main`; merge them into `main`, tag when applicable, then back-merge or cherry-pick into `develop`.
 - Use Conventional Commit subjects: `feat:`, `fix:`, `docs:`, `test:`, `refactor:`, `chore:`, `perf:`, `style:`, `build:`, `ci:`, or `revert:`. Add a scope when useful, for example `fix(api): ...`.
 - Keep commits small and reviewable. Do not commit generated output, local secrets, screenshots, or debugging artifacts.

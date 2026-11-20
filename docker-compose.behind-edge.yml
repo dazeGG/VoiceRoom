@@ -64,9 +64,6 @@ services:
     cpus: 0.25
     ports: !reset []
     volumes:
-      # Infrastructure config follows this checkout even during bootstrap from
-      # an existing immutable web image built before the shared-host profile.
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - ./config/caddy/behind-edge.headers:/etc/caddy/proxy.d/behind-edge.caddy:ro
     # Plain HTTP site addresses: no certificates here, the host's Caddy has them.
     environment:

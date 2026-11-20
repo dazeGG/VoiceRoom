@@ -1,35 +1,20 @@
-name: Release application
+name: Release Meet
 
-# A commit reaches main only through a pull request whose head passed ci.yml while
-# up to date with main (branch protection), so nothing here runs those jobs again.
-# Static components use their own release tags and workflows.
 on:
   push:
-    tags: ['v[0-9]*']
+    tags: ['meet/v*']
 
 permissions:
   contents: read
 
 jobs:
-  images:
-    name: Publish images
-    permissions:
-      contents: read
-      packages: write
-    uses: ./.github/workflows/images.yml
-
-  deploy-production:
-    name: Deploy production
-    needs: images
-    uses: ./.github/workflows/deploy.yml
+  validate:
+    uses: ./.github/workflows/validate-release.yml
     with:
-      environment: production
-      url: https://voiceroom.ru
-    secrets: inherit
+      component: meet
 
-  personal-bundle:
-    name: Build the personal server release bundle
-    needs: [images, deploy-production]
+  bundle:
+    needs: validate
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -48,6 +33,19 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Publish the Meet API image
+        id: api
+        uses: docker/build-push-action@v7
+        with:
+          builder: ${{ steps.buildx.outputs.name }}
+          context: .
+          target: api
+          platforms: linux/amd64
+          push: true
+          tags: ghcr.io/dazegg/voiceroom-api:personal-${{ github.sha }}
+          labels: org.opencontainers.image.source=https://github.com/${{ github.repository }}
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,mode=max,scope=api
       - name: Publish the Meet edge image
         id: personal-web
         uses: docker/build-push-action@v7
@@ -57,17 +55,18 @@ jobs:
           target: personal-web
           platforms: linux/amd64
           push: true
-          # Keep the Meet variant in the existing public package so fresh installs can pull it anonymously.
+          # The existing public package lets fresh installs pull anonymously.
           tags: ghcr.io/dazegg/voiceroom-web:personal-${{ github.sha }}
           labels: org.opencontainers.image.source=https://github.com/${{ github.repository }}
           cache-from: type=gha,scope=personal-web
           cache-to: type=gha,mode=max,scope=personal-web
       - name: Pin Compose images and hash release assets
         env:
+          API_DIGEST: ${{ steps.api.outputs.digest }}
           PERSONAL_WEB_DIGEST: ${{ steps.personal-web.outputs.digest }}
         run: |
           node scripts/cd/build-personal-release.mts "$GITHUB_REF_NAME" \
-            "ghcr.io/dazegg/voiceroom-api:$GITHUB_SHA" \
+            "ghcr.io/dazegg/voiceroom-api@$API_DIGEST" \
             "ghcr.io/dazegg/voiceroom-web@$PERSONAL_WEB_DIGEST" personal-release
       - uses: actions/upload-artifact@v4
         with:
@@ -76,9 +75,8 @@ jobs:
           if-no-files-found: error
           overwrite: true
 
-  publish-personal-release:
-    name: Attach the personal server release bundle
-    needs: personal-bundle
+  release:
+    needs: bundle
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -87,11 +85,13 @@ jobs:
       queue: max
     steps:
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
       - uses: actions/download-artifact@v5
         with:
           name: personal-release
           path: personal-release
-      - name: Publish installer assets
+      - name: Publish installer assets and release notes
         env:
           GH_TOKEN: ${{ github.token }}
         run: bash scripts/cd/publish-personal-release.sh "$GITHUB_REF_NAME" personal-release

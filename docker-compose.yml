@@ -164,7 +164,8 @@ services:
 
   message-delivery:
     logging: *logging
-    image: ${VOICEROOM_WORKER_IMAGE:?set immutable VOICEROOM_WORKER_IMAGE digest}
+    image: ${VOICEROOM_WORKER_IMAGE:-${VOICEROOM_API_IMAGE:?set immutable VOICEROOM_API_IMAGE digest}}
+    command: ["node", "apps/api/src/workers/main.ts"]
     restart: unless-stopped
     depends_on:
       # Workers start once the API is healthy, so on a deploy the API and the
@@ -187,7 +188,8 @@ services:
 
   notification-delivery:
     logging: *logging
-    image: ${VOICEROOM_WORKER_IMAGE:?set immutable VOICEROOM_WORKER_IMAGE digest}
+    image: ${VOICEROOM_WORKER_IMAGE:-${VOICEROOM_API_IMAGE:?set immutable VOICEROOM_API_IMAGE digest}}
+    command: ["node", "apps/api/src/workers/main.ts"]
     restart: unless-stopped
     expose: ["9464"]
     depends_on:
@@ -214,7 +216,8 @@ services:
 
   media-processing:
     logging: *logging
-    image: ${VOICEROOM_WORKER_IMAGE:?set immutable VOICEROOM_WORKER_IMAGE digest}
+    image: ${VOICEROOM_WORKER_IMAGE:-${VOICEROOM_API_IMAGE:?set immutable VOICEROOM_API_IMAGE digest}}
+    command: ["node", "apps/api/src/workers/main.ts"]
     restart: unless-stopped
     expose: ["9464"]
     depends_on:
@@ -238,7 +241,8 @@ services:
 
   media-maintenance:
     logging: *logging
-    image: ${VOICEROOM_WORKER_IMAGE:?set immutable VOICEROOM_WORKER_IMAGE digest}
+    image: ${VOICEROOM_WORKER_IMAGE:-${VOICEROOM_API_IMAGE:?set immutable VOICEROOM_API_IMAGE digest}}
+    command: ["node", "apps/api/src/workers/main.ts"]
     restart: unless-stopped
     depends_on:
       api:
@@ -260,7 +264,8 @@ services:
 
   media-reconciliation:
     logging: *logging
-    image: ${VOICEROOM_WORKER_IMAGE:?set immutable VOICEROOM_WORKER_IMAGE digest}
+    image: ${VOICEROOM_WORKER_IMAGE:-${VOICEROOM_API_IMAGE:?set immutable VOICEROOM_API_IMAGE digest}}
+    command: ["node", "apps/api/src/workers/main.ts"]
     restart: unless-stopped
     depends_on:
       api:
@@ -283,6 +288,8 @@ services:
   caddy:
     logging: *logging
     image: ${VOICEROOM_WEB_IMAGE:?set immutable VOICEROOM_WEB_IMAGE digest}
+    labels:
+      org.voiceroom.caddy-compose: "1"
     restart: unless-stopped
     depends_on:
       # Not waiting for a healthy API: the site and the LiveKit signal route

@@ -1,5 +1,9 @@
 {
 	grace_period 2s
+	# The personal stack publishes HTTPS over TCP only.
+	default_bind {
+		protocols h1 h2
+	}
 	# Access logging stays off. Runtime errors can also include the request, so
 	# remove it at the logger instead of relying on query or header names.
 	log default {
@@ -11,7 +15,10 @@
 			}
 		}
 	}
+	import /etc/caddy/turn.d/*.options
 }
+
+import /etc/caddy/turn.d/*.site
 
 {$PERSONAL_CADDY_SITE} {
 	@api path /api /api/*

@@ -1,0 +1,105 @@
+name: Release production component
+
+on:
+  workflow_call:
+    inputs:
+      component:
+        required: true
+        type: string
+      url:
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    uses: ./.github/workflows/validate-release.yml
+    with:
+      component: ${{ inputs.component }}
+
+  images:
+    if: inputs.component == 'api' || inputs.component == 'web'
+    needs: validate
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/images.yml
+    with:
+      component: ${{ inputs.component }}
+
+  artifacts:
+    if: inputs.component == 'admin' || inputs.component == 'widget'
+    needs: validate
+    uses: ./.github/workflows/build-client.yml
+    with:
+      component: ${{ inputs.component }}
+
+  deploy-images:
+    if: inputs.component == 'api' || inputs.component == 'web'
+    needs: images
+    uses: ./.github/workflows/deploy.yml
+    with:
+      component: ${{ inputs.component }}
+      environment: production
+      url: ${{ inputs.url }}
+    secrets: inherit
+
+  deploy-client:
+    if: inputs.component == 'admin' || inputs.component == 'widget'
+    needs: artifacts
+    uses: ./.github/workflows/deploy-client.yml
+    with:
+      component: ${{ inputs.component }}
+      environment: production
+      url: ${{ inputs.url }}
+    secrets: inherit
+
+  release:
+    if: ${{ !cancelled() && (needs.deploy-images.result == 'success' || needs.deploy-client.result == 'success') }}
+    needs: [validate, deploy-images, deploy-client]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      COMPONENT: ${{ inputs.component }}
+      VERSION: ${{ needs.validate.outputs.version }}
+      PUBLIC_URL: ${{ inputs.url }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/download-artifact@v5
+        if: inputs.component == 'admin' || inputs.component == 'widget'
+        with:
+          name: ${{ inputs.component }}-dist
+          path: client-dist
+      - name: Publish component release notes
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then exit 0; fi
+          paths=("apps/$COMPONENT")
+          case "$COMPONENT" in
+            api) paths+=(packages/shared docker-compose.yml) ;;
+            web) paths+=(packages/call packages/shared packages/ui Caddyfile config/caddy) ;;
+            admin) paths+=(packages/shared config/caddy/admin-csp.caddy) ;;
+            widget) paths+=(packages/call packages/shared packages/ui) ;;
+          esac
+          previous="$(git tag --list "$COMPONENT/v*" --merged "$GITHUB_SHA" --sort=-version:refname |
+            awk -v current="$GITHUB_REF_NAME" '$0 != current && !seen { print; seen=1 }')"
+          range="${previous:+$previous..}$GITHUB_SHA"
+          notes="$RUNNER_TEMP/component-release.md"
+          printf 'Deployed to %s.\n\n' "$PUBLIC_URL" > "$notes"
+          git log -20 --format='- %s' --no-merges "$range" -- "${paths[@]}" >> "$notes"
+          assets=()
+          if [ -d client-dist ]; then
+            artifact="voiceroom-$COMPONENT-$VERSION.tar.gz"
+            tar -czf "$artifact" -C client-dist .
+            assets+=("$artifact")
+          fi
+          gh release create "$GITHUB_REF_NAME" "${assets[@]}" --verify-tag --latest=false \
+            --title "VoiceRoom $COMPONENT $VERSION" --notes-file "$notes"
