@@ -86,7 +86,7 @@ export function createGuestJoinController(options: GuestJoinOptions) {
   }
 
   async function join(rawName: string): Promise<void> {
-    if (disposed || step.value !== 'name') return;
+    if (disposed || step.value !== 'name' || !room.value) return;
     const name = cleanDisplayName(rawName);
     if (!name) {
       issue.value = 'name-required';
@@ -97,7 +97,7 @@ export function createGuestJoinController(options: GuestJoinOptions) {
     issue.value = null;
     try {
       options.setDisplayName(name);
-      unmount = mountGuestRoomClient(options.roomId, name, checkedAt);
+      unmount = mountGuestRoomClient(room.value.roomId, name, checkedAt);
       await joinRoom();
       if (current !== generation) return;
       if (state.joined) {
@@ -134,3 +134,5 @@ export function createGuestJoinController(options: GuestJoinOptions) {
 
   return { phase, room: readonly(room), failure, capabilities, check, join, leave, dispose };
 }
+
+export { createGuestTransport } from './transport';
