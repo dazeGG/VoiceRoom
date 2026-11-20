@@ -425,6 +425,15 @@ class InstallerTest(unittest.TestCase):
                           'private-owner-token-0', 'unrecognised-password', 'unrecognised-token'):
             self.assertNotIn(sensitive, output)
 
+    def test_doctor_warns_instead_of_failing_ports_when_docker_publishes_without_a_listener(self):
+        self.install()
+        daemon_config = self.root / 'daemon.json'
+        daemon_config.write_text('{"userland-proxy": false}')
+        self.env['VOICEROOM_DOCKER_DAEMON_CONFIG'] = str(daemon_config)
+        self.fail_readiness(missing_ports=[7882])
+        output = self.run_doctor()
+        self.assert_doctor_status(output, 'WARN', 'Local UDP 7882', 'userland-proxy')
+
     def test_doctor_warns_when_firewall_rules_cannot_be_read(self):
         self.install()
         self.fail_readiness(firewall={'nft -n list ruleset': [1, 'Operation not permitted']})

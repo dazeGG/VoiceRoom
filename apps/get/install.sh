@@ -11,6 +11,7 @@ bin=${VOICEROOM_BIN_DIR:-/usr/local/bin}
 release_base=${VOICEROOM_RELEASE_BASE:-https://github.com/dazeGG/VoiceRoom/releases}
 duckdns_url=${VOICEROOM_DUCKDNS_URL:-https://www.duckdns.org}
 desec_url=${VOICEROOM_DESEC_URL:-https://desec.io/api/v1}
+docker_daemon_config=${VOICEROOM_DOCKER_DAEMON_CONFIG:-/etc/docker/daemon.json}
 env_file=$install_dir/.env
 current=$install_dir/current
 recovery=$install_dir/.upgrade
@@ -897,6 +898,9 @@ doctor_listeners() {
     ')
     if [ -z "$first_missing" ]; then
       doctor_result OK "Local $protocol $port_range" 'Listening'
+    elif jq -e '."userland-proxy" == false' "$docker_daemon_config" >/dev/null 2>&1; then
+      # Without the userland proxy Docker forwards published ports in the kernel, so no host socket exists.
+      doctor_result WARN "Local $protocol $port_range" "Docker has userland-proxy disabled, so port $first_missing has no host socket to check. Check the containers instead."
     else
       doctor_result FAIL "Local $protocol $port_range" "No listener on $first_missing. Make sure Docker and the VoiceRoom containers are running, then run sudo voiceroom install if needed."
     fi
