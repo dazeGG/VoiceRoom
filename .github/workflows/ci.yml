@@ -481,6 +481,8 @@ jobs:
   deploy-clients-dev:
     name: Deploy dev ${{ matrix.component }}
     needs: deploy-dev
+    # Skipped checks earlier in the chain would otherwise skip this job too.
+    if: ${{ !cancelled() && needs.deploy-dev.result == 'success' }}
     strategy:
       fail-fast: false
       matrix:
