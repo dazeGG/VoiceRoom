@@ -1,14 +1,14 @@
 <script setup lang="ts">
 import { t } from '@/shared/i18n';
 import { House } from '@lucide/vue';
-import { useStartUiStore } from '@/features/room/start-ui.store';
+import { useStartUiStore } from '@voice-room/call/engine/core/start-ui.store';
 import { APP_HOME } from '@/shared/app-home';
 import { MascotIcon } from '@/shared/ui';
 import { iconMd } from '@/shared/ui/icons';
-import { usePageStore } from '@/stores/page.store';
+import { useCallPageStore } from '@voice-room/call/engine/core/call-page.store';
 
 const startUi = useStartUiStore();
-const page = usePageStore();
+const page = useCallPageStore();
 </script>
 
 <template>

@@ -2,6 +2,7 @@ import { NodePackageImporter } from 'sass';
 import { fileURLToPath } from 'node:url';
 import vue from '@vitejs/plugin-vue';
 import { configDefaults, defineConfig } from 'vitest/config';
+import { voiceAssetUrls } from '@voice-room/call/voice-assets';
 
 import {
   buildVersion,
@@ -9,7 +10,8 @@ import {
   precompressPlugin,
   serviceWorkerPlugin,
   versionFilePlugin,
-  voiceAssetVersion
+  voiceAssetVersion,
+  voiceAssetsPlugin
 } from './scripts/deploy-contract.ts';
 
 const API_TARGET = process.env.VITE_DEV_API_TARGET || 'http://localhost:3000';
@@ -79,12 +81,17 @@ const nodeTestFiles = [
 ];
 
 export default defineConfig({
-  plugins: [vue(), cspMetaPlugin(), versionFilePlugin(APP_VERSION), serviceWorkerPlugin(), precompressPlugin()],
+  plugins: [
+    vue(),
+    cspMetaPlugin(),
+    versionFilePlugin(APP_VERSION),
+    serviceWorkerPlugin(),
+    voiceAssetsPlugin(),
+    precompressPlugin()
+  ],
   define: {
     'import.meta.env.VITE_APP_VERSION': JSON.stringify(APP_VERSION),
-    'import.meta.env.VITE_VOICE_ASSET_VERSION': JSON.stringify(
-      voiceAssetVersion(fileURLToPath(new URL('./public', import.meta.url)))
-    )
+    __VOICE_ASSET_URLS__: JSON.stringify(voiceAssetUrls(voiceAssetVersion()))
   },
   resolve: {
     alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) }

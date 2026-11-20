@@ -22,9 +22,9 @@ const webRoot = fileURLToPath(new URL('../../apps/web', import.meta.url));
 const browserModule = String.raw`
 import { createPinia, setActivePinia } from 'pinia';
 setActivePinia(createPinia());
-const { state } = await import('/src/features/room/client/core/room-runtime.store.ts');
-const { applyVideoReliefToScreen } = await import('/src/features/room/client/services/video-relief.ts');
-const { getScreenProfile, getScreenPublishVideoOptions } = await import('/src/features/room/client/media/profiles.ts');
+const { state } = await import('@voice-room/call/engine/core/room-runtime.store');
+const { applyVideoReliefToScreen } = await import('@voice-room/call/engine/services/video-relief');
+const { getScreenProfile, getScreenPublishVideoOptions } = await import('@voice-room/call/engine/media/profiles');
 const send = new RTCPeerConnection({iceServers:[]}), receive = new RTCPeerConnection({iceServers:[]});
 const video = document.createElement('video');
 video.autoplay=true; video.muted=true; video.playsInline=true; video.width=1280; video.height=720;

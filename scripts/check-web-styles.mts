@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Style conventions for web and portable UI (apps/web/CLAUDE.md, rules 6-8), run by
+// Style conventions for web and portable packages (apps/web/CLAUDE.md, rules 6-8), run by
 // `npm run check`. Exits 1 and lists every violation as `file:line reason`:
 //   - a .css or .sass file (styles are .scss partials only);
 //   - `[data-` in a .scss file or a .vue <style> block, in any case (comments
@@ -8,7 +8,7 @@
 //     and the line above the block is a one-line comment saying why;
 //   - an import of `reka-ui` (any subpath, static or dynamic) in a .ts/.vue
 //     file outside the primitive directories.
-//   - a Sass module in packages/ui that loads styles from an app.
+//   - a Sass module in a portable package that loads styles from an app.
 
 import { readFileSync } from 'node:fs';
 import { relative, resolve } from 'node:path';
@@ -30,7 +30,9 @@ const STYLE_BLOCK = /^[ \t]*<style\b/gm;
 const SCRIPT_BLOCK = /<script\b[^>]*>(?<body>[\s\S]*?)<\/script>/g;
 const STYLE_BODY = /<style\b[^>]*>(?<body>[\s\S]*?)<\/style>/g;
 const ONE_LINE_COMMENT = /^\s*(?:<!--.*-->|\/\/.*|\/\*.*\*\/)\s*$/;
-const SOURCE_ROOTS = ['apps/web/src', 'packages/ui/src'];
+const CALL_ROOT = 'packages/call/src';
+const UI_ROOT = 'packages/ui/src';
+const SOURCE_ROOTS = ['apps/web/src', UI_ROOT, CALL_ROOT];
 const REKA_WRAPPERS = ['apps/web/src/shared/ui/', 'packages/ui/src/components/'];
 const SASS_MODULE = /@(?:use|forward|import)\s*(['"])(?<module>[^'"]+)\1/g;
 const APP_STYLE_MODULE =
@@ -50,7 +52,7 @@ function blocksOnly(source: string, pattern: RegExp): string {
 }
 
 /**
- * Violations in web and portable UI, each as `file:line reason`
+ * Violations in web and portable packages, each as `file:line reason`
  * with `file` relative to `repoRoot`. Allowlist files are repo-relative too.
  */
 export function checkWebStyles(repoRoot: string, allowlist: readonly StyleAllowance[] = STYLE_ALLOWLIST): string[] {
@@ -75,10 +77,13 @@ export function checkWebStyles(repoRoot: string, allowlist: readonly StyleAllowa
     for (const match of uncommentedStyles.matchAll(/\[\s*data-/gi)) {
       problems.push(`${path}:${lineAt(source, match.index)} [data-*] selector; use aria-* or a BEM modifier class`);
     }
-    if (path.startsWith('packages/ui/src/')) {
+    const portable = path.startsWith(`${UI_ROOT}/`) ? 'UI' : path.startsWith(`${CALL_ROOT}/`) ? 'call' : null;
+    if (portable) {
       for (const match of uncommentedStyles.matchAll(SASS_MODULE)) {
         if (APP_STYLE_MODULE.test(match.groups?.module ?? '')) {
-          problems.push(`${path}:${lineAt(source, match.index)} portable UI cannot load styles from applications`);
+          problems.push(
+            `${path}:${lineAt(source, match.index)} portable ${portable} cannot load styles from applications`
+          );
         }
       }
     }
@@ -117,7 +122,7 @@ if (import.meta.main) {
   const repoRoot = resolve(import.meta.dirname, '..');
   const problems = checkWebStyles(repoRoot);
   if (problems.length > 0) {
-    process.stderr.write(`Web and portable UI style conventions:\n${problems.sort().join('\n')}\n`);
+    process.stderr.write(`Web and portable package style conventions:\n${problems.sort().join('\n')}\n`);
     process.exit(1);
   }
 }

@@ -1,4 +1,6 @@
-import { createRnnoiseNode } from '../room/client/media/rnnoise-node';
+import { createRnnoiseNode } from '@voice-room/call/rnnoise-node';
+import { t } from '@/shared/i18n';
+import { voiceAssets } from '@/shared/media/voice-assets';
 export type WidgetNoiseMode = 'rnnoise' | 'browser' | 'off';
 export interface WidgetCapture {
   track: MediaStreamTrack;
@@ -29,8 +31,11 @@ export async function openWidgetMicrophone(
     context = new AudioContext({ sampleRate: 48000, latencyHint: 'interactive' });
     const source = context.createMediaStreamSource(raw);
     const output = context.createMediaStreamDestination();
-    node = await createRnnoiseNode(context, (processor) =>
-      processor.addEventListener('processorerror', onProcessorError, { once: true })
+    node = await createRnnoiseNode(
+      context,
+      (processor) => processor.addEventListener('processorerror', onProcessorError, { once: true }),
+      voiceAssets,
+      () => t('AudioWorklet недоступен')
     );
     source.connect(node);
     node.connect(output);

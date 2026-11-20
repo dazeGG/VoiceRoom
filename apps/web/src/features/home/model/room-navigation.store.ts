@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia';
 import { reactive, toRefs } from 'vue';
-import { useVoiceSessionStore } from '@/features/room/voice-session.store';
+import { useVoiceSessionStore } from '@voice-room/call/engine';
 
 export type RoomShellMode = 'friends' | 'rooms';
 

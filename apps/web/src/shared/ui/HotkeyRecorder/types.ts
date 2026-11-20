@@ -1,10 +1,6 @@
-export interface HotkeyBinding {
-  altKey: boolean;
-  code: string;
-  ctrlKey: boolean;
-  metaKey: boolean;
-  shiftKey: boolean;
-}
+import type { HotkeyBinding } from '@voice-room/ui/hotkey';
+
+export type { HotkeyBinding } from '@voice-room/ui/hotkey';
 
 /**
  * Props of HotkeyRecorder. The binding itself is `v-model` (`HotkeyBinding | null`);

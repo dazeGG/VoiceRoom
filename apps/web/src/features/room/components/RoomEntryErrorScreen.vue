@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { t } from '@/shared/i18n';
-import { showRoomRoute } from '@/features/room/client/room/room';
+import { showRoomRoute } from '@voice-room/call/engine/room/room';
 import { APP_HOME } from '@/shared/app-home';
-import { usePageStore } from '@/stores/page.store';
+import { useCallPageStore } from '@voice-room/call/engine/core/call-page.store';
 
-const page = usePageStore();
+const page = useCallPageStore();
 
 function retry(): void {
   void showRoomRoute();

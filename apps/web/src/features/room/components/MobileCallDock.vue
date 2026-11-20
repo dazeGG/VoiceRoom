@@ -4,13 +4,13 @@
 import { t } from '@/shared/i18n';
 import { Check, Headphones, Mic, MicOff, PhoneOff, Smartphone, Video, VideoOff, Volume2 } from '@lucide/vue';
 import { computed } from 'vue';
-import { handleLeaveButtonClick } from '@/features/room/client/room/room';
-import { toggleCamera } from '@/features/room/client/services/camera-service';
-import { supportsAudioOutputSelection } from '@/features/room/client/services/media-playback-service';
-import { getCallControlsView, getCameraControlsView, handleMicButtonClick } from '@/features/room/client/ui/controls';
-import { refreshDevices, switchOutputDevice } from '@/features/room/client/ui/devices';
+import { handleLeaveButtonClick } from '@voice-room/call/engine/room/room';
+import { toggleCamera } from '@voice-room/call/engine/services/camera-service';
+import { supportsAudioOutputSelection } from '@voice-room/call/engine/services/media-playback-service';
+import { getCallControlsView, getCameraControlsView, handleMicButtonClick } from '@voice-room/call/engine/ui/controls';
+import { refreshDevices, switchOutputDevice } from '@voice-room/call/engine/ui/devices';
 import { useMobileCallUiStore } from '@/features/room/mobile-call-ui.store';
-import { useRoomDeviceUiStore } from '@/features/room/room-device-ui.store';
+import { useRoomDeviceUiStore } from '@voice-room/call/engine/core/room-device-ui.store';
 
 type OutputKind = 'headset' | 'earpiece' | 'speaker';
 

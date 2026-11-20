@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Style check for web and portable UI, run by `npm run check`: backgrounds use the
+// Style check for web and portable packages, run by `npm run check`: backgrounds use the
 // canonical palette tokens declared in _tokens.scss instead of one-off colours.
 // Exits 1 and lists every violation as `file:line selector -> value`.
 
@@ -9,7 +9,7 @@ import { relative, resolve } from 'node:path';
 import { blankComments } from './lib/blank-comments.mts';
 import { walkFiles } from './lib/glob.mts';
 
-const SOURCE_ROOTS = ['apps/web/src', 'packages/ui/src'];
+const SOURCE_ROOTS = ['apps/web/src', 'packages/ui/src', 'packages/call/src'];
 const TOKENS_FILE = 'packages/ui/src/styles/_tokens.scss';
 
 // Surface tokens of the default theme; the tokens file must declare exactly these.

@@ -15,7 +15,7 @@ import {
   setOutputDevice,
   syncAudioBusSettings,
   type MicrophoneMode
-} from '@/features/room/client';
+} from '@voice-room/call/engine';
 import { withSavedDeviceMissing } from '@/shared/audio/device-list';
 import { SegmentControl, Select, Slider, type SegmentOption } from '@/shared/ui';
 import {

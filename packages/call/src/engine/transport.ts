@@ -1,0 +1,56 @@
+import type { LiveKitAdmission } from '@voice-room/shared/contracts/admission';
+import type { ErrorCode } from '@voice-room/shared/contracts/errors';
+import type { ClientCommands, MediaGrant, ServerEvent } from '@voice-room/shared/contracts/realtime';
+import type { PeerSession, RoomLifecycleSummary } from './core/types';
+
+export type LiveKitCredentials = LiveKitAdmission & { urls: string[] };
+
+export interface CallTransportFailure {
+  code: ErrorCode | '';
+  status: number;
+  message: string;
+}
+
+export type CallRealtimeEvent =
+  | Extract<
+      ServerEvent,
+      {
+        type:
+          | 'pong'
+          | 'room.snapshot'
+          | 'room.not_found'
+          | 'room.kicked'
+          | 'room.banned'
+          | 'room.peer.joined'
+          | 'room.peer.left'
+          | 'room.peer.updated'
+          | 'room.voice.quality'
+          | 'room.full'
+          | 'server.full'
+          | 'room.updated'
+          | 'room.deleted';
+      }
+    >
+  | { type: 'error'; payload: { code: ErrorCode | ''; message: string | undefined } };
+
+type Member = PeerSession & { roomId: string };
+
+export interface CallTransport {
+  roomStatus(roomId: string): Promise<Pick<RoomLifecycleSummary, 'name' | 'avatarUrl' | 'isStatic'> | null>;
+  requestLiveKitToken(input: Member & { name: string }): Promise<LiveKitCredentials>;
+  failure(error: unknown): CallTransportFailure | null;
+  realtime: {
+    ensureConnected(): void;
+    isConnected(): boolean;
+    getConnectionEpoch(): number;
+    onStateChange(listener: (connected: boolean, epoch: number) => void): () => void;
+    subscribeRoom(roomId: string, handler: (event: CallRealtimeEvent) => void): () => void;
+    join(input: Member & { name: string }): void;
+    leave(input: Member): void;
+    updatePeer(input: Member & { patch: Record<string, unknown> }): void;
+    reportPoll(input: ClientCommands['room.voice.report']): void;
+    requestMediaGrant(input: ClientCommands['room.media.request']): Promise<MediaGrant | null>;
+    requestResync(recoveryEpoch: number, appEpoch: number): boolean;
+    setResyncFailureHandler(handler: ((input: { code: string }) => void) | null): void;
+  };
+}

@@ -5,7 +5,7 @@
 import type { ProfileCardPerson } from '@/shared/components/profile-card';
 import type { RoomSocial } from './social';
 import type { PresenceStatus } from '@/shared/presence';
-import type { Participant } from './client/model/participants';
+import type { Participant } from '@voice-room/call/engine/model/participants';
 import type { ChatMessage } from '@/api/rooms';
 import type { MembershipMember } from '@voice-room/shared/contracts/membership';
 import { displayNameOf } from '@/shared/utils/display-name';

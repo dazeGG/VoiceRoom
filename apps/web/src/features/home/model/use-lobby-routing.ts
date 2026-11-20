@@ -4,7 +4,7 @@
 
 import { ref } from 'vue';
 import { useRouter, type Router } from 'vue-router';
-import { useVoiceSessionStore } from '@/features/room/voice-session.store';
+import { useVoiceSessionStore } from '@voice-room/call/engine';
 import { useRoomUiStore } from '@/features/room/room-ui.store';
 import { bindDesktopLinks, type DesktopLink } from '@/platform/desktop-links';
 import {

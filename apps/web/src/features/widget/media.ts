@@ -1,4 +1,4 @@
-import { loadLiveKitClient } from '../room/client/media/livekit-runtime';
+import { loadLiveKitClient } from '@voice-room/call/livekit-runtime';
 import { openWidgetMicrophone, type WidgetCapture, type WidgetNoiseMode } from './capture';
 import type {
   ConnectionQuality,

@@ -1,9 +1,9 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch, type Ref } from 'vue';
 import { isAppVisible, onAppVisibilityChange } from '@/platform/app-visibility';
-import { startScreenStartupDiagnostics } from './client/media/screen-startup-diagnostics';
-import { startScreenSustainedDiagnostics } from './client/media/screen-sustained-diagnostics';
-import { isScreenVideoPublication } from './client/services/livekit/publication-kinds';
-import { useScreenUiStore } from './screen-ui.store';
+import { startScreenStartupDiagnostics } from '@voice-room/call/engine/media/screen-startup-diagnostics';
+import { startScreenSustainedDiagnostics } from '@voice-room/call/engine/media/screen-sustained-diagnostics';
+import { isScreenVideoPublication } from '@voice-room/call/engine/services/livekit/publication-kinds';
+import { useScreenUiStore } from '@voice-room/call/engine/core/screen-ui.store';
 
 /** The displayed stage owns this observer, including close/reopen and visibility pauses. */
 export function useScreenStartupDiagnostics(video: Ref<HTMLVideoElement | null>): void {

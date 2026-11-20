@@ -5,12 +5,14 @@
 import { computed, ref } from 'vue';
 import { nearestCorner, type PipCorner } from '@/features/room/mobile-call-layout';
 import { useMobileCallUiStore, type MobileCallScene } from '@/features/room/mobile-call-ui.store';
+import { useRoomUiStore } from '@/features/room/room-ui.store';
 import MobileCallTile from './MobileCallTile.vue';
 import MobileCameraFlip from './MobileCameraFlip.vue';
 
 const props = defineProps<{ scene: Extract<MobileCallScene, { kind: 'duo' }>; corner: PipCorner }>();
 
 const mobileCall = useMobileCallUiStore();
+const roomUi = useRoomUiStore();
 
 /** Past this many pixels a touch is a drag, not a tap: a finger wobbles a few on its own. */
 const DRAG_THRESHOLD_PX = 10;
@@ -44,7 +46,7 @@ const canFlip = computed(() => expanded.value && Boolean(participant.value.camer
 function handlePointerDown(event: PointerEvent): void {
   // The stage underneath would take this touch as a tap on the big picture.
   event.stopPropagation();
-  mobileCall.restartChromeTimer();
+  mobileCall.restartChromeTimer(() => roomUi.chatOpen);
   if (event.button !== 0) return;
   start = { x: event.clientX, y: event.clientY };
   dragged = false;

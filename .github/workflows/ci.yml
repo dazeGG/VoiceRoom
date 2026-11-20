@@ -256,7 +256,7 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: npm
-      - run: npm ci --workspace @voice-room/web --workspace @voice-room/shared --workspace @voice-room/ui
+      - run: npm ci --workspace @voice-room/web --workspace @voice-room/shared --workspace @voice-room/ui --workspace @voice-room/call
       - name: Start the voice stack and pull the Playwright image
         run: |
           version=$(node -p "require('./package-lock.json').packages['node_modules/@playwright/test'].version")

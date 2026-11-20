@@ -85,7 +85,7 @@ onMounted(() => {
         void import('@/api/realtime').then((realtime) => realtime.getAppRealtime().probeLiveness());
         if (callActivity.active) {
           // Optional diagnostics must not interfere with the existing wake recovery.
-          void import('@/features/room/client/room/capture-diagnostics')
+          void import('@voice-room/call/engine/room/capture-diagnostics')
             .then((diagnostics) => diagnostics.noteWakeUnlock(reason))
             .catch(() => undefined);
         }

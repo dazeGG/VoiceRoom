@@ -10,9 +10,9 @@ import { readOpenInAppSignals, shouldOfferOpenInApp } from '@/platform/open-in-a
 import AppBenefitsModal from '@/shared/components/AppBenefitsModal.vue';
 import { Button } from '@/shared/ui';
 import { iconMd, iconSm } from '@/shared/ui/icons';
-import { isRoomEmbedded } from '../client/core/embed';
-import { state as roomClientState } from '../client/core/room-runtime.store';
-import { rejoinRoomSignedIn } from '../client/room/room';
+import { isRoomEmbedded } from '@voice-room/call/engine/core/embed';
+import { state as roomClientState } from '@voice-room/call/engine/core/room-runtime.store';
+import { rejoinRoomSignedIn } from '@voice-room/call/engine/room/room';
 import { resolveRoomCta } from '../room-cta';
 
 const session = useSessionStore();
