@@ -3,8 +3,8 @@
 // without a rejoin, and never on someone else's.
 
 import { afterEach, expect, test } from 'vitest';
-import { clientRoomName, syncLocalProfile } from '@/features/room/client/index';
-import { state } from '@/features/room/client/core/room-runtime.store';
+import { clientRoomName, syncLocalProfile } from '@voice-room/call/engine';
+import { state } from '@voice-room/call/engine/core/room-runtime.store';
 import { participant } from '../fixtures/participant';
 
 afterEach(() => {

@@ -1,18 +1,26 @@
 import { expect, test, vi } from 'vitest';
 import type * as RoomRealtime from '@/entities/room/room-realtime';
 
-vi.mock('@/features/room/client/ui/toast', () => ({ showToast: vi.fn() }));
+vi.mock('@voice-room/call/engine/ui/toast', () => ({ showToast: vi.fn() }));
 vi.mock('@/entities/room/room-realtime', async (importOriginal) => ({
   ...(await importOriginal<typeof RoomRealtime>()),
   isMediaRequestError: (id: string | undefined) => id === 'media-1'
 }));
 
-const { showToast } = await import('@/features/room/client/ui/toast');
-const { createVoiceEventHandler } = await import('@/features/room/client/room/voice-events');
+const { showToast } = await import('@voice-room/call/engine/ui/toast');
+const { createVoiceEventHandler } = await import('@voice-room/call/engine/room/voice-events');
+const { mapWebCallEvent } = await import('@/features/room/adapters/web-call-transport');
 
 function handler() {
   const room = { leaveRoom: vi.fn(), showModeration: vi.fn(), showNotFound: vi.fn() };
-  return { room, handle: createVoiceEventHandler(room) };
+  const handle = createVoiceEventHandler(room);
+  return {
+    room,
+    handle: async (event: import('@/api/realtime').RealtimeEvent) => {
+      const mapped = mapWebCallEvent(event);
+      if (mapped) await handle(mapped);
+    }
+  };
 }
 
 test('a refused media request is not shown as a room error: the stream falls back on its own', async () => {

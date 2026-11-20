@@ -10,14 +10,15 @@ async function load() {
   report.mockClear();
   vi.useFakeTimers();
   vi.setSystemTime(new Date('2026-11-11T08:00:00Z'));
-  vi.doMock('@/shared/log', () => ({
+  vi.doMock('@/shared/log', async (importOriginal) => ({
+    ...(await importOriginal<typeof import('@/shared/log')>()),
     createLogger: () => ({
       info: (msg: string, ctx: Record<string, string | number | boolean | null>) => records.push({ msg, ctx }),
       error: (msg: string, ctx: Record<string, string | number | boolean | null>) => records.push({ msg, ctx })
     }),
     reportClientLogs: report
   }));
-  return freshImport(() => import('@/features/room/client/room/capture-diagnostics'));
+  return freshImport(() => import('@voice-room/call/engine/room/capture-diagnostics'));
 }
 
 afterEach(() => {
@@ -356,7 +357,7 @@ test('owned suspend and resume do not masquerade as external transitions or spen
 
 test('an old capture owned transition cannot hide a new capture external suspension', async () => {
   const diagnostics = await load();
-  const { state } = await import('@/features/room/client/core/room-runtime.store');
+  const { state } = await import('@voice-room/call/engine/core/room-runtime.store');
   diagnostics.startCaptureDiagnostics();
   const snapshot = (contextState: string) => ({
     generation: 1,

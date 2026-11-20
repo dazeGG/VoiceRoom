@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { APP_HOME } from '@voice-room/shared/app-home';
 import {
   createPermanentRoom,
   enterRoom,
@@ -70,7 +71,7 @@ test('an owner delete propagates live to another participant without reload', as
   await expect(dialog).toBeVisible();
   await dialog.getByRole('button', { name: 'Удалить комнату' }).click();
   await dialog.getByRole('button', { name: 'Удалить навсегда' }).click();
-  await ownerPage.waitForURL('**/', { timeout: 15_000 });
+  await ownerPage.waitForURL((url) => url.pathname === APP_HOME, { timeout: 15_000 });
 
   await expect(guestPage.locator('body')).toHaveClass(/\bscreen--not-found\b/, { timeout: 20_000 });
   await expect(guestPage.locator('#notFoundScreen')).toBeVisible();

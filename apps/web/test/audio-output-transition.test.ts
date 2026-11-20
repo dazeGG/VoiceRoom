@@ -4,7 +4,7 @@ import {
   createAudioOutputTransitionQueue,
   selectOutputOrSystem,
   transitionAudioOutput
-} from '@/features/room/client/services/audio-output-transition.ts';
+} from '@voice-room/call/engine/services/audio-output-transition';
 
 function deferred() {
   let resolve = () => {};

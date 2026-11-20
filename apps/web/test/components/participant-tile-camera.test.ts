@@ -7,10 +7,10 @@ import { fireEvent, render, screen } from '@testing-library/vue';
 import { nextTick } from 'vue';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import ParticipantTile from '@/features/room/components/ParticipantTile.vue';
-import { state } from '@/features/room/client/core/room-runtime.store';
-import { createInitialRoomState } from '@/features/room/client/model/room-state';
-import { createParticipant } from '@/features/room/client/room/participants';
-import type { Participant } from '@/features/room/client/core/types';
+import { state } from '@voice-room/call/engine/core/room-runtime.store';
+import { createInitialRoomState } from '@voice-room/call/engine/model/room-state';
+import { createParticipant } from '@voice-room/call/engine/room/participants';
+import type { Participant } from '@voice-room/call/engine/core/types';
 import { useParticipantContextUiStore } from '@/features/room/participant-context-ui.store';
 import { defined, instanceOf } from '../helpers/assert';
 

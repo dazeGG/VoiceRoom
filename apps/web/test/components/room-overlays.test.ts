@@ -2,7 +2,7 @@ import { screen } from '@testing-library/vue';
 import { expect, test } from 'vitest';
 import { defineComponent, h } from 'vue';
 import RoomOverlays from '@/features/room/components/RoomOverlays.vue';
-import { useGuestNameUiStore } from '@/features/room/guest-name-ui.store';
+import { useGuestNameUiStore } from '@voice-room/call/engine/core/guest-name-ui.store';
 import { renderWithApp } from '../helpers/render.ts';
 
 // The guest name dialog sits in the app shell; while it is open the rest of the shell is inert.

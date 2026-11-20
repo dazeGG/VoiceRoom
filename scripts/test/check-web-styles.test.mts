@@ -144,3 +144,19 @@ test('portable styles cannot depend on app modules', (t) => {
     'packages/ui/src/styles/_b.scss:2 portable UI cannot load styles from applications'
   ]);
 });
+
+test('call styles use portable Sass modules and call views use portable UI wrappers', (t) => {
+  const { repo } = tree(
+    t,
+    {
+      'styles/_call.scss':
+        "@use 'pkg:@voice-room/ui/styles/mixins';\n@forward '../../../../apps/web/src/styles/mixins';\n",
+      'views/CallDock.vue': '<script setup lang="ts">import { DialogRoot } from \'reka-ui\';</script>\n'
+    },
+    'packages/call/src'
+  );
+  assert.deepEqual(checkWebStyles(repo).sort(), [
+    'packages/call/src/styles/_call.scss:2 portable call cannot load styles from applications',
+    'packages/call/src/views/CallDock.vue:1 reka-ui import outside the primitive directories; use a UI wrapper'
+  ]);
+});

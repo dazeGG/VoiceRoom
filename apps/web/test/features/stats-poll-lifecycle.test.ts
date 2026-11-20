@@ -46,9 +46,9 @@ async function loadPoll() {
     updateVoicePeer: () => {},
     reportVoicePoll: (payload: Parameters<typeof reportVoicePoll>[0]) => polls.push(payload)
   }));
-  const stats = await freshImport(() => import('@/features/room/client/room/stats'));
-  const { state } = await import('@/features/room/client/core/room-runtime.store');
-  const strain = await import('@/features/room/client/room/call-strain');
+  const stats = await freshImport(() => import('@voice-room/call/engine/room/stats'));
+  const { state } = await import('@voice-room/call/engine/core/room-runtime.store');
+  const strain = await import('@voice-room/call/engine/room/call-strain');
   const noteStrain = vi.spyOn(strain, 'noteCallStrain');
   Object.assign(state, { joined: true, roomId: 'first', peerId: 'self', sessionToken: 'session-one' });
   onTestFinished(stats.stopPeerLatencyStats);

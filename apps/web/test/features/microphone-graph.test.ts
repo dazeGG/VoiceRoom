@@ -4,20 +4,21 @@
 
 import { createPinia, setActivePinia } from 'pinia';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
-import { state } from '@/features/room/client/core/room-runtime.store';
-import { createInitialRoomState } from '@/features/room/client/model/room-state.ts';
+import { state } from '@voice-room/call/engine/core/room-runtime.store';
+import { createInitialRoomState } from '@voice-room/call/engine/model/room-state';
 import {
   openLocalMicrophone,
   setLocalMicrophoneCapture,
   setMicrophoneCaptureEnabled,
   setMicrophoneVolume,
   stopMicrophoneCapture
-} from '@/features/room/client/services/microphone-service.ts';
-import type { MicrophoneCapture } from '@/features/room/client/core/types.ts';
+} from '@voice-room/call/engine/services/microphone-service';
+import type { MicrophoneCapture } from '@voice-room/call/engine/core/types';
 import { defined } from '../helpers/assert.ts';
+import { installWebCallPortsForTest } from '../helpers/call-ports';
 
 const fallback = vi.hoisted(() => vi.fn());
-vi.mock('@/features/room/client/ui/devices', () => ({ fallbackRnnoiseAfterProcessorError: fallback }));
+vi.mock('@voice-room/call/engine/ui/devices', () => ({ fallbackRnnoiseAfterProcessorError: fallback }));
 
 vi.mock('/rnnoise/rnnoise.mjs', () => ({
   RNNoiseNode: class {
@@ -128,9 +129,10 @@ class FakeContext {
 const contexts: FakeContext[] = [];
 const latest = () => defined(contexts.at(-1), 'audio context');
 
-beforeEach(() => {
+beforeEach(async () => {
   fallback.mockClear();
   setActivePinia(createPinia());
+  await installWebCallPortsForTest();
   Object.assign(state, createInitialRoomState());
   state.gateThresholdDb = -50;
   vi.stubGlobal(
@@ -339,7 +341,7 @@ test('RNNoise failure during preparation or candidate barrier is latched before 
 test('a browser without RNNoise falls back with one toast a page, and the saved choice stays RNNoise', async () => {
   vi.stubGlobal('AudioWorkletNode', undefined);
   state.noiseMode = 'rnnoise';
-  const { useToastUiStore } = await import('@/features/room/toast-ui.store');
+  const { useToastUiStore } = await import('@voice-room/call/engine/core/toast-ui.store');
   const first = await openLocalMicrophone();
   const second = await openLocalMicrophone();
   expect([first.mode, second.mode]).toEqual(['browser', 'browser']);

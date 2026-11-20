@@ -1,5 +1,6 @@
 import { onTestFinished, test, vi } from 'vitest';
 import assert from 'node:assert/strict';
+import { installWebCallPortsForTest } from './helpers/call-ports';
 
 class MemoryStorage {
   #values = new Map<string, string>();
@@ -89,7 +90,8 @@ test('desktop hotkey sync buffers early events, prefers the latest status, and d
   vi.resetModules();
   console.warn = () => {};
 
-  const service = await import('@/features/room/client/services/desktop-hotkey-service.ts');
+  await installWebCallPortsForTest();
+  const service = await import('@voice-room/call/engine/services/desktop-hotkey-service');
   const actions: unknown[] = [];
   const statuses: unknown[] = [];
   unbind = service.bindDesktopGlobalHotkeys(

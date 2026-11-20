@@ -3,7 +3,7 @@
 // second, so one lost packet in a single poll must not read as 12 % loss.
 
 import { expect, test } from 'vitest';
-import { LOSS_MIN_PACKETS, LOSS_WINDOW_POLLS, createLossWindow } from '@/features/room/client/room/loss-window';
+import { LOSS_MIN_PACKETS, LOSS_WINDOW_POLLS, createLossWindow } from '@voice-room/call/engine/room/loss-window';
 
 test('one lost packet in a silent poll says nothing, not 12 %', () => {
   const loss = createLossWindow();

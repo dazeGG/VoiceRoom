@@ -1,3 +1,4 @@
+import { installWebCallPortsForTest } from './helpers/call-ports';
 import { test, vi } from 'vitest';
 import assert from 'node:assert/strict';
 import { instanceOf } from './helpers/assert.ts';
@@ -71,8 +72,9 @@ async function loadBus(storage = {}) {
   vi.stubGlobal('MediaStream', FakeMediaStream);
   vi.stubGlobal('AudioContext', FakeAudioContext);
   vi.resetModules();
-  const bus = await import('@/features/room/client/services/audio-bus.ts');
-  const { state } = await import('@/features/room/client/core/room-runtime.store');
+  await installWebCallPortsForTest();
+  const bus = await import('@voice-room/call/engine/services/audio-bus');
+  const { state } = await import('@voice-room/call/engine/core/room-runtime.store');
   return { bus, state };
 }
 

@@ -20,7 +20,7 @@ const mocks = vi.hoisted(() => ({
   listeners: new Map<string, (...args: unknown[]) => void>()
 }));
 vi.mock('../src/features/widget/capture', () => ({ openWidgetMicrophone: mocks.capture }));
-vi.mock('../src/features/room/client/media/livekit-runtime', () => ({
+vi.mock('@voice-room/call/livekit-runtime', () => ({
   loadLiveKitClient: async () => ({
     Room: class {
       localParticipant = {

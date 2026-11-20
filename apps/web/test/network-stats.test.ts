@@ -1,7 +1,7 @@
 import { test, vi } from 'vitest';
 import assert from 'node:assert/strict';
 import { freshImport } from './helpers/fresh-module';
-import type { RtcStatsSource } from '@/features/room/client/media/rtc-stats';
+import type { RtcStatsSource } from '@voice-room/call/engine/media/rtc-stats';
 
 async function load<Module>(importModule: () => Promise<Module>): Promise<Module> {
   vi.stubGlobal('window', { location: { hash: '', pathname: '/', search: '' } });
@@ -16,7 +16,7 @@ function report(entries: Array<{ id: string } & Record<string, unknown>>) {
 }
 
 test('upstream loss counters and a UDP transport come from the publisher stats, audio only', async () => {
-  const { getOutboundNetworkFromStats } = await load(() => import('@/features/room/client/room/stats'));
+  const { getOutboundNetworkFromStats } = await load(() => import('@voice-room/call/engine/room/stats'));
   const stats = report([
     // The SFU's fraction of one short interval is not trusted: the counters are.
     { id: 'r1', type: 'remote-inbound-rtp', kind: 'audio', packetsLost: 12, fractionLost: 0.125 },
@@ -43,8 +43,8 @@ test('upstream loss counters and a UDP transport come from the publisher stats, 
 });
 
 test('fresh RTT selection rejects unmeasured candidate zero and cached observations', async () => {
-  const { selectFreshRoundTripTime } = await load(() => import('@/features/room/client/room/stats'));
-  const { readRtcStats } = await import('@/features/room/client/media/rtc-stats');
+  const { selectFreshRoundTripTime } = await load(() => import('@voice-room/call/engine/room/stats'));
+  const { readRtcStats } = await import('@voice-room/call/engine/media/rtc-stats');
   const publication = {};
   const sample = (timestamp: number, pairRtt: number, responses?: number) =>
     readRtcStats(
@@ -75,8 +75,8 @@ test('fresh RTT selection rejects unmeasured candidate zero and cached observati
 });
 
 test('pair/publication identity and invalid decoder fields force an unknown baseline', async () => {
-  const { selectFreshRoundTripTime } = await load(() => import('@/features/room/client/room/stats'));
-  const { readRtcStats } = await import('@/features/room/client/media/rtc-stats');
+  const { selectFreshRoundTripTime } = await load(() => import('@voice-room/call/engine/room/stats'));
+  const { readRtcStats } = await import('@voice-room/call/engine/media/rtc-stats');
   const publication = {};
   const pair = (id: string, responsesReceived: number, timestamp: number, currentRoundTripTime: number) =>
     readRtcStats(
@@ -119,7 +119,7 @@ test('pair/publication identity and invalid decoder fields force an unknown base
 });
 
 test('a relay or TCP candidate is reported as a degraded transport', async () => {
-  const { getOutboundNetworkFromStats } = await load(() => import('@/features/room/client/room/stats'));
+  const { getOutboundNetworkFromStats } = await load(() => import('@voice-room/call/engine/room/stats'));
   const pair = { id: 'p1', type: 'candidate-pair', state: 'succeeded', selected: true, localCandidateId: 'l1' };
   assert.equal(
     getOutboundNetworkFromStats(report([pair, { id: 'l1', candidateType: 'relay', protocol: 'udp' }])).transport,
@@ -139,9 +139,9 @@ test('a relay or TCP candidate is reported as a degraded transport', async () =>
 });
 
 test.each(['udp', 'tcp', 'tls'])('a prflx candidate using TURN over %s is shown as a relay', async (relayProtocol) => {
-  const { getOutboundNetworkFromStats } = await load(() => import('@/features/room/client/room/stats'));
-  const { getConnectionStatusView } = await import('@/features/room/client/ui/status');
-  const { state } = await import('@/features/room/client/core/room-runtime.store');
+  const { getOutboundNetworkFromStats } = await load(() => import('@voice-room/call/engine/room/stats'));
+  const { getConnectionStatusView } = await import('@voice-room/call/engine/ui/status');
+  const { state } = await import('@voice-room/call/engine/core/room-runtime.store');
   const { transport } = getOutboundNetworkFromStats(
     report([
       { id: 'p1', type: 'candidate-pair', state: 'succeeded', nominated: true, localCandidateId: 'l1' },
@@ -159,7 +159,7 @@ test.each(['udp', 'tcp', 'tls'])('a prflx candidate using TURN over %s is shown 
 test.each([undefined, '', 'unknown', true, 1])(
   'invalid relayProtocol %s does not turn a direct candidate into TURN',
   async (relayProtocol) => {
-    const { getOutboundNetworkFromStats } = await load(() => import('@/features/room/client/room/stats'));
+    const { getOutboundNetworkFromStats } = await load(() => import('@voice-room/call/engine/room/stats'));
     const pair = { id: 'p1', type: 'candidate-pair', state: 'succeeded', selected: true, localCandidateId: 'l1' };
     for (const protocol of ['udp', 'tcp']) {
       assert.equal(
@@ -183,7 +183,7 @@ test.each([undefined, '', 'unknown', true, 1])(
 );
 
 test('an unused TURN candidate does not override the selected direct route', async () => {
-  const { getOutboundNetworkFromStats } = await load(() => import('@/features/room/client/room/stats'));
+  const { getOutboundNetworkFromStats } = await load(() => import('@voice-room/call/engine/room/stats'));
   assert.equal(
     getOutboundNetworkFromStats(
       report([
@@ -198,9 +198,9 @@ test('an unused TURN candidate does not override the selected direct route', asy
 });
 
 test('the status pill explains loss, jitter and a TCP fallback and warns on real loss', async () => {
-  const status = await load(() => import('@/features/room/client/ui/status'));
+  const status = await load(() => import('@voice-room/call/engine/ui/status'));
   // Same module graph as status.ts, so both see one state instance.
-  const { state } = await import('@/features/room/client/core/room-runtime.store');
+  const { state } = await import('@voice-room/call/engine/core/room-runtime.store');
   state.voiceConnection = 'connected';
   state.localPingMs = 40;
   state.localNetwork = { inboundLossPct: 1.2, jitterMs: 9, outboundLossPct: 0, transport: 'tcp' };

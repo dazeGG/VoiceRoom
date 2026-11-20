@@ -1,26 +1,26 @@
 import { createPinia, setActivePinia } from 'pinia';
 import { afterEach, beforeEach, expect, onTestFinished, test, vi } from 'vitest';
 import type { CallFeedbackCall } from '@voice-room/shared/contracts/feedback';
-import type { CallIdentity, CallPageState, CallPorts } from '@/features/room/client/ports';
+import type { CallIdentity, CallPorts } from '@voice-room/call/engine/ports';
 import { authUser } from '../fixtures/users';
 import { lobbyRoom, roomStatus } from '../fixtures/answers';
 import { stubFetch } from '../fixtures/fetch';
 import { installFakeWebSocket } from '../fixtures/fake-websocket';
 
-vi.mock('@/features/room/client/ui/devices', async (original) => ({
+vi.mock('@voice-room/call/engine/ui/devices', async (original) => ({
   ...(await original<object>()),
   refreshDevices: vi.fn(async () => {})
 }));
-vi.mock('@/features/room/client/services/microphone-service', async (original) => ({
+vi.mock('@voice-room/call/engine/services/microphone-service', async (original) => ({
   ...(await original<object>()),
   openLocalMicrophone: vi.fn(async () => null)
 }));
-vi.mock('@/features/room/client/services/livekit-service', async (original) => ({
+vi.mock('@voice-room/call/engine/services/livekit-service', async (original) => ({
   ...(await original<object>()),
   connectLiveKitRoom: vi.fn(async () => true),
   syncRemoteVideoVisibility: vi.fn()
 }));
-vi.mock('@/features/room/client/ui/toast', () => ({ showToast: vi.fn() }));
+vi.mock('@voice-room/call/engine/ui/toast', () => ({ showToast: vi.fn() }));
 
 beforeEach(() => {
   vi.resetModules();
@@ -39,25 +39,52 @@ afterEach(async () => {
   vi.unstubAllGlobals();
 });
 
-function fakePorts(identity: CallIdentity = { kind: 'guest', profile: null, feedbackGuestId: 'feedback-guest' }) {
-  const page: CallPageState = {
-    screen: '',
-    screenView: false,
-    stripCollapsed: false,
-    stageSummary: '',
-    desktopScreenFullscreen: false
-  };
+async function fakePorts(identity: CallIdentity = { kind: 'guest', profile: null, feedbackGuestId: 'feedback-guest' }) {
+  const { useCallPageStore } = await import('@voice-room/call/engine/core/call-page.store');
+  const { webCallTransport } = await import('@/features/room/adapters/web-call-transport');
+  const { voiceAssetUrls } = await import('@voice-room/call/voice-assets');
+  const storage = new Map<string, string>();
+  const page = useCallPageStore();
+  const { createLogger } = await import('@voice-room/ui/log');
+  const { useLeaveScreenStore } = await import('@/features/room/leave-screen.store');
+  const showLeaveScreen = useLeaveScreenStore().openLeaveScreen;
   const feedbackEvents: Array<'drop' | 'offer' | CallFeedbackCall | null> = [];
   const listeners = new Set<(visible: boolean) => void>();
   const hostEntered = vi.fn();
   const goHome = vi.fn();
   const ports: CallPorts = {
+    transport: webCallTransport,
+    assets: voiceAssetUrls(),
+    storage: {
+      read: (key) => storage.get(key) ?? null,
+      write: (key, value) => storage.set(key, value),
+      remove: (key) => storage.delete(key)
+    },
+    diagnostics: {
+      logger: (namespace) => createLogger(namespace),
+      report: async () => false,
+      installGlobalErrorCapture: vi.fn(),
+      reportJoinOutcome: vi.fn(),
+      buildVersion: () => 'test'
+    },
+    mediaPolicy: { camera: true },
     identity: {
       current: () => identity,
+      credentials: () => ({ peerId: 'injected-peer', sessionToken: 'injected-session' }),
+      rotateCredentials: () => ({ peerId: 'new-peer', sessionToken: 'new-session' }),
       knownEntry: () => null,
       verifyEntry: vi.fn(async () => ({ identity, isCurrent: () => true }))
     },
-    host: { entered: hostEntered },
+    host: {
+      entered: hostEntered,
+      createRoom: async () => '',
+      isDeletingRoom: () => false,
+      closeParticipantMenu: vi.fn(),
+      showLeaveScreen,
+      setCallActive: vi.fn(),
+      leaveMembership: async () => false,
+      suppressCuePlayback: () => false
+    },
     feedback: {
       drop: () => feedbackEvents.push('drop'),
       finished: (call) => feedbackEvents.push(call),
@@ -73,28 +100,27 @@ function fakePorts(identity: CallIdentity = { kind: 'guest', profile: null, feed
       prepareRoomNavigation: vi.fn(),
       navigateToRoom: vi.fn(),
       goHome,
-      page: {
-        read: () => page,
-        patch: (patch) => Object.assign(page, patch)
-      }
+      forceRelay: () => false,
+      traceLiveKit: () => false,
+      desktop: {}
     }
   };
-  return { ports, page, feedbackEvents, listeners, hostEntered, goHome };
+  return { ports, page, feedbackEvents, listeners, hostEntered, goHome, showLeaveScreen };
 }
 
 async function installFake(identity?: CallIdentity) {
-  const fixture = fakePorts(identity);
-  const { installCallPorts } = await import('@/features/room/client/ports');
+  const fixture = await fakePorts(identity);
+  const { installCallPorts } = await import('@voice-room/call/engine/ports');
   onTestFinished(installCallPorts(fixture.ports));
   return fixture;
 }
 
 test('binding fails precisely before installation and releases only its own installed ports', async () => {
-  const { getCallPorts, installCallPorts } = await import('@/features/room/client/ports');
+  const { getCallPorts, installCallPorts } = await import('@voice-room/call/engine/ports');
   const missing = 'Call ports are not installed. Install call ports before invoking room runtime actions.';
   expect(getCallPorts).toThrow(missing);
-  const first = fakePorts();
-  const second = fakePorts();
+  const first = await fakePorts();
+  const second = await fakePorts();
   const releaseFirst = installCallPorts(first.ports);
   expect(getCallPorts()).toBe(first.ports);
   const releaseSecond = installCallPorts(second.ports);
@@ -105,14 +131,16 @@ test('binding fails precisely before installation and releases only its own inst
 });
 
 test('public runtime exports import before installation and later actions observe the current binding', async () => {
-  const { getCallPorts } = await import('@/features/room/client/ports');
-  const runtime = await import('@/features/room/client/index');
+  const { getCallPorts } = await import('@voice-room/call/engine/ports');
+  const runtime = await import('@voice-room/call/engine');
   expect(getCallPorts).toThrow('Call ports are not installed.');
   const first = await installFake();
+  first.ports.platform.desktop.runtime = { isDesktop: true };
   expect(runtime.setMicrophoneMode('push-to-talk')).toBe('push-to-talk');
-  const { showStartScreen } = await import('@/features/room/client/room/room');
+  const { showStartScreen } = await import('@voice-room/call/engine/room/room');
   showStartScreen();
   expect(first.page.screen).toBe('start');
+  setActivePinia(createPinia());
   const second = await installFake();
   first.page.screen = 'checking';
   showStartScreen();
@@ -126,10 +154,10 @@ test('guest-only ports prompt for a name and join with transport fixtures withou
   const fixture = await installFake();
   installFakeWebSocket();
   const fetch = stubFetch({ '/api/rooms/abc123': { body: roomStatus({ roomId: 'abc123' }) } });
-  const room = await import('@/features/room/client/room/room');
-  const { state } = await import('@/features/room/client/core/room-runtime.store');
-  const { useGuestNameUiStore } = await import('@/features/room/guest-name-ui.store');
-  const { handleGuestNameSubmit } = await import('@/features/room/client/ui/names');
+  const room = await import('@voice-room/call/engine/room/room');
+  const { state } = await import('@voice-room/call/engine/core/room-runtime.store');
+  const { useGuestNameUiStore } = await import('@voice-room/call/engine/core/guest-name-ui.store');
+  const { handleGuestNameSubmit } = await import('@voice-room/call/engine/ui/names');
   Object.assign(state, { roomId: 'abc123', peerId: 'peer-1', sessionToken: 'session-1' });
   onTestFinished(() => room.leaveRoom());
 
@@ -155,13 +183,15 @@ test('guest-only ports prompt for a name and join with transport fixtures withou
   expect(fixture.listeners.size).toBe(0);
 });
 
-test('production adapter captures its Pinia and maps all five page fields to body classes', async () => {
+test('web derives body classes from the five call-owned page fields', async () => {
   const pinia = createPinia();
   setActivePinia(pinia);
   const { createWebCallPorts } = await import('@/features/room/adapters/web-call-ports');
   const { useSessionStore } = await import('@/features/auth/session.store');
+  const { useCallPageStore } = await import('@voice-room/call/engine/core/call-page.store');
+  const callPage = useCallPageStore(pinia);
   const { usePageStore, installBodyClasses } = await import('@/stores/page.store');
-  const { installCallPorts } = await import('@/features/room/client/ports');
+  const { installCallPorts } = await import('@voice-room/call/engine/ports');
   const ports = createWebCallPorts(pinia);
   const session = useSessionStore(pinia);
   session.setUser(authUser({ displayName: 'Captured account' }));
@@ -172,15 +202,15 @@ test('production adapter captures its Pinia and maps all five page fields to bod
   useSessionStore(other).setUser(null);
   expect(ports.identity.current().profile?.displayName).toBe('Captured account');
 
-  const { showStartScreen } = await import('@/features/room/client/room/room');
+  const { showStartScreen } = await import('@voice-room/call/engine/room/room');
   showStartScreen();
-  ports.platform.page.patch({
+  callPage.$patch({
     screenView: true,
     stripCollapsed: true,
     stageSummary: 'hidden',
     desktopScreenFullscreen: true
   });
-  expect(ports.platform.page.read()).toMatchObject({
+  expect(callPage).toMatchObject({
     screen: 'start',
     screenView: true,
     stripCollapsed: true,
@@ -198,7 +228,7 @@ test('production adapter captures its Pinia and maps all five page fields to bod
   );
   expect(usePageStore(pinia).screen).toBe('start');
   expect(usePageStore(other).screen).toBe('');
-  ports.platform.page.patch({
+  callPage.$patch({
     screen: '',
     screenView: false,
     stripCollapsed: false,
@@ -212,11 +242,11 @@ test('embedded cached account entry persists its name and starts host effects sy
   const pinia = createPinia();
   setActivePinia(pinia);
   const { createWebCallPorts } = await import('@/features/room/adapters/web-call-ports');
-  const { installCallPorts } = await import('@/features/room/client/ports');
+  const { installCallPorts } = await import('@voice-room/call/engine/ports');
   const { useSessionStore } = await import('@/features/auth/session.store');
-  const { setRoomEmbedded } = await import('@/features/room/client/core/embed');
-  const { state } = await import('@/features/room/client/core/room-runtime.store');
-  const { resolveRoomEntryName } = await import('@/features/room/client/room/room-entry');
+  const { setRoomEmbedded } = await import('@voice-room/call/engine/core/embed');
+  const { state } = await import('@voice-room/call/engine/core/room-runtime.store');
+  const { resolveRoomEntryName } = await import('@voice-room/call/engine/room/room-entry');
   const fetch = stubFetch({
     'POST /api/auth/rooms': { body: { ok: true, room: lobbyRoom() } },
     '/api/auth/rooms': { body: { ok: true, rooms: [] } }
@@ -273,7 +303,7 @@ test.each([
     ports.platform.policy = () => ({ roomClientAllowed: true, desktopAllowed, platformClass });
     vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue('Chrome/130.0.0.0');
     vi.spyOn(document, 'hidden', 'get').mockReturnValue(true);
-    const { canRecoverMic } = await import('@/features/room/client/room/mic-send');
+    const { canRecoverMic } = await import('@voice-room/call/engine/room/mic-send');
     expect(canRecoverMic()).toBe(expected);
     vi.spyOn(document, 'hidden', 'get').mockReturnValue(false);
     expect(canRecoverMic()).toBe(true);
@@ -291,10 +321,10 @@ test.each(['guest', 'account'] as const)(
     installFakeWebSocket();
     stubFetch({ '/api/rooms/abc123': { body: roomStatus({ roomId: 'abc123' }) } });
     const { CALL_FEEDBACK_MAX_DURATION_S } = await import('@voice-room/shared/contracts/feedback');
-    const room = await import('@/features/room/client/room/room');
-    const { state } = await import('@/features/room/client/core/room-runtime.store');
-    const quality = await import('@/features/room/client/room/call-quality');
-    const { setRoomEmbedded, setRoomShell } = await import('@/features/room/client/core/embed');
+    const room = await import('@voice-room/call/engine/room/room');
+    const { state } = await import('@voice-room/call/engine/core/room-runtime.store');
+    const quality = await import('@voice-room/call/engine/room/call-quality');
+    const { setRoomEmbedded, setRoomShell } = await import('@voice-room/call/engine/core/embed');
     const shell = { roomLeft: vi.fn(), roomsChanged: vi.fn() };
     setRoomEmbedded(true);
     setRoomShell(shell);
@@ -331,9 +361,9 @@ test.each(['guest', 'account'] as const)(
 
 test('connecting leave finishes null before offering while idle leave does not offer feedback', async () => {
   const fixture = await installFake();
-  const room = await import('@/features/room/client/room/room');
-  const { state } = await import('@/features/room/client/core/room-runtime.store');
-  const { setRoomEmbedded } = await import('@/features/room/client/core/embed');
+  const room = await import('@voice-room/call/engine/room/room');
+  const { state } = await import('@voice-room/call/engine/core/room-runtime.store');
+  const { setRoomEmbedded } = await import('@voice-room/call/engine/core/embed');
   setRoomEmbedded(true);
   state.roomId = 'abc123';
   await room.handleLeaveButtonClick();
@@ -345,8 +375,8 @@ test('connecting leave finishes null before offering while idle leave does not o
 
 test('signed-in rejoin marks navigation before the leave cue and assigns the room only after teardown', async () => {
   const fixture = await installFake();
-  const room = await import('@/features/room/client/room/room');
-  const { state } = await import('@/features/room/client/core/room-runtime.store');
+  const room = await import('@voice-room/call/engine/room/room');
+  const { state } = await import('@voice-room/call/engine/core/room-runtime.store');
   const actions: string[] = [];
   fixture.ports.platform.prepareRoomNavigation = () => actions.push('prepare');
   fixture.ports.feedback.finished = () => actions.push('finished');
@@ -376,8 +406,8 @@ test.each([
         : { kind, profile: { displayName: 'Account', avatarAccent: '', avatarColorKey: '', avatarUrl: '' } };
     const fixture = await installFake(identity);
     fixture.ports.platform.policy = () => ({ roomClientAllowed: true, desktopAllowed, platformClass: 'unknown' });
-    const room = await import('@/features/room/client/room/room');
-    const { state } = await import('@/features/room/client/core/room-runtime.store');
+    const room = await import('@voice-room/call/engine/room/room');
+    const { state } = await import('@voice-room/call/engine/core/room-runtime.store');
     const { useLeaveScreenStore } = await import('@/features/room/leave-screen.store');
     Object.assign(state, { roomId: 'abc123', roomIsStatic: true });
     await room.handleLeaveButtonClick();
@@ -400,12 +430,12 @@ test('creating the web call ports loads no room module', async () => {
     loaded.push(name);
     return original();
   };
-  vi.doMock('@/features/room/client/core/room-runtime.store', track('room runtime'));
-  vi.doMock('@/features/room/client/core/embed', track('room shell'));
+  vi.doMock('@voice-room/call/engine/core/room-runtime.store', track('room runtime'));
+  vi.doMock('@voice-room/call/engine/core/embed', track('room shell'));
   vi.doMock('@/features/room/room-settings.store', track('room settings'));
   onTestFinished(() => {
-    vi.doUnmock('@/features/room/client/core/room-runtime.store');
-    vi.doUnmock('@/features/room/client/core/embed');
+    vi.doUnmock('@voice-room/call/engine/core/room-runtime.store');
+    vi.doUnmock('@voice-room/call/engine/core/embed');
     vi.doUnmock('@/features/room/room-settings.store');
   });
 
@@ -413,4 +443,21 @@ test('creating the web call ports loads no room module', async () => {
   createWebCallPorts(createPinia());
 
   expect(loaded).toEqual([]);
+});
+test('mount uses the host credentials even when the same room has browser credentials', async () => {
+  const fixture = await installFake();
+  const getCredentials = vi.fn(fixture.ports.identity.credentials);
+  fixture.ports.identity.credentials = getCredentials;
+  sessionStorage.setItem(
+    'voice-room:peer-session:abc123',
+    JSON.stringify({ peerId: 'browser-peer', sessionToken: 'browser-session-token-from-storage' })
+  );
+  const { mountRoomClient } = await import('@voice-room/call/engine/main');
+  const { state } = await import('@voice-room/call/engine/core/room-runtime.store');
+  const fetch = stubFetch({ '/api/rooms/abc123': { body: roomStatus({ roomId: 'abc123' }) } });
+  const unmount = mountRoomClient(document, { roomId: 'abc123' });
+  await vi.waitFor(() => expect(fetch.calls).toContainEqual(expect.objectContaining({ url: '/api/rooms/abc123' })));
+  expect(getCredentials).toHaveBeenCalledExactlyOnceWith('abc123');
+  expect(state).toMatchObject({ roomId: 'abc123', peerId: 'injected-peer', sessionToken: 'injected-session' });
+  unmount();
 });

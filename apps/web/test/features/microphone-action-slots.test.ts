@@ -16,25 +16,26 @@ import {
   setMicrophoneRecoveryObserver,
   startMicrophoneCall,
   type MicrophoneRecoveryEvent
-} from '@/features/room/client/ui/devices';
+} from '@voice-room/call/engine/ui/devices';
 import { Room } from 'livekit-client';
 import { FakeMediaStream, FakeMediaStreamTrack } from '../helpers/fake-media';
-import type { MicrophoneCapture } from '@/features/room/client/core/types';
-import { state } from '@/features/room/client/core/room-runtime.store';
-import { createInitialRoomState } from '@/features/room/client/model/room-state';
+import type { MicrophoneCapture } from '@voice-room/call/engine/core/types';
+import { state } from '@voice-room/call/engine/core/room-runtime.store';
+import { createInitialRoomState } from '@voice-room/call/engine/model/room-state';
 import { clearLogBuffer, readLogBuffer } from '@/shared/log';
-import { noteMicSend } from '@/features/room/client/room/mic-send';
+import { noteMicSend } from '@voice-room/call/engine/room/mic-send';
 import {
   setLocalMicrophoneCapture,
   setMicrophoneCaptureEnabled
-} from '@/features/room/client/services/microphone-service';
-import { ensureLocalMicrophonePublished } from '@/features/room/client/services/livekit/local-publications';
+} from '@voice-room/call/engine/services/microphone-service';
+import { ensureLocalMicrophonePublished } from '@voice-room/call/engine/services/livekit/local-publications';
 import { defined } from '../helpers/assert';
+import { installWebCallPortsForTest } from '../helpers/call-ports';
 
 // Microphone ownership tests isolate the unrelated application realtime edge.
-vi.mock('@/features/room/client/room/presence', () => ({ postState: vi.fn(async () => {}) }));
+vi.mock('@voice-room/call/engine/room/presence', () => ({ postState: vi.fn(async () => {}) }));
 
-vi.mock('@/features/room/client/media/livekit-runtime', () => ({
+vi.mock('@voice-room/call/engine/media/livekit-runtime', () => ({
   TRACK_SOURCE: { Microphone: 'microphone' },
   loadLiveKitClient: async () => ({ Track: { Source: { Microphone: 'microphone' } } })
 }));
@@ -43,7 +44,7 @@ const captureWork = vi.hoisted(() => ({
   open: vi.fn<() => Promise<MicrophoneCapture>>(),
   stop: vi.fn()
 }));
-vi.mock('@/features/room/client/services/microphone-service', async (original) => ({
+vi.mock('@voice-room/call/engine/services/microphone-service', async (original) => ({
   ...(await original<object>()),
   openLocalMicrophone: captureWork.open,
   stopMicrophoneCapture: captureWork.stop
@@ -958,6 +959,7 @@ test('rejected stale unpublish leaves the page mutation slot quarantined', async
   vi.useFakeTimers();
   clearLogBuffer();
   setActivePinia(createPinia());
+  await installWebCallPortsForTest();
   Object.assign(state, createInitialRoomState());
   const track = new FakeMediaStreamTrack('stale-reject', 'audio');
   const stream = new FakeMediaStream([track]);
@@ -1075,7 +1077,7 @@ test('the microphone button says so when an earlier microphone operation still h
   expect(await joining).toBeNull();
   Object.assign(state, { joined: true, livekitRoom: { localParticipant: {} }, localStream: null });
 
-  const { useToastUiStore } = await import('@/features/room/toast-ui.store');
+  const { useToastUiStore } = await import('@voice-room/call/engine/core/toast-ui.store');
   expect(await attachMicrophoneOutcome()).toBe('busy');
   expect(useToastUiStore().items.map((item) => item.message)).toContain(
     'Микрофон ещё занят прошлой операцией: попробуйте через несколько секунд'

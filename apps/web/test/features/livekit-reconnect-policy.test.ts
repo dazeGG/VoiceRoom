@@ -7,7 +7,7 @@ import { expect, test } from 'vitest';
 import {
   SIGNAL_RESUME_WINDOW_MS,
   createSignalReconnectPolicy
-} from '@/features/room/client/services/livekit/reconnect-policy.ts';
+} from '@voice-room/call/engine/services/livekit/reconnect-policy';
 import { defined } from '../helpers/assert.ts';
 import { loadLiveKitHarness } from '../helpers/livekit-harness.ts';
 

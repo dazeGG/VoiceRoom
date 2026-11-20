@@ -43,6 +43,17 @@ test('routes UI package changes to the web and site checks', () => {
   assert.deepEqual(changedComponents(['packages/ui/src/tile-grid.ts']), appAndSite);
 });
 
+test('routes the call package to the application checks and voice e2e lane', () => {
+  for (const path of [
+    'packages/call/package.json',
+    'packages/call/src/engine/index.ts',
+    'packages/call/src/views/CallStage.vue',
+    'packages/call/assets/rnnoise/rnnoise.wasm'
+  ]) {
+    assert.deepEqual(changedComponents([path]), app);
+  }
+});
+
 test('manifest and lock version bumps stay in their release lane', () => {
   const lock = (siteVersion: string, appVersion = '2.13.0', astroVersion = '7.4.2') =>
     JSON.stringify({
@@ -54,6 +65,7 @@ test('manifest and lock version bumps stay in their release lane', () => {
         'apps/admin': { version: appVersion },
         'apps/api': { version: appVersion },
         'packages/shared': { version: appVersion },
+        'packages/call': { version: appVersion },
         'apps/site': { name: '@voice-room/site', version: siteVersion, devDependencies: { astro: astroVersion } },
         'node_modules/astro': { version: astroVersion }
       }

@@ -2,25 +2,26 @@
 
 import { createPinia, setActivePinia } from 'pinia';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
+import { installWebCallPortsForTest } from '../helpers/call-ports';
 
-vi.mock('@/features/room/client/media/cues', async (importOriginal) => ({
+vi.mock('@voice-room/call/engine/media/cues', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   playMicCue: vi.fn()
 }));
-vi.mock('@/features/room/client/room/presence', () => ({ postState: vi.fn(async () => {}) }));
-vi.mock('@/features/room/client/services/livekit-service', async (importOriginal) => ({
+vi.mock('@voice-room/call/engine/room/presence', () => ({ postState: vi.fn(async () => {}) }));
+vi.mock('@voice-room/call/engine/services/livekit-service', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   syncLocalMicrophonePublicationMuted: vi.fn(async () => {})
 }));
 
-const cues = await import('@/features/room/client/media/cues');
-const { state } = await import('@/features/room/client/core/room-runtime.store');
-const { createInitialRoomState } = await import('@/features/room/client/model/room-state.ts');
-const hotkeys = await import('@/features/room/client/core/hotkeys.ts');
-const { isMicrophoneShownMuted } = await import('@/features/room/client/core/microphone-mute.ts');
+const cues = await import('@voice-room/call/engine/media/cues');
+const { state } = await import('@voice-room/call/engine/core/room-runtime.store');
+const { createInitialRoomState } = await import('@voice-room/call/engine/model/room-state');
+const hotkeys = await import('@voice-room/call/engine/core/hotkeys');
+const { isMicrophoneShownMuted } = await import('@voice-room/call/engine/core/microphone-mute');
 const { beginPushToTalk, endPushToTalk, toggleMicrophoneMuted, toggleOutputMute } =
-  await import('@/features/room/client/ui/controls.ts');
-const { getStoredMicrophoneVolume, persistMicrophoneVolume } = await import('@/features/room/client/core/settings.ts');
+  await import('@voice-room/call/engine/ui/controls');
+const { getStoredMicrophoneVolume, persistMicrophoneVolume } = await import('@voice-room/call/engine/core/settings');
 const { formatHotkeyBinding, hotkeyBindingFromEvent, hotkeyMatchesEvent } =
   await import('@/shared/ui/HotkeyRecorder/hotkey.ts');
 
@@ -64,7 +65,8 @@ test('microphone mute defaults to Ctrl+Shift+M, or Cmd+Shift+M on Apple; other a
   expect(hotkeys.getDefaultHotkeyBinding('push-to-talk')).toBeNull();
 });
 
-test('a changed binding is stored and announced; clearing it disables the action; junk falls back to the default', () => {
+test('a changed binding is stored and announced; clearing it disables the action; junk falls back to the default', async () => {
+  await installWebCallPortsForTest();
   const changed = vi.fn();
   window.addEventListener(hotkeys.HOTKEY_BINDINGS_CHANGED_EVENT, changed);
   hotkeys.writeHotkeyBinding('push-to-talk', {
@@ -143,7 +145,8 @@ test('push-to-talk does nothing outside a call, in open-mic mode or while deafen
   expect(beginPushToTalk()).toBe(false);
 });
 
-test('microphone volume is stored as a whole percent between 0 and 200', () => {
+test('microphone volume is stored as a whole percent between 0 and 200', async () => {
+  await installWebCallPortsForTest();
   expect(getStoredMicrophoneVolume()).toBe(100);
   expect(persistMicrophoneVolume(149.6)).toBe(150);
   expect(getStoredMicrophoneVolume()).toBe(150);

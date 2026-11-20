@@ -13,7 +13,7 @@ import {
   getScreenProfileLabels,
   getScreenPublishVideoOptions,
   SCREEN_DEGRADATION_PREFERENCE
-} from '@/features/room/client/media/profiles.ts';
+} from '@voice-room/call/engine/media/profiles';
 
 afterEach(() => vi.unstubAllGlobals());
 

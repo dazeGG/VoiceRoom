@@ -2,14 +2,15 @@
 // mid-sample drops the partial tail instead of misreading it. Mid-stream helper
 // restarts stay silent; a final non-zero exit reports the stream audio as lost.
 
-import { afterEach, expect, test, vi } from 'vitest';
-import { state } from '@/features/room/client/core/room-runtime.store';
+import { afterEach, beforeEach, expect, test, vi } from 'vitest';
+import { state } from '@voice-room/call/engine/core/room-runtime.store';
 import {
   getDesktopPcmSamples,
   onDesktopScreenAudioLost,
   startDesktopSafeScreenAudioCapture,
   stopLocalScreenAudioCapture
-} from '@/features/room/client/services/desktop-screen-audio';
+} from '@voice-room/call/engine/services/desktop-screen-audio';
+import { installWebCallPortsForTest } from '../helpers/call-ports';
 
 type BridgeEvent = { sessionId: string; event: Record<string, unknown> };
 
@@ -54,6 +55,8 @@ function installDesktopAudioBridge({ withTrack = true }: { withTrack?: boolean }
   vi.stubGlobal('AudioWorkletNode', FakeAudioWorkletNode);
   return { bridge, emit, eventListeners, released };
 }
+
+beforeEach(installWebCallPortsForTest);
 
 afterEach(() => {
   stopLocalScreenAudioCapture();

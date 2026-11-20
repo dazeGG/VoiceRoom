@@ -158,7 +158,7 @@ test('a report the throttle held back goes out once when the window ends', async
 test('a successful recovery requests its own held upload after session metadata already flushed', async () => {
   const { calls } = stubFetch({ 'POST /api/client-logs': { body: { ok: true } } });
   const [log, diagnostics] = await freshImport(() =>
-    Promise.all([import('../../src/shared/log.ts'), import('@/features/room/client/room/capture-diagnostics')])
+    Promise.all([import('../../src/shared/log.ts'), import('@voice-room/call/engine/room/capture-diagnostics')])
   );
   diagnostics.startCaptureDiagnostics();
   await vi.advanceTimersByTimeAsync(0);

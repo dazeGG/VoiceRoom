@@ -28,9 +28,9 @@ async function loadRemoteCamera(peerId = 'peer-a') {
     autoResolveClient: true,
     requestToken: async () => ({ token: 't', url: 'wss://lk.example' })
   });
-  const { useParticipantsUiStore } = await import('@/features/room/participants-ui.store');
+  const { useParticipantsUiStore } = await import('@voice-room/call/engine/core/participants-ui.store');
   const participantsUi = useParticipantsUiStore();
-  const { syncRemoteCameraDemand } = await import('@/features/room/client/services/livekit/remote-participants.ts');
+  const { syncRemoteCameraDemand } = await import('@voice-room/call/engine/services/livekit/remote-participants');
   const track = { mediaStreamTrack: { kind: 'video', readyState: 'live', id: 'camera-track' } };
   const camera = fakePublication('camera', { isSubscribed: true, track });
   const participant = fakeParticipant(peerId, [camera.publication]);
@@ -108,10 +108,18 @@ async function loadLocalCamera(
 ) {
   const lk = await loadLiveKitHarness({ autoResolveClient: true, cameraCodec });
   const presence: Array<Record<string, unknown>> = [];
-  vi.doMock('@/entities/room/room-realtime', () => ({
-    requestMediaGrant: async () => grant,
-    updateVoicePeer: (payload: { patch: Record<string, unknown> }) => presence.push(payload.patch)
-  }));
+  const { getCallPorts } = await import('@voice-room/call/engine/ports');
+  const ports = getCallPorts();
+  ports.transport = {
+    ...ports.transport,
+    realtime: {
+      ...ports.transport.realtime,
+      requestMediaGrant: async () => grant,
+      updatePeer: ({ patch }) => {
+        presence.push(patch);
+      }
+    }
+  };
   vi.stubGlobal('navigator', { mediaDevices: { getUserMedia } });
   const published: Array<{ track: unknown; options: Record<string, unknown> }> = [];
   const unpublished: unknown[] = [];
@@ -136,8 +144,8 @@ async function loadLocalCamera(
     cameraFacing: 'user'
   });
   const showToast = vi.fn();
-  vi.doMock('@/features/room/client/ui/toast', () => ({ showToast }));
-  const camera = await import('@/features/room/client/services/camera-service.ts');
+  vi.doMock('@voice-room/call/engine/ui/toast', () => ({ showToast }));
+  const camera = await import('@voice-room/call/engine/services/camera-service');
   return { lk, camera, published, unpublished, showToast, presence, setPublishingQuality };
 }
 
@@ -397,7 +405,7 @@ test('a browser without H.264 sends its camera in VP8, with no backup to fall ba
 
 test('an overloaded computer lightens video silently: our camera stops at 360p, others come in small unless large', async () => {
   const { lk, participantsUi, camera, participant } = await loadRemoteCamera();
-  const { relieveVideo } = await import('@/features/room/client/services/video-relief.ts');
+  const { relieveVideo } = await import('@voice-room/call/engine/services/video-relief');
   lk.syncParticipant(participant);
   await flushMicrotasks();
   expect(camera.calls.quality.at(-1)).toBe(MEDIUM);
@@ -412,7 +420,7 @@ test('an overloaded computer lightens video silently: our camera stops at 360p, 
 
   // A camera opened large still comes in full.
   participantsUi.focusedParticipantId = 'peer-a';
-  const { syncRemoteCameraDemand } = await import('@/features/room/client/services/livekit/remote-participants.ts');
+  const { syncRemoteCameraDemand } = await import('@voice-room/call/engine/services/livekit/remote-participants');
   syncRemoteCameraDemand();
   await flushMicrotasks();
   expect(camera.calls.quality.at(-1)).toBe(HIGH);
@@ -428,7 +436,7 @@ test('a camera turned on after the call was lightened starts at 360p', async () 
 
 async function loadScreenRelief(profileId = 'balanced-30', settings: MediaTrackSettings = { frameRate: 30 }) {
   const { lk } = await loadRemoteCamera();
-  const { applyVideoReliefToScreen } = await import('@/features/room/client/services/video-relief.ts');
+  const { applyVideoReliefToScreen } = await import('@voice-room/call/engine/services/video-relief');
   const video = new FakeMediaStreamTrack('screen-video', 'video');
   video.contentHint = 'motion';
   video.getSettings = () => settings;
@@ -583,4 +591,22 @@ test('a new screen and its republication retain relief through the real publish 
   expect(capture.applyConstraints).toHaveBeenCalledExactlyOnceWith({ frameRate: { max: 15 } });
   expect(capture.video.readyState).toBe('live');
   expect(capture.audio.readyState).toBe('live');
+});
+
+test('camera-off policy blocks local capture and remote camera subscription', async () => {
+  const capture = vi.fn(async () => fakeCapture().stream);
+  const { lk, camera: localCamera } = await loadLocalCamera(capture);
+  const { getCallPorts } = await import('@voice-room/call/engine/ports');
+  getCallPorts().mediaPolicy = { camera: false };
+  await localCamera.toggleCamera();
+  expect(capture).not.toHaveBeenCalled();
+
+  const remoteCamera = fakePublication('camera', { isSubscribed: true });
+  const microphone = fakePublication('microphone');
+  lk.state.serverPeerIds.add('remote');
+  lk.syncParticipant(fakeParticipant('remote', [remoteCamera.publication, microphone.publication]));
+  await flushMicrotasks();
+  expect(remoteCamera.publication.isDesired).toBe(false);
+  expect(remoteCamera.calls.subscribed).not.toContain(true);
+  expect(microphone.calls.subscribed).toEqual([true]);
 });

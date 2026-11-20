@@ -6,7 +6,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, expect, test, vi } from 'vitest';
 import { defineComponent, h, provide } from 'vue';
 import RoomSettingsDialog from '@/features/room/components/RoomSettingsDialog.vue';
-import { state as roomClientState } from '@/features/room/client/core/room-runtime.store';
+import { state as roomClientState } from '@voice-room/call/engine/core/room-runtime.store';
 import { useRoomSettingsStore } from '@/features/room/room-settings.store';
 import { ROOM_SHELL_KEY } from '@/features/room/shell';
 import { stubFetch } from '../fixtures/fetch.ts';

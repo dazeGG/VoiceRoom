@@ -13,10 +13,10 @@ import {
 import { AUTH_INVALIDATION_KEY, useSessionStore } from '@/features/auth/session.store';
 import { useRoomMembershipStore } from '@/entities/room/room-membership.store';
 import { useProfileDraft } from '@/features/home/model/use-profile-draft';
-import { syncLocalProfile } from '@/features/room/client';
-import { resolveRoomEntryName } from '@/features/room/client/room/room-entry';
-import { state } from '@/features/room/client/core/room-runtime.store';
-import { persistName, requestGuestNameForRoom } from '@/features/room/client/ui/names';
+import { syncLocalProfile } from '@voice-room/call/engine';
+import { resolveRoomEntryName } from '@voice-room/call/engine/room/room-entry';
+import { state } from '@voice-room/call/engine/core/room-runtime.store';
+import { persistName, requestGuestNameForRoom } from '@voice-room/call/engine/ui/names';
 import { useRoomSettingsStore } from '@/features/room/room-settings.store';
 import { authUser } from '../fixtures/users';
 
@@ -29,10 +29,10 @@ vi.mock('@/api/auth', async (original) => ({
   addRoomByCode: vi.fn(),
   fetchOwnedRooms: vi.fn()
 }));
-vi.mock('@/features/room/client', () => ({ syncLocalProfile: vi.fn() }));
-vi.mock('@/features/room/client/ui/names', () => ({ persistName: vi.fn(), requestGuestNameForRoom: vi.fn() }));
-vi.mock('@/features/room/client/ui/toast', () => ({ showToast: vi.fn() }));
-vi.mock('@/features/room/client/core/embed', () => ({ getRoomShell: () => shell, isRoomEmbedded: () => false }));
+vi.mock('@voice-room/call/engine', () => ({ syncLocalProfile: vi.fn() }));
+vi.mock('@voice-room/call/engine/ui/names', () => ({ persistName: vi.fn(), requestGuestNameForRoom: vi.fn() }));
+vi.mock('@voice-room/call/engine/ui/toast', () => ({ showToast: vi.fn() }));
+vi.mock('@voice-room/call/engine/core/embed', () => ({ getRoomShell: () => shell, isRoomEmbedded: () => false }));
 const shell = vi.hoisted(() => ({ roomsChanged: vi.fn() }));
 let pinia: Pinia;
 const A = authUser();
