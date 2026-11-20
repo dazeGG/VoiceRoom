@@ -67,14 +67,18 @@ FROM caddy:2.11.4-builder-alpine AS caddy-build
 
 RUN xcaddy build v2.11.4 --with github.com/mholt/caddy-l4@v0.1.2
 
-FROM caddy:2.11.4-alpine AS web
+FROM caddy:2.11.4-alpine AS caddy-runtime
+COPY --from=caddy-build /usr/bin/caddy /usr/bin/caddy
+COPY config/caddy/turn.options config/caddy/turn.site /etc/caddy/turn-available/
+COPY --chmod=0755 config/caddy/entrypoint.sh /usr/local/bin/voiceroom-caddy
+CMD ["voiceroom-caddy"]
+
+FROM caddy-runtime AS web
 LABEL org.voiceroom.capabilities="widget-boundary-v1"
 
-COPY --from=caddy-build /usr/bin/caddy /usr/bin/caddy
 COPY Caddyfile /etc/caddy/Caddyfile
-COPY config/caddy/turn.options config/caddy/turn.site /etc/caddy/turn-available/
 COPY config/caddy/domains-available /etc/caddy/domains-available
-COPY --chmod=0755 config/caddy/entrypoint.sh /usr/local/bin/voiceroom-caddy
+COPY --chmod=0755 config/caddy/prepare-web.sh /usr/local/bin/voiceroom-prepare-web
 COPY --chmod=0755 config/caddy/archive-assets.sh /usr/local/bin/voiceroom-archive-assets
 COPY --from=web-build /app/csp.caddy /etc/caddy/csp.caddy
 COPY --from=web-build /app/widget-csp.caddy /etc/caddy/widget-csp.caddy
@@ -84,7 +88,7 @@ COPY --from=web-build /app/apps/widget/dist /srv/web
 # The admin app, served only on ADMIN_DOMAIN behind the staff gate (Caddyfile).
 COPY --from=web-build /app/apps/admin/dist /srv/admin
 
-CMD ["voiceroom-caddy"]
+CMD ["voiceroom-caddy", "voiceroom-prepare-web"]
 
 FROM node:24.18.0-alpine3.23 AS meet-build
 WORKDIR /app
@@ -102,7 +106,7 @@ COPY apps/web/scripts/emit-caddy-csp.ts ./emit-caddy-csp.mts
 RUN npm --workspace @voice-room/meet run build \
   && node emit-caddy-csp.mts apps/meet/dist/index.html "'self' {\$PERSONAL_SIGNAL_URL} stun: turn: turns:" > /app/csp.caddy
 
-FROM caddy:2.11.4-alpine AS personal-web
+FROM caddy-runtime AS personal-web
 COPY config/personal/Caddyfile /etc/caddy/Caddyfile
 COPY --from=meet-build /app/csp.caddy /etc/caddy/personal-csp.caddy
 COPY --from=meet-build /app/apps/meet/dist /srv/meet

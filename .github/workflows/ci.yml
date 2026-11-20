@@ -366,7 +366,8 @@ jobs:
     timeout-minutes: 15
     env:
       PERSONAL_SMOKE_PROJECT: personal-ci-${{ github.run_id }}-${{ github.run_attempt }}
-      PERSONAL_DOMAIN: 127.0.0.1
+      # Caddy issues the turn.localhost certificate from its local CA in CI.
+      PERSONAL_DOMAIN: localhost
       PERSONAL_ORIGIN: http://127.0.0.1:5187
       PERSONAL_CADDY_SITE: http://127.0.0.1
       PERSONAL_SIGNAL_URL: ws://127.0.0.1:5187
