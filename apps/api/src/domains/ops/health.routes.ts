@@ -6,7 +6,7 @@ import { failure } from '../../platform/http/http-kit.ts';
 
 export function registerHealthRoutes(
   root: FastifyInstance,
-  { livekitEnabled, ready }: { livekitEnabled(): boolean; ready?: () => Promise<boolean> }
+  { livekitEnabled, ready }: { livekitEnabled: () => boolean; ready?: () => Promise<boolean> }
 ): void {
   const app = root.withTypeProvider<TypeBoxTypeProvider>();
   const health = () => ({ livekit: livekitEnabled(), ok: true as const });

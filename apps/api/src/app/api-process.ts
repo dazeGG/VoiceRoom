@@ -24,7 +24,7 @@ export async function startApiProcess({
   env: NodeJS.ProcessEnv;
   logger: Logger;
   exit?: ((code?: number) => void) | undefined;
-  prepare(databaseUrl: string): Promise<ApiProcess>;
+  prepare: (databaseUrl: string) => Promise<ApiProcess>;
 }): Promise<ApiServer | null> {
   try {
     const database = readDatabaseConfig(env);

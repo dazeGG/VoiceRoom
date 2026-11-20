@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict';
 import { createHash, randomUUID } from 'node:crypto';
-import { once } from 'node:events';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import test from 'node:test';
@@ -50,7 +49,10 @@ test('personal process keeps only transient call state and purges it on expiry a
   let processHandle = startServer(socketPath, database.databaseUrl, logs, env, 'src/server.personal.ts');
   async function kill() {
     if (processHandle.exitCode !== null || processHandle.signalCode !== null) return;
-    const closed = once(processHandle, 'close');
+    const closed = new Promise<void>((resolve, reject) => {
+      processHandle.once('close', () => resolve());
+      processHandle.once('error', reject);
+    });
     processHandle.kill('SIGKILL');
     await closed;
   }
