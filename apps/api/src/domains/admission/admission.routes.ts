@@ -18,7 +18,11 @@ import { ROOM_SURFACE_CEILINGS } from '../rooms/room-surface.policy.ts';
 import type { AdmissionService, RefusalReason } from './admission.service.ts';
 
 const ROOM_BANNED_ERROR = 'Вы заблокированы в этой комнате';
-const TOKEN_PATHS = { main: '/api/livekit-token', widget: '/api/widget/livekit-token' } as const;
+const TOKEN_PATHS = {
+  main: '/api/livekit-token',
+  widget: '/api/widget/livekit-token',
+  meet: '/api/meet/livekit-token'
+} as const;
 
 const REFUSALS: Record<RefusalReason, { status: 400 | 403 | 404 | 409 | 503; body: Failure }> = {
   invalid_request: { status: 400, body: failure('Invalid room, peer, or session token', { code: 'invalid_request' }) },
@@ -64,7 +68,7 @@ const REFUSALS: Record<RefusalReason, { status: 400 | 403 | 404 | 409 | 503; bod
 
 export function registerAdmissionRoutes(
   root: FastifyInstance,
-  ctx: ApiContext,
+  ctx: Pick<ApiContext, 'clientIp' | 'resolveSession'>,
   admission: AdmissionService,
   surface: keyof typeof TOKEN_PATHS = 'main'
 ): void {

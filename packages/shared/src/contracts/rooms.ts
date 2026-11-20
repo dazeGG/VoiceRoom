@@ -94,6 +94,18 @@ export const RoomCapabilities = Type.Object({
 });
 export type RoomCapabilities = Static<typeof RoomCapabilities>;
 
+export const MeetOwnerExchangeBody = Type.Object({ token: Type.String({ minLength: 1, maxLength: 128 }) });
+export type MeetOwnerExchangeBody = Static<typeof MeetOwnerExchangeBody>;
+
+export const MeetOwnerAuthorization = Ok({ token: Type.String() });
+export type MeetOwnerAuthorization = Static<typeof MeetOwnerAuthorization>;
+
+export const MeetRoomCreated = Ok({ roomId: Type.String(), joinUrl: Type.String() });
+export type MeetRoomCreated = Static<typeof MeetRoomCreated>;
+
+export const MeetRoomStatus = Ok({ roomId: Type.String(), capabilities: RoomCapabilities, peers: Type.Number() });
+export type MeetRoomStatus = Static<typeof MeetRoomStatus>;
+
 export const RoomStatus = Ok({
   avatarUrl: Nullable(Type.String()),
   // Optional on read for clients talking to an older server.

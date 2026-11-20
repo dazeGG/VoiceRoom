@@ -52,7 +52,11 @@ export interface RoomsServiceDeps {
 export type OwnerCheck =
   { status: 'owner'; room: LiveRoom } | { status: 'unauthenticated' | 'not_found' | 'forbidden' };
 
-export function createRoomsService(deps: RoomsServiceDeps) {
+export function createRoomCreation(
+  deps: Pick<RoomsServiceDeps, 'limits' | 'newRoomId'> & {
+    store(): Pick<RoomsStore, 'roomIdExists' | 'getRoom' | 'createRoomWithQuota'>;
+  }
+) {
   const newRoomId = deps.newRoomId || createRoomId;
 
   async function isTaken(roomId: string): Promise<boolean> {
@@ -78,6 +82,12 @@ export function createRoomsService(deps: RoomsServiceDeps) {
       roomId
     });
   }
+
+  return createRoom;
+}
+
+export function createRoomsService(deps: RoomsServiceDeps) {
+  const createRoom = createRoomCreation(deps);
 
   // Only a persistent room has an owner; temporary rooms cannot be changed.
   async function checkOwner(userId: string | null | undefined, roomId: string): Promise<OwnerCheck> {

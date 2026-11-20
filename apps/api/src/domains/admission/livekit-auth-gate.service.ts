@@ -16,7 +16,9 @@ import { kyselyOn } from '../../platform/db/kysely.ts';
 import { createGateCredentialRepository } from './gate-credential.repository.ts';
 import { LOG_EVENTS } from '../../lib/log-events.ts';
 import { createLogger } from '../../lib/logger.ts';
-import { DEFAULT_ROOM_PREFIX, normalizeLiveKitRoomPrefix, verifyAccessTokenBinding } from './livekit-token-binding.mts';
+import { DEFAULT_ROOM_PREFIX, verifyAccessTokenBinding } from './livekit-token-binding.mts';
+import { readLiveKitGateConfig } from '../../app/config.ts';
+import { createPersonalLogger } from '../../platform/personal-logger.ts';
 
 const DEFAULT_GATE_PATH = '/rtc';
 const VALIDATE_TIMEOUT_MS = 5_000;
@@ -112,6 +114,7 @@ function createLiveKitAuthGateService({
   roomPrefix = DEFAULT_ROOM_PREFIX,
   roomStore,
   secret,
+  superviseWidgets = true,
   upstreamUrl = process.env.LIVEKIT_INTERNAL_URL || process.env.LIVEKIT_URL || 'ws://127.0.0.1:7880'
 }: {
   boundary?: Pick<CredentialBoundaryService, 'authorizeCredential' | 'assertReady'>;
@@ -121,6 +124,7 @@ function createLiveKitAuthGateService({
   roomPrefix?: string;
   roomStore?: GateRoomStore | undefined;
   secret?: unknown;
+  superviseWidgets?: boolean;
   upstreamUrl?: string;
 } = {}) {
   const path = normalizeGatePath(gatePath);
@@ -150,9 +154,8 @@ function createLiveKitAuthGateService({
     cutWidgets();
     return ![...pending].some((token) => token.kind === 'unknown');
   }
-  const owner: WidgetRuntimeOwner | null = pool
-    ? createWidgetRuntimeOwner({ pool, role: 'gate', quiesce, lost: cutWidgets })
-    : null;
+  const owner: WidgetRuntimeOwner | null =
+    pool && superviseWidgets ? createWidgetRuntimeOwner({ pool, role: 'gate', quiesce, lost: cutWidgets }) : null;
   let timer: ReturnType<typeof setInterval> | undefined;
   let sweep: Promise<void> | null = null;
   let started = false;
@@ -176,7 +179,7 @@ function createLiveKitAuthGateService({
     return sweep;
   }
   async function start(): Promise<void> {
-    if (started) return;
+    if (started || !owner) return;
     started = true;
     timer = setInterval(() => void sweepOwner(), 250);
     timer.unref();
@@ -488,19 +491,13 @@ export { DEFAULT_GATE_PATH, createLiveKitAuthGateService, extractCredential, ins
 // Phase 4 moves this entry out of the domain: it reads process.env and opens
 // a pool here, which only src/app should do.
 if (import.meta.main) {
-  const logger = createLogger({ name: 'livekit-auth-gate' });
+  const env = process.env;
+  const { host, port, ...config } = readLiveKitGateConfig(env);
+  const name = 'livekit-auth-gate';
+  const logger = config.superviseWidgets ? createLogger({ env, name }) : createPersonalLogger({ env, name });
   try {
-    const pool = createDbPool({ databaseUrl: readDatabaseConfig(process.env).url, logger });
-    const service = createLiveKitAuthGateService({
-      pool,
-      gatePath: process.env.LIVEKIT_GATE_PATH || DEFAULT_GATE_PATH,
-      logger,
-      roomPrefix: normalizeLiveKitRoomPrefix(process.env.LIVEKIT_ROOM_PREFIX),
-      secret: process.env.LIVEKIT_GATE_SECRET,
-      upstreamUrl: process.env.LIVEKIT_INTERNAL_URL || 'ws://127.0.0.1:7880'
-    });
-    const port = Number(process.env.LIVEKIT_GATE_PORT || 3080);
-    const host = process.env.LIVEKIT_GATE_HOST || '0.0.0.0';
+    const pool = createDbPool({ databaseUrl: readDatabaseConfig(env).url, logger });
+    const service = createLiveKitAuthGateService({ pool, logger, ...config });
     const server = service.createServer();
     installGateShutdown(server, { logger, closePool: () => pool.end() });
     server.listen(port, host, () => {
@@ -516,8 +513,8 @@ if (import.meta.main) {
     );
     // The logger is silent unless LOG_LEVEL is set, and a process that refuses
     // to start must still tell the operator why.
-    process.stderr.write(`LiveKit auth gate failed to start: ${(error instanceof Error && error.stack) || String(error)}
-`);
+    const detail = config.superviseWidgets && error instanceof Error ? `: ${error.message}` : '';
+    process.stderr.write(`LiveKit auth gate failed to start${detail}\n`);
     process.exitCode = 1;
   }
 }

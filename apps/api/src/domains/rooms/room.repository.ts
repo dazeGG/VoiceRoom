@@ -407,6 +407,15 @@ export function createRoomRepository({ db, roomIdleTtlMs = 15 * 60 * 1000 }: { d
     return Number(result.numUpdatedRows);
   }
 
+  // Meet has no post-call retention window. Deleting the room also deletes
+  // its identities, gate credentials and principal epochs through their FKs.
+  async function deleteMeetRooms(now?: number): Promise<boolean> {
+    let rooms = db.deleteFrom('rooms').where('kind', '=', 'meet');
+    if (now !== undefined) rooms = rooms.where('empty_since', '<=', toDate(now - roomIdleTtlMs));
+    const result = await rooms.executeTakeFirst();
+    return result.numDeletedRows > 0n;
+  }
+
   async function listRoomsForOwner(ownerId: string | null | undefined) {
     if (!ownerId) return [];
     const rows = await db
@@ -522,6 +531,7 @@ export function createRoomRepository({ db, roomIdleTtlMs = 15 * 60 * 1000 }: { d
     listAvatarKeys,
     listRoomsForOwner,
     markActiveTemporaryRoomsEmpty,
+    deleteMeetRooms,
     markRoomActive,
     markRoomEmpty,
     pruneRooms,

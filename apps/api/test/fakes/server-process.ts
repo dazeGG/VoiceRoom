@@ -53,7 +53,7 @@ export function waitForHealthz(socketPath: string, timeoutMs = 15000): Promise<v
 }
 
 /**
- * Spawns src/server.ts on `socketPath` against `databaseUrl`. Room creation
+ * Spawns an API entry on `socketPath` against `databaseUrl`. Room creation
  * limits are off; `env` adds or overrides variables. Output is appended to
  * `logs` so a failing test can print it.
  */
@@ -61,9 +61,10 @@ export function startServer(
   socketPath: string,
   databaseUrl: string,
   logs: ServerLogs,
-  env: Record<string, string> = {}
+  env: Record<string, string> = {},
+  entry: 'src/server.ts' | 'src/server.personal.ts' = 'src/server.ts'
 ): ChildProcess & { stdout: NonNullable<ChildProcess['stdout']>; stderr: NonNullable<ChildProcess['stderr']> } {
-  const child = spawn(process.execPath, ['src/server.ts'], {
+  const child = spawn(process.execPath, [entry], {
     cwd: path.join(import.meta.dirname, '../..'),
     env: {
       ...process.env,
