@@ -328,7 +328,7 @@ jobs:
     env:
       PLAYWRIGHT_WIDGET_COMPOSE_PROJECT: widget-ci-${{ github.run_id }}-${{ github.run_attempt }}
       PLAYWRIGHT_WIDGET_E2E: "1"
-      PLAYWRIGHT_WIDGET_RECOVERY: "1"
+      PLAYWRIGHT_WIDGET_RECOVERY: "0"
       WIDGET_ENABLED: "true"
       CI_GATE_PUBLIC_URL: wss://localhost:19443
       CI_ROOM_CREATE_POW_DIFFICULTY: "4"
