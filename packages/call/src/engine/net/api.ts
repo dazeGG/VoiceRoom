@@ -19,11 +19,19 @@ export async function checkRoomExists(roomId: string): Promise<boolean> {
     lastRoomCheck = null;
     return false;
   }
+  rememberRoomStatus(roomId, status);
+  return true;
+}
+
+export function rememberRoomStatus(
+  roomId: string,
+  status: NonNullable<Awaited<ReturnType<CallTransport['roomStatus']>>>,
+  checkedAt = Date.now()
+): void {
   state.roomName = status.name;
   state.roomAvatarUrl = status.avatarUrl ?? '';
   state.roomIsStatic = status.isStatic;
-  lastRoomCheck = { roomId, at: Date.now() };
-  return true;
+  lastRoomCheck = { roomId, at: checkedAt };
 }
 
 /** A join right after the room page checked the room need not ask again. */

@@ -83,6 +83,7 @@ function handleContextMenu(event: MouseEvent): void {
 }
 
 function handleKeydown(event: KeyboardEvent): void {
+  if (event.target !== tile.value) return;
   if (event.key === 'Enter' || event.key === ' ') {
     event.preventDefault();
     emit('activate');

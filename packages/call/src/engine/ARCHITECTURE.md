@@ -1,8 +1,9 @@
 # Call engine architecture
 
-`packages/call` is TypeScript source compiled by its consumer. The web app is the composition root. It installs
-`createWebCallPorts(pinia)` before routing and loads the engine mount beside the room page. Module imports are safe
-before installation. The binding lives across room mounts because lobby controls and settings use it in between calls.
+`packages/call` is TypeScript source compiled by its consumers. Web and Meet install their own ports before routing.
+Web loads the engine mount beside the room page and keeps the binding across room mounts for lobby controls and
+settings. Meet uses the headless guest controller to check the room and collect a name before mounting the same
+engine. Module imports are safe before installation.
 
 ## Engine and host
 

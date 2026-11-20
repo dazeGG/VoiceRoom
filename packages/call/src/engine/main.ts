@@ -32,8 +32,10 @@ import {
   showRoomEntryFailure,
   showRoomNotFound,
   showRoomRoute,
+  showRoomScreen,
   showStartScreen
 } from './room/room';
+import { rememberRoomStatus } from './net/api';
 import {
   bindScreenStageIdleUi,
   refreshStageStripControls,
@@ -53,6 +55,11 @@ let activeVoiceLeaveTeardown: (() => void) | null = null;
 let activeVoiceControlsTeardown: (() => void) | null = null;
 let desktopHotkeysTeardown: (() => void) | null = null;
 
+/** A guest host has already checked the room and collected the name. */
+export function mountGuestRoomClient(roomId: string, displayName: string, checkedAt: number): () => void {
+  return mountRoomClient(document, { roomId, guestEntry: { displayName, checkedAt } });
+}
+
 export function mountRoomClient(
   _root: ParentNode = document,
   options: {
@@ -62,6 +69,7 @@ export function mountRoomClient(
     embedded?: boolean;
     shell?: CallShell;
     autoJoin?: boolean;
+    guestEntry?: { displayName: string; checkedAt: number };
   } = {}
 ): () => void {
   const ports = getCallPorts();
@@ -217,7 +225,7 @@ export function mountRoomClient(
     state.sessionToken = '';
   }
 
-  const savedName = cleanDisplayName(readStorage(DISPLAY_NAME_STORAGE_KEY));
+  const savedName = options.guestEntry?.displayName ?? cleanDisplayName(readStorage(DISPLAY_NAME_STORAGE_KEY));
   state.savedName = savedName;
   useStartUiStore().nameInput = savedName;
   updateNameStatuses(savedName);
@@ -257,7 +265,12 @@ export function mountRoomClient(
   if (state.roomRoute && !state.roomId) {
     showRoomNotFound();
   } else if (state.roomId) {
-    runRoomRoute();
+    if (options.guestEntry) {
+      rememberRoomStatus(state.roomId, { name: '', avatarUrl: null, isStatic: false }, options.guestEntry.checkedAt);
+      showRoomScreen();
+    } else {
+      runRoomRoute();
+    }
   } else {
     showStartScreen();
   }

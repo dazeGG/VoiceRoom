@@ -99,7 +99,8 @@ export function createLiveKitParticipant(participant: RemoteParticipant): Partic
     id: participant.identity,
     isLocal: participant.isLocal || participant.identity === state.peerId,
     joinedAt: participant.joinedAt ? participant.joinedAt.getTime() : Date.now(),
-    name: participant.name || participant.identity,
+    // The personal SFU gets only the opaque identity. Keep the guest name from presence.
+    name: participant.name || state.peers.get(participant.identity)?.name || participant.identity,
     screen: participant.isScreenShareEnabled || screenPresence.active,
     screenAudio: screenPresence.hasAudio
   });
