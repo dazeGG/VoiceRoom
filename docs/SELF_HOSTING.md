@@ -35,10 +35,10 @@ Personal-сервер не записывает историю пребыван�
 
 Создайте A-записи `voice.example.com`, `livekit.voice.example.com` и, если нужна админка, `admin.voice.example.com` на IP сервера. Замените `voice.example.com` своим доменом. У DNS-провайдера выберите режим «только DNS», если он предлагает проксирование трафика. Добавляйте AAAA-записи, только если сервер доступен по IPv6.
 
-Скачайте тег приложения, для которого опубликованы образы API, воркера и веб-приложения. В примере используется `v2.14.3`.
+Скачайте тег приложения, для которого опубликованы образы API, воркера и веб-приложения. В примере используется `v2.15.0`.
 
 ```sh
-git clone --depth 1 --branch v2.14.3 https://github.com/dazeGG/VoiceRoom.git
+git clone --depth 1 --branch v2.15.0 https://github.com/dazeGG/VoiceRoom.git
 cd VoiceRoom
 ```
 
