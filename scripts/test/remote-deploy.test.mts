@@ -66,6 +66,7 @@ cat <<'MANIFEST_HELPER'
 ${fs.readFileSync(path.resolve(import.meta.dirname, '../cd/widget-release-capabilities.py'), 'utf8')}
 MANIFEST_HELPER
 ;;
+*publish-client.sh) echo 'exit 0' ;;
 *)
 cat <<'WIDGET_HELPER'
 ${fs.readFileSync(path.resolve(import.meta.dirname, '../cd/widget-boundary-preflight.py'), 'utf8')}
