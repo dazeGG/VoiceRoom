@@ -390,6 +390,13 @@ function isMovedOutOfSvelteLib(value: string, current: Set<string>, fileExists: 
   return current.has(`apps/web/src/${value.slice(SVELTE_LIB.length)}`);
 }
 
+const WEB_ROOM_CLIENT = 'apps/web/src/features/room/client/';
+
+function isMovedToCallEngine(value: string, current: Set<string>, fileExists: FileExists) {
+  if (!value.startsWith(WEB_ROOM_CLIENT) || fileExists(value)) return false;
+  return current.has(`packages/call/src/engine/${value.slice(WEB_ROOM_CLIENT.length)}`);
+}
+
 function assertPolicySuperset(
   currentValues: string[],
   baseValues: string[],
@@ -401,7 +408,8 @@ function assertPolicySuperset(
     if (
       current.has(value) ||
       isRenamedToTypeScript(value, current, fileExists) ||
-      isMovedOutOfSvelteLib(value, current, fileExists)
+      isMovedOutOfSvelteLib(value, current, fileExists) ||
+      isMovedToCallEngine(value, current, fileExists)
     )
       continue;
     throw new Error(`${label} may not remove or narrow protected-base policy entry: ${value}`);

@@ -5,9 +5,9 @@
 
 import { nextTick, watchEffect } from 'vue';
 import { beforeEach, expect, test } from 'vitest';
-import { state } from '@/features/room/client/core/room-runtime.store';
-import { createInitialRoomState } from '@/features/room/client/model/room-state.ts';
-import { createParticipant } from '@/features/room/client/room/participants.ts';
+import { state } from '@voice-room/call/engine/core/room-runtime.store';
+import { createInitialRoomState } from '@voice-room/call/engine/model/room-state';
+import { createParticipant } from '@voice-room/call/engine/room/participants';
 
 beforeEach(() => {
   Object.assign(state, createInitialRoomState());

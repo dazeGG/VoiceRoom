@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { registerViaUi, uniqueLogin } from './helpers';
+import { createPermanentRoom, enterRoom, registerViaUi, uniqueLogin } from './helpers';
 
 test('joining a room establishes voice through the public LiveKit gate', async ({ page }) => {
   const expectedLiveKitHost = process.env.PLAYWRIGHT_EXPECTED_LIVEKIT_HOST ?? 'voice-gate.test:7890';
@@ -85,4 +85,45 @@ test('joining a room establishes voice through the public LiveKit gate', async (
       )
     )
     .toBe(true);
+});
+
+test('a shared screen plays on a second peer and closes when the publisher stops', async ({ browser }) => {
+  const publisherContext = await browser.newContext();
+  const viewerContext = await browser.newContext();
+  try {
+    await publisherContext.addInitScript(() => {
+      // Chromium supplies a synthetic video track and the normal call pipeline publishes it as screen video.
+      const media = navigator.mediaDevices;
+      media.getDisplayMedia = () => media.getUserMedia({ video: true, audio: false });
+    });
+    const publisher = await publisherContext.newPage();
+    const viewer = await viewerContext.newPage();
+    const publisherName = uniqueLogin('screenowner');
+    await registerViaUi(publisher, publisherName);
+    const roomId = await createPermanentRoom(publisher, 'Screen share smoke');
+    await enterRoom(publisher, roomId);
+    await registerViaUi(viewer, uniqueLogin('screenviewer'));
+    await enterRoom(viewer, roomId);
+    for (const page of [publisher, viewer]) {
+      await expect(page.locator('.room-topbar__status--connected')).toContainText('Голос подключен');
+    }
+
+    const share = publisher.locator('#screenButton');
+    await share.click();
+    await expect(share).toHaveAttribute('aria-pressed', 'true');
+    await viewer.getByRole('button', { name: `Смотреть стрим ${publisherName}` }).click();
+    await expect(viewer.locator('body')).toHaveClass(/\bscreen-view--open\b/);
+    await expect
+      .poll(() =>
+        viewer.locator('#screenVideo').evaluate((video) => (video instanceof HTMLVideoElement ? video.videoWidth : 0))
+      )
+      .toBeGreaterThan(0);
+
+    await share.click();
+    await expect(share).toHaveAttribute('aria-pressed', 'false');
+    await expect(viewer.locator('body')).not.toHaveClass(/\bscreen-view--open\b/);
+  } finally {
+    await publisherContext.close();
+    await viewerContext.close();
+  }
 });

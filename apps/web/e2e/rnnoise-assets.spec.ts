@@ -22,10 +22,11 @@ declare global {
 }
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
+const assetDir = join(root, '../../packages/call/assets/rnnoise');
 const oldWorklet = readFileSync(join(root, 'test/fixtures/rnnoise-old.worklet.js.txt'));
-const newWorklet = readFileSync(join(root, 'public/rnnoise/rnnoise.worklet.js'));
-const loader = readFileSync(join(root, 'public/rnnoise/rnnoise.mjs'));
-const wasm = readFileSync(join(root, 'public/rnnoise/rnnoise.wasm'));
+const newWorklet = readFileSync(join(assetDir, 'rnnoise.worklet.js'));
+const loader = readFileSync(join(assetDir, 'rnnoise.mjs'));
+const wasm = readFileSync(join(assetDir, 'rnnoise.wasm'));
 const sha256 = (bytes: Buffer) => createHash('sha256').update(bytes).digest('hex');
 
 async function startServingRoot() {
@@ -88,6 +89,53 @@ async function loadPinnedLoader(page: Page, origin: string): Promise<void> {
 
 const expectedOld = '36208641d215d6b06a193a9e0351ca345ea78e20b76f828773a1ea26863b13cc';
 const expectedNew = '44cacadc74d8b0c0d3c07c75a59ea2ca8d117dcdd13e2607c9696e35be57c553';
+
+test('the web origin loads and runs the versioned RNNoise assets under its page policy', async ({ page }) => {
+  const assets = [
+    readFileSync(join(assetDir, '../audio-gate.worklet.js')),
+    readFileSync(join(assetDir, '../desktop-audio-source.worklet.js')),
+    loader,
+    wasm,
+    newWorklet
+  ];
+  const query = `?v=${sha256(Buffer.concat(assets)).slice(0, 12)}`;
+  await page.goto('/');
+  await expect(page.locator('meta[http-equiv="content-security-policy"]')).toHaveAttribute(
+    'content',
+    /script-src 'self' 'wasm-unsafe-eval'/
+  );
+  const result = await page.evaluate(async (query) => {
+    const rnnoise: unknown = await import(`/rnnoise/rnnoise.mjs${query}`);
+    if (
+      typeof rnnoise !== 'object' ||
+      !rnnoise ||
+      !('RNNoiseNode' in rnnoise) ||
+      typeof rnnoise.RNNoiseNode !== 'function' ||
+      !('rnnoise_loadAssets' in rnnoise) ||
+      typeof rnnoise.rnnoise_loadAssets !== 'function'
+    ) {
+      throw new Error('Unexpected RNNoise module');
+    }
+    const register: unknown = Reflect.get(rnnoise.RNNoiseNode, 'register');
+    if (typeof register !== 'function') throw new Error('RNNoise node cannot register');
+    const context = new OfflineAudioContext(1, 4096, 48_000);
+    const assets: unknown = Reflect.apply(rnnoise.rnnoise_loadAssets, undefined, [
+      { moduleSrc: `/rnnoise/rnnoise.wasm${query}`, scriptSrc: `/rnnoise/rnnoise.worklet.js${query}` }
+    ]);
+    const registered: unknown = Reflect.apply(register, rnnoise.RNNoiseNode, [context, assets]);
+    await Promise.resolve(registered);
+    const processor: unknown = Reflect.construct(rnnoise.RNNoiseNode, [context]);
+    if (!(processor instanceof AudioWorkletNode)) throw new Error('RNNoise processor is unavailable');
+    let errors = 0;
+    processor.addEventListener('processorerror', () => errors++);
+    const source = new ConstantSourceNode(context, { offset: 0.2 });
+    source.connect(processor).connect(context.destination);
+    source.start();
+    const rendered = await context.startRendering();
+    return { errors, finite: rendered.getChannelData(0).every(Number.isFinite) };
+  }, query);
+  expect(result).toEqual({ errors: 0, finite: true });
+});
 
 test('old/new page-version queries load old/new worklets with actual pinned loader and WASM', async ({ browser }) => {
   assert.equal(sha256(oldWorklet), expectedOld);

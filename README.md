@@ -106,4 +106,4 @@ API-тестам нужна PostgreSQL в `TEST_DATABASE_URL`: на каждый
 
 ## Лицензия
 
-MIT License. Vendored RNNoise assets в `apps/web/public/rnnoise/` распространяются под собственной MIT-лицензией в `apps/web/public/rnnoise/LICENSE`. Атрибуция шрифтов, эмодзи, GeoIP и библиотек — на странице `/licenses`.
+MIT License. Vendored RNNoise assets в `packages/call/assets/rnnoise/` распространяются под собственной MIT-лицензией в `packages/call/assets/rnnoise/LICENSE`. Атрибуция шрифтов, эмодзи, GeoIP и библиотек — на странице `/licenses`.

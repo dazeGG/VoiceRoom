@@ -4,9 +4,9 @@
 // only when AudioWorklet is unavailable.
 
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
-import { state } from '@/features/room/client/core/room-runtime.store';
-import { createInitialRoomState } from '@/features/room/client/model/room-state';
-import { createParticipant } from '@/features/room/client/room/participants';
+import { state } from '@voice-room/call/engine/core/room-runtime.store';
+import { createInitialRoomState } from '@voice-room/call/engine/model/room-state';
+import { createParticipant } from '@voice-room/call/engine/room/participants';
 import {
   attachMeter,
   detachMeter,
@@ -15,16 +15,17 @@ import {
   startMeters,
   stopMeters,
   syncSpeakingThresholds
-} from '@/features/room/client/media/meters';
+} from '@voice-room/call/engine/media/meters';
 import { defined } from '../helpers/assert';
+import { installWebCallPortsForTest } from '../helpers/call-ports';
 
 const refreshMicrophoneLevelMeter = vi.hoisted(() => vi.fn());
 const context = vi.hoisted((): { value: FakeContext | null } => ({ value: null }));
 
-vi.mock('@/features/room/client/services/media-playback-service', () => ({
+vi.mock('@voice-room/call/engine/services/media-playback-service', () => ({
   getSharedAudioContext: () => context.value
 }));
-vi.mock('@/features/room/client/ui/devices', () => ({ refreshMicrophoneLevelMeter }));
+vi.mock('@voice-room/call/engine/ui/devices', () => ({ refreshMicrophoneLevelMeter }));
 
 class FakeNode {
   connections: unknown[] = [];
@@ -87,6 +88,8 @@ class FakeStream {
 }
 
 const flush = () => new Promise((resolveFlush) => setTimeout(resolveFlush, 0));
+
+beforeEach(installWebCallPortsForTest);
 
 beforeEach(() => {
   Object.assign(state, createInitialRoomState());

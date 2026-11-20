@@ -14,9 +14,9 @@ async function load(routes: Record<string, Reply>, { embedded = false } = {}) {
   setActivePinia(createPinia());
   await installWebCallPortsForTest();
   const { calls, fetchMock } = stubFetch(routes);
-  const entry = await import('@/features/room/client/room/room-entry');
-  const embed = await import('@/features/room/client/core/embed');
-  const { state } = await import('@/features/room/client/core/room-runtime.store');
+  const entry = await import('@voice-room/call/engine/room/room-entry');
+  const embed = await import('@voice-room/call/engine/core/embed');
+  const { state } = await import('@voice-room/call/engine/core/room-runtime.store');
   const { useSessionStore } = await import('@/features/auth/session.store');
   const { useRoomSettingsStore } = await import('@/features/room/room-settings.store');
   embed.setRoomEmbedded(embedded);

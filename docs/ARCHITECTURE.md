@@ -17,6 +17,8 @@ main site; it talks to the API's admin routes.
   theme styles. The web app, embedded widget and site consume its package
   exports. The package imports no app code. Web owns product stores, locale
   registration and the client log reporting sink.
+- `packages/call` owns the reusable call engine, its core views and the voice
+  asset source. Web wires its host ports and emits the manifest URLs.
 - The application workspaces version together. The site and documentation
   release independently. CI boots the whole stack for the voice-join smoke test.
 - Deployables are already separate: the `api`, `worker` and `web` images are
@@ -147,10 +149,10 @@ above, list it here so nobody copies the old pattern.
 | Advisory lock keys written inline | `account/login-event.repository.ts`, `admission/gate-credential.repository.ts`, `media/attachment.repository.ts`, `messaging/message-idempotency.repository.ts`, `messaging/pin.repository.ts`, `notifications/inbox.repository.ts`, `rooms/room.repository.ts` (all under `domains/`) | Add the key to `lockKeys` and call `lockXact` |
 | A ban delete and the address re-keying take no lock | `domains/moderation/room-ban.repository.ts` (`deleteRoomBan`), `domains/moderation/active-ban.repository.ts` (`keyStoredAddresses`) | A new `room_bans` writer takes the room-bans lock |
 | Without a database, routes answer 503 `internal_error` | `app/service-registry.ts`, `app/domain-services.ts` (no catalogued code; `http-kit.ts` masks status >= 500) | Add a catalogued code before surfacing a new 503 |
-| Device state has two sources of truth | `features/room/room-device-ui.store.ts` against `features/room/client/core/types.ts`, copied by hand in `client/ui/devices.ts` and `client/services/microphone-service.ts` | One owner per value; the UI reads it and the action writes it; type `noiseMode` as `NoiseMode` |
-| Reconnect jitter is written three times | `api/realtime.ts`, `features/room/client/recovery/realtime-recovery.ts`, `features/room/client/services/livekit/reconnect-policy.ts` | Do not add a fourth `Math.random()` backoff; share one jitter helper |
+| Device state has two sources of truth | `packages/call/src/engine/core/room-device-ui.store.ts` against `packages/call/src/engine/core/types.ts`, copied by hand in `packages/call/src/engine/ui/devices.ts` and `packages/call/src/engine/services/microphone-service.ts` | One owner per value; the UI reads it and the action writes it; type `noiseMode` as `NoiseMode` |
+| Reconnect jitter is written three times | `api/realtime.ts`, `packages/call/src/engine/recovery/realtime-recovery.ts`, `packages/call/src/engine/services/livekit/reconnect-policy.ts` | Do not add a fourth `Math.random()` backoff; share one jitter helper |
 | Listbox keyboard handling is copied | `features/home/components/lobby/Sidebar.vue` (own typeahead) against `shared/ui/Select/Select.vue` | Use `Select`; do not write another typeahead |
-| Screen profile ids are free strings in the room client | `features/room/client/core/types.ts`, `client/media/profiles.ts` | Narrow ids in the client; keep the wire field `PublicPeer.screenProfileId` a plain string |
+| Screen profile ids are free strings in the room client | `packages/call/src/engine/core/types.ts`, `packages/call/src/engine/media/profiles.ts` | Narrow ids in the client; keep the wire field `PublicPeer.screenProfileId` a plain string |
 | Large components | `shared/chat/EmojiPickerPanel.vue` (506 lines) | Split by concern before adding to it |
 | The lobby store is large | `features/home/model/lobby.store.ts` (577 lines) | New lobby state goes in its own store or `use-*.ts` composable, not in `lobby.store.ts` |
 | `on(client)` query-shape guard: a value that is not a client falls back to the pool | `domains/media/attachment.repository.ts`, `domains/media/media-job.repository.ts` (`media-job-repository.test.ts` pins the fallback) | Kept on purpose. A new repository takes a typed `QueryClient` and does not guess the shape at run time |
@@ -162,7 +164,7 @@ above, list it here so nobody copies the old pattern.
 | Optional `credentialBoundary` | `realtime/room-runtime.ts` (`RuntimeCredentialBoundary \| null`; null without a 32-byte gate secret, then leases revoke through the room store) | Kept on purpose. Do not add another nullable collaborator to `RoomRuntimeDeps` |
 | Large lobby components | `features/home/components/lobby/Sidebar.vue` (405 lines), `features/home/LobbyPage.vue` (374 lines) | Extract a composable or a child component before adding to either |
 
-Paths in the web rows are under `apps/web/src/`, the rest under
+Paths in the web rows without a package prefix are under `apps/web/src/`, the rest under
 `apps/api/src/`.
 
 Every release-2.5 feature is on everywhere; `/api/capabilities` answers all of
@@ -219,8 +221,12 @@ styles/                 SCSS: tokens, mixins and one partial per BEM block
   class, never a `[data-*]` selector. `scripts/check-web-styles.mts` and
   `scripts/check-web-palette.mts` enforce this in `npm run check`.
 - Browser, desktop, media and LiveKit fallbacks stay explicit and testable.
-  The room client (`features/room/client`) has its own notes in
-  `ARCHITECTURE.md` there.
+  `packages/call` owns the call engine and portable Vue views. Its engine
+  uses host ports for identity/storage, transport, desktop capabilities and
+  diagnostics. Web installs the adapter in its composition root and composes
+  the call views with persistent chat, account, moderation and leave surfaces.
+  Body classes derive from call page state and web shell state.
+  See [Call engine architecture](../packages/call/src/engine/ARCHITECTURE.md).
 
 ## 6. Tests
 

@@ -4,10 +4,11 @@
 
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import type { MediaGrant } from '@voice-room/shared/contracts/realtime';
-import type { startScreenStartupDiagnostics } from '@/features/room/client/media/screen-startup-diagnostics';
-import type * as MediaGrantModule from '@/features/room/client/services/media-grant';
+import type { startScreenStartupDiagnostics } from '@voice-room/call/engine/media/screen-startup-diagnostics';
+import type * as MediaGrantModule from '@voice-room/call/engine/services/media-grant';
+import { installWebCallPortsForTest } from '../helpers/call-ports';
 
-const P = '@/features/room/client';
+const P = '@voice-room/call/engine';
 beforeEach(() => {
   vi.useFakeTimers();
   vi.stubGlobal('RTCRtpSender', {});
@@ -106,7 +107,7 @@ async function loadScreenShare(
     // The desktop picker settles the profile: here the person picked 1080p 60 FPS.
     openScreenShare: async () => ({
       mode: 'games',
-      profile: (await import('@/features/room/client/media/profiles')).getScreenProfile('high-60'),
+      profile: (await import('@voice-room/call/engine/media/profiles')).getScreenProfile('high-60'),
       stream
     })
   }));
@@ -116,7 +117,9 @@ async function loadScreenShare(
   }));
   vi.doMock(`${P}/room/participants`, () => ({ updateParticipant: () => {} }));
   vi.doMock(`${P}/core/microphone-mute`, () => ({ isMicrophoneShownMuted: () => false }));
-  vi.doMock(`${P}/../screen-ui.store`, () => ({ useScreenUiStore: () => ({ getActiveScreenPeer: () => null }) }));
+  vi.doMock(`${P}/core/screen-ui.store`, () => ({
+    useScreenUiStore: () => ({ getActiveScreenPeer: () => null })
+  }));
   vi.doMock(`${P}/ui/screen-view`, () => ({
     hideScreenStage: () => {},
     openLocalStreamPreview: () => {},
@@ -128,7 +131,8 @@ async function loadScreenShare(
     askForMedia
   }));
 
-  const service = await import('@/features/room/client/services/screen-share-service');
+  await installWebCallPortsForTest();
+  const service = await import('@voice-room/call/engine/services/screen-share-service');
   return {
     service,
     state,

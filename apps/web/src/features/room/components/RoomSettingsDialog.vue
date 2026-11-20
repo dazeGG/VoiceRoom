@@ -16,9 +16,9 @@ import { APP_HOME } from '@/shared/app-home';
 import { BAN_UNDO_DURATION_MS, type ModerationNoticeOptions } from '@/entities/room/room-moderation';
 import { Dialog } from '@/shared/ui';
 import { iconMd, iconSm } from '@/shared/ui/icons';
-import { state as roomClientState } from '../client/core/room-runtime.store';
-import { applyRoomUpdated } from '../client/room/lifecycle';
-import { showToast } from '../client/ui/toast';
+import { state as roomClientState } from '@voice-room/call/engine/core/room-runtime.store';
+import { applyRoomUpdated } from '@voice-room/call/engine/room/lifecycle';
+import { showToast } from '@voice-room/call/engine/ui/toast';
 import { useRoomSettingsStore } from '../room-settings.store';
 import { useRoomShell } from '../shell';
 

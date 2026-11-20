@@ -9,7 +9,7 @@ async function load() {
   const { useRoomNavigationStore } = await freshImport(
     () => import('../../src/features/home/model/room-navigation.store.ts')
   );
-  const { useVoiceSessionStore } = await import('../../src/features/room/voice-session.store.ts');
+  const { useVoiceSessionStore } = await import('@voice-room/call/engine/core/voice-session.store');
   const navigation = useRoomNavigationStore();
   const voice = useVoiceSessionStore();
   voice.clearConnectedVoiceRoom();

@@ -10,19 +10,19 @@ import {
   closeScreenSourceOnBackdrop,
   confirmScreenSourcePicker,
   switchScreenTab
-} from '../client/ui/screen-source-picker';
-import { unlockAudio } from '../client/services/media-playback-service';
+} from '@voice-room/call/engine/ui/screen-source-picker';
+import { unlockAudio } from '@voice-room/call/engine/services/media-playback-service';
 import {
   clearGuestNameError,
   handleGuestNameDialogClick,
   handleGuestNameDialogKeydown,
   handleGuestNameSubmit,
   syncGuestNameDialogInert
-} from '../client/ui/names';
-import { useGuestNameUiStore } from '../guest-name-ui.store';
-import { useScreenSourceUiStore } from '../screen-source-ui.store';
-import { useStartUiStore } from '../start-ui.store';
-import { useToastUiStore } from '../toast-ui.store';
+} from '@voice-room/call/engine/ui/names';
+import { useGuestNameUiStore } from '@voice-room/call/engine/core/guest-name-ui.store';
+import { useScreenSourceUiStore } from '@voice-room/call/engine/core/screen-source-ui.store';
+import { useStartUiStore } from '@voice-room/call/engine/core/start-ui.store';
+import { useToastUiStore } from '@voice-room/call/engine/core/toast-ui.store';
 
 const log = createLogger('room:overlays');
 

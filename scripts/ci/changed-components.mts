@@ -4,6 +4,7 @@ import { isRecord } from '../../packages/shared/src/guards.ts';
 
 const SITE = 'apps/site';
 const SHARED = 'packages/shared';
+const CALL = 'packages/call';
 const APP_VERSION_MANIFESTS = ['package.json', `${SHARED}/package.json`];
 type Workspace = 'app' | 'site';
 type VersionChanges = { appManifests?: readonly string[]; lock?: Workspace };
@@ -57,7 +58,7 @@ export function lockVersionComponent(before: string, after: string): Workspace |
     };
     const sitePackages = normalize([SITE]);
     if (sitePackages && isDeepStrictEqual(previous, { ...current, packages: sitePackages })) return 'site';
-    const appPackages = normalize(['', 'apps/admin', 'apps/api', 'apps/web', SHARED]);
+    const appPackages = normalize(['', 'apps/admin', 'apps/api', 'apps/web', SHARED, CALL]);
     if (appPackages && isDeepStrictEqual(previous, { ...current, version: previous.version, packages: appPackages })) {
       return 'app';
     }
@@ -86,6 +87,8 @@ export function changedComponents(paths: string[], versionChanges: VersionChange
       lanes.app = lanes.site = lanes.docs = true;
     } else if (/^\.github\/workflows\/(?:build|deploy|release)-static\.yml$/.test(path)) {
       lanes.site = lanes.docs = true;
+    } else if (path.startsWith(`${CALL}/`)) {
+      lanes.app = true;
     } else if (
       // Shared packages, including UI and its Sass assets, feed both build lanes.
       path.startsWith('packages/') ||

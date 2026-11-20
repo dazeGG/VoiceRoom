@@ -1,5 +1,5 @@
 import { expect, test, vi } from 'vitest';
-import { isMicrophoneInputSilent } from '@/features/room/client/media/input-silence';
+import { isMicrophoneInputSilent } from '@voice-room/call/engine/media/input-silence';
 
 function stubAudio({ samples, state = 'running' }: { samples: number[]; state?: AudioContextState }) {
   const closed: boolean[] = [];

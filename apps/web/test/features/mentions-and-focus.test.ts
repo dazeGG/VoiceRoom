@@ -1,9 +1,9 @@
 import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, expect, test } from 'vitest';
 import { createMentionComposer } from '@/shared/chat/mention-composer';
-import { state } from '@/features/room/client/core/room-runtime.store';
-import { createInitialRoomState } from '@/features/room/client/model/room-state';
-import { useParticipantsUiStore } from '@/features/room/participants-ui.store';
+import { state } from '@voice-room/call/engine/core/room-runtime.store';
+import { createInitialRoomState } from '@voice-room/call/engine/model/room-state';
+import { useParticipantsUiStore } from '@voice-room/call/engine/core/participants-ui.store';
 import { participant } from '../fixtures/participant.ts';
 
 const member = (userId: string, login: string) =>

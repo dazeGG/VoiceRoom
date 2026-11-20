@@ -22,7 +22,7 @@ import {
   recordPeerCount,
   recordPollCounts,
   startCallQuality
-} from '@/features/room/client/room/call-quality';
+} from '@voice-room/call/engine/room/call-quality';
 import { stubFetch } from '../fixtures/fetch';
 import { renderWithApp } from '../helpers/render';
 

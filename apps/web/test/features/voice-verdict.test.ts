@@ -2,10 +2,10 @@
 // peer its own verdict; the room keeps it for the connection pill.
 
 import { beforeEach, expect, test } from 'vitest';
-import { state } from '@/features/room/client/core/room-runtime.store';
-import { createInitialRoomState } from '@/features/room/client/model/room-state';
-import { createVoiceEventHandler } from '@/features/room/client/room/voice-events';
-import { getConnectionStatusView } from '@/features/room/client/ui/status';
+import { state } from '@voice-room/call/engine/core/room-runtime.store';
+import { createInitialRoomState } from '@voice-room/call/engine/model/room-state';
+import { createVoiceEventHandler } from '@voice-room/call/engine/room/voice-events';
+import { getConnectionStatusView } from '@voice-room/call/engine/ui/status';
 
 const handle = createVoiceEventHandler({ leaveRoom: () => {}, showModeration: () => {}, showNotFound: () => {} });
 const verdict = (peerId: string, level: 'good' | 'unstable' | 'bad' | null, cause: 'heard_badly' | null) =>

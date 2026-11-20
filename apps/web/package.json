@@ -9,7 +9,7 @@
     "build": "vite build",
     "prebuild": "npm run emoji:assets",
     "emoji:assets": "node scripts/build-emoji-assets.ts",
-    "check": "node --check public/audio-gate.worklet.js && node --check public/desktop-audio-source.worklet.js && node --check public/rnnoise/rnnoise.worklet.js && vue-tsc --noEmit && vue-tsc -p tsconfig.test.json --noEmit",
+    "check": "node --check ../../packages/call/assets/audio-gate.worklet.js && node --check ../../packages/call/assets/desktop-audio-source.worklet.js && node --check ../../packages/call/assets/rnnoise/rnnoise.worklet.js && vue-tsc --noEmit && vue-tsc -p tsconfig.test.json --noEmit",
     "preview": "vite preview",
     "test": "vitest run",
     "e2e": "playwright test"
@@ -17,6 +17,7 @@
   "dependencies": {
     "@fortawesome/free-brands-svg-icons": "^7.3.0",
     "@lucide/vue": "^1.61.0",
+    "@voice-room/call": "file:../../packages/call",
     "@voice-room/shared": "file:../../packages/shared",
     "@voice-room/ui": "file:../../packages/ui",
     "livekit-client": "^2.22.4",

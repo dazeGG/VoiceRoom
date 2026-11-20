@@ -6,7 +6,7 @@ import { stubFetch } from '../fixtures/fetch';
 import { FakeWebSocket } from '../fixtures/fake-websocket';
 import type { RealtimeEvent } from '@/api/realtime';
 import { FakeMediaStream, FakeMediaStreamTrack } from '../helpers/fake-media';
-import type { MicrophoneCapture } from '@/features/room/client/core/types';
+import type { MicrophoneCapture } from '@voice-room/call/engine/core/types';
 
 function pendingCapture(): { capture: MicrophoneCapture; raw: FakeMediaStreamTrack; output: FakeMediaStreamTrack } {
   const raw = new FakeMediaStreamTrack('join-raw', 'audio');
@@ -34,19 +34,19 @@ const relief = vi.hoisted(() => ({
   noise: vi.fn(async () => false),
   video: vi.fn(async () => {})
 }));
-vi.mock('@/features/room/client/room/call-strain', async (original) => ({
+vi.mock('@voice-room/call/engine/room/call-strain', async (original) => ({
   ...(await original<object>()),
   startCallStrainWatch: (callback: () => void) => relief.callbacks.push(callback)
 }));
-vi.mock('@/features/room/client/room/call-quality', async (original) => ({
+vi.mock('@voice-room/call/engine/room/call-quality', async (original) => ({
   ...(await original<object>()),
   recordCpuRelief: relief.record
 }));
-vi.mock('@/features/room/client/room/capture-diagnostics', async (original) => ({
+vi.mock('@voice-room/call/engine/room/capture-diagnostics', async (original) => ({
   ...(await original<object>()),
   noteProcessingRelief: relief.note
 }));
-vi.mock('@/features/room/client/services/video-relief', async (original) => ({
+vi.mock('@voice-room/call/engine/services/video-relief', async (original) => ({
   ...(await original<object>()),
   relieveVideo: relief.video
 }));
@@ -59,19 +59,19 @@ vi.mock('@/entities/room/room-realtime', async (original) => ({
 }));
 vi.mock('@/shared/log', async (original) => ({ ...(await original<object>()), reportVoiceJoinOutcome: vi.fn() }));
 
-vi.mock('@/features/room/client/ui/devices', async (original) => ({
+vi.mock('@voice-room/call/engine/ui/devices', async (original) => ({
   ...(await original<object>()),
   relieveNoiseSuppression: relief.noise,
   refreshDevices: vi.fn(async () => {
     throw new Error('enumeration failed');
   })
 }));
-vi.mock('@/features/room/client/ui/toast', () => ({ showToast: vi.fn() }));
-vi.mock('@/features/room/client/services/microphone-service', async (original) => ({
+vi.mock('@voice-room/call/engine/ui/toast', () => ({ showToast: vi.fn() }));
+vi.mock('@voice-room/call/engine/services/microphone-service', async (original) => ({
   ...(await original<object>()),
   openLocalMicrophone: vi.fn(async () => null)
 }));
-vi.mock('@/features/room/client/services/livekit-service', async (original) => ({
+vi.mock('@voice-room/call/engine/services/livekit-service', async (original) => ({
   ...(await original<object>()),
   connectLiveKitRoom: vi.fn(async () => true),
   syncRemoteVideoVisibility: vi.fn()
@@ -82,8 +82,8 @@ test('device enumeration failure does not prevent joining', async () => {
   await installWebCallPortsForTest();
   vi.stubGlobal('WebSocket', FakeWebSocket);
   stubFetch({ '/api/rooms/abc123': { body: roomStatus({ roomId: 'abc123' }) } });
-  const room = await import('@/features/room/client/room/room');
-  const { state } = await import('@/features/room/client/core/room-runtime.store');
+  const room = await import('@voice-room/call/engine/room/room');
+  const { state } = await import('@voice-room/call/engine/core/room-runtime.store');
   const { reportVoiceJoinOutcome } = await import('@/shared/log');
   vi.mocked(reportVoiceJoinOutcome).mockClear();
   Object.assign(state, { roomId: 'abc123', peerId: 'peer-1', sessionToken: 'session-1' });
@@ -100,10 +100,10 @@ test('a slow permission prompt explains listen-only join and late permission is 
   await installWebCallPortsForTest();
   vi.stubGlobal('WebSocket', FakeWebSocket);
   stubFetch({ '/api/rooms/abc123': { body: roomStatus({ roomId: 'abc123' }) } });
-  const room = await import('@/features/room/client/room/room');
-  const { state } = await import('@/features/room/client/core/room-runtime.store');
-  const { openLocalMicrophone } = await import('@/features/room/client/services/microphone-service');
-  const { showToast } = await import('@/features/room/client/ui/toast');
+  const room = await import('@voice-room/call/engine/room/room');
+  const { state } = await import('@voice-room/call/engine/core/room-runtime.store');
+  const { openLocalMicrophone } = await import('@voice-room/call/engine/services/microphone-service');
+  const { showToast } = await import('@voice-room/call/engine/ui/toast');
   let resolvePermission: (capture: MicrophoneCapture) => void = () => {};
   vi.mocked(openLocalMicrophone).mockImplementationOnce(() => new Promise((resolve) => (resolvePermission = resolve)));
   Object.assign(state, { roomId: 'abc123', peerId: 'peer-1', sessionToken: 'session-1' });
@@ -129,10 +129,10 @@ test('a cancelled permission prompt does not show a stale timeout explanation', 
   await installWebCallPortsForTest();
   vi.stubGlobal('WebSocket', FakeWebSocket);
   stubFetch({ '/api/rooms/abc123': { body: roomStatus({ roomId: 'abc123' }) } });
-  const room = await import('@/features/room/client/room/room');
-  const { state } = await import('@/features/room/client/core/room-runtime.store');
-  const { openLocalMicrophone } = await import('@/features/room/client/services/microphone-service');
-  const { showToast } = await import('@/features/room/client/ui/toast');
+  const room = await import('@voice-room/call/engine/room/room');
+  const { state } = await import('@voice-room/call/engine/core/room-runtime.store');
+  const { openLocalMicrophone } = await import('@voice-room/call/engine/services/microphone-service');
+  const { showToast } = await import('@voice-room/call/engine/ui/toast');
   let resolvePermission: (capture: MicrophoneCapture) => void = () => {};
   vi.mocked(openLocalMicrophone).mockImplementationOnce(() => new Promise((resolve) => (resolvePermission = resolve)));
   Object.assign(state, { roomId: 'abc123', peerId: 'peer-1', sessionToken: 'session-1' });
@@ -157,9 +157,9 @@ test('a server refusal during a pending connection is failure, not cancellation'
   await installWebCallPortsForTest();
   vi.stubGlobal('WebSocket', FakeWebSocket);
   stubFetch({ '/api/rooms/abc123': { body: roomStatus({ roomId: 'abc123' }) } });
-  const room = await import('@/features/room/client/room/room');
-  const { state } = await import('@/features/room/client/core/room-runtime.store');
-  const { connectLiveKitRoom } = await import('@/features/room/client/services/livekit-service');
+  const room = await import('@voice-room/call/engine/room/room');
+  const { state } = await import('@voice-room/call/engine/core/room-runtime.store');
+  const { connectLiveKitRoom } = await import('@voice-room/call/engine/services/livekit-service');
   const { reportVoiceJoinOutcome } = await import('@/shared/log');
   vi.mocked(reportVoiceJoinOutcome).mockClear();
   vi.mocked(connectLiveKitRoom).mockClear();
@@ -185,11 +185,11 @@ test('leaving during deferred device enumeration disposes a prepared candidate i
   await installWebCallPortsForTest();
   vi.stubGlobal('WebSocket', FakeWebSocket);
   stubFetch({ '/api/rooms/abc123': { body: roomStatus({ roomId: 'abc123' }) } });
-  const room = await import('@/features/room/client/room/room');
-  const { state } = await import('@/features/room/client/core/room-runtime.store');
-  const { refreshDevices } = await import('@/features/room/client/ui/devices');
-  const { openLocalMicrophone } = await import('@/features/room/client/services/microphone-service');
-  const { connectLiveKitRoom } = await import('@/features/room/client/services/livekit-service');
+  const room = await import('@voice-room/call/engine/room/room');
+  const { state } = await import('@voice-room/call/engine/core/room-runtime.store');
+  const { refreshDevices } = await import('@voice-room/call/engine/ui/devices');
+  const { openLocalMicrophone } = await import('@voice-room/call/engine/services/microphone-service');
+  const { connectLiveKitRoom } = await import('@voice-room/call/engine/services/livekit-service');
   const { capture, raw, output } = pendingCapture();
   vi.mocked(openLocalMicrophone).mockResolvedValueOnce(capture);
   let finishEnumeration: () => void = () => {};
@@ -213,11 +213,11 @@ test('token or transport rejection disposes the uncommitted join candidate', asy
   await installWebCallPortsForTest();
   vi.stubGlobal('WebSocket', FakeWebSocket);
   stubFetch({ '/api/rooms/abc123': { body: roomStatus({ roomId: 'abc123' }) } });
-  const room = await import('@/features/room/client/room/room');
-  const { state } = await import('@/features/room/client/core/room-runtime.store');
-  const { refreshDevices } = await import('@/features/room/client/ui/devices');
-  const { openLocalMicrophone } = await import('@/features/room/client/services/microphone-service');
-  const { connectLiveKitRoom } = await import('@/features/room/client/services/livekit-service');
+  const room = await import('@voice-room/call/engine/room/room');
+  const { state } = await import('@voice-room/call/engine/core/room-runtime.store');
+  const { refreshDevices } = await import('@voice-room/call/engine/ui/devices');
+  const { openLocalMicrophone } = await import('@voice-room/call/engine/services/microphone-service');
+  const { connectLiveKitRoom } = await import('@voice-room/call/engine/services/livekit-service');
   const { capture, raw, output } = pendingCapture();
   vi.mocked(openLocalMicrophone).mockResolvedValueOnce(capture);
   vi.mocked(refreshDevices).mockResolvedValueOnce([]);
@@ -235,11 +235,11 @@ test('a confirmed join publication keeps its committed capture until leave', asy
   await installWebCallPortsForTest();
   vi.stubGlobal('WebSocket', FakeWebSocket);
   stubFetch({ '/api/rooms/abc123': { body: roomStatus({ roomId: 'abc123' }) } });
-  const room = await import('@/features/room/client/room/room');
-  const { state } = await import('@/features/room/client/core/room-runtime.store');
-  const { refreshDevices } = await import('@/features/room/client/ui/devices');
-  const { openLocalMicrophone } = await import('@/features/room/client/services/microphone-service');
-  const { connectLiveKitRoom } = await import('@/features/room/client/services/livekit-service');
+  const room = await import('@voice-room/call/engine/room/room');
+  const { state } = await import('@voice-room/call/engine/core/room-runtime.store');
+  const { refreshDevices } = await import('@voice-room/call/engine/ui/devices');
+  const { openLocalMicrophone } = await import('@voice-room/call/engine/services/microphone-service');
+  const { connectLiveKitRoom } = await import('@voice-room/call/engine/services/livekit-service');
   const { capture, raw, output } = pendingCapture();
   vi.mocked(openLocalMicrophone).mockResolvedValueOnce(capture);
   vi.mocked(refreshDevices).mockResolvedValueOnce([]);
@@ -262,8 +262,8 @@ test('old deferred relief completion cannot update a new call or its diagnostics
   await installWebCallPortsForTest();
   vi.stubGlobal('WebSocket', FakeWebSocket);
   stubFetch({ '/api/rooms/abc123': { body: roomStatus({ roomId: 'abc123' }) } });
-  const room = await import('@/features/room/client/room/room');
-  const { state } = await import('@/features/room/client/core/room-runtime.store');
+  const room = await import('@voice-room/call/engine/room/room');
+  const { state } = await import('@voice-room/call/engine/core/room-runtime.store');
   relief.callbacks.length = 0;
   relief.record.mockClear();
   relief.note.mockClear();

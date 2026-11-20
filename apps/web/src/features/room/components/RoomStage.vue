@@ -1,19 +1,20 @@
 <script setup lang="ts">
-import { t } from '@/shared/i18n';
+import { RoomStage } from '@voice-room/call/views';
 import { computed, watchEffect } from 'vue';
-import { state as roomClientState } from '../client/core/room-runtime.store';
-import { usePageStore } from '@/stores/page.store';
-import { syncRemoteCameraDemand } from '../client/services/livekit/remote-participants';
+import { state as roomClientState } from '@voice-room/call/engine/core/room-runtime.store';
+import { useCallPageStore } from '@voice-room/call/engine/core/call-page.store';
+import { syncRemoteCameraDemand } from '@voice-room/call/engine/services/livekit/remote-participants';
 import { useMobileCallUiStore } from '../mobile-call-ui.store';
-import { useParticipantsUiStore } from '../participants-ui.store';
+import { useParticipantsUiStore } from '@voice-room/call/engine/core/participants-ui.store';
 import RoomChat from './RoomChat.vue';
 import RoomDock from './RoomDock.vue';
 import ScreenStage from './ScreenStage.vue';
 import StageTiles from './StageTiles.vue';
 
-const page = usePageStore();
+const page = useCallPageStore();
 const participantsUi = useParticipantsUiStore();
 const mobileCallUi = useMobileCallUiStore();
+const mobileCallActive = computed(() => mobileCallUi.isMobileCallActive());
 
 // Each camera layer follows the size of its tile: re-pick them whenever the
 // spotlight, the screen stage or the number of people changes.
@@ -21,7 +22,7 @@ const layoutKey = computed(() =>
   [
     participantsUi.focusedParticipantId,
     // A phone draws the call itself (MobileCallStage) until someone's screen is opened.
-    mobileCallUi.isMobileCallActive(),
+    mobileCallActive.value,
     mobileCallUi.getMobileSpotlightPeerId(),
     roomClientState.viewedScreenPeerId,
     roomClientState.peers.size
@@ -36,14 +37,10 @@ watchEffect(() => {
 </script>
 
 <template>
-  <main id="roomScreen" class="room-layout" :hidden="page.screen !== 'room'">
-    <section class="stage" :aria-label="t('Голосовая комната')">
-      <ScreenStage />
-      <template v-if="!mobileCallUi.isMobileCallActive()">
-        <StageTiles />
-        <RoomDock />
-      </template>
-    </section>
-    <RoomChat />
-  </main>
+  <RoomStage :hidden="page.screen !== 'room'">
+    <template #screen><ScreenStage /></template>
+    <template v-if="!mobileCallActive" #tiles><StageTiles /></template>
+    <template v-if="!mobileCallActive" #dock><RoomDock /></template>
+    <template #panel><RoomChat /></template>
+  </RoomStage>
 </template>

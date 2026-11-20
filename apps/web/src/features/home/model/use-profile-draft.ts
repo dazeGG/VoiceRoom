@@ -6,7 +6,7 @@ import { t } from '@/shared/i18n';
 import { computed, ref } from 'vue';
 import { deleteUserAvatar, updateDisplayName, uploadUserAvatar, type AuthUser } from '@/api/auth';
 import { useSessionStore } from '@/features/auth/session.store';
-import { syncLocalProfile } from '@/features/room/client';
+import { syncLocalProfile } from '@voice-room/call/engine';
 
 const AVATAR_MAX_BYTES = 5 * 1024 * 1024;
 

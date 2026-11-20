@@ -1,14 +1,14 @@
 <script setup lang="ts">
 import { t } from '@/shared/i18n';
-import { createRoomFromStart, handleRoomCodeKeydown, joinRoomByCode } from '@/features/room/client/room/room-start';
-import { saveStartName, updateNameStatuses } from '@/features/room/client/ui/names';
-import { useStartUiStore } from '@/features/room/start-ui.store';
+import { createRoomFromStart, handleRoomCodeKeydown, joinRoomByCode } from '@voice-room/call/engine/room/room-start';
+import { saveStartName, updateNameStatuses } from '@voice-room/call/engine/ui/names';
+import { useStartUiStore } from '@voice-room/call/engine/core/start-ui.store';
 import FeatureList from '@/shared/components/FeatureList.vue';
 import { START_FEATURES } from '@/shared/start-features';
-import { usePageStore } from '@/stores/page.store';
+import { useCallPageStore } from '@voice-room/call/engine/core/call-page.store';
 
 const startUi = useStartUiStore();
-const page = usePageStore();
+const page = useCallPageStore();
 
 function handleCreateClick(): void {
   void createRoomFromStart();

@@ -7,7 +7,7 @@ import { expect, test } from 'vitest';
 import { nextTick } from 'vue';
 import { useLocaleStore } from '@/shared/i18n';
 import RoomOverlays from '@/features/room/components/RoomOverlays.vue';
-import { useGuestNameUiStore } from '@/features/room/guest-name-ui.store';
+import { useGuestNameUiStore } from '@voice-room/call/engine/core/guest-name-ui.store';
 import { renderWithApp } from '../helpers/render';
 
 test('the guest name dialog links the terms and the personal data policy, with nothing to tick', async () => {

@@ -32,6 +32,8 @@ import { publicLobbyRoom, publicPeer } from '../../apps/api/src/domains/rooms/ro
 import { createRoomRealtimeRuntime, type RuntimeRoomStore } from '../../apps/api/src/realtime/room-runtime.ts';
 import { createConnectionRegistry } from '../../apps/api/src/realtime/registry.ts';
 import type { PresenceRoom } from '../../apps/api/src/realtime/runtime-types.ts';
+import { UserFacingError } from '@voice-room/call/engine/core/utils';
+import { formatJoinError, LiveKitTransportError } from '@voice-room/call/engine/room/join-error';
 import { isRecord } from '@voice-room/shared/guards';
 import type {
   AccountSession,
@@ -60,44 +62,6 @@ import type { LobbyRoom, RoomCard, RoomList, RoomUnbookmarked } from '@voice-roo
 const require = createRequire(import.meta.url);
 const SILENT_LOGGER = { log() {}, info() {}, warn() {}, error() {} };
 const SECRET = 'g08-test-livekit-gate-secret-at-least-32-bytes';
-const WEB_ROOM_COVERAGE_SCRIPT = String.raw`
-  import fs from "node:fs";
-  import { registerHooks, stripTypeScriptTypes } from "node:module";
-  import path from "node:path";
-  import { pathToFileURL } from "node:url";
-  const targetPath = path.resolve("apps/web/src/features/room/client/room/room.ts");
-  const targetUrl = pathToFileURL(targetPath).href;
-  const originalSource = fs.readFileSync(targetPath, "utf8");
-  const importNames = new Map();
-  for (const match of originalSource.matchAll(/import\s*\{([\s\S]*?)\}\s*from\s*['"]([^'"]+)['"]/g)) {
-    importNames.set(match[2], match[1].split(",").map((entry) => entry.trim().replace(/^type\s+/, "").split(/\s+as\s+/)[0]).filter(Boolean));
-  }
-  registerHooks({
-    resolve(specifier, context, nextResolve) {
-      if (context.parentURL === targetUrl && importNames.has(specifier)) return { url: "g08-stub:" + encodeURIComponent(specifier), shortCircuit: true };
-      return nextResolve(specifier, context);
-    },
-    load(url, context, nextLoad) {
-      if (url === targetUrl) {
-        const source = originalSource + "\nexport { formatJoinError as __g08FormatJoinError, LiveKitTransportError as __g08LiveKitTransportError, ApiError as __g08ApiError };\n";
-        return { format: "module", source: stripTypeScriptTypes(source, { mode: "strip" }), shortCircuit: true };
-      }
-      if (url.startsWith("g08-stub:")) {
-        const names = importNames.get(decodeURIComponent(url.slice("g08-stub:".length))) ?? [];
-        // Each stub is callable and constructible; its own prototype makes instanceof
-        // tell the error classes formatJoinError tells apart.
-        return { format: "module", source: names.map((name) => "export const " + name + " = new Proxy(function (value) { return value; }, { get: (target, key) => (key === 'prototype' ? target.prototype : undefined) });").join("\n"), shortCircuit: true };
-      }
-      return nextLoad(url, context);
-    }
-  });
-  const room = await import(targetUrl);
-  if (!/^LiveKit недоступен/.test(room.__g08FormatJoinError(new room.__g08LiveKitTransportError()))) process.exitCode = 1;
-  const apiError = new room.__g08ApiError();
-  apiError.message = "server refused";
-  if (room.__g08FormatJoinError(apiError) !== "server refused") process.exitCode = 1;
-  if (room.__g08FormatJoinError(new Error("plain failure")) !== "Не удалось подключиться") process.exitCode = 1;
-`;
 const ADMISSION_INTERNAL_COVERAGE_SCRIPT = String.raw`
   const fs = require("node:fs");
   const path = require("node:path");
@@ -191,10 +155,10 @@ function thresholdFixture(overrides: Partial<CoverageThresholds> = {}): Coverage
         name: 'media',
         enforcement: 'on-changed',
         paths: [],
-        pathPatterns: ['apps/web/src/features/room/client/media/']
+        pathPatterns: ['packages/call/src/engine/media/']
       }
     ],
-    businessPathPatterns: ['apps/api/src/', 'apps/web/src/', 'packages/shared/src/'],
+    businessPathPatterns: ['apps/api/src/', 'apps/web/src/', 'packages/shared/src/', 'packages/call/src/'],
     ignoredPathPatterns: ['/test/', '/migrations/', '.d.ts'],
     ...overrides
   };
@@ -446,6 +410,38 @@ test('G08-A03d3 a web module moved out of src/lib/ carries its entry once the ol
   );
 });
 
+test('the call engine inherits a protected media entry after the original module is removed', () => {
+  const legacy = 'apps/web/src/features/room/client/media/screen-receiver-demand.ts';
+  const moved = 'packages/call/src/engine/media/screen-receiver-demand.ts';
+  const baseline = thresholdFixture({ strictBranchPaths: [legacy] });
+  const relocated = thresholdFixture({ strictBranchPaths: [moved] });
+  const summary = {
+    ...greenSummary,
+    files: { ...greenSummary.files, [moved]: { lines: { pct: 100 }, branches: { pct: 100 } } }
+  };
+  const check = (thresholdsUnderTest: CoverageThresholds, fileExists: (file: string) => boolean) =>
+    enforceCoverage({
+      coverageSummary: summary,
+      thresholds: thresholdsUnderTest,
+      baseThresholds: baseline,
+      fileExists
+    });
+
+  assert.equal(check(relocated, () => false).ratchetMode, 'protected-base-ratchet');
+  assert.throws(
+    () => check(relocated, (file) => file === legacy),
+    /may not remove or narrow protected-base policy entry/i
+  );
+  assert.throws(
+    () =>
+      check(
+        thresholdFixture({ strictBranchPaths: ['packages/call/src/views/screen-receiver-demand.ts'] }),
+        () => false
+      ),
+    /may not remove or narrow protected-base policy entry/i
+  );
+});
+
 test('G08-A03e a .ts exclusion may only replace the .js/.mjs exclusions of a module that is gone', () => {
   const base = thresholdFixture({
     ignoredPathPatterns: [
@@ -521,7 +517,7 @@ test('G08-A04 rejects unmeasured/regressed coverage and changed business gaps', 
 });
 
 test('G08-A05 changed auth and web media strict files fail closed when missing or below the strict minimum', () => {
-  const media = 'apps/web/src/features/room/client/media/screen-receiver-demand.ts';
+  const media = 'packages/call/src/engine/media/screen-receiver-demand.ts';
   assert.throws(
     () =>
       checkCoverage({
@@ -671,7 +667,7 @@ test('G08 web TypeScript producer measures actual auth and media decision files'
     globalThis.fetch = originalFetch;
   });
   const auth = await import('../../apps/web/src/api/auth.ts');
-  const media = await import('../../apps/web/src/features/room/client/media/screen-receiver-demand.ts');
+  const media = await import('@voice-room/call/engine/media/screen-receiver-demand');
   const user = {
     avatarAccent: null,
     avatarColorKey: 'blurple',
@@ -819,16 +815,18 @@ test('G08 web TypeScript producer measures actual auth and media decision files'
   assert.equal(media.getScreenReceiverDemand('peer', '', new Set()), 'hidden');
 });
 
-test('G08 coverage producers execute the changed web line and invariant-protected admission fallbacks', () => {
+test('G08 call join shows the localized LiveKit, transport, user-facing and default failures', () => {
+  const transportFailure = { code: '', status: 400, message: 'server refused' } as const;
+  assert.match(formatJoinError(new LiveKitTransportError(), transportFailure), /^LiveKit недоступен/);
+  assert.equal(formatJoinError(new Error('raw error'), transportFailure), 'server refused');
+  assert.equal(formatJoinError(new UserFacingError('cannot use this device'), null), 'cannot use this device');
+  assert.equal(formatJoinError(new Error('plain failure'), null), 'Не удалось подключиться');
+});
+
+test('G08 coverage producers execute invariant-protected admission fallbacks', () => {
   const coverageEnv = process.env.COVERAGE_V8_DIR
     ? { NODE_V8_COVERAGE: path.resolve(process.env.COVERAGE_V8_DIR) }
     : {};
-  const web = spawnSync(process.execPath, ['--input-type=module', '--eval', WEB_ROOM_COVERAGE_SCRIPT], {
-    cwd: path.resolve('.'),
-    encoding: 'utf8',
-    env: { ...process.env, ...coverageEnv }
-  });
-  assert.equal(web.status, 0, web.stderr);
   const admission = spawnSync(process.execPath, ['--eval', ADMISSION_INTERNAL_COVERAGE_SCRIPT], {
     cwd: path.resolve('.'),
     encoding: 'utf8',

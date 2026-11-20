@@ -4,7 +4,7 @@
 // 16:9 shape instead. Past nine people the grid pages sideways.
 import { t } from '@/shared/i18n';
 import { computed, ref } from 'vue';
-import type { Participant } from '@/features/room/client/core/types';
+import type { Participant } from '@voice-room/call/engine/core/types';
 import { useMobileCallUiStore } from '@/features/room/mobile-call-ui.store';
 import MobileCallTile from './MobileCallTile.vue';
 import MobileCameraFlip from './MobileCameraFlip.vue';

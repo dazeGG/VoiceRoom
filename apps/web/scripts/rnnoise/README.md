@@ -6,19 +6,22 @@ ESLint project. It is the readable, repository-owned adaptation of the worklet
 that was committed as a minified public asset in VoiceRoom commit `ca6ed846`
 (June 2026), then moved to the Vue app in `98b7a30c`. Its structure and ABI
 match the upstream [`simple-rnnoise-wasm` worklet](https://github.com/JSmith01/simple-rnnoise-wasm/blob/master/src/worklet.js),
-whose authors and MIT license match the vendored `public/rnnoise/LICENSE`.
+whose authors and MIT license match the vendored `packages/call/assets/rnnoise/LICENSE`.
 This adaptation does not rebuild the loader; the WASM has its own build below.
 
 Run `node apps/web/scripts/build-rnnoise-worklet.ts` from the repository root
-to copy the readable source deterministically to the fixed-path public asset.
+to copy the readable source deterministically to `packages/call/assets/rnnoise/rnnoise.worklet.js`.
 Run the same command with `--check` to verify byte identity without writing.
 There is no minifier, source map, npm install, or new dependency in this step.
 The source keeps the existing MIT notice and the full vendored license remains
-alongside the public assets.
+alongside the package assets. Web serves them at their original root-relative
+paths using the package URL manifest. The production build includes the hash of
+the five media files in each URL's `?v=` parameter and Caddy caches those URLs
+for a year.
 
 ## WASM
 
-`public/rnnoise/rnnoise.wasm` is RNNoise 0.2 (xiph tag `v0.2`, commit
+`packages/call/assets/rnnoise/rnnoise.wasm` is RNNoise 0.2 (xiph tag `v0.2`, commit
 `904a876d`, model `rnnoise_data-0b50c45`) with a minimal-latency `pipe()`
 wrapper, built by `wasm/build-wasm.sh` (Emscripten 6.0.13 in Docker, `-O3`,
 `-msimd128 -mavx`, fixed 8 MiB memory, 1 MB stack). The script fetches the
@@ -26,7 +29,7 @@ pinned sources, checks the model tarball's sha256 and rebuilds the shipped
 bytes exactly:
 
 ```sh
-bash apps/web/scripts/rnnoise/wasm/build-wasm.sh   # rewrites public/rnnoise/rnnoise.wasm
+bash apps/web/scripts/rnnoise/wasm/build-wasm.sh   # rewrites packages/call/assets/rnnoise/rnnoise.wasm
 ```
 
 `wasm/pipe.c` keeps the simple-rnnoise-wasm ABI (`newState`, `deleteState`,

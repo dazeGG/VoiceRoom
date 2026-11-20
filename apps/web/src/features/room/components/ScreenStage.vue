@@ -1,160 +1,55 @@
 <script setup lang="ts">
-import { t } from '@/shared/i18n';
-import { Maximize, Minimize, Volume2, VolumeX } from '@lucide/vue';
-import { computed, ref, watch, watchEffect } from 'vue';
-import EmojiText from '@/shared/chat/EmojiText.vue';
-import { AvatarStack } from '@/shared/ui';
+import { computed, shallowRef } from 'vue';
+import { ScreenStage } from '@voice-room/call/views';
+import { useScreenUiStore } from '@voice-room/call/engine/core/screen-ui.store';
 import {
   syncScreenVideoAudio,
   toggleScreenFullscreen,
   toggleScreenMute,
   updateScreenVolumeFromSlider
-} from '../client/ui/screen-stage-controls';
-import { handleScreenStageClick } from '../client/ui/screen-view';
-import { useScreenUiStore } from '../screen-ui.store';
+} from '@voice-room/call/engine/ui/screen-stage-controls';
+import { handleScreenStageClick } from '@voice-room/call/engine/ui/screen-view';
+import EmojiText from '@/shared/chat/EmojiText.vue';
 import { useScreenStartupDiagnostics } from '../use-screen-startup-diagnostics';
 
 const screenUi = useScreenUiStore();
-
-const stageEl = ref<HTMLElement | null>(null);
-const videoEl = ref<HTMLVideoElement | null>(null);
+const videoEl = shallowRef<HTMLVideoElement | null>(null);
 useScreenStartupDiagnostics(videoEl);
-const volumeSliderEl = ref<HTMLInputElement | null>(null);
 
 const meta = computed(() => screenUi.getScreenMetaView());
 const volume = computed(() => screenUi.getStreamVolumeView());
 const fullscreen = computed(() => screenUi.getFullscreenView());
 
-watchEffect(
-  () => {
-    screenUi.registerScreenVideo(videoEl.value);
-    screenUi.registerScreenStage(stageEl.value);
-    screenUi.registerStreamVolumeSlider(volumeSliderEl.value);
-  },
-  { flush: 'post' }
-);
-
-watch(
-  [videoEl, () => screenUi.activeStream],
-  ([video, stream]) => {
-    if (!video) return;
-    if (stream && video.srcObject !== stream) {
-      video.srcObject = stream;
-      syncScreenVideoAudio();
-    } else if (!stream) {
-      video.pause();
-      video.srcObject = null;
-    }
-  },
-  { flush: 'post' }
-);
+function registerElements(
+  stage: HTMLElement | null,
+  video: HTMLVideoElement | null,
+  slider: HTMLInputElement | null
+): void {
+  screenUi.registerScreenVideo(video);
+  screenUi.registerScreenStage(stage);
+  screenUi.registerStreamVolumeSlider(slider);
+  videoEl.value = video;
+}
 </script>
 
 <template>
-  <div
-    id="screenStage"
-    ref="stageEl"
-    :class="['screen-stage', { 'screen-stage--active': screenUi.uiActive }]"
-    :hidden="!screenUi.stageVisible"
-    role="button"
-    tabindex="-1"
-    :aria-label="t('Закрыть просмотр экрана')"
-    @click="handleScreenStageClick"
-    @keydown="
-      (event: KeyboardEvent) => {
-        if (event.key === 'Enter' || event.key === ' ') handleScreenStageClick(event);
-      }
-    "
-    @pointerenter="screenUi.uiActive = true"
-    @pointerleave="screenUi.uiActive = false"
-    @pointermove="
-      () => {
-        if (screenUi.stageVisible) screenUi.uiActive = true;
-      }
-    "
+  <ScreenStage
+    :active-stream="screenUi.activeStream"
+    :stage-visible="screenUi.stageVisible"
+    :ui-active="screenUi.uiActive"
+    :show-placeholder="screenUi.showPlaceholder"
+    :show-controls="screenUi.showControls"
+    :meta="meta"
+    :volume="volume"
+    :fullscreen="fullscreen"
+    @elements-change="registerElements"
+    @stream-attached="syncScreenVideoAudio"
+    @interact="handleScreenStageClick"
+    @active-change="screenUi.uiActive = $event"
+    @toggle-mute="toggleScreenMute"
+    @update-volume="updateScreenVolumeFromSlider()"
+    @toggle-fullscreen="void toggleScreenFullscreen()"
   >
-    <video id="screenVideo" ref="videoEl" class="screen-stage__video" autoplay playsinline></video>
-    <div id="screenPlaceholder" class="screen-placeholder" :hidden="!screenUi.showPlaceholder">
-      {{ t('Подключение к экрану') }}
-    </div>
-
-    <div v-if="meta" id="screenMeta" class="screen-meta">
-      <span class="screen-meta__live" aria-hidden="true"></span>
-      <span id="screenMetaTitle" class="screen-meta__title"><EmojiText :text="meta.title" /></span>
-      <span v-if="meta.showSepProfile" id="screenMetaSepProfile" class="screen-meta__sep" aria-hidden="true">·</span>
-      <span v-if="meta.showQuality" id="screenMetaQuality" class="screen-meta__detail">{{ meta.qualityLabel }}</span>
-      <span v-if="meta.showSepFps" id="screenMetaSepFps" class="screen-meta__sep" aria-hidden="true">·</span>
-      <span v-if="meta.showFps" id="screenMetaFps" class="screen-meta__detail">{{ meta.fpsLabel }}</span>
-      <span v-if="meta.showSepViewers" id="screenMetaSepViewers" class="screen-meta__sep" aria-hidden="true">·</span>
-      <span id="screenMetaViewers" class="screen-meta__detail screen-meta__viewers">
-        <template v-if="meta.viewerAvatars.length === 0">{{ t('Смотрят: 0') }}</template>
-        <AvatarStack
-          v-else
-          :items="meta.viewerAvatars"
-          :max-avatars="null"
-          :size="22"
-          :aria-label="t('Смотрят стрим')"
-          class="screen-meta__avatar-stack"
-        />
-      </span>
-    </div>
-
-    <div id="screenViewControls" class="screen-view-controls" :hidden="!screenUi.showControls">
-      <div id="streamVolumeControl" class="stream-volume" :hidden="volume.hidden">
-        <button
-          id="streamVolumeButton"
-          class="screen-view-controls__button stream-volume__button"
-          type="button"
-          :aria-label="volume.ariaLabel"
-          :aria-pressed="volume.muted"
-          @click="toggleScreenMute"
-        >
-          <span class="stream-volume__icon stream-volume__icon--on" aria-hidden="true"><Volume2 /></span>
-          <span class="stream-volume__icon stream-volume__icon--off" aria-hidden="true"><VolumeX /></span>
-        </button>
-        <div id="streamVolumePopover" class="stream-volume__popover">
-          <output
-            class="stream-volume__value"
-            :class="{ 'stream-volume__value--muted': volume.muted }"
-            for="streamVolumeSlider"
-          >
-            {{ volume.valuePercent }}%
-          </output>
-          <div class="stream-volume__track">
-            <input
-              id="streamVolumeSlider"
-              ref="volumeSliderEl"
-              class="stream-volume__slider"
-              type="range"
-              min="0"
-              :max="volume.maxPercent"
-              :value="volume.valuePercent"
-              :aria-label="t('Громкость стрима')"
-              @input="updateScreenVolumeFromSlider()"
-            />
-          </div>
-        </div>
-      </div>
-
-      <button
-        id="screenFullscreenButton"
-        class="screen-view-controls__button screen-view-controls__fullscreen"
-        type="button"
-        :aria-label="fullscreen.ariaLabel"
-        :aria-pressed="fullscreen.fullscreen"
-        @click="void toggleScreenFullscreen()"
-      >
-        <span
-          class="screen-view-controls__fullscreen-icon screen-view-controls__fullscreen-icon--enter"
-          aria-hidden="true"
-          ><Maximize
-        /></span>
-        <span
-          class="screen-view-controls__fullscreen-icon screen-view-controls__fullscreen-icon--exit"
-          aria-hidden="true"
-          ><Minimize
-        /></span>
-      </button>
-    </div>
-  </div>
+    <template #title="{ title }"><EmojiText :text="title" /></template>
+  </ScreenStage>
 </template>

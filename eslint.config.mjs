@@ -26,61 +26,8 @@ const ROOM_LOBBY_IMPORTS = {
   group: ['@/features/home', '@/features/home/**', '**/features/home/**'],
   message: 'A room does not import the lobby: use @/entities or the room social context.'
 };
-const CALL_HOST_IMPORTS = ['features/call-feedback', 'features/room/adapters'];
-const CALL_APP_IMPORTS = [
-  'features/auth',
-  'api/auth',
-  ...CALL_HOST_IMPORTS,
-  'stores/page.store',
-  'platform/desktop-boundary',
-  'platform/open-in-app',
-  'platform/app-visibility'
-];
-const CALL_IMPORT_MESSAGE = 'Call code uses installed call ports, not web application dependencies or adapters.';
-const UI_IMPORT_MESSAGE = 'Portable UI cannot import applications or application aliases.';
-const UI_APP_IMPORTS = '^@(?:/|$)|^@voice-room/(?:admin|api|docs|site|web)(?:/|$)|(?:^|/)apps(?:/|$)';
-const escapeRegex = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-const aliasRegex = (targets) => `^@/(?:${targets.map(escapeRegex).join('|')})(?:\\.ts)?(?:/|$)`;
-const UP = '(?:\\.\\./)';
-
-// The protected targets are matched by their @/ alias; relative specifiers are
-// matched by how far they climb, since a pattern cannot resolve them. Call code
-// reaches anything outside features/room through @/ (no relative import leaves
-// it today), so climbing out of features/room is refused outright.
-function callImportRules(regexes) {
-  return {
-    'no-restricted-imports': [
-      'error',
-      { patterns: [ROOM_LOBBY_IMPORTS, ...regexes.map((regex) => ({ regex, message: CALL_IMPORT_MESSAGE }))] }
-    ],
-    'no-restricted-syntax': [
-      'error',
-      ...OVERLOAD_CAST,
-      ...regexes.map((regex) => ({
-        selector: `ImportExpression[source.value=/${regex.replaceAll('/', '\\/')}/]`,
-        message: CALL_IMPORT_MESSAGE
-      }))
-    ]
-  };
-}
-
-// One block per directory depth below features/room/client: a file d levels down
-// leaves features/room with d + 2 climbs and reaches features/room/adapters with d + 1.
-// The last block also covers anything deeper, conservatively.
-const CALL_CLIENT_DEPTHS = 5;
-function callClientBlocks() {
-  return Array.from({ length: CALL_CLIENT_DEPTHS }, (_, depth) => {
-    const deepest = depth === CALL_CLIENT_DEPTHS - 1;
-    return {
-      files: [`apps/web/src/features/room/client/${'*/'.repeat(depth)}${deepest ? '**/' : ''}*.{ts,vue}`],
-      rules: callImportRules([
-        aliasRegex(CALL_APP_IMPORTS),
-        `^${UP}{${depth + 2},}`,
-        `^${UP}{${depth + 1}}adapters(?:\\.ts)?(?:/|$)`
-      ])
-    };
-  });
-}
+const PORTABLE_IMPORT_MESSAGE = 'Portable packages cannot import applications or app aliases.';
+const PORTABLE_APP_IMPORTS = '^@(?:/|$)|^@voice-room/(?:admin|api|docs|site|web)(?:/|$)|(?:^|/)apps(?:/|$)';
 
 export default tseslint.config(
   {
@@ -92,6 +39,7 @@ export default tseslint.config(
       '.omx/**',
       'apps/api/src/platform/db/schema.ts',
       'apps/web/public/**',
+      'packages/call/assets/**',
       'apps/site/public/**',
       'apps/site/.astro/**',
       'apps/docs/**',
@@ -103,10 +51,10 @@ export default tseslint.config(
   },
   js.configs.recommended,
   ...tseslint.configs.strictTypeChecked,
-  // Vue rules apply to the web app and the portable UI package.
+  // Vue rules apply to the web app and the portable packages.
   ...vue.configs['flat/recommended-error'].map((config) => ({
     ...config,
-    files: config.files ?? ['apps/web/**/*.{ts,vue}', 'packages/ui/**/*.{ts,vue}']
+    files: config.files ?? ['apps/web/**/*.{ts,vue}', 'packages/{call,ui}/**/*.{ts,vue}']
   })),
   {
     languageOptions: {
@@ -121,6 +69,7 @@ export default tseslint.config(
           './apps/web/tsconfig.test.json',
           './packages/shared/tsconfig.test.json',
           './packages/ui/tsconfig.json',
+          './packages/call/tsconfig.json',
           './scripts/tsconfig.json'
         ],
         tsconfigRootDir: import.meta.dirname,
@@ -218,14 +167,17 @@ export default tseslint.config(
   {
     // Browser code logs through @/shared/log so records reach the failure
     // report buffer; only the logger itself touches the console.
-    files: ['apps/web/src/**/*.{ts,vue}'],
+    files: ['apps/web/src/**/*.{ts,vue}', 'packages/call/src/**/*.{ts,vue}'],
     ignores: ['apps/web/src/shared/log.ts'],
     rules: { 'no-console': 'error' }
   },
   {
-    files: ['packages/ui/**/*.{ts,tsx,mts,js,jsx,mjs,vue}'],
+    files: ['packages/{call,ui}/**/*.{ts,tsx,mts,js,jsx,mjs,vue}'],
     rules: {
-      'no-restricted-imports': ['error', { patterns: [{ regex: UI_APP_IMPORTS, message: UI_IMPORT_MESSAGE }] }],
+      'no-restricted-imports': [
+        'error',
+        { patterns: [{ regex: PORTABLE_APP_IMPORTS, message: PORTABLE_IMPORT_MESSAGE }] }
+      ],
       'no-restricted-syntax': [
         'error',
         ...OVERLOAD_CAST,
@@ -234,8 +186,8 @@ export default tseslint.config(
           'ImportExpression[source.quasis.0.value.cooked',
           'TSImportType[source.value'
         ].map((selector) => ({
-          selector: `${selector}=/${UI_APP_IMPORTS.replaceAll('/', '\\/')}/]`,
-          message: UI_IMPORT_MESSAGE
+          selector: `${selector}=/${PORTABLE_APP_IMPORTS.replaceAll('/', '\\/')}/]`,
+          message: PORTABLE_IMPORT_MESSAGE
         }))
       ]
     }
@@ -253,17 +205,6 @@ export default tseslint.config(
         }
       ]
     }
-  },
-  // PR1's checked cut: web identity, feedback and shell policy stay in adapters.
-  ...callClientBlocks(),
-  {
-    // Lobby leave shares the call feedback port without importing its adapter.
-    files: ['apps/web/src/features/room/voice-session.store.ts'],
-    rules: callImportRules([
-      aliasRegex(CALL_HOST_IMPORTS),
-      '^\\.\\./call-feedback(?:\\.ts)?(?:/|$)',
-      '^\\./adapters(?:\\.ts)?(?:/|$)'
-    ])
   },
   {
     // Layers below the features never reach up into one.
@@ -290,8 +231,7 @@ export default tseslint.config(
     }
   },
   {
-    // The lobby reaches the room client only through its public index
-    // (features/room/client/index.ts), never a module inside it.
+    // The lobby reaches the call engine only through its public index.
     files: ['apps/web/src/features/home/**/*.{ts,vue}'],
     rules: {
       'no-restricted-imports': [
@@ -299,8 +239,8 @@ export default tseslint.config(
         {
           patterns: [
             {
-              group: ['@/features/room/client/**', '**/room/client/**'],
-              message: 'Import the room client from @/features/room/client, its public index.'
+              group: ['@voice-room/call/engine/**', '**/call/src/engine/**'],
+              message: 'Import the call engine from @voice-room/call/engine, its public index.'
             }
           ]
         }

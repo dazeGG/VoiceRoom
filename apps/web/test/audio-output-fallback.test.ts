@@ -1,3 +1,4 @@
+import { installWebCallPortsForTest } from './helpers/call-ports';
 // The real audio bus with a saved speaker that comes and goes: the sound falls
 // back to the system device, the saved choice stays, and a device picked by hand
 // still reports its failure instead of quietly playing somewhere else.
@@ -58,8 +59,9 @@ async function loadBus(savedSink = '') {
   vi.stubGlobal('MediaStream', FakeMediaStream);
   vi.stubGlobal('AudioContext', FakeAudioContext);
   vi.resetModules();
-  const bus = await import('@/features/room/client/services/audio-bus.ts');
-  const { state } = await import('@/features/room/client/core/room-runtime.store');
+  await installWebCallPortsForTest();
+  const bus = await import('@voice-room/call/engine/services/audio-bus');
+  const { state } = await import('@voice-room/call/engine/core/room-runtime.store');
   const graph = bus.getAudioBusGraph();
   const context = instanceOf(graph.context, FakeAudioContext, 'the bus context');
   const limiter = instanceOf(graph.limiter, FakeNode, 'the limiter');

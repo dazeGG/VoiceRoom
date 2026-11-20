@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# Rebuilds public/rnnoise/rnnoise.wasm byte for byte (see ../README.md).
+# Rebuilds packages/call/assets/rnnoise/rnnoise.wasm byte for byte (see ../README.md).
 # Needs git, curl, sha256sum and Docker. Writes only under the given work dir
 # (default: a temp dir) and the output path.
 #   bash apps/web/scripts/rnnoise/wasm/build-wasm.sh [out.wasm] [work-dir]
 set -euo pipefail
 
 here=$(cd "$(dirname "$0")" && pwd)
-out=${1:-$here/../../../public/rnnoise/rnnoise.wasm}
+out=${1:-$here/../../../../../packages/call/assets/rnnoise/rnnoise.wasm}
 work=${2:-$(mktemp -d)}
 emsdk=emscripten/emsdk:6.0.13
 # xiph/rnnoise tag v0.2 and its model tarball. v0.2's model_version names the

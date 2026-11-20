@@ -15,6 +15,7 @@ node_modules/
 coverage/
 !scripts/coverage/
 apps/web/public/
+packages/call/assets/
 apps/site/public/
 apps/site/.astro/
 apps/docs/

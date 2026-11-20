@@ -6,10 +6,10 @@ import { createPinia, setActivePinia } from 'pinia';
 import { fireEvent, render, screen } from '@testing-library/vue';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import ScreenStage from '@/features/room/components/ScreenStage.vue';
-import { state } from '@/features/room/client/core/room-runtime.store';
-import { createInitialRoomState } from '@/features/room/client/model/room-state';
-import { bindScreenStageIdleUi } from '@/features/room/client/ui/screen-stage-controls';
-import { useScreenUiStore } from '@/features/room/screen-ui.store';
+import { state } from '@voice-room/call/engine/core/room-runtime.store';
+import { createInitialRoomState } from '@voice-room/call/engine/model/room-state';
+import { bindScreenStageIdleUi } from '@voice-room/call/engine/ui/screen-stage-controls';
+import { useScreenUiStore } from '@voice-room/call/engine/core/screen-ui.store';
 import { instanceOf } from '../helpers/assert.ts';
 
 const idleAbort = new AbortController();

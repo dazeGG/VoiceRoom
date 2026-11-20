@@ -9,7 +9,7 @@ import { FakeMediaStream, FakeMediaStreamTrack } from './helpers/fake-media.ts';
 
 const applied: Array<{ element: HTMLMediaElement; options: { boostAllowed?: boolean } }> = [];
 const released: HTMLMediaElement[] = [];
-vi.mock('@/features/room/client/services/media-playback-service', () => ({
+vi.mock('@voice-room/call/engine/services/media-playback-service', () => ({
   isAppPlaybackMuted: () => false,
   applyScreenMediaElementVolume: (element: HTMLMediaElement, options: { boostAllowed?: boolean }) => {
     applied.push({ element, options });
@@ -19,7 +19,7 @@ vi.mock('@/features/room/client/services/media-playback-service', () => ({
     released.push(element);
   }
 }));
-vi.mock('@/features/room/screen-ui.store', () => ({
+vi.mock('@voice-room/call/engine/core/screen-ui.store', () => ({
   useScreenUiStore: () => ({
     bumpScreenUiRevision: () => {},
     getActiveScreenPeer: () => null,
@@ -29,7 +29,7 @@ vi.mock('@/features/room/screen-ui.store', () => ({
   })
 }));
 
-const { syncScreenAudioFallback } = await import('@/features/room/client/ui/screen-stage-controls.ts');
+const { syncScreenAudioFallback } = await import('@voice-room/call/engine/ui/screen-stage-controls');
 
 beforeEach(() => {
   setActivePinia(createPinia());

@@ -30,6 +30,7 @@ const ALLOWED = [
   /platform\/db\/schema\.ts$/,
   // Audio worklets are plain scripts the browser loads by URL; tests run them in a sandbox.
   /\/public\/[^/]+\.worklet\.js$/,
+  /\/packages\/call\/assets\/(?:audio-gate|desktop-audio-source)\.worklet\.js$/,
   // The web push worker as a production build emits it: deployment output, not source.
   /^service-worker\.js$/
 ];

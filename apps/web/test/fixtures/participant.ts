@@ -1,7 +1,7 @@
 // A room participant with every field set the way a fresh one starts, for
 // tests that hand participants to the room state or its components.
 
-import type { Participant } from '@/features/room/client/core/types';
+import type { Participant } from '@voice-room/call/engine/core/types';
 
 export function participant(overrides: Partial<Participant> = {}): Participant {
   return {

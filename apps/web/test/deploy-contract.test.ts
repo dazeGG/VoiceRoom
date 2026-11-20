@@ -2,16 +2,26 @@ import { onTestFinished, test, vi } from 'vitest';
 import assert from 'node:assert/strict';
 import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
+import { createServer as createHttpServer, get, type IncomingMessage } from 'node:http';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
+import { buffer } from 'node:stream/consumers';
 import { fileURLToPath } from 'node:url';
 import { brotliDecompressSync } from 'node:zlib';
 import { build, createServer } from 'vite';
+import { voiceAssetUrls } from '@voice-room/call/voice-assets';
 
-import { metaPolicy, versionFile, voiceAssetVersion } from '../scripts/deploy-contract.ts';
+import { metaPolicy, versionFile, voiceAssetDirectory, voiceAssetVersion } from '../scripts/deploy-contract.ts';
 import { buildHeaderPolicy, readMetaPolicy } from '../scripts/emit-caddy-csp.ts';
 
 const webRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
+const mediaPaths = [
+  '/audio-gate.worklet.js',
+  '/desktop-audio-source.worklet.js',
+  '/rnnoise/rnnoise.mjs',
+  '/rnnoise/rnnoise.wasm',
+  '/rnnoise/rnnoise.worklet.js'
+];
 
 test('the meta policy quotes keywords, not schemes, and leaves out what a meta tag ignores', () => {
   const policy = metaPolicy({
@@ -36,14 +46,8 @@ test('generated RNNoise worklet is reproducible and changes the cache-busting vo
   const publicDir = mkdtempSync(join(tmpdir(), 'voice-assets-'));
   try {
     mkdirSync(join(publicDir, 'rnnoise'));
-    for (const file of [
-      'audio-gate.worklet.js',
-      'desktop-audio-source.worklet.js',
-      'rnnoise/rnnoise.mjs',
-      'rnnoise/rnnoise.wasm',
-      'rnnoise/rnnoise.worklet.js'
-    ]) {
-      copyFileSync(join(webRoot, 'public', file), join(publicDir, file));
+    for (const path of mediaPaths) {
+      copyFileSync(join(voiceAssetDirectory, path), join(publicDir, path));
     }
     const newVersion = voiceAssetVersion(publicDir);
     copyFileSync(
@@ -52,7 +56,7 @@ test('generated RNNoise worklet is reproducible and changes the cache-busting vo
     );
     const oldVersion = voiceAssetVersion(publicDir);
     assert.notEqual(newVersion, oldVersion);
-    assert.equal(newVersion, voiceAssetVersion(join(webRoot, 'public')));
+    assert.equal(newVersion, voiceAssetVersion());
   } finally {
     rmSync(publicDir, { recursive: true, force: true });
   }
@@ -95,8 +99,20 @@ function verifyDeployArtifacts(outDir: string) {
   );
   assert.ok(!readdirSync(outDir).includes('fonts'), 'no font under a fixed name');
   // The audio files keep fixed names; their addresses carry a content hash.
-  const audioVersion = voiceAssetVersion(join(webRoot, 'public'));
+  const audioVersion = voiceAssetVersion();
   assert.ok(bundle.includes(`?v=${audioVersion}`), 'the bundle carries the audio files version');
+  assert.equal(voiceAssetVersion(outDir), audioVersion, 'the query names the exact deployed bytes');
+  assert.deepEqual(
+    Object.values(voiceAssetUrls(audioVersion)),
+    mediaPaths.map((path) => `${path}?v=${audioVersion}`)
+  );
+  for (const url of Object.values(voiceAssetUrls(audioVersion))) {
+    assert.ok(bundle.includes(url), `the browser receives ${url}`);
+  }
+  assert.deepEqual(
+    readFileSync(join(outDir, 'rnnoise', 'LICENSE')),
+    readFileSync(join(voiceAssetDirectory, 'rnnoise', 'LICENSE'))
+  );
 
   // The page has something to show before its code arrives, and the app mounts over it.
   assert.match(html, /<div id="app"><div class="boot-splash"/);
@@ -144,8 +160,7 @@ test.skipIf(deployContractMode === 'checked')(
   }
 );
 
-test('the dev server leaves the address of the RNNoise module alone', { timeout: 60_000 }, async () => {
-  // With ?import added it refuses a file of public/ and covers the page with an error overlay.
+test('the dev server serves audio assets at browser module and fetch URLs', { timeout: 60_000 }, async () => {
   const server = await createServer({
     root: webRoot,
     logLevel: 'silent',
@@ -153,12 +168,25 @@ test('the dev server leaves the address of the RNNoise module alone', { timeout:
     server: { middlewareMode: true, hmr: false, ws: false },
     optimizeDeps: { noDiscovery: true, include: [] }
   });
+  const http = createHttpServer(server.middlewares);
   try {
-    const module = await server.transformRequest('/src/features/room/client/media/rnnoise-node.ts');
-    assert.ok(module, 'the module transforms');
-    // Left as written: it ends in .mjs, so nothing is added to it.
-    assert.match(module.code, /^\s*`\$\{RNNOISE_ASSET_BASE\}rnnoise\.mjs`\s*$/m);
+    await new Promise<void>((done) => http.listen(0, '127.0.0.1', done));
+    const address = http.address();
+    assert.ok(address && typeof address !== 'string');
+    assert.deepEqual(Object.values(voiceAssetUrls()), mediaPaths);
+    for (const path of mediaPaths) {
+      const request = path.endsWith('.mjs') ? `${path}?import` : path;
+      const response = await new Promise<IncomingMessage>((resolve, reject) => {
+        get(`http://127.0.0.1:${address.port}${request}`, resolve).once('error', reject);
+      });
+      const bytes = await buffer(response);
+      assert.equal(response.statusCode, 200, path);
+      assert.equal(response.headers['cache-control'], 'no-cache');
+      assert.equal(response.headers['content-type'], path.endsWith('.wasm') ? 'application/wasm' : 'text/javascript');
+      assert.deepEqual(bytes, readFileSync(join(voiceAssetDirectory, path)));
+    }
   } finally {
+    await new Promise<void>((resolve, reject) => http.close((error) => (error ? reject(error) : resolve())));
     await server.close();
   }
 });

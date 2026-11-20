@@ -3,7 +3,7 @@ import { nextTick } from 'vue';
 import userEvent from '@testing-library/user-event';
 import RoomTopbar from '@/features/room/components/RoomTopbar.vue';
 import { useSessionStore } from '@/features/auth/session.store';
-import { state as roomClientState } from '@/features/room/client/core/room-runtime.store';
+import { state as roomClientState } from '@voice-room/call/engine/core/room-runtime.store';
 import { participant } from '../fixtures/participant';
 import { authUser } from '../fixtures/users';
 import { renderWithApp } from '../helpers/render';

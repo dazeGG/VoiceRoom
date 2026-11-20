@@ -29,7 +29,7 @@ async function setup() {
       return removeVisibility;
     }
   }));
-  vi.doMock('@/features/room/screen-ui.store', () => ({
+  vi.doMock('@voice-room/call/engine/core/screen-ui.store', () => ({
     useScreenUiStore: () => ({
       get stageVisible() {
         return store.stageVisible;
@@ -40,7 +40,7 @@ async function setup() {
       getActiveScreenPeer: () => peer
     })
   }));
-  vi.doMock('@/features/room/client/media/screen-startup-diagnostics', () => ({
+  vi.doMock('@voice-room/call/engine/media/screen-startup-diagnostics', () => ({
     startScreenStartupDiagnostics: start
   }));
   const { useScreenStartupDiagnostics } = await import('@/features/room/use-screen-startup-diagnostics');

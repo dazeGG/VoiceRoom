@@ -1,7 +1,7 @@
 // Saving a global hotkey. Push-to-talk without a key would leave the microphone
 // shut for good, so clearing that key switches the microphone back to open.
 
-import { setMicrophoneMode, writeHotkeyBinding, type HotkeyAction } from '@/features/room/client';
+import { setMicrophoneMode, writeHotkeyBinding, type HotkeyAction } from '@voice-room/call/engine';
 import type { HotkeyBinding } from '@/shared/ui/HotkeyRecorder/types';
 import { readSoundSettings } from './sound-settings';
 

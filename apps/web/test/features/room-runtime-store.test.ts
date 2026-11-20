@@ -5,8 +5,8 @@ import type { LocalTrackPublication, Room } from 'livekit-client';
 import { createPinia, setActivePinia } from 'pinia';
 import { watch } from 'vue';
 import { beforeEach, expect, test } from 'vitest';
-import { clientRoomName, state, useRoomRuntimeStore } from '@/features/room/client/core/room-runtime.store';
-import { createInitialRoomState } from '@/features/room/client/model/room-state';
+import { clientRoomName, state, useRoomRuntimeStore } from '@voice-room/call/engine/core/room-runtime.store';
+import { createInitialRoomState } from '@voice-room/call/engine/model/room-state';
 import { mistyped } from '../helpers/mistyped';
 
 beforeEach(() => {
@@ -64,7 +64,7 @@ test('the room name is the client name only for the room it holds', () => {
 });
 
 test('publications kept in state come back unproxied, so unpublishTrack finds them', async () => {
-  const { unpublishLocalScreenTracks } = await import('@/features/room/client/services/livekit/local-publications');
+  const { unpublishLocalScreenTracks } = await import('@voice-room/call/engine/services/livekit/local-publications');
   const track = { id: 'screen-track' };
   const unpublished: unknown[] = [];
   state.livekitRoom = mistyped<Room>({

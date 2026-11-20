@@ -5,8 +5,8 @@
 import { t } from '@/shared/i18n';
 import { MicOff } from '@lucide/vue';
 import { computed, onMounted, onUnmounted, watch } from 'vue';
-import { state as roomClientState } from '@/features/room/client/core/room-runtime.store';
-import { isMicrophoneShownMuted } from '@/features/room/client/core/microphone-mute';
+import { state as roomClientState } from '@voice-room/call/engine/core/room-runtime.store';
+import { isMicrophoneShownMuted } from '@voice-room/call/engine/core/microphone-mute';
 import { useMobileCallUiStore } from '@/features/room/mobile-call-ui.store';
 import { useRoomUiStore } from '@/features/room/room-ui.store';
 import { getDesktopBoundaryPolicy } from '@/platform/desktop-boundary';
@@ -29,13 +29,17 @@ const selfBigFlip = computed(
   () => scene.value.kind === 'duo' && scene.value.big.isLocal && Boolean(roomClientState.localCameraStream)
 );
 
+function restartChromeTimer(): void {
+  mobileCall.restartChromeTimer(() => roomUi.chatOpen);
+}
+
 // The controls start hiding as soon as the call shows them, and again once a
 // menu or the chat over the call closes.
 watch(
   [active, () => mobileCall.chromeVisible, () => roomUi.chatOpen, () => mobileCall.outputOpen],
   ([isActive, chromeVisible], _before, onCleanup) => {
     if (!isActive || !chromeVisible) return;
-    mobileCall.restartChromeTimer();
+    restartChromeTimer();
     onCleanup(mobileCall.stopChromeTimer);
   },
   { immediate: true }
@@ -56,7 +60,7 @@ onUnmounted(() => {
   <div
     v-if="active"
     :class="['mobile-call', `mobile-call--${scene.kind}`, { 'mobile-call--chrome-hidden': !mobileCall.chromeVisible }]"
-    @pointerdown="mobileCall.restartChromeTimer"
+    @pointerdown="restartChromeTimer"
   >
     <template v-if="scene.kind === 'duo'">
       <div class="mobile-call__bleed">

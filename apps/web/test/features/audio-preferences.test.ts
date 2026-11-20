@@ -1,3 +1,4 @@
+import { installWebCallPortsForTest } from '../helpers/call-ports';
 // Per-person listening preferences survive reloads and follow the account,
 // not the transient peer id.
 
@@ -7,9 +8,12 @@ import {
   getParticipantAudioPreference,
   getParticipantAudioPreferenceKey,
   storeParticipantAudioPreference
-} from '@/features/room/client/core/settings.ts';
+} from '@voice-room/call/engine/core/settings';
 
-beforeEach(() => localStorage.clear());
+beforeEach(async () => {
+  localStorage.clear();
+  await installWebCallPortsForTest();
+});
 
 test('a signed-in person is remembered by account; a guest by peer id', () => {
   expect(getParticipantAudioPreferenceKey(' user-1 ', 'peer-9')).toBe('account:user-1');
@@ -47,7 +51,7 @@ test('the interface sound volume is a stored percentage', () => {
 });
 
 test('the master volume is stored as a whole percent between 0 and 200', async () => {
-  const { getStoredMasterVolume, persistMasterVolume } = await import('@/features/room/client/core/settings.ts');
+  const { getStoredMasterVolume, persistMasterVolume } = await import('@voice-room/call/engine/core/settings');
   expect(getStoredMasterVolume()).toBe(100);
   expect(persistMasterVolume(250)).toBe(200);
   expect(persistMasterVolume(-1)).toBe(0);

@@ -11,7 +11,7 @@ import { useLobbyRouting } from '../../src/features/home/model/use-lobby-routing
 import type { LobbyMode } from '../../src/features/home/model/lobby.store.ts';
 import { useRoomNavigationStore } from '../../src/features/home/model/room-navigation.store.ts';
 import { ROOM_SWITCH_CONFIRM_STORAGE_KEY } from '../../src/features/home/model/room-switch-confirmation.ts';
-import { useVoiceSessionStore } from '../../src/features/room/voice-session.store.ts';
+import { useVoiceSessionStore } from '@voice-room/call/engine/core/voice-session.store';
 import { isShallowEntry } from '../../src/shared/utils/shallow-routing.ts';
 
 let router: Router;

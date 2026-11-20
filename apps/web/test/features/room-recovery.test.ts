@@ -4,16 +4,17 @@
 
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { createPinia, setActivePinia } from 'pinia';
-import type { ReplacementOutcome } from '@/features/room/client/recovery/realtime-recovery';
-import { state } from '@/features/room/client/core/room-runtime.store';
-import { createInitialRoomState } from '@/features/room/client/model/room-state';
+import type { ReplacementOutcome } from '@voice-room/call/engine/recovery/realtime-recovery';
+import { state } from '@voice-room/call/engine/core/room-runtime.store';
+import { createInitialRoomState } from '@voice-room/call/engine/model/room-state';
 import {
   invalidateMicrophoneActions,
   requestAutomaticMicrophoneConnectionReplacement,
   setMicrophoneRecoveryObserver,
   startMicrophoneCall,
   type MicrophoneRecoveryEvent
-} from '@/features/room/client/ui/devices';
+} from '@voice-room/call/engine/ui/devices';
+import { installWebCallPortsForTest } from '../helpers/call-ports';
 
 vi.mock('@/entities/room/room-realtime', () => ({
   requestActiveVoiceResync: vi.fn(() => true),
@@ -25,9 +26,10 @@ vi.mock('@/shared/log', async (importOriginal) => ({
 }));
 
 const { reportClientLogs } = await import('@/shared/log');
-const recovery = await import('@/features/room/client/recovery/room-recovery');
+const recovery = await import('@voice-room/call/engine/recovery/room-recovery');
 
 beforeEach(() => vi.mocked(reportClientLogs).mockClear());
+beforeEach(installWebCallPortsForTest);
 afterEach(() => {
   recovery.cancelRoomRecovery();
   recovery.setRoomRecoveryLiveKitAdapter(null);
