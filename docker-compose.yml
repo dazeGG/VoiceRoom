@@ -288,6 +288,8 @@ services:
   caddy:
     logging: *logging
     image: ${VOICEROOM_WEB_IMAGE:?set immutable VOICEROOM_WEB_IMAGE digest}
+    labels:
+      org.voiceroom.caddy-compose: "1"
     restart: unless-stopped
     depends_on:
       # Not waiting for a healthy API: the site and the LiveKit signal route

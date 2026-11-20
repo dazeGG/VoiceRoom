@@ -448,17 +448,28 @@ elif args[:2] == ['image', 'inspect']:
 elif args[0] == 'pull':
     note('pull')
     sys.exit(int(os.environ.get('VR_PULL_EXIT', '0')))
+elif args == ['compose', 'config', '--services']:
+    print('postgres', 'api', 'livekit', 'caddy', sep='\\n')
 elif args[:2] == ['compose', 'up']:
     note('compose-up')
+    if 'livekit' in args[2:]: note('rollout-livekit')
     sys.exit(int(os.environ.get('VR_UP_EXIT', '0')))
 else:
     note('docker ' + ' '.join(args[:3]))
 `
   );
-  const run = (overrides: NodeJS.ProcessEnv = {}) =>
+  const run = (overrides: NodeJS.ProcessEnv = {}, component = 'all') =>
     spawnSync(
       '/bin/bash',
-      [path.resolve(scripts, '../cd/remote-deploy.sh'), dir, 'test-commit', 'test-api', 'test-worker', 'test-web'],
+      [
+        path.resolve(scripts, '../cd/remote-deploy.sh'),
+        dir,
+        'test-commit',
+        'test-api',
+        'test-worker',
+        'test-web',
+        component
+      ],
       {
         env: {
           ...env,
@@ -475,6 +486,41 @@ else:
   const events = () => (fs.existsSync(calls) ? fs.readFileSync(calls, 'utf8').trim().split('\n') : []);
   return { dir, initialEnv, restoredEnv: `${initialEnv}WIDGET_ENABLED=false\n`, run, events };
 }
+
+test(
+  'API rollout guards the LiveKit logging transition before recreating the service',
+  { skip: !python || !bash || !linux },
+  async (t) => {
+    for (const approved of [false, true]) {
+      await t.test(approved ? 'explicit approval' : 'active call after log capture', (t) => {
+        const fixture = rolloutFixture(t);
+        const result = fixture.run(
+          {
+            ALLOW_LOGGING_VOICE_INTERRUPTION: approved ? '1' : '0',
+            VR_METRIC_SECOND: 'voice_room_api_presence_peers 2'
+          },
+          'api'
+        );
+        const events = fixture.events();
+        const rollout = events.indexOf('compose-up');
+        assert.ok(events.includes('archive'));
+        if (approved) {
+          assert.equal(result.status, 0, result.stderr);
+          assert.ok(events.some((event) => event.includes('deployment.logging_voice_interruption_approved')));
+          assert.equal(events.includes('metric'), false);
+          assert.ok(events.indexOf('archive') < rollout);
+          assert.ok(events.includes('rollout-livekit'));
+        } else {
+          assert.notEqual(result.status, 0);
+          assert.match(result.stderr, /requires a verified zero voice-peer count/);
+          assert.ok(events.indexOf('archive') < events.lastIndexOf('metric'));
+          assert.equal(rollout, -1);
+          assert.equal(fs.readFileSync(path.join(fixture.dir, '.env'), 'utf8'), fixture.restoredEnv);
+        }
+      });
+    }
+  }
+);
 
 test(
   'interruption consent is strict, one-command-only and permits only first-activation idle checks to be skipped',

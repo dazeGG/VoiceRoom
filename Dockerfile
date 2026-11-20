@@ -91,6 +91,7 @@ CMD ["voiceroom-caddy"]
 
 FROM caddy-runtime AS web
 LABEL org.voiceroom.capabilities="widget-boundary-v1"
+LABEL org.voiceroom.requires-caddy-compose="1"
 
 COPY Caddyfile /etc/caddy/Caddyfile
 COPY config/caddy/domains-available /etc/caddy/domains-available

@@ -164,6 +164,32 @@ main() {
     docker pull --quiet "$web_image"
   fi
   report_phase image-pull
+  if [ "$component" = web ]; then
+    # The host checkout supplies the edge's environment, ports and mounts.
+    local required_edge_contract edge_config
+    required_edge_contract=$(docker image inspect --format \
+      '{{with index .Config.Labels "org.voiceroom.requires-caddy-compose"}}{{.}}{{end}}' "$web_image")
+    if [ -n "$required_edge_contract" ]; then
+      if ! edge_config=$(docker compose config --format json caddy); then
+        echo 'Web rollout cannot resolve Caddy from the host checkout; deploy the API release carrying the required Compose change first' >&2
+        return 1
+      fi
+      python3 -c '
+import json
+import re
+import sys
+
+required = sys.argv[1]
+labels = json.load(sys.stdin)["services"]["caddy"].get("labels", {}) or {}
+available = labels.get("org.voiceroom.caddy-compose", "")
+if not re.fullmatch(r"[1-9][0-9]*", required):
+    sys.exit("invalid Web image label org.voiceroom.requires-caddy-compose: expected a positive integer")
+if not re.fullmatch(r"[1-9][0-9]*", available) or int(available) < int(required):
+    sys.exit(f"Web image requires Caddy Compose contract {required}; "
+             "deploy the API release carrying the required Compose change first")
+' "$required_edge_contract" <<< "$edge_config"
+    fi
+  fi
   python3 "$manifest_helper" "$boundary_manifest" \
     "$api_image" "$worker_image" "$web_image" \
     "$previous_api" "$previous_worker" "$previous_web" < /dev/null
@@ -185,12 +211,30 @@ main() {
     rm -f "$client_publisher"
   fi
 
-  local rollout_args=(--remove-orphans)
-  case "$component" in
-    api) rollout_args=(migrate media-init api livekit-gate message-delivery notification-delivery
-                        media-processing media-maintenance media-reconciliation) ;;
-    web) rollout_args=(--no-deps caddy) ;;
-  esac
+  local rollout_args=()
+  select_rollout_services() {
+    case "$component" in
+      all) rollout_args=(--remove-orphans) ;;
+      web) rollout_args=(--no-deps caddy) ;;
+      api)
+        local services service has_caddy=false
+        services=$(docker compose config --services) || return 1
+        rollout_args=(--remove-orphans --no-deps)
+        while IFS= read -r service; do
+          case "$service" in
+            caddy) has_caddy=true ;;
+            '') ;;
+            *) rollout_args+=("$service") ;;
+          esac
+        done <<< "$services"
+        # Keep Caddy defined so Compose does not consider it an orphan. An
+        # empty selection would make Compose apply the entire project.
+        if [ "$has_caddy" != true ] || [ "${#rollout_args[@]}" -eq 2 ]; then
+          echo 'API rollout requires a Compose project with Caddy and at least one non-edge service' >&2
+          return 1
+        fi ;;
+    esac
+  }
   rollback() {
     trap - ERR
     log_deploy deployment.rollback_requested
@@ -211,7 +255,7 @@ main() {
       git checkout --quiet --detach "$previous_commit"
     fi
     if [ "$rollout_started" = true ]; then
-      if ! docker compose up -d "${rollout_args[@]}"; then
+      if ! select_rollout_services || ! docker compose up -d "${rollout_args[@]}"; then
         echo 'rollback stack restoration failed; operator repair required' >&2
       fi
     fi
@@ -252,6 +296,7 @@ main() {
     set_env VOICEROOM_WEB_IMAGE "$web_image"
   fi
   docker compose config --quiet
+  select_rollout_services
   if [ "$persistent_logs" = true ]; then
     bash /etc/voiceroom/logging/preflight.sh "$PWD"
   fi
