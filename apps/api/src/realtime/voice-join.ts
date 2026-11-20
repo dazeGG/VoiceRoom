@@ -18,7 +18,7 @@ import { buildServerEnvelope } from './envelope.ts';
 import type { ReconnectLeases } from './reconnect-leases.ts';
 import type { ConnectionRegistry, WsConnection } from './registry.ts';
 import type { createRoomSummaries } from './room-summaries.ts';
-import type { Peer, PresenceRoom, RuntimeLogger, RuntimeRoomStore } from './runtime-types.ts';
+import type { CallRoomStore, Peer, PresenceRoom, RuntimeLogger } from './runtime-types.ts';
 import { rejoinedVoice } from './voice-track.ts';
 
 /** What a join reads of the signed-in account taking the seat; null for a guest. */
@@ -38,7 +38,7 @@ type LeavePayload = { roomId: string; peerId: string; sessionToken?: string } | 
 export interface VoiceJoinDeps {
   presenceRooms: Map<string, PresenceRoom>;
   wsRegistry: ConnectionRegistry;
-  getRoomStore: () => RuntimeRoomStore;
+  getRoomStore: () => CallRoomStore;
   getRoom: (roomId: string) => Promise<PresenceRoom | null>;
   publicPeer: (peer: Peer) => PublicPeer;
   publishRoomEvent: (roomId: string, envelope: ServerEnvelope, exceptPeerId?: string) => void;
@@ -53,7 +53,7 @@ export interface VoiceJoinDeps {
   findRoomBan: (roomId: string, userId: string | null | undefined, ip: string) => Promise<ActiveBanRecord | null>;
   logger: RuntimeLogger;
   leases: ReconnectLeases;
-  summaries: ReturnType<typeof createRoomSummaries>;
+  summaries?: Pick<ReturnType<typeof createRoomSummaries>, 'invalidateRecipients' | 'schedule'> | undefined;
   buildRoomSnapshot: (roomId: string, mode: RoomSnapshot['mode']) => Promise<RoomSnapshot | null>;
   leaveVoiceRoom: (
     connection: WsConnection,
@@ -424,13 +424,13 @@ export function createVoiceJoin(deps: VoiceJoinDeps) {
         // Announce synchronously with the initial insert. A reconnect may replace
         // this transport while occupancy persistence is pending; deferring the
         // announcement until afterward could leave a real peer undiscoverable.
-        summaries.invalidateRecipients(roomId);
+        summaries?.invalidateRecipients(roomId);
         publishRoomEvent(roomId, buildServerEnvelope('room.peer.joined', { roomId, peer: publicPeer(peer) }), peerId);
-        summaries.schedule(roomId);
+        summaries?.schedule(roomId);
       } else if (reconnectProfileChanged) {
-        summaries.invalidateRecipients(roomId);
+        summaries?.invalidateRecipients(roomId);
         publishRoomEvent(roomId, buildServerEnvelope('room.peer.updated', { roomId, peer: publicPeer(peer) }));
-        summaries.schedule(roomId);
+        summaries?.schedule(roomId);
       }
 
       try {

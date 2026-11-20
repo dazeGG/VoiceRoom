@@ -11,9 +11,10 @@ import { createConnectionRegistry } from '../src/realtime/registry.ts';
 import {
   createRoomPresence,
   type OccupancyStore,
-  type RoomPresenceDeps,
+  type PresenceRoom,
   type RosterPeer
 } from '../src/realtime/room-presence.ts';
+import { createVoiceStays } from '../src/realtime/voice-stays.ts';
 import type { FinishedVoiceSession } from '../src/domains/rooms/voice-session.repository.ts';
 import { fake, recordingLogger } from './fakes/index.ts';
 
@@ -60,7 +61,7 @@ type HarnessOptions = {
   runtime?: boolean;
   retry?: { baseMs: number; maxMs: number };
   roster?: { waitMs: number; pollMs: number };
-  sessions?: RoomPresenceDeps['sessions'];
+  sessions?: Parameters<typeof createVoiceStays>[0]['sessions'];
   now?: () => number;
 };
 
@@ -81,6 +82,12 @@ function harness({
       return logger.records.filter((record) => record.level === 'error').map((record) => record.evt);
     }
   };
+  const stays = createVoiceStays({
+    rooms: (): Iterable<PresenceRoom> => presence.rooms.values(),
+    sessions: sessions ?? (() => null),
+    logger: () => logger,
+    now
+  });
   const presence = createRoomPresence({
     store: () => ({
       async markRoomActive(roomId: string) {
@@ -96,14 +103,18 @@ function harness({
       ...store
     }),
     sockets,
-    runtime: () => (runtime ? { scheduleSummaryBroadcast: (roomId) => calls.summaries.push(roomId) } : null),
+    previewSubscribers: sockets.roomDetailSubscribers,
+    onRosterChange: runtime
+      ? (roomId) => {
+          calls.summaries.push(roomId);
+        }
+      : undefined,
+    onPeerLeft: stays.recordPeerLeft,
     logger: () => logger,
     occupancyRetry: retry,
-    roster,
-    sessions,
-    now
+    roster
   });
-  return { calls, presence };
+  return { calls, presence, stays };
 }
 
 /** A voice session sink that keeps what it was given. */
@@ -327,7 +338,7 @@ test('the idle sweep reconciles live rooms first and forgets rooms the store dro
 
 test('a seat that leaves is recorded as one finished stay; an account keeps its id and a guest has none', async () => {
   const sink = sessionSink();
-  const { presence } = harness({ sessions: sink.sessions, now: () => 5000 });
+  const { presence, stays } = harness({ sessions: sink.sessions, now: () => 5000 });
   const room = presence.room('r1');
   room.peers.set('ada', {
     id: 'ada',
@@ -357,7 +368,7 @@ test('a seat that leaves is recorded as one finished stay; an account keeps its 
   presence.closePeer('r1', 'ada', 'ta');
   presence.closePeer('r1', 'guest', 'tg', 'kicked');
   presence.closePeer('r1', 'unjoined', 'tu');
-  await presence.recordOpenSessions();
+  await stays.recordOpenSessions();
   // A guest's stay carries its name, browser id, device and address (for the
   // repository to key; the address is never stored).
   const none = {
@@ -402,7 +413,7 @@ test('a seat that leaves is recorded as one finished stay; an account keeps its 
 
 test('a stay keeps the kind of the room it was in', async () => {
   const sink = sessionSink();
-  const { presence } = harness({ sessions: sink.sessions, now: () => 5000 });
+  const { presence, stays } = harness({ sessions: sink.sessions, now: () => 5000 });
   presence.attach({ id: 'P8NZ4T', kind: 'widget' });
   presence.attach({ id: 'kitchen' });
   presence.room('P8NZ4T').peers.set('g', { id: 'g', joinedAt: 1000, transport: transport('tg') });
@@ -411,7 +422,7 @@ test('a stay keeps the kind of the room it was in', async () => {
     .peers.set('a', { id: 'a', accountUserId: 'user-a', joinedAt: 2000, transport: transport('ta') });
   presence.closePeer('P8NZ4T', 'g', 'tg');
   presence.closePeer('kitchen', 'a', 'ta');
-  await presence.recordOpenSessions();
+  await stays.recordOpenSessions();
   assert.deepEqual(
     sink.recorded.flat().map((stay) => [stay.roomId, stay.roomKind]),
     [
@@ -423,14 +434,14 @@ test('a stay keeps the kind of the room it was in', async () => {
 
 test('stopping records every stay still in voice once; a leave after that is not recorded again', async () => {
   const sink = sessionSink();
-  const { presence } = harness({ sessions: sink.sessions, now: () => 9000 });
+  const { presence, stays } = harness({ sessions: sink.sessions, now: () => 9000 });
   presence.room('r1').peers.set('a', { id: 'a', accountUserId: 'user-a', joinedAt: 1000, transport: transport('ta') });
   presence.room('r2').peers.set('b', { id: 'b', joinedAt: 3000, transport: transport('tb') });
 
-  await presence.recordOpenSessions();
-  await presence.recordOpenSessions();
+  await stays.recordOpenSessions();
+  await stays.recordOpenSessions();
   presence.closePeer('r1', 'a', 'ta');
-  await presence.recordOpenSessions();
+  await stays.recordOpenSessions();
   const none = {
     roomKind: null,
     guestName: null,
@@ -449,9 +460,10 @@ test('stopping records every stay still in voice once; a leave after that is not
   ]);
 
   presence.reset();
+  stays.reset();
   presence.room('r3').peers.set('c', { id: 'c', joinedAt: 4000, transport: transport('tc') });
   presence.closePeer('r3', 'c', 'tc');
-  await presence.recordOpenSessions();
+  await stays.recordOpenSessions();
   assert.equal(sink.recorded.length, 2, 'a reset app records again');
 });
 
@@ -459,13 +471,13 @@ test('a failed stay write is logged, and without a database nothing is written',
   const failing = harness({ sessions: sessionSink({ fails: true }).sessions });
   failing.presence.room('r1').peers.set('p', { id: 'p', joinedAt: 1000, transport: transport('tp') });
   failing.presence.closePeer('r1', 'p', 'tp');
-  await failing.presence.recordOpenSessions();
+  await failing.stays.recordOpenSessions();
   assert.ok(failing.calls.errors.includes('room.voice_session_record_failed'));
 
   const offline = harness({ sessions: () => null });
   offline.presence.room('r1').peers.set('p', { id: 'p', joinedAt: 1000, transport: transport('tp') });
   offline.presence.closePeer('r1', 'p', 'tp');
-  await offline.presence.recordOpenSessions();
+  await offline.stays.recordOpenSessions();
   assert.deepEqual(offline.calls.errors, []);
 });
 

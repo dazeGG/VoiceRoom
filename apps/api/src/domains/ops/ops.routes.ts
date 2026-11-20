@@ -6,13 +6,7 @@ import type { TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
 import type { FastifyInstance } from 'fastify';
 import { Failure } from '@voice-room/shared/contracts/http';
 import { Type } from 'typebox';
-import {
-  ClientLogsAccepted,
-  ClientVital,
-  DesktopRelease,
-  Health,
-  PowChallenge
-} from '@voice-room/shared/contracts/ops';
+import { ClientLogsAccepted, ClientVital, DesktopRelease, PowChallenge } from '@voice-room/shared/contracts/ops';
 import type { ApiContext } from '../../app/context.ts';
 import { failure } from '../../platform/http/http-kit.ts';
 import { LOG_EVENTS } from '../../lib/log-events.ts';
@@ -20,6 +14,7 @@ import { recordWebVital } from '../../lib/metrics.ts';
 import { CLIENT_LOG_LIMITS, normalizeClientLogBatch } from '../../lib/client-log-intake.ts';
 import type { DesktopReleaseService } from './desktop-release.service.ts';
 import type { RateCheck } from '../../lib/rate-limit.ts';
+import { registerHealthRoutes } from './health.routes.ts';
 
 export interface OpsRouteDeps {
   livekitEnabled(): boolean;
@@ -36,13 +31,7 @@ export interface OpsRouteDeps {
 export function registerOpsRoutes(root: FastifyInstance, ctx: ApiContext, deps: OpsRouteDeps): void {
   const app = root.withTypeProvider<TypeBoxTypeProvider>();
 
-  // Public and unauthenticated: it answers "is this replica serving?" and
-  // nothing about the topology behind it. The internal LiveKit address and live
-  // room/peer counts stay in /api/metrics.
-  app.get('/api/healthz', { schema: { response: { 200: Health } } }, async () => ({
-    livekit: deps.livekitEnabled(),
-    ok: true as const
-  }));
+  registerHealthRoutes(app, deps);
 
   app.get('/api/metrics', async (_request, reply) => {
     return reply.header('Content-Type', 'text/plain; version=0.0.4; charset=utf-8').send(deps.renderMetrics());

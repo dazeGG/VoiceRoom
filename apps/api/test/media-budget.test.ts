@@ -1,14 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import type { MediaGrant } from '@voice-room/shared/contracts/realtime';
-import { createRoomRealtimeRuntime, type RoomRuntimeDeps } from '../src/realtime/room-runtime.ts';
+import type { RoomRuntimeDeps } from '../src/realtime/room-runtime.ts';
 import type { WsConnection } from '../src/realtime/registry.ts';
 import { fake } from './fakes/index.ts';
 import { defined } from './helpers/assert-defined.ts';
-import { runtimeDeps } from './fakes/room-runtime.ts';
+import { createFullTestRuntime, runtimeDeps } from './fakes/room-runtime.ts';
 
 type TestRoom = NonNullable<Awaited<ReturnType<RoomRuntimeDeps['getRoom']>>>;
-type Runtime = ReturnType<typeof createRoomRealtimeRuntime>;
+type Runtime = ReturnType<typeof createFullTestRuntime>;
 
 function connection() {
   return fake<WsConnection>({ activeVoice: null, closed: false, pendingVoiceJoin: null, previewRoomIds: new Set() });
@@ -25,7 +25,7 @@ function budgetRuntime(limits: {
     ['room-b', { id: 'room-b', peers: new Map() }]
   ]);
   const clock = { now: 1_000_000 };
-  const runtime = createRoomRealtimeRuntime(
+  const runtime = createFullTestRuntime(
     runtimeDeps({
       ...limits,
       presenceRooms: rooms,

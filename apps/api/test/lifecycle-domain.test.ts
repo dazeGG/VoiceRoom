@@ -68,7 +68,7 @@ function presence() {
       }
     }),
     sockets,
-    runtime: () => null,
+    previewSubscribers: sockets.roomDetailSubscribers,
     logger: () => recordingLogger(),
     occupancyRetry: { baseMs: 1000, maxMs: 1000 },
     roster: { waitMs: 0, pollMs: 1 }

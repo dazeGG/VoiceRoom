@@ -42,7 +42,9 @@ COPY apps/api ./apps/api
 COPY packages/shared ./packages/shared
 COPY config ./config
 
-RUN mkdir -p /data/uploads /data/media && chown node:node /data/uploads /data/media
+RUN mkdir -p /data/uploads /data/media /data/personal/owner \
+  && chown node:node /data/uploads /data/media /data/personal/owner \
+  && chmod 0700 /data/personal/owner
 
 USER node
 EXPOSE 3000
@@ -76,3 +78,14 @@ COPY --from=web-build /app/apps/web/dist /srv/web
 COPY --from=web-build /app/apps/admin/dist /srv/admin
 
 CMD ["voiceroom-caddy"]
+
+FROM node:24.18.0-alpine3.23 AS personal-static
+WORKDIR /app
+COPY apps/web/scripts/emit-caddy-csp.ts ./
+COPY config/personal/index.html ./
+RUN node emit-caddy-csp.ts index.html "'self' {\$PERSONAL_SIGNAL_URL} stun: turn: turns:" > /app/csp.caddy
+
+FROM caddy:2.11.4-alpine AS personal-web
+COPY config/personal/Caddyfile /etc/caddy/Caddyfile
+COPY --from=personal-static /app/csp.caddy /etc/caddy/personal-csp.caddy
+COPY --from=personal-static /app/index.html /srv/meet/index.html

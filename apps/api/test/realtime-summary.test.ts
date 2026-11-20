@@ -3,10 +3,9 @@ import type { StoredRoom } from '../src/domains/rooms/room-views.ts';
 import { dbRoom, fake, lobbyRoom } from './fakes/index.ts';
 import assert from 'node:assert/strict';
 import { buildRoomRealtimeSummary } from '@voice-room/shared/realtime';
-import { createRoomRealtimeRuntime } from '../src/realtime/room-runtime.ts';
 import { buildServerEnvelope } from '../src/realtime/envelope.ts';
 import type { WsConnection } from '../src/realtime/registry.ts';
-import { runtimeDeps } from './fakes/room-runtime.ts';
+import { createFullTestRuntime, runtimeDeps } from './fakes/room-runtime.ts';
 
 test('buildRoomRealtimeSummary mirrors shared summary rules', () => {
   const peers = Array.from({ length: 6 }, (_, index) => ({
@@ -43,7 +42,7 @@ test('legacy widget chat skips snapshot reads and queued room detail deliveries'
   });
   const delivered: string[] = [];
   let reads = 0;
-  const runtime = createRoomRealtimeRuntime(
+  const runtime = createFullTestRuntime(
     runtimeDeps({
       store: {
         getRoom: async () => dbRoom(roomId, { kind: 'widget', widgetChatEnabled: true }),
@@ -71,7 +70,7 @@ test('legacy widget chat skips snapshot reads and queued room detail deliveries'
 
 test('chat messages schedule personalized unread summaries for room recipients', async () => {
   const sent: Array<{ userId: string; unreadCount: unknown }> = [];
-  const runtime = createRoomRealtimeRuntime(
+  const runtime = createFullTestRuntime(
     runtimeDeps({
       store: {
         getRoom: async () => dbRoom('room1', { createdAt: 0, name: 'Test room' }),

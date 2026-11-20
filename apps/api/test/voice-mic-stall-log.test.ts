@@ -5,17 +5,17 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { LOG_EVENTS } from '../src/lib/log-events.ts';
-import { createRoomRealtimeRuntime, type RoomRuntimeDeps } from '../src/realtime/room-runtime.ts';
+import type { RoomRuntimeDeps } from '../src/realtime/room-runtime.ts';
 import type { WsConnection } from '../src/realtime/registry.ts';
 import { fake } from './fakes/index.ts';
-import { runtimeDeps } from './fakes/room-runtime.ts';
+import { createFullTestRuntime, runtimeDeps } from './fakes/room-runtime.ts';
 
 type TestRoom = NonNullable<Awaited<ReturnType<RoomRuntimeDeps['getRoom']>>>;
 
 async function seated() {
   const warnings: unknown[] = [];
   const rooms = new Map<string, TestRoom>([['kitchen', { id: 'kitchen', peers: new Map() }]]);
-  const runtime = createRoomRealtimeRuntime(
+  const runtime = createFullTestRuntime(
     runtimeDeps({
       presenceRooms: rooms,
       getRoom: async (roomId) => rooms.get(roomId) ?? null,

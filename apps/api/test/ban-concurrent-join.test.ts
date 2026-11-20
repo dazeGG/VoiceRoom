@@ -28,7 +28,6 @@ for (const cleanupFails of [false, true]) {
       const second = connect();
       const presence = createRoomPresence({
         sockets: registry,
-        runtime: () => null,
         logger: () => recordingLogger(),
         roster: { waitMs: 10, pollMs: 1 },
         occupancyRetry: { baseMs: 1, maxMs: 2 },

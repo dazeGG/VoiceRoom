@@ -65,7 +65,8 @@ function createLiveKitCredentialProvider({
     const token = new AccessToken(apiKey, apiSecret, {
       identity: peerId,
       metadata: JSON.stringify({ roomId }),
-      name,
+      // Meet distributes display names through its in-memory API roster.
+      name: surface === 'meet' ? '' : name,
       ttl: ttlSeconds
     });
     const canPublishSources = liveKitPublishSources(surface, {

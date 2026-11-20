@@ -5,18 +5,14 @@
 import type pg from 'pg';
 import { kyselyOn, type Queryable } from '../platform/db/kysely.ts';
 import { createActiveBanService, type ActiveBanService } from '../domains/moderation/active-ban.service.ts';
-import { createRoomRepository } from '../domains/rooms/room.repository.ts';
 import { createRoomAccessRepository } from '../domains/rooms/room-access.repository.ts';
-import { createPeerIdentityRepository } from '../domains/rooms/peer-identity.repository.ts';
 import { createRoomChatRepository } from '../domains/messaging/room-chat.repository.ts';
-import {
-  createGateCredentialRepository,
-  revokePrincipalInTransaction
-} from '../domains/admission/gate-credential.repository.ts';
-import { createRoomBanRepository, createServerMuteRepository } from '../domains/moderation/room-ban.repository.ts';
+import { revokePrincipalInTransaction } from '../domains/admission/gate-credential.repository.ts';
+import { createRoomBanRepository } from '../domains/moderation/room-ban.repository.ts';
 import type { GatePrincipal } from '../domains/admission/gate-principal.ts';
 import { createIpKey, type IpKeyOf } from '../lib/ip-key.ts';
 import { resolveIpKeySecret } from './config.ts';
+import { createCallRoomStore } from './call-room-store.ts';
 
 // The registry passes its own address keyer; a store built with only a pool
 // keys addresses with the same configured secret.
@@ -38,16 +34,11 @@ function createRoomStore({
     injectedBans?.() ??
     (activeBanService ??= createActiveBanService({ pool, ipKeyOf: ipKeyOf ?? createIpKey(resolveIpKeySecret()) }));
 
-  const gate = createGateCredentialRepository({ db });
-
   return {
-    ...createRoomRepository({ db, roomIdleTtlMs }),
+    ...createCallRoomStore(db, roomIdleTtlMs),
     ...createRoomAccessRepository({ db, pool, bans }),
-    ...createPeerIdentityRepository({ db }),
     ...createRoomChatRepository({ db, pool }),
-    ...gate,
     ...createRoomBanRepository({ pool, bans }),
-    ...createServerMuteRepository({ db }),
     /** For services that revoke inside their own pg transaction. */
     revokeLiveKitGatePrincipalInTransaction(
       client: Queryable,

@@ -9,7 +9,7 @@ import type { ApiContext } from './context.ts';
 import type { RateLimits } from './rate-limits.ts';
 import type { createServiceRegistry } from './service-registry.ts';
 import type { readApiConfig } from './config.ts';
-import type { RoomRealtimeRuntime } from '../realtime/room-runtime.ts';
+import type { FullRoomRealtimeRuntime } from './full-room-realtime.ts';
 import type { createWsHandler } from '../realtime/ws-handler.ts';
 import { registerCapabilityRoutes } from '../platform/capability-routes.ts';
 import { registerClientPolicyRoutes } from '../platform/client-policy-routes.ts';
@@ -40,6 +40,7 @@ import { registerRoomRoutes } from '../domains/rooms/rooms.routes.ts';
 import { createStaffActorResolver, registerStaffRoutes } from '../domains/staff/staff.routes.ts';
 import { registerFriendsRoutes } from '../domains/social/friends.routes.ts';
 import { registerRingRoutes } from '../domains/rings/rings.routes.ts';
+import { registerCallWebSocket } from './call-ws.routes.ts';
 
 type RoomRouteDeps = Parameters<typeof registerRoomRoutes>[2];
 type OpsRouteDeps = Parameters<typeof registerOpsRoutes>[2];
@@ -87,7 +88,7 @@ export interface ApiRouteDeps {
   findRoomBan: RoomRouteDeps['findRoomBan'];
   lobbyRoom: RoomRouteDeps['lobbyRoom'];
   presenceRooms: Map<string, { peers: Map<string, PresencePeer> }>;
-  roomRuntime: RoomRealtimeRuntime;
+  roomRuntime: FullRoomRealtimeRuntime;
   wsHandler: ReturnType<typeof createWsHandler>;
   widgetWsHandler: ReturnType<typeof createWsHandler>;
   widgetCanAdmit(): Promise<boolean>;
@@ -111,12 +112,12 @@ export function registerApiRoutes(app: FastifyInstance, ctx: ApiContext, deps: A
       maxRoomPeers: deps.config.MAX_ROOM_PEERS
     });
     registerAdmissionRoutes(widget, ctx, deps.domain.admission, 'widget');
-    widget.get('/api/widget/ws', { websocket: true }, (socket, request) => {
+    registerCallWebSocket(widget, 'widget', deps.widgetWsHandler, (socket) => {
       if (!deps.config.WIDGET_ENABLED) {
         socket.close(1008, 'Widget unavailable');
-        return;
+        return false;
       }
-      void deps.widgetWsHandler.handleConnection(socket, request.raw);
+      return true;
     });
   });
   registerRoomRoutes(app, ctx, {
@@ -234,17 +235,12 @@ export function registerApiRoutes(app: FastifyInstance, ctx: ApiContext, deps: A
     visibility: database.media.visibility
   });
 
-  // Register after plugins finish loading so @fastify/websocket can wrap the handler.
-  app.after(() => {
-    app.get('/api/ws', { websocket: true }, (socket, request) => {
-      // An outdated Android app is closed before the handshake, so it never gets `ready`.
-      const version = outdatedAndroidVersion(request.headers['user-agent'], deps.config.ANDROID_MIN_VERSION);
-      if (version !== null) {
-        request.log.info({ evt: LOG_EVENTS.HTTP_CLIENT_OUTDATED, transport: 'ws', version }, 'outdated app refused');
-        socket.close(4426, 'Client outdated');
-        return;
-      }
-      void deps.wsHandler.handleConnection(socket, request.raw);
-    });
+  registerCallWebSocket(app, 'main', deps.wsHandler, (socket, request) => {
+    // An outdated Android app is closed before getting `ready`.
+    const version = outdatedAndroidVersion(request.headers['user-agent'], deps.config.ANDROID_MIN_VERSION);
+    if (version === null) return true;
+    request.log.info({ evt: LOG_EVENTS.HTTP_CLIENT_OUTDATED, transport: 'ws', version }, 'outdated app refused');
+    socket.close(4426, 'Client outdated');
+    return false;
   });
 }

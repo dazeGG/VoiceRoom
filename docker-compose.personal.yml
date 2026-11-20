@@ -1,0 +1,142 @@
+name: voiceroom-personal
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: 10m
+    max-file: "3"
+
+x-database: &database
+  DATABASE_URL: postgres://voice_room:${PERSONAL_POSTGRES_PASSWORD:?set PERSONAL_POSTGRES_PASSWORD}@postgres:5432/voice_room
+
+x-livekit-gate: &livekit-gate
+  LIVEKIT_INTERNAL_URL: ws://livekit:7880
+  LIVEKIT_GATE_SECRET: ${PERSONAL_GATE_SECRET:?set PERSONAL_GATE_SECRET}
+
+x-api-image: &api-image
+  image: ${COMPOSE_PROJECT_NAME}-api
+  build:
+    context: .
+    target: api
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    logging: *logging
+    command: ["postgres", "-c", "log_parameter_max_length=0", "-c", "log_parameter_max_length_on_error=0"]
+    environment:
+      POSTGRES_DB: voice_room
+      POSTGRES_USER: voice_room
+      POSTGRES_PASSWORD: ${PERSONAL_POSTGRES_PASSWORD:?set PERSONAL_POSTGRES_PASSWORD}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U voice_room -d voice_room"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    volumes:
+      - postgres:/var/lib/postgresql/data
+
+  migrate:
+    <<: *api-image
+    logging: *logging
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: ["node", "apps/api/src/scripts/migrate.ts", "up"]
+    environment:
+      <<: *database
+
+  api:
+    <<: *api-image
+    restart: unless-stopped
+    logging: *logging
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      livekit-gate:
+        condition: service_healthy
+    command: ["node", "apps/api/src/server.personal.ts"]
+    environment:
+      <<: [*database, *livekit-gate]
+      HOST: 0.0.0.0
+      PORT: 3000
+      LOG_LEVEL: info
+      PERSONAL_ORIGIN: ${PERSONAL_ORIGIN:-https://${PERSONAL_DOMAIN}}
+      PERSONAL_OWNER_FILE: /data/personal/owner/secret
+      LIVEKIT_GATE_PUBLIC_URL: ${PERSONAL_SIGNAL_URL:-wss://${PERSONAL_DOMAIN}}
+      LIVEKIT_API_KEY: ${PERSONAL_LIVEKIT_API_KEY:?set PERSONAL_LIVEKIT_API_KEY}
+      LIVEKIT_API_SECRET: ${PERSONAL_LIVEKIT_API_SECRET:?set PERSONAL_LIVEKIT_API_SECRET}
+      ROOM_IDLE_TTL_MS: ${PERSONAL_ROOM_IDLE_TTL_MS:-900000}
+      ROOM_PRUNE_INTERVAL_MS: ${PERSONAL_ROOM_PRUNE_INTERVAL_MS:-60000}
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3000/api/readyz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    volumes:
+      - owner:/data/personal
+
+  livekit-gate:
+    <<: *api-image
+    restart: unless-stopped
+    logging: *logging
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      livekit:
+        condition: service_started
+    command: ["node", "apps/api/src/domains/admission/livekit-auth-gate.service.ts"]
+    environment:
+      <<: [*database, *livekit-gate]
+      LIVEKIT_GATE_WIDGET_SUPERVISION: "false"
+      LOG_LEVEL: info
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3080/readyz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  livekit:
+    image: livekit/livekit-server:v1.13.2
+    restart: unless-stopped
+    logging: *logging
+    environment:
+      LIVEKIT_CONFIG: |
+        port: 7880
+        bind_addresses: ["0.0.0.0"]
+        log_level: error
+        rtc:
+          tcp_port: ${PERSONAL_RTC_TCP_PORT:-7881}
+          udp_port: ${PERSONAL_RTC_UDP_PORT:-7882}
+          use_external_ip: ${PERSONAL_LIVEKIT_EXTERNAL_IP:-true}
+        keys:
+          "${PERSONAL_LIVEKIT_API_KEY:?set PERSONAL_LIVEKIT_API_KEY}": "${PERSONAL_LIVEKIT_API_SECRET:?set PERSONAL_LIVEKIT_API_SECRET}"
+    ports:
+      - "${PERSONAL_BIND_HOST:-0.0.0.0}:${PERSONAL_RTC_TCP_PORT:-7881}:${PERSONAL_RTC_TCP_PORT:-7881}/tcp"
+      - "${PERSONAL_BIND_HOST:-0.0.0.0}:${PERSONAL_RTC_UDP_PORT:-7882}:${PERSONAL_RTC_UDP_PORT:-7882}/udp"
+
+  caddy:
+    build:
+      context: .
+      target: personal-web
+    restart: unless-stopped
+    logging: *logging
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      PERSONAL_CADDY_SITE: ${PERSONAL_CADDY_SITE:-${PERSONAL_DOMAIN}}
+      PERSONAL_SIGNAL_URL: ${PERSONAL_SIGNAL_URL:-wss://${PERSONAL_DOMAIN}}
+    ports:
+      - "${PERSONAL_BIND_HOST:-0.0.0.0}:${PERSONAL_HTTP_PORT:-80}:80"
+      - "${PERSONAL_BIND_HOST:-0.0.0.0}:${PERSONAL_HTTPS_PORT:-443}:443"
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  postgres:
+  owner:
+  caddy_data:
+  caddy_config:

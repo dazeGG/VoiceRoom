@@ -11,6 +11,22 @@ import { readEnvBool, readEnvInt, readMessageDeliveryMode, readUploadsDir } from
 
 type Env = Record<string, string | undefined>;
 
+export function readPersonalOwnerConfig(env: Env = process.env): { origin: string; ownerFile: string } {
+  const parsed = URL.parse(env.PERSONAL_ORIGIN || '');
+  if (
+    !parsed ||
+    !['http:', 'https:'].includes(parsed.protocol) ||
+    parsed.username ||
+    parsed.password ||
+    parsed.pathname !== '/' ||
+    parsed.search ||
+    parsed.hash
+  ) {
+    throw new Error('PERSONAL_ORIGIN must be an HTTP(S) origin');
+  }
+  return { origin: parsed.origin, ownerFile: env.PERSONAL_OWNER_FILE?.trim() || '/data/owner/secret' };
+}
+
 /** The origin of a URL ("https://voiceroom.ru"), or an empty string for anything that is not one. */
 function cleanOrigin(value: string | undefined): string {
   try {
@@ -21,6 +37,18 @@ function cleanOrigin(value: string | undefined): string {
 }
 
 export const DEFAULT_REALTIME_RECONNECT_LEASE_MS = 30000;
+
+export function readLiveKitGateConfig(env: Env = process.env) {
+  return {
+    gatePath: env.LIVEKIT_GATE_PATH || '/rtc',
+    roomPrefix: normalizeLiveKitRoomPrefix(env.LIVEKIT_ROOM_PREFIX),
+    secret: env.LIVEKIT_GATE_SECRET,
+    upstreamUrl: env.LIVEKIT_INTERNAL_URL || 'ws://127.0.0.1:7880',
+    port: Number(env.LIVEKIT_GATE_PORT || 3080),
+    host: env.LIVEKIT_GATE_HOST || '0.0.0.0',
+    superviseWidgets: readEnvBool('LIVEKIT_GATE_WIDGET_SUPERVISION', true, env)
+  };
+}
 
 export function resolveRealtimeReconnectLeaseMs(env: Env = process.env): number {
   const value = Number(env.REALTIME_RECONNECT_LEASE_MS);

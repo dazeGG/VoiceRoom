@@ -56,7 +56,7 @@ jobs:
 
   policy:
     name: Git Flow policy
-    needs: [changes, site, docs]
+    needs: [changes, site, docs, personal-smoke]
     if: always() && github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
@@ -85,12 +85,13 @@ jobs:
               ;;
           esac
 
-      # This check already protects main. Validate the routed static jobs so an
-      # unrelated app job can skip without making site or docs checks optional.
-      - name: Require each selected static check
+      # This check already protects main. Require each routed job while letting
+      # jobs for unaffected components skip.
+      - name: Require each selected static and personal stack check
         env:
           ROUTING_RESULT: ${{ needs.changes.result }}
           APP_CHANGED: ${{ needs.changes.outputs.app }}
+          PERSONAL_RESULT: ${{ needs.personal-smoke.result }}
           SITE_CHANGED: ${{ needs.changes.outputs.site }}
           SITE_RESULT: ${{ needs.site.result }}
           DOCS_CHANGED: ${{ needs.changes.outputs.docs }}
@@ -102,7 +103,7 @@ jobs:
             echo "::error::Could not determine the changes that need checks."
             exit 1
           fi
-          for lane in "site:$SITE_CHANGED:$SITE_RESULT" "docs:$DOCS_CHANGED:$DOCS_RESULT"; do
+          for lane in "site:$SITE_CHANGED:$SITE_RESULT" "docs:$DOCS_CHANGED:$DOCS_RESULT" "personal:$APP_CHANGED:$PERSONAL_RESULT"; do
             case "$lane" in
               *:true:success|*:false:skipped) ;;
               *) echo "::error::Unexpected check result: $lane"; exit 1 ;;
@@ -300,6 +301,49 @@ jobs:
       # The API test job already runs the LiveKit boundary test file.
       - run: G05_SELECTED_MECHANISM=external-auth-gate node scripts/lkv/run-strict-boundary-proof.mts --json --fail-on-blocked
 
+  personal-smoke:
+    name: Personal Compose smoke
+    needs: changes
+    if: needs.changes.outputs.app == 'true' && needs.changes.outputs.verified != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      PERSONAL_SMOKE_PROJECT: personal-ci-${{ github.run_id }}-${{ github.run_attempt }}
+      PERSONAL_DOMAIN: 127.0.0.1
+      PERSONAL_ORIGIN: http://127.0.0.1:5187
+      PERSONAL_CADDY_SITE: http://127.0.0.1
+      PERSONAL_SIGNAL_URL: ws://127.0.0.1:5187
+      PERSONAL_BIND_HOST: 127.0.0.1
+      PERSONAL_HTTP_PORT: "5187"
+      PERSONAL_HTTPS_PORT: "5443"
+      PERSONAL_LIVEKIT_EXTERNAL_IP: "false"
+      PERSONAL_POSTGRES_PASSWORD: personal-ci-password
+      PERSONAL_GATE_SECRET: personal-ci-gate-secret-at-least-32-bytes
+      PERSONAL_LIVEKIT_API_KEY: personal-ci-key
+      PERSONAL_LIVEKIT_API_SECRET: personal-ci-livekit-secret-at-least-32-bytes
+      PERSONAL_ROOM_IDLE_TTL_MS: "4000"
+      PERSONAL_ROOM_PRUNE_INTERVAL_MS: "250"
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci --workspace @voice-room/api --workspace @voice-room/shared
+      - name: Start the personal stack with clean project volumes
+        run: docker compose -p "$PERSONAL_SMOKE_PROJECT" -f docker-compose.personal.yml up -d --build --wait --wait-timeout 120
+      - run: node --test scripts/ci/personal-compose-smoke.test.mts
+      - name: Report personal service states
+        if: failure()
+        run: docker compose -p "$PERSONAL_SMOKE_PROJECT" -f docker-compose.personal.yml ps --all
+      - name: Remove personal stack resources
+        if: always()
+        run: |
+          docker compose -p "$PERSONAL_SMOKE_PROJECT" -f docker-compose.personal.yml down -v --rmi local
+          if docker image inspect "$PERSONAL_SMOKE_PROJECT-api" >/dev/null 2>&1; then
+            docker image rm "$PERSONAL_SMOKE_PROJECT-api"
+          fi
+
   record-app-checks:
     name: Record verified application tree
     needs: [changes, policy, check, test, test-web, voice-join, goal-g05]
@@ -327,14 +371,14 @@ jobs:
 
   images:
     name: Publish images
-    needs: [changes, check, test, test-web, voice-join, goal-g05]
+    needs: [changes, check, test, test-web, voice-join, goal-g05, personal-smoke]
     if: >-
       !cancelled() && github.event_name == 'push' && needs.changes.result == 'success' &&
       needs.changes.outputs.app == 'true' &&
       (needs.changes.outputs.verified == 'true' ||
       (needs.check.result == 'success' && needs.test.result == 'success' &&
       needs.test-web.result == 'success' && needs.voice-join.result == 'success' &&
-      needs.goal-g05.result == 'success'))
+      needs.goal-g05.result == 'success' && needs.personal-smoke.result == 'success'))
     permissions:
       contents: read
       packages: write

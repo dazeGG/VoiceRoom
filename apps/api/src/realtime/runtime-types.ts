@@ -78,20 +78,25 @@ type RoomRepositories = RoomRepository &
   GateCredentialRepository &
   ServerMuteRepository;
 
-export type RuntimeRoomStore = Pick<
+export type CallRoomStore = Pick<
   RoomRepositories,
   | 'getRoom'
-  | 'listMessages'
   | 'getOrCreatePeerIdentity'
-  | 'listVisibleRoomsForUser'
-  | 'listSummaryRecipientUserIds'
   | 'markRoomActive'
   | 'revokeLiveKitGatePeer'
-  | 'getRoomUnreadCount'
-  | 'listNotificationRecipientUserIds'
   | 'isRoomServerMuted'
   | 'normalizeGatePrincipal'
 >;
+
+export type RuntimeRoomStore = CallRoomStore &
+  Pick<
+    RoomRepositories,
+    | 'listMessages'
+    | 'listVisibleRoomsForUser'
+    | 'listSummaryRecipientUserIds'
+    | 'getRoomUnreadCount'
+    | 'listNotificationRecipientUserIds'
+  >;
 
 export type RuntimeLogger = Pick<Logger, 'info' | 'warn' | 'error'>;
 

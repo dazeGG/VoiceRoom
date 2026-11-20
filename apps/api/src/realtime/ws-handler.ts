@@ -52,8 +52,8 @@ export interface WsRoomRuntime {
     connection: WsConnection,
     payload: ClientCommands['room.media.request']
   ): { ok: true; grant: MediaGrant } | { ok: false; code: ErrorCode };
-  broadcastRoomTyping(connection: WsConnection, roomId: string, activity: TypingActivity): unknown;
-  sendAccountSummaries(connection: WsConnection, userId: string): Promise<unknown>;
+  broadcastRoomTyping?(connection: WsConnection, roomId: string, activity: TypingActivity): unknown;
+  sendAccountSummaries?(connection: WsConnection, userId: string): Promise<unknown>;
 }
 type WsSocket = RealtimeSocket & {
   on(event: 'message', listener: (raw: unknown) => void): unknown;
@@ -87,11 +87,11 @@ function createWsHandler({
   getBoundary,
   widgetAdmissionEnabled,
   widgetLocalAllowed,
-  resolveSessionUser,
-  getFriendIds,
-  isUserOnline,
+  resolveSessionUser = async () => null,
+  getFriendIds = async () => [],
+  isUserOnline = () => false,
   canTypeToUser = async () => false,
-  getClientIp = () => 'unknown',
+  getClientIp,
   now = Date.now,
   logger = createLogger({ name: 'api' })
 }: {
@@ -101,11 +101,11 @@ function createWsHandler({
   widgetAdmissionEnabled?: () => Promise<boolean>;
   widgetLocalAllowed?: () => boolean;
   roomRuntime: WsRoomRuntime;
-  resolveSessionUser: (req: IncomingMessage) => Promise<ResolvedSession | null>;
-  getFriendIds: (userId: string) => Promise<string[]>;
-  isUserOnline: (userId: string) => boolean;
+  resolveSessionUser?: (req: IncomingMessage) => Promise<ResolvedSession | null>;
+  getFriendIds?: (userId: string) => Promise<string[]>;
+  isUserOnline?: (userId: string) => boolean;
   canTypeToUser?: (userId: string, peerId: string) => Promise<unknown>;
-  getClientIp?: (req: IncomingMessage) => string;
+  getClientIp?: ((req: IncomingMessage) => string) | undefined;
   now?: () => number;
   logger?: Pick<Logger, 'info' | 'warn' | 'error'>;
 }) {
@@ -260,7 +260,7 @@ function createWsHandler({
           connection,
           envelope.payload,
           currentSession?.user || null,
-          getClientIp(req),
+          getClientIp?.(req) ?? '',
           envelope.id
         );
         const joinRoomId = envelope.payload.roomId;
@@ -356,7 +356,7 @@ function createWsHandler({
       }
 
       case 'room.chat.typing': {
-        await roomRuntime.broadcastRoomTyping(
+        await roomRuntime.broadcastRoomTyping?.(
           connection,
           envelope.payload.roomId,
           envelope.payload.activity ?? 'typing'
@@ -414,7 +414,7 @@ function createWsHandler({
           connId: connection.id,
           userId: connection.userId || undefined,
           code: Number(code) || 0,
-          reason: closeReasonText(reason).slice(0, 120) || undefined,
+          reason: ceiling.guestOnly ? undefined : closeReasonText(reason).slice(0, 120) || undefined,
           durationMs: now() - connection.openedAt,
           err: ceiling.guestOnly ? undefined : error || undefined
         },
@@ -459,16 +459,17 @@ function createWsHandler({
         return;
       }
 
-      const guestIp = sessionUser ? '' : getClientIp(req);
+      const clientIp = getClientIp?.(req) ?? '';
+      const guestIp = sessionUser ? '' : clientIp || 'unknown';
       if (!sessionUser && registry.rejectGuestOverLimit(guestIp)) {
         logger.warn(
           {
             evt: LOG_EVENTS.WS_REJECTED_OVER_LIMIT,
-            ipHash: hashIp(guestIp),
+            ipHash: clientIp ? hashIp(clientIp) : undefined,
             scope: 'guest',
             code: 4429
           },
-          'ws connection rejected over the per-ip guest limit'
+          getClientIp ? 'ws connection rejected over the per-ip guest limit' : 'ws guest connection limit reached'
         );
         socket.close(4429, 'Too many connections');
         return;
@@ -478,7 +479,6 @@ function createWsHandler({
         socket.close(1008, 'Widget unavailable');
         return;
       }
-      const clientIp = getClientIp(req);
       const opened = sessionUser
         ? registry.addConnection(
             sessionUser.id,
@@ -490,9 +490,11 @@ function createWsHandler({
         : registry.addGuestConnection(socket, guestIp);
       opened.roomSurface = surface;
       connection = opened;
-      opened.client = clientKind(req.headers?.['user-agent']);
-      const described = describeUserAgent(req.headers?.['user-agent']);
-      opened.device = { os: described.os, browser: described.client };
+      if (getClientIp) {
+        opened.client = clientKind(req.headers?.['user-agent']);
+        const described = describeUserAgent(req.headers?.['user-agent']);
+        opened.device = { os: described.os, browser: described.client };
+      }
 
       logger.info(
         {
@@ -500,7 +502,7 @@ function createWsHandler({
           connId: opened.id,
           userId: opened.userId || undefined,
           guest: opened.guest,
-          ipHash: hashIp(clientIp)
+          ipHash: clientIp ? hashIp(clientIp) : undefined
         },
         'ws connected'
       );
@@ -525,7 +527,7 @@ function createWsHandler({
           userId: sessionUser.id,
           onlineFriendIds: friendIds.filter((friendId) => isUserOnline(friendId))
         });
-        void roomRuntime.sendAccountSummaries(opened, sessionUser.id);
+        void roomRuntime.sendAccountSummaries?.(opened, sessionUser.id);
       } else {
         registry.sendReady(opened, { guest: true });
       }
@@ -539,7 +541,7 @@ function createWsHandler({
           evt: LOG_EVENTS.WS_CONNECT_FAILED,
           connId: connection?.id,
           userId: connection?.userId || undefined,
-          err: error
+          err: ceiling.guestOnly ? undefined : error
         },
         'ws connection setup failed'
       );
