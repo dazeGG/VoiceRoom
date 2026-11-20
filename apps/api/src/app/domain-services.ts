@@ -271,8 +271,12 @@ export function createDomainServices(deps: DomainServiceDeps) {
     stays: (asks) => required(services.getAdminRoomsRepository()).lastStays(asks)
   });
 
+  const adminPresenceRooms = () =>
+    [...hub.presenceRooms.values()].filter(
+      (room): room is typeof room & { kind?: 'main' | 'widget' } => room.kind !== 'meet'
+    );
   const liveCalls = () =>
-    [...hub.presenceRooms.values()].flatMap((room) => {
+    adminPresenceRooms().flatMap((room) => {
       const since = room.peers.size > 0 ? callSince(room) : null;
       return since === null ? [] : [{ roomId: room.id, since }];
     });
@@ -307,7 +311,7 @@ export function createDomainServices(deps: DomainServiceDeps) {
 
   const adminRooms = createAdminRoomsService({
     staff,
-    presenceRooms: () => hub.presenceRooms.values(),
+    presenceRooms: adminPresenceRooms,
     repository: () => required(services.getAdminRoomsRepository()),
     describeAddress: services.describeAddress,
     feedbackInRoom: async (roomId, from, until) =>

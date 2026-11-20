@@ -1,5 +1,5 @@
 // Scope comes from server transport wiring, never a request body or header.
-export type RoomSurface = 'main' | 'widget';
+export type RoomSurface = 'main' | 'widget' | 'meet';
 export type RoomKind = RoomSurface;
 export interface RoomBoundary {
   kind?: RoomKind;

@@ -202,7 +202,11 @@ test('main and widget apply the same room seat limit while reserving a disconnec
         profileId: 'high-60'
       });
       sendWs(first.ws, 'room.peer.update', { ...seated, patch: { screen: true } });
-      const update = await waitForWsType(first.frames, 'room.peer.updated', (frame) => frame.payload.peer.screen);
+      const update = await waitForWsType(
+        first.frames,
+        'room.peer.updated',
+        (frame) => frame.payload.peer.screen === true
+      );
       assert.equal(update.payload.peer.id, seated.peerId);
     }
 

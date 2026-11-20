@@ -8,6 +8,7 @@ import type { ServerEnvelope } from '@voice-room/shared/realtime';
 import type { Logger } from 'pino';
 import type { AdmissionPeer } from '../domains/admission/admission.service.ts';
 import { LOG_EVENTS } from '../lib/log-events.ts';
+import type { RoomKind } from '../domains/rooms/room-surface.policy.ts';
 import { publicPeer, type PresencePeer } from '../domains/rooms/room-views.ts';
 import type { FinishedVoiceSession, VoiceSessionRepository } from '../domains/rooms/voice-session.repository.ts';
 import { buildServerEnvelope } from './envelope.ts';
@@ -20,7 +21,7 @@ export interface RosterPeer extends PresencePeer {
 }
 
 export interface PresenceRoom {
-  kind?: 'main' | 'widget';
+  kind?: RoomKind;
   widgetChatEnabled?: boolean;
   id: string;
   peers: Map<string, RosterPeer>;
@@ -69,7 +70,7 @@ export function createRoomPresence(deps: RoomPresenceDeps) {
   }
 
   /** Joins a stored room with its live roster (the roster object is shared, not copied). */
-  function attach<T extends { id: string; kind?: 'main' | 'widget'; peers?: Map<string, RosterPeer> }>(
+  function attach<T extends { id: string; kind?: RoomKind; peers?: Map<string, RosterPeer> }>(
     dbRoom: T | null
   ): (T & { peers: Map<string, RosterPeer> }) | null {
     if (!dbRoom) return null;
@@ -144,7 +145,7 @@ export function createRoomPresence(deps: RoomPresenceDeps) {
   }
 
   function finishedSession(target: PresenceRoom, peer: RosterPeer, leftAt: number): FinishedVoiceSession | null {
-    if (!peer.joinedAt) return null;
+    if (!peer.joinedAt || target.kind === 'meet') return null;
     const userId = peer.accountUserId || null;
     return {
       roomId: target.id,

@@ -7,6 +7,7 @@ import { readDatabaseConfig } from '../lib/config.ts';
 import { transaction } from '../platform/db/pool.ts';
 import { liveKitHttpUrl } from '../domains/admission/livekit-config.ts';
 import { getLiveKitRoomName, normalizeLiveKitRoomPrefix } from '../domains/admission/livekit-token-binding.mts';
+import type { RoomKind } from '../domains/rooms/room-surface.policy.ts';
 
 export interface RecoveryMedia {
   listRooms(): Promise<Array<{ name: string; numParticipants: number }>>;
@@ -86,7 +87,7 @@ export async function runWidgetRecovery({
       "SELECT count(*)::int AS count FROM livekit_gate_credentials c JOIN rooms r ON r.id=c.room_id WHERE r.kind='widget' AND c.revoked_at IS NULL AND c.expires_at>clock_timestamp()"
     );
     if (remaining.rows[0]?.count !== 0) throw new Error('credentials_not_revoked');
-    const rows = await client.query<{ id: string; kind: 'main' | 'widget' }>('SELECT id,kind FROM rooms');
+    const rows = await client.query<{ id: string; kind: RoomKind }>('SELECT id,kind FROM rooms');
     const known = new Map(rows.rows.map((row) => [getLiveKitRoomName(row.id, prefix), row.kind]));
     const rooms = await media.listRooms();
     if (rooms.some((room) => room.name.startsWith(prefix) && !known.has(room.name)))
