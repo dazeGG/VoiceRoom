@@ -571,8 +571,8 @@ test('server mute stays inside the declared grant and the surface ceiling', () =
   // Muting a widget guest who could only speak leaves nothing to publish.
   const silent = resolveServerMutePermission({ canPublishSources: [MICROPHONE] }, true, 'widget');
   assert.deepEqual([silent.canPublish, silent.canPublishSources], [false, []]);
-  // A malformed source list falls back to the surface ceiling.
-  const malformed = resolveServerMutePermission({ canPublishSources: undefined }, true, 'widget');
+  // A grant without a source list falls back to the surface ceiling.
+  const malformed = resolveServerMutePermission({}, true, 'widget');
   assert.deepEqual(malformed.canPublishSources, [CAMERA]);
 });
 
