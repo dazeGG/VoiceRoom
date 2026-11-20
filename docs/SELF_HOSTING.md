@@ -4,7 +4,15 @@
 
 Для временных видеовстреч используйте [установщик VoiceRoom Meet](../apps/docs/src/content/docs/self-hosting/install.md). На чистом Linux-сервере он настраивает домен, создаёт `.env` и запускает готовые образы. Для аккаунтов, постоянных комнат, истории чатов и админки см. [установку полного стека](#установка-полного-стека).
 
-Адрес `get.voiceroom.ru` использует отдельную конфигурацию [Caddy](../apps/get/Caddyfile) с перенаправлением на `install.sh` из последнего релиза приложения в GitHub. Для работы команды установки нужны этот HTTPS-хост и релиз с файлом `install.sh`, манифестом и `docker-compose.personal.yml`.
+Адрес `get.voiceroom.ru` перенаправляет на `install.sh` из выпуска Meet, помеченного как Latest в GitHub. Для установки нужны этот HTTPS-хост и выпуск `meet/vX.Y.Z` с `install.sh`, `manifest.json` и `docker-compose.personal.yml`. Манифест фиксирует образы по digest. [Конфигурация Caddy](../apps/get/Caddyfile)
+
+Для перехода с `v2.15.0` один раз запустите новый установщик в режиме обновления. Старый локальный CLI распознаёт только теги вида `vX.Y.Z`. Новый CLI подхватит существующий каталог установки и заменит локальную команду после успешного обновления.
+
+```sh
+curl -fsSL https://get.voiceroom.ru | sudo sh -s -- upgrade
+```
+
+Последующие обновления запускаются через `sudo voiceroom upgrade`. Конкретный выпуск можно указать как `sudo voiceroom upgrade meet/v1.0.0`.
 
 Для DuckDNS и deSEC установщик читает A- и AAAA-записи перед изменением DNS. Если адрес отличается от публичного IPv4 сервера, для установки, `voiceroom domain set` и настройки нового имени TURN при обновлении требуется подтверждение в терминале. По умолчанию ответ «нет». При запуске без терминала передайте `--replace-dns`, только если намерены заменить эти записи. После подтверждения установщик направит A-записи на сервер и удалит существующие AAAA-записи для настраиваемых имён. Скачивание образов при установке и обновлении повторяется до трёх попыток. При окончательном сбое команда выводит последние строки диагностики Compose с удалёнными секретами.
 
@@ -59,11 +67,12 @@ Personal-сервер не записывает историю пребыван�
 
 Создайте A-записи `voice.example.com`, `livekit.voice.example.com` и, если нужна админка, `admin.voice.example.com` на IP сервера. Замените `voice.example.com` своим доменом. У DNS-провайдера выберите режим «только DNS», если он предлагает проксирование трафика. Добавляйте AAAA-записи, только если сервер доступен по IPv6.
 
-Скачайте тег приложения, для которого опубликованы образы API, воркера и веб-приложения. В примере используется `v2.15.0`.
+Скачайте Compose из тега API и получите тег Web. В примере используется `1.0.0` из каждой серии.
 
 ```sh
-git clone --depth 1 --branch v2.15.0 https://github.com/dazeGG/VoiceRoom.git
+git clone --depth 1 --branch api/v1.0.0 https://github.com/dazeGG/VoiceRoom.git
 cd VoiceRoom
+git fetch --depth 1 origin tag web/v1.0.0
 ```
 
 В этом блоке замените только `voice.example.com`. Если `.env` уже существует, блок остановится и сохранит его содержимое.
@@ -73,7 +82,8 @@ cd VoiceRoom
   set -euC
   umask 077
   domain=voice.example.com
-  release_sha=$(git rev-parse HEAD)
+  api_sha=$(git rev-parse HEAD)
+  web_sha=$(git rev-parse 'web/v1.0.0^{commit}')
   postgres_password=$(openssl rand -hex 32)
   livekit_key=$(openssl rand -hex 16)
   livekit_secret=$(openssl rand -hex 32)
@@ -87,9 +97,8 @@ LIVEKIT_API_KEY=$livekit_key
 LIVEKIT_API_SECRET=$livekit_secret
 LIVEKIT_GATE_SECRET=$gate_secret
 VOICE_ROOM_CURSOR_HMAC_KEYS=$cursor_key
-VOICEROOM_API_IMAGE=ghcr.io/dazegg/voiceroom-api:$release_sha
-VOICEROOM_WORKER_IMAGE=ghcr.io/dazegg/voiceroom-worker:$release_sha
-VOICEROOM_WEB_IMAGE=ghcr.io/dazegg/voiceroom-web:$release_sha
+VOICEROOM_API_IMAGE=ghcr.io/dazegg/voiceroom-api:$api_sha
+VOICEROOM_WEB_IMAGE=ghcr.io/dazegg/voiceroom-web:$web_sha
 EOF
 )
 ```
@@ -109,6 +118,18 @@ docker compose ps -a
 curl -fsS https://voice.example.com/api/healthz
 docker compose logs --tail=100 caddy migrate api livekit livekit-gate
 ```
+
+Панель администратора и виджет публикуются отдельно после старта Caddy. Для каждого
+нужного компонента скачайте архив из его релиза. Пример для виджета с GitHub CLI:
+
+```sh
+git fetch --depth 1 origin tag widget/v1.0.0
+gh release download widget/v1.0.0 --repo dazeGG/VoiceRoom --pattern voiceroom-widget-1.0.0.tar.gz
+gzip -dc voiceroom-widget-1.0.0.tar.gz |
+  bash scripts/cd/publish-client.sh "$PWD" widget "$(git rev-parse 'widget/v1.0.0^{commit}')"
+```
+
+Для панели замените `widget` на `admin` в теге, имени архива и команде публикации.
 
 ## Environment и секреты
 
@@ -264,11 +285,13 @@ LIVEKIT_API_SECRET
 LIVEKIT_GATE_SECRET
 VOICE_ROOM_CURSOR_HMAC_KEYS
 VOICEROOM_API_IMAGE
-VOICEROOM_WORKER_IMAGE
 VOICEROOM_WEB_IMAGE
 ```
 
-`LIVEKIT_DOMAIN` по умолчанию равен `livekit.${DOMAIN}`. Версии трёх образов должны соответствовать одному релизу и используемому файлу Compose.
+`LIVEKIT_DOMAIN` по умолчанию равен `livekit.${DOMAIN}`. Образ API используется также
+воркерами, миграциями и LiveKit gate. `VOICEROOM_WORKER_IMAGE` остаётся необязательным
+переопределением для ранее развёрнутых стеков и отката. Используйте Compose из
+релиза API и совместимый релиз Web.
 
 `DATABASE_URL` в compose соберётся автоматически из `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` и service name `postgres`. Если деплой не через compose — задайте `DATABASE_URL` явно как secret.
 Если Web Push намеренно не используется, `VAPID_*` можно опустить — API продолжит работать,
@@ -276,7 +299,7 @@ VOICEROOM_WEB_IMAGE
 
 ## CI/CD (GitHub Actions)
 
-Пайплайн описан в `.github/workflows/ci.yml`. Проверки запускаются для pull request в `develop` и `main`. После push в `develop` повторный CI приложения пропускается, если успешный PR в `develop` проверил то же Git-дерево на той же базе. При прямом push, изменении базы или отсутствии подтверждения запускается полный набор проверок приложения для push. Сайт и документация по-прежнему проверяются и собираются независимо по затронутым компонентам. Production-релиз приложения запускается по тегу в `.github/workflows/release.yml`. Ветки, PR, коммиты, hotfix и релизы ведутся по [`GIT_FLOW.md`](./GIT_FLOW.md):
+Пайплайн описан в `.github/workflows/ci.yml`. Проверки запускаются для pull request в `develop` и `main`. После push в `develop` повторный CI приложения пропускается, если успешный PR в `develop` проверил то же Git-дерево на той же базе. При прямом push, изменении базы или отсутствии подтверждения запускается полный набор проверок приложения для push. Сайт и документация проверяются и собираются по затронутым компонентам. Теги production и порядок публикации описаны в [`GIT_FLOW.md`](./GIT_FLOW.md).
 
 - **policy** — проверяет допустимый Git Flow маршрут PR и Conventional Commit формат PR title.
 - **check** — `npm ci`, `npm run check` (tsc, vue-tsc, ESLint и Prettier по shared, api и web), `npm run build` (Vite).
@@ -284,12 +307,30 @@ VOICEROOM_WEB_IMAGE
 - **voice-join** — проверка входа в голосовую комнату через LiveKit.
 - **G05** — строгий LiveKit-профиль.
 
-**Деплой** (`.github/workflows/deploy.yml`, вызывается после публикации образов; на `develop` сборка образов начинается после подтверждения проверенного Git-дерева или успешных `check`, `test`, `test-web`, `voice-join` и G05 на push):
+После проверок изменений приложения в `develop` на dev выкатываются API, Web, Admin
+и Widget. В production `api/v*` выкатывает API, воркеры, LiveKit gate и миграции,
+а `web/v*` обновляет образ Caddy с Web. `admin/v*` и `widget/v*` переключают
+артефакт своего компонента и перечитывают конфигурацию Caddy. `meet/v*`
+публикует только персональный комплект для самостоятельной установки.
 
-- **images** — для изменений приложения в `develop` и тегов приложения `v*` собирает таргеты `api`, `worker`, `web` и публикует `ghcr.io/dazegg/voiceroom-<target>:<commit-sha>`.
-- **deploy-production** — тег `v*` на коммите, влитом в `main` (первый родитель), совпадающий с версией в `package.json`, сразу выкатывается на прод без ручного подтверждения: environment `production` только ограничивает деплой тегами `v*` (https://voiceroom.ru).
+Caddy загружает HTML и CSP из одного каталога релиза. Хешированные файлы
+Admin и Widget остаются доступны после публикации, в том числе для ранее
+розданных загрузчиков виджета. Web сохраняет прежний 30-дневный архив чанков.
+Проксируемые WebSocket-соединения могут переподключиться при перечитывании
+конфигурации Caddy.
 
-Выкатку делает `scripts/cd/remote-deploy.sh` на сервере по SSH: бэкап `.env` и `pg_dump` в `deploy-backups/ci/` (хранятся 5 последних, а дампы и копии `.env` старше 30 дней удаляются и в `deploy-backups/ci/`, и в `deploy-backups/manual/`), `git checkout` коммита, `docker pull` образов, подстановка `VOICEROOM_*_IMAGE` в `.env`, `docker compose config`, `docker compose up -d --wait`. Если любой шаг падает, возвращаются прежние коммит, `.env` и контейнеры. Миграции при этом **не откатываются** — после неудачной миграции восстанавливайте БД из дампа (см. «Миграции» ниже).
+`scripts/cd/remote-deploy.sh` выполняет выкатку образов по SSH. При выкатке API
+он сохраняет `.env` и `pg_dump` в `deploy-backups/ci/` и обновляет Compose из
+тега API. Для Web скрипт сохраняет `.env` и меняет образ Caddy. Если выкатка
+падает, скрипт проверяет совместимость отката и возвращает предыдущие настройки
+и затронутые сервисы. При необходимости восстановите БД из дампа вручную.
+CI хранит по пять последних копий. Дампы и копии `.env` старше 30 дней удаляются
+из `deploy-backups/ci/` и `deploy-backups/manual/`.
+
+Сначала выкатывайте API, если клиенту нужны его изменения. Поддерживайте
+совместимость между текущей и предыдущей версией API и каждого клиента.
+Миграции входят в релиз API. Меняйте контракты `packages/shared` совместимо со
+старыми клиентами, включая открытые вкладки.
 
 Каждый environment хранит свои secrets `SSH_HOST`, `SSH_USER`, `SSH_KEY` и variables `DEPLOY_PATH`, `SSH_FINGERPRINT` (ED25519-отпечаток хоста; без совпадения деплой не стартует). Серверный `.env` (как минимум `DOMAIN`, `POSTGRES_PASSWORD`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`, `LIVEKIT_GATE_SECRET`, `VOICE_ROOM_CURSOR_HMAC_KEYS`) живёт на сервере, а не в Actions.
 
@@ -421,8 +462,8 @@ app.example.com {
 DNS-запись домена должна указывать на этот хост, а контейнер-апстрим должен делить с Caddy сеть Docker, например подключиться к внешней сети `voiceroom_default`. Ошибка синтаксиса остановит Caddy, поэтому сначала проверьте, потом применяйте:
 
 ```bash
-docker compose exec caddy caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
-docker compose exec caddy caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile
+docker compose exec caddy voiceroom-prepare-web validate
+docker compose exec caddy voiceroom-prepare-web reload
 ```
 
 Каталог смонтирован только для чтения; пока в нём нет `*.caddy`, Caddy работает как раньше.
@@ -460,10 +501,11 @@ MAX_ROOM_PEERS=6
 MAX_VOICE_PEERS=12
 ```
 
-Set the three `VOICEROOM_*_IMAGE` values to images from the same verified commit.
+Set the API and Web image references to compatible builds. Dev CI builds both
+from the tested commit.
 The overlay caps each service's memory and CPU and raises its OOM score. It
-bind-mounts the checkout's Caddyfile and `behind-edge.headers`, so infrastructure
-configuration also works when bootstrapping from existing immutable images.
+uses the Caddyfile from the Web image and mounts `behind-edge.headers` for the
+outer proxy's forwarded address contract.
 The dev media ports must be allowed by the host/provider firewall. TURN/TLS on
 443 remains production-only; dev uses direct ICE on 7891/TCP and 7892/UDP.
 
