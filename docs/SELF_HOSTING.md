@@ -10,7 +10,21 @@
 
 `docker-compose.personal.yml` поднимает отдельный сервер для временных видеовстреч Meet. Personal-серверу нужны собственный Compose-проект и собственная база PostgreSQL.
 
-В отдельном `.env.personal` задайте `PERSONAL_DOMAIN` и `PERSONAL_LIVEKIT_API_KEY`, а также отдельные случайные значения для `PERSONAL_POSTGRES_PASSWORD`, `PERSONAL_LIVEKIT_API_SECRET` и `PERSONAL_GATE_SECRET` (например, `openssl rand -hex 32` для каждого). Направьте DNS домена на сервер и откройте TCP 80/443 для Caddy, TCP 7881 и UDP 7882 для медиа LiveKit. Caddy обслуживает HTTPS и передаёт сигналинг через auth-gate на том же домене.
+В отдельном `.env.personal` задайте `PERSONAL_DOMAIN` и `PERSONAL_LIVEKIT_API_KEY`, а также отдельные случайные значения для `PERSONAL_POSTGRES_PASSWORD`, `PERSONAL_LIVEKIT_API_SECRET` и `PERSONAL_GATE_SECRET` (например, `openssl rand -hex 32` для каждого).
+
+Для `PERSONAL_DOMAIN=meet.example.com` создайте A-записи `meet.example.com` и `turn.meet.example.com` на публичный IPv4 сервера. Используйте режим «только DNS» у DNS-провайдера. На сервере с одним IPv4 оставьте оба имени без AAAA-записей. Caddy автоматически получит сертификаты для обоих имён и передаст сигналинг через auth-gate на домене Meet.
+
+Откройте входящие порты в файрволе сервера и в панели хостинга.
+
+| Порт | Для чего |
+| --- | --- |
+| `80/TCP` | HTTP и получение сертификатов |
+| `443/TCP` | HTTPS, сигналинг LiveKit и TURN/TLS через Caddy |
+| `7881/TCP`, `7882/UDP` | Прямая передача медиа LiveKit |
+| `3478/UDP` | TURN по UDP |
+| `30000–30099/UDP` | Порты ретрансляции медиа LiveKit |
+
+TURN включён по умолчанию. Если сеть участника блокирует прямые медиапорты, браузер может подключиться к `turn.<домен>` на `443/TCP`. Caddy выбирает маршрут по TLS SNI и передаёт соединение встроенному TURN-серверу LiveKit.
 
 ```sh
 docker compose --env-file .env.personal -f docker-compose.personal.yml up -d --build --wait
