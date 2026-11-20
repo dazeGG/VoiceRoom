@@ -574,10 +574,32 @@ test('live widget mute and unmute preserve the camera and data denial', async ()
     logger: recordingLogger,
     clientFactory: () => client
   });
-  assert.deepEqual(await admin.setParticipantMuted('widget-room', 'peer', true), { status: 'applied' });
+  assert.deepEqual(await admin.setParticipantMuted('widget-room', 'peer', true, 'widget'), { status: 'applied' });
   assert.deepEqual(permission.canPublishSources, [CAMERA]);
-  assert.deepEqual(await admin.setParticipantMuted('widget-room', 'peer', false), { status: 'applied' });
+  assert.deepEqual(await admin.setParticipantMuted('widget-room', 'peer', false, 'widget'), { status: 'applied' });
   assert.deepEqual(permission.canPublishSources, [CAMERA, MICROPHONE]);
+});
+
+test('live widget unmute intersects legacy and overbroad grants with the widget ceiling', async () => {
+  const { CAMERA, MICROPHONE, SCREEN_SHARE, SCREEN_SHARE_AUDIO } = TrackSource;
+  for (const sources of [[], [CAMERA, SCREEN_SHARE, SCREEN_SHARE_AUDIO]]) {
+    const updates: unknown[] = [];
+    const admin = createLiveKitAdmin({
+      config: () => ENABLED,
+      roomName: String,
+      logger: recordingLogger,
+      clientFactory: () =>
+        fake<LiveKitAdminClient>({
+          getParticipant: async () => ({ permission: { canPublishSources: sources, canPublishData: true } }),
+          updateParticipant: async (_room, _peer, _metadata, permission) => {
+            updates.push([permission.canPublishSources, fieldOf(permission, 'canPublishData')]);
+          }
+        })
+    });
+    const result = await admin.setParticipantMuted('widget-room', 'peer', false, 'widget');
+    assert.deepEqual(result, { status: 'applied' });
+    assert.deepEqual(updates, [[sources.length ? [CAMERA, MICROPHONE] : [MICROPHONE, CAMERA], false]]);
+  }
 });
 
 for (const accountUserId of [null, 'user-1']) {

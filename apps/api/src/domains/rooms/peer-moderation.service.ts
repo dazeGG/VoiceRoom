@@ -11,6 +11,7 @@ import type { RoomBanRepository, ServerMuteRepository } from '../moderation/room
 import type { LiveKitConfig } from '../admission/livekit-config.ts';
 import type { PeerEviction } from './peer-eviction.ts';
 import type { LiveRoom, PresencePeer } from './room-views.ts';
+import type { RoomSurface } from './room-surface.policy.ts';
 import { codeOf } from '../../platform/error-code.ts';
 import { noteMicChange } from '../../realtime/voice-track.ts';
 
@@ -36,7 +37,7 @@ export interface PeerModerationDeps {
     principal: GatePrincipal;
     log: Pick<Logger, 'error'>;
   }): Promise<void>;
-  setParticipantMuted(roomId: string, peerId: string, muted: boolean): Promise<ServerMuteResult>;
+  setParticipantMuted(roomId: string, peerId: string, muted: boolean, surface: RoomSurface): Promise<ServerMuteResult>;
   /** Tells the room (and its preview watchers) that a peer changed. */
   announcePeerUpdated(room: LiveRoom, peer: PresencePeer): void;
   maxBans: number;
@@ -108,7 +109,7 @@ export function createPeerModerationService(deps: PeerModerationDeps) {
     // still grants the microphone. Revoke them so a reconnect has to fetch a
     // fresh admission, which the durable mute row keeps microphone-free.
     if (muted) await deps.revokeForServerMute({ roomId: room.id, peerId: peer.id, principal, log: deps.logger() });
-    await deps.setParticipantMuted(room.id, peer.id, muted);
+    await deps.setParticipantMuted(room.id, peer.id, muted, room.kind ?? 'main');
 
     // The peer learns it from the same peer-updated everyone gets.
     deps.announcePeerUpdated(room, peer);

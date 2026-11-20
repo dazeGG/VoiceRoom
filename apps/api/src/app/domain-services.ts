@@ -106,7 +106,7 @@ export function createDomainServices(deps: DomainServiceDeps) {
     gatePrincipalForPeer: (roomId, peer) => hub.liveKitGatePrincipalForPeer(roomId, peer),
     livekitConfig: () => liveKit.config(),
     revokeForServerMute: (input) => deps.admission.revokeForServerMute(input),
-    setParticipantMuted: (roomId, peerId, muted) => liveKit.setParticipantMuted(roomId, peerId, muted),
+    setParticipantMuted: liveKit.setParticipantMuted,
     announcePeerUpdated: (room, peer) =>
       hub.presence.publish(
         room.id,
