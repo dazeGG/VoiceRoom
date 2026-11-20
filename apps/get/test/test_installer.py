@@ -49,6 +49,9 @@ class Endpoints(BaseHTTPRequestHandler):
     def dns_zone(self):
         return unquote(self.path.split('/')[4])
 
+    def dns_name(self, subname):
+        return f'{subname}.{self.dns_zone()}' if subname else self.dns_zone()
+
     def do_GET(self):
         request = urlsplit(self.path)
         path, query = request.path, parse_qs(request.query)
@@ -62,10 +65,11 @@ class Endpoints(BaseHTTPRequestHandler):
             return self.send_json(self.server.records.get((name, kind), {}).get('records', []))
         if path == '/update':
             return self.duckdns(query)
-        if path.startswith('/api/v1/domains/') and path.endswith(('/@/A/', '/.../A/')):
+        if path.startswith('/api/v1/domains/') and path.endswith('/A/'):
             if self.headers.get('Authorization') != f'Token {TOKEN}':
                 return self.send_json({'detail': 'unauthorized'}, 401)
-            record = self.server.records.get((self.dns_zone(), 'A'))
+            subname = path.split('/')[-3]
+            record = self.server.records.get((self.dns_name('' if subname == '@' else subname), 'A'))
             return self.send_json(record if record else {'detail': 'missing'}, 200 if record else 404)
         if path == '/releases/latest/download/manifest.json':
             self.send_response(302)
@@ -97,16 +101,17 @@ class Endpoints(BaseHTTPRequestHandler):
         if not (self.path.startswith('/api/v1/domains/') and self.path.endswith('/rrsets/')):
             return self.send_json({'detail': 'use the upsert endpoint'}, 404)
         body = json.loads(self.rfile.read(int(self.headers.get('Content-Length', 0))) or b'null')
-        if not isinstance(body, list) or len(body) != 1:
-            return self.send_json({'detail': 'expected exactly one RRset'}, 400)
-        record = body[0]
-        if record.get('subname') != '' or record.get('type') != 'A' or record.get('ttl', 0) < 60:
-            return self.send_json({'detail': 'expected the apex A RRset'}, 400)
-        key = (self.dns_zone(), 'A')
-        if record['records']:
-            self.server.records[key] = record
-        else:
-            self.server.records.pop(key, None)
+        if not isinstance(body, list) or not body or any(
+            not isinstance(record.get('subname'), str) or record.get('type') != 'A' or record.get('ttl', 0) < 60
+            for record in body
+        ):
+            return self.send_json({'detail': 'expected valid A RRsets'}, 400)
+        for record in body:
+            key = (self.dns_name(record['subname']), 'A')
+            if record['records']:
+                self.server.records[key] = record
+            else:
+                self.server.records.pop(key, None)
         return self.send_json(body)
 
 
@@ -121,13 +126,15 @@ class InstallerTest(unittest.TestCase):
         self.cli.parent.mkdir()
         doubles = self.root / 'fakes'
         doubles.mkdir()
-        for command in ('docker', 'dig', 'curl', 'uname', 'ss', 'mv'):
+        for command in ('docker', 'dig', 'curl', 'uname', 'ss', 'mv', 'openssl'):
             target = doubles / command
             shutil.copyfile(Path(__file__).with_name('fake_command.py'), target)
             target.chmod(0o700)
 
         self.server = ThreadingHTTPServer(('127.0.0.1', 0), Endpoints)
-        self.server.records = {('meet.example.test', 'A'): {'records': [SERVER_IP]}}
+        self.server.records = {(name, 'A'): {'records': [SERVER_IP]} for name in (
+            'meet.example.test', 'turn.meet.example.test',
+        )}
         self.server.public_ip = SERVER_IP
         self.server.assets = {}
         self.server.requests = []
@@ -149,6 +156,7 @@ class InstallerTest(unittest.TestCase):
             GET_TEST_HTTP=self.base,
             GET_TEST_REAL_CURL=shutil.which('curl'),
             GET_TEST_REAL_MV=shutil.which('mv'),
+            GET_TEST_REAL_OPENSSL=shutil.which('openssl'),
             NO_PROXY='127.0.0.1,localhost',
             VOICEROOM_HOME=str(self.home),
             VOICEROOM_BIN_DIR=str(self.cli.parent),
@@ -163,11 +171,16 @@ class InstallerTest(unittest.TestCase):
         self.bootstrap = INSTALLER.read_bytes()
         self.publish(V1)
 
-    def publish(self, version, *, bad_image=False):
+    def publish(self, version, *, bad_image=False, turn=True):
         images = {name: image(name, version) for name in ('api', 'caddy', 'livekit', 'postgres')}
         services = {key: {'image': value} for key, value in images.items()}
         services['migrate'] = {'image': images['api']}
         services['livekit-gate'] = {'image': image('api', V1) if bad_image else images['api']}
+        udp_ports = [7882]
+        if turn:
+            services['caddy']['environment'] = {'TURN_ENABLED': 'true'}
+            udp_ports.extend([3478, *range(30000, 30100)])
+        services['livekit']['ports'] = [{'protocol': 'udp', 'published': str(port)} for port in udp_ports]
         compose = json.dumps({'name': 'voiceroom-personal', 'services': services}).encode()
         manifest = {'schemaVersion': 1, 'version': version, 'images': images, 'files': {
             COMPOSE: digest(compose), 'install.sh': digest(self.bootstrap),
@@ -227,9 +240,28 @@ class InstallerTest(unittest.TestCase):
         self.assertTrue(all(len(secret) >= 32 for secret in secrets))
         self.assertEqual(self.state()['image'], image('api', V1))
         self.assertEqual(self.state()['origin'], 'https://meet.example.test')
+        self.assertEqual(self.state()['turn_domain'], 'turn.meet.example.test')
         self.assertIn('/dns/meet.example.test/A', self.server.requests)
+        self.assertIn('/dns/turn.meet.example.test/A', self.server.requests)
+        self.assertIn('Set an A record for turn.meet.example.test', output)
         self.assertIn('https://meet.example.test/#owner=private-owner-token-0', output)
-        self.assertIn('api', self.run_cli('status').lower())
+        status = self.run_cli('status')
+        self.assertIn('api', status)
+        self.assertIn('turn.meet.example.test:443/tcp', status)
+        self.assertIn('3478/udp', status)
+        self.assertIn('30000-30099/udp', status)
+
+    def test_own_domain_requires_the_turn_dns_record_before_start(self):
+        del self.server.records[('turn.meet.example.test', 'A')]
+        output = self.run_cli('install', '--provider', 'own', '--domain', 'meet.example.test', bootstrap=True, ok=False)
+        self.assertIn('DNS must resolve turn.meet.example.test', output)
+        self.assertFalse(self.dotenv.exists())
+        self.assertEqual(self.events(), [])
+
+    def test_status_reports_when_turn_tls_is_not_ready(self):
+        self.install()
+        self.fail_readiness(turn='turn.meet.example.test')
+        self.assertIn('TURN/TLS is not ready at turn.meet.example.test:443', self.run_cli('status', ok=False))
 
     def test_piped_duckdns_install_reads_secret_from_terminal_without_echo(self):
         master, slave = pty.openpty()
@@ -272,6 +304,8 @@ class InstallerTest(unittest.TestCase):
                     process.kill()
         self.assertEqual(self.server.records[('voice.duckdns.org', 'A')]['records'], [SERVER_IP])
         self.assertEqual(self.state()['origin'], 'https://meet.voice.duckdns.org')
+        self.assertEqual(self.state()['turn_domain'], 'turn.meet.voice.duckdns.org')
+        self.assertIn('/dns/turn.meet.voice.duckdns.org/A', self.server.requests)
 
     def test_rerun_preserves_existing_env_and_active_version(self):
         self.install()
@@ -291,12 +325,59 @@ class InstallerTest(unittest.TestCase):
         saved = self.environment()
         self.publish(V2)
         self.server.latest = V2
-        self.run_cli('upgrade')
+        self.run_cli('upgrade', GET_TEST_BUSY_PORT='3478')
         self.assertEqual(self.environment(), saved)
         self.assertEqual(self.state()['image'], image('api', V2))
         self.assertEqual(self.state()['schema'], image('api', V2))
         self.assertIn(V2, self.run_cli('status'))
         self.assertFalse(list(self.home.rglob('*.dump')))
+
+    def test_upgrade_from_legacy_config_prepares_de_sec_turn_without_changing_env(self):
+        self.publish(V1, turn=False)
+        self.run_cli('install', '--provider', 'desec', '--domain', 'meet.voice.dedyn.io', bootstrap=True)
+        saved = self.environment()
+        self.assertIn('TURN: disabled', self.run_cli('status'))
+        self.assertNotIn(('turn.meet.voice.dedyn.io', 'A'), self.server.records)
+        self.publish(V2)
+        self.run_cli('upgrade', V2)
+        self.assertEqual(self.environment(), saved)
+        self.assertEqual(self.server.records[('turn.meet.voice.dedyn.io', 'A')]['records'], [SERVER_IP])
+        self.assertEqual(self.state()['turn_domain'], 'turn.meet.voice.dedyn.io')
+        self.assertEqual(self.state()['schema'], image('api', V2))
+
+    def test_upgrade_from_legacy_config_checks_new_ports_and_turn_dns_before_downtime(self):
+        self.publish(V1, turn=False)
+        del self.server.records[('turn.meet.example.test', 'A')]
+        self.install()
+        self.publish(V2)
+        events = self.events()
+        output = self.run_cli('upgrade', V2, ok=False, GET_TEST_BUSY_PORT='30012')
+        self.assertIn('30012/udp', output)
+        output = self.run_cli('upgrade', V2, ok=False)
+        self.assertIn(f'Set an A record for turn.meet.example.test to {SERVER_IP}', output)
+        self.assertEqual(self.events(), events)
+        self.assertEqual(self.state()['image'], image('api', V1))
+
+    def test_upgrade_from_legacy_config_reuses_duckdns_without_token(self):
+        self.publish(V1, turn=False)
+        self.run_cli('install', '--provider', 'duckdns', '--domain', 'meet.voice.duckdns.org', bootstrap=True)
+        self.publish(V2)
+        self.server.requests.clear()
+        self.run_cli('upgrade', V2, bootstrap=True, VOICEROOM_DNS_TOKEN='')
+        self.assertEqual(self.state()['turn_domain'], 'turn.meet.voice.duckdns.org')
+        self.assertNotIn('/update', self.server.requests)
+
+    def test_failed_turn_upgrade_restores_legacy_release_and_removes_new_dns_record(self):
+        self.publish(V1, turn=False)
+        self.run_cli('install', '--provider', 'desec', '--domain', 'voice.dedyn.io', bootstrap=True)
+        saved = self.environment()
+        self.publish(V2)
+        self.fail_readiness(turn='turn.voice.dedyn.io')
+        self.run_cli('upgrade', V2, ok=False)
+        self.assertEqual(self.environment(), saved)
+        self.assertEqual(self.state()['schema'], image('api', V1))
+        self.assertEqual(self.state()['turn_domain'], '')
+        self.assertNotIn(('turn.voice.dedyn.io', 'A'), self.server.records)
 
     def test_failed_upgrade_restores_database_active_release_and_env(self):
         self.install()
@@ -326,9 +407,11 @@ class InstallerTest(unittest.TestCase):
         old_values = self.env_values()
         self.run_cli('domain', 'set', '--provider', 'desec', '--domain', 'voice.dedyn.io')
         self.assertEqual(self.server.records[('voice.dedyn.io', 'A')]['records'], [SERVER_IP])
+        self.assertEqual(self.server.records[('turn.voice.dedyn.io', 'A')]['records'], [SERVER_IP])
         self.assertEqual(self.state()['origin'], 'https://voice.dedyn.io')
         self.assertEqual(self.state()['signal'], 'wss://voice.dedyn.io')
         self.assertEqual(self.state()['site'], 'voice.dedyn.io')
+        self.assertEqual(self.state()['turn_domain'], 'turn.voice.dedyn.io')
         self.assertIn('voice.dedyn.io', self.run_cli('domain', 'show'))
         for key in ('PERSONAL_POSTGRES_PASSWORD', 'PERSONAL_GATE_SECRET', 'PERSONAL_LIVEKIT_API_SECRET'):
             self.assertEqual(self.env_values()[key], old_values[key])
@@ -337,13 +420,17 @@ class InstallerTest(unittest.TestCase):
         self.install()
         saved = self.environment()
         previous = {'subname': '', 'type': 'A', 'ttl': 3600, 'records': [OLD_IP, '198.51.100.60']}
+        previous_turn = {'subname': 'turn', 'type': 'A', 'ttl': 7200, 'records': [OLD_IP]}
         self.server.records[('voice.dedyn.io', 'A')] = previous
-        self.fail_readiness(origin='https://voice.dedyn.io')
+        self.server.records[('turn.voice.dedyn.io', 'A')] = previous_turn
+        self.fail_readiness(turn='turn.voice.dedyn.io')
         output = self.run_cli('domain', 'set', '--provider', 'desec', '--domain', 'voice.dedyn.io', ok=False)
         self.assertEqual(self.server.records[('voice.dedyn.io', 'A')], previous)
+        self.assertEqual(self.server.records[('turn.voice.dedyn.io', 'A')], previous_turn)
         self.assertEqual(self.environment(), saved)
         self.assertEqual(self.state()['origin'], 'https://meet.example.test')
         self.assertEqual(self.state()['signal'], 'wss://meet.example.test')
+        self.assertEqual(self.state()['turn_domain'], 'turn.meet.example.test')
         self.assertNotIn('private-owner-token-0', output)
 
     def test_signal_after_domain_commit_keeps_dns_aligned_with_committed_domain(self):
@@ -371,13 +458,15 @@ class InstallerTest(unittest.TestCase):
         self.assertEqual(self.events(), [])
 
     def test_busy_udp_socket_refuses_before_any_dns_or_stack_change(self):
-        output = self.run_cli(
-            'install', '--provider', 'duckdns', '--domain', 'voice',
-            bootstrap=True, ok=False, GET_TEST_BUSY_PORT='7882',
-        )
-        self.assertIn('7882/udp', output)
-        self.assertNotIn('/update', self.server.requests)
-        self.assertEqual(self.events(), [])
+        for port in ('7882', '3478', '30050'):
+            with self.subTest(port=port):
+                output = self.run_cli(
+                    'install', '--provider', 'duckdns', '--domain', 'voice',
+                    bootstrap=True, ok=False, GET_TEST_BUSY_PORT=port,
+                )
+                self.assertIn(f'{port}/udp', output)
+                self.assertNotIn('/update', self.server.requests)
+                self.assertEqual(self.events(), [])
 
     def test_fresh_install_does_not_take_over_a_preexisting_compose_project(self):
         for resource in ('ps', 'volume'):

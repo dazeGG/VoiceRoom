@@ -11,7 +11,10 @@
 			}
 		}
 	}
+	import /etc/caddy/turn.d/*.options
 }
+
+import /etc/caddy/turn.d/*.site
 
 {$PERSONAL_CADDY_SITE} {
 	@api path /api /api/*

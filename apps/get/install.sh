@@ -94,6 +94,7 @@ compose() (
   # Compose gives ambient variables precedence over --env-file.
   unset PERSONAL_DOMAIN PERSONAL_ORIGIN PERSONAL_CADDY_SITE PERSONAL_SIGNAL_URL PERSONAL_BIND_HOST \
     PERSONAL_HTTP_PORT PERSONAL_HTTPS_PORT PERSONAL_RTC_TCP_PORT PERSONAL_RTC_UDP_PORT \
+    PERSONAL_TURN_ENABLED PERSONAL_TURN_UDP_PORT PERSONAL_RELAY_PORT_FIRST PERSONAL_RELAY_PORT_LAST \
     PERSONAL_LIVEKIT_EXTERNAL_IP PERSONAL_LIVEKIT_NODE_IP PERSONAL_ROOM_IDLE_TTL_MS \
     PERSONAL_ROOM_PRUNE_INTERVAL_MS PERSONAL_POSTGRES_PASSWORD PERSONAL_GATE_SECRET \
     PERSONAL_LIVEKIT_API_KEY PERSONAL_LIVEKIT_API_SECRET COMPOSE_PROFILES COMPOSE_ENV_FILES COMPOSE_REMOVE_ORPHANS
@@ -172,6 +173,15 @@ validate_images() {
     ' "$work/compose.json" >/dev/null 2>&1
 }
 
+read_turn_domain() {
+  jq -er '.services.caddy.environment | if .TURN_ENABLED == "true" then .TURN_DOMAIN else "" end' "$1"
+}
+
+turn_udp_ports() {
+  # The first UDP binding is direct RTC. Compose expands the relay range into individual ports.
+  jq -r '[.services.livekit.ports[]? | select(.protocol == "udp") | .published][1:][]' "$1"
+}
+
 activate() {
   ln -s "$1" "$work/current" && mv -Tf "$work/current" "$current"
 }
@@ -235,9 +245,6 @@ select_domain() {
         *.*) fail 'Enter a DuckDNS name ending in .duckdns.org.' ;;
         *) domain=$domain.duckdns.org ;;
       esac
-      # DuckDNS resolves nested names to the address of the registered label.
-      label=${domain%.duckdns.org}
-      label=${label##*.}
       ;;
     desec|own) ;;
     *) fail 'Use --provider duckdns, desec or own.' ;;
@@ -283,16 +290,48 @@ desec_request() {
 
 desec_write() {
   code=$(desec_request --request PUT --header 'Content-Type: application/json' \
-    --data-binary "@$1" "$desec_url/domains/$domain/rrsets/") || return 1
+    --data-binary "@$1" "$desec_url/domains/$zone/rrsets/") || return 1
   case $code in 200|201|204) return 0 ;; *) return 1 ;; esac
+}
+
+desec_snapshot() {
+  rr_name=$1
+  code=$(desec_request "$desec_url/domains/$zone/rrsets/${rr_name:-@}/A/") ||
+    fail 'Could not access the deSEC zone.'
+  case $code in
+    200) jq -e --arg subname "$rr_name" 'select((.ttl | type == "number") and (.records | type == "array")) |
+      {subname: $subname, type: "A", ttl, records}' "$work/desec-response.json" 2>/dev/null ||
+      fail 'deSEC returned an invalid A record.' ;;
+    404) jq -n --arg subname "$rr_name" '{subname: $subname, type: "A", ttl: 3600, records: []}' ;;
+    *) fail 'deSEC could not read the A record. Check the domain and API token.' ;;
+  esac
+}
+
+dns_matches() {
+  resolved=$(dig +time=2 +tries=1 +short "$1." A 2>/dev/null) && [ "$resolved" = "$ip" ] &&
+    ipv6=$(dig +time=2 +tries=1 +short "$1." AAAA 2>/dev/null) && [ -z "$ipv6" ]
 }
 
 prepare_dns() {
   if ! ip=$(http --ipv4 "${VOICEROOM_IP_URL:-https://api.ipify.org}") || ! valid_ipv4 "$ip"; then
     fail 'Could not determine the public IPv4 address of this server.'
   fi
+  if [ -n "$turn_domain" ]; then
+    valid_domain "$turn_domain" || fail 'The derived TURN hostname is not a valid public DNS name.'
+  fi
+  dns_names=$domain
+  if [ "$1" = turn ]; then
+    dns_names=$turn_domain
+    if dns_matches "$turn_domain"; then return; fi
+    if [ "$provider" != own ]; then read_token; fi
+  elif [ -n "$turn_domain" ]; then
+    dns_names="$domain $turn_domain"
+  fi
   case $provider in
     duckdns)
+      # Nested names use the same address as the registered label.
+      label=${domain%.duckdns.org}
+      label=${label##*.}
       duckdns_ns=$(dig +time=2 +tries=1 +short duckdns.org. NS 2>/dev/null | awk 'NR == 1 {print $1}')
       if [ -z "$duckdns_ns" ] || ! old_a=$(duckdns_record A) || ! old_aaaa=$(duckdns_record AAAA); then
         fail 'Could not read the current DuckDNS records from an authoritative server.'
@@ -303,35 +342,39 @@ prepare_dns() {
       duckdns_write "$ip" || fail 'DuckDNS rejected the update. Check the registered name and API token.'
       ;;
     desec)
-      code=$(desec_request "$desec_url/domains/$domain/rrsets/@/A/") ||
-        fail 'Could not access the deSEC zone.'
-      case $code in
-        200)
-          jq -e 'select((.ttl | type == "number") and (.records | type == "array")) |
-            [{subname:"", type:"A", ttl, records}]' \
-            "$work/desec-response.json" > "$work/dns-before.json" 2>/dev/null ||
-            fail 'deSEC returned an invalid A record.'
+      zone=$domain
+      case $domain in
+        *.dedyn.io)
+          suffix=${domain%.dedyn.io}
+          zone=${suffix##*.}.dedyn.io
           ;;
-        404) printf '%s\n' '[{"subname":"","type":"A","ttl":3600,"records":[]}]' > "$work/dns-before.json" ;;
-        *) fail 'deSEC could not read the A record. Check the domain and API token.' ;;
       esac
-      jq --arg ip "$ip" '.[0].records = [$ip]' "$work/dns-before.json" > "$work/dns-after.json"
+      for dns_name in $dns_names; do
+        subname=${dns_name%"$zone"}
+        desec_snapshot "${subname%.}" >> "$work/dns-records.json"
+      done
+      jq -s '.' "$work/dns-records.json" > "$work/dns-before.json"
+      jq --arg ip "$ip" 'map(.records = [$ip])' "$work/dns-before.json" > "$work/dns-after.json"
       rollback_dns=true
-      desec_write "$work/dns-after.json" || fail 'deSEC rejected the A record update.'
+      desec_write "$work/dns-after.json" || fail 'deSEC rejected the A record update. Check the token permissions.'
+      ;;
+    own)
+      for dns_name in $dns_names; do say "Set an A record for $dns_name to $ip. Remove any AAAA record."; done
       ;;
   esac
-  say "Checking DNS for $domain ($ip)…"
+  say "Checking DNS for $dns_names ($ip)…"
   attempts=${VOICEROOM_DNS_WAIT:-36}
+  missing=$dns_names
   while [ "$attempts" -gt 0 ]; do
-    if resolved=$(dig +time=2 +tries=1 +short "$domain." A 2>/dev/null) &&
-      [ "$resolved" = "$ip" ] &&
-      ipv6=$(dig +time=2 +tries=1 +short "$domain." AAAA 2>/dev/null) && [ -z "$ipv6" ]; then
-      return
-    fi
+    missing=
+    for dns_name in $dns_names; do
+      if ! dns_matches "$dns_name"; then missing=$dns_name; break; fi
+    done
+    if [ -z "$missing" ]; then return; fi
     attempts=$((attempts - 1))
     if [ "$attempts" -gt 0 ]; then sleep 5; fi
   done
-  fail "DNS must resolve $domain to $ip with no AAAA record. Check the records and allow for DNS propagation."
+  fail "DNS must resolve $missing to $ip with no AAAA record. Check the records and allow for DNS propagation."
 }
 
 restore_dns() {
@@ -349,6 +392,28 @@ check_ports() {
     bound=$(ss -H "$filter" "sport = :$port" 2>/dev/null) || fail 'Could not check local ports using ss.'
     [ -z "$bound" ] || fail "Local port $port/$protocol is already in use."
   done
+}
+
+check_turn_ports() {
+  ports=$(turn_udp_ports "$1")
+  if [ -z "$ports" ]; then return; fi
+  old_ports=
+  if [ "$#" -gt 1 ]; then old_ports=$(turn_udp_ports "$2"); fi
+  sockets=$(ss -H -aun 2>/dev/null) || fail 'Could not check local ports using ss.'
+  busy=$(printf '%s\n' "$sockets" | awk -v ports="$ports" -v old="$old_ports" '
+    BEGIN {
+      count = split(ports, requested, "\n")
+      for (i = 1; i <= count; i++) new_port[requested[i]] = 1
+      count = split(old, previous, "\n")
+      for (i = 1; i <= count; i++) delete new_port[previous[i]]
+    }
+    NF >= 5 {
+      port = $(NF - 1)
+      sub(/^.*:/, "", port)
+      if (port in new_port) { print port; exit }
+    }
+  ')
+  [ -z "$busy" ] || fail "Local port $busy/udp is already in use."
 }
 
 check_project() {
@@ -393,6 +458,24 @@ edge_ready() {
   return 1
 }
 
+turn_ready() {
+  if [ -z "$1" ]; then return 0; fi
+  health_attempts=${VOICEROOM_HEALTH_WAIT:-36}
+  while [ "$health_attempts" -gt 0 ]; do
+    if timeout 8 openssl s_client -connect 127.0.0.1:443 -servername "$1" \
+      -verify_hostname "$1" -verify_return_error </dev/null >/dev/null 2>&1; then return 0; fi
+    health_attempts=$((health_attempts - 1))
+    if [ "$health_attempts" -gt 0 ]; then sleep 5; fi
+  done
+  say "TURN/TLS is not ready at $1:443. Check its DNS record, certificate and inbound TCP ports 80 and 443."
+  return 1
+}
+
+render_active() {
+  compose "$current" "$env_file" config --format json > "$work/active.json" ||
+    fail 'Could not render the installed Compose configuration.'
+}
+
 owner_link() {
   link=$(compose "$current" "$env_file" exec -T api node apps/api/src/scripts/owner-link.ts "$@") || return 1
   case $link in "https://$installed_domain/#owner="*) ;; *) return 1 ;; esac
@@ -425,6 +508,8 @@ install_stack() {
     [ -z "$version" ] || [ "$version" = "$bundle_version" ] || fail 'Use voiceroom upgrade to change the release.'
     [ -z "$provider$domain" ] || say 'Using the installed domain. Use voiceroom domain set to change it.'
     say 'Reusing the active release and installation environment.'
+    render_active
+    turn_domain=$(read_turn_domain "$work/active.json")
     install_cli "$current" || fail 'Could not install the voiceroom command.'
   else
     check_project
@@ -433,7 +518,9 @@ install_stack() {
     select_domain
     write_env
     validate_images "$candidate" "$work/.env" || fail 'The release Compose images do not match its manifest.'
-    prepare_dns
+    turn_domain=$(read_turn_domain "$work/compose.json")
+    check_turn_ports "$work/compose.json"
+    prepare_dns all
     if ! activate "$candidate" || ! install_cli "$candidate" || ! ln -T "$work/.env" "$env_file"; then
       fail 'Could not save the installation.'
     fi
@@ -445,7 +532,9 @@ install_stack() {
   start_stack "$current" "$env_file" || fail 'The stack did not become healthy. Run voiceroom status.'
   edge_ready "$installed_domain" ||
     fail 'HTTPS readiness failed. Check DNS, the TLS certificate and inbound TCP ports 80 and 443, then rerun install.'
+  turn_ready "$turn_domain" || exit 1
   say 'Local HTTPS is ready. Test inbound TCP 7881 and UDP 7882 from another network.'
+  if [ -n "$turn_domain" ]; then say "Test TURN/TLS on $turn_domain:443 from a network that blocks the direct ports."; fi
   printf 'Meet: https://%s/\n' "$installed_domain"
   if link=$(owner_link); then
     printf 'Private owner link: %s\n' "$link"
@@ -489,6 +578,14 @@ upgrade_stack() {
     return
   fi
   validate_images "$candidate" "$env_file" || fail 'The release Compose images do not match its manifest.'
+  turn_domain=$(read_turn_domain "$work/compose.json")
+  render_active
+  check_turn_ports "$work/compose.json" "$work/active.json"
+  if [ -n "$turn_domain" ] && [ "$(read_turn_domain "$work/active.json")" != "$turn_domain" ]; then
+    domain=$installed_domain
+    provider=$installed_provider
+    prepare_dns turn
+  fi
   backup_config || fail 'Could not back up the installation environment and manifest.'
   say "Pulling $bundle_version. The server will stop accepting calls during the upgrade."
   compose "$candidate" "$env_file" pull >/dev/null || fail 'Image pull failed. The previous release is still active.'
@@ -503,10 +600,11 @@ upgrade_stack() {
   fi
   if ! compose "$candidate" "$env_file" up -d --wait --wait-timeout 120 --no-build --pull never postgres >/dev/null ||
     ! compose "$candidate" "$env_file" run --rm -T --no-deps --pull never migrate >/dev/null ||
-    ! start_stack "$candidate" "$env_file" || ! edge_ready "$installed_domain"; then
+    ! start_stack "$candidate" "$env_file" || ! edge_ready "$installed_domain" || ! turn_ready "$turn_domain"; then
     fail 'Upgrade failed during migration or readiness checks.'
   fi
   activate "$candidate" || fail 'Could not activate the new release.'
+  rollback_dns=false
   recover_upgrade || fail 'Upgrade is active, but local cleanup needs to be retried.'
   rollback_upgrade=false
   say "Upgraded to $bundle_version."
@@ -518,9 +616,10 @@ change_domain() {
     "$env_file" > "$work/.env"
   printf 'PERSONAL_DOMAIN=%s\nVR_DNS_PROVIDER=%s\n' "$domain" "$provider" >> "$work/.env"
   validate_images "$current" "$work/.env" || fail 'Could not render Compose for the new domain.'
-  prepare_dns
+  turn_domain=$(read_turn_domain "$work/compose.json")
+  prepare_dns all
   rollback_domain=true
-  if ! start_stack "$current" "$work/.env" || ! edge_ready "$domain"; then
+  if ! start_stack "$current" "$work/.env" || ! edge_ready "$domain" || ! turn_ready "$turn_domain"; then
     fail 'The stack did not become ready on the new domain.'
   fi
   mv -Tf "$work/.env" "$env_file" || fail 'Could not save the new domain.'
@@ -531,6 +630,18 @@ change_domain() {
 
 status() {
   printf 'Version: %s\nDomain: %s\n' "$bundle_version" "$installed_domain"
+  render_active
+  turn_domain=$(read_turn_domain "$work/active.json")
+  if [ -n "$turn_domain" ]; then
+    printf 'TURN/TLS: %s:443/tcp\n' "$turn_domain"
+    turn_udp_ports "$work/active.json" | awk '
+      NR == 1 { printf "TURN UDP: %s/udp\n", $0 }
+      NR == 2 { relay_start = $0 }
+      END { if (NR >= 2) printf "TURN relay: %s-%s/udp\n", relay_start, $0 }
+    '
+  else
+    printf 'TURN: disabled\n'
+  fi
   compose "$current" "$env_file" ps --all --format json > "$work/status.json" ||
     fail 'Could not read container status.'
   jq -rs '
@@ -539,6 +650,7 @@ status() {
     join(" ")
   ' "$work/status.json" 2>/dev/null || fail 'Could not read container status.'
   edge_ready "$installed_domain" || fail 'HTTPS is not ready.'
+  turn_ready "$turn_domain" || exit 1
   say 'HTTPS is ready.'
 }
 
@@ -553,6 +665,10 @@ finish() {
   fi
   if [ "$operation" = install ] && [ "$rollback_dns" = true ] && [ -f "$env_file" ]; then
     if [ "$(stat -c '%d:%i' "$env_file")" = "$(stat -c '%d:%i' "$work/.env")" ]; then rollback_dns=false; fi
+  fi
+  if [ "$operation" = upgrade ] && [ "$rollback_dns" = true ] && [ -f "$recovery/target" ] &&
+    [ "$(readlink "$current")" = "$(cat "$recovery/target")" ]; then
+    rollback_dns=false
   fi
   if [ "$rollback_dns" = true ]; then
     restore_dns || say 'Could not restore the former DNS record. Check the DNS provider.'
@@ -578,7 +694,7 @@ main() {
   fi
   [ "$(id -u)" = 0 ] || fail 'Run the installer as root, for example: curl -fsSL https://get.voiceroom.ru | sudo sh'
   case $install_dir:$bin in /*:/*) ;; *) fail 'Use absolute installation paths.' ;; esac
-  for dependency in curl openssl jq dig ss flock sha256sum; do
+  for dependency in curl openssl jq dig ss flock sha256sum timeout; do
     command -v "$dependency" >/dev/null 2>&1 || fail "Missing $dependency. Install the required host packages and retry."
   done
   token=${VOICEROOM_DNS_TOKEN:-}
