@@ -1,6 +1,8 @@
+import { NodePackageImporter } from 'sass';
 import { fileURLToPath } from 'node:url';
 import vue from '@vitejs/plugin-vue';
 import { configDefaults, defineConfig } from 'vitest/config';
+import { voiceAssetUrls } from '@voice-room/call/voice-assets';
 
 import {
   buildVersion,
@@ -8,7 +10,8 @@ import {
   precompressPlugin,
   serviceWorkerPlugin,
   versionFilePlugin,
-  voiceAssetVersion
+  voiceAssetVersion,
+  voiceAssetsPlugin
 } from './scripts/deploy-contract.ts';
 
 const API_TARGET = process.env.VITE_DEV_API_TARGET || 'http://localhost:3000';
@@ -78,12 +81,17 @@ const nodeTestFiles = [
 ];
 
 export default defineConfig({
-  plugins: [vue(), cspMetaPlugin(), versionFilePlugin(APP_VERSION), serviceWorkerPlugin(), precompressPlugin()],
+  plugins: [
+    vue(),
+    cspMetaPlugin(),
+    versionFilePlugin(APP_VERSION),
+    serviceWorkerPlugin(),
+    voiceAssetsPlugin(),
+    precompressPlugin()
+  ],
   define: {
     'import.meta.env.VITE_APP_VERSION': JSON.stringify(APP_VERSION),
-    'import.meta.env.VITE_VOICE_ASSET_VERSION': JSON.stringify(
-      voiceAssetVersion(fileURLToPath(new URL('./public', import.meta.url)))
-    )
+    __VOICE_ASSET_URLS__: JSON.stringify(voiceAssetUrls(voiceAssetVersion()))
   },
   resolve: {
     alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) }
@@ -94,20 +102,10 @@ export default defineConfig({
     strictPort: true,
     proxy: API_PROXY
   },
+  css: { preprocessorOptions: { scss: { importers: [new NodePackageImporter()] } } },
   build: {
     outDir: 'dist',
     emptyOutDir: true,
-    rollupOptions: {
-      input: {
-        app: fileURLToPath(new URL('./index.html', import.meta.url)),
-        embed: fileURLToPath(new URL('./embed/v1/index.html', import.meta.url)),
-        widgetLoader: fileURLToPath(new URL('./src/features/widget/loader-entry.ts', import.meta.url))
-      },
-      output: {
-        entryFileNames: (chunk) =>
-          chunk.name === 'widgetLoader' ? 'widget/v1/loader.js' : '_app/immutable/[name]-[hash].js'
-      }
-    },
     // Caddy caches /_app/immutable/* for a year and keeps earlier releases'
     // chunks there for open tabs (Caddyfile, config/caddy/archive-assets.sh).
     assetsDir: '_app/immutable'

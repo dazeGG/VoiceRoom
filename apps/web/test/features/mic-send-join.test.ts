@@ -1,6 +1,7 @@
 // The watch a joined call runs: its rebuild is the real microphone restart and its
 // replacement the optional one, which a refusal cannot turn into a failed recovery.
 
+import { installWebCallPortsForTest } from '../helpers/call-ports';
 import { createPinia, setActivePinia } from 'pinia';
 import { expect, test, vi } from 'vitest';
 import { stubFetch } from '../fixtures/fetch';
@@ -11,21 +12,21 @@ const spies = vi.hoisted(() => ({
   requestLiveKitReplacement: vi.fn(async () => true)
 }));
 
-vi.mock('@/features/room/client/ui/devices', async (importOriginal) => ({
+vi.mock('@voice-room/call/engine/ui/devices', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   refreshDevices: vi.fn(async () => {}),
   reopenMicrophone: spies.reopenMicrophone
 }));
-vi.mock('@/features/room/client/ui/toast', () => ({ showToast: vi.fn() }));
-vi.mock('@/features/room/client/services/livekit-service', async (importOriginal) => ({
+vi.mock('@voice-room/call/engine/ui/toast', () => ({ showToast: vi.fn() }));
+vi.mock('@voice-room/call/engine/services/livekit-service', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   connectLiveKitRoom: vi.fn(async () => true)
 }));
-vi.mock('@/features/room/client/recovery/room-recovery', async (importOriginal) => ({
+vi.mock('@voice-room/call/engine/recovery/room-recovery', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   requestLiveKitReplacement: spies.requestLiveKitReplacement
 }));
-vi.mock('@/features/room/client/room/stats', async (importOriginal) => ({
+vi.mock('@voice-room/call/engine/room/stats', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   // The test reads the microphone itself, without a poll of its own in between.
   startPeerLatencyStats: vi.fn()
@@ -36,6 +37,7 @@ const settled = () => new Promise((resolve) => setTimeout(resolve, 0));
 test('a joined call rebuilds a stalled microphone, then replaces the connection, and stops watching on leaving', async () => {
   vi.resetModules();
   setActivePinia(createPinia());
+  await installWebCallPortsForTest();
   vi.stubGlobal('WebSocket', FakeWebSocket);
   const userAgent = vi
     .spyOn(window.navigator, 'userAgent', 'get')
@@ -55,9 +57,9 @@ test('a joined call rebuilds a stalled microphone, then replaces the connection,
       }
     }
   });
-  const room = await import('@/features/room/client/room/room');
-  const { noteMicSend } = await import('@/features/room/client/room/mic-send');
-  const { state } = await import('@/features/room/client/core/room-runtime.store');
+  const room = await import('@voice-room/call/engine/room/room');
+  const { noteMicSend } = await import('@voice-room/call/engine/room/mic-send');
+  const { state } = await import('@voice-room/call/engine/core/room-runtime.store');
   Object.assign(state, { roomId: 'abc123', peerId: 'peer-1', sessionToken: 'session-1' });
 
   await room.joinRoom();

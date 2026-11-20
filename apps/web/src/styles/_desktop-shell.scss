@@ -6,7 +6,7 @@
 //   .lobby-shell, .room-chat-rail, .auth-loader, .auth-session-error -> same (blocks)
 //   html.is-desktop, .is-shell-fullscreen, .vr-game-mode              -> same (state classes on <html>)
 //   body[data-screen-view='true']                                     -> body.screen-view--open
-@use 'mixins' as *;
+@use 'pkg:@voice-room/ui/styles/mixins' as *;
 
 html.is-desktop {
   --voice-room-shell-topbar: 32px;

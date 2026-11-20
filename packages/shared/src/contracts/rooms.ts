@@ -86,8 +86,30 @@ export type RenameRoomBody = Static<typeof RenameRoomBody>;
 export const RoomCard = Ok({ room: LobbyRoom });
 export type RoomCard = Static<typeof RoomCard>;
 
+export const RoomCapabilities = Type.Object({
+  screenShare: Type.Boolean(),
+  camera: Type.Boolean(),
+  chat: Type.Union([Type.Literal('none'), Type.Literal('ephemeral'), Type.Literal('persistent')]),
+  maxPeers: Type.Integer({ minimum: 1 })
+});
+export type RoomCapabilities = Static<typeof RoomCapabilities>;
+
+export const MeetOwnerExchangeBody = Type.Object({ token: Type.String({ minLength: 1, maxLength: 128 }) });
+export type MeetOwnerExchangeBody = Static<typeof MeetOwnerExchangeBody>;
+
+export const MeetOwnerAuthorization = Ok({ token: Type.String() });
+export type MeetOwnerAuthorization = Static<typeof MeetOwnerAuthorization>;
+
+export const MeetRoomCreated = Ok({ roomId: Type.String(), joinUrl: Type.String() });
+export type MeetRoomCreated = Static<typeof MeetRoomCreated>;
+
+export const MeetRoomStatus = Ok({ roomId: Type.String(), capabilities: RoomCapabilities, peers: Type.Number() });
+export type MeetRoomStatus = Static<typeof MeetRoomStatus>;
+
 export const RoomStatus = Ok({
   avatarUrl: Nullable(Type.String()),
+  // Optional on read for clients talking to an older server.
+  capabilities: Type.Optional(RoomCapabilities),
   createdAt: Type.Number(),
   exists: Type.Literal(true),
   emptySince: Type.Optional(Nullable(Type.Number())),

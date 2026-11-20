@@ -1,5 +1,6 @@
 // The public site: static pages for search engines and new visitors, built to
 // dist/ and served by Caddy from /srv/site next to the app (Caddyfile).
+import { NodePackageImporter } from 'sass';
 import { defineConfig } from 'astro/config';
 import { buildContract } from './src/build-contract.ts';
 import { SITE_ORIGIN } from './src/site.ts';
@@ -15,7 +16,10 @@ export default defineConfig({
     inlineStylesheets: 'never'
   },
   // Scripts stay files: the site is served under script-src 'self' (build-contract.ts).
-  vite: { build: { assetsInlineLimit: 0 } },
+  vite: {
+    build: { assetsInlineLimit: 0 },
+    css: { preprocessorOptions: { scss: { importers: [new NodePackageImporter()] } } }
+  },
   devToolbar: { enabled: false },
   integrations: [buildContract()]
 });

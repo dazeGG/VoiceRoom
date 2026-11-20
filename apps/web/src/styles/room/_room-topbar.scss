@@ -23,7 +23,7 @@
 //   .status-pill[data-state='x']                    -> .room-topbar__status--x
 //   body[data-screen='room'] .topbar-room-heading   -> body.screen--room .room-topbar__heading
 //   html[data-platform-class='mobile']              -> html.platform--mobile
-@use '../mixins' as *;
+@use 'pkg:@voice-room/ui/styles/mixins' as *;
 
 .room-topbar__heading {
   display: none;

@@ -3,7 +3,7 @@
 import { t } from '@/shared/i18n';
 import { PinOff } from '@lucide/vue';
 import { computed } from 'vue';
-import type { Participant } from '@/features/room/client/core/types';
+import type { Participant } from '@voice-room/call/engine/core/types';
 import { STRIP_FITTING_TILES } from '@/features/room/mobile-call-layout';
 import { useMobileCallUiStore } from '@/features/room/mobile-call-ui.store';
 import MobileCallTile from './MobileCallTile.vue';

@@ -13,6 +13,8 @@ test('routes application, public site and documentation changes independently', 
     changedComponents(['apps/api/src/server.ts', 'apps/web/src/main.ts', 'apps/admin/src/main.tsx']),
     app
   );
+  assert.deepEqual(changedComponents(['apps/meet/src/main.ts']), app);
+  assert.deepEqual(changedComponents(['apps/widget/src/main.ts']), app);
   assert.deepEqual(changedComponents(['apps/site/src/pages/index.astro']), site);
   assert.deepEqual(changedComponents(['apps/docs/src/content/docs/index.md', 'apps/docs/package-lock.json']), docs);
   assert.deepEqual(changedComponents(['apps/site/public/image.png', 'apps/docs/astro.config.mjs']), {
@@ -26,12 +28,6 @@ test('routes application, public site and documentation changes independently', 
 test('routes shared dependencies and validation files to their consumers', () => {
   assert.deepEqual(changedComponents(['packages/shared/src/app-home.ts']), appAndSite);
   assert.deepEqual(changedComponents(['packages/shared/package.json']), appAndSite);
-  assert.deepEqual(changedComponents(['apps/web/src/styles/_tokens.scss']), appAndSite);
-  assert.deepEqual(changedComponents(['apps/web/src/assets/fonts/onest-latin.woff2']), appAndSite);
-  assert.deepEqual(changedComponents(['apps/web/src/styles/room/_room-dock.scss']), appAndSite);
-  assert.deepEqual(changedComponents(['apps/web/src/styles/_mixins.scss']), appAndSite);
-  assert.deepEqual(changedComponents(['apps/web/src/shared/ui/tile-grid.ts']), appAndSite);
-  assert.deepEqual(changedComponents(['apps/web/src/shared/utils/avatar-initial.ts']), appAndSite);
   assert.deepEqual(changedComponents(['scripts/check-type-coverage.mts']), appAndSite);
   assert.deepEqual(changedComponents(['scripts/test/web-text-contrast.test.mts']), appAndSite);
   assert.deepEqual(changedComponents(['.github/workflows/ci.yml']), everyLane);
@@ -41,6 +37,23 @@ test('routes shared dependencies and validation files to their consumers', () =>
   assert.deepEqual(changedComponents(['scripts/test/static-publication.sh']), everyLane);
   assert.deepEqual(changedComponents(['.github/workflows/build-static.yml']), { ...site, docs: true });
   assert.deepEqual(changedComponents(['.github/workflows/release.yml', 'Dockerfile']), app);
+});
+
+test('routes UI package changes to the web and site checks', () => {
+  assert.deepEqual(changedComponents(['packages/ui/package.json']), appAndSite);
+  assert.deepEqual(changedComponents(['packages/ui/src/styles/_tokens.scss']), appAndSite);
+  assert.deepEqual(changedComponents(['packages/ui/src/tile-grid.ts']), appAndSite);
+});
+
+test('routes the call package to the application checks and voice and widget e2e lanes', () => {
+  for (const path of [
+    'packages/call/package.json',
+    'packages/call/src/engine/index.ts',
+    'packages/call/src/views/CallStage.vue',
+    'packages/call/assets/rnnoise/rnnoise.wasm'
+  ]) {
+    assert.deepEqual(changedComponents([path]), app);
+  }
 });
 
 test('manifest and lock version bumps stay in their release lane', () => {
@@ -54,6 +67,7 @@ test('manifest and lock version bumps stay in their release lane', () => {
         'apps/admin': { version: appVersion },
         'apps/api': { version: appVersion },
         'packages/shared': { version: appVersion },
+        'packages/call': { version: appVersion },
         'apps/site': { name: '@voice-room/site', version: siteVersion, devDependencies: { astro: astroVersion } },
         'node_modules/astro': { version: astroVersion }
       }

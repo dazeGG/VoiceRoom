@@ -11,18 +11,22 @@ import type { BoundedMap } from '../lib/bounded-map.ts';
 import { LOG_EVENTS } from '../lib/log-events.ts';
 import { createLogger } from '../lib/logger.ts';
 import type { RateLimiter } from '../lib/rate-limit.ts';
+import type { RoomSurface } from '../domains/rooms/room-surface.policy.ts';
 import type { Logger } from '../platform/types.ts';
 
 export type RealtimeSocket = {
   readyState: number;
+  bufferedAmount?: number;
   send(data: string): void;
   close(code?: number, reason?: string): void;
 };
+
+const MEET_MAX_BUFFERED_BYTES = 64 * 1024;
 /** The voice seat a socket holds. */
 export type ActiveVoice = { roomId: string; peerId: string; sessionToken: string; transportId: string };
 export type WsConnection = {
   /** Trusted upgrade adapter scope, never decoded from client frames. */
-  roomSurface?: 'main' | 'widget';
+  roomSurface?: RoomSurface;
   widgetQuiesced?: boolean;
   id: string;
   userId: string | null;
@@ -112,7 +116,7 @@ function createConnectionRegistry({
   keepaliveMs: number;
   onPresenceChange?: ((friendId: string, userId: string, online: boolean) => void) | null;
   onConnectionClose?: ((connection: WsConnection) => void) | null;
-  getFriendIds: (userId: string) => Promise<string[]>;
+  getFriendIds?: (userId: string) => Promise<string[]>;
   logger?: Pick<Logger, 'error'>;
 }) {
   const userConnections = new Map<string, Set<WsConnection>>();
@@ -206,7 +210,7 @@ function createConnectionRegistry({
   }
 
   async function notifyFriendsPresence(userId: string, online: boolean): Promise<void> {
-    if (!onPresenceChange || !userId) return;
+    if (!onPresenceChange || !getFriendIds || !userId) return;
     let friendIds: string[];
     try {
       friendIds = await getFriendIds(userId);
@@ -272,7 +276,11 @@ function createConnectionRegistry({
   }
 
   function sendToConnection(connection: WsConnection, envelope: ServerEnvelope): boolean {
-    return sendWsEnvelope(connection.socket, envelope);
+    return sendWsEnvelope(
+      connection.socket,
+      envelope,
+      connection.roomSurface === 'meet' ? MEET_MAX_BUFFERED_BYTES : undefined
+    );
   }
 
   function sendToUser(userId: string, envelope: ServerEnvelope): number {

@@ -2,14 +2,14 @@ import { createPinia, setActivePinia } from 'pinia';
 import { computed, nextTick } from 'vue';
 import { beforeEach, expect, test, vi } from 'vitest';
 import { fireEvent } from '@testing-library/vue';
-import { english, french } from '../src/shared/i18n/catalog';
+import { english, french, russian } from '../src/shared/i18n/catalog';
 import { LOCALE_STORAGE_KEY, t, useLocaleStore } from '../src/shared/i18n';
 import { formatNumber } from '../src/shared/i18n';
 import { currentErrorMessage, useLocalizedText } from '../src/shared/i18n/localized-text';
 import { ApiError } from '../src/api/client';
 import { errorText } from '../src/api/error-texts';
 import { t as runtimeTranslation } from '../src/shared/i18n/runtime.ts';
-import { NOISE_MODES } from '../src/features/room/client/core/config';
+import { NOISE_MODES } from '@voice-room/call/engine/core/config';
 import { dayMonth, timeAgo } from '../src/shared/utils/date-format';
 import { formatTypingLabel } from '../src/shared/chat/typing';
 import { displayNameOf } from '../src/shared/utils/display-name';
@@ -29,13 +29,16 @@ test('first use selects a supported browser preference and saved choice wins', a
   vi.spyOn(navigator, 'languages', 'get').mockReturnValue(['de-DE', 'fr-CA']);
   const locale = useLocaleStore();
   await locale.init();
+  expect(locale.ready).toBe(true);
   expect(locale.current).toBe('fr');
   expect(document.documentElement.lang).toBe('fr');
+  expect(t('Назад')).toBe('Retour');
   expect(localStorage.getItem(LOCALE_STORAGE_KEY)).toBe('fr');
   await locale.select('en');
   expect(localStorage.getItem(LOCALE_STORAGE_KEY)).toBe('en');
   await locale.init();
   expect(locale.current).toBe('en');
+  expect(t('Назад')).toBe('Back');
   locale.stop();
 });
 
@@ -91,7 +94,10 @@ test('desktop authority is separate from browser storage and newer pushes beat i
   listeners[0]?.('fr');
   finish('en');
   await initialized;
+  expect(locale.ready).toBe(true);
   expect(locale.current).toBe('fr');
+  expect(document.documentElement.lang).toBe('fr');
+  expect(t('Назад')).toBe('Retour');
   await locale.select('en');
   expect(locale.current).toBe('en');
   expect(localStorage.getItem(LOCALE_STORAGE_KEY)).toBe('ru');
@@ -128,15 +134,17 @@ test('a stale desktop save response cannot overwrite a newer selection', async (
   expect(locale.current).toBe('en');
 });
 
-test('English and French dictionaries have identical complete message keys', () => {
+test('Russian, English and French dictionaries cover the same message keys and placeholders', () => {
   expect(Object.keys(french).sort()).toEqual(Object.keys(english).sort());
-  for (const value of Object.values(english)) expect(value.trim()).not.toBe('');
-  for (const value of Object.values(french)) expect(value.trim()).not.toBe('');
-  const translations = new Map(Object.entries(french));
-  for (const [key, entry] of Object.entries(english)) {
+  const russianOverrides = new Map(Object.entries(russian));
+  const frenchTranslations = new Map(Object.entries(french));
+  for (const key of russianOverrides.keys()) expect(Object.hasOwn(english, key)).toBe(true);
+  for (const [key, englishText] of Object.entries(english)) {
     const expected = (key.match(/\{p\d+\}/g) ?? []).sort();
-    expect((entry.match(/\{p\d+\}/g) ?? []).sort()).toEqual(expected);
-    expect((translations.get(key)?.match(/\{p\d+\}/g) ?? []).sort()).toEqual(expected);
+    for (const translation of [russianOverrides.get(key) ?? key, englishText, frenchTranslations.get(key) ?? '']) {
+      expect(translation.trim(), key).not.toBe('');
+      expect((translation.match(/\{p\d+\}/g) ?? []).sort(), key).toEqual(expected);
+    }
   }
 });
 

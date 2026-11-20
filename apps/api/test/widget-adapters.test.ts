@@ -7,7 +7,7 @@ import { createRoomStore } from '../src/app/room-store.ts';
 import { WidgetRoomCreated, WidgetRoomInfo } from '@voice-room/shared/contracts/widget';
 import { RoomCreated } from '@voice-room/shared/contracts/rooms';
 import { startApiServer, request, registerAccount } from './fakes/server-process.ts';
-import { openWs, joinVoiceRoom, waitForWsType, sendWs } from './ws-harness.ts';
+import { openWs, joinVoiceRoom, waitForWsType, waitForClose, sendWs } from './ws-harness.ts';
 
 test('real widget adapters ignore account cookies and isolate room lookup, WS, snapshots and chat policy', async (t) => {
   const server = await startApiServer(t, {
@@ -112,13 +112,25 @@ test('real widget adapters ignore account cookies and isolate room lookup, WS, s
       path
     );
   const beforeScreen = widget.frames.length;
+  sendWs(widget.ws, 'room.media.request', { ...join, kind: 'screen', profileId: 'high-60' });
+  assert.equal((await waitForWsType(widget.frames, 'error', () => true, 5000, beforeScreen)).error.code, 'forbidden');
+  const beforeScreenPatch = widget.frames.length;
   sendWs(widget.ws, 'room.peer.update', {
     roomId: join.roomId,
     peerId: join.peerId,
     sessionToken: join.sessionToken,
     patch: { screen: true }
   });
-  assert.equal((await waitForWsType(widget.frames, 'error', () => true, 5000, beforeScreen)).error.code, 'forbidden');
+  assert.equal(
+    (await waitForWsType(widget.frames, 'error', () => true, 5000, beforeScreenPatch)).error.code,
+    'forbidden'
+  );
+  sendWs(widget.ws, 'room.media.request', { ...join, kind: 'camera' });
+  assert.deepEqual((await waitForWsType(widget.frames, 'room.media.grant')).payload, {
+    roomId: join.roomId,
+    kind: 'camera',
+    granted: true
+  });
   const stale = openWs(server.socketPath, { path: '/api/widget/ws' });
   t.after(() => stale.ws.close());
   await stale.ready;
@@ -145,4 +157,78 @@ test('real widget adapters ignore account cookies and isolate room lookup, WS, s
   assert.equal(resumed.payload.peers.filter((peer) => peer.id === writer.peerId).length, 1);
   await pool.query('UPDATE widget_boundary_activation SET widget_admission_enabled=false');
   assert.equal((await request(server.socketPath, { pathname: `/api/widget/rooms/${legacy.id}` })).status, 404);
+});
+
+test('main and widget apply the same room seat limit while reserving a disconnected peer’s seat for rejoin', async (t) => {
+  const server = await startApiServer(t, {
+    env: { WIDGET_ENABLED: 'true', MAX_ROOM_PEERS: '1', MAX_VOICE_PEERS: '0', MEDIA_BUDGET_MBPS: '0' }
+  });
+  const pool = new Pool({ connectionString: server.databaseUrl });
+  server.beforeCleanup(() => pool.end());
+  await pool.query('UPDATE widget_boundary_activation SET widget_boundary_required=true,widget_admission_enabled=true');
+
+  for (const surface of ['main', 'widget'] as const) {
+    const prefix = surface === 'widget' ? '/api/widget' : '/api';
+    const create =
+      surface === 'widget'
+        ? await request(
+            server.socketPath,
+            { method: 'POST', pathname: `${prefix}/rooms`, body: { chat: false } },
+            WidgetRoomCreated
+          )
+        : await request(server.socketPath, { method: 'POST', pathname: `${prefix}/rooms`, body: {} }, RoomCreated);
+    assert.equal(create.status, 201);
+    const seated = {
+      roomId: create.body.roomId,
+      peerId: `${surface}-seated`,
+      sessionToken: 's'.repeat(32),
+      name: 'Seated'
+    };
+    const newcomer = { ...seated, peerId: `${surface}-newcomer`, sessionToken: 'n'.repeat(32), name: 'Newcomer' };
+    const path = `${prefix}/ws`;
+    const first = openWs(server.socketPath, { path });
+    const second = openWs(server.socketPath, { path });
+    t.after(() => first.ws.close());
+    t.after(() => second.ws.close());
+    await Promise.all([first.ready, second.ready]);
+    await joinVoiceRoom(first, seated);
+
+    if (surface === 'main') {
+      sendWs(first.ws, 'room.media.request', { ...seated, kind: 'screen', profileId: 'high-60' });
+      assert.deepEqual((await waitForWsType(first.frames, 'room.media.grant')).payload, {
+        roomId: seated.roomId,
+        kind: 'screen',
+        granted: true,
+        profileId: 'high-60'
+      });
+      sendWs(first.ws, 'room.peer.update', { ...seated, patch: { screen: true } });
+      const update = await waitForWsType(
+        first.frames,
+        'room.peer.updated',
+        (frame) => frame.payload.peer.screen === true
+      );
+      assert.equal(update.payload.peer.id, seated.peerId);
+    }
+
+    const closed = waitForClose(first.ws);
+    first.ws.close();
+    await closed;
+    sendWs(second.ws, 'room.join', newcomer);
+    assert.deepEqual((await waitForWsType(second.frames, 'room.full')).payload, {
+      roomId: seated.roomId,
+      maxRoomPeers: 1
+    });
+    const resumed = await joinVoiceRoom(second, seated);
+    assert.deepEqual(
+      resumed.payload.peers.map((peer) => peer.id),
+      [seated.peerId]
+    );
+    const write = await request(server.socketPath, {
+      method: 'POST',
+      pathname: '/api/state',
+      body: { ...seated, screen: true }
+    });
+    assert.equal(write.status, surface === 'main' ? 409 : 404);
+    assert.equal(write.body.code, surface === 'main' ? 'state_updates_require_websocket' : 'room_not_found');
+  }
 });

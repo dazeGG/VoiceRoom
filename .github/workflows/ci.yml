@@ -26,6 +26,7 @@ jobs:
       app: ${{ steps.route.outputs.app }}
       site: ${{ steps.route.outputs.site }}
       docs: ${{ steps.route.outputs.docs }}
+      installer: ${{ steps.route.outputs.installer }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -41,6 +42,16 @@ jobs:
           node --test scripts/test/changed-components.test.mts
           bash scripts/test/reuse-app-checks.sh
           node scripts/ci/changed-components.mts "$BASE_SHA" "$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+          installer=false
+          if [[ "$BASE_SHA" =~ ^0+$ ]]; then
+            installer=true
+          else
+            installer_changes=$(git diff --name-only --no-renames "$BASE_SHA" "$GITHUB_SHA" -- apps/get/)
+            if [[ -n "$installer_changes" ]]; then
+              installer=true
+            fi
+          fi
+          echo "installer=$installer" >> "$GITHUB_OUTPUT"
 
       - name: Look for already verified application changes
         id: reuse
@@ -56,7 +67,7 @@ jobs:
 
   policy:
     name: Git Flow policy
-    needs: [changes, site, docs]
+    needs: [changes, site, docs, personal-smoke, widget-smoke, installer]
     if: always() && github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
@@ -85,16 +96,20 @@ jobs:
               ;;
           esac
 
-      # This check already protects main. Validate the routed static jobs so an
-      # unrelated app job can skip without making site or docs checks optional.
-      - name: Require each selected static check
+      # This check already protects main. Require each routed job while letting
+      # jobs for unaffected components skip.
+      - name: Require each selected static, personal stack, widget and installer check
         env:
           ROUTING_RESULT: ${{ needs.changes.result }}
           APP_CHANGED: ${{ needs.changes.outputs.app }}
+          PERSONAL_RESULT: ${{ needs.personal-smoke.result }}
+          WIDGET_RESULT: ${{ needs.widget-smoke.result }}
           SITE_CHANGED: ${{ needs.changes.outputs.site }}
           SITE_RESULT: ${{ needs.site.result }}
           DOCS_CHANGED: ${{ needs.changes.outputs.docs }}
           DOCS_RESULT: ${{ needs.docs.result }}
+          INSTALLER_CHANGED: ${{ needs.changes.outputs.installer }}
+          INSTALLER_RESULT: ${{ needs.installer.result }}
         shell: bash
         run: |
           set -euo pipefail
@@ -102,7 +117,9 @@ jobs:
             echo "::error::Could not determine the changes that need checks."
             exit 1
           fi
-          for lane in "site:$SITE_CHANGED:$SITE_RESULT" "docs:$DOCS_CHANGED:$DOCS_RESULT"; do
+          for lane in "site:$SITE_CHANGED:$SITE_RESULT" "docs:$DOCS_CHANGED:$DOCS_RESULT" \
+              "personal:$APP_CHANGED:$PERSONAL_RESULT" "widget:$APP_CHANGED:$WIDGET_RESULT" \
+              "installer:$INSTALLER_CHANGED:$INSTALLER_RESULT"; do
             case "$lane" in
               *:true:success|*:false:skipped) ;;
               *) echo "::error::Unexpected check result: $lane"; exit 1 ;;
@@ -128,7 +145,7 @@ jobs:
         run: |
           npm run build:app
           WEB_DEPLOY_CONTRACT=built npm --workspace @voice-room/web run test -- \
-            test/deploy-contract.test.ts -t 'a production build keeps the deployment contract'
+            test/deploy-contract.test.ts -t 'a production (web|widget) build keeps the deployment contract'
 
   # API and web tests run as separate jobs so neither waits for the other.
   test:
@@ -243,6 +260,8 @@ jobs:
         env:
           WEB_DEPLOY_CONTRACT: checked
       - run: npm --workspace @voice-room/admin run test
+      - run: npm --workspace @voice-room/meet run test
+      - run: npm --workspace @voice-room/widget run test
 
   voice-join:
     name: Voice room join smoke
@@ -256,7 +275,7 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: npm
-      - run: npm ci --workspace @voice-room/web --workspace @voice-room/shared
+      - run: npm ci --workspace @voice-room/web --workspace @voice-room/shared --workspace @voice-room/ui --workspace @voice-room/call
       - name: Start the voice stack and pull the Playwright image
         run: |
           version=$(node -p "require('./package-lock.json').packages['node_modules/@playwright/test'].version")
@@ -300,9 +319,107 @@ jobs:
       # The API test job already runs the LiveKit boundary test file.
       - run: G05_SELECTED_MECHANISM=external-auth-gate node scripts/lkv/run-strict-boundary-proof.mts --json --fail-on-blocked
 
+  widget-smoke:
+    name: Embedded guest call and media boundary
+    needs: changes
+    if: needs.changes.outputs.app == 'true' && needs.changes.outputs.verified != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      PLAYWRIGHT_WIDGET_COMPOSE_PROJECT: widget-ci-${{ github.run_id }}-${{ github.run_attempt }}
+      PLAYWRIGHT_WIDGET_E2E: "1"
+      PLAYWRIGHT_WIDGET_RECOVERY: "1"
+      WIDGET_ENABLED: "true"
+      CI_GATE_PUBLIC_URL: wss://localhost:19443
+      CI_ROOM_CREATE_POW_DIFFICULTY: "4"
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm --workspace @voice-room/widget run build
+      - name: Start the isolated widget API and SFU
+        run: |
+          docker compose -p "$PLAYWRIGHT_WIDGET_COMPOSE_PROJECT" -f docker-compose.ci.yml up -d --build --wait --wait-timeout 180 api
+          docker compose -p "$PLAYWRIGHT_WIDGET_COMPOSE_PROJECT" -f docker-compose.ci.yml exec -T postgres \
+            psql -v ON_ERROR_STOP=1 -U voice_room -d voice_room_ci \
+            -c 'UPDATE widget_boundary_activation SET widget_boundary_required=true, widget_admission_enabled=true WHERE singleton'
+      - name: Exercise frozen loader compatibility, reconnect and SFU denials
+        run: |
+          npm --workspace @voice-room/web run e2e -- \
+            e2e/widget-embed.spec.ts e2e/widget-media-boundary.spec.ts e2e/widget-reconnect.spec.ts
+      - name: Report widget service states
+        if: failure()
+        run: docker compose -p "$PLAYWRIGHT_WIDGET_COMPOSE_PROJECT" -f docker-compose.ci.yml ps --all
+      - name: Remove widget stack resources
+        if: always()
+        run: docker compose -p "$PLAYWRIGHT_WIDGET_COMPOSE_PROJECT" -f docker-compose.ci.yml down -v --rmi local
+
+  personal-smoke:
+    name: Personal Compose smoke
+    needs: changes
+    if: needs.changes.outputs.app == 'true' && needs.changes.outputs.verified != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      PERSONAL_SMOKE_PROJECT: personal-ci-${{ github.run_id }}-${{ github.run_attempt }}
+      PERSONAL_DOMAIN: 127.0.0.1
+      PERSONAL_ORIGIN: http://127.0.0.1:5187
+      PERSONAL_CADDY_SITE: http://127.0.0.1
+      PERSONAL_SIGNAL_URL: ws://127.0.0.1:5187
+      PERSONAL_BIND_HOST: 127.0.0.1
+      PERSONAL_HTTP_PORT: "5187"
+      PERSONAL_HTTPS_PORT: "5443"
+      PERSONAL_LIVEKIT_EXTERNAL_IP: "false"
+      PERSONAL_LIVEKIT_NODE_IP: 127.0.0.1
+      PERSONAL_POSTGRES_PASSWORD: personal-ci-password
+      PERSONAL_GATE_SECRET: personal-ci-gate-secret-at-least-32-bytes
+      PERSONAL_LIVEKIT_API_KEY: personal-ci-key
+      PERSONAL_LIVEKIT_API_SECRET: personal-ci-livekit-secret-at-least-32-bytes
+      PERSONAL_ROOM_IDLE_TTL_MS: "10000"
+      PERSONAL_ROOM_PRUNE_INTERVAL_MS: "250"
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci --workspace @voice-room/api --workspace @voice-room/meet --workspace @voice-room/shared --workspace @voice-room/ui --workspace @voice-room/call
+      - run: npx playwright install --with-deps chromium
+      - name: Start the personal stack with clean project volumes
+        run: docker compose -p "$PERSONAL_SMOKE_PROJECT" -f docker-compose.personal.yml up -d --build --wait --wait-timeout 120
+      - run: node --test scripts/ci/personal-compose-smoke.test.mts
+      - name: Exercise a two-guest Meet call through Caddy
+        run: npm --workspace @voice-room/meet run e2e
+      - name: Report personal service states
+        if: failure()
+        run: docker compose -p "$PERSONAL_SMOKE_PROJECT" -f docker-compose.personal.yml ps --all
+      - name: Remove personal stack resources
+        if: always()
+        run: |
+          docker compose -p "$PERSONAL_SMOKE_PROJECT" -f docker-compose.personal.yml down -v --rmi local
+          if docker image inspect "$PERSONAL_SMOKE_PROJECT-api" >/dev/null 2>&1; then
+            docker image rm "$PERSONAL_SMOKE_PROJECT-api"
+          fi
+
+  installer:
+    name: Meet installer and CLI tests
+    needs: changes
+    if: needs.changes.outputs.installer == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - run: sudo python3 -B -m unittest discover -s apps/get/test -v
+
   record-app-checks:
     name: Record verified application tree
-    needs: [changes, policy, check, test, test-web, voice-join, goal-g05]
+    needs: [changes, policy, check, test, test-web, voice-join, widget-smoke, goal-g05]
     if: github.event_name == 'pull_request' && github.base_ref == 'develop' && needs.changes.outputs.app == 'true'
     runs-on: ubuntu-latest
     steps:
@@ -327,14 +444,15 @@ jobs:
 
   images:
     name: Publish images
-    needs: [changes, check, test, test-web, voice-join, goal-g05]
+    needs: [changes, check, test, test-web, voice-join, widget-smoke, goal-g05, personal-smoke, installer]
     if: >-
       !cancelled() && github.event_name == 'push' && needs.changes.result == 'success' &&
       needs.changes.outputs.app == 'true' &&
+      (needs.changes.outputs.installer == 'false' || needs.installer.result == 'success') &&
       (needs.changes.outputs.verified == 'true' ||
       (needs.check.result == 'success' && needs.test.result == 'success' &&
-      needs.test-web.result == 'success' && needs.voice-join.result == 'success' &&
-      needs.goal-g05.result == 'success'))
+      needs.test-web.result == 'success' && needs.voice-join.result == 'success' && needs.widget-smoke.result == 'success' &&
+      needs.goal-g05.result == 'success' && needs.personal-smoke.result == 'success'))
     permissions:
       contents: read
       packages: write

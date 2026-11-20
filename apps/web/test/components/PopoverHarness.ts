@@ -1,8 +1,8 @@
 // Test components: a popover with a button trigger, three menu items and an optional submenu.
 
 import { defineComponent, h, ref } from 'vue';
-import { Popover, PopoverMenuItem, PopoverSubmenu } from '@/shared/ui/Popover';
-import type { PopoverCloseReason, PopoverRole } from '@/shared/ui/Popover';
+import { Popover, PopoverMenuItem, PopoverSubmenu } from '@voice-room/ui/components';
+import type { PopoverCloseReason, PopoverRole } from '@voice-room/ui/components';
 
 export type PopoverHarnessProps = {
   label?: string;

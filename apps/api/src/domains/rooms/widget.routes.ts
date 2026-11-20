@@ -11,7 +11,7 @@ import { normalizeRoomId } from '@voice-room/shared/validation';
 import type { ApiContext } from '../../app/context.ts';
 import { failure } from '../../platform/http/http-kit.ts';
 import type { RoomRoutesDeps } from './rooms.routes.ts';
-import { roomAllowsSurface } from './room-surface.policy.ts';
+import { roomAllowsSurface, roomCapabilities } from './room-surface.policy.ts';
 
 export function registerWidgetRoomRoutes(
   root: FastifyInstance,
@@ -67,6 +67,7 @@ export function registerWidgetRoomRoutes(
       return {
         ok: true as const,
         roomId: room.id,
+        capabilities: roomCapabilities('widget', deps.maxRoomPeers),
         chat: false,
         maxRoomPeers: deps.maxRoomPeers,
         peers: room.peers.size

@@ -32,7 +32,7 @@ test('the microphone is sent before a shared screen', async () => {
   };
   lk.state.localStream = new FakeMediaStream([new FakeMediaStreamTrack('mic', 'audio')], 'mic-stream');
   lk.state.localScreenStream = new FakeMediaStream([new FakeMediaStreamTrack('sound', 'audio')], 'screen-stream');
-  const publications = await import('@/features/room/client/services/livekit/local-publications');
+  const publications = await import('@voice-room/call/engine/services/livekit/local-publications');
 
   await publications.publishLocalMicrophone();
   await publications.publishLocalScreenTracks();

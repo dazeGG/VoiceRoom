@@ -17,8 +17,10 @@ const BASELINE_PATH = resolve(repoRoot, 'config/test-source-reads.json');
 const TREES = [
   'apps/api/test',
   'apps/admin/test',
+  'apps/meet/test',
   'apps/site/test',
   'apps/web/test',
+  'apps/widget/test',
   'packages/shared/test',
   'scripts/test'
 ];
@@ -30,6 +32,7 @@ const ALLOWED = [
   /platform\/db\/schema\.ts$/,
   // Audio worklets are plain scripts the browser loads by URL; tests run them in a sandbox.
   /\/public\/[^/]+\.worklet\.js$/,
+  /\/packages\/call\/assets\/(?:audio-gate|desktop-audio-source)\.worklet\.js$/,
   // The web push worker as a production build emits it: deployment output, not source.
   /^service-worker\.js$/
 ];

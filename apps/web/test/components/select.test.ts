@@ -104,3 +104,14 @@ test('a select without options does not open', async () => {
   await userEvent.click(screen.getByRole('combobox'));
   expect(screen.queryByRole('listbox')).toBeNull();
 });
+
+test('web draws emoji artwork in the selected label and in the option list', async () => {
+  render(Select, {
+    props: { modelValue: 'headset', options: [{ value: 'headset', label: 'Music 🎵' }] }
+  });
+  const trigger = screen.getByRole('combobox');
+  expect(trigger.querySelector('img')?.getAttribute('alt')).toBe('🎵');
+
+  await userEvent.click(trigger);
+  expect(screen.getByRole('option').querySelector('img')?.getAttribute('alt')).toBe('🎵');
+});

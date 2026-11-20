@@ -1,13 +1,22 @@
+import type { RealtimeEvent } from '@/api/realtime';
 import { expect, test, vi } from 'vitest';
 
-vi.mock('@/features/room/client/ui/toast', () => ({ showToast: vi.fn() }));
+vi.mock('@voice-room/call/engine/ui/toast', () => ({ showToast: vi.fn() }));
 
-const { showToast } = await import('@/features/room/client/ui/toast');
-const { createVoiceEventHandler } = await import('@/features/room/client/room/voice-events');
+const { showToast } = await import('@voice-room/call/engine/ui/toast');
+const { createVoiceEventHandler } = await import('@voice-room/call/engine/room/voice-events');
+const { mapWebCallEvent } = await import('@/features/room/adapters/web-call-transport');
 
 function handler() {
   const room = { leaveRoom: vi.fn(), showModeration: vi.fn(), showNotFound: vi.fn() };
-  return { room, handle: createVoiceEventHandler(room) };
+  const handle = createVoiceEventHandler(room);
+  return {
+    room,
+    handle: async (event: RealtimeEvent) => {
+      const mapped = mapWebCallEvent(event);
+      if (mapped) await handle(mapped);
+    }
+  };
 }
 
 test('a server at its voice cap tells the guest to come back later and leaves the room', async () => {

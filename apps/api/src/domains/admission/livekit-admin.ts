@@ -4,11 +4,17 @@
 import { RoomServiceClient, TrackSource } from 'livekit-server-sdk';
 import type { Logger } from 'pino';
 import { LOG_EVENTS } from '../../lib/log-events.ts';
+import type { RoomSurface } from '../rooms/room-surface.policy.ts';
 import type { LiveKitConfig } from './livekit-config.ts';
+import { liveKitPublishSources } from './livekit-publish.policy.ts';
 
 interface ParticipantPermissionLike {
+  canPublish?: boolean;
+  canPublishData?: boolean;
   canPublishSources?: TrackSource[];
 }
+
+type ServerMutePermission = { canPublish: boolean; canPublishData: false; canPublishSources: TrackSource[] };
 
 export interface LiveKitAdminClient {
   removeParticipant(room: string, identity: string): Promise<unknown>;
@@ -46,29 +52,29 @@ export function isLiveKitParticipantAlreadyGone(error: unknown): boolean {
 }
 
 // Server mute is enforced at the SFU, not just in the client: microphone is
-// removed from the participant's allowed sources while the camera, screen sharing
-// and data remain intact, and the live microphone track is muted immediately.
+// removed from the participant's allowed sources, and the live microphone track
+// is muted immediately. Other media grants stay within the surface ceiling.
 export function resolveServerMutePermission(
   currentPermission: undefined,
-  muted: boolean
-): ParticipantPermissionLike & { canPublishSources: TrackSource[] };
+  muted: boolean,
+  surface?: RoomSurface
+): ServerMutePermission;
 export function resolveServerMutePermission<T extends ParticipantPermissionLike>(
   currentPermission: T,
-  muted: boolean
-): T & { canPublishSources: TrackSource[] };
+  muted: boolean,
+  surface?: RoomSurface
+): Omit<T, keyof ServerMutePermission> & ServerMutePermission;
 export function resolveServerMutePermission(
   currentPermission: ParticipantPermissionLike = {},
-  muted: boolean
-): ParticipantPermissionLike & { canPublishSources: TrackSource[] } {
+  muted: boolean,
+  surface: RoomSurface = 'main'
+): ServerMutePermission {
+  const allowed = liveKitPublishSources(surface, { microphone: !muted });
   const declaredSources = Array.isArray(currentPermission.canPublishSources) ? currentPermission.canPublishSources : [];
-  const currentSources =
-    declaredSources.length > 0
-      ? declaredSources
-      : [TrackSource.MICROPHONE, TrackSource.CAMERA, TrackSource.SCREEN_SHARE, TrackSource.SCREEN_SHARE_AUDIO];
-  const canPublishSources = muted
-    ? currentSources.filter((source) => source !== TrackSource.MICROPHONE)
-    : [...new Set([...currentSources, TrackSource.MICROPHONE])];
-  return { ...currentPermission, canPublishSources };
+  const sources = declaredSources.length ? [...declaredSources, ...(!muted ? [TrackSource.MICROPHONE] : [])] : allowed;
+  const canPublishSources =
+    currentPermission.canPublish === false ? [] : [...new Set(sources)].filter((source) => allowed.includes(source));
+  return { ...currentPermission, canPublish: canPublishSources.length > 0, canPublishData: false, canPublishSources };
 }
 
 export function createLiveKitAdmin({
@@ -99,20 +105,24 @@ export function createLiveKitAdmin({
 
   // A failed mute falls back to disconnecting the participant; the durable mute
   // row then keeps the microphone out of every freshly issued admission.
-  async function setParticipantMuted(roomId: string, peerId: string, muted: boolean): Promise<ServerMuteResult> {
+  async function setParticipantMuted(
+    roomId: string,
+    peerId: string,
+    muted: boolean,
+    surface: RoomSurface = 'main'
+  ): Promise<ServerMuteResult> {
     const livekit = config();
     if (!livekit.enabled) return undefined;
     const service = clientFactory(livekit);
     const room = roomName(roomId);
     try {
       const participant = await service.getParticipant(room, peerId);
-      // Preserve every unrelated grant. A microphone moderation action must not
-      // widen subscriptions/data grants or revoke screen-share publication.
+      // Preserve unrelated grants within the ceiling and keep data publishing disabled.
       await service.updateParticipant(
         room,
         peerId,
         undefined,
-        resolveServerMutePermission(participant?.permission || {}, muted)
+        resolveServerMutePermission(participant?.permission || {}, muted, surface)
       );
       if (muted) {
         // Microphone only — a moderator mute must not silence screen-share audio.

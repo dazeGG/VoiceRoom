@@ -2,6 +2,7 @@
 // inside the lobby the session is already known, and nothing in a join needs the
 // ownership answer.
 
+import { installWebCallPortsForTest } from '../helpers/call-ports';
 import { createPinia, setActivePinia } from 'pinia';
 import { expect, test, vi } from 'vitest';
 import { lobbyRoom } from '../fixtures/answers';
@@ -11,10 +12,11 @@ import { authUser } from '../fixtures/users';
 async function load(routes: Record<string, Reply>, { embedded = false } = {}) {
   vi.resetModules();
   setActivePinia(createPinia());
+  await installWebCallPortsForTest();
   const { calls, fetchMock } = stubFetch(routes);
-  const entry = await import('@/features/room/client/room/room-entry');
-  const embed = await import('@/features/room/client/core/embed');
-  const { state } = await import('@/features/room/client/core/room-runtime.store');
+  const entry = await import('@voice-room/call/engine/room/room-entry');
+  const embed = await import('@voice-room/call/engine/core/embed');
+  const { state } = await import('@voice-room/call/engine/core/room-runtime.store');
   const { useSessionStore } = await import('@/features/auth/session.store');
   const { useRoomSettingsStore } = await import('@/features/room/room-settings.store');
   embed.setRoomEmbedded(embedded);

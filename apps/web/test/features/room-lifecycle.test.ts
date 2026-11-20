@@ -2,24 +2,26 @@
 // reach a client on more than one channel; each takes effect once and only
 // for the room this client is in.
 
+import { installWebCallPortsForTest } from '../helpers/call-ports';
 import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, expect, test, vi } from 'vitest';
 import { lobbyRoom } from '../fixtures/answers';
 
 const showRoomNotFound = vi.fn();
 const refreshRoomHeading = vi.fn();
-vi.mock('@/features/room/client/room/room', () => ({ showRoomNotFound, refreshRoomHeading }));
-vi.mock('@/features/room/client/ui/toast', () => ({ showToast: vi.fn() }));
+vi.mock('@voice-room/call/engine/room/room', () => ({ showRoomNotFound, refreshRoomHeading }));
+vi.mock('@voice-room/call/engine/ui/toast', () => ({ showToast: vi.fn() }));
 
 async function load() {
   vi.resetModules();
   setActivePinia(createPinia());
-  const lifecycle = await import('@/features/room/client/room/lifecycle');
-  const { state } = await import('@/features/room/client/core/room-runtime.store');
+  await installWebCallPortsForTest();
+  const lifecycle = await import('@voice-room/call/engine/room/lifecycle');
+  const { state } = await import('@voice-room/call/engine/core/room-runtime.store');
   const { useRoomSettingsStore } = await import('@/features/room/room-settings.store');
   const { usePageStore } = await import('@/stores/page.store');
   const roomSettingsUi = useRoomSettingsStore();
-  const { showToast } = await import('@/features/room/client/ui/toast');
+  const { showToast } = await import('@voice-room/call/engine/ui/toast');
   state.roomId = 'room-a';
   usePageStore().screen = 'room';
   return { ...lifecycle, state, roomSettingsUi, page: usePageStore(), showToast: vi.mocked(showToast) };

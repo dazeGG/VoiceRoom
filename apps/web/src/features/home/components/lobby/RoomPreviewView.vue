@@ -14,7 +14,7 @@ import RoomPanelHeader from '@/features/room/components/RoomPanelHeader.vue';
 import EmojiText from '@/shared/chat/EmojiText.vue';
 import { getAvatarPresentation } from '@/shared/ui/avatar-presentation';
 import { iconSm } from '@/shared/ui/icons';
-import { fitTiles } from '@/shared/ui/tile-grid';
+import { fitTiles } from '@voice-room/ui/tile-grid';
 import LobbyStreamTile from './LobbyStreamTile.vue';
 import RoomPreviewChat from './RoomPreviewChat.vue';
 import RoomPreviewDock from './RoomPreviewDock.vue';

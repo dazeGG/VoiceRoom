@@ -2,6 +2,90 @@
 
 Как поднять VoiceRoom на своём сервере: окружение и секреты, Docker, TURN, CI/CD и миграции. Обзор продукта и быстрый локальный запуск — в [`README.md`](../README.md).
 
+Для временных видеовстреч используйте [установщик VoiceRoom Meet](../apps/docs/src/content/docs/self-hosting/install.md). На чистом Linux-сервере он настраивает домен, создаёт `.env` и запускает готовые образы. Для аккаунтов, постоянных комнат, истории чатов и админки см. [установку полного стека](#установка-полного-стека).
+
+Адрес `get.voiceroom.ru` использует отдельную конфигурацию [Caddy](../apps/get/Caddyfile) с перенаправлением на `install.sh` из последнего релиза приложения в GitHub. Для работы команды установки нужны этот HTTPS-хост и релиз с файлом `install.sh`, манифестом и `docker-compose.personal.yml`.
+
+## Ручная установка Meet
+
+`docker-compose.personal.yml` поднимает отдельный сервер для временных видеовстреч Meet. Personal-серверу нужны собственный Compose-проект и собственная база PostgreSQL.
+
+В отдельном `.env.personal` задайте `PERSONAL_DOMAIN` и `PERSONAL_LIVEKIT_API_KEY`, а также отдельные случайные значения для `PERSONAL_POSTGRES_PASSWORD`, `PERSONAL_LIVEKIT_API_SECRET` и `PERSONAL_GATE_SECRET` (например, `openssl rand -hex 32` для каждого). Направьте DNS домена на сервер и откройте TCP 80/443 для Caddy, TCP 7881 и UDP 7882 для медиа LiveKit. Caddy обслуживает HTTPS и передаёт сигналинг через auth-gate на том же домене.
+
+```sh
+docker compose --env-file .env.personal -f docker-compose.personal.yml up -d --build --wait
+docker compose --env-file .env.personal -f docker-compose.personal.yml exec -T api node apps/api/src/scripts/owner-link.ts
+# Для ротации
+docker compose --env-file .env.personal -f docker-compose.personal.yml exec -T api node apps/api/src/scripts/owner-link.ts --rotate
+```
+
+Откройте в браузере ссылку из команды `owner-link.ts`, нажмите «Создать встречу» и скопируйте ссылку на встречу. Откройте эту ссылку сами, если хотите участвовать, и отправьте её гостям. Каждый участник вводит своё имя, нажимает «Присоединиться к встрече» и разрешает браузеру доступ к микрофону. В звонке можно включить камеру и поделиться экраном.
+
+В чате встречи можно отправлять текст. Сообщения получают только участники, подключённые к этой встрече в момент отправки. Сервер не хранит сообщения. История видна только в той вкладке, где сообщения были получены, и очищается при выходе из встречи. Новые участники не видят предыдущие сообщения. Пропущенные сообщения после переподключения не доставляются.
+
+Секрет владельца хранится в томе `owner`. Ссылка владельца обменивается один раз на разрешение создавать комнаты на пять минут. Когда потребуется новая ссылка владельца, выполните команду с `--rotate`. Ротация отзывает старые ссылки и разрешения владельца. Медиадоступ гостей сохраняется. Гостям передавайте только ссылку на комнату.
+
+Personal-сервер не записывает историю пребывания в звонках, аналитику или замеры использования и не выполняет поиск по IP или геолокации. Отображаемые имена живут в памяти. PostgreSQL хранит рабочие записи комнаты, идентификаторы участников с хешами токенов и данные допуска к LiveKit до закрытия комнаты. После ухода последнего участника и окончания срока ожидания переподключения пустую комнату удаляет проверка по таймеру. При старте сервер удаляет рабочие записи оставшихся Meet-комнат. Удаление физическое на уровне таблиц. Журналы стека не содержат имён участников, текста сообщений или токенов. Docker хранит до трёх файлов журнала по 10 МБ на контейнер.
+
+Сам сервер не создаёт резервных копий. При обновлении через `voiceroom upgrade` CLI останавливает приём звонков и создаёт закрытую временную копию PostgreSQL для отката миграций. Копия удаляется после успешного обновления или отката, а при прерванном или неудачном восстановлении сохраняется для следующей попытки. Копии `.env` и манифеста релиза остаются в `/opt/voiceroom/backups`. Если вы самостоятельно копируете PostgreSQL или его том, копия хранится по вашей политике. Копии базы могут содержать рабочие записи, существовавшие на момент копирования.
+
+## Установка полного стека
+
+Полный VoiceRoom запускается через `docker-compose.yml`. Понадобится Linux-сервер `x86_64` с публичным IPv4, Docker Engine с плагином `docker compose`, Git и OpenSSL. Порты `80/TCP`, `443/TCP`, `7881/TCP` и `7882/UDP` должны быть свободны на сервере и доступны через файрвол. HTTPS и сигналинг LiveKit обслуживает Caddy, медиа проходит на `7882/UDP` или `7881/TCP`.
+
+Создайте A-записи `voice.example.com`, `livekit.voice.example.com` и, если нужна админка, `admin.voice.example.com` на IP сервера. Замените `voice.example.com` своим доменом. У DNS-провайдера выберите режим «только DNS», если он предлагает проксирование трафика. Добавляйте AAAA-записи, только если сервер доступен по IPv6.
+
+Скачайте тег приложения, для которого опубликованы образы API, воркера и веб-приложения. В примере используется `v2.15.0`.
+
+```sh
+git clone --depth 1 --branch v2.15.0 https://github.com/dazeGG/VoiceRoom.git
+cd VoiceRoom
+```
+
+В этом блоке замените только `voice.example.com`. Если `.env` уже существует, блок остановится и сохранит его содержимое.
+
+```sh
+(
+  set -euC
+  umask 077
+  domain=voice.example.com
+  release_sha=$(git rev-parse HEAD)
+  postgres_password=$(openssl rand -hex 32)
+  livekit_key=$(openssl rand -hex 16)
+  livekit_secret=$(openssl rand -hex 32)
+  gate_secret=$(openssl rand -hex 32)
+  cursor_key=$(openssl rand -hex 32)
+
+  cat > .env <<EOF
+DOMAIN=$domain
+POSTGRES_PASSWORD=$postgres_password
+LIVEKIT_API_KEY=$livekit_key
+LIVEKIT_API_SECRET=$livekit_secret
+LIVEKIT_GATE_SECRET=$gate_secret
+VOICE_ROOM_CURSOR_HMAC_KEYS=$cursor_key
+VOICEROOM_API_IMAGE=ghcr.io/dazegg/voiceroom-api:$release_sha
+VOICEROOM_WORKER_IMAGE=ghcr.io/dazegg/voiceroom-worker:$release_sha
+VOICEROOM_WEB_IMAGE=ghcr.io/dazegg/voiceroom-web:$release_sha
+EOF
+)
+```
+
+Сохраните `.env` в закрытой резервной копии. Compose выводит `LIVEKIT_DOMAIN` и `ADMIN_DOMAIN` из `DOMAIN`. Если выбрали другие имена, добавьте их в `.env` явно.
+
+```sh
+docker compose config --quiet &&
+  docker compose pull &&
+  docker compose up -d --wait
+```
+
+Откройте `https://voice.example.com/app`, создайте комнату и проверьте звук с собеседником в обе стороны. Если страница открывается, а звонок не соединяется, проверьте DNS имени LiveKit и доступность `7882/UDP` и `7881/TCP` из внешней сети. Для сетей, которые пропускают только веб-трафик, см. [настройку TURN/TLS](#turntls-на-443).
+
+```sh
+docker compose ps -a
+curl -fsS https://voice.example.com/api/healthz
+docker compose logs --tail=100 caddy migrate api livekit livekit-gate
+```
+
 ## Environment и секреты
 
 `.env`, `.env.*` и любые реальные значения окружения не хранятся в Git. Для локального запуска создайте `.env` вручную из защищённого источника: password manager, серверный vault или приватная заметка владельца проекта. GitHub Secrets/Variables используйте для CI/CD и protected deploy environments; после сохранения GitHub не показывает secret-значения обратно, поэтому это не удобный источник для локального копирования.
@@ -24,6 +108,7 @@ GitHub-аналог GitLab CI/CD variables находится здесь:
 | `LIVEKIT_API_KEY` | API / LiveKit | Ключ LiveKit. |
 | `LIVEKIT_API_SECRET` | API / LiveKit | Секрет LiveKit. Сгенерировать случайным значением. |
 | `LIVEKIT_GATE_SECRET` | API / LiveKit gate | Отдельный случайный секрет длиной не менее 32 символов. Не должен совпадать с `LIVEKIT_API_SECRET`. |
+| `VOICE_ROOM_CURSOR_HMAC_KEYS` | API production | Стабильный ключ подписи курсоров. Для новой установки подойдёт отдельное значение `openssl rand -hex 32`. |
 | `VAPID_PRIVATE_KEY` | API / Web Push | Приватная часть стабильной VAPID-пары. Никогда не публиковать и не хранить в Git. |
 | `RUSTORE_PUSH_SERVICE_TOKEN` | API и notification worker / RuStore Push | Сервисный ключ проекта push-уведомлений из консоли RuStore. Никогда не публиковать и не хранить в Git. |
 | `GITHUB_TOKEN` | API desktop release endpoint, optional | Нужен только если хочется повысить лимит GitHub API. |
@@ -145,19 +230,21 @@ DATABASE_URL=postgres://voice_room:<local-random-password>@127.0.0.1:5432/voice_
 
 ### Минимальный production набор
 
-Для production compose обычно достаточно задать:
+Для первого запуска production Compose нужны:
 
 ```text
 DOMAIN
-LIVEKIT_DOMAIN
 POSTGRES_PASSWORD
 LIVEKIT_API_KEY
 LIVEKIT_API_SECRET
 LIVEKIT_GATE_SECRET
-VAPID_PUBLIC_KEY
-VAPID_PRIVATE_KEY
-VAPID_SUBJECT
+VOICE_ROOM_CURSOR_HMAC_KEYS
+VOICEROOM_API_IMAGE
+VOICEROOM_WORKER_IMAGE
+VOICEROOM_WEB_IMAGE
 ```
+
+`LIVEKIT_DOMAIN` по умолчанию равен `livekit.${DOMAIN}`. Версии трёх образов должны соответствовать одному релизу и используемому файлу Compose.
 
 `DATABASE_URL` в compose соберётся автоматически из `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` и service name `postgres`. Если деплой не через compose — задайте `DATABASE_URL` явно как secret.
 Если Web Push намеренно не используется, `VAPID_*` можно опустить — API продолжит работать,
@@ -196,7 +283,7 @@ files leaves the running containers and database in place. The first application
 rollout copies the public site out of the legacy Caddy image when a site release has
 yet to be published.
 
-On a new self-host install, build and publish the site files once:
+To add the public landing page to a self-hosted instance, build and publish the site files:
 
 ```bash
 npm ci
@@ -244,17 +331,17 @@ Production compose запускает образы `api`, `worker` и `web` из
 - `caddy` — frontend static build из `apps/web/dist`, reverse proxy для `/api/*` и отдельный reverse proxy для LiveKit domain. JS-чанки прошлых релизов он держит в volume `web_archive` 30 дней, чтобы вкладки, открытые до выкатки, продолжали работать;
 - `livekit` — LiveKit SFU, `livekit-gate` — auth-gate перед ним (см. [`LIVEKIT_GATE.md`](./LIVEKIT_GATE.md)).
 
-Production-like запуск:
+Запуск после подготовки `.env`:
 
 ```bash
-# Создайте production .env на сервере из приватного vault/секретов деплоя, затем:
-npm start
+docker compose config --quiet
+docker compose up -d --wait
 ```
 
-Остановить production-like stack:
+Остановить стек:
 
 ```bash
-npm run stop
+docker compose stop
 ```
 
 Dev compose через npm scripts:

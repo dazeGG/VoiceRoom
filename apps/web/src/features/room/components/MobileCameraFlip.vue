@@ -2,14 +2,16 @@
 import { t } from '@/shared/i18n';
 import { SwitchCamera } from '@lucide/vue';
 import { computed, ref } from 'vue';
-import { state as roomClientState } from '@/features/room/client/core/room-runtime.store';
-import { flipCamera } from '@/features/room/client/services/camera-service';
+import { state as roomClientState } from '@voice-room/call/engine/core/room-runtime.store';
+import { flipCamera } from '@voice-room/call/engine/services/camera-service';
 import { useMobileCallUiStore } from '@/features/room/mobile-call-ui.store';
+import { useRoomUiStore } from '@/features/room/room-ui.store';
 
 /** `pill` carries its label; `round` is the icon alone, for the small picture-in-picture. */
 const { variant = 'pill' } = defineProps<{ variant?: 'pill' | 'round' }>();
 
 const mobileCall = useMobileCallUiStore();
+const roomUi = useRoomUiStore();
 
 // Each tap turns the icon half a turn, the way the camera turns.
 const turns = ref(0);
@@ -24,7 +26,7 @@ function flip(event: MouseEvent): void {
 // Not a drag of the picture under it, but still a touch that keeps the controls.
 function keepControls(event: PointerEvent): void {
   event.stopPropagation();
-  mobileCall.restartChromeTimer();
+  mobileCall.restartChromeTimer(() => roomUi.chatOpen);
 }
 </script>
 

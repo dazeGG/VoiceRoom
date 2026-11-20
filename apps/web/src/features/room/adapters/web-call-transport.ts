@@ -1,0 +1,91 @@
+import { LiveKitAdmission, LiveKitTokenBody } from '@voice-room/shared/contracts/admission';
+import { api, ApiError } from '@/api/client';
+import { ERROR_TEXTS } from '@/api/error-texts';
+import { fetchRoomStatus } from '@/api/rooms';
+import { preloadRuntimeConfig, resolveLiveKitUrls } from '@/platform/runtime-config';
+import type { CallTransport, CallRealtimeEvent, LiveKitCredentials } from '@voice-room/call/engine/transport';
+
+async function requestLiveKitToken(input: {
+  name: string;
+  peerId: string;
+  roomId: string;
+  sessionToken: string;
+}): Promise<LiveKitCredentials> {
+  // The address list comes from a second request; it goes out beside the token, not after it.
+  preloadRuntimeConfig();
+  const signal = AbortSignal.timeout(10_000);
+  const admission = await api
+    .post('/api/livekit-token', LiveKitAdmission, input, { bodySchema: LiveKitTokenBody, signal })
+    .catch((error: unknown) => {
+      if (signal.aborted) throw new ApiError(ERROR_TEXTS.unavailable, 0, { code: 'unavailable' });
+      throw error;
+    });
+  return { ...admission, urls: await resolveLiveKitUrls(admission.url) };
+}
+
+import { getAppRealtime, type RealtimeEvent } from '@/api/realtime';
+import { errorText } from '@/api/error-texts';
+import {
+  ensureAppRealtimeConnected,
+  isMediaRequestError,
+  joinVoiceRoom,
+  leaveVoiceRoom,
+  reportVoicePoll,
+  requestActiveVoiceResync,
+  requestMediaGrant,
+  setActiveVoiceResyncFailureHandler,
+  subscribeRoomVoice,
+  updateVoicePeer
+} from '@/entities/room/room-realtime';
+
+export function mapWebCallEvent(event: RealtimeEvent): CallRealtimeEvent | undefined {
+  switch (event.type) {
+    case 'error':
+      if (isMediaRequestError(event.payload.id)) return;
+      return {
+        type: 'error',
+        payload: { code: event.payload.code, message: errorText(event.payload.code) ?? undefined }
+      };
+    case 'pong':
+    case 'room.snapshot':
+    case 'room.not_found':
+    case 'room.kicked':
+    case 'room.banned':
+    case 'room.peer.joined':
+    case 'room.peer.left':
+    case 'room.peer.updated':
+    case 'room.voice.quality':
+    case 'room.full':
+    case 'server.full':
+    case 'room.updated':
+    case 'room.deleted':
+      return event;
+    default:
+      return undefined;
+  }
+}
+
+export const webCallTransport: CallTransport = {
+  roomStatus: fetchRoomStatus,
+  requestLiveKitToken,
+  failure: (error) =>
+    error instanceof ApiError ? { code: error.code, status: error.status, message: error.message } : null,
+  realtime: {
+    ensureConnected: (...args) => ensureAppRealtimeConnected(...args),
+    isConnected: () => getAppRealtime().isConnected(),
+    getConnectionEpoch: () => getAppRealtime().getConnectionEpoch(),
+    onStateChange: (handler) => getAppRealtime().onStateChange(handler),
+    subscribeRoom: (roomId, handler) =>
+      subscribeRoomVoice(roomId, (event) => {
+        const mapped = mapWebCallEvent(event);
+        if (mapped) handler(mapped);
+      }),
+    join: (...args) => joinVoiceRoom(...args),
+    leave: (...args) => leaveVoiceRoom(...args),
+    updatePeer: (...args) => updateVoicePeer(...args),
+    reportPoll: (...args) => reportVoicePoll(...args),
+    requestMediaGrant: (input) => requestMediaGrant(input),
+    requestResync: (...args) => requestActiveVoiceResync(...args),
+    setResyncFailureHandler: (...args) => setActiveVoiceResyncFailureHandler(...args)
+  }
+};

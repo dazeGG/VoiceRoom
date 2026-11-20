@@ -1,0 +1,325 @@
+@use 'pkg:@voice-room/ui/styles/room/participant';
+@use 'pkg:@voice-room/ui/styles/room/room-dock';
+@use 'pkg:@voice-room/ui/styles/room/tile-grid';
+@use 'pkg:@voice-room/ui/styles/mixins' as *;
+
+.widget-shell.widget-shell--call {
+  height: 100dvh;
+  min-height: 0;
+  padding: 12px 12px 6px;
+  overflow: hidden;
+
+  .widget-shell__body {
+    display: flex;
+    min-height: 0;
+    flex: 1;
+    flex-direction: column;
+  }
+
+  .widget-shell__credit {
+    margin-block-start: 4px;
+    padding-block-start: 0;
+  }
+
+  [role='alert'] {
+    flex: none;
+    max-height: 4rem;
+    margin: 0 0 8px;
+    overflow: auto;
+  }
+}
+
+.widget-call {
+  --call-line: color-mix(in srgb, var(--vr-text) 14%, var(--vr-bg));
+  --vr-surface-2: color-mix(in srgb, var(--vr-text) 7%, var(--vr-bg));
+  --vr-surface-3: color-mix(in srgb, var(--vr-text) 9%, var(--vr-bg));
+  --vr-line: color-mix(in srgb, var(--vr-text) 14%, transparent);
+  --vr-line-strong: var(--call-line);
+  --vr-scrim: color-mix(in srgb, var(--vr-bg) 86%, transparent);
+  --vr-accent-soft: color-mix(in srgb, var(--vr-accent) 18%, var(--vr-bg));
+  --vr-video-bg: var(--vr-bg);
+  --vr-hover: color-mix(in srgb, var(--vr-text) 12%, transparent);
+  position: relative;
+  display: grid;
+  min-height: 0;
+  flex: 1;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.widget-call__header {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  min-height: 26px;
+  align-items: center;
+  gap: 8px;
+
+  button {
+    min-width: 26px;
+    min-height: 26px;
+    padding: 3px;
+    border-radius: var(--widget-small-radius);
+  }
+}
+
+.widget-call__copy-feedback:not(:empty) {
+  position: absolute;
+  z-index: 1;
+  inset-block-start: 100%;
+  inset-inline-start: 0;
+  padding: 4px 8px;
+  border: 1px solid var(--call-line);
+  border-radius: var(--widget-small-radius);
+  background: var(--vr-bg);
+  font-size: 0.6875rem;
+  pointer-events: none;
+}
+
+.widget-call__sr-only {
+  @include visually-hidden;
+}
+
+.widget-call .widget-call__code-button {
+  min-width: 0;
+  max-width: 80%;
+  margin-inline-end: auto;
+  padding-inline: 5px;
+  border-color: transparent;
+  background: transparent;
+  color: var(--vr-text);
+
+  code {
+    overflow: hidden;
+    font: 600 0.75rem/1.4 var(--font-mono);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    user-select: all;
+  }
+
+  svg {
+    flex: none;
+  }
+}
+
+.widget-call .widget-call__expand {
+  position: absolute;
+  z-index: 2;
+  inset: auto 0 -22px auto;
+  width: 24px;
+  min-height: 24px;
+  padding: 3px;
+  border-radius: var(--widget-small-radius);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .widget-call__code-button:not(:hover, :focus-visible) svg {
+    opacity: 0;
+  }
+
+  .widget-shell--call:not(
+      :hover,
+      :has(:focus-visible),
+      :has(.widget-call__panel),
+      :has(.widget-call__header--copy-feedback)
+    )
+    .widget-call__chrome {
+    opacity: 0;
+    pointer-events: none;
+
+    * {
+      pointer-events: none;
+    }
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .widget-call__chrome {
+    transition: opacity 150ms ease;
+  }
+}
+
+.tile-grid.widget-call__tiles {
+  gap: 8px;
+  margin: 0;
+  list-style: none;
+  scrollbar-color: var(--call-line) transparent;
+  scrollbar-gutter: auto;
+
+  &.widget-call__tiles--fit {
+    overflow: clip;
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--vr-accent);
+    outline-offset: -2px;
+  }
+}
+
+.widget-call__tiles > li {
+  flex: 0 0 var(--tile-width, min(100%, 480px));
+  min-width: 0;
+}
+
+@container (max-width: 250px) {
+  .tile-grid.widget-call__tiles {
+    gap: 4px;
+  }
+}
+
+.widget-call .participant {
+  --participant-pastel: color-mix(in srgb, var(--vr-accent) 24%, var(--vr-bg));
+  border-radius: var(--widget-radius);
+
+  .participant__heading {
+    border-radius: var(--widget-small-radius);
+  }
+}
+
+@container (max-height: 58px) {
+  .widget-call .participant__ring {
+    align-self: start;
+    margin-block-start: 2px;
+  }
+
+  .widget-call .participant__copy {
+    inset: auto 2px 2px;
+    max-width: calc(100% - 4px);
+  }
+
+  .widget-call .participant__heading {
+    height: 14px;
+    padding-inline: 3px;
+    font-size: 0.625rem;
+  }
+}
+
+.widget-call .participant:not([role]) {
+  cursor: default;
+}
+
+.widget-call .participant__camera video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.widget-call .participant--local .participant__camera video {
+  transform: scaleX(-1);
+}
+
+.widget-call .room-dock--widget {
+  position: static;
+  padding: 0;
+  pointer-events: auto;
+
+  .room-dock__shell {
+    flex-wrap: nowrap;
+    gap: 6px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    box-shadow: none;
+  }
+
+  :is(.room-dock__button, .room-dock__menu-button):focus-visible {
+    outline-offset: -2px;
+  }
+
+  :is(.room-dock__split, .room-dock__button--leave, .room-dock__connection) {
+    border-radius: var(--widget-control-radius);
+  }
+}
+
+@container (max-width: 319px) {
+  .widget-call .room-dock--widget {
+    .room-dock__shell {
+      gap: 4px;
+    }
+    .room-dock__split {
+      height: 32px;
+      min-height: 0;
+    }
+    .room-dock__button {
+      width: 30px;
+      min-width: 0;
+      height: 32px;
+      min-height: 0;
+    }
+    .room-dock__button svg {
+      width: 17px;
+      height: 17px;
+    }
+    .room-dock__menu-button {
+      width: 14px;
+      height: 32px;
+    }
+    .room-dock__menu-button svg {
+      width: 11px;
+      height: 11px;
+    }
+    .room-dock__connection {
+      width: 32px;
+      min-width: 0;
+      height: 32px;
+      min-height: 0;
+      padding-block-end: 8px;
+    }
+    .room-dock__divider {
+      display: none;
+    }
+    .room-dock__button--leave {
+      width: 32px;
+    }
+  }
+}
+
+.widget-call .widget-call__panel {
+  position: absolute;
+  z-index: 1;
+  inset: auto 0 54px;
+  width: auto;
+  max-height: calc(100% - 80px);
+  transform: none;
+  padding: 10px;
+  overflow: auto;
+  border: 1px solid var(--call-line);
+  border-radius: var(--widget-radius);
+  background: var(--vr-surface-2);
+}
+
+.widget-call__panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-block-end: 8px;
+
+  button {
+    min-width: 28px;
+    min-height: 28px;
+    padding: 4px;
+    border-radius: var(--widget-small-radius);
+  }
+}
+
+.widget-call__settings,
+.widget-call__settings label {
+  display: grid;
+  gap: 6px;
+  font-size: 0.8125rem;
+}
+
+.widget-call__settings :is(input, select, button) {
+  min-height: 36px;
+  padding: 6px 8px;
+  font-size: inherit;
+}
+
+.widget-call__settings input[type='range'] {
+  padding: 0;
+  accent-color: var(--vr-accent);
+}

@@ -2,12 +2,13 @@
 // browser only asks whether it may: a click on a download (the desktop app's
 // installer) fires beforeunload, the page stays, and the call must stay too.
 
+import { installWebCallPortsForTest } from '../helpers/call-ports';
 import { createPinia, setActivePinia } from 'pinia';
-import { afterEach, expect, test, vi } from 'vitest';
+import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 
 const leaveRoom = vi.fn();
 
-vi.mock('@/features/room/client/room/room', () => ({
+vi.mock('@voice-room/call/engine/room/room', () => ({
   joinRoom: vi.fn(async () => {}),
   leaveRoom,
   showRoomEntryFailure: vi.fn(),
@@ -17,9 +18,14 @@ vi.mock('@/features/room/client/room/room', () => ({
 }));
 
 setActivePinia(createPinia());
-const { mountRoomClient } = await import('@/features/room/client/main');
+const { mountRoomClient } = await import('@voice-room/call/engine/main');
 
 let unmount: (() => void) | null = null;
+
+beforeEach(async () => {
+  setActivePinia(createPinia());
+  await installWebCallPortsForTest();
+});
 
 afterEach(() => {
   unmount?.();

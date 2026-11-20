@@ -1,17 +1,16 @@
 import { test, expect } from '@playwright/test';
 import { build } from 'vite';
 import path from 'node:path';
-import { Pool } from 'pg';
-import { startWidgetHttpsFixture, widgetOrigin } from './widget-https-fixture';
+import { startWidgetHttpsFixture, waitForWidgetHttps, widgetDist, widgetOrigin } from './widget-https-fixture';
 test.describe('widget actual SFU source and data restrictions', () => {
   test.skip(process.env.PLAYWRIGHT_WIDGET_E2E !== '1', 'requires isolated widget API, gate and SFU');
   test.use({ ignoreHTTPSErrors: true, permissions: ['microphone', 'camera'] });
-  let stop: (() => void) | undefined;
-  test.beforeAll(async () => {
+  let fixture: ReturnType<typeof startWidgetHttpsFixture> | undefined;
+  test.beforeAll(async ({ request }) => {
     await build({
       configFile: false,
       build: {
-        outDir: path.resolve(import.meta.dirname, '../dist/_widget-test'),
+        outDir: path.join(widgetDist, '_widget-test'),
         emptyOutDir: true,
         lib: {
           entry: path.resolve(import.meta.dirname, 'widget-boundary-client.ts'),
@@ -20,9 +19,10 @@ test.describe('widget actual SFU source and data restrictions', () => {
         }
       }
     });
-    stop = startWidgetHttpsFixture();
+    fixture = startWidgetHttpsFixture();
+    await waitForWidgetHttps(request);
   });
-  test.afterAll(() => stop?.());
+  test.afterAll(() => fixture?.stop());
   test('SFU rejects screen sources and drops data with an unmodified widget-issued token', async ({ page }) => {
     test.setTimeout(90000);
     await page.goto(`${widgetOrigin}/embed/v1`);
@@ -44,17 +44,7 @@ test.describe('widget actual SFU source and data restrictions', () => {
     });
     if (typeof result !== 'object' || result === null || !('roomId' in result) || typeof result.roomId !== 'string')
       throw new Error('Missing probe result');
-    const database = process.env.PLAYWRIGHT_WIDGET_DATABASE_URL;
-    if (!database) throw new Error('Expected explicit disposable widget database');
-    const url = new URL(database);
-    if (url.hostname !== '127.0.0.1' || url.port !== '55439' || url.pathname !== '/widget_test')
-      throw new Error('Unsafe fixture database');
-    const pool = new Pool({ connectionString: url.href });
-    try {
-      await pool.query('DELETE FROM rooms WHERE id = $1 AND kind = $2', [result.roomId, 'widget']);
-    } finally {
-      await pool.end();
-    }
+    fixture?.cleanupRoom(result.roomId);
     expect(result).toMatchObject({
       screenRejected: true,
       screenAudioRejected: true,

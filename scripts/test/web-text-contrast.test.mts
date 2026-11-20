@@ -70,9 +70,9 @@ const overlays = [
 ];
 const styles = process.argv.includes('--site')
   ? ['apps/site/src/styles/site.scss']
-  : ['apps/web/src/styles/_tokens.scss', 'apps/admin/src/styles/theme.css'];
+  : ['packages/ui/src/styles/_tokens.scss', 'apps/admin/src/styles/theme.css'];
 for (const path of styles) {
-  const css = sass.compile(resolve(root, path)).css;
+  const css = sass.compile(resolve(root, path), { importers: [new sass.NodePackageImporter(root)] }).css;
   const blocks = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((match) => ({
     selector: match[1] ?? '',
     body: match[2] ?? ''

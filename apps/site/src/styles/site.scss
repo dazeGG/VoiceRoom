@@ -1,7 +1,7 @@
 // The public site's styles. Colours, radii and fonts are the app's own
-// (apps/web/src/styles), so the site and the app look like one product.
-@use '../../../web/src/styles/tokens';
-@use '../../../web/src/styles/typography';
+// (packages/ui), so the site and the app look like one product.
+@use 'pkg:@voice-room/ui/styles/tokens';
+@use 'pkg:@voice-room/ui/styles/typography';
 
 $content: 1120px;
 $narrow: 760px;

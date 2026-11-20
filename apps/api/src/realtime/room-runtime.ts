@@ -1,36 +1,33 @@
 import type { StoredRoom } from '../domains/rooms/room-views.ts';
-import type { RoomChatMessage } from '../domains/messaging/room-chat-views.ts';
+import { roomAllowsChat, roomAllowsSurface, ROOM_SURFACE_CEILINGS } from '../domains/rooms/room-surface.policy.ts';
 import type { ErrorCode } from '@voice-room/shared/contracts/errors';
 import type { ClientCommands, PeerLeaveReason, VoiceTarget } from '@voice-room/shared/contracts/realtime';
-import type { RoomMessage } from '@voice-room/shared/contracts/messages';
 import type { LobbyRoom, PublicPeer } from '@voice-room/shared/contracts/rooms';
 import { normalizePeerId, cleanGuestName, cleanStreamId, cleanScreenProfileId } from '@voice-room/shared/validation';
 import { buildServerEnvelope } from './envelope.ts';
-import { buildRoomRealtimeSummary, type ServerEnvelope } from '@voice-room/shared/realtime';
+import type { ServerEnvelope } from '@voice-room/shared/realtime';
 import { LOG_EVENTS } from '../lib/log-events.ts';
 import { createLogger } from '../lib/logger.ts';
 import type { RoomSnapshot } from '@voice-room/shared/contracts/realtime';
-import type { UserRepository } from '../domains/account/user.repository.ts';
 import type { ActiveBanRecord } from '../domains/moderation/active-ban.repository.ts';
 import type { CredentialBoundaryService } from '../domains/admission/credential-boundary.service.ts';
 import type { ConnectionRegistry, WsConnection } from './registry.ts';
 import { createReconnectLeases } from './reconnect-leases.ts';
-import { createRoomSummaries } from './room-summaries.ts';
-import { createRoomFanout } from './room-fanout.ts';
+import type { createRoomSummaries } from './room-summaries.ts';
 import { createVoiceJoin, type JoinUser } from './voice-join.ts';
 import { claimMedia, decideMediaRequest, MEDIA_MIN_VIEWERS, type MediaLimits } from './media-budget.ts';
-import { createMediaMinute } from './media-minute.ts';
+import type { createMediaMinute } from './media-minute.ts';
 import { leaveReasonOf } from './runtime-types.ts';
-import { noteMicChange, noteStayEvent, noteVoiceReport } from './voice-track.ts';
+import { noteMicChange, noteVoiceReport, type noteStayEvent } from './voice-track.ts';
 import { isRecord } from '@voice-room/shared/guards';
 import type {
   FinalizeError,
+  CallRoomStore,
   LeaseReason,
   LeaseRecord,
   Peer,
   PresenceRoom,
-  RuntimeLogger,
-  RuntimeRoomStore
+  RuntimeLogger
 } from './runtime-types.ts';
 export type { RuntimeRoomStore } from './runtime-types.ts';
 
@@ -41,12 +38,14 @@ export type RuntimeCredentialBoundary = Pick<
 export type RoomRuntimeDeps = {
   presenceRooms: Map<string, PresenceRoom>;
   wsRegistry: ConnectionRegistry;
-  getRoomStore: () => RuntimeRoomStore;
+  getRoomStore: () => CallRoomStore;
   getRoom: (roomId: string) => Promise<PresenceRoom | null>;
   publicPeer: (peer: Peer) => PublicPeer;
   publicLobbyRoom: (room: StoredRoom) => LobbyRoom;
-  publicChatMessage: (message: RoomChatMessage) => RoomMessage;
-  getUserStore?: (() => Pick<UserRepository, 'getUserById'>) | null;
+  readHistory?: ((room: StoredRoom) => Promise<RoomSnapshot['recentMessages']>) | undefined;
+  summaries?: Pick<ReturnType<typeof createRoomSummaries>, 'invalidateRecipients' | 'schedule'> | undefined;
+  mediaMinute?: Pick<ReturnType<typeof createMediaMinute>, 'note' | 'noteDecision'> | undefined;
+  stayEvent?: typeof noteStayEvent | undefined;
   /** Sends a room event to its peers and to the sockets previewing it. */
   publishRoomEvent: (roomId: string, envelope: ServerEnvelope, exceptPeerId?: string) => void;
   closePeer: (roomId: string, peerId: string, transportId: string | undefined, reason: PeerLeaveReason) => void;
@@ -60,7 +59,7 @@ export type RoomRuntimeDeps = {
   /** Screen shares one room may run at once; 0 turns it off. */
   MAX_ROOM_SCREENS?: number;
   tokensMatch: (expected: string | null | undefined, actual: string | null | undefined) => boolean;
-  sessionAvatarColorKey: (user: JoinUser) => string;
+  sessionAvatarColorKey?: (user: JoinUser) => string;
   queueRoomOccupancyTransition?: (roomId: string) => Promise<unknown>;
   findRoomBan: (roomId: string, userId: string | null | undefined, ip: string) => Promise<ActiveBanRecord | null>;
   /** Null without a gate secret: leases then revoke through the room store. */
@@ -103,18 +102,17 @@ function createRoomRealtimeRuntime(deps: RoomRuntimeDeps) {
     getRoom,
     publicPeer,
     publicLobbyRoom,
-    publicChatMessage,
-    getUserStore,
+    readHistory,
+    summaries,
+    mediaMinute,
+    stayEvent,
     publishRoomEvent,
     closePeer,
     avatarColorForPeerId,
     MAX_ROOM_PEERS,
     MAX_VOICE_PEERS = 0,
-    MEDIA_BUDGET_MBPS = 0,
-    MEDIA_BUDGET_VOICE_PEERS = 0,
-    MAX_ROOM_SCREENS = 0,
     tokensMatch,
-    sessionAvatarColorKey,
+    sessionAvatarColorKey = () => '',
     queueRoomOccupancyTransition = async (roomId: string) => getRoomStore().markRoomActive(roomId),
     findRoomBan,
     credentialBoundary,
@@ -126,33 +124,7 @@ function createRoomRealtimeRuntime(deps: RoomRuntimeDeps) {
     logger = createLogger({ name: 'api' })
   } = deps;
 
-  const mediaLimits: MediaLimits = {
-    budgetBps: MEDIA_BUDGET_MBPS * 1_000_000,
-    maxRoomScreens: MAX_ROOM_SCREENS,
-    minViewers: Math.min(MEDIA_MIN_VIEWERS, Math.max(0, MAX_ROOM_PEERS - 1)),
-    voicePeersAtZero: MEDIA_BUDGET_VOICE_PEERS
-  };
-  const mediaMinute = createMediaMinute({ rooms: () => presenceRooms.values(), limits: mediaLimits, now });
-
-  const summaries = createRoomSummaries({
-    presenceRooms,
-    wsRegistry,
-    getRoomStore,
-    publicPeer,
-    publicLobbyRoom,
-    avatarColorForPeerId,
-    logger
-  });
-  const fanout = createRoomFanout({
-    presenceRooms,
-    wsRegistry,
-    getRoomStore,
-    getUserStore,
-    publicChatMessage,
-    scheduleSummary: summaries.schedule,
-    now,
-    logger
-  });
+  const mediaLimits = roomMediaLimits(deps);
   const leases = createReconnectLeases({
     presenceRooms,
     tokensMatch,
@@ -220,7 +192,7 @@ function createRoomRealtimeRuntime(deps: RoomRuntimeDeps) {
       if (isRecord(error)) Object.assign(error, { ownershipFinalized: true });
       throw error;
     }
-    summaries.schedule(record.roomId);
+    summaries?.schedule(record.roomId);
     return { finalized: true };
   }
 
@@ -231,9 +203,7 @@ function createRoomRealtimeRuntime(deps: RoomRuntimeDeps) {
     const dbRoom = await getRoomStore().getRoom(roomId);
     if (!dbRoom) return null;
     const recentMessages =
-      dbRoom.kind === 'widget'
-        ? []
-        : (await getRoomStore().listMessages(roomId, { limit: 100 })).map(publicChatMessage);
+      readHistory && roomAllowsChat(dbRoom, dbRoom.kind ?? 'main') ? await readHistory(dbRoom) : [];
     // Presence is the last synchronous read: no awaited work may let this
     // snapshot overwrite a newer peer update that was already broadcast.
     const presence = presenceRooms.get(roomId);
@@ -265,7 +235,8 @@ function createRoomRealtimeRuntime(deps: RoomRuntimeDeps) {
     try {
       const boundary = await getRoomStore().getRoom(roomId);
       if (!current()) return;
-      if (!boundary || (boundary.kind ?? 'main') !== 'main' || connection.roomSurface === 'widget') return;
+      if (!roomAllowsSurface(boundary, 'main') || ROOM_SURFACE_CEILINGS[connection.roomSurface ?? 'main'].guestOnly)
+        return;
       const roomBan = await findRoomBan(roomId, userId, connection.clientIp || connection.guestIp || '');
       if (!current()) return;
       if (roomBan) {
@@ -338,7 +309,7 @@ function createRoomRealtimeRuntime(deps: RoomRuntimeDeps) {
       if (!connection.previewRoomIds.has(payload.roomId))
         wsRegistry.unregisterConnectionForRoom(connection, payload.roomId);
     }
-    summaries.schedule(payload.roomId);
+    summaries?.schedule(payload.roomId);
   }
 
   async function disconnectAccountFromRoom({
@@ -393,7 +364,7 @@ function createRoomRealtimeRuntime(deps: RoomRuntimeDeps) {
       wsRegistry.sendToUser(userId, buildServerEnvelope('room.left', { roomId, peerId: peer.id, reason }));
       wsRegistry.detachVoicePeer(roomId, peer.id);
     }
-    summaries.schedule(roomId);
+    summaries?.schedule(roomId);
     return { ok: true, disconnected: peers.length };
   }
 
@@ -444,17 +415,17 @@ function createRoomRealtimeRuntime(deps: RoomRuntimeDeps) {
     }
     if (Object.hasOwn(patch, 'deafened')) peer.deafened = Boolean(patch.deafened);
     if (Object.hasOwn(patch, 'camera') && Boolean(peer.camera) !== Boolean(patch.camera)) {
-      noteStayEvent(peer, patch.camera ? 'camera_on' : 'camera_off', now());
+      stayEvent?.(peer, patch.camera ? 'camera_on' : 'camera_off', now());
     }
     if (Object.hasOwn(patch, 'screen') && Boolean(peer.screen) !== Boolean(patch.screen)) {
-      noteStayEvent(peer, patch.screen ? 'screen_on' : 'screen_off', now());
+      stayEvent?.(peer, patch.screen ? 'screen_on' : 'screen_off', now());
     }
     if (Object.hasOwn(patch, 'camera')) peer.camera = Boolean(patch.camera);
     if (Object.hasOwn(patch, 'screen')) peer.screen = Boolean(patch.screen);
     if (Object.hasOwn(patch, 'screenAudio')) peer.screenAudio = Boolean(patch.screenAudio);
     if (Object.hasOwn(patch, 'screenProfileId')) peer.screenProfileId = cleanScreenProfileId(patch.screenProfileId);
     if (Object.hasOwn(patch, 'screenStreamId')) peer.screenStreamId = cleanStreamId(patch.screenStreamId);
-    if (patch.screen === true || patch.camera === true) mediaMinute.note();
+    if (patch.screen === true || patch.camera === true) mediaMinute?.note();
     if (Object.hasOwn(patch, 'viewedScreenPeerId')) {
       peer.viewedScreenPeerId = resolveViewedScreenPeerId(room, peer.id, patch.viewedScreenPeerId);
     }
@@ -470,7 +441,7 @@ function createRoomRealtimeRuntime(deps: RoomRuntimeDeps) {
     }
 
     publishRoomEvent(roomId, buildServerEnvelope('room.peer.updated', { roomId, peer: publicPeer(peer) }));
-    summaries.schedule(roomId);
+    summaries?.schedule(roomId);
     return { ok: true as const, peer: publicPeer(peer) };
   }
 
@@ -480,7 +451,7 @@ function createRoomRealtimeRuntime(deps: RoomRuntimeDeps) {
     const active = activePeer(connection, payload);
     if (!active.ok) return active;
     const { roomId, mic } = payload;
-    if (mic && (mic.reopens > 0 || mic.replacements > 0)) {
+    if (stayEvent && mic && (mic.reopens > 0 || mic.replacements > 0)) {
       logger.warn(
         {
           evt: LOG_EVENTS.ROOM_MIC_STALL_RECOVERY,
@@ -492,7 +463,13 @@ function createRoomRealtimeRuntime(deps: RoomRuntimeDeps) {
         'a client recovered a stalled microphone'
       );
     }
-    for (const { peer, verdict } of noteVoiceReport(active.room.peers, active.peer, payload, now())) {
+    for (const { peer, verdict } of noteVoiceReport(
+      active.room.peers,
+      active.peer,
+      payload,
+      now(),
+      Boolean(stayEvent)
+    )) {
       const socket = peer.transport?.connection;
       if (!socket) continue;
       wsRegistry.sendToConnection(
@@ -525,39 +502,8 @@ function createRoomRealtimeRuntime(deps: RoomRuntimeDeps) {
       now: at
     });
     claimMedia(active.peer, grant, at);
-    mediaMinute.noteDecision(payload.kind, profileId, grant);
+    mediaMinute?.noteDecision(payload.kind, profileId, grant);
     return { ok: true as const, grant };
-  }
-
-  // Push current summaries for every room visible to the account over one
-  // connection. Runs right after `ready` so the lobby renders live rosters on
-  // first load and resyncs after a reconnect (including clearing stale ones —
-  // empty rooms are sent too).
-  async function sendAccountSummaries(connection: WsConnection, userId: string): Promise<void> {
-    if (!userId) return;
-    let rooms: Awaited<ReturnType<RuntimeRoomStore['listVisibleRoomsForUser']>>;
-    try {
-      rooms = await getRoomStore().listVisibleRoomsForUser(userId);
-    } catch (error) {
-      logger.error(
-        { evt: LOG_EVENTS.WS_SUMMARY_LOAD_FAILED, userId, err: error },
-        'failed to list rooms for the ws ready summaries'
-      );
-      return;
-    }
-    for (const dbRoom of rooms) {
-      const presence = presenceRooms.get(dbRoom.id);
-      const peers = presence ? Array.from(presence.peers.values()).map(publicPeer) : [];
-      const unreadCount = Number.isFinite(dbRoom.unreadCount)
-        ? dbRoom.unreadCount
-        : await summaries.unreadCount(dbRoom.id, userId);
-      const summary = buildRoomRealtimeSummary(
-        publicLobbyRoom({ ...dbRoom, unreadCount }),
-        peers,
-        avatarColorForPeerId
-      );
-      wsRegistry.sendToConnection(connection, buildServerEnvelope('room.summary', { room: summary }));
-    }
   }
 
   function cleanupConnection(connection: WsConnection): void {
@@ -582,9 +528,6 @@ function createRoomRealtimeRuntime(deps: RoomRuntimeDeps) {
   }
 
   return {
-    broadcastChatMessage: fanout.broadcastChatMessage,
-    broadcastRoomDetail: fanout.broadcastRoomDetail,
-    broadcastRoomTyping: fanout.broadcastRoomTyping,
     buildRoomSnapshot,
     cancelAccountReconnectLeases: leases.cancelAccount,
     cancelRoomReconnectLeases: leases.cancelRoom,
@@ -593,17 +536,10 @@ function createRoomRealtimeRuntime(deps: RoomRuntimeDeps) {
     finalizeReconnectLease: leases.finalize,
     finalizePendingReconnectLease: leases.finalizePending,
     finalizeReconnectPeers: leases.finalizePeers,
-    flushSummary: summaries.flush,
-    invalidateRecipientCache: summaries.invalidateRecipients,
     joinVoiceRoom,
     leaveVoiceRoom,
     reportVoice,
     requestMedia,
-    scheduleSummaryBroadcast: summaries.schedule,
-    /** The server's video over the minute so far, for the system sample; starts the next one. */
-    takeMediaMinute: mediaMinute.take,
-    sendRoomSummaryToUser: summaries.sendToUser,
-    sendAccountSummaries,
     subscribePreview,
     unsubscribePreview,
     updatePeerState
@@ -611,5 +547,22 @@ function createRoomRealtimeRuntime(deps: RoomRuntimeDeps) {
 }
 
 export type RoomRealtimeRuntime = ReturnType<typeof createRoomRealtimeRuntime>;
+
+export function roomMediaLimits({
+  MAX_ROOM_PEERS,
+  MEDIA_BUDGET_MBPS = 0,
+  MEDIA_BUDGET_VOICE_PEERS = 0,
+  MAX_ROOM_SCREENS = 0
+}: Pick<
+  RoomRuntimeDeps,
+  'MAX_ROOM_PEERS' | 'MEDIA_BUDGET_MBPS' | 'MEDIA_BUDGET_VOICE_PEERS' | 'MAX_ROOM_SCREENS'
+>): MediaLimits {
+  return {
+    budgetBps: MEDIA_BUDGET_MBPS * 1_000_000,
+    maxRoomScreens: MAX_ROOM_SCREENS,
+    minViewers: Math.min(MEDIA_MIN_VIEWERS, Math.max(0, MAX_ROOM_PEERS - 1)),
+    voicePeersAtZero: MEDIA_BUDGET_VOICE_PEERS
+  };
+}
 
 export { clearViewedScreenPeerReferences, createRoomRealtimeRuntime, resolveViewedScreenPeerId };

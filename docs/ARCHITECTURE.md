@@ -1,20 +1,40 @@
 # VoiceRoom architecture
 
 Rules for new code, the current state of the code, and where the two still
-differ. Import rules live in `config/import-boundaries.v1.json`. The history of how the API got here
+differ. Import rules live in `config/import-boundaries.v1.json` and `eslint.config.mjs`. The history of how the API got here
 (`server.js` split, CommonJS → ES modules, JavaScript → TypeScript) is in git.
 
 ## 1. Repository shape: one monorepo
 
-API, web, admin and `packages/shared` stay in one repository. `apps/admin` is
+API, web, Meet, widget, site, admin, and the shared workspaces stay in one repository. `apps/admin` is
 the React staff console (admin.voiceroom.ru), signed in by handoff from the
 main site; it talks to the API's admin routes.
 
 - `packages/shared` is a live contract (validators, realtime envelopes, screen
   profile ids, reserved peer ids). One change updates the contract and both
   consumers atomically.
-- Versions move in lockstep (the root and every workspace share one version),
-  and CI boots the whole stack for the voice-join smoke test.
+- `packages/ui` owns portable call UI primitives, preview utilities and shared
+  theme styles. The web app, embedded widget and site consume its package
+  exports. The package imports no app code. Web owns product stores, locale
+  registration and the client log reporting sink.
+- `packages/call` owns the reusable call engine, its core views and the voice
+  asset source. Web wires its full-product ports. Meet and widget compose the
+  headless `@voice-room/call/guest` controller and guest transport with their
+  own API routes and entry and call screens. Each app emits the same versioned
+  voice asset URLs from the shared asset source.
+- `apps/widget` owns the v1 loader, iframe handshake, room creation proof,
+  compact call shell and frame-local credentials and preferences. The loader
+  and document ship in the web image at `/widget/v1/loader.js` and `/embed/v1/`.
+  Hashed widget chunks live under `/_app/immutable/widget/` and are kept by the
+  shared asset archive for open frames during updates. Caddy's embed document
+  and public loader keep separate framing, caching and cross-origin policies.
+  For local source development, `npm run dev:host:widget` serves the widget
+  entry points on port 5182 and proxies widget API requests to the local API.
+  When an embed disables its camera, the engine blocks camera capture and
+  remote camera subscriptions. Widget admission supplies the room capability
+  ceiling and the API and SFU enforce the screen and data publishing boundary.
+- The application workspaces version together. The site and documentation
+  release independently. CI boots the whole stack for the voice-join smoke test.
 - Deployables are already separate: the `api`, `worker` and `web` images are
   built and rolled out independently.
 - The desktop shell is its own repository (own release cadence and signing).
@@ -27,10 +47,11 @@ public API with third-party clients.
 - Everything is strict TypeScript. The API and `packages/shared` run on Node 24
   type stripping with no build step: erasable syntax only, imports with
   explicit `.ts` extensions, `tsc` in `npm run check`. The web (Vue 3) is
-  compiled by Vite and checked by `vue-tsc`.
+  compiled by Vite and checked by `vue-tsc`. `packages/ui` exports TypeScript
+  source for each Vite consumer to compile and keeps Vue and Pinia as peers.
 - JavaScript stays only where it must: the byte-pinned `.cjs` migrations,
   `scripts/geoip/fetch-dbip-city-lite.mjs` (host crontabs run it by path) and
-  the AudioWorklet modules in `apps/web/public` (served unbundled).
+  the AudioWorklet modules in `packages/call/assets` (served unbundled).
 - Types are proved, not asserted, and `npm run check` enforces it:
   - No `as` (except `as const`), no non-null `!`, no `any`
     (`consistent-type-assertions: never`, `no-non-null-assertion`,
@@ -142,10 +163,10 @@ above, list it here so nobody copies the old pattern.
 | Advisory lock keys written inline | `account/login-event.repository.ts`, `admission/gate-credential.repository.ts`, `media/attachment.repository.ts`, `messaging/message-idempotency.repository.ts`, `messaging/pin.repository.ts`, `notifications/inbox.repository.ts`, `rooms/room.repository.ts` (all under `domains/`) | Add the key to `lockKeys` and call `lockXact` |
 | A ban delete and the address re-keying take no lock | `domains/moderation/room-ban.repository.ts` (`deleteRoomBan`), `domains/moderation/active-ban.repository.ts` (`keyStoredAddresses`) | A new `room_bans` writer takes the room-bans lock |
 | Without a database, routes answer 503 `internal_error` | `app/service-registry.ts`, `app/domain-services.ts` (no catalogued code; `http-kit.ts` masks status >= 500) | Add a catalogued code before surfacing a new 503 |
-| Device state has two sources of truth | `features/room/room-device-ui.store.ts` against `features/room/client/core/types.ts`, copied by hand in `client/ui/devices.ts` and `client/services/microphone-service.ts` | One owner per value; the UI reads it and the action writes it; type `noiseMode` as `NoiseMode` |
-| Reconnect jitter is written three times | `api/realtime.ts`, `features/room/client/recovery/realtime-recovery.ts`, `features/room/client/services/livekit/reconnect-policy.ts` | Do not add a fourth `Math.random()` backoff; share one jitter helper |
+| Device state has two sources of truth | `packages/call/src/engine/core/room-device-ui.store.ts` against `packages/call/src/engine/core/types.ts`, copied by hand in `packages/call/src/engine/ui/devices.ts` and `packages/call/src/engine/services/microphone-service.ts` | One owner per value; the UI reads it and the action writes it; type `noiseMode` as `NoiseMode` |
+| Reconnect jitter is written three times | `api/realtime.ts`, `packages/call/src/engine/recovery/realtime-recovery.ts`, `packages/call/src/engine/services/livekit/reconnect-policy.ts` | Do not add a fourth `Math.random()` backoff; share one jitter helper |
 | Listbox keyboard handling is copied | `features/home/components/lobby/Sidebar.vue` (own typeahead) against `shared/ui/Select/Select.vue` | Use `Select`; do not write another typeahead |
-| Screen profile ids are free strings in the room client | `features/room/client/core/types.ts`, `client/media/profiles.ts` | Narrow ids in the client; keep the wire field `PublicPeer.screenProfileId` a plain string |
+| Screen profile ids are free strings in the room client | `packages/call/src/engine/core/types.ts`, `packages/call/src/engine/media/profiles.ts` | Narrow ids in the client; keep the wire field `PublicPeer.screenProfileId` a plain string |
 | Large components | `shared/chat/EmojiPickerPanel.vue` (506 lines) | Split by concern before adding to it |
 | The lobby store is large | `features/home/model/lobby.store.ts` (577 lines) | New lobby state goes in its own store or `use-*.ts` composable, not in `lobby.store.ts` |
 | `on(client)` query-shape guard: a value that is not a client falls back to the pool | `domains/media/attachment.repository.ts`, `domains/media/media-job.repository.ts` (`media-job-repository.test.ts` pins the fallback) | Kept on purpose. A new repository takes a typed `QueryClient` and does not guess the shape at run time |
@@ -157,7 +178,7 @@ above, list it here so nobody copies the old pattern.
 | Optional `credentialBoundary` | `realtime/room-runtime.ts` (`RuntimeCredentialBoundary \| null`; null without a 32-byte gate secret, then leases revoke through the room store) | Kept on purpose. Do not add another nullable collaborator to `RoomRuntimeDeps` |
 | Large lobby components | `features/home/components/lobby/Sidebar.vue` (405 lines), `features/home/LobbyPage.vue` (374 lines) | Extract a composable or a child component before adding to either |
 
-Paths in the web rows are under `apps/web/src/`, the rest under
+Paths in the web rows without a package prefix are under `apps/web/src/`, the rest under
 `apps/api/src/`.
 
 Every release-2.5 feature is on everywhere; `/api/capabilities` answers all of
@@ -208,14 +229,18 @@ styles/                 SCSS: tokens, mixins and one partial per BEM block
   `lobby/dm/*` for the direct thread, `RoomChatComposer` and pure layout in
   `room-chat-view.ts` for the room chat, `services/livekit/*` behind
   `livekit-service.ts`.
-- Styles: no `<style>` in `.vue` files. Each BEM block has a partial in
-  `styles/<area>/_<block>.scss`; colours come from the `--vr-*` tokens in
-  `styles/_tokens.scss`, not raw values. State is `aria-*` or a BEM modifier
+- Styles: no `<style>` in `.vue` files. Each BEM block has a partial in web's
+  `styles/<area>` or `packages/ui/src/styles`. Colours use the `--vr-*` tokens
+  in `packages/ui/src/styles/_tokens.scss`. State is `aria-*` or a BEM modifier
   class, never a `[data-*]` selector. `scripts/check-web-styles.mts` and
   `scripts/check-web-palette.mts` enforce this in `npm run check`.
 - Browser, desktop, media and LiveKit fallbacks stay explicit and testable.
-  The room client (`features/room/client`) has its own notes in
-  `ARCHITECTURE.md` there.
+  `packages/call` owns the call engine and portable Vue views. Its engine
+  uses host ports for identity/storage, transport, desktop capabilities and
+  diagnostics. Web installs the adapter in its composition root and composes
+  the call views with persistent chat, account, moderation and leave surfaces.
+  Body classes derive from call page state and web shell state.
+  See [Call engine architecture](../packages/call/src/engine/ARCHITECTURE.md).
 
 ## 6. Tests
 

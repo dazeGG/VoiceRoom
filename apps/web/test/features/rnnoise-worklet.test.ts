@@ -5,8 +5,9 @@ import { fileURLToPath } from 'node:url';
 import { runInNewContext } from 'node:vm';
 import { test } from 'vitest';
 
-const workletPath = join(dirname(fileURLToPath(import.meta.url)), '../../public/rnnoise/rnnoise.worklet.js');
-const wasmPath = join(dirname(fileURLToPath(import.meta.url)), '../../public/rnnoise/rnnoise.wasm');
+const assetDir = join(import.meta.dirname, '../../../../packages/call/assets/rnnoise');
+const workletPath = join(assetDir, 'rnnoise.worklet.js');
+const wasmPath = join(assetDir, 'rnnoise.wasm');
 const oldWorkletPath = join(dirname(fileURLToPath(import.meta.url)), '../fixtures/rnnoise-old.worklet.js.txt');
 
 class StubProcessor {

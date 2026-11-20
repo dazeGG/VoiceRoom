@@ -20,6 +20,7 @@ import {
   RoomUnbookmarked
 } from '@voice-room/shared/contracts/rooms';
 import { cleanRoomName, normalizePeerId, normalizeRoomId, normalizeSessionToken } from '@voice-room/shared/validation';
+import { roomCapabilities } from './room-surface.policy.ts';
 import type { ApiContext } from '../../app/context.ts';
 import { failure, optionalJsonBody, type Failure } from '../../platform/http/http-kit.ts';
 import {
@@ -220,6 +221,7 @@ export function registerRoomRoutes(root: FastifyInstance, ctx: ApiContext, deps:
       return {
         ok: true as const,
         avatarUrl: avatarUrl(room.avatarKey),
+        capabilities: roomCapabilities('main', deps.maxRoomPeers),
         createdAt: room.createdAt,
         exists: true as const,
         ...(room.emptySince === undefined ? {} : { emptySince: room.emptySince }),

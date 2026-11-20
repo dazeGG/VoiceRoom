@@ -4,7 +4,7 @@
 // through module scope.
 
 import { createWidgetRuntimeOwner, type WidgetRuntimeOwner } from '../domains/rooms/widget-runtime-owner.repository.ts';
-import { roomAllowsSurface } from '../domains/rooms/room-surface.policy.ts';
+import { roomAllowsAdmission } from '../domains/rooms/room-surface.policy.ts';
 import type http from 'node:http';
 import type { IncomingMessage } from 'node:http';
 import type { FastifyBaseLogger } from 'fastify';
@@ -117,13 +117,13 @@ export function createApiRuntime({ env = process.env }: { env?: NodeJS.ProcessEn
     config.WIDGET_ENABLED && widgetOwner !== null && (await widgetOwner.capture()) !== null;
   const limits = createRateLimits(config);
   const admissionService = createAdmissionService({
+    maxRoomPeers: config.MAX_ROOM_PEERS,
     livekitConfig: liveKit.config,
     credentialProvider: services.getLiveKitCredentialProvider,
     credentialBoundary: services.getCredentialBoundary,
     store: services.getRoomStore,
     roomExists: async (roomId) => Boolean(await hub.getRoom(roomId)),
-    roomAllowed: async (roomId, surface) =>
-      roomAllowsSurface(await hub.getRoom(roomId), surface) && (surface === 'main' || (await widgetCanAdmit())),
+    roomAllowed: async (roomId, surface) => roomAllowsAdmission(await hub.getRoom(roomId), surface, widgetCanAdmit),
     findRoomBan: hub.findRoomBan,
     waitForRosterPeer: hub.presence.waitForRosterPeer,
     currentRosterPeer: hub.presence.currentRosterPeer,
@@ -257,18 +257,20 @@ export function createApiRuntime({ env = process.env }: { env?: NodeJS.ProcessEn
       liveKitCredentials,
       membershipServicesOverride
     });
-    if (roomStoreChanged) hub.presence.reset();
+    if (roomStoreChanged) hub.resetPresence();
 
     const app = createFastifyApp({
       bodyLimit: config.BODY_LIMIT_BYTES,
       trustProxy: config.TRUST_PROXY,
-      maxUploadBytes: MAX_UPLOAD_BYTES,
       wsMaxPayloadBytes: config.WS_MAX_PAYLOAD_BYTES,
       securityHeaders: baseHeaders,
       logRequest: logHttpRequest,
-      // The admin app's cookie authenticates too, so its writes are origin-checked the same way.
-      hasSessionCookie: (req) => Boolean(getSessionToken(req) || staffToken(req, config.SESSION_COOKIE_SECURE)),
-      outdatedClientVersion: (req) => outdatedAndroidVersion(req.headers['user-agent'], config.ANDROID_MIN_VERSION)
+      accountHttp: {
+        maxUploadBytes: MAX_UPLOAD_BYTES,
+        // The admin app's cookie authenticates too, so its writes are origin-checked the same way.
+        hasSessionCookie: (req) => Boolean(getSessionToken(req) || staffToken(req, config.SESSION_COOKIE_SECURE)),
+        outdatedClientVersion: (req) => outdatedAndroidVersion(req.headers['user-agent'], config.ANDROID_MIN_VERSION)
+      }
     });
     const appLogger = logger || app.log;
     setProcessLogger(appLogger);
@@ -371,7 +373,7 @@ export function createApiRuntime({ env = process.env }: { env?: NodeJS.ProcessEn
 
   async function closeStores(logger: Pick<Logger, 'error'> = getProcessLogger()): Promise<void> {
     // The roster ends with the process: its open stays are written while the pool is still up.
-    await hub.presence.recordOpenSessions();
+    await hub.recordOpenSessions();
     await services.close(logger);
   }
 

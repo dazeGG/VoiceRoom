@@ -4,7 +4,10 @@
 // microphone, a poll after the computer slept and a browser that does not count
 // the sound are not stalls. Each poll tells the server what it saw.
 
-import { afterEach, expect, test, vi } from 'vitest';
+import { afterEach, beforeEach, expect, onTestFinished, test, vi } from 'vitest';
+import { createPinia, setActivePinia } from 'pinia';
+import { createWebCallPorts } from '@/features/room/adapters/web-call-ports';
+import { installCallPorts } from '@voice-room/call/engine/ports';
 import {
   MIC_HEALTHY_POLLS,
   MIC_RECOVERIES_PER_CALL,
@@ -17,10 +20,15 @@ import {
   stopMicSendWatch,
   takeMicPoll,
   type MicReading
-} from '@/features/room/client/room/mic-send';
+} from '@voice-room/call/engine/room/mic-send';
 import { resolveDesktopBoundaryPolicy } from '@/platform/desktop-boundary';
 import { freshImport } from '../helpers/fresh-module';
 import { defined } from '../helpers/assert';
+
+beforeEach(() => {
+  const pinia = setActivePinia(createPinia());
+  onTestFinished(installCallPorts(createWebCallPorts(pinia)));
+});
 
 afterEach(() => {
   stopMicSendWatch();
@@ -104,7 +112,7 @@ test('paused capture cannot verify progress and times out unverified', () => {
 
 test.each(['cancel', 'timeout'] as const)('a stale capture completes once as unverified on %s', async (ending) => {
   vi.useFakeTimers();
-  const progress = await freshImport(() => import('@/features/room/client/room/mic-send'));
+  const progress = await freshImport(() => import('@voice-room/call/engine/room/mic-send'));
   const complete = vi.fn();
   progress.observeCaptureProgress(complete, () => false);
   expect(() => {
@@ -119,7 +127,7 @@ test.each(['cancel', 'timeout'] as const)('a stale capture completes once as unv
 
 test('a publication-only identity change cannot restore the previous action progress', async () => {
   vi.useFakeTimers();
-  const progress = await freshImport(() => import('@/features/room/client/room/mic-send'));
+  const progress = await freshImport(() => import('@voice-room/call/engine/room/mic-send'));
   const publication = {};
   let currentPublication = publication;
   const complete = vi.fn();
@@ -331,9 +339,9 @@ async function pollingCall(source: () => StatsEntry[], overrides: Record<string,
     updateVoicePeer: () => {},
     reportVoicePoll: (payload: { mic?: unknown }) => sent.push(payload)
   }));
-  const stats = await freshImport(() => import('@/features/room/client/room/stats'));
-  const micSend = await import('@/features/room/client/room/mic-send');
-  const { state } = await import('@/features/room/client/core/room-runtime.store');
+  const stats = await freshImport(() => import('@voice-room/call/engine/room/stats'));
+  const micSend = await import('@voice-room/call/engine/room/mic-send');
+  const { state } = await import('@voice-room/call/engine/core/room-runtime.store');
   Object.assign(state, {
     joined: true,
     voiceConnection: 'connected',

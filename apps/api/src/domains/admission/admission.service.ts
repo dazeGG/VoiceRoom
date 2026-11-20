@@ -3,7 +3,8 @@
 // each reason is spelled for clients; unexpected failures throw, after the
 // credential that was already issued has been revoked.
 
-import type { RoomSurface } from '../rooms/room-surface.policy.ts';
+import type { RoomCapabilities } from '@voice-room/shared/contracts/rooms';
+import { ROOM_SURFACE_CEILINGS, roomCapabilities, type RoomSurface } from '../rooms/room-surface.policy.ts';
 import type { Logger } from 'pino';
 import { LOG_EVENTS } from '../../lib/log-events.ts';
 import { tokensMatch } from '../../platform/crypto/tokens-match.ts';
@@ -12,15 +13,9 @@ import type { PeerIdentityClaim } from '../rooms/peer-identity.repository.ts';
 import type { GateCredentialRepository } from './gate-credential.repository.ts';
 import type { GatePrincipal } from './gate-principal.ts';
 import type { LiveKitConfig } from './livekit-config.ts';
-import type { AdmissionIssue } from './livekit-credential-provider.ts';
+import type { AdmissionIssue, LiveKitAdmission } from './livekit-credential-provider.ts';
 
-export interface Admission {
-  gateCredentialId: string;
-  room: string;
-  token: string;
-  ttlSeconds: number;
-  url: string;
-}
+export type Admission = LiveKitAdmission & { capabilities: RoomCapabilities };
 
 type CredentialRevocation = Awaited<ReturnType<GateCredentialRepository['revokeLiveKitGateCredential']>>;
 
@@ -33,6 +28,7 @@ export interface CredentialProvider {
     peerId: string;
     principal: GatePrincipal;
     roomId: string;
+    surface: RoomSurface;
   }): Promise<AdmissionIssue>;
 }
 
@@ -80,6 +76,7 @@ export interface AdmissionPeer {
 }
 
 export interface AdmissionDeps {
+  maxRoomPeers: number;
   livekitConfig(): LiveKitConfig;
   credentialProvider(): CredentialProvider | null;
   credentialBoundary(): CredentialBoundary | null;
@@ -202,15 +199,13 @@ export function createAdmissionService(deps: AdmissionDeps) {
   const refuse = (reason: RefusalReason): AdmissionResult => ({ status: 'refused', reason });
 
   async function admit(request: AdmissionRequest): Promise<AdmissionResult> {
-    const { roomId, peerId, sessionToken, name, user, clientIp, log } = request;
+    const { roomId, peerId, sessionToken, name, user, clientIp, log, surface = 'main' } = request;
+    const ceiling = ROOM_SURFACE_CEILINGS[surface];
     const livekit = deps.livekitConfig();
 
-    if (
-      !(await deps.roomExists(roomId)) ||
-      (deps.roomAllowed && !(await deps.roomAllowed(roomId, request.surface ?? 'main')))
-    )
+    if (!(await deps.roomExists(roomId)) || (deps.roomAllowed && !(await deps.roomAllowed(roomId, surface))))
       return refuse('room_not_found');
-    if (request.surface === 'widget' && user) return refuse('invalid_session');
+    if (ceiling.guestOnly && user) return refuse('invalid_session');
 
     // Media admission belongs to a peer the room roster already knows. Without
     // this a caller holding only the room id could subscribe to every voice and
@@ -292,12 +287,13 @@ export function createAdmissionService(deps: AdmissionDeps) {
     const issue = () =>
       provider.issueAdmission({
         canPublishMicrophone: !serverMuted,
-        canPublishScreen: request.surface !== 'widget',
+        canPublishScreen: ceiling.screenShare,
         livekitRoom: deps.roomName(roomId),
         name,
         peerId,
         principal,
-        roomId
+        roomId,
+        surface
       });
     const revoke = (credentialId: string | undefined, cause?: unknown) =>
       revokeIssuedAdmission({
@@ -316,7 +312,7 @@ export function createAdmissionService(deps: AdmissionDeps) {
       logDenied(log, { roomId, peerId, code: 'livekit_gate_credential_unavailable' });
       return refuse('livekit_gate_credential_unavailable');
     }
-    let admission: Admission = issued.admission;
+    let admission = issued.admission;
 
     if (!current()) {
       await revoke(admission.gateCredentialId);
@@ -383,7 +379,7 @@ export function createAdmissionService(deps: AdmissionDeps) {
     }
     let stillAllowed = true;
     try {
-      if (deps.roomAllowed) stillAllowed = await deps.roomAllowed(roomId, request.surface ?? 'main');
+      if (deps.roomAllowed) stillAllowed = await deps.roomAllowed(roomId, surface);
     } catch (error) {
       await revoke(admission.gateCredentialId, error);
       throw error;
@@ -392,7 +388,10 @@ export function createAdmissionService(deps: AdmissionDeps) {
       await revoke(admission.gateCredentialId);
       return refuse(stillAllowed ? 'invalid_session' : 'room_not_found');
     }
-    return { status: 'issued', admission };
+    return {
+      status: 'issued',
+      admission: { ...admission, capabilities: roomCapabilities(surface, deps.maxRoomPeers) }
+    };
   }
 
   // Every gate credential issued before a server mute was paired with a JWT

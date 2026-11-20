@@ -11,7 +11,8 @@
     "test": "node --test test/*.test.ts"
   },
   "dependencies": {
-    "@voice-room/shared": "file:../../packages/shared"
+    "@voice-room/shared": "file:../../packages/shared",
+    "@voice-room/ui": "file:../../packages/ui"
   },
   "devDependencies": {
     "@astrojs/check": "0.9.12",

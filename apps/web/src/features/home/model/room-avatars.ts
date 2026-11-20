@@ -1,6 +1,6 @@
 import { t } from '@/shared/i18n';
 import type { RoomPeerSummary } from '@voice-room/shared/contracts/realtime';
-import type { AvatarStackItem } from '@/shared/ui/AvatarStack/types';
+import type { AvatarStackItem } from '@voice-room/ui/components';
 import { getAvatarPresentation } from '@/shared/ui/avatar-presentation';
 
 export function roomPeerAvatarItems(peers: RoomPeerSummary[]): AvatarStackItem[] {

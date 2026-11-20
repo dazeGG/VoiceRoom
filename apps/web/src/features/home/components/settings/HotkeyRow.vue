@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue';
-import { getDefaultHotkeyBinding, readHotkeyBinding, setDesktopGlobalHotkeysSuspended } from '@/features/room/client';
-import type { HotkeyAction } from '@/features/room/client';
+import { getDefaultHotkeyBinding, readHotkeyBinding, setDesktopGlobalHotkeysSuspended } from '@voice-room/call/engine';
+import type { HotkeyAction } from '@voice-room/call/engine';
 import { HotkeyRecorder } from '@/shared/ui';
 import type { HotkeyBinding } from '@/shared/ui/HotkeyRecorder/types';
 import { saveHotkey } from '../../model/hotkey-settings';

@@ -44,7 +44,7 @@
       "paths": [
         "apps/api/src/domains/media/attachment.repository.ts",
         "apps/api/src/domains/media/media-job.repository.ts",
-        "apps/web/src/features/room/client/media/screen-receiver-demand.ts"
+        "packages/call/src/engine/media/screen-receiver-demand.ts"
       ],
       "pathPatterns": []
     }
@@ -54,7 +54,7 @@
     "apps/api/src/domains/media/attachment.repository.ts",
     "apps/api/src/domains/media/media-job.repository.ts",
     "apps/web/src/api/auth.ts",
-    "apps/web/src/features/room/client/media/screen-receiver-demand.ts"
+    "packages/call/src/engine/media/screen-receiver-demand.ts"
   ],
   "ignoredPathPatterns": [
     "/test/",

@@ -4,11 +4,13 @@
 // and show the update notice, and /service-worker.js for web push. Assets go
 // to /_app/immutable/ through build.assetsDir in vite.config.ts.
 
-import { createHash } from 'node:crypto';
-import { readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
-import { extname, join, resolve } from 'node:path';
-import { brotliCompressSync, constants, gzipSync } from 'node:zlib';
+import { resolve } from 'node:path';
 import { build, type Plugin } from 'vite';
+import { cspMetaPlugin as createCspMetaPlugin } from '../../../scripts/build/csp-meta.ts';
+
+export { precompressPlugin } from '../../../scripts/build/precompress.ts';
+export { metaPolicy } from '../../../scripts/build/csp-meta.ts';
+export { voiceAssetDirectory, voiceAssetVersion, voiceAssetsPlugin } from '../../../scripts/build/voice-assets.ts';
 
 type Env = Record<string, string | undefined>;
 
@@ -72,46 +74,8 @@ export function pageCspDirectives(env: Env = process.env): Record<string, readon
   };
 }
 
-// CSP keywords are written in single quotes; schemes and hosts are not.
-const QUOTED = new Set([
-  'self',
-  'unsafe-eval',
-  'unsafe-hashes',
-  'unsafe-inline',
-  'none',
-  'strict-dynamic',
-  'report-sample',
-  'wasm-unsafe-eval',
-  'script'
-]);
-// A <meta> policy ignores these; Caddy sends frame-ancestors in the header.
-const HEADER_ONLY = new Set(['frame-ancestors', 'report-uri', 'sandbox']);
-
-export function metaPolicy(directives: Record<string, readonly string[]>): string {
-  return Object.entries(directives)
-    .filter(([name, values]) => !HEADER_ONLY.has(name) && values.length > 0)
-    .map(([name, values]) => [name, ...values.map((value) => (QUOTED.has(value) ? `'${value}'` : value))].join(' '))
-    .join('; ');
-}
-
 export function cspMetaPlugin(env: Env = process.env): Plugin {
-  const policy = metaPolicy(pageCspDirectives(env));
-  if (policy.includes('"')) throw new Error('policy cannot contain a double quote');
-  return {
-    name: 'voiceroom-csp-meta',
-    // Written as raw text, as SvelteKit does: Vite's tag descriptors escape the
-    // quotes to &#39;, which emit-caddy-csp.ts would copy into the header.
-    // It follows the charset declaration and precedes every script it governs.
-    transformIndexHtml(html) {
-      const charset = /<meta charset="[^"]*">/i.exec(html)?.[0];
-      if (!charset) throw new Error('index.html has no <meta charset> to put the policy after');
-      // A replacer function: `$&` or `$'` in an env-derived policy is not a replacement pattern.
-      return html.replace(
-        charset,
-        () => `${charset}\n    <meta http-equiv="content-security-policy" content="${policy}">`
-      );
-    }
-  };
+  return createCspMetaPlugin(pageCspDirectives(env));
 }
 
 /** The same shape SvelteKit writes, so a tab of either build reads the other's file. */
@@ -122,61 +86,6 @@ export function versionFile(version: string): string {
 /** The build id: SvelteKit's default, the build time. vite.config.ts computes it once for the bundle and the file. */
 export function buildVersion(): string {
   return Date.now().toString();
-}
-
-// The audio files joining a call needs. They keep fixed names under public/
-// (the worklet loader and RNNoise address them by URL), so their URLs carry this
-// instead of a hashed name, and Caddy caches a versioned URL for a year.
-const VOICE_ASSET_FILES = [
-  'audio-gate.worklet.js',
-  'desktop-audio-source.worklet.js',
-  'rnnoise/rnnoise.mjs',
-  'rnnoise/rnnoise.wasm',
-  'rnnoise/rnnoise.worklet.js'
-];
-
-/** Changes only when one of the files does, so a release does not make every visitor download them again. */
-export function voiceAssetVersion(publicDir: string): string {
-  const hash = createHash('sha256');
-  for (const file of VOICE_ASSET_FILES) hash.update(readFileSync(resolve(publicDir, file)));
-  return hash.digest('hex').slice(0, 12);
-}
-
-// Not .svg: the emoji are thousands of tiny files, which Caddy compresses on the fly.
-const COMPRESSED_TYPES = new Set(['.css', '.html', '.js', '.json', '.mjs', '.wasm']);
-const MIN_COMPRESSED_BYTES = 1024;
-
-function compressTree(directory: string): void {
-  for (const name of readdirSync(directory)) {
-    const path = join(directory, name);
-    if (statSync(path).isDirectory()) {
-      compressTree(path);
-      continue;
-    }
-    if (!COMPRESSED_TYPES.has(extname(name))) continue;
-    const source = readFileSync(path);
-    if (source.length < MIN_COMPRESSED_BYTES) continue;
-    writeFileSync(
-      `${path}.br`,
-      brotliCompressSync(source, { params: { [constants.BROTLI_PARAM_QUALITY]: constants.BROTLI_MAX_QUALITY } })
-    );
-    writeFileSync(`${path}.gz`, gzipSync(source, { level: constants.Z_BEST_COMPRESSION }));
-  }
-}
-
-/** Writes .br and .gz next to the build's files, at a strength too slow to spend on every request (Caddyfile). */
-export function precompressPlugin(): Plugin {
-  let outDir = '';
-  return {
-    name: 'voiceroom-precompress',
-    apply: 'build',
-    configResolved(config) {
-      outDir = resolve(config.root, config.build.outDir);
-    },
-    closeBundle() {
-      compressTree(outDir);
-    }
-  };
 }
 
 export function versionFilePlugin(version = buildVersion()): Plugin {

@@ -2,33 +2,35 @@
 // a signed-in account enters under its own name and saves the room, a guest
 // is asked for a name, and a failed account check stops entry.
 
+import { installWebCallPortsForTest } from '../helpers/call-ports';
 import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, expect, test, vi } from 'vitest';
 import { stubFetch, type Reply } from '../fixtures/fetch';
 import { lobbyRoom, roomStatus } from '../fixtures/answers';
 import { authUser } from '../fixtures/users';
 
-vi.mock('@/features/room/client/ui/devices', async (importOriginal) => ({
+vi.mock('@voice-room/call/engine/ui/devices', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   refreshDevices: vi.fn(async () => {})
 }));
-vi.mock('@/features/room/client/ui/toast', () => ({ showToast: vi.fn() }));
+vi.mock('@voice-room/call/engine/ui/toast', () => ({ showToast: vi.fn() }));
 
 async function load(routes: Record<string, Reply>) {
   vi.resetModules();
   setActivePinia(createPinia());
+  await installWebCallPortsForTest();
   const fetchStub = stubFetch(routes);
   const shell = { roomLeft: vi.fn<(roomId: string) => void>(), roomsChanged: vi.fn<(roomId: string) => void>() };
-  const { setRoomShell } = await import('@/features/room/client/core/embed');
+  const { setRoomShell } = await import('@voice-room/call/engine/core/embed');
   setRoomShell(shell);
-  const room = await import('@/features/room/client/room/room');
-  const { state } = await import('@/features/room/client/core/room-runtime.store');
-  const names = await import('@/features/room/client/ui/names');
-  const { useGuestNameUiStore } = await import('@/features/room/guest-name-ui.store');
+  const room = await import('@voice-room/call/engine/room/room');
+  const { state } = await import('@voice-room/call/engine/core/room-runtime.store');
+  const names = await import('@voice-room/call/engine/ui/names');
+  const { useGuestNameUiStore } = await import('@voice-room/call/engine/core/guest-name-ui.store');
   const { usePageStore } = await import('@/stores/page.store');
   const guestNameUi = useGuestNameUiStore();
   const page = usePageStore();
-  const { showToast } = await import('@/features/room/client/ui/toast');
+  const { showToast } = await import('@voice-room/call/engine/ui/toast');
   state.roomId = 'abc123';
   return { ...room, ...names, state, guestNameUi, page, fetchStub, shell, showToast: vi.mocked(showToast) };
 }

@@ -2,7 +2,10 @@ import { expect, test } from 'vitest';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 
-const source = readFileSync(`${import.meta.dirname}/../public/desktop-audio-source.worklet.js`, 'utf8');
+const source = readFileSync(
+  `${import.meta.dirname}/../../../packages/call/assets/desktop-audio-source.worklet.js`,
+  'utf8'
+);
 type Processor = { process(inputs: Float32Array[][], outputs: Float32Array[][]): boolean };
 function harness(channels: number, sampleRate: number) {
   let ctor: (new (options: object) => Processor) | undefined;

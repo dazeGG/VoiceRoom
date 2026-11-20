@@ -263,11 +263,12 @@ export function noteVoiceReport<Peer extends VoicePeer>(
     VoicePoll,
     'rttMs' | 'rttUnchanged' | 'jitterBufferMs' | 'uplink' | 'transport' | 'heard' | 'mic' | 'cpu' | 'joinTiming'
   >,
-  at: number
+  at: number,
+  collectStay = true
 ): VoiceChange<Peer>[] {
   const voice = (peer.voice ??= emptyVoice());
-  if (poll.joinTiming) voice.joinTiming = poll.joinTiming;
-  const minute = minuteOf(voice, at);
+  if (collectStay && poll.joinTiming) voice.joinTiming = poll.joinTiming;
+  const minute = collectStay ? minuteOf(voice, at) : null;
 
   // A speaker the poll does not name sent nothing since the previous one, and
   // one whose microphone was changing said nothing we can judge. Only here, poll
@@ -286,7 +287,7 @@ export function noteVoiceReport<Peer extends VoicePeer>(
     keepLast(polls);
     if (!peers.has(senderId) || polls.every((counts) => counts.packets === 0)) voice.heard.delete(senderId);
     else voice.heard.set(senderId, polls);
-    if (counts === NO_COUNTS) continue;
+    if (!minute || counts === NO_COUNTS) continue;
     addCounts(minute.heard, counts);
     const window = polls.reduce(addCounts, { ...NO_COUNTS });
     minute.worstHeard = worseWindow(minute.worstHeard, window);
@@ -309,28 +310,30 @@ export function noteVoiceReport<Peer extends VoicePeer>(
   voice.jitterBufferPolls.push(poll.jitterBufferMs);
   keepLast(voice.jitterBufferPolls);
   voice.reportedAt = at;
-  if (poll.rttMs !== null) {
-    minute.rttMsSum += poll.rttMs;
-    minute.rttPolls += 1;
+  if (minute) {
+    if (poll.rttMs !== null) {
+      minute.rttMsSum += poll.rttMs;
+      minute.rttPolls += 1;
+    }
+    if (poll.jitterBufferMs !== null) {
+      minute.jitterBufferMsSum += poll.jitterBufferMs;
+      minute.jitterBufferPolls += 1;
+    }
+    minute.uplink.packets += poll.uplink.packets;
+    minute.uplink.lost += poll.uplink.lost;
+    if (poll.mic) {
+      minute.mic.expectedMs += poll.mic.expectedMs;
+      minute.mic.deliveredMs += poll.mic.deliveredMs;
+      minute.mic.contextMs += poll.mic.contextMs;
+      minute.mic.reopens += poll.mic.reopens;
+      minute.mic.replacements += poll.mic.replacements;
+    }
+    minute.transport = poll.transport ?? minute.transport;
+    if (poll.cpu) noteCpu(voice, minute, poll.cpu, at);
   }
-  if (poll.jitterBufferMs !== null) {
-    minute.jitterBufferMsSum += poll.jitterBufferMs;
-    minute.jitterBufferPolls += 1;
-  }
-  minute.uplink.packets += poll.uplink.packets;
-  minute.uplink.lost += poll.uplink.lost;
-  if (poll.mic) {
-    minute.mic.expectedMs += poll.mic.expectedMs;
-    minute.mic.deliveredMs += poll.mic.deliveredMs;
-    minute.mic.contextMs += poll.mic.contextMs;
-    minute.mic.reopens += poll.mic.reopens;
-    minute.mic.replacements += poll.mic.replacements;
-  }
-  minute.transport = poll.transport ?? minute.transport;
-  if (poll.cpu) noteCpu(voice, minute, poll.cpu, at);
 
   const changes = judgeRoom(peers, at);
-  if (voice.verdict) {
+  if (minute && voice.verdict) {
     minute.polls[voice.verdict.level] += 1;
     if (voice.verdict.cause) {
       minute.causes ??= { heard_badly: 0, hears_badly: 0, delay: 0 };

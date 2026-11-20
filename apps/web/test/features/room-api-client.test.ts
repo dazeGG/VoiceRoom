@@ -1,11 +1,12 @@
+import { installWebCallPortsForTest } from '../helpers/call-ports';
 // The room client's API calls: LiveKit credentials come with every address to
 // try, refusals keep what the recovery logic keys on, and a room check fills
 // the top bar.
 
 import { beforeEach, expect, test, vi } from 'vitest';
 import { ApiError } from '@/api/client';
-import { state } from '@/features/room/client/core/room-runtime.store';
-import { checkRoomExists, requestLiveKitToken } from '@/features/room/client/net/api';
+import { state } from '@voice-room/call/engine/core/room-runtime.store';
+import { checkRoomExists, requestLiveKitToken } from '@voice-room/call/engine/net/api';
 import { resetRuntimeConfig } from '@/platform/runtime-config';
 import { stubFetch } from '../fixtures/fetch';
 import { instanceOf } from '../helpers/assert';
@@ -20,7 +21,10 @@ const ADMISSION = {
   url: 'wss://lk.example/rtc'
 };
 
-beforeEach(() => resetRuntimeConfig());
+beforeEach(async () => {
+  resetRuntimeConfig();
+  await installWebCallPortsForTest();
+});
 
 test('credentials carry every LiveKit address to try', async () => {
   const { calls } = stubFetch({

@@ -5,7 +5,7 @@ import { computed } from 'vue';
 import { AccountBadge, Avatar, Button, Ellipsis } from '@/shared/ui';
 import { iconSm } from '@/shared/ui/icons';
 import { dayMonthYear } from '@/shared/utils/date-format';
-import { getAvatarColor } from '@/visual/tokens';
+import { getAvatarColor } from '@voice-room/ui/avatar-colors';
 import type { ProfileCardProps } from './types';
 
 const props = withDefaults(defineProps<ProfileCardProps>(), { friendsSince: null, busy: false });

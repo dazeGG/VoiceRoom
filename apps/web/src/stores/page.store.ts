@@ -1,21 +1,14 @@
-import { defineStore } from 'pinia';
+import { defineStore, storeToRefs } from 'pinia';
+import { useCallPageStore } from '@voice-room/call/engine/core/call-page.store';
 import { ref, watchEffect, type WatchHandle } from 'vue';
 
-export type PageScreen = '' | 'start' | 'checking' | 'room' | 'entry-error' | 'not-found' | 'moderation';
-
 /**
- * Page state that styles read from `<body>`. Svelte kept it in `document.body.dataset`;
- * here it lives in one store and `installBodyClasses()` mirrors it as classes.
+ * Web body state combines host shell fields with refs owned by the call store.
  */
 export const usePageStore = defineStore('page', () => {
-  const screen = ref<PageScreen>('');
   const chatOpen = ref(false);
   const lobbyEmbedded = ref(false);
-  const screenView = ref(false);
-  const stripCollapsed = ref(false);
-  const stageSummary = ref<'' | 'hidden'>('');
-  const desktopScreenFullscreen = ref(false);
-  return { screen, chatOpen, lobbyEmbedded, screenView, stripCollapsed, stageSummary, desktopScreenFullscreen };
+  return { ...storeToRefs(useCallPageStore()), chatOpen, lobbyEmbedded };
 });
 
 const SCREEN_CLASS_PREFIX = 'screen--';

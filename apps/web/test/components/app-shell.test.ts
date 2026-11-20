@@ -17,7 +17,7 @@ import { stubFetch } from '../fixtures/fetch.ts';
 const platform = vi.hoisted(() => ({ desktop: true }));
 const captureTelemetry = vi.hoisted(() => ({ noteWakeUnlock: vi.fn() }));
 
-vi.mock('../../src/features/room/client/room/capture-diagnostics.ts', () => captureTelemetry);
+vi.mock('@voice-room/call/engine/room/capture-diagnostics', () => captureTelemetry);
 
 vi.mock('../../src/platform/desktop-boundary.ts', async (importOriginal) => {
   const original = await importOriginal<typeof DesktopBoundary>();

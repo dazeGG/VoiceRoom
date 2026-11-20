@@ -144,7 +144,7 @@ export interface HistoryAfter {
   id: string;
 }
 
-// The columns only ever hold these two (rooms_kind_check, voice_sessions_room_kind_check).
+// The full-product admin contract and the voice-session history share these kinds.
 const roomKindOf = (value: string | null): RoomKind | null => (value === 'main' || value === 'widget' ? value : null);
 
 // The column only ever holds these four (voice_sessions_client_check).
@@ -308,6 +308,7 @@ export function createAdminRoomsRepository({ pool }: { pool: pg.Pool }) {
         'u.avatar_accent'
       ])
       .where('r.id', 'in', [...ids])
+      .where('r.kind', 'in', ['main', 'widget'])
       .execute();
     return rows.map((row) => ({
       id: row.room_id,

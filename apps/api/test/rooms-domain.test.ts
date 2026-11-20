@@ -962,6 +962,7 @@ test('GET /api/rooms/:roomId is the public status card', async (t) => {
   assert.deepEqual((await call(app, 'GET', '/api/rooms/room-1')).body, {
     ok: true,
     avatarUrl: '/api/avatars/a.webp',
+    capabilities: { screenShare: true, camera: true, chat: 'persistent', maxPeers: 12 },
     createdAt: 1,
     exists: true,
     emptySince: 9,

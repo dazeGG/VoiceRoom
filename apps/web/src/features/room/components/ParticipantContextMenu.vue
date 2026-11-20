@@ -11,11 +11,11 @@ import {
   getParticipantAudioPreference,
   getParticipantAudioPreferenceKey,
   storeParticipantAudioPreference
-} from '../client/core/settings';
-import { state as roomState } from '../client/core/room-runtime.store';
-import { applyRemoteParticipantAudioPreferences } from '../client/services/media-playback-service';
-import { getParticipantById } from '../client/room/participants';
-import { showToast } from '../client/ui/toast';
+} from '@voice-room/call/engine/core/settings';
+import { state as roomState } from '@voice-room/call/engine/core/room-runtime.store';
+import { applyRemoteParticipantAudioPreferences } from '@voice-room/call/engine/services/media-playback-service';
+import { getParticipantById } from '@voice-room/call/engine/room/participants';
+import { showToast } from '@voice-room/call/engine/ui/toast';
 import { useParticipantContextUiStore } from '../participant-context-ui.store';
 import { participantProfilePerson } from '../profile-card-adapter';
 import { useRoomSettingsStore } from '../room-settings.store';

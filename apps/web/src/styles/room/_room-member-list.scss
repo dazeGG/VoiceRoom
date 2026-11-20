@@ -15,7 +15,7 @@
 // [data-*] -> aria
 //   .room-member-list__menu-trigger[data-open='true'] -> .room-member-list__menu-trigger[aria-expanded='true']
 
-@use '../mixins' as *;
+@use 'pkg:@voice-room/ui/styles/mixins' as *;
 
 .room-member-list {
   display: grid;

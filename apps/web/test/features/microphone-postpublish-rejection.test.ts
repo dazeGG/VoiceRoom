@@ -1,18 +1,20 @@
 import { createPinia, setActivePinia } from 'pinia';
 import { expect, test, vi } from 'vitest';
 import { FakeMediaStream, FakeMediaStreamTrack } from '../helpers/fake-media';
-import { state } from '@/features/room/client/core/room-runtime.store';
-import { createInitialRoomState } from '@/features/room/client/model/room-state';
-import { acquireMicrophoneForJoin, ensureCurrentMicrophonePublication } from '@/features/room/client/ui/devices';
+import { state } from '@voice-room/call/engine/core/room-runtime.store';
+import { createInitialRoomState } from '@voice-room/call/engine/model/room-state';
+import { acquireMicrophoneForJoin, ensureCurrentMicrophonePublication } from '@voice-room/call/engine/ui/devices';
 import { clearLogBuffer, readLogBuffer } from '@/shared/log';
+import { installWebCallPortsForTest } from '../helpers/call-ports';
 
-vi.mock('@/features/room/client/media/livekit-runtime', () => ({
+vi.mock('@voice-room/call/engine/media/livekit-runtime', () => ({
   loadLiveKitClient: async () => ({ Track: { Source: { Microphone: 'microphone' } } })
 }));
 
 test('post-publish mute rejection detaches under the same lease and quarantines rejected cleanup', async () => {
   clearLogBuffer();
   setActivePinia(createPinia());
+  await installWebCallPortsForTest();
   Object.assign(state, createInitialRoomState());
   const track = new FakeMediaStreamTrack('mute-reject-output', 'audio');
   const stream = new FakeMediaStream([track]);

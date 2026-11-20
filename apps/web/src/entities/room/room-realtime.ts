@@ -93,6 +93,7 @@ const ROOM_OF: { [Type in ServerEventType]: ((payload: ServerEvents[Type]) => st
   'room.peer.left': (payload) => payload.roomId,
   'room.peer.updated': (payload) => payload.roomId,
   'room.voice.quality': (payload) => payload.roomId,
+  'meet.chat.message': null,
   'room.chat.message': (payload) => payload.roomId,
   'room.chat.edited': (payload) => payload.roomId,
   'room.chat.deleted': (payload) => payload.roomId,

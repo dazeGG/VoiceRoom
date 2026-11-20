@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { t } from '@/shared/i18n';
 import { computed } from 'vue';
-import { state } from '@/features/room/client/core/room-runtime.store';
+import { state } from '@voice-room/call/engine/core/room-runtime.store';
 import { APP_HOME } from '@/shared/app-home';
-import { usePageStore } from '@/stores/page.store';
+import { useCallPageStore } from '@voice-room/call/engine/core/call-page.store';
 
-const page = usePageStore();
+const page = useCallPageStore();
 
 const banned = computed(() => state.moderationReason === 'banned');
 </script>

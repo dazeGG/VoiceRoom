@@ -1,5 +1,5 @@
-// WASM side of public/rnnoise/rnnoise.wasm. Same ABI as simple-rnnoise-wasm's
-// src/worklet.c (MIT, see public/rnnoise/LICENSE), with the smallest fixed
+// WASM side of packages/call/assets/rnnoise/rnnoise.wasm. Same ABI as simple-rnnoise-wasm's
+// src/worklet.c (MIT, see packages/call/assets/rnnoise/LICENSE), with the smallest fixed
 // buffering that never runs dry.
 //
 // RNNoise consumes 480-sample frames; Web Audio delivers L-sample quanta.

@@ -8,7 +8,7 @@ import { stubFetch } from '../fixtures/fetch.ts';
 import { FakeWebSocket, installFakeWebSocket } from '../fixtures/fake-websocket.ts';
 
 const playRoomChatMessageCue = vi.fn();
-vi.mock('../../src/features/room/client/media/cues', () => ({ playRoomChatMessageCue }));
+vi.mock('@voice-room/call/engine/media/cues', () => ({ playRoomChatMessageCue }));
 
 const { useLobbyNotifications } = await import('../../src/features/home/model/use-lobby-notifications.ts');
 const realtime = await import('../../src/api/realtime.ts');

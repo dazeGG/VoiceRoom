@@ -1,6 +1,6 @@
 # Web guidance
 
-`apps/web` is the Vue 3 client (Vite, Pinia, vue-router, Reka UI). Layers and import rules: `../../docs/ARCHITECTURE.md` section 5; the room client has its own notes in `src/features/room/client/ARCHITECTURE.md`.
+`apps/web` is the Vue 3 client (Vite, Pinia, vue-router, Reka UI). Layers and import rules: `../../docs/ARCHITECTURE.md` section 5; the call engine has its own notes in `../../packages/call/src/engine/ARCHITECTURE.md`.
 
 ## Rules (binding for every task)
 
@@ -14,9 +14,9 @@
 3. `watch`/`watchEffect` only for the outside world (DOM, listeners, timers); `flush: 'post'` when it touches the DOM, `onMounted`/`onBeforeUnmount` for listeners and timers. Derived values are `computed`; what happens after a user action belongs in the action function. A view that starts fresh for a new subject is remounted with `:key` or `v-if`, not reset in a watcher.
 4. Never put a foreign object into reactive state unwrapped: LiveKit `Room`/`Participant`/`Track`, `MediaStream`, `MediaStreamTrack`, `AudioContext`, `AudioNode`, `WebSocket`, DOM nodes go through `markRaw()` or `shallowRef`. Vue `reactive` proxies class instances, which breaks identity checks and costs CPU.
 5. Imperative code (room client, services) reads stores with `useXStore()` after `setActivePinia(pinia)` in `main.ts`. Tests call `setActivePinia(createPinia())` in `beforeEach` (`renderWithApp` and `freshImport` do it).
-6. Styles: no `<style>` in `.vue` files. A component's block lives in `src/styles/<area>/_<block>.scss`, is forwarded from that area's `_index.scss`, and uses BEM names (`room-dock`, `room-dock__button`, `room-dock__button--active`). `<style scoped>` only with a one-line comment above it saying why and an entry in `STYLE_ALLOWLIST` in `scripts/check-web-styles.mts`. Colours come from the `--vr-*` tokens in `_tokens.scss`, never raw values (`scripts/check-web-palette.mts`). Breakpoints and repeated patterns are in `_mixins.scss`. Sass module system only (`@use`/`@forward`), never `@import`. The "Svelte class -> BEM class" maps at the top of older partials record the pre-Vue selectors; new partials do not need one.
+6. Styles: no `<style>` in `.vue` files. A component's block lives in `src/styles/<area>/_<block>.scss` or in `packages/call/src/styles` and `packages/ui/src/styles` for portable views and primitives. Web area indexes forward the partials in cascade order. Use BEM names (`room-dock`, `room-dock__button`, `room-dock__button--active`). `<style scoped>` only with a one-line comment above it saying why and an entry in `STYLE_ALLOWLIST` in `scripts/check-web-styles.mts`. Colours come from `pkg:@voice-room/ui/styles/tokens` (`--vr-*`), and breakpoints and repeated patterns from `pkg:@voice-room/ui/styles/mixins`. Sass module system only (`@use`/`@forward`), never `@import`. The "Svelte class -> BEM class" maps at the top of older partials record the pre-Vue selectors; new partials do not need one.
 7. State in markup: semantic state is `aria-*` (`aria-pressed`, `aria-expanded`, `aria-selected`, `aria-current`, `aria-busy`, `aria-disabled`) and the SCSS selects on it; visual-only state is a BEM modifier class via `:class`. No `data-*` for styling and no `[data-` in `.scss` (comments are not checked). `data-*` stays only where a third party sets it (Reka's `data-state`); we do not select on it.
-8. Reka UI sits behind our primitives (`Dialog`, `Popover`, `ContextMenu`, `Select`, `Slider`, `Switch`, `SegmentControl`). Only `src/shared/ui/**` imports `reka-ui`.
+8. Reka UI sits behind our primitives (`Dialog`, `Popover`, `ContextMenu`, `Select`, `Slider`, `Switch`, `SegmentControl`). Only `src/shared/ui/**` and `packages/ui/src/components/**` import `reka-ui`.
 9. Imports use the `@/` alias (`src/`). Layer rules are enforced by ESLint for these paths.
 10. `shared` never imports `features`; reuse shared UI and model utilities before adding abstractions.
 11. Browser, desktop, media and LiveKit fallbacks stay explicit and testable.
@@ -41,11 +41,15 @@ State on `<html>` and `<body>` is a class:
 | Desktop screen share in fullscreen (independent of `screen--<name>`) | `body.screen--desktop-fullscreen` |
 | Desktop shell state | `html.is-desktop`, `.is-shell-fullscreen`, `.vr-game-mode` |
 
-Remove the old theme or screen class before adding the new one. Page state (`screen`, `chatOpen`, `lobbyEmbedded`, `screenView`, `stripCollapsed`, `stageSummary`, `desktopScreenFullscreen`) lives in one Pinia store, `src/stores/page.store.ts`; one watcher, `installBodyClasses()`, sets the BEM classes on `<body>` from it. Nothing writes or reads `body.dataset`; the e2e specs assert the class. The room runtime `state` (`room-runtime.store.ts`) is one module-level reactive object that the room client imports directly; `useRoomRuntimeStore().state` is the same object for components. Assigning a class instance (LiveKit `Room`, publications) to it marks the value raw.
+Remove the old theme or screen class before adding the new one. Call page state (`screen`, `screenView`, `stripCollapsed`, `stageSummary`, `desktopScreenFullscreen`) lives in the call package. `src/stores/page.store.ts` combines these refs with web shell state (`chatOpen` and `lobbyEmbedded`). `installBodyClasses()` derives the BEM classes on `<body>`. Nothing writes or reads `body.dataset`; the e2e specs assert the class. The room runtime `state` (`room-runtime.store.ts`) is one module-level reactive object that the room client imports directly; `useRoomRuntimeStore().state` is the same object for components. Assigning a class instance (LiveKit `Room`, publications) to it marks the value raw.
+
+The composition root installs the web transport, identity/storage, diagnostics and desktop capabilities for `@voice-room/call`. The room page supplies route inputs and shell callbacks at mount. Web composes package views with product settings, persistent chat, account and moderation controls.
+
+The widget frame and v1 loader live in `../widget`. Web's widget configurator uses the presentational preview from `@voice-room/ui/widget`. The web image assembles both builds, and the widget's isolated browser suites live here under `e2e/widget-*.spec.ts`.
 
 ## Styles layout
 
-`src/styles/main.scss` is imported once, by `src/main.ts`: `_tokens.scss` (every `--vr-*` token and theme), `_typography.scss`, `_base.scss`, `_desktop-shell.scss`, then `ui/ chat/ room/ home/ auth/ legal/ app/` (`_index.scss` forwards one partial per BEM block). Shared dialog chrome is `ui/_dialog.scss`; the account and room settings modal is `home/_settings.scss`.
+`src/styles/main.scss` is imported once, by `src/main.ts`. It loads tokens and typography from `@voice-room/ui`, then `_base.scss`, `_desktop-shell.scss`, and `ui/ chat/ room/ home/ auth/ legal/ app/` (`_index.scss` forwards one partial per BEM block). Shared dialog chrome is `ui/_dialog.scss`; the account and room settings modal is `home/_settings.scss`.
 
 ## Tests
 
@@ -59,7 +63,7 @@ Remove the old theme or screen class before adding the new one. Page state (`scr
 ## Commands
 
 - `npm --workspace @voice-room/web run check` (worklet syntax, `vue-tsc` for `src` and for tests), `run test`, `run build`.
-- Style conventions: `node scripts/check-web-styles.mts` (`[data-` in `.scss`, `<style>` outside the allowlist, `reka-ui` outside `shared/ui`); palette: `node scripts/check-web-palette.mts`. Their tests are `scripts/test/check-web-styles.test.mts` and `scripts/test/check-web-palette.test.mts`.
-- Compile the styles: `npx sass --no-source-map apps/web/src/styles/main.scss > /dev/null`.
+- Style conventions: `node scripts/check-web-styles.mts` (`[data-` selectors, `<style>` outside the allowlist, `reka-ui` outside primitive directories); palette: `node scripts/check-web-palette.mts`. Both scan web and `packages/ui`. Their tests are `scripts/test/check-web-styles.test.mts` and `scripts/test/check-web-palette.test.mts`.
+- Compile the styles with `npx sass --pkg-importer=node --no-source-map apps/web/src/styles/main.scss`.
 - After editing run `npm run format`; the root `npm run check` fails on unformatted files.
 - Follow `../../docs/GIT_FLOW.md` for all commits, branches, pull requests, hotfixes, and releases.

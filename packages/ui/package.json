@@ -1,0 +1,45 @@
+{
+  "name": "@voice-room/ui",
+  "version": "2.15.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./components": "./src/components.ts",
+    "./avatar-colors": "./src/avatar-colors.ts",
+    "./avatar-initial": "./src/avatar-initial.ts",
+    "./avatar-presentation": "./src/avatar-presentation.ts",
+    "./clipboard": "./src/clipboard.ts",
+    "./device-list": "./src/device-list.ts",
+    "./hotkey": "./src/hotkey.ts",
+    "./icon-defaults": "./src/icon-defaults.ts",
+    "./i18n": "./src/i18n.ts",
+    "./localized-text": "./src/localized-text.ts",
+    "./log": "./src/log.ts",
+    "./storage": "./src/storage.ts",
+    "./tile-grid": "./src/tile-grid.ts",
+    "./toast": "./src/toast.ts",
+    "./widget": "./src/widget.ts",
+    "./widget-frame-expansion": "./src/widget-frame-expansion.ts",
+    "./fonts/*": "./src/assets/fonts/*",
+    "./styles/components/*": "./src/styles/components/_*.scss",
+    "./styles/room/*": "./src/styles/room/_*.scss",
+    "./styles/widget/*": "./src/styles/widget/_*.scss",
+    "./styles/*": "./src/styles/_*.scss"
+  },
+  "scripts": {
+    "check": "vue-tsc --noEmit"
+  },
+  "dependencies": {
+    "@lucide/vue": "^1.61.0",
+    "@voice-room/shared": "file:../shared",
+    "reka-ui": "^2.11.0"
+  },
+  "peerDependencies": {
+    "pinia": "^4.1.0",
+    "vue": "^3.5.44"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0",
+    "vue-tsc": "^3.3.13"
+  }
+}

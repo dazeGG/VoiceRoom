@@ -1,6 +1,5 @@
-/* The main site's default theme (graphite-volt) and fonts, so the admin app
-   looks like VoiceRoom. Copied from apps/web/src/styles/_tokens.scss: the two
-   apps share no build, and the admin app has one theme only. */
+/* The admin app keeps a copy of the default VoiceRoom theme (graphite-volt)
+   from packages/ui/src/styles/_tokens.scss and uses local font files. */
 
 @font-face {
   font-family: 'Onest';

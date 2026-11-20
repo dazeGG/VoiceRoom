@@ -5,6 +5,7 @@ import type { Logger } from 'pino';
 import type { LiveRoom, LobbyRoom, StoredRoom } from './room-views.ts';
 import { createRoomId } from '../../platform/db/ids.ts';
 import { isRoomOwner } from './room.policy.ts';
+import type { RoomKind } from './room-surface.policy.ts';
 
 type RequestLog = { log?: Pick<Logger, 'warn' | 'error'> } | null;
 
@@ -15,7 +16,7 @@ export interface RoomsStore {
   roomIdExists?(roomId: string): Promise<boolean>;
   getRoom(roomId: string): Promise<StoredRoom | null>;
   createRoomWithQuota(input: {
-    kind?: 'main' | 'widget';
+    kind?: RoomKind;
     widgetChatEnabled?: boolean;
     creatorIp: string;
     isStatic: boolean;
@@ -51,7 +52,11 @@ export interface RoomsServiceDeps {
 export type OwnerCheck =
   { status: 'owner'; room: LiveRoom } | { status: 'unauthenticated' | 'not_found' | 'forbidden' };
 
-export function createRoomsService(deps: RoomsServiceDeps) {
+export function createRoomCreation(
+  deps: Pick<RoomsServiceDeps, 'limits' | 'newRoomId'> & {
+    store(): Pick<RoomsStore, 'roomIdExists' | 'getRoom' | 'createRoomWithQuota'>;
+  }
+) {
   const newRoomId = deps.newRoomId || createRoomId;
 
   async function isTaken(roomId: string): Promise<boolean> {
@@ -60,7 +65,7 @@ export function createRoomsService(deps: RoomsServiceDeps) {
   }
 
   async function createRoom(input: {
-    kind?: 'main' | 'widget';
+    kind?: RoomKind;
     widgetChatEnabled?: boolean;
     creatorIp: string;
     isStatic: boolean;
@@ -77,6 +82,12 @@ export function createRoomsService(deps: RoomsServiceDeps) {
       roomId
     });
   }
+
+  return createRoom;
+}
+
+export function createRoomsService(deps: RoomsServiceDeps) {
+  const createRoom = createRoomCreation(deps);
 
   // Only a persistent room has an owner; temporary rooms cannot be changed.
   async function checkOwner(userId: string | null | undefined, roomId: string): Promise<OwnerCheck> {

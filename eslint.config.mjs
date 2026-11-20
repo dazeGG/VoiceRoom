@@ -22,6 +22,13 @@ const OVERLOAD_CAST = [
   message: 'Overloads over an unknown-returning implementation are a cast; prove the type with a guard instead.'
 }));
 
+const ROOM_LOBBY_IMPORTS = {
+  group: ['@/features/home', '@/features/home/**', '**/features/home/**'],
+  message: 'A room does not import the lobby: use @/entities or the room social context.'
+};
+const PORTABLE_IMPORT_MESSAGE = 'Portable packages cannot import applications or app aliases.';
+const PORTABLE_APP_IMPORTS = '^@(?:/|$)|^@voice-room/(?:admin|api|docs|meet|site|web|widget)(?:/|$)|(?:^|/)apps(?:/|$)';
+
 export default tseslint.config(
   {
     ignores: [
@@ -32,6 +39,7 @@ export default tseslint.config(
       '.omx/**',
       'apps/api/src/platform/db/schema.ts',
       'apps/web/public/**',
+      'packages/call/assets/**',
       'apps/site/public/**',
       'apps/site/.astro/**',
       'apps/docs/**',
@@ -43,10 +51,10 @@ export default tseslint.config(
   },
   js.configs.recommended,
   ...tseslint.configs.strictTypeChecked,
-  // Vue rules apply to the web app only.
+  // Vue rules apply to the Vue apps and the portable packages.
   ...vue.configs['flat/recommended-error'].map((config) => ({
     ...config,
-    files: config.files ?? ['apps/web/**/*.{ts,vue}']
+    files: config.files ?? ['apps/{meet,web,widget}/**/*.{ts,vue}', 'packages/{call,ui}/**/*.{ts,vue}']
   })),
   {
     languageOptions: {
@@ -59,7 +67,11 @@ export default tseslint.config(
           './apps/admin/tsconfig.json',
           './apps/site/tsconfig.json',
           './apps/web/tsconfig.test.json',
+          './apps/meet/tsconfig.test.json',
+          './apps/widget/tsconfig.test.json',
           './packages/shared/tsconfig.test.json',
+          './packages/ui/tsconfig.json',
+          './packages/call/tsconfig.json',
           './scripts/tsconfig.json'
         ],
         tsconfigRootDir: import.meta.dirname,
@@ -157,9 +169,30 @@ export default tseslint.config(
   {
     // Browser code logs through @/shared/log so records reach the failure
     // report buffer; only the logger itself touches the console.
-    files: ['apps/web/src/**/*.{ts,vue}'],
+    files: ['apps/{meet,web}/src/**/*.{ts,vue}', 'packages/call/src/**/*.{ts,vue}'],
     ignores: ['apps/web/src/shared/log.ts'],
     rules: { 'no-console': 'error' }
+  },
+  {
+    files: ['packages/{call,ui}/**/*.{ts,tsx,mts,js,jsx,mjs,vue}'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        { patterns: [{ regex: PORTABLE_APP_IMPORTS, message: PORTABLE_IMPORT_MESSAGE }] }
+      ],
+      'no-restricted-syntax': [
+        'error',
+        ...OVERLOAD_CAST,
+        ...[
+          'ImportExpression[source.value',
+          'ImportExpression[source.quasis.0.value.cooked',
+          'TSImportType[source.value'
+        ].map((selector) => ({
+          selector: `${selector}=/${PORTABLE_APP_IMPORTS.replaceAll('/', '\\/')}/]`,
+          message: PORTABLE_IMPORT_MESSAGE
+        }))
+      ]
+    }
   },
   {
     // docs/ARCHITECTURE.md section 5: the lobby shows rooms, never the other way
@@ -170,12 +203,7 @@ export default tseslint.config(
       'no-restricted-imports': [
         'error',
         {
-          patterns: [
-            {
-              group: ['@/features/home', '@/features/home/**', '**/features/home/**'],
-              message: 'A room does not import the lobby: use @/entities or the room social context.'
-            }
-          ]
+          patterns: [ROOM_LOBBY_IMPORTS]
         }
       ]
     }
@@ -205,8 +233,7 @@ export default tseslint.config(
     }
   },
   {
-    // The lobby reaches the room client only through its public index
-    // (features/room/client/index.ts), never a module inside it.
+    // The lobby reaches the call engine only through its public index.
     files: ['apps/web/src/features/home/**/*.{ts,vue}'],
     rules: {
       'no-restricted-imports': [
@@ -214,8 +241,8 @@ export default tseslint.config(
         {
           patterns: [
             {
-              group: ['@/features/room/client/**', '**/room/client/**'],
-              message: 'Import the room client from @/features/room/client, its public index.'
+              group: ['@voice-room/call/engine/**', '**/call/src/engine/**'],
+              message: 'Import the call engine from @voice-room/call/engine, its public index.'
             }
           ]
         }

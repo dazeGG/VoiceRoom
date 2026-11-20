@@ -1,5 +1,8 @@
 import { expect, test, vi } from 'vitest';
-import { prepareScreenStartBitrate, screenStartBitrateAnswer } from '@/features/room/client/media/screen-start-bitrate';
+import {
+  prepareScreenStartBitrate,
+  screenStartBitrateAnswer
+} from '@voice-room/call/engine/media/screen-start-bitrate';
 
 const session = 'v=0\r\na=group:BUNDLE 0 1 2\r\n';
 const audio =

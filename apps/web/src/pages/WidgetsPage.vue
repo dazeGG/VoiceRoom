@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import '@/styles/widget/_configurator.scss';
-import '@/styles/widget/_shell.scss';
+import '@voice-room/ui/styles/widget/shell';
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
 import { ArrowLeft, Check, Copy, PanelTop, ShieldCheck } from '@lucide/vue';
 import {
@@ -13,18 +13,17 @@ import {
   WIDGET_TITLE_LIMIT,
   defaultWidgetConfig,
   normalizeWidgetColor,
+  widgetEmbedMarkup,
   type WidgetConfig
 } from '@voice-room/shared/contracts/widget';
 import { createRoomCode } from '@voice-room/shared/validation';
-import { widgetSnippet } from '@/features/widget/snippet';
-import WidgetJoinControls from '@/features/widget/WidgetJoinControls.vue';
-import WidgetCallLayout from '@/features/widget/WidgetCallLayout.vue';
-import { createWidgetFrameExpansion } from '@/features/widget/frame-expansion';
-import { Button } from '@/shared/ui/Button';
+import { WidgetCallLayout, WidgetJoinControls } from '@voice-room/ui/widget';
+import { createWidgetFrameExpansion } from '@voice-room/ui/widget-frame-expansion';
+import { Button } from '@voice-room/ui/components';
 import { SegmentControl } from '@/shared/ui/SegmentControl';
 import type { SegmentOption } from '@/shared/ui/SegmentControl/types';
 import { Switch } from '@/shared/ui/Switch';
-import { Slider } from '@/shared/ui/Slider';
+import { Slider } from '@voice-room/ui/components';
 import { copyText } from '@/shared/utils/clipboard';
 
 const config = reactive({ ...defaultWidgetConfig });
@@ -110,7 +109,7 @@ const result = computed(() => {
       ...(cameraAllowed.value ? {} : { camera: false }),
       ...(heading.value === DEFAULT_WIDGET_TITLE ? {} : { title: heading.value })
     };
-    return { code: widgetSnippet(settings), error: '' };
+    return { code: widgetEmbedMarkup(settings), error: '' };
   } catch {
     return { code: '', error: 'Проверьте скругление (0–24 px) и отступ (0–48 px).' };
   }

@@ -10,7 +10,6 @@ import type {
   AdmissionResult,
   AdmissionService
 } from '../src/domains/admission/admission.service.ts';
-import type { RoomSurface } from '../src/domains/rooms/room-surface.policy.ts';
 import { registerHttpKit } from '../src/platform/http/http-kit.ts';
 import { isRecord } from '../src/platform/record.ts';
 import { fake, storedUser } from './fakes/index.ts';
@@ -21,12 +20,13 @@ const CREDENTIALS = {
   room: 'voice-room-room-secret',
   token: 'jwt',
   ttlSeconds: 600,
-  url: 'wss://gate.example.test'
+  url: 'wss://gate.example.test',
+  capabilities: { screenShare: false, camera: true, chat: 'none' as const, maxPeers: 12 }
 };
 
 function admissionApp(
   t: TestContext,
-  surface: RoomSurface,
+  surface: 'main' | 'widget',
   outcome: AdmissionResult = { status: 'issued', admission: CREDENTIALS }
 ) {
   const logs: string[] = [];

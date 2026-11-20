@@ -1,6 +1,7 @@
+import { installWebCallPortsForTest } from './helpers/call-ports';
 import { createPinia, setActivePinia } from 'pinia';
 import { afterEach, test, vi } from 'vitest';
-import type { Participant } from '@/features/room/client/core/types.ts';
+import type { Participant } from '@voice-room/call/engine/core/types';
 import { participant as participantFixture } from './fixtures/participant.ts';
 import { defined } from './helpers/assert.ts';
 import { FakeMediaStream, FakeMediaStreamTrack } from './helpers/fake-media.ts';
@@ -15,26 +16,27 @@ import assert from 'node:assert/strict';
 async function loadParticipantScreenLifecycle() {
   vi.resetModules();
   setActivePinia(createPinia());
+  await installWebCallPortsForTest();
   const testState = { stageRefreshes: 0 };
-  vi.doMock('@/features/room/client/services/media-playback-service', () => ({
+  vi.doMock('@voice-room/call/engine/services/media-playback-service', () => ({
     applyRemoteParticipantAudioPreferences: () => {},
     playMediaElement: () => {},
     releaseRemoteAudioElement: () => {}
   }));
-  vi.doMock('@/features/room/client/media/cues', () => ({
+  vi.doMock('@voice-room/call/engine/media/cues', () => ({
     clearPeerJoinCue: () => {},
     playStreamCue: () => {},
     playStreamViewerCue: () => {}
   }));
-  vi.doMock('@/features/room/client/media/meters', () => ({
+  vi.doMock('@voice-room/call/engine/media/meters', () => ({
     attachMeter: () => {},
     detachMeter: () => {},
     refreshSpeaking: () => {}
   }));
-  vi.doMock('@/features/room/client/services/livekit-service', () => ({
+  vi.doMock('@voice-room/call/engine/services/livekit-service', () => ({
     syncLiveKitScreenSubscriptions: () => {}
   }));
-  vi.doMock('@/features/room/client/ui/screen-view', () => ({
+  vi.doMock('@voice-room/call/engine/ui/screen-view', () => ({
     disconnectScreen: () => {},
     hideScreenStage: () => {},
     refreshScreenStage: () => {
@@ -42,8 +44,8 @@ async function loadParticipantScreenLifecycle() {
     },
     refreshScreenTiles: () => {}
   }));
-  const lifecycle = await import('@/features/room/client/room/participants.ts');
-  const { state } = await import('@/features/room/client/core/room-runtime.store');
+  const lifecycle = await import('@voice-room/call/engine/room/participants');
+  const { state } = await import('@voice-room/call/engine/core/room-runtime.store');
   state.viewedScreenPeerId = '';
   state.screenRequesting = false;
   return { lifecycle, state, testState };

@@ -1,14 +1,21 @@
+import type * as WebLog from '@/shared/log';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
-import { startScreenStartupDiagnostics } from '@/features/room/client/media/screen-startup-diagnostics';
-import type { CaptureCounters } from '@/features/room/client/media/screen-startup-diagnostics';
+import { startScreenStartupDiagnostics } from '@voice-room/call/engine/media/screen-startup-diagnostics';
+import type { CaptureCounters } from '@voice-room/call/engine/media/screen-startup-diagnostics';
 import type { LogContext } from '@/shared/log';
+import { installWebCallPortsForTest } from '../helpers/call-ports';
 
 const { info, report } = vi.hoisted(() => ({
   info: vi.fn<(message: string, context: LogContext) => void>(),
   report: vi.fn(async () => true)
 }));
-vi.mock('@/shared/log', () => ({ createLogger: () => ({ info }), reportClientLogs: report }));
+vi.mock('@/shared/log', async (importOriginal) => ({
+  ...(await importOriginal<typeof WebLog>()),
+  createLogger: () => ({ info }),
+  reportClientLogs: report
+}));
 
+beforeEach(installWebCallPortsForTest);
 beforeEach(() => {
   vi.useFakeTimers();
   vi.setSystemTime(new Date('2026-11-06T12:00:00Z'));

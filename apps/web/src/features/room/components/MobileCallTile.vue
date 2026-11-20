@@ -4,10 +4,10 @@
 import { t } from '@/shared/i18n';
 import { HeadphoneOff, MicOff, MonitorPlay } from '@lucide/vue';
 import { computed, ref, type Directive } from 'vue';
-import type { Participant } from '@/features/room/client/core/types';
-import { state as roomState } from '@/features/room/client/core/room-runtime.store';
-import { enterScreenView } from '@/features/room/client/ui/screen-view';
-import { keepVideoFitted } from '@/features/room/client/ui/video-fit';
+import type { Participant } from '@voice-room/call/engine/core/types';
+import { state as roomState } from '@voice-room/call/engine/core/room-runtime.store';
+import { enterScreenView } from '@voice-room/call/engine/ui/screen-view';
+import { keepVideoFitted } from '@voice-room/call/engine/ui/video-fit';
 import EmojiText from '@/shared/chat/EmojiText.vue';
 import { createLogger, errorContext } from '@/shared/log';
 import { getAvatarPresentation } from '@/shared/ui/avatar-presentation';

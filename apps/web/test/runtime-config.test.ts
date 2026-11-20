@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import http, { type RequestListener } from 'node:http';
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { test, onTestFinished } from 'vitest';
@@ -12,7 +12,7 @@ import {
   parseRuntimeConfig,
   resolveLiveKitConnectUrls
 } from '@voice-room/shared/runtime-config';
-import { buildHeaderPolicy, renderCaddySnippet } from '../scripts/emit-caddy-csp.ts';
+import { writePolicyFixtures } from './helpers/caddy-edge.ts';
 
 const repositoryRoot = `${import.meta.dirname}/../../../`;
 const caddyImage = 'caddy:2.11.4-alpine';
@@ -60,13 +60,7 @@ async function fetchEdgeConfig(origin: string, timeoutMs = 100) {
 async function startCaddyEdge(wsUrl: string) {
   const name = `voiceroom-g13-${randomUUID()}`;
   const caddyfile = path.join(repositoryRoot, 'Caddyfile');
-  // The image generates this snippet from its own build; any valid policy
-  // lets the Caddyfile load here.
-  const cspSnippet = path.join(mkdtempSync(path.join(os.tmpdir(), 'voiceroom-csp-')), 'csp.caddy');
-  writeFileSync(
-    cspSnippet,
-    renderCaddySnippet(buildHeaderPolicy("default-src 'self'; script-src 'self' 'sha256-test='"))
-  );
+  const policies = writePolicyFixtures(mkdtempSync(path.join(os.tmpdir(), 'voiceroom-csp-')));
   const run = spawnSync(
     'docker',
     [
@@ -87,7 +81,9 @@ async function startCaddyEdge(wsUrl: string) {
       '-v',
       `${caddyfile}:/etc/caddy/Caddyfile:ro`,
       '-v',
-      `${cspSnippet}:/etc/caddy/csp.caddy:ro`,
+      `${policies.web}:/etc/caddy/csp.caddy:ro`,
+      '-v',
+      `${policies.widget}:/etc/caddy/widget-csp.caddy:ro`,
       '-v',
       `${path.join(repositoryRoot, 'config/caddy/admin-csp.caddy')}:/etc/caddy/admin-csp.caddy:ro`,
       caddyImage

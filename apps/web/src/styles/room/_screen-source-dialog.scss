@@ -36,7 +36,7 @@
 // [data-*] -> aria / modifier class
 //   .screen-source-toggle[data-on='true'] -> .screen-source-dialog__switch--on
 //   (tabs, options, toggle buttons, gear and presets already select on aria-pressed)
-@use '../mixins' as *;
+@use 'pkg:@voice-room/ui/styles/mixins' as *;
 
 .screen-source-dialog {
   position: fixed;

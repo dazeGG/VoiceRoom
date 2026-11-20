@@ -6,6 +6,7 @@ import type { Database } from '../../platform/db/kysely.ts';
 import type { Rooms } from '../../platform/db/schema.ts';
 import { createRoomId, createRowId } from '../../platform/db/ids.ts';
 import { toDate, toMillis } from '../../platform/epoch-millis.ts';
+import type { RoomKind } from './room-surface.policy.ts';
 
 /** A room row, plus the per-user columns some listings add. */
 export type RoomRow = Omit<Selectable<Rooms>, 'kind' | 'widget_chat_enabled'> &
@@ -23,9 +24,9 @@ export function normalizePositiveInt(value: unknown, fallback: number): number {
   return Number.isFinite(next) && next >= 0 ? next : fallback;
 }
 
-function storedRoomKind(kind: string | undefined): 'main' | 'widget' {
-  if (kind === undefined || kind === 'main') return 'main';
-  if (kind === 'widget') return 'widget';
+function storedRoomKind(kind: string | undefined): RoomKind {
+  if (kind === undefined) return 'main';
+  if (kind === 'main' || kind === 'widget' || kind === 'meet') return kind;
   throw new Error('Invalid stored room kind');
 }
 
@@ -106,7 +107,7 @@ async function countLiveTemporaryRooms(db: Database): Promise<number> {
 }
 
 type NewRoom = {
-  kind: 'main' | 'widget';
+  kind: RoomKind;
   widgetChatEnabled: boolean;
   id: string;
   creatorIp: string;
@@ -148,7 +149,7 @@ export function createRoomRepository({ db, roomIdleTtlMs = 15 * 60 * 1000 }: { d
   }: {
     roomId?: string;
     creatorIp?: unknown;
-    kind?: 'main' | 'widget';
+    kind?: RoomKind;
     widgetChatEnabled?: boolean;
     isStatic?: boolean;
     ownerId?: string | null;
@@ -188,7 +189,7 @@ export function createRoomRepository({ db, roomIdleTtlMs = 15 * 60 * 1000 }: { d
   }: {
     roomId?: string;
     creatorIp?: unknown;
-    kind?: 'main' | 'widget';
+    kind?: RoomKind;
     widgetChatEnabled?: boolean;
     isStatic?: boolean;
     ownerId?: string | null;
@@ -406,6 +407,15 @@ export function createRoomRepository({ db, roomIdleTtlMs = 15 * 60 * 1000 }: { d
     return Number(result.numUpdatedRows);
   }
 
+  // Meet has no post-call retention window. Deleting the room also deletes
+  // its identities, gate credentials and principal epochs through their FKs.
+  async function deleteMeetRooms(now?: number): Promise<boolean> {
+    let rooms = db.deleteFrom('rooms').where('kind', '=', 'meet');
+    if (now !== undefined) rooms = rooms.where('empty_since', '<=', toDate(now - roomIdleTtlMs));
+    const result = await rooms.executeTakeFirst();
+    return result.numDeletedRows > 0n;
+  }
+
   async function listRoomsForOwner(ownerId: string | null | undefined) {
     if (!ownerId) return [];
     const rows = await db
@@ -521,6 +531,7 @@ export function createRoomRepository({ db, roomIdleTtlMs = 15 * 60 * 1000 }: { d
     listAvatarKeys,
     listRoomsForOwner,
     markActiveTemporaryRoomsEmpty,
+    deleteMeetRooms,
     markRoomActive,
     markRoomEmpty,
     pruneRooms,

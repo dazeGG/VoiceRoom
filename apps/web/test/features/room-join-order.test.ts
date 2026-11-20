@@ -2,6 +2,7 @@
 // and a visitor far from the server pays each one in full. The room check runs
 // beside the microphone, and is not repeated right after the room page made it.
 
+import { installWebCallPortsForTest } from '../helpers/call-ports';
 import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, expect, test, vi } from 'vitest';
 import { roomStatus } from '../fixtures/answers';
@@ -18,16 +19,16 @@ const microphone = vi.hoisted(() => {
   return held;
 });
 
-vi.mock('@/features/room/client/ui/devices', async (importOriginal) => ({
+vi.mock('@voice-room/call/engine/ui/devices', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   refreshDevices: vi.fn(async () => {})
 }));
-vi.mock('@/features/room/client/ui/toast', () => ({ showToast: vi.fn() }));
+vi.mock('@voice-room/call/engine/ui/toast', () => ({ showToast: vi.fn() }));
 vi.mock('@/shared/log', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   reportVoiceJoinOutcome: vi.fn()
 }));
-vi.mock('@/features/room/client/services/microphone-service', async (importOriginal) => ({
+vi.mock('@voice-room/call/engine/services/microphone-service', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   openLocalMicrophone: () => {
     microphone.opened += 1;
@@ -37,7 +38,7 @@ vi.mock('@/features/room/client/services/microphone-service', async (importOrigi
     microphone.stopped.push(capture);
   }
 }));
-vi.mock('@/features/room/client/media/livekit-runtime', () => ({
+vi.mock('@voice-room/call/engine/media/livekit-runtime', () => ({
   TRACK_SOURCE: { Camera: 'camera', Microphone: 'microphone', ScreenShare: 'screen_share' },
   loadLiveKitClient: vi.fn(async () => ({
     Room: class {
@@ -55,11 +56,12 @@ const ROOM = { body: roomStatus({ roomId: 'abc123', name: 'Планёрка', is
 async function loadRoom(routes: Record<string, Reply>) {
   vi.resetModules();
   setActivePinia(createPinia());
+  await installWebCallPortsForTest();
   vi.stubGlobal('WebSocket', FakeWebSocket);
   const { calls, fetchMock } = stubFetch(routes);
-  const room = await import('@/features/room/client/room/room');
-  const api = await import('@/features/room/client/net/api');
-  const { state } = await import('@/features/room/client/core/room-runtime.store');
+  const room = await import('@voice-room/call/engine/room/room');
+  const api = await import('@voice-room/call/engine/net/api');
+  const { state } = await import('@voice-room/call/engine/core/room-runtime.store');
   const { usePageStore } = await import('@/stores/page.store');
   Object.assign(state, { roomId: 'abc123', peerId: 'peer-1', sessionToken: 'session-1' });
   const roomChecks = () => calls.filter((call) => call.url === '/api/rooms/abc123').length;

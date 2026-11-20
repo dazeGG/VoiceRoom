@@ -27,6 +27,8 @@ const AREAS: ReadonlyArray<{ folder: string; project: string; ignore?: readonly 
   { folder: 'apps/web/test', project: '../tsconfig.test.json' },
   { folder: 'apps/web/e2e', project: '../tsconfig.test.json' },
   { folder: 'apps/web/scripts', project: '../tsconfig.test.json' },
+  { folder: 'apps/meet', project: 'tsconfig.test.json' },
+  { folder: 'apps/widget', project: 'tsconfig.test.json' },
   // The web's own config files (vite, playwright); the folders above are measured on their own.
   {
     folder: 'apps/web',
@@ -42,6 +44,8 @@ const AREAS: ReadonlyArray<{ folder: string; project: string; ignore?: readonly 
   // The emoji corpus is byte-pinned (G07) and stays as it is.
   { folder: 'packages/shared/src', project: '../tsconfig.test.json', ignore: ['emoji.ts'] },
   { folder: 'packages/shared/test', project: '../tsconfig.test.json' },
+  { folder: 'packages/ui/src', project: '../tsconfig.json' },
+  { folder: 'packages/call/src', project: '../tsconfig.json' },
   { folder: 'scripts', project: 'tsconfig.json' }
 ];
 

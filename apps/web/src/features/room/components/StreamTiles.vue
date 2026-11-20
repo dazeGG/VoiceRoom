@@ -1,14 +1,14 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-import { state } from '../client/core/room-runtime.store';
+import { state } from '@voice-room/call/engine/core/room-runtime.store';
 import {
   getScreenParticipants,
   getScreenStreamForParticipant,
   hasStreamTilePreview,
   isScreenSubscribed,
   isStreamTileCollapsed
-} from '../client/ui/screen-view';
-import { useScreenUiStore } from '../screen-ui.store';
+} from '@voice-room/call/engine/ui/screen-view';
+import { useScreenUiStore } from '@voice-room/call/engine/core/screen-ui.store';
 import StreamTile from './StreamTile.vue';
 
 const screenUi = useScreenUiStore();

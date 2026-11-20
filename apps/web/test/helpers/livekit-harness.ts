@@ -5,9 +5,10 @@
 import type { RoomOptions } from 'livekit-client';
 import { createPinia, setActivePinia } from 'pinia';
 import { vi } from 'vitest';
-import type { Participant } from '@/features/room/client/core/types.ts';
-import type * as LiveKitServiceModule from '@/features/room/client/services/livekit-service.ts';
-import type * as ScreenProfilesModule from '@/features/room/client/media/profiles';
+import { installWebCallPortsForTest } from './call-ports';
+import type { Participant } from '@voice-room/call/engine/core/types';
+import type * as LiveKitServiceModule from '@voice-room/call/engine/services/livekit-service';
+import type * as ScreenProfilesModule from '@voice-room/call/engine/media/profiles';
 
 type Peer = Record<string, unknown> & { id: string };
 
@@ -65,7 +66,7 @@ export interface LiveKitHarness {
 const isStoppable = (track: unknown): track is { stop(): void } =>
   typeof track === 'object' && track !== null && 'stop' in track && typeof track.stop === 'function';
 
-const P = '@/features/room/client';
+const P = '@voice-room/call/engine';
 
 export async function loadLiveKitHarness(
   options: {
@@ -96,6 +97,7 @@ export async function loadLiveKitHarness(
 ): Promise<LiveKitHarness> {
   vi.resetModules();
   setActivePinia(createPinia());
+  await installWebCallPortsForTest();
 
   const state: LiveKitHarness['state'] = {
     outputMuted: false,
@@ -197,7 +199,7 @@ export async function loadLiveKitHarness(
     }
   };
 
-  vi.doMock('@/features/room/start-ui.store', () => ({ useStartUiStore: () => ({}) }));
+  vi.doMock('@voice-room/call/engine/core/start-ui.store', () => ({ useStartUiStore: () => ({}) }));
   vi.doMock(`${P}/core/room-runtime.store`, () => ({ state }));
   // Media-only tests can isolate the network presence edge. Camera tests use
   // their own room-realtime mock to verify real presence payloads.
@@ -346,7 +348,7 @@ export async function loadLiveKitHarness(
     }
   }));
 
-  const service = await import('@/features/room/client/services/livekit-service.ts');
+  const service = await import('@voice-room/call/engine/services/livekit-service');
   return {
     service,
     state,

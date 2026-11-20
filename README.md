@@ -58,6 +58,7 @@ apps/
   api/        Fastify API, WebSocket realtime, воркеры доставки и медиа, auth-gate LiveKit
   web/        клиент на Vue 3 (статическая сборка Vite), открывается на /app
   site/       публичный сайт на Astro: главная и страницы для поисковиков
+  docs/       публичная справка для пользователей и владельцев сайтов
   admin/      админка на React, отдельный сайт на admin.<домен>
 packages/
   shared/     общие контракты HTTP и realtime для API и веба
@@ -91,12 +92,13 @@ API-тестам нужна PostgreSQL в `TEST_DATABASE_URL`: на каждый
 
 ## Self-hosting
 
-Production-стек — это `docker-compose.yml`: PostgreSQL, API, воркеры, Caddy, LiveKit и его auth-gate. Минимальный `.env` содержит `DOMAIN`, `POSTGRES_PASSWORD`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`, `LIVEKIT_GATE_SECRET` и, для Web Push, `VAPID_*`.
+Для временных видеовстреч на своём Linux-сервере установите VoiceRoom Meet одной командой. В [руководстве по Meet](./apps/docs/src/content/docs/self-hosting/install.md) описаны установка, подключение своего домена, DuckDNS или deSEC и проверка первого звонка.
 
-Все переменные окружения, Docker, TURN, бэкапы, CI/CD и миграции описаны в [`docs/SELF_HOSTING.md`](./docs/SELF_HOSTING.md). Модель доступа и подробности про аккаунты — в [`docs/SECURITY.md`](./docs/SECURITY.md).
+Для аккаунтов, постоянных комнат, истории чатов и админки используйте [установку полного стека](./docs/SELF_HOSTING.md#установка-полного-стека). Переменные окружения, Docker, TURN, бэкапы, CI/CD и миграции описаны в [`docs/SELF_HOSTING.md`](./docs/SELF_HOSTING.md), модель доступа — в [`docs/SECURITY.md`](./docs/SECURITY.md).
 
 ## Документация
 
+- [Публичная справка VoiceRoom](https://docs.voiceroom.ru) содержит инструкции по звонкам, комнатам, звуку и экрану, приложению для компьютера и виджету.
 - Архитектура и разработка: [архитектура](./docs/ARCHITECTURE.md), [Git Flow](./docs/GIT_FLOW.md), [производительность](./docs/PERFORMANCE.md), [логирование](./docs/LOGGING.md).
 - Эксплуатация и безопасность: [self-hosting](./docs/SELF_HOSTING.md), [безопасность](./docs/SECURITY.md), [LiveKit gate](./docs/LIVEKIT_GATE.md), [юридические вопросы](./docs/LEGAL.md).
 - Медиа: [запуск и диагностика трансляций](./docs/SCREEN_STARTUP.md).
@@ -104,4 +106,4 @@ Production-стек — это `docker-compose.yml`: PostgreSQL, API, ворке
 
 ## Лицензия
 
-MIT License. Vendored RNNoise assets в `apps/web/public/rnnoise/` распространяются под собственной MIT-лицензией в `apps/web/public/rnnoise/LICENSE`. Атрибуция шрифтов, эмодзи, GeoIP и библиотек — на странице `/licenses`.
+MIT License. Vendored RNNoise assets в `packages/call/assets/rnnoise/` распространяются под собственной MIT-лицензией в `packages/call/assets/rnnoise/LICENSE`. Атрибуция шрифтов, эмодзи, GeoIP и библиотек — на странице `/licenses`.

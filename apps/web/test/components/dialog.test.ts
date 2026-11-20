@@ -2,7 +2,7 @@ import { render, screen } from '@testing-library/vue';
 import userEvent from '@testing-library/user-event';
 import { expect, test, vi } from 'vitest';
 import { defineComponent, h, ref } from 'vue';
-import { Dialog as UiDialog } from '@/shared/ui/Dialog';
+import { Dialog as UiDialog } from '@voice-room/ui/components';
 import { ToastStack, type ToastItem } from '@/shared/ui/ToastStack';
 
 function hostWith(onClosed: () => void, toasts: ToastItem[] = []) {
