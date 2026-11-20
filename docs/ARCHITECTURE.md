@@ -26,9 +26,10 @@ main site; it talks to the API's admin routes.
 - `apps/widget` owns the v1 loader, iframe handshake, room creation proof,
   compact call shell and frame-local credentials and preferences. The loader
   and document are served at `/widget/v1/loader.js` and `/embed/v1/`.
-  Hashed widget chunks live under `/_app/immutable/widget/` and are kept by the
-  shared asset archive for open frames during updates. Caddy's embed document
-  and public loader keep separate framing, caching and cross-origin policies.
+  Hashed widget chunks live under `/_app/immutable/widget/`. The edge reads
+  the widget's release and archive directories so open frames can load their
+  earlier chunks. The embed document and public loader keep separate framing,
+  caching and cross-origin policies.
   For local source development, `npm run dev:host:widget` serves the widget
   entry points on port 5182 and proxies widget API requests to the local API.
   When an embed disables its camera, the engine blocks camera capture and

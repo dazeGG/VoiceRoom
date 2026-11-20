@@ -68,22 +68,22 @@ for component in widget admin; do
   LEGACY_EDGE=1 bash /repo/scripts/cd/publish-client.sh /tmp/stack "$component" "$version1" --seed-legacy "$version2"
 done
 cd /tmp/stack
-test "$(readlink static/widget/current)" = "releases/$version1"
-test "$(readlink static/admin/current)" = "releases/$version1"
+admin_selection=$(readlink static/admin/current)
 test "$(cat static/widget/current/csp.caddy)" = 'widget policy'
 test "$(cat static/admin/current/csp.caddy)" = 'admin policy'
 test -f static/widget/archive/_app/immutable/legacy-dep.js
 printf 'widget v2' >/tmp/widget/embed/v1/index.html
 mv /tmp/widget/_app/immutable/widget/old.js /tmp/widget/_app/immutable/widget/new.js
-publish widget "$version2"
+# The API checkout SHA used during seeding can match the first Widget tag.
+publish widget "$version1"
 test "$(cat static/widget/current/embed/v1/index.html)" = 'widget v2'
 test -f static/widget/archive/_app/immutable/widget/old.js
 test -f static/widget/archive/_app/immutable/widget/new.js
-test "$(readlink static/admin/current)" = "releases/$version1"
+test "$(readlink static/admin/current)" = "$admin_selection"
 test "$(cat static/admin/current/index.html)" = 'admin v1'
 printf 'broken' >/tmp/widget/embed/v1/index.html
 if publish widget "$version3"; then exit 1; fi
-test "$(readlink static/widget/current)" = "releases/$version2"
+test "$(readlink static/widget/current)" = "releases/$version1"
 test "$(cat static/widget/current/embed/v1/index.html)" = 'widget v2'
 `;
     const result = spawnSync(

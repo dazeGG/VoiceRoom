@@ -86,13 +86,17 @@ fi
 chmod -R u+rwX,go+rX,go-w "$staging/dist"
 sh "$staging/archive-assets.sh" "$staging/dist/$chunks" "$root/archive/$chunks" forever
 
-release="$root/releases/$commit"
+# The checkout may already be at the commit tagged for the first split
+# releases, even while Caddy still serves the legacy client's bytes.
+release_id=$commit
+if [ "$mode" = --seed-legacy ]; then release_id="legacy-$commit"; fi
+release="$root/releases/$release_id"
 if [ ! -e "$release" ]; then
   mv -T "$staging/dist" "$release"
 fi
 test -s "$release/$entry"
 previous=$(readlink "$root/current" || true)
-ln -s "releases/$commit" "$staging/current"
+ln -s "releases/$release_id" "$staging/current"
 mv -Tf "$staging/current" "$root/current"
 
 if [ -z "$mode" ] && ! docker exec "$edge" voiceroom-prepare-web reload; then
