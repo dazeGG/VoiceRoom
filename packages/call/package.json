@@ -1,6 +1,6 @@
 {
   "name": "@voice-room/call",
-  "version": "2.15.0",
+  "version": "0.0.0",
   "private": true,
   "type": "module",
   "exports": {

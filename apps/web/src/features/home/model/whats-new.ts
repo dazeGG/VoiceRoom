@@ -12,8 +12,8 @@ export interface WhatsNewSlide {
 
 // Two to four headline changes, a line of text each; everything else belongs
 // in the release notes. The pictures are screenshots of the real app (544×408
-// at 2x) kept in static/whats-new/<version>/. For the next release, bump
-// WHATS_NEW_VERSION in the shared contract together with these slides.
+// at 2x) kept in static/whats-new/<version>/. When replacing the slides,
+// advance the shared WHATS_NEW_VERSION content revision independently of package versions.
 export const WHATS_NEW_SLIDES: readonly [WhatsNewSlide, ...WhatsNewSlide[]] = [
   {
     image: '/whats-new/2.8.0/look.webp',

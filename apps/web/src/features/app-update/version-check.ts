@@ -6,7 +6,7 @@
 export interface VersionCheckOptions {
   /** The build id of the running app. */
   version: string;
-  /** Called once, when a newer build is found. */
+  /** Called once, when a different deployed web build is found. */
   onUpdated: () => void;
   /** Between two polls; 0 polls only on `check()`. */
   interval: number;
@@ -16,7 +16,7 @@ export interface VersionCheckOptions {
 }
 
 export interface VersionCheck {
-  /** Asks now; answers whether a newer build is out. */
+  /** Asks now; answers whether a different deployed web build has been seen. */
   check(): Promise<boolean>;
   stop(): void;
 }
@@ -44,8 +44,9 @@ export function createVersionCheck({
       const response = await fetch(url, { headers: { pragma: 'no-cache', 'cache-control': 'no-cache' } });
       if (!response.ok) return false;
       const data: unknown = await response.json();
+      if (updated) return true;
       const deployed = typeof data === 'object' && data !== null && 'version' in data ? data.version : undefined;
-      if (deployed === version) return false;
+      if (typeof deployed !== 'string' || !deployed || deployed === version) return false;
       updated = true;
       clearTimeout(timeout);
       onUpdated();

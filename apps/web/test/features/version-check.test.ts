@@ -66,6 +66,33 @@ test('a missing file or a failed request is not an update', async () => {
   expect(onUpdated).not.toHaveBeenCalled();
 });
 
+test('an incomplete build marker during deployment does not signal an update', async () => {
+  let body: unknown = {};
+  stubFetch({ 'GET /_app/version.json': () => ({ body }) });
+  const onUpdated = vi.fn();
+  const check = createVersionCheck({ version: '200', onUpdated, interval: 0 });
+
+  expect(await check.check()).toBe(false);
+  body = { version: 100 };
+  expect(await check.check()).toBe(false);
+  body = { version: '' };
+  expect(await check.check()).toBe(false);
+  expect(onUpdated).not.toHaveBeenCalled();
+});
+
+test('overlapping polls announce a rollback once and a reloaded tab matches the deployed build', async () => {
+  stubFetch({ 'GET /_app/version.json': answer('100') });
+  const onUpdated = vi.fn();
+  const oldTab = createVersionCheck({ version: '200', onUpdated, interval: 0 });
+
+  expect(await Promise.all([oldTab.check(), oldTab.check()])).toEqual([true, true]);
+  expect(onUpdated).toHaveBeenCalledTimes(1);
+
+  const reloadedTab = createVersionCheck({ version: '100', onUpdated, interval: 0 });
+  expect(await reloadedTab.check()).toBe(false);
+  expect(onUpdated).toHaveBeenCalledTimes(1);
+});
+
 test('a dev server is never asked', async () => {
   const { calls } = stubFetch({ 'GET /_app/version.json': answer('200') });
   const check = createVersionCheck({ version: '100', onUpdated: vi.fn(), interval: 60_000, enabled: false });

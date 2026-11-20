@@ -10,9 +10,10 @@ API, web, Meet, widget, site, admin, and the shared workspaces stay in one repos
 the React staff console (admin.voiceroom.ru), signed in by handoff from the
 main site; it talks to the API's admin routes.
 
-- `packages/shared` is a live contract (validators, realtime envelopes, screen
-  profile ids, reserved peer ids). One change updates the contract and both
-  consumers atomically.
+- `packages/shared` owns the wire contracts (validators, realtime envelopes,
+  screen profile ids, reserved peer ids). Consumers build the package from
+  source and release on separate schedules, so contract changes must work
+  across adjacent releases. See [Git Flow](GIT_FLOW.md).
 - `packages/ui` owns portable call UI primitives, preview utilities and shared
   theme styles. The web app, embedded widget and site consume its package
   exports. The package imports no app code. Web owns product stores, locale
@@ -24,7 +25,7 @@ main site; it talks to the API's admin routes.
   voice asset URLs from the shared asset source.
 - `apps/widget` owns the v1 loader, iframe handshake, room creation proof,
   compact call shell and frame-local credentials and preferences. The loader
-  and document ship in the web image at `/widget/v1/loader.js` and `/embed/v1/`.
+  and document are served at `/widget/v1/loader.js` and `/embed/v1/`.
   Hashed widget chunks live under `/_app/immutable/widget/` and are kept by the
   shared asset archive for open frames during updates. Caddy's embed document
   and public loader keep separate framing, caching and cross-origin policies.
@@ -33,14 +34,34 @@ main site; it talks to the API's admin routes.
   When an embed disables its camera, the engine blocks camera capture and
   remote camera subscriptions. Widget admission supplies the room capability
   ceiling and the API and SFU enforce the screen and data publishing boundary.
-- The application workspaces version together. The site and documentation
-  release independently. CI boots the whole stack for the voice-join smoke test.
-- Deployables are already separate: the `api`, `worker` and `web` images are
-  built and rolled out independently.
-- The desktop shell is its own repository (own release cadence and signing).
+- API (including workers and the LiveKit gate), web, admin, widget and the
+  self-hosted Meet bundle have separate release series. The public site and
+  docs keep their existing series. CI boots the whole stack for the voice-join
+  smoke test.
 
-Revisit only with separate teams per side, independent release cadences, or a
-public API with third-party clients.
+### Runtime versions
+
+- Web checks its compiled-in build ID against `/_app/version.json` by equality.
+  The same build generates both values. Deploying or rolling back to a
+  different web build prompts an update once. An API restart can trigger a
+  check, but the result still depends on the deployed web build.
+- The API reports its own package version in service logs and the staff
+  overview. Capture diagnostics report the web build ID and the desktop shell
+  version in separate fields.
+- The desktop shell updates itself from its own signed releases and reports
+  update status through `window.voiceRoomDesktopUpdate`. The web notice uses
+  that status, and the API desktop-download endpoint reads the desktop
+  repository's latest release.
+- Android HTTP, WebSocket and Ring delivery use the Android app version and
+  the operator's `ANDROID_MIN_VERSION`. HTTP and WebSocket read the agent
+  string. Ring delivery reads the version saved on the native push token.
+- `WHATS_NEW_VERSION` is an ordered revision for the announcement slides and
+  the account's `whatsNewSeen` value. Keep the existing `2.8.0` revision until
+  there is new content, and advance this revision independently of web and
+  API versions so existing read acknowledgements stay valid.
+- Wire and data markers such as widget loader v1, native push payload v1 and
+  `contractVersion` describe their protocols and schemas independently of
+  package versions.
 
 ## 2. Languages and runtime
 

@@ -16,6 +16,8 @@ const OUTDATED = 'VoiceRoom-Android/1.1.9';
 const CURRENT = 'VoiceRoom-Android/1.2.0';
 const CHROME =
   'Mozilla/5.0 (Linux; Android 12) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Mobile Safari/537.36';
+const DESKTOP =
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 VoiceRoom/1.0.0 Chrome/138.0.0.0 Electron/37.2.0 Safari/537.36';
 
 function createApp(t: TestContext, androidMinVersion: string) {
   const app = createApiRuntime({ env: { ...process.env, ANDROID_MIN_VERSION: androidMinVersion } }).createApp();
@@ -104,9 +106,9 @@ test('an Upgrade header lets an outdated app past the 426 only on /api/ws', asyn
   assert.equal(checked(Failure, response.json()).code, 'client_outdated');
 });
 
-test('the current app, a browser and a request without a user agent pass', async (t) => {
+test('the current Android app, an older-numbered desktop app, browsers and requests without a user agent pass', async (t) => {
   const app = createApp(t, '1.2.0');
-  for (const userAgent of [CURRENT, 'VoiceRoom-Android/1.10.0', CHROME, undefined]) {
+  for (const userAgent of [CURRENT, 'VoiceRoom-Android/1.10.0', DESKTOP, CHROME, undefined]) {
     const response = await get(app, '/api/capabilities', userAgent);
     assert.equal(response.statusCode, 200, String(userAgent));
     assert.equal(checked(Capabilities, response.json()).contractVersion, 1);
@@ -150,7 +152,7 @@ test('an outdated app WebSocket closes with 4426 before ready; a current one get
   assert.equal(refused.reason, 'Client outdated');
   assert.equal(refused.frames, 0);
 
-  for (const userAgent of [CURRENT, CHROME]) {
+  for (const userAgent of [CURRENT, DESKTOP, CHROME]) {
     const session = openWs(port, { headers: { 'User-Agent': userAgent } });
     t.after(() => session.ws.close());
     assert.equal((await session.ready).type, 'ready', userAgent);
