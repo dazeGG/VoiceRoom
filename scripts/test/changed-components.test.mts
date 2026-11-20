@@ -13,6 +13,7 @@ test('routes application, public site and documentation changes independently', 
     changedComponents(['apps/api/src/server.ts', 'apps/web/src/main.ts', 'apps/admin/src/main.tsx']),
     app
   );
+  assert.deepEqual(changedComponents(['apps/meet/src/main.ts']), app);
   assert.deepEqual(changedComponents(['apps/site/src/pages/index.astro']), site);
   assert.deepEqual(changedComponents(['apps/docs/src/content/docs/index.md', 'apps/docs/package-lock.json']), docs);
   assert.deepEqual(changedComponents(['apps/site/public/image.png', 'apps/docs/astro.config.mjs']), {

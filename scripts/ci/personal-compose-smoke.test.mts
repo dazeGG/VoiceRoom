@@ -114,12 +114,32 @@ test('personal edge serves a protected document and only the personal HTTP surfa
   }, 'Caddy could not reach the ready personal API');
   const page = await request('/');
   assert.equal(page.status, 200);
-  assert.match(await page.text(), /<h1>VoiceRoom Meet<\/h1>/);
-  assert.match(page.headers.get('content-security-policy') ?? '', /(?:^|; )frame-ancestors 'none'(?:;|$)/);
+  assert.match(await page.text(), /<title>VoiceRoom Meet<\/title>/);
+  const csp = page.headers.get('content-security-policy') ?? '';
+  assert.match(csp, /(?:^|; )frame-ancestors 'none'(?:;|$)/);
+  assert.ok(csp.split('; ').includes(`connect-src 'self' ws://${site.host} stun: turn: turns:`));
+  assert.match(csp, /(?:^|; )script-src 'self' 'wasm-unsafe-eval'(?:;|$)/);
   assert.match(page.headers.get('permissions-policy') ?? '', /display-capture=\(self\)/);
   assert.equal(page.headers.get('cross-origin-resource-policy'), 'same-origin');
   assert.equal(page.headers.get('access-control-allow-origin'), null);
   assert.equal(page.headers.get('x-frame-options'), 'DENY');
+  assert.equal(page.headers.get('cache-control'), 'no-cache');
+  for (const [path, contentType] of [
+    ['/rnnoise/rnnoise.mjs', /javascript/],
+    ['/rnnoise/rnnoise.wasm', /^application\/wasm/],
+    ['/rnnoise/rnnoise.worklet.js', /javascript/],
+    ['/audio-gate.worklet.js', /javascript/],
+    ['/desktop-audio-source.worklet.js', /javascript/]
+  ] as const) {
+    const asset = await request(`${path}?v=smoke`);
+    assert.equal(asset.status, 200, path);
+    assert.match(asset.headers.get('content-type') ?? '', contentType);
+    assert.equal(asset.headers.get('cache-control'), 'public, max-age=31536000, immutable');
+    await asset.arrayBuffer();
+  }
+  const unversionedWasm = await request('/rnnoise/rnnoise.wasm');
+  assert.equal(unversionedWasm.headers.get('cache-control'), 'no-cache');
+  await unversionedWasm.arrayBuffer();
   for (const path of [
     '/api/metrics',
     '/api/admin/overview',
