@@ -14,6 +14,7 @@ test('routes application, public site and documentation changes independently', 
     app
   );
   assert.deepEqual(changedComponents(['apps/meet/src/main.ts']), app);
+  assert.deepEqual(changedComponents(['apps/widget/src/main.ts']), app);
   assert.deepEqual(changedComponents(['apps/site/src/pages/index.astro']), site);
   assert.deepEqual(changedComponents(['apps/docs/src/content/docs/index.md', 'apps/docs/package-lock.json']), docs);
   assert.deepEqual(changedComponents(['apps/site/public/image.png', 'apps/docs/astro.config.mjs']), {
@@ -44,7 +45,7 @@ test('routes UI package changes to the web and site checks', () => {
   assert.deepEqual(changedComponents(['packages/ui/src/tile-grid.ts']), appAndSite);
 });
 
-test('routes the call package to the application checks and voice e2e lane', () => {
+test('routes the call package to the application checks and voice and widget e2e lanes', () => {
   for (const path of [
     'packages/call/package.json',
     'packages/call/src/engine/index.ts',
