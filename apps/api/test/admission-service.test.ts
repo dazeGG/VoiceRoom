@@ -557,6 +557,25 @@ test('mute permissions and "already gone" classification', () => {
   assert.equal(tokensMatch('abc', 'abcd'), false);
 });
 
+test('server mute stays inside the declared grant and the surface ceiling', () => {
+  const { CAMERA, MICROPHONE, SCREEN_SHARE } = TrackSource;
+  // Muting drops only the microphone from what the participant was granted.
+  const muted = resolveServerMutePermission({ canPublishSources: [MICROPHONE, CAMERA, SCREEN_SHARE] }, true, 'meet');
+  assert.deepEqual(
+    [muted.canPublish, muted.canPublishSources, muted.canPublishData],
+    [true, [CAMERA, SCREEN_SHARE], false]
+  );
+  // A participant whose publishing LiveKit already revoked stays revoked on unmute.
+  const revoked = resolveServerMutePermission({ canPublish: false, canPublishSources: [CAMERA] }, false, 'meet');
+  assert.deepEqual([revoked.canPublish, revoked.canPublishSources], [false, []]);
+  // Muting a widget guest who could only speak leaves nothing to publish.
+  const silent = resolveServerMutePermission({ canPublishSources: [MICROPHONE] }, true, 'widget');
+  assert.deepEqual([silent.canPublish, silent.canPublishSources], [false, []]);
+  // A malformed source list falls back to the surface ceiling.
+  const malformed = resolveServerMutePermission({ canPublishSources: undefined }, true, 'widget');
+  assert.deepEqual(malformed.canPublishSources, [CAMERA]);
+});
+
 test('live widget mute and unmute preserve the camera and data denial', async () => {
   const { CAMERA, MICROPHONE } = TrackSource;
   let permission = { canPublishSources: [MICROPHONE, CAMERA], canPublishData: false };
