@@ -1,3 +1,4 @@
+import type * as WebLog from '@/shared/log';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { startScreenStartupDiagnostics } from '@voice-room/call/engine/media/screen-startup-diagnostics';
 import type { CaptureCounters } from '@voice-room/call/engine/media/screen-startup-diagnostics';
@@ -9,7 +10,7 @@ const { info, report } = vi.hoisted(() => ({
   report: vi.fn(async () => true)
 }));
 vi.mock('@/shared/log', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/shared/log')>()),
+  ...(await importOriginal<typeof WebLog>()),
   createLogger: () => ({ info }),
   reportClientLogs: report
 }));

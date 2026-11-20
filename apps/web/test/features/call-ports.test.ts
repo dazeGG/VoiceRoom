@@ -446,8 +446,7 @@ test('creating the web call ports loads no room module', async () => {
 });
 test('mount uses the host credentials even when the same room has browser credentials', async () => {
   const fixture = await installFake();
-  const getCredentials = vi.fn(fixture.ports.identity.credentials);
-  fixture.ports.identity.credentials = getCredentials;
+  const getCredentials = vi.spyOn(fixture.ports.identity, 'credentials');
   sessionStorage.setItem(
     'voice-room:peer-session:abc123',
     JSON.stringify({ peerId: 'browser-peer', sessionToken: 'browser-session-token-from-storage' })

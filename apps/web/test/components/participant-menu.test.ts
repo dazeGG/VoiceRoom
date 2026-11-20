@@ -1,3 +1,4 @@
+import type * as RoomsApi from '@/api/rooms';
 import { screen, waitFor, within } from '@testing-library/vue';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
@@ -24,7 +25,7 @@ const social = {
   showFriends: vi.fn()
 } satisfies RoomSocial;
 vi.mock('@/api/rooms', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/api/rooms')>()),
+  ...(await importOriginal<typeof RoomsApi>()),
   banRoomPeer: vi.fn(async () => 'ban-1'),
   kickRoomPeer: vi.fn(async () => {}),
   setRoomPeerServerMute: vi.fn(async () => {}),

@@ -1,3 +1,4 @@
+import type { RealtimeEvent } from '@/api/realtime';
 import { expect, test, vi } from 'vitest';
 
 vi.mock('@voice-room/call/engine/ui/toast', () => ({ showToast: vi.fn() }));
@@ -11,7 +12,7 @@ function handler() {
   const handle = createVoiceEventHandler(room);
   return {
     room,
-    handle: async (event: import('@/api/realtime').RealtimeEvent) => {
+    handle: async (event: RealtimeEvent) => {
       const mapped = mapWebCallEvent(event);
       if (mapped) await handle(mapped);
     }

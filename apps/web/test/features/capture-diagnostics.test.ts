@@ -1,3 +1,4 @@
+import type * as WebLog from '@/shared/log';
 import { afterEach, expect, test, vi } from 'vitest';
 import { normalizeClientLogBatch } from '../../../api/src/lib/client-log-intake.ts';
 import { freshImport } from '../helpers/fresh-module';
@@ -11,7 +12,7 @@ async function load() {
   vi.useFakeTimers();
   vi.setSystemTime(new Date('2026-11-11T08:00:00Z'));
   vi.doMock('@/shared/log', async (importOriginal) => ({
-    ...(await importOriginal<typeof import('@/shared/log')>()),
+    ...(await importOriginal<typeof WebLog>()),
     createLogger: () => ({
       info: (msg: string, ctx: Record<string, string | number | boolean | null>) => records.push({ msg, ctx }),
       error: (msg: string, ctx: Record<string, string | number | boolean | null>) => records.push({ msg, ctx })

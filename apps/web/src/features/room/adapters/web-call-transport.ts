@@ -60,6 +60,8 @@ export function mapWebCallEvent(event: RealtimeEvent): CallRealtimeEvent | undef
     case 'room.updated':
     case 'room.deleted':
       return event;
+    default:
+      return undefined;
   }
 }
 
