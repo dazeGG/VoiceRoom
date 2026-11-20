@@ -21,9 +21,9 @@ const compose = {
   'x-api-image': apiService
 };
 const installer = Buffer.from('#!/bin/sh\nexit 0\n');
-const version = 'v3.1.1';
-const api = 'ghcr.io/dazegg/voiceroom-api';
-const caddy = 'ghcr.io/dazegg/voiceroom-web';
+const version = 'meet/v1.0.0';
+const api = pinImage('ghcr.io/dazegg/voiceroom-api');
+const caddy = pinImage('ghcr.io/dazegg/voiceroom-web');
 
 function sha256(bytes: string | Buffer): string {
   return createHash('sha256').update(bytes).digest('hex');
@@ -40,8 +40,8 @@ test('the installer manifest binds the emitted Compose and installer to the immu
     version,
     files: { 'docker-compose.personal.yml': sha256(composeAsset), 'install.sh': sha256(installer) },
     images: {
-      api: pinImage(api),
-      caddy: pinImage(caddy),
+      api,
+      caddy,
       postgres: pinImage('postgres'),
       livekit: pinImage('livekit/livekit-server')
     }
@@ -66,6 +66,18 @@ test('the installer manifest binds the emitted Compose and installer to the immu
 
 test('the bundle rejects unpinned images and unaccounted-for services', () => {
   assert.throws(
+    () =>
+      buildPersonalRelease({
+        compose,
+        installer,
+        version,
+        api: 'ghcr.io/dazegg/voiceroom-api:mutable',
+        caddy,
+        pinImage
+      }),
+    /immutable digest/
+  );
+  assert.throws(
     () => buildPersonalRelease({ compose, installer, version, api, caddy, pinImage: (image) => image }),
     /immutable digest/
   );
@@ -74,4 +86,13 @@ test('the bundle rejects unpinned images and unaccounted-for services', () => {
     () => buildPersonalRelease({ compose: withWorker, installer, version, api, caddy, pinImage }),
     /Unexpected personal Compose services/
   );
+});
+
+test('only a stable Meet tag can become a new installer manifest version', () => {
+  for (const version of ['v2.15.0', 'api/v1.0.0', 'meet/v1.0.0-rc.1', 'meet/v01.0.0']) {
+    assert.throws(
+      () => buildPersonalRelease({ compose, installer, version, api, caddy, pinImage }),
+      /stable Meet release tag/
+    );
+  }
 });
