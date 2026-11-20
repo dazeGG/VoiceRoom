@@ -1,0 +1,94 @@
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--vr-bg);
+  color: var(--vr-text);
+  font-family: var(--font-ui, system-ui, sans-serif);
+  line-height: 1.5;
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+button {
+  cursor: pointer;
+}
+button:disabled {
+  cursor: default;
+}
+a {
+  color: inherit;
+}
+[hidden] {
+  display: none !important;
+}
+
+:where(button, a, input, select):focus-visible {
+  outline: 2px solid var(--vr-accent);
+  outline-offset: 3px;
+}
+
+.meet-shell {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  min-height: 100dvh;
+
+  &__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.75rem clamp(1rem, 4vw, 3rem);
+    border-bottom: 1px solid var(--vr-line);
+    background: var(--vr-surface);
+  }
+
+  &__brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.625rem;
+    font-weight: 600;
+    text-decoration: none;
+    white-space: nowrap;
+  }
+
+  &__brand strong {
+    color: var(--vr-accent);
+  }
+
+  &__mark {
+    display: grid;
+    place-items: center;
+    width: 2.125rem;
+    height: 2.125rem;
+    border-radius: var(--radius-sm);
+    background: var(--vr-accent);
+    color: var(--vr-accent-ink);
+  }
+
+  &__language {
+    min-height: 2.5rem;
+    max-width: 9rem;
+    padding-inline: 0.65rem;
+    border: 1px solid var(--vr-line-strong);
+    border-radius: var(--radius-sm);
+    background: var(--vr-surface-2);
+    color: var(--vr-text);
+  }
+
+  &__sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}

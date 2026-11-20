@@ -4,13 +4,14 @@
 // and show the update notice, and /service-worker.js for web push. Assets go
 // to /_app/immutable/ through build.assetsDir in vite.config.ts.
 
-import { createHash } from 'node:crypto';
 import { readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { extname, join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { brotliCompressSync, constants, gzipSync } from 'node:zlib';
-import { voiceAssetLicensePath, voiceAssetPaths } from '@voice-room/call/voice-assets';
 import { build, type Plugin } from 'vite';
+import { cspMetaPlugin as createCspMetaPlugin } from '../../../scripts/build/csp-meta.ts';
+
+export { metaPolicy } from '../../../scripts/build/csp-meta.ts';
+export { voiceAssetDirectory, voiceAssetVersion, voiceAssetsPlugin } from '../../../scripts/build/voice-assets.ts';
 
 type Env = Record<string, string | undefined>;
 
@@ -74,46 +75,8 @@ export function pageCspDirectives(env: Env = process.env): Record<string, readon
   };
 }
 
-// CSP keywords are written in single quotes; schemes and hosts are not.
-const QUOTED = new Set([
-  'self',
-  'unsafe-eval',
-  'unsafe-hashes',
-  'unsafe-inline',
-  'none',
-  'strict-dynamic',
-  'report-sample',
-  'wasm-unsafe-eval',
-  'script'
-]);
-// A <meta> policy ignores these; Caddy sends frame-ancestors in the header.
-const HEADER_ONLY = new Set(['frame-ancestors', 'report-uri', 'sandbox']);
-
-export function metaPolicy(directives: Record<string, readonly string[]>): string {
-  return Object.entries(directives)
-    .filter(([name, values]) => !HEADER_ONLY.has(name) && values.length > 0)
-    .map(([name, values]) => [name, ...values.map((value) => (QUOTED.has(value) ? `'${value}'` : value))].join(' '))
-    .join('; ');
-}
-
 export function cspMetaPlugin(env: Env = process.env): Plugin {
-  const policy = metaPolicy(pageCspDirectives(env));
-  if (policy.includes('"')) throw new Error('policy cannot contain a double quote');
-  return {
-    name: 'voiceroom-csp-meta',
-    // Written as raw text, as SvelteKit does: Vite's tag descriptors escape the
-    // quotes to &#39;, which emit-caddy-csp.ts would copy into the header.
-    // It follows the charset declaration and precedes every script it governs.
-    transformIndexHtml(html) {
-      const charset = /<meta charset="[^"]*">/i.exec(html)?.[0];
-      if (!charset) throw new Error('index.html has no <meta charset> to put the policy after');
-      // A replacer function: `$&` or `$'` in an env-derived policy is not a replacement pattern.
-      return html.replace(
-        charset,
-        () => `${charset}\n    <meta http-equiv="content-security-policy" content="${policy}">`
-      );
-    }
-  };
+  return createCspMetaPlugin(pageCspDirectives(env));
 }
 
 /** The same shape SvelteKit writes, so a tab of either build reads the other's file. */
@@ -124,52 +87,6 @@ export function versionFile(version: string): string {
 /** The build id: SvelteKit's default, the build time. vite.config.ts computes it once for the bundle and the file. */
 export function buildVersion(): string {
   return Date.now().toString();
-}
-
-export const voiceAssetDirectory = fileURLToPath(new URL('../../../packages/call/assets', import.meta.url));
-const audioPaths = Object.values(voiceAssetPaths);
-const emittedPaths: readonly string[] = [...audioPaths, voiceAssetLicensePath];
-
-/** Changes only when one of the files does, so a release does not make every visitor download them again. */
-export function voiceAssetVersion(assetDir = voiceAssetDirectory): string {
-  const hash = createHash('sha256');
-  for (const path of audioPaths) hash.update(readFileSync(join(assetDir, path)));
-  return hash.digest('hex').slice(0, 12);
-}
-
-/** Serve the package bytes at the same root-relative URLs in development and production. */
-export function voiceAssetsPlugin(): Plugin {
-  return {
-    name: 'voiceroom-voice-assets',
-    configureServer(server) {
-      server.middlewares.use((request, response, next) => {
-        const path = request.url?.split('?', 1)[0];
-        if ((request.method !== 'GET' && request.method !== 'HEAD') || !path || !emittedPaths.includes(path)) {
-          next();
-          return;
-        }
-        const extension = extname(path);
-        const contentType =
-          path === voiceAssetLicensePath
-            ? 'text/plain'
-            : extension === '.wasm'
-              ? 'application/wasm'
-              : 'text/javascript';
-        response.setHeader('Content-Type', contentType);
-        response.setHeader('Cache-Control', 'no-cache');
-        response.end(readFileSync(join(voiceAssetDirectory, path)));
-      });
-    },
-    generateBundle() {
-      for (const path of emittedPaths) {
-        this.emitFile({
-          type: 'asset',
-          fileName: path.slice(1),
-          source: readFileSync(join(voiceAssetDirectory, path))
-        });
-      }
-    }
-  };
 }
 
 // Not .svg: the emoji are thousands of tiny files, which Caddy compresses on the fly.

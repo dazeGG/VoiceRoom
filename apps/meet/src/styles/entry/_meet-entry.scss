@@ -1,0 +1,6 @@
+.meet-entry {
+  display: grid;
+  place-items: center;
+  padding: clamp(1rem, 5vw, 3rem);
+  background: radial-gradient(ellipse at 50% 30%, var(--vr-accent-soft), transparent 64%);
+}

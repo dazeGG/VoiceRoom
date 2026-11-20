@@ -17,6 +17,7 @@ const BASELINE_PATH = resolve(repoRoot, 'config/test-source-reads.json');
 const TREES = [
   'apps/api/test',
   'apps/admin/test',
+  'apps/meet/test',
   'apps/site/test',
   'apps/web/test',
   'packages/shared/test',

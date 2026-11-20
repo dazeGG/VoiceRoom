@@ -9,7 +9,7 @@ import { relative, resolve } from 'node:path';
 import { blankComments } from './lib/blank-comments.mts';
 import { walkFiles } from './lib/glob.mts';
 
-const SOURCE_ROOTS = ['apps/web/src', 'packages/ui/src', 'packages/call/src'];
+const SOURCE_ROOTS = ['apps/web/src', 'apps/meet/src', 'packages/ui/src', 'packages/call/src'];
 const TOKENS_FILE = 'packages/ui/src/styles/_tokens.scss';
 
 // Surface tokens of the default theme; the tokens file must declare exactly these.

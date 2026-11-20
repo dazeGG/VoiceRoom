@@ -16,12 +16,16 @@
 {$PERSONAL_CADDY_SITE} {
 	@api path /api /api/*
 	handle @api {
-		reverse_proxy api:3000
+		reverse_proxy api:3000 {
+			# Native browser WebSocket handshakes may carry ambient cookies.
+			header_up -Cookie
+		}
 	}
 
 	@signal path /rtc /rtc/*
 	handle @signal {
 		reverse_proxy livekit-gate:3080 {
+			header_up -Cookie
 			# The standalone gate's cross-origin validation response is unnecessary
 			# on the same-origin personal site.
 			header_down -Access-Control-Allow-Origin
@@ -48,6 +52,22 @@
 		}
 		@room path /room/*
 		rewrite @room /index.html
+
+		@immutable path /_meet/immutable/*
+		@versionedAudio {
+			path /rnnoise/* /audio-gate.worklet.js /desktop-audio-source.worklet.js
+			query v=*
+		}
+		@revalidate {
+			not path /_meet/immutable/*
+			not {
+				path /rnnoise/* /audio-gate.worklet.js /desktop-audio-source.worklet.js
+				query v=*
+			}
+		}
+		header @immutable Cache-Control "public, max-age=31536000, immutable"
+		header @versionedAudio Cache-Control "public, max-age=31536000, immutable"
+		header @revalidate Cache-Control "no-cache"
 		file_server
 	}
 }
