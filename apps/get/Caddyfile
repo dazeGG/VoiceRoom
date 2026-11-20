@@ -1,0 +1,6 @@
+get.voiceroom.ru {
+	@installer path /
+	header @installer Cache-Control "no-store"
+	redir @installer https://github.com/dazeGG/VoiceRoom/releases/latest/download/install.sh 302
+	respond 404
+}

@@ -26,3 +26,72 @@ jobs:
       environment: production
       url: https://voiceroom.ru
     secrets: inherit
+
+  personal-bundle:
+    name: Build the personal server release bundle
+    needs: [images, deploy-production]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    env:
+      DOCKER_BUILD_RECORD_UPLOAD: false
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+      - uses: docker/setup-buildx-action@v4
+        id: buildx
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Publish the Meet edge image
+        id: personal-web
+        uses: docker/build-push-action@v7
+        with:
+          builder: ${{ steps.buildx.outputs.name }}
+          context: .
+          target: personal-web
+          platforms: linux/amd64
+          push: true
+          # Keep the Meet variant in the existing public package so fresh installs can pull it anonymously.
+          tags: ghcr.io/dazegg/voiceroom-web:personal-${{ github.sha }}
+          labels: org.opencontainers.image.source=https://github.com/${{ github.repository }}
+          cache-from: type=gha,scope=personal-web
+          cache-to: type=gha,mode=max,scope=personal-web
+      - name: Pin Compose images and hash release assets
+        env:
+          PERSONAL_WEB_DIGEST: ${{ steps.personal-web.outputs.digest }}
+        run: |
+          node scripts/cd/build-personal-release.mts "$GITHUB_REF_NAME" \
+            "ghcr.io/dazegg/voiceroom-api:$GITHUB_SHA" \
+            "ghcr.io/dazegg/voiceroom-web@$PERSONAL_WEB_DIGEST" personal-release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: personal-release
+          path: personal-release/
+          if-no-files-found: error
+          overwrite: true
+
+  publish-personal-release:
+    name: Attach the personal server release bundle
+    needs: personal-bundle
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    concurrency:
+      group: publish-personal-release
+      queue: max
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v5
+        with:
+          name: personal-release
+          path: personal-release
+      - name: Publish installer assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/cd/publish-personal-release.sh "$GITHUB_REF_NAME" personal-release
