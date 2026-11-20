@@ -1,8 +1,10 @@
 import { URL } from 'node:url';
-import { AccessToken, TrackSource } from 'livekit-server-sdk';
+import { AccessToken } from 'livekit-server-sdk';
 import { normalizeLiveKitServerUrl } from '@voice-room/shared/runtime-config';
+import type { RoomSurface } from '../rooms/room-surface.policy.ts';
 import type { CredentialIssue } from './credential-boundary.service.ts';
 import type { GatePrincipal } from './gate-principal.ts';
+import { liveKitPublishSources } from './livekit-publish.policy.ts';
 
 export type LiveKitAdmission = {
   gateCredentialId: string;
@@ -40,6 +42,7 @@ function createLiveKitCredentialProvider({
     peerId,
     name = '',
     principal,
+    surface = 'main',
     canPublishMicrophone = true,
     canPublishScreen = true
   }: {
@@ -48,6 +51,7 @@ function createLiveKitCredentialProvider({
     peerId?: string;
     name?: string;
     principal?: GatePrincipal | null;
+    surface?: RoomSurface;
     canPublishMicrophone?: boolean;
     canPublishScreen?: boolean;
   } = {}): Promise<AdmissionIssue> {
@@ -64,14 +68,15 @@ function createLiveKitCredentialProvider({
       name,
       ttl: ttlSeconds
     });
-    const canPublishSources = [TrackSource.CAMERA];
-    if (canPublishScreen) canPublishSources.push(TrackSource.SCREEN_SHARE, TrackSource.SCREEN_SHARE_AUDIO);
-    if (canPublishMicrophone !== false) canPublishSources.unshift(TrackSource.MICROPHONE);
+    const canPublishSources = liveKitPublishSources(surface, {
+      microphone: canPublishMicrophone,
+      screen: canPublishScreen
+    });
     // Chat, reactions and presence travel over the API, never LiveKit data
     // packets, and the client binds no data handler. Granting data would only
     // let a modified client flood everyone in the room.
     token.addGrant({
-      canPublish: true,
+      canPublish: canPublishSources.length > 0,
       canPublishData: false,
       canPublishSources,
       canSubscribe: true,

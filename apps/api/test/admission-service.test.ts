@@ -68,6 +68,7 @@ function setup(overrides: Partial<AdmissionDeps> = {}, accountUserId: string | n
   };
   let muted = false;
   const deps: AdmissionDeps = {
+    maxRoomPeers: 12,
     livekitConfig: () => ENABLED,
     credentialProvider: () => ({
       async issueAdmission(input) {

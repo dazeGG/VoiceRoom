@@ -3,6 +3,7 @@
 
 import { Type, type Static } from 'typebox';
 import { Ok } from './http.ts';
+import { RoomCapabilities } from './rooms.ts';
 
 export const LiveKitTokenBody = Type.Object({
   roomId: Type.Optional(Type.String()),
@@ -12,6 +13,7 @@ export const LiveKitTokenBody = Type.Object({
 });
 
 export const LiveKitAdmission = Ok({
+  capabilities: Type.Optional(RoomCapabilities),
   gateCredentialId: Type.String(),
   /** The LiveKit room name, which is not the VoiceRoom room id. */
   room: Type.String(),
