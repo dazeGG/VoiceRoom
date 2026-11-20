@@ -22,6 +22,7 @@ test.describe('widget actual SFU source and data restrictions', () => {
     fixture = startWidgetHttpsFixture();
     await waitForWidgetHttps(request);
   });
+  test.afterEach(() => fixture?.cleanupWidgetRooms());
   test.afterAll(() => fixture?.stop());
   test('SFU rejects screen sources and drops data with an unmodified widget-issued token', async ({ page }) => {
     test.setTimeout(90000);
@@ -44,7 +45,6 @@ test.describe('widget actual SFU source and data restrictions', () => {
     });
     if (typeof result !== 'object' || result === null || !('roomId' in result) || typeof result.roomId !== 'string')
       throw new Error('Missing probe result');
-    fixture?.cleanupRoom(result.roomId);
     expect(result).toMatchObject({
       screenRejected: true,
       screenAudioRejected: true,

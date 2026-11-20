@@ -181,10 +181,13 @@ https://127.0.0.1:19444, https://127.0.0.1:19445 {
         rmSync(directory, { recursive: true, force: true });
       }
     },
-    cleanupRoom(roomId: string | null) {
-      if (roomId === null) return;
-      if (!/^[a-zA-Z0-9_-]+$/.test(roomId)) throw new Error('Invalid fixture room ID');
-      sql(`DELETE FROM rooms WHERE id = '${roomId}' AND kind = 'widget'`);
+    /**
+     * Every test leaves the isolated project without widget rooms. The API
+     * allows one temporary room per IP, and a room whose creation failed
+     * halfway has no code in the test to clean it up by.
+     */
+    cleanupWidgetRooms() {
+      sql(`DELETE FROM rooms WHERE kind = 'widget'`);
     },
     restoreAdmission() {
       sql('UPDATE widget_boundary_activation SET widget_admission_enabled=true WHERE singleton');

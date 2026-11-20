@@ -50,6 +50,7 @@ test.describe('guest widget across independent HTTPS parents', () => {
     fixture = startWidgetHttpsFixture();
     await waitForWidgetHttps(request);
   });
+  test.afterEach(() => fixture?.cleanupWidgetRooms());
   test.afterAll(() => {
     fixture?.stop();
   });
@@ -62,14 +63,12 @@ test.describe('guest widget across independent HTTPS parents', () => {
       [0, 1].map(() => browser.newContext({ ignoreHTTPSErrors: true, permissions: ['microphone', 'camera'] }))
     );
     await Promise.all(contexts.map((context) => context.addInitScript(installWidgetBrowserProbe)));
-    let createdCode: string | null = null;
     let recovered = false;
     try {
       const pages = await Promise.all(contexts.map((context) => context.newPage()));
       await Promise.all(pages.map((page, index) => page.goto(required(widgetParents[index]))));
       const frames = pages.map((page) => page.frameLocator('iframe[title="VoiceRoom"]'));
       const code = await createWidgetRoom(required(frames[0]), 'Player One');
-      createdCode = code;
       await joinWidgetRoom(required(frames[1]), code, 'Player Two');
       for (const frame of frames) await expectWidgetAudio(frame);
       await required(frames[0]).locator('.widget-shell').hover();
@@ -149,11 +148,7 @@ test.describe('guest widget across independent HTTPS parents', () => {
       }
     } finally {
       await Promise.all(contexts.map((context) => context.close()));
-      try {
-        required(fixture).cleanupRoom(createdCode);
-      } finally {
-        if (recovered) required(fixture).restoreAdmission();
-      }
+      if (recovered) required(fixture).restoreAdmission();
     }
   });
 
@@ -167,9 +162,8 @@ test.describe('guest widget across independent HTTPS parents', () => {
     const publisher = frames.nth(0).contentFrame();
     const cameraOff = frames.nth(1).contentFrame();
     const observerPage = await page.context().newPage();
-    let code: string | null = null;
     try {
-      code = await createWidgetRoom(publisher, 'Camera Publisher');
+      const code = await createWidgetRoom(publisher, 'Camera Publisher');
       await joinWidgetRoom(cameraOff, code);
       await expect(publisher.getByRole('button', { name: 'Звук участника Гость', exact: true })).toHaveCount(1);
       await expect(cameraOff.getByRole('button', { name: 'Звук участника Camera Publisher', exact: true })).toHaveCount(
@@ -208,7 +202,6 @@ test.describe('guest widget across independent HTTPS parents', () => {
     } finally {
       await observerPage.close();
       await page.close();
-      required(fixture).cleanupRoom(code);
     }
   });
 

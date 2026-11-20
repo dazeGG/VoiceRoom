@@ -16,6 +16,7 @@ test.describe('widget guest session recovery', () => {
     fixture = startWidgetHttpsFixture();
     await waitForWidgetHttps(request);
   });
+  test.afterEach(() => fixture?.cleanupWidgetRooms());
   test.afterAll(() => fixture?.stop());
 
   test('recovers roster and voice behind a collapsed launcher without replacing the guest', async ({ page }) => {
@@ -32,9 +33,8 @@ test.describe('widget guest session recovery', () => {
     const setOffline = (value: boolean) =>
       alice.locator('body').evaluate((_, offline) => window.widgetProbe?.setOffline(offline), value);
 
-    let code: string | null = null;
     try {
-      code = await createWidgetRoom(alice, 'Alice');
+      const code = await createWidgetRoom(alice, 'Alice');
       await joinWidgetRoom(bob, code, 'Bob');
       await expectWidgetAudio(alice);
       await expectWidgetAudio(bob);
@@ -74,7 +74,6 @@ test.describe('widget guest session recovery', () => {
       await expect(aliceOnBob).toHaveCount(0);
     } finally {
       await page.close();
-      fixture?.cleanupRoom(code);
     }
   });
 });
