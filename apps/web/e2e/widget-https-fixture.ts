@@ -51,10 +51,26 @@ function isolatedProject(): string {
   return project;
 }
 
-/** Local-only HTTPS parents and signaling proxy on the named CI Compose network. */
+/** Loopback address that Compose published for a service port, such as `127.0.0.1:3000`. */
+function publishedPort(compose: string[], service: string, port: number): string {
+  const address = docker([...compose, 'port', service, String(port)]);
+  if (!/^127\.0\.0\.1:\d+$/.test(address)) throw new Error(`${service}:${port} must be published on 127.0.0.1`);
+  return address;
+}
+
+/**
+ * Local-only HTTPS parents and signaling proxy for the named CI Compose project.
+ *
+ * The proxy shares the host network and reaches the API and gate through their
+ * loopback ports. A container on a bridge network adds a host interface, and
+ * Chromium aborts in-flight loads with ERR_NETWORK_CHANGED when that interface
+ * gets its address, which failed the first widget entry after each fixture start.
+ */
 export function startWidgetHttpsFixture() {
   const project = isolatedProject();
   const compose = ['compose', '-p', project, '-f', ciCompose];
+  const api = publishedPort(compose, 'api', 3000);
+  const gate = publishedPort(compose, 'livekit-gate', 3080);
   const directory = mkdtempSync(path.join(os.tmpdir(), 'widget-https-'));
   const name = `widget-https-${process.pid}-${Date.now()}`;
   const host = (embed: string) =>
@@ -78,14 +94,15 @@ export function startWidgetHttpsFixture() {
   default_sni localhost
 }
 https://localhost:19443 {
+  bind 127.0.0.1
   tls internal
   root * /srv/widget
   header X-Content-Type-Options nosniff
   handle /api/* {
-    reverse_proxy api:3000
+    reverse_proxy ${api}
   }
   handle /rtc* {
-    reverse_proxy livekit-gate:3080
+    reverse_proxy ${gate}
   }
   handle /runtime-config.json {
     header Content-Type application/json
@@ -114,6 +131,7 @@ https://localhost:19443 {
   }
 }
 https://127.0.0.1:19444, https://127.0.0.1:19445 {
+  bind 127.0.0.1
   tls internal
   header Referrer-Policy no-referrer
   root * /srv/fixture
@@ -130,13 +148,7 @@ https://127.0.0.1:19444, https://127.0.0.1:19445 {
       '--name',
       name,
       '--network',
-      `${project}_default`,
-      '-p',
-      '127.0.0.1:19443:19443',
-      '-p',
-      '127.0.0.1:19444:19444',
-      '-p',
-      '127.0.0.1:19445:19445',
+      'host',
       '-v',
       `${directory}:/srv/fixture:ro`,
       '-v',
@@ -181,10 +193,13 @@ https://127.0.0.1:19444, https://127.0.0.1:19445 {
         rmSync(directory, { recursive: true, force: true });
       }
     },
-    cleanupRoom(roomId: string | null) {
-      if (roomId === null) return;
-      if (!/^[a-zA-Z0-9_-]+$/.test(roomId)) throw new Error('Invalid fixture room ID');
-      sql(`DELETE FROM rooms WHERE id = '${roomId}' AND kind = 'widget'`);
+    /**
+     * Every test leaves the isolated project without widget rooms. The API
+     * allows one temporary room per IP, and a room whose creation failed
+     * halfway has no code in the test to clean it up by.
+     */
+    cleanupWidgetRooms() {
+      sql(`DELETE FROM rooms WHERE kind = 'widget'`);
     },
     restoreAdmission() {
       sql('UPDATE widget_boundary_activation SET widget_admission_enabled=true WHERE singleton');

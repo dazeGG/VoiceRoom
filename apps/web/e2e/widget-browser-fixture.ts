@@ -87,10 +87,22 @@ export function installWidgetBrowserProbe(): void {
   };
 }
 
+/** Waits for the call; a failed entry names the widget's own error instead of only the idle status. */
+async function expectEntered(frame: FrameLocator): Promise<void> {
+  try {
+    await expect(frame.getByRole('status')).toHaveText('В комнате', { timeout: 30_000 });
+  } catch (error) {
+    const alert = frame.getByRole('alert');
+    const reason = (await alert.count()) > 0 ? await alert.textContent() : null;
+    if (!reason) throw error;
+    throw new Error(`Widget did not enter the room: ${reason}`, { cause: error });
+  }
+}
+
 export async function createWidgetRoom(frame: FrameLocator, name: string): Promise<string> {
   await frame.getByLabel('Ваше имя').fill(name);
   await frame.getByRole('button', { name: 'Создать комнату', exact: true }).click();
-  await expect(frame.getByRole('status')).toHaveText('В комнате', { timeout: 30_000 });
+  await expectEntered(frame);
   const roomId = await frame.locator('.widget-call__code').textContent();
   if (!roomId) throw new Error('Missing widget room code');
   return roomId;
@@ -100,7 +112,7 @@ export async function joinWidgetRoom(frame: FrameLocator, roomId: string, name?:
   if (name !== undefined) await frame.getByLabel('Ваше имя').fill(name);
   await frame.getByLabel('Код комнаты').fill(roomId);
   await frame.getByRole('button', { name: 'Войти', exact: true }).click();
-  await expect(frame.getByRole('status')).toHaveText('В комнате', { timeout: 30_000 });
+  await expectEntered(frame);
 }
 
 export async function expectWidgetAudio(frame: FrameLocator) {
