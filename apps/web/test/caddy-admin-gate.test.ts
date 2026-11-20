@@ -14,7 +14,7 @@ import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import { onTestFinished, test } from 'vitest';
-import { buildHeaderPolicy, renderCaddySnippet } from '../scripts/emit-caddy-csp.ts';
+import { writePolicyFixtures } from './helpers/caddy-edge.ts';
 
 const repositoryRoot = `${import.meta.dirname}/../../../`;
 const caddyImage = 'caddy:2.11.4-alpine';
@@ -56,8 +56,7 @@ async function startEdge() {
   const scratch = mkdtempSync(path.join(os.tmpdir(), 'voiceroom-admin-gate-'));
   const fakeApi = path.join(scratch, 'Caddyfile');
   writeFileSync(fakeApi, FAKE_API);
-  const csp = path.join(scratch, 'csp.caddy');
-  writeFileSync(csp, renderCaddySnippet(buildHeaderPolicy("default-src 'self'; script-src 'self' 'sha256-test='")));
+  const policies = writePolicyFixtures(scratch);
   const admin = path.join(scratch, 'admin');
   mkdirSync(path.join(admin, 'assets'), { recursive: true });
   writeFileSync(path.join(admin, 'index.html'), '<!doctype html><html><body>admin app</body></html>');
@@ -104,7 +103,9 @@ async function startEdge() {
       '-v',
       `${path.join(repositoryRoot, 'Caddyfile')}:/etc/caddy/Caddyfile:ro`,
       '-v',
-      `${csp}:/etc/caddy/csp.caddy:ro`,
+      `${policies.web}:/etc/caddy/csp.caddy:ro`,
+      '-v',
+      `${policies.widget}:/etc/caddy/widget-csp.caddy:ro`,
       '-v',
       `${path.join(repositoryRoot, 'config/caddy/admin-csp.caddy')}:/etc/caddy/admin-csp.caddy:ro`,
       '-v',

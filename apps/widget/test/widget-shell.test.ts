@@ -1,103 +1,100 @@
 import { render, fireEvent, screen } from '@testing-library/vue';
-import { beforeEach, expect, test, vi } from 'vitest';
-import { defaultWidgetConfig } from '@voice-room/shared/contracts/widget';
-import WidgetShell from '../src/features/widget/WidgetShell.vue';
-const mocks = vi.hoisted(() => ({
-  create: vi.fn(async () => undefined),
-  join: vi.fn(async (_code: string) => undefined),
-  leave: vi.fn(),
-  devices: vi.fn(async () => undefined),
-  toggleOutput: vi.fn(async () => undefined),
-  volume: vi.fn(),
-  video: vi.fn<(_id: string) => HTMLVideoElement | undefined>(() => undefined),
-  speaking: vi.fn((_id: string) => false),
-  connectionQuality: vi.fn<() => 'excellent' | 'good' | 'poor' | 'lost' | 'unknown'>(() => 'good'),
-  state: {
+import { afterEach, beforeEach, expect, test, vi } from 'vitest';
+import { createPinia, setActivePinia } from 'pinia';
+import { markRaw, reactive } from 'vue';
+import { defaultWidgetConfig, type WidgetConfig } from '@voice-room/shared/contracts/widget';
+import { state } from '@voice-room/call/engine/core/room-runtime.store';
+import { getParticipantAudioPreference, getParticipantAudioPreferenceKey } from '@voice-room/call/engine/core/settings';
+import { createInitialRoomState } from '@voice-room/call/engine/model/room-state';
+import { installCallPorts } from '@voice-room/call/engine/ports';
+import { createParticipant } from '@voice-room/call/engine/room/participants';
+import { refreshDevices } from '@voice-room/call/engine/ui/devices';
+import type * as deviceControls from '@voice-room/call/engine/ui/devices';
+import WidgetShell from '../src/WidgetShell.vue';
+import { createWidgetSession, widgetSessionKey } from '../src/session';
+
+vi.mock('@voice-room/call/engine/ui/devices', async (importOriginal) => {
+  const original = await importOriginal<typeof deviceControls>();
+  return { ...original, refreshDevices: vi.fn(async () => []) };
+});
+
+const parentOrigin = 'https://game.test';
+const nonce = 'ab'.repeat(24);
+const installed: (() => void)[] = [];
+
+class FakeStream {
+  get [Symbol.toStringTag](): string {
+    return 'MediaStream';
+  }
+}
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  vi.stubGlobal('MediaStream', FakeStream);
+  Object.assign(state, createInitialRoomState(), { peerId: 'self', localConnectionQuality: 'good', joined: true });
+  createParticipant({ id: 'self', name: 'Вы' });
+});
+
+afterEach(() => {
+  for (const uninstall of installed.splice(0)) uninstall();
+  vi.restoreAllMocks();
+});
+
+function renderShell(config: WidgetConfig = defaultWidgetConfig, joined = true, camera = config.camera !== false) {
+  const pinia = createPinia();
+  setActivePinia(pinia);
+  const session = createWidgetSession({ camera, setCallActive: vi.fn() });
+  installed.push(installCallPorts(session.ports, pinia));
+  const create = vi.fn(async () => undefined);
+  const join = vi.fn(async (_code: string) => undefined);
+  const dispose = vi.fn();
+  const entry = reactive({
+    ...session.entry,
     roomId: 'roomCode',
     name: 'Guest',
     status: 'В комнате',
-    error: '',
-    joined: true,
-    muted: false,
-    outputMuted: false,
-    camera: false,
-    peers: [{ id: 'alex', name: 'Алекс', serverMuted: false }],
-    devices: [],
-    localVolumes: {},
-    input: '',
-    output: '',
-    noise: 'browser'
-  }
-}));
-vi.mock('../src/features/widget/runtime', () => ({
-  createWidgetRuntime: () => ({
-    state: mocks.state,
-    peerId: 'self',
-    create: mocks.create,
-    join: mocks.join,
-    leave: mocks.leave,
-    devices: mocks.devices,
-    toggleOutput: mocks.toggleOutput,
-    outputBlocked: () => false,
-    volume: mocks.volume,
-    video: mocks.video,
-    speaking: mocks.speaking,
-    connectionQuality: mocks.connectionQuality,
-    media: { resumeAudio: vi.fn() }
-  })
-}));
-beforeEach(() => {
-  vi.clearAllMocks();
-  mocks.state.joined = true;
-  mocks.connectionQuality.mockReturnValue('good');
-});
-
-test('the shared guest entry passes the edited name and room code into the real shell actions', async () => {
-  mocks.state.joined = false;
+    joined,
+    cameraAllowed: camera
+  });
   const view = render(WidgetShell, {
     props: {
-      bootstrap: {
-        config: { ...defaultWidgetConfig, title: 'Голосовой стол Бэнга' },
-        parentOrigin: 'https://game.test',
-        nonce: 'ab'.repeat(24)
-      }
+      bootstrap: { config, parentOrigin, nonce }
+    },
+    global: {
+      plugins: [pinia],
+      provide: { [widgetSessionKey]: { ...session, entry, create, join, dispose } }
     }
   });
+  return { view, entry, create, join, dispose };
+}
+
+test('the shared guest entry passes the edited name and room code into the real shell actions', async () => {
+  const { view, entry, create, join } = renderShell({ ...defaultWidgetConfig, title: 'Голосовой стол Бэнга' }, false);
   expect(await screen.findByRole('heading', { name: 'Голосовой стол Бэнга' })).toBeTruthy();
   expect(screen.getByRole('link', { name: 'VoiceRoom' }).getAttribute('href')).toBe('https://voiceroom.ru/');
   await fireEvent.update(await screen.findByLabelText('Ваше имя'), 'Party guest');
   await fireEvent.click(screen.getByRole('button', { name: 'Создать комнату' }));
-  expect(mocks.state.name).toBe('Party guest');
-  expect(mocks.create).toHaveBeenCalledOnce();
+  expect(entry.name).toBe('Party guest');
+  expect(create).toHaveBeenCalledOnce();
   await fireEvent.update(screen.getByLabelText('Код комнаты'), 'party-code');
   await fireEvent.click(screen.getByRole('button', { name: 'Войти' }));
-  expect(mocks.join).toHaveBeenCalledWith('party-code');
+  expect(join).toHaveBeenCalledWith('party-code');
   view.unmount();
 });
 test('legacy embeds can still join rooms while ignoring the old chat setting', async () => {
-  const view = render(WidgetShell, {
-    props: {
-      bootstrap: {
-        config: { ...defaultWidgetConfig, chat: true },
-        parentOrigin: 'https://game.test',
-        nonce: 'ab'.repeat(24)
-      }
-    }
-  });
+  const { view, dispose } = renderShell({ ...defaultWidgetConfig, chat: true });
   expect(await screen.findByRole('button', { name: 'Выйти' })).toBeTruthy();
   expect(screen.queryByRole('button', { name: 'Текстовый чат' })).toBeNull();
   view.unmount();
-  expect(mocks.leave).toHaveBeenCalledOnce();
+  expect(dispose).toHaveBeenCalledOnce();
 });
 
 test('the in-call dock keeps per-participant controls available from their video tile', async () => {
-  const video = document.createElement('video');
-  mocks.video.mockImplementation((id) => (id === 'alex' ? video : undefined));
-  render(WidgetShell, {
-    props: {
-      bootstrap: { config: defaultWidgetConfig, parentOrigin: 'https://game.test', nonce: 'ab'.repeat(24) }
-    }
-  });
+  const peer = createParticipant({ id: 'alex', name: 'Алекс' });
+  const stream = markRaw(new MediaStream());
+  peer.camera = true;
+  peer.cameraStream = stream;
+  renderShell();
   const participant = await screen.findByRole('button', { name: 'Звук участника Алекс' });
   const grid = screen.getByRole('list', { name: 'Участники звонка' });
   const tiles = [...grid.querySelectorAll('.participant')];
@@ -108,7 +105,7 @@ test('the in-call dock keeps per-participant controls available from their video
     tiles.forEach((tile, index) => expect(current[index]).toBe(tile));
     expect(tiles.every((tile) => tile.classList.contains('participant--grid'))).toBe(true);
   };
-  expect(participant.closest('li')?.querySelector('video')).toBe(video);
+  expect(participant.closest('li')?.querySelector('video')?.srcObject).toBe(stream);
   await fireEvent.click(participant);
   expectSameTiles();
   await fireEvent.click(screen.getByRole('button', { name: 'Закрыть' }));
@@ -118,20 +115,19 @@ test('the in-call dock keeps per-participant controls available from their video
   await fireEvent.contextMenu(participant);
   expectSameTiles();
   await fireEvent.update(screen.getByRole('slider', { name: 'Громкость' }), '0.5');
-  expect(mocks.volume).toHaveBeenCalledWith('alex', 0.5);
+  const preference = getParticipantAudioPreferenceKey(peer.accountUserId, peer.id);
+  expect(getParticipantAudioPreference(preference).volume).toBe(0.5);
   await fireEvent.click(screen.getByRole('button', { name: 'Отключить локально' }));
-  expect(mocks.volume).toHaveBeenCalledWith('alex', 0);
+  expect(getParticipantAudioPreference(preference).volume).toBe(0);
+  await fireEvent.click(screen.getByRole('button', { name: 'Включить локально' }));
+  expect(getParticipantAudioPreference(preference).volume).toBeGreaterThan(0);
   await fireEvent.click(screen.getByRole('button', { name: 'Закрыть' }));
   expect(screen.queryByRole('slider', { name: 'Громкость' })).toBeNull();
   expect(screen.getByRole('button', { name: 'Выйти' })).toBeTruthy();
 });
 
 test('the dock opens a separate device menu from each group and toggles headphones', async () => {
-  render(WidgetShell, {
-    props: {
-      bootstrap: { config: defaultWidgetConfig, parentOrigin: 'https://game.test', nonce: 'ab'.repeat(24) }
-    }
-  });
+  renderShell();
   await fireEvent.click(await screen.findByRole('button', { name: 'Выбрать микрофон' }));
   expect(screen.getByLabelText('Шумоподавление')).toBeTruthy();
   await fireEvent.click(screen.getByRole('button', { name: 'Выбрать динамик' }));
@@ -139,23 +135,33 @@ test('the dock opens a separate device menu from each group and toggles headphon
   expect(screen.queryByLabelText('Шумоподавление')).toBeNull();
   await fireEvent.click(screen.getByRole('button', { name: 'Выбрать камеру' }));
   expect(screen.getByLabelText('Камера', { exact: true })).toBeTruthy();
-  expect(mocks.devices).toHaveBeenCalledTimes(3);
+  expect(refreshDevices).toHaveBeenCalledTimes(3);
   await fireEvent.click(screen.getByRole('button', { name: 'Выключить звук' }));
-  expect(mocks.toggleOutput).toHaveBeenCalledOnce();
+  expect(state.localAppAudioSuppressed).toBe(true);
+  expect(screen.getByRole('button', { name: 'Включить звук' })).toBeTruthy();
 });
 
 test('voice-only rooms use live quality and offer a copyable code and expansion through the parent', async () => {
-  const parentOrigin = 'https://game.test';
-  const nonce = 'ab'.repeat(24);
   const copy = vi.fn(async () => undefined);
-  vi.stubGlobal('navigator', Object.create(navigator, { clipboard: { value: { writeText: copy } } }));
-  mocks.connectionQuality.mockReturnValue('poor');
-  render(WidgetShell, {
-    props: { bootstrap: { config: { ...defaultWidgetConfig, camera: false }, parentOrigin, nonce } }
-  });
+  vi.stubGlobal(
+    'navigator',
+    Object.assign(
+      { clipboard: { writeText: copy } },
+      {
+        userAgent: navigator.userAgent,
+        maxTouchPoints: navigator.maxTouchPoints
+      }
+    )
+  );
+  state.localConnectionQuality = 'poor';
+  const peer = createParticipant({ id: 'alex', name: 'Алекс' });
+  peer.camera = true;
+  peer.cameraStream = markRaw(new MediaStream());
+  const { view } = renderShell(defaultWidgetConfig, true, false);
   await fireEvent.click(await screen.findByRole('button', { name: 'Скопировать код комнаты' }));
   expect(copy).toHaveBeenCalledWith('roomCode');
   expect(screen.queryByRole('button', { name: 'Выбрать камеру' })).toBeNull();
+  expect(view.container.querySelector('video')).toBeNull();
   expect(
     screen.getByRole('img', { name: 'Нестабильная связь' }).classList.contains('room-dock__connection--warning')
   ).toBe(true);

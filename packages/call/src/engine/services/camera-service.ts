@@ -35,27 +35,31 @@ async function startCamera(): Promise<void> {
   }
 
   state.cameraStarting = true;
+  const self = state.self;
+  const isCurrent = () => state.joined && state.self === self;
   try {
     const grant = await askForMedia('camera');
+    if (!isCurrent() || getInstalledCallPorts()?.mediaPolicy.camera === false) return;
     if (grant && !grant.granted) {
       showToast(describeMediaRefusal(grant), { duration: 12000, variant: 'error' });
       return;
     }
     const stream = await openCameraCapture(state.cameraDeviceId);
-    if (!state.joined) {
+    if (!isCurrent() || getInstalledCallPorts()?.mediaPolicy.camera === false) {
       stopStream(stream);
       return;
     }
     adoptCameraStream(stream);
     await publishLocalCamera();
     // The server counts the camera against its media budget from here on.
-    await postState();
+    if (isCurrent()) await postState();
   } catch (error) {
+    if (!isCurrent()) return;
     log.warn('camera start failed', errorContext(error));
     await stopCamera();
     showToast(describeCameraError(error));
   } finally {
-    state.cameraStarting = false;
+    if (isCurrent()) state.cameraStarting = false;
   }
 }
 

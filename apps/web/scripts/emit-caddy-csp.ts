@@ -9,7 +9,7 @@
 // narrowed here with Caddy's {$LIVEKIT_DOMAIN} placeholder, which Caddy fills in
 // from the environment when it loads the imported file.
 //
-// Usage: node emit-caddy-csp.ts <dist/index.html> [connect-src] > csp.caddy
+// Usage: node emit-caddy-csp.ts <dist/index.html> [connect-src] [frame-ancestors] > csp.caddy
 
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -25,7 +25,7 @@ export function readMetaPolicy(html: string): string {
   return policy;
 }
 
-export function buildHeaderPolicy(metaPolicy: string, connectSrc = CONNECT_SRC) {
+export function buildHeaderPolicy(metaPolicy: string, connectSrc = CONNECT_SRC, frameAncestors = "'none'") {
   const directives = new Map<string, string>();
   for (const part of String(metaPolicy).split(';')) {
     const trimmed = part.trim();
@@ -41,7 +41,7 @@ export function buildHeaderPolicy(metaPolicy: string, connectSrc = CONNECT_SRC) 
     throw new Error("script-src allows 'unsafe-inline'; the build has no inline script that would need it");
   }
   directives.set('connect-src', connectSrc);
-  directives.set('frame-ancestors', "'none'");
+  directives.set('frame-ancestors', frameAncestors);
   directives.set('worker-src', "'self'");
   directives.set('manifest-src', "'self'");
   return Array.from(directives, ([name, value]) => `${name} ${value}`).join('; ');
@@ -55,10 +55,12 @@ export function renderCaddySnippet(policy: string) {
 if (process.argv[1] && fileURLToPath(import.meta.url) === fs.realpathSync(process.argv[1])) {
   const file = process.argv[2];
   if (!file) {
-    process.stderr.write('usage: emit-caddy-csp.ts <dist/index.html> [connect-src]\n');
+    process.stderr.write('usage: emit-caddy-csp.ts <dist/index.html> [connect-src] [frame-ancestors]\n');
     process.exit(2);
   }
   process.stdout.write(
-    renderCaddySnippet(buildHeaderPolicy(readMetaPolicy(fs.readFileSync(file, 'utf8')), process.argv[3]))
+    renderCaddySnippet(
+      buildHeaderPolicy(readMetaPolicy(fs.readFileSync(file, 'utf8')), process.argv[3] || undefined, process.argv[4])
+    )
   );
 }

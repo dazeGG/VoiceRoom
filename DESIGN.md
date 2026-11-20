@@ -4,7 +4,7 @@
 - Status: Active
 - Last refreshed: 2026-11-17
 - Primary product surfaces: landing start flow, authenticated lobby, room voice/screen/chat UI, direct messages, profile/sound/notification settings.
-- Guest embed surfaces: `/widgets` anonymous configurator and `/embed/v1` compact guest room. Current Vue evidence: `apps/web/src/pages/WidgetsPage.vue`, `features/widget/WidgetShell.vue`, shared UI primitives, `_tokens.scss`, and the rejected configurator screenshot supplied on 2026-11-17.
+- Guest embed surfaces: `/widgets` anonymous configurator and `/embed/v1` compact guest room. Current Vue evidence: `apps/web/src/pages/WidgetsPage.vue`, `apps/widget/src/WidgetShell.vue`, `packages/ui/src/components/Widget`, `_tokens.scss`, and the rejected configurator screenshot supplied on 2026-11-17.
 - Evidence reviewed: `img.png`, `img_1.png`, user-provided settings screenshots (2026-07-14), `apps/web/src/lib/shared/styles/app.css`, `apps/web/src/lib/shared/ui/Button/Button.svelte`, `apps/web/src/lib/features/home/styles/home.css`, `apps/web/src/lib/features/home/styles/lobby-v2.css`, `apps/web/src/lib/features/home/styles/settings.css`, `apps/web/src/lib/features/home/components/SettingsModal.svelte`, `apps/web/src/lib/features/room/styles/controls.css` (Svelte paths from before the Vue cutover).
 
 ## Brand

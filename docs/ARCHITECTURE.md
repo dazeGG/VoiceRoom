@@ -6,7 +6,7 @@ differ. Import rules live in `config/import-boundaries.v1.json` and `eslint.conf
 
 ## 1. Repository shape: one monorepo
 
-API, web, site, admin, and the shared workspaces stay in one repository. `apps/admin` is
+API, web, Meet, widget, site, admin, and the shared workspaces stay in one repository. `apps/admin` is
 the React staff console (admin.voiceroom.ru), signed in by handoff from the
 main site; it talks to the API's admin routes.
 
@@ -18,7 +18,21 @@ main site; it talks to the API's admin routes.
   exports. The package imports no app code. Web owns product stores, locale
   registration and the client log reporting sink.
 - `packages/call` owns the reusable call engine, its core views and the voice
-  asset source. Web wires its host ports and emits the manifest URLs.
+  asset source. Web wires its full-product ports. Meet and widget compose the
+  headless `@voice-room/call/guest` controller and guest transport with their
+  own API routes and entry and call screens. Each app emits the same versioned
+  voice asset URLs from the shared asset source.
+- `apps/widget` owns the v1 loader, iframe handshake, room creation proof,
+  compact call shell and frame-local credentials and preferences. The loader
+  and document ship in the web image at `/widget/v1/loader.js` and `/embed/v1/`.
+  Hashed widget chunks live under `/_app/immutable/widget/` and are kept by the
+  shared asset archive for open frames during updates. Caddy's embed document
+  and public loader keep separate framing, caching and cross-origin policies.
+  For local source development, `npm run dev:host:widget` serves the widget
+  entry points on port 5182 and proxies widget API requests to the local API.
+  When an embed disables its camera, the engine blocks camera capture and
+  remote camera subscriptions. Widget admission supplies the room capability
+  ceiling and the API and SFU enforce the screen and data publishing boundary.
 - The application workspaces version together. The site and documentation
   release independently. CI boots the whole stack for the voice-join smoke test.
 - Deployables are already separate: the `api`, `worker` and `web` images are
@@ -37,7 +51,7 @@ public API with third-party clients.
   source for each Vite consumer to compile and keeps Vue and Pinia as peers.
 - JavaScript stays only where it must: the byte-pinned `.cjs` migrations,
   `scripts/geoip/fetch-dbip-city-lite.mjs` (host crontabs run it by path) and
-  the AudioWorklet modules in `apps/web/public` (served unbundled).
+  the AudioWorklet modules in `packages/call/assets` (served unbundled).
 - Types are proved, not asserted, and `npm run check` enforces it:
   - No `as` (except `as const`), no non-null `!`, no `any`
     (`consistent-type-assertions: never`, `no-non-null-assertion`,

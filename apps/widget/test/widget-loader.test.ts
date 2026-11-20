@@ -3,10 +3,10 @@ import {
   defaultWidgetConfig,
   encodeWidgetConfig,
   parseWidgetBootstrap,
+  widgetEmbedMarkup as widgetSnippet,
   type WidgetConfig
 } from '@voice-room/shared/contracts/widget';
-import { mountWidget } from '../src/features/widget/loader';
-import { widgetSnippet } from '../src/features/widget/snippet';
+import { mountWidget } from '../src/loader';
 const disposals: (() => void)[] = [];
 afterEach(() => {
   disposals.splice(0).forEach((dispose) => dispose());

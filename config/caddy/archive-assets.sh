@@ -1,8 +1,8 @@
 #!/bin/sh
 # Keeps the hashed JS and CSS of earlier releases next to this one. A tab
 # opened before a deploy still loads its own chunks while it runs, and Caddy
-# serves /_app/immutable/ from the archive (Caddyfile). Files are named by
-# their content hash, so a file of any release can sit beside the others.
+# serves /_app/immutable/ from the archive (Caddyfile), including the widget/
+# subtree. Files are named by content hash, so releases can share the archive.
 #
 # Usage: archive-assets.sh [build-dir] [archive-dir] [retention-days]
 set -eu

@@ -15,6 +15,7 @@ import { metaPolicy, versionFile, voiceAssetDirectory, voiceAssetVersion } from 
 import { buildHeaderPolicy, readMetaPolicy } from '../scripts/emit-caddy-csp.ts';
 
 const webRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
+const widgetRoot = join(webRoot, '..', 'widget');
 const mediaPaths = [
   '/audio-gate.worklet.js',
   '/desktop-audio-source.worklet.js',
@@ -136,28 +137,55 @@ function verifyDeployArtifacts(outDir: string) {
 }
 
 // CI verifies the regular build in its build job. Local runs use a temporary build.
-test.skipIf(deployContractMode === 'checked')(
-  'a production build keeps the deployment contract',
-  { timeout: 60_000 },
-  async () => {
-    if (deployContractMode === 'built') {
-      verifyDeployArtifacts(join(webRoot, 'dist'));
-      return;
-    }
-    const outDir = mkdtempSync(join(tmpdir(), 'web-build-'));
-    vi.stubEnv('LIVEKIT_DOMAIN', livekitDomain);
-    // Vitest's test environment would leave import.meta.env.PROD false.
-    vi.stubEnv('NODE_ENV', 'production');
-    onTestFinished(() => {
-      vi.unstubAllEnvs();
-    });
-    try {
-      await build({ root: webRoot, logLevel: 'silent', build: { outDir, emptyOutDir: true } });
-      verifyDeployArtifacts(outDir);
-    } finally {
-      rmSync(outDir, { recursive: true, force: true });
-    }
+async function verifyProductionBuild(root: string, verify: (outDir: string) => void) {
+  if (deployContractMode === 'built') {
+    verify(join(root, 'dist'));
+    return;
   }
+  const outDir = mkdtempSync(join(tmpdir(), 'deploy-build-'));
+  vi.stubEnv('LIVEKIT_DOMAIN', livekitDomain);
+  // Vitest's test environment would leave import.meta.env.PROD false.
+  vi.stubEnv('NODE_ENV', 'production');
+  onTestFinished(() => {
+    vi.unstubAllEnvs();
+  });
+  try {
+    await build({ root, logLevel: 'silent', build: { outDir, emptyOutDir: true } });
+    verify(outDir);
+  } finally {
+    rmSync(outDir, { recursive: true, force: true });
+  }
+}
+
+test.skipIf(deployContractMode === 'checked')(
+  'a production web build keeps the deployment contract',
+  { timeout: 60_000 },
+  () => verifyProductionBuild(webRoot, verifyDeployArtifacts)
+);
+
+function verifyWidgetArtifacts(outDir: string) {
+  const html = readFileSync(join(outDir, 'embed', 'v1', 'index.html'), 'utf8');
+  const policy = buildHeaderPolicy(readMetaPolicy(html), undefined, 'https:');
+  assert.match(policy, /frame-ancestors https:/);
+  assert.match(policy, /script-src 'self' 'wasm-unsafe-eval'/);
+  assert.match(policy, /connect-src 'self' wss:\/\/\{\$LIVEKIT_DOMAIN\}/);
+  assert.ok(html.indexOf('http-equiv="content-security-policy"') < html.indexOf('<script'));
+  const entry = html.match(/src="\/(_app\/immutable\/widget\/[^"]+\.js)"/)?.[1];
+  assert.ok(entry, 'a separate archive path for the frame');
+  const entryPath = join(outDir, entry);
+  assert.deepEqual(brotliDecompressSync(readFileSync(`${entryPath}.br`)), readFileSync(entryPath));
+  assert.equal(voiceAssetVersion(outDir), voiceAssetVersion());
+
+  const loaderPath = join(outDir, 'widget', 'v1', 'loader.js');
+  const loader = readFileSync(loaderPath);
+  assert.ok(loader.length > 0);
+  assert.deepEqual(brotliDecompressSync(readFileSync(`${loaderPath}.br`)), loader);
+}
+
+test.skipIf(deployContractMode === 'checked')(
+  'a production widget build keeps the deployment contract',
+  { timeout: 60_000 },
+  () => verifyProductionBuild(widgetRoot, verifyWidgetArtifacts)
 );
 
 test('the dev server serves audio assets at browser module and fetch URLs', { timeout: 60_000 }, async () => {

@@ -204,6 +204,26 @@ test('a camera that is unplugged turns itself off and says so', async () => {
   expect(showToast).toHaveBeenCalledWith('Камера отключилась');
 });
 
+test('leaving and rejoining while the camera prompt is pending never publishes the old capture', async () => {
+  const capture = fakeCapture();
+  const pending = Promise.withResolvers<unknown>();
+  const getUserMedia = vi.fn(() => pending.promise);
+  const { lk, camera, published } = await loadLocalCamera(getUserMedia);
+
+  const opening = camera.toggleCamera();
+  await vi.waitFor(() => expect(getUserMedia).toHaveBeenCalledOnce());
+  camera.stopLocalCamera();
+  lk.state.joined = false;
+  lk.state.self = null;
+  Object.assign(lk.state, { joined: true, self: { id: 'self' } });
+
+  pending.resolve(capture.stream);
+  await opening;
+  expect(capture.track.stopped).toBe(true);
+  expect(published).toHaveLength(0);
+  expect(lk.state.localCameraStream).toBeNull();
+});
+
 test('a refused camera stays off and nothing is published', async () => {
   const { lk, camera, published } = await loadLocalCamera(async () => {
     throw Object.assign(new Error('denied'), { name: 'NotAllowedError' });

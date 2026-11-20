@@ -72,7 +72,7 @@ services:
       LIVEKIT_GATE_SECRET: ci-livekit-gate-secret-at-least-32-bytes
       LIVEKIT_INTERNAL_URL: ws://livekit:7880
     ports:
-      - "127.0.0.1:7890:3080"
+      - "127.0.0.1:${CI_GATE_PORT:-7890}:3080"
     volumes:
       - .:/app
       - node_modules:/app/node_modules
@@ -173,11 +173,12 @@ services:
       DATABASE_URL: postgres://voice_room:voice_room_ci@postgres:5432/voice_room_ci
       LIVEKIT_URL: ws://livekit:7880
       LIVEKIT_INTERNAL_URL: ws://livekit:7880
-      LIVEKIT_GATE_PUBLIC_URL: ws://voice-gate.test:7890
+      LIVEKIT_GATE_PUBLIC_URL: ${CI_GATE_PUBLIC_URL:-ws://voice-gate.test:7890}
+      WIDGET_ENABLED: ${WIDGET_ENABLED:-false}
       LIVEKIT_GATE_SECRET: ci-livekit-gate-secret-at-least-32-bytes
       LIVEKIT_API_KEY: devkey
       LIVEKIT_API_SECRET: devsecret
-      ROOM_CREATE_POW_DIFFICULTY: 0
+      ROOM_CREATE_POW_DIFFICULTY: ${CI_ROOM_CREATE_POW_DIFFICULTY:-0}
       ROOM_CREATE_RATE_LIMIT: 0
       TRUST_PROXY: "false"
       UPLOADS_DIR: /data/uploads
@@ -203,7 +204,7 @@ services:
     build:
       context: .
       target: deps
-    command: sh -c "npm run build && npm run preview -- --host 0.0.0.0 --port 5180"
+    command: sh -c "npm run build && npm --workspace @voice-room/widget run build && cp -R ../widget/dist/. dist/ && npm run preview -- --host 0.0.0.0 --port 5180"
     working_dir: /app/apps/web
     depends_on:
       deps:

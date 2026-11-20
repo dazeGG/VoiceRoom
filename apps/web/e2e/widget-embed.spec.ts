@@ -1,62 +1,20 @@
-import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { defaultWidgetConfig, encodeWidgetConfig } from '@voice-room/shared/contracts/widget';
-import { Pool } from 'pg';
 import { expect, test } from '@playwright/test';
-import { startWidgetHttpsFixture, widgetOrigin, widgetParents } from './widget-https-fixture';
+import {
+  createWidgetRoom,
+  expectWidgetAudio,
+  installWidgetBrowserProbe,
+  joinWidgetRoom
+} from './widget-browser-fixture';
+import { startWidgetHttpsFixture, waitForWidgetHttps, widgetOrigin, widgetParents } from './widget-https-fixture';
 function required<T>(value: T | null | undefined): T {
   if (value == null) throw new Error('Missing widget fixture value');
   return value;
 }
 
-async function cleanupWidgetFixtureRoom(createdCode: string | null) {
-  if (createdCode && process.env.PLAYWRIGHT_WIDGET_DATABASE_URL) {
-    const url = new URL(process.env.PLAYWRIGHT_WIDGET_DATABASE_URL);
-    if (url.hostname !== '127.0.0.1' || url.port !== '55439' || url.pathname !== '/widget_test')
-      throw new Error('Unsafe widget fixture database');
-    const pool = new Pool({ connectionString: url.href });
-    try {
-      await pool.query('DELETE FROM rooms WHERE id = $1 AND kind = $2', [createdCode, 'widget']);
-    } finally {
-      await pool.end();
-    }
-  }
-}
-
-async function restoreFixtureAdmission() {
-  const url = new URL(required(process.env.PLAYWRIGHT_WIDGET_DATABASE_URL));
-  if (url.hostname !== '127.0.0.1' || url.port !== '55439' || url.pathname !== '/widget_test')
-    throw new Error('Unsafe recovery fixture');
-  const pool = new Pool({ connectionString: url.href });
-  try {
-    await pool.query('UPDATE widget_boundary_activation SET widget_admission_enabled=true WHERE singleton');
-  } finally {
-    await pool.end();
-  }
-}
-function recoverFixture(command: 'recover' | 'verify-disabled') {
-  const database = required(process.env.PLAYWRIGHT_WIDGET_DATABASE_URL);
-  const url = new URL(database);
-  if (url.hostname !== '127.0.0.1' || url.port !== '55439' || url.pathname !== '/widget_test')
-    throw new Error('Unsafe recovery fixture');
-  const result = spawnSync(
-    process.execPath,
-    [path.resolve(import.meta.dirname, '../../api/src/scripts/widget-recovery.ts'), command],
-    {
-      encoding: 'utf8',
-      timeout: 30000,
-      env: {
-        ...process.env,
-        DATABASE_URL: database,
-        LIVEKIT_INTERNAL_URL: 'http://127.0.0.1:17880',
-        LIVEKIT_API_KEY: 'devkey',
-        LIVEKIT_API_SECRET: 'devsecret'
-      }
-    }
-  );
-  expect(result.status, result.stderr).toBe(0);
-  const report: unknown = JSON.parse(result.stdout);
+function recoveryProof(report: unknown) {
   expect(report).toMatchObject({
     ok: true,
     admissionDisabled: true,
@@ -85,72 +43,35 @@ function recoverFixture(command: 'recover' | 'verify-disabled') {
   return { generation: report.recoveryGeneration, apiOwner: report.apiOwner, gateOwner: report.gateOwner };
 }
 test.describe('guest widget across independent HTTPS parents', () => {
-  test.skip(process.env.PLAYWRIGHT_WIDGET_E2E !== '1', 'requires isolated API3000, gate7899 and built widget');
-  test.use({ ignoreHTTPSErrors: true });
-  let stop: (() => void) | undefined;
-  test.beforeAll(() => {
-    stop = startWidgetHttpsFixture();
+  test.skip(process.env.PLAYWRIGHT_WIDGET_E2E !== '1', 'requires an isolated CI Compose project and built widget');
+  test.use({ ignoreHTTPSErrors: true, permissions: ['microphone', 'camera'] });
+  let fixture: ReturnType<typeof startWidgetHttpsFixture> | undefined;
+  test.beforeAll(async ({ request }) => {
+    fixture = startWidgetHttpsFixture();
+    await waitForWidgetHttps(request);
   });
   test.afterAll(() => {
-    stop?.();
+    fixture?.stop();
   });
 
-  test('two guest contexts exchange real microphone/camera and text, retaining playback through collapse', async ({
+  test('two guest contexts exchange real microphone and camera, retaining playback through collapse', async ({
     browser
   }) => {
     test.setTimeout(120_000);
     const contexts = await Promise.all(
       [0, 1].map(() => browser.newContext({ ignoreHTTPSErrors: true, permissions: ['microphone', 'camera'] }))
     );
-    for (const context of contexts) {
-      await context.addInitScript(() => {
-        for (const key of ['localStorage', 'sessionStorage']) {
-          Object.defineProperty(window, key, {
-            get() {
-              throw new DOMException('Storage blocked by fixture', 'SecurityError');
-            }
-          });
-        }
-      });
-    }
+    await Promise.all(contexts.map((context) => context.addInitScript(installWidgetBrowserProbe)));
     let createdCode: string | null = null;
     let recovered = false;
     try {
       const pages = await Promise.all(contexts.map((context) => context.newPage()));
       await Promise.all(pages.map((page, index) => page.goto(required(widgetParents[index]))));
       const frames = pages.map((page) => page.frameLocator('iframe[title="VoiceRoom"]'));
-      await required(frames[0]).getByLabel('Ваше имя').fill('Player One');
-      await required(frames[0]).getByRole('button', { name: 'Создать комнату', exact: true }).click();
-      await expect(required(frames[0]).getByRole('status')).toHaveText('В комнате', { timeout: 30_000 });
-      const code = await required(frames[0]).locator('.widget-call__code').textContent();
-      expect(code).toBeTruthy();
+      const code = await createWidgetRoom(required(frames[0]), 'Player One');
       createdCode = code;
-      await required(frames[1]).getByLabel('Ваше имя').fill('Player Two');
-      await required(frames[1]).getByLabel('Код комнаты').fill(required(code));
-      await required(frames[1]).getByRole('button', { name: 'Войти', exact: true }).click();
-      await expect(required(frames[1]).getByRole('status')).toHaveText('В комнате', { timeout: 30_000 });
-      for (const frame of frames) {
-        await frame.locator('.widget-shell').hover();
-        const enableAudio = frame.getByRole('button', { name: 'Включить звук', exact: true });
-        if (await enableAudio.isVisible()) await enableAudio.click();
-        await expect
-          .poll(
-            () =>
-              frame
-                .locator('audio')
-                .evaluateAll((elements) =>
-                  elements.some(
-                    (element) =>
-                      element instanceof HTMLMediaElement &&
-                      element.srcObject instanceof MediaStream &&
-                      element.srcObject.getAudioTracks().some((track) => track.readyState === 'live') &&
-                      element.currentTime > 0
-                  )
-                ),
-            { timeout: 30_000 }
-          )
-          .toBe(true);
-      }
+      await joinWidgetRoom(required(frames[1]), code, 'Player Two');
+      for (const frame of frames) await expectWidgetAudio(frame);
       await required(frames[0]).locator('.widget-shell').hover();
       await required(frames[0]).getByRole('button', { name: 'Включить камеру', exact: true }).click();
       await expect
@@ -171,41 +92,39 @@ test.describe('guest widget across independent HTTPS parents', () => {
         .toBe(true);
       for (const frame of frames) {
         await expect(frame.getByRole('button', { name: 'Текстовый чат', exact: true })).toHaveCount(0);
+        await expect(frame.getByRole('button', { name: /показать экран|демонстрация экрана/i })).toHaveCount(0);
       }
+      const firstFrame = required(frames[0]);
+      await firstFrame.locator('.widget-shell').hover();
+      await firstFrame.getByRole('button', { name: 'Развернуть виджет', exact: true }).click();
+      const restoreSize = firstFrame.getByRole('button', { name: 'Вернуть размер виджета', exact: true });
+      await expect(restoreSize).toHaveAttribute('aria-pressed', 'true');
+      await restoreSize.click();
+      await expect(firstFrame.getByRole('button', { name: 'Развернуть виджет', exact: true })).toHaveAttribute(
+        'aria-pressed',
+        'false'
+      );
       for (let count = 0; count < 10; count++) {
         await required(pages[0]).getByRole('button', { name: 'VoiceRoom • В звонке', exact: true }).click();
         await required(pages[0]).getByRole('button', { name: 'VoiceRoom • В звонке', exact: true }).click();
       }
       await expect(required(frames[0]).getByRole('status')).toHaveText('В комнате');
-      await expect(required(frames[0]).locator('.widget-call__code')).toHaveText(required(code));
-      await expect
-        .poll(() =>
-          required(frames[1])
-            .locator('audio')
-            .evaluateAll((elements) =>
-              elements.some(
-                (element) =>
-                  element instanceof HTMLMediaElement &&
-                  element.srcObject instanceof MediaStream &&
-                  element.srcObject.getAudioTracks().some((track) => track.readyState === 'live') &&
-                  element.currentTime > 0
-              )
-            )
-        )
-        .toBe(true);
+      await expect(required(frames[0]).locator('.widget-call__code')).toHaveText(code);
+      await expectWidgetAudio(required(frames[1]));
       const denied = await required(contexts[0]).request.get(`${widgetOrigin}/api/rooms/${code}`);
       expect(denied.status()).toBe(404);
       if (process.env.PLAYWRIGHT_WIDGET_RECOVERY === '1') {
-        const recovery = recoverFixture('recover');
-        const verified = recoverFixture('verify-disabled');
+        recovered = true;
+        const recovery = recoveryProof(required(fixture).recover('recover'));
+        const verified = recoveryProof(required(fixture).recover('verify-disabled'));
         expect(verified).toEqual(recovery);
         await test.info().attach('widget-recovery-owner-proof', {
           body: JSON.stringify({ recovery, verified }),
           contentType: 'application/json'
         });
-        recovered = true;
         for (const frame of frames) {
           await expect(frame.getByRole('status')).not.toHaveText('В комнате');
+          await expect(frame.getByLabel('Ваше имя')).toBeVisible();
           await expect
             .poll(() =>
               frame
@@ -221,6 +140,8 @@ test.describe('guest widget across independent HTTPS parents', () => {
             )
             .toBe(false);
         }
+        for (const page of pages)
+          await expect(page.getByRole('button', { name: 'VoiceRoom', exact: true })).toBeVisible();
       } else {
         await required(frames[0]).locator('.widget-shell').hover();
         await required(frames[0]).getByRole('button', { name: 'Выйти', exact: true }).click();
@@ -228,8 +149,66 @@ test.describe('guest widget across independent HTTPS parents', () => {
       }
     } finally {
       await Promise.all(contexts.map((context) => context.close()));
-      await cleanupWidgetFixtureRoom(createdCode);
-      if (recovered) await restoreFixtureAdmission();
+      try {
+        required(fixture).cleanupRoom(createdCode);
+      } finally {
+        if (recovered) required(fixture).restoreAdmission();
+      }
+    }
+  });
+
+  test('two frames on one host keep separate same-room guests and enforce camera-off capture and subscription', async ({
+    page
+  }) => {
+    test.setTimeout(120_000);
+    await page.context().addInitScript(installWidgetBrowserProbe);
+    await page.goto(`${widgetParents[0]}/multi`);
+    const frames = page.locator('iframe[title="VoiceRoom"]');
+    const publisher = frames.nth(0).contentFrame();
+    const cameraOff = frames.nth(1).contentFrame();
+    const observerPage = await page.context().newPage();
+    let code: string | null = null;
+    try {
+      code = await createWidgetRoom(publisher, 'Camera Publisher');
+      await joinWidgetRoom(cameraOff, code);
+      await expect(publisher.getByRole('button', { name: 'Звук участника Гость', exact: true })).toHaveCount(1);
+      await expect(cameraOff.getByRole('button', { name: 'Звук участника Camera Publisher', exact: true })).toHaveCount(
+        1
+      );
+      await expectWidgetAudio(publisher);
+      await expectWidgetAudio(cameraOff);
+      await expect(cameraOff.getByRole('button', { name: /камер/ })).toHaveCount(0);
+      await expect
+        .poll(() => cameraOff.locator('body').evaluate(() => window.widgetProbe?.audioProcessors()))
+        .toContain('rnnoise');
+
+      await observerPage.goto(widgetParents[1]);
+      const observer = observerPage.frameLocator('iframe[title="VoiceRoom"]');
+      await joinWidgetRoom(observer, code, 'Camera Observer');
+      await page.bringToFront();
+      await publisher.locator('.widget-shell').hover();
+      await publisher.getByRole('button', { name: 'Включить камеру', exact: true }).click();
+      await observerPage.bringToFront();
+      await expect
+        .poll(() =>
+          observer
+            .locator('.participant video')
+            .evaluateAll((videos) => videos.some((video) => video instanceof HTMLVideoElement && video.videoWidth > 0))
+        )
+        .toBe(true);
+      await page.bringToFront();
+      await expectWidgetAudio(cameraOff);
+      await expect(cameraOff.locator('video')).toHaveCount(0);
+      expect(await cameraOff.locator('body').evaluate(() => window.widgetProbe?.cameraUsage())).toEqual({
+        captures: 0,
+        receivedPackets: 0
+      });
+      await expect(publisher.getByRole('status')).toHaveText('В комнате');
+      await expect(cameraOff.getByRole('status')).toHaveText('В комнате');
+    } finally {
+      await observerPage.close();
+      await page.close();
+      required(fixture).cleanupRoom(code);
     }
   });
 

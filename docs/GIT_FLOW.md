@@ -44,7 +44,7 @@ This repository uses Git Flow for all development and releases. This file is the
 
 | Component | Version source | Production tag | Release entry |
 | --- | --- | --- | --- |
-| VoiceRoom application (web, API, workers, admin, Meet) | `package.json` | `vX.Y.Z` | Personal bundle on each tag, with series notes on `vX.Y.0` |
+| VoiceRoom application (web, API, workers, admin, Meet, widget) | `package.json` | `vX.Y.Z` | Personal bundle on each tag, with series notes on `vX.Y.0` |
 | Public website | `apps/site/package.json` | `site/vX.Y.Z` | VoiceRoom Site X.Y.Z |
 | Public documentation | `apps/docs/package.json` | `docs/vX.Y.Z` | VoiceRoom Docs X.Y.Z |
 
@@ -56,7 +56,7 @@ same Releases page while they share a repository.
 
 The GitHub `production` environment must allow the tag patterns `v*`,
 `site/v*` and `docs/v*`. Release PRs carry the version changes and matching
-lockfiles. For an application release, bump the root, API, web, admin, Meet,
+lockfiles. For an application release, bump the root, API, web, admin, Meet, widget,
 shared, UI and call workspace versions together. The site and documentation each keep an
 independent version.
 
@@ -67,7 +67,7 @@ the component being released.
 ```bash
 npm version 2.14.0 --no-git-tag-version --ignore-scripts --include-workspace-root \
   --workspace @voice-room/api --workspace @voice-room/web \
-  --workspace @voice-room/admin --workspace @voice-room/meet --workspace @voice-room/shared \
+  --workspace @voice-room/admin --workspace @voice-room/meet --workspace @voice-room/widget --workspace @voice-room/shared \
   --workspace @voice-room/ui --workspace @voice-room/call
 npm version 1.0.1 --no-git-tag-version --ignore-scripts --workspace @voice-room/site
 npm --prefix apps/docs version 1.0.1 --no-git-tag-version --ignore-scripts

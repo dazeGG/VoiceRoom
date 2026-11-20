@@ -1,8 +1,8 @@
 import { Room, RoomEvent, Track } from 'livekit-client';
 import { LiveKitAdmission } from '@voice-room/shared/contracts/admission';
 import { WidgetRoomCreated } from '@voice-room/shared/contracts/widget';
-import { widgetRequest } from '../src/features/widget/http';
-import { widgetProof } from '../src/features/widget/proof';
+import { widgetRequest } from '../../widget/src/http';
+import { widgetProof } from '../../widget/src/proof';
 
 /** Test-only malicious client: widens local SDK checks, never its signed token. */
 export async function runWidgetBoundaryProbe() {

@@ -4,7 +4,7 @@
 
 import { spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { copyFileSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { copyFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { get } from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
@@ -13,6 +13,20 @@ import { buildHeaderPolicy, renderCaddySnippet } from '../../scripts/emit-caddy-
 
 const repositoryRoot = `${import.meta.dirname}/../../../../`;
 const caddyImage = 'caddy:2.11.4-alpine';
+
+/** Test policies for the two generated Caddy imports. */
+export function writePolicyFixtures(directory: string) {
+  const web = path.join(directory, 'csp.caddy');
+  const widget = path.join(directory, 'widget-csp.caddy');
+  writeFileSync(web, renderCaddySnippet(buildHeaderPolicy("default-src 'self'; script-src 'self'")));
+  writeFileSync(
+    widget,
+    renderCaddySnippet(
+      buildHeaderPolicy("default-src 'self'; script-src 'self' 'wasm-unsafe-eval'", undefined, 'https:')
+    )
+  );
+  return { web, widget };
+}
 
 export const dockerAvailable =
   spawnSync('docker', ['version', '--format', '{{.Server.Version}}'], {
@@ -38,6 +52,7 @@ export async function startCaddyEdge({
   env = {},
   files = {},
   binaryFiles = {},
+  archivedFiles,
   siteFiles = DEFAULT_SITE_FILES,
   docsFiles = {},
   sites = {},
@@ -49,6 +64,8 @@ export async function startCaddyEdge({
   /** Files of the web root by path, next to index.html. */
   files?: Record<string, string>;
   binaryFiles?: Record<string, Uint8Array>;
+  /** Files left in the immutable archive by an older release. */
+  archivedFiles?: Record<string, string>;
   /** Files of the public site's root (apps/site/dist). */
   siteFiles?: Record<string, string>;
   /** Files of the documentation root (apps/docs/dist). */
@@ -60,13 +77,8 @@ export async function startCaddyEdge({
   behindEdge?: boolean;
 } = {}): Promise<string> {
   const name = `voiceroom-edge-${randomUUID()}`;
-  // The image generates this snippet from its own build; any valid policy
-  // lets the Caddyfile load here.
-  const cspSnippet = path.join(mkdtempSync(path.join(os.tmpdir(), 'voiceroom-csp-')), 'csp.caddy');
-  writeFileSync(
-    cspSnippet,
-    renderCaddySnippet(buildHeaderPolicy("default-src 'self'; script-src 'self' 'sha256-test='"))
-  );
+  const cspDirectory = mkdtempSync(path.join(os.tmpdir(), 'voiceroom-csp-'));
+  const policies = writePolicyFixtures(cspDirectory);
   // The app's page, which every address of the app answers with.
   const webRoot = writeRoot('voiceroom-web-', {
     'index.html': '<!doctype html><html><body>web</body></html>',
@@ -87,6 +99,13 @@ export async function startCaddyEdge({
   // Extra sites the host manages; empty unless a test provides some.
   const sitesDir = mkdtempSync(path.join(os.tmpdir(), 'voiceroom-sites-'));
   for (const [file, content] of Object.entries(sites)) writeFileSync(path.join(sitesDir, file), content);
+  const archiveRoot = archivedFiles ? writeRoot('voiceroom-archive-', archivedFiles) : undefined;
+  onTestFinished(() => {
+    spawnSync('docker', ['rm', '-f', name], { encoding: 'utf8' });
+    for (const directory of [archiveRoot, cspDirectory, webRoot, siteRoot, docsRoot, domainsDir, sitesDir]) {
+      if (directory) rmSync(directory, { recursive: true, force: true });
+    }
+  });
   const run = spawnSync(
     'docker',
     [
@@ -110,7 +129,9 @@ export async function startCaddyEdge({
       '-v',
       `${path.join(repositoryRoot, 'Caddyfile')}:/etc/caddy/Caddyfile:ro`,
       '-v',
-      `${cspSnippet}:/etc/caddy/csp.caddy:ro`,
+      `${policies.web}:/etc/caddy/csp.caddy:ro`,
+      '-v',
+      `${policies.widget}:/etc/caddy/widget-csp.caddy:ro`,
       '-v',
       `${webRoot}:/srv/web:ro`,
       '-v',
@@ -129,16 +150,20 @@ export async function startCaddyEdge({
             `${path.join(repositoryRoot, 'config/caddy/behind-edge.headers')}:/etc/caddy/proxy.d/behind-edge.caddy:ro`
           ]
         : []),
-      caddyImage
+      ...(archiveRoot
+        ? [
+            '-v',
+            `${archiveRoot}:/srv/archive`,
+            '-v',
+            `${path.join(repositoryRoot, 'config/caddy/archive-assets.sh')}:/archive-assets.sh:ro`
+          ]
+        : []),
+      caddyImage,
+      ...(archiveRoot ? ['sh', '-c', 'sh /archive-assets.sh && exec caddy run --config /etc/caddy/Caddyfile'] : [])
     ],
     { encoding: 'utf8' }
   );
   if (run.status !== 0) throw new Error(run.stderr || 'failed to start Caddy edge');
-  const close = () => {
-    spawnSync('docker', ['rm', '-f', name], { encoding: 'utf8' });
-  };
-  onTestFinished(close);
-
   const mapping = spawnSync('docker', ['port', name, '80/tcp'], { encoding: 'utf8' });
   const port = mapping.stdout.trim().match(/:(\d+)$/)?.[1];
   if (!port) throw new Error(`missing Caddy port mapping: ${mapping.stderr}`);
