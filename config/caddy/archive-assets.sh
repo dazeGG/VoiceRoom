@@ -17,4 +17,11 @@ if [ "$days" != forever ]; then
   find "$archive" -type f -mtime +"$days" -delete
   find "$archive" -mindepth 1 -type d -empty -delete
 fi
-cp -R -p -n "$src/." "$archive/"
+# Copy only files the archive lacks: the archived ones may be served right now,
+# and their names are content hashes. `cp -n` is not portable (GNU warns, and
+# some coreutils versions fail when they skip a file).
+(cd "$src" && find . -type f) | while IFS= read -r file; do
+  [ -e "$archive/$file" ] && continue
+  mkdir -p "$archive/$(dirname "$file")"
+  cp -p "$src/$file" "$archive/$file"
+done
