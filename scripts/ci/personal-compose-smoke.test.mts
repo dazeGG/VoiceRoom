@@ -159,7 +159,8 @@ function turnAttributes(response: Buffer, request: Buffer, type: number): Map<nu
 async function sendTurn(socket: TLSSocket, request: Buffer): Promise<Buffer> {
   socket.write(request);
   let response = Buffer.alloc(0);
-  for await (const chunk of socket.iterator({ destroyOnReturn: false })) {
+  const chunks: AsyncIterable<unknown, unknown, unknown> = socket.iterator({ destroyOnReturn: false });
+  for await (const chunk of chunks) {
     assert.ok(Buffer.isBuffer(chunk));
     response = Buffer.concat([response, chunk]);
     if (response.length >= 20 && response.length >= 20 + response.readUInt16BE(2)) return response;
@@ -188,9 +189,9 @@ async function verifyTurnRelay({
   const udp = createSocket('udp4');
   try {
     const request = allocateRequest();
-    const response = once(udp, 'message', { signal: AbortSignal.timeout(7000) });
+    const response: Promise<unknown[]> = once(udp, 'message', { signal: AbortSignal.timeout(7000) });
     udp.send(request, udpPort, host);
-    const message: unknown[] = await response;
+    const message = await response;
     const [reply] = message;
     assert.ok(Buffer.isBuffer(reply));
     const error = turnAttributes(reply, request, 0x0113).get(0x0009);
