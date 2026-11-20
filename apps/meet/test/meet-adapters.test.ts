@@ -1,5 +1,5 @@
 import { voiceAssetUrls } from '@voice-room/call/voice-assets';
-import type { ClientCommand, ServerEvent } from '@voice-room/shared/contracts/realtime';
+import { MEET_CHAT_MAX_BYTES, type ClientCommand, type ServerFrame } from '@voice-room/shared/contracts/realtime';
 import type { RoomCapabilities } from '@voice-room/shared/contracts/rooms';
 import { validateClientCommand } from '@voice-room/shared/realtime';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -10,7 +10,7 @@ import { createMeetTransport, type MeetTransport } from '@/adapters/meet-transpo
 
 const roomId = 'cal9';
 const guest = { roomId, name: 'Alice', peerId: 'peer-alice', sessionToken: 'x'.repeat(64) };
-const capabilities: RoomCapabilities = { camera: true, chat: 'none', maxPeers: 8, screenShare: true };
+const capabilities: RoomCapabilities = { camera: true, chat: 'ephemeral', maxPeers: 8, screenShare: true };
 const admission = {
   ok: true as const,
   room: roomId,
@@ -145,7 +145,7 @@ class TestSocket extends EventTarget {
     this.sent.push(parsed.envelope);
   }
 
-  receive(frame: ServerEvent): void {
+  receive(frame: ServerFrame): void {
     this.dispatchEvent(new MessageEvent('message', { data: JSON.stringify(frame) }));
   }
 
@@ -270,6 +270,72 @@ describe('Meet realtime adapter', () => {
     await vi.advanceTimersByTimeAsync(10_000);
     expect(sockets).toHaveLength(2);
     expect(transport.capabilities.value).toBeNull();
+  });
+
+  it('sends chat only on an admitted active roster and never sends a rejected draft after reconnect', async () => {
+    const { chat } = transport;
+    expect(chat.send('Before joining')).toBe(false);
+    transport.realtime.join(guest);
+    const first = ready();
+    snapshot(first, guest.peerId, 'preview');
+    expect(chat.send('Before roster attachment')).toBe(false);
+    snapshot(first);
+    expect(chat.send('Before admission')).toBe(false);
+    await transport.requestLiveKitToken(guest);
+    expect(chat.ready.value).toBe(true);
+    expect(chat.send('   ')).toBe(false);
+    expect(chat.send('é'.repeat(MEET_CHAT_MAX_BYTES / 2 + 1))).toBe(false);
+    expect(chat.send(' A live message ')).toBe(true);
+    expect(first.sent.filter((frame) => frame.type === 'meet.chat.send')).toEqual([
+      { id: first.sent.at(-1)?.id, type: 'meet.chat.send', payload: { text: 'A live message' } }
+    ]);
+
+    first.close();
+    expect(chat.ready.value).toBe(false);
+    expect(chat.send('During disconnect')).toBe(false);
+    await vi.advanceTimersByTimeAsync(400);
+    const second = ready();
+    expect(chat.send('While the new socket joins')).toBe(false);
+    snapshot(second);
+    expect(chat.ready.value).toBe(true);
+    expect(second.sent.map(({ type }) => type)).toEqual(['room.join']);
+  });
+
+  it('keeps the most recent delivered messages in memory until leave and routes chat refusals to the panel', async () => {
+    const { chat } = transport;
+    const onEvent = vi.fn();
+    transport.realtime.subscribeRoom(roomId, onEvent);
+    transport.realtime.join(guest);
+    const socket = ready();
+    const deliver = (index: number) => {
+      socket.receive({
+        type: 'meet.chat.message',
+        payload: { id: `chat-${index}`, authorId: guest.peerId, displayName: 'Alice', text: `Message ${index}` }
+      });
+    };
+
+    deliver(0);
+    expect(chat.messages.value).toEqual([]);
+    snapshot(socket);
+    await transport.requestLiveKitToken(guest);
+    for (let index = 1; index <= 101; index += 1) deliver(index);
+    expect(chat.messages.value).toHaveLength(100);
+    expect(chat.messages.value[0]?.text).toBe('Message 2');
+    expect(chat.messages.value.at(-1)?.text).toBe('Message 101');
+    expect(chat.send('Rate limited')).toBe(true);
+    const id = socket.sent.at(-1)?.id;
+    if (!id) throw new Error('No chat request was sent');
+    socket.receive({ id, type: 'error', error: { code: 'rate_limited', message: 'slow down' } });
+    expect(chat.error.value).toBe('rate_limited');
+    expect(onEvent).toHaveBeenCalledOnce();
+
+    socket.close();
+    await vi.advanceTimersByTimeAsync(400);
+    snapshot(ready());
+    expect(chat.messages.value).toHaveLength(100);
+    transport.realtime.leave(guest);
+    expect(chat.messages.value).toEqual([]);
+    expect(chat.error.value).toBeNull();
   });
 
   it('drops an in-flight admission after leave even if its response still arrives', async () => {

@@ -1,3 +1,5 @@
+@use 'pkg:@voice-room/ui/styles/mixins';
+
 .meet-call {
   position: relative;
   display: grid;
@@ -39,7 +41,35 @@
     }
   }
 
+  &__header-actions {
+    display: flex;
+    align-items: center;
+    gap: clamp(0.5rem, 2vw, 1rem);
+  }
+
+  &__chat-toggle {
+    min-height: 2.75rem;
+    padding: 0.4rem 0.75rem;
+    white-space: nowrap;
+
+    &[aria-expanded='true'] {
+      border-color: var(--vr-accent-line);
+      color: var(--vr-accent);
+    }
+
+    @include mixins.below(mixins.$bp-phone) {
+      width: 2.75rem;
+      padding: 0;
+
+      span {
+        @include mixins.visually-hidden;
+      }
+    }
+  }
+
   .room-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
     min-height: 0;
   }
   .stage {

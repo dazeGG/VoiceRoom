@@ -1,16 +1,18 @@
 import type { CallRealtimeEvent, CallTransport, LiveKitCredentials } from '@voice-room/call/engine/transport';
 import { loadLiveKitClient } from '@voice-room/call/livekit-runtime';
 import { isErrorCode, RETRYABLE_JOIN_CODES } from '@voice-room/shared/contracts/errors';
-import type {
-  ClientCommand,
-  ClientCommands,
-  MediaGrant,
-  ServerFrame,
-  VoiceTarget
+import {
+  MEET_CHAT_MAX_BYTES,
+  type ClientCommand,
+  type ClientCommands,
+  type MediaGrant,
+  type ServerEvents,
+  type ServerFrame,
+  type VoiceTarget
 } from '@voice-room/shared/contracts/realtime';
 import type { RoomCapabilities } from '@voice-room/shared/contracts/rooms';
 import { parseServerFrame } from '@voice-room/shared/realtime';
-import { shallowRef, type ShallowRef } from 'vue';
+import { computed, shallowRef, type Ref, type ShallowRef } from 'vue';
 import { MeetApiError, meetErrorMessage, type MeetApi } from '@/adapters/meet-api';
 
 type Socket = Pick<WebSocket, 'readyState' | 'send' | 'close'> & EventTarget;
@@ -18,7 +20,6 @@ type Socket = Pick<WebSocket, 'readyState' | 'send' | 'close'> & EventTarget;
 interface JoinSession {
   input: ClientCommands['room.join'];
   lifetime: AbortController;
-  rosterReady: boolean;
   rosterListeners: Set<() => void>;
 }
 
@@ -31,10 +32,20 @@ const READY_TIMEOUT_MS = 8_000;
 const HEARTBEAT_MS = 15_000;
 const ROSTER_TIMEOUT_MS = 10_000;
 const MEDIA_TIMEOUT_MS = 4_000;
+const CHAT_HISTORY_LIMIT = 100;
+const CHAT_REQUEST_PREFIX = 'meet-chat-';
+
+export type MeetChatMessage = ServerEvents['meet.chat.message'];
 
 export interface MeetTransport extends CallTransport {
   disconnect(): void;
   capabilities: Readonly<ShallowRef<RoomCapabilities | null>>;
+  chat: {
+    ready: Readonly<Ref<boolean>>;
+    messages: Readonly<ShallowRef<readonly MeetChatMessage[]>>;
+    error: Readonly<ShallowRef<string | null>>;
+    send: (text: string) => boolean;
+  };
 }
 
 function isSamePeer(left: VoiceTarget, right: VoiceTarget): boolean {
@@ -74,24 +85,6 @@ function deniedMedia(input: ClientCommands['room.media.request']): MediaGrant {
   return { roomId: input.roomId, kind: input.kind, granted: false, reason: 'server_busy' };
 }
 
-async function waitForRoster(session: JoinSession, signal: AbortSignal): Promise<void> {
-  if (signal.aborted) throw new MeetApiError('not_in_room', 409);
-  if (session.rosterReady) return;
-  await new Promise<void>((resolve, reject) => {
-    const ready = () => {
-      signal.removeEventListener('abort', cancelled);
-      session.rosterListeners.delete(ready);
-      resolve();
-    };
-    const cancelled = () => {
-      session.rosterListeners.delete(ready);
-      reject(new MeetApiError('not_in_room', 409));
-    };
-    session.rosterListeners.add(ready);
-    signal.addEventListener('abort', cancelled, { once: true });
-  });
-}
-
 export function createMeetTransport(
   api: Pick<MeetApi, 'status' | 'admit'>,
   { origin = window.location.origin, openSocket = (url: URL): Socket => new WebSocket(url) } = {}
@@ -115,14 +108,43 @@ export function createMeetTransport(
   let resyncTimer: ReturnType<typeof setTimeout> | undefined;
   let resyncFailureHandler: ((input: { code: string }) => void) | null = null;
   const capabilities = shallowRef<RoomCapabilities | null>(null);
+  const rosterAttached = shallowRef(false);
+  const chatReady = computed(() => rosterAttached.value && capabilities.value?.chat === 'ephemeral');
+  const chatMessages = shallowRef<readonly MeetChatMessage[]>([]);
+  const chatError = shallowRef<string | null>(null);
   const roomListeners = new Map<string, Set<(event: CallRealtimeEvent) => void>>();
   const stateListeners = new Set<(connected: boolean, epoch: number) => void>();
   const pendingMedia = new Map<string, PendingMedia>();
+
+  async function waitForRoster(current: JoinSession, signal: AbortSignal): Promise<void> {
+    if (signal.aborted) throw new MeetApiError('not_in_room', 409);
+    if (rosterAttached.value) return;
+    await new Promise<void>((resolve, reject) => {
+      const ready = () => {
+        signal.removeEventListener('abort', cancelled);
+        current.rosterListeners.delete(ready);
+        resolve();
+      };
+      const cancelled = () => {
+        current.rosterListeners.delete(ready);
+        reject(new MeetApiError('not_in_room', 409));
+      };
+      current.rosterListeners.add(ready);
+      signal.addEventListener('abort', cancelled, { once: true });
+    });
+  }
 
   function send(command: ClientCommand): boolean {
     if (!socket || socket.readyState !== WebSocket.OPEN || !connected) return false;
     socket.send(JSON.stringify(command));
     return true;
+  }
+
+  function sendChat(text: string): boolean {
+    text = text.trim();
+    if (!chatReady.value || !text || new TextEncoder().encode(text).byteLength > MEET_CHAT_MAX_BYTES) return false;
+    chatError.value = null;
+    return send({ id: `${CHAT_REQUEST_PREFIX}${++sequence}`, type: 'meet.chat.send', payload: { text } });
   }
 
   function sendJoin(): boolean {
@@ -146,7 +168,7 @@ export function createMeetTransport(
     clearResync();
     resyncKey = '';
     joinRequestId = '';
-    if (session) session.rosterReady = false;
+    rosterAttached.value = false;
     for (const pending of pendingMedia.values()) pending.finish(deniedMedia(pending.input));
     if (previous && previous.readyState < WebSocket.CLOSING) previous.close();
     if (!connected) return;
@@ -172,6 +194,8 @@ export function createMeetTransport(
     }
     session = null;
     capabilities.value = null;
+    chatMessages.value = [];
+    chatError.value = null;
     reconnectAttempts = 0;
     clearTimeout(reconnectTimer);
     reconnectTimer = undefined;
@@ -204,6 +228,16 @@ export function createMeetTransport(
     const current = session;
     if (!current || !connected) return;
     const { roomId, peerId } = current.input;
+    if (frame.type === 'meet.chat.message') {
+      if (rosterAttached.value) {
+        chatMessages.value = [...chatMessages.value.slice(1 - CHAT_HISTORY_LIMIT), frame.payload];
+      }
+      return;
+    }
+    if (frame.type === 'error' && frame.id?.startsWith(CHAT_REQUEST_PREFIX)) {
+      if (chatReady.value) chatError.value = frame.error.code;
+      return;
+    }
     if (frame.type === 'room.media.grant' || (frame.type === 'error' && frame.id?.startsWith('media-'))) {
       const pending = pendingMedia.get(frame.id ?? '');
       if (!pending) return;
@@ -244,12 +278,12 @@ export function createMeetTransport(
       joinRequestId = '';
       clearResync();
       reconnectAttempts = 0;
-      current.rosterReady = true;
+      rosterAttached.value = true;
       for (const listener of current.rosterListeners) listener();
     }
     if (frame.type === 'pong') {
       unansweredPingAt = null;
-      if (!current.rosterReady) return;
+      if (!rosterAttached.value) return;
     }
     const event = roomEvent(frame);
     if (event) for (const listener of roomListeners.get(roomId) ?? []) listener(event);
@@ -301,7 +335,7 @@ export function createMeetTransport(
     },
     join(input) {
       if (session) disconnect();
-      session = { input, lifetime: new AbortController(), rosterReady: false, rosterListeners: new Set() };
+      session = { input, lifetime: new AbortController(), rosterListeners: new Set() };
       if (!sendJoin()) connect();
     },
     leave(payload) {
@@ -309,13 +343,15 @@ export function createMeetTransport(
       disconnect();
     },
     updatePeer(payload) {
-      if (session?.rosterReady && isSamePeer(session.input, payload)) send({ type: 'room.peer.update', payload });
+      if (session && rosterAttached.value && isSamePeer(session.input, payload))
+        send({ type: 'room.peer.update', payload });
     },
     reportPoll(payload) {
-      if (session?.rosterReady && isSamePeer(session.input, payload)) send({ type: 'room.voice.report', payload });
+      if (session && rosterAttached.value && isSamePeer(session.input, payload))
+        send({ type: 'room.voice.report', payload });
     },
     requestMediaGrant(input) {
-      if (!session?.rosterReady || !isSamePeer(session.input, input) || !connected)
+      if (!session || !rosterAttached.value || !isSamePeer(session.input, input) || !connected)
         return Promise.resolve(deniedMedia(input));
       const id = `media-${++sequence}`;
       return new Promise((resolve) => {
@@ -354,6 +390,7 @@ export function createMeetTransport(
     realtime,
     disconnect,
     capabilities,
+    chat: { ready: chatReady, messages: chatMessages, error: chatError, send: sendChat },
     async roomStatus(roomId) {
       const found = await api.status(roomId);
       return found ? { name: '', avatarUrl: '', isStatic: false } : null;

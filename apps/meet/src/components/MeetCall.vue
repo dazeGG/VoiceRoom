@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, onMounted, useTemplateRef, watchEffect } from 'vue';
+import { MessageSquareText } from '@lucide/vue';
+import { computed, onMounted, ref, useId, useTemplateRef, watchEffect } from 'vue';
 import { RoomStage, ParticipantTile, StageTiles } from '@voice-room/call/views';
 import { useParticipantsUiStore } from '@voice-room/call/engine/core/participants-ui.store';
 import { useScreenUiStore } from '@voice-room/call/engine/core/screen-ui.store';
@@ -10,14 +11,19 @@ import { syncRemoteCameraDemand } from '@voice-room/call/engine/services/livekit
 import type { RoomCapabilities } from '@voice-room/shared/contracts/rooms';
 import { getAvatarPresentation } from '@voice-room/ui/avatar-presentation';
 import { t } from '@voice-room/ui/i18n';
+import MeetChat from '@/components/MeetChat.vue';
 import MeetDock from '@/components/MeetDock.vue';
 import MeetScreen from '@/components/MeetScreen.vue';
+import { useMeetStore } from '@/meet.store';
 
 defineProps<{ capabilities: RoomCapabilities | null; reconnecting: boolean }>();
 const emit = defineEmits<{ leave: [] }>();
 const participantsUi = useParticipantsUiStore();
 const screen = useScreenUiStore();
 const toast = useToastUiStore();
+const { chat } = useMeetStore().transport;
+const chatOpen = ref(false);
+const chatId = useId();
 const heading = useTemplateRef<HTMLHeadingElement>('heading');
 const participants = computed(() => participantsUi.getSortedParticipants());
 const focused = computed(() => participantsUi.getFocusedParticipant());
@@ -43,9 +49,24 @@ async function watchScreen(peerId: string): Promise<void> {
   <div class="meet-call" :class="{ 'meet-call--screen': screen.stageVisible }">
     <div class="meet-call__header">
       <h1 ref="heading" tabindex="-1">{{ t('meet.call') }}</h1>
-      <span class="meet-call__connection" :class="{ 'meet-call__connection--waiting': reconnecting }" role="status">
-        {{ t(reconnecting ? 'meet.reconnecting' : 'meet.connected') }}
-      </span>
+      <div class="meet-call__header-actions">
+        <span class="meet-call__connection" :class="{ 'meet-call__connection--waiting': reconnecting }" role="status">
+          {{ t(reconnecting ? 'meet.reconnecting' : 'meet.connected') }}
+        </span>
+        <button
+          v-if="capabilities?.chat === 'ephemeral'"
+          class="meet-button meet-button--secondary meet-call__chat-toggle"
+          type="button"
+          :aria-label="t('meet.chat.title')"
+          aria-haspopup="dialog"
+          :aria-controls="chatId"
+          :aria-expanded="chatOpen"
+          @click="chatOpen = !chatOpen"
+        >
+          <MessageSquareText :size="18" aria-hidden="true" />
+          <span>{{ t('meet.chat.title') }}</span>
+        </button>
+      </div>
     </div>
     <RoomStage :hidden="false">
       <template #screen><MeetScreen /></template>
@@ -75,6 +96,15 @@ async function watchScreen(peerId: string): Promise<void> {
       </template>
       <template #dock>
         <MeetDock :capabilities="capabilities" @leave="emit('leave')" />
+      </template>
+      <template #panel>
+        <MeetChat
+          v-if="capabilities?.chat === 'ephemeral'"
+          v-model="chatOpen"
+          :panel-id="chatId"
+          :local-peer-id="state.peerId"
+          :chat="chat"
+        />
       </template>
     </RoomStage>
     <div class="meet-call__toasts" aria-live="polite">
