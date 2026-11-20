@@ -1,4 +1,9 @@
-import { roomAllowsSurface, type RoomBoundary, type RoomSurface } from '../domains/rooms/room-surface.policy.ts';
+import {
+  ROOM_SURFACE_CEILINGS,
+  roomAllowsSurface,
+  type RoomBoundary,
+  type RoomSurface
+} from '../domains/rooms/room-surface.policy.ts';
 import type { JoinResult, JoinUser } from './voice-join.ts';
 import type { IncomingMessage } from 'node:http';
 import { clientKind, describeUserAgent } from '@voice-room/shared/account-security';
@@ -59,6 +64,15 @@ type WsSocket = RealtimeSocket & {
 // A client opens with hello, its restored subscriptions and whatever it queued
 // offline; more than this before the session resolves is not a client.
 const MAX_EARLY_FRAMES = 64;
+const GUEST_COMMANDS = new Set<ClientCommand['type']>([
+  'hello',
+  'ping',
+  'room.join',
+  'room.leave',
+  'room.peer.update',
+  'room.voice.report',
+  'room.media.request'
+]);
 
 // ws hands the close reason over as a Buffer; tests and fakes may pass text.
 function closeReasonText(reason: unknown): string {
@@ -95,6 +109,7 @@ function createWsHandler({
   now?: () => number;
   logger?: Pick<Logger, 'info' | 'warn' | 'error'>;
 }) {
+  const ceiling = ROOM_SURFACE_CEILINGS[surface];
   // Every realtime failure is attributed to the connection and the message type
   // that caused it. Without both, a report of "the call keeps dropping" leaves
   // nothing to search: the socket is gone and the stack alone names no user.
@@ -105,7 +120,7 @@ function createWsHandler({
         connId: connection?.id,
         userId: connection?.userId || undefined,
         type: type || undefined,
-        err: surface === 'widget' ? undefined : error
+        err: ceiling.guestOnly ? undefined : error
       },
       'ws message handler failed'
     );
@@ -171,7 +186,7 @@ function createWsHandler({
     req: IncomingMessage
   ): Promise<void> {
     if (
-      surface === 'widget' &&
+      ceiling.requiresWidgetOwner &&
       envelope.type === 'room.join' &&
       widgetAdmissionEnabled &&
       !(await widgetAdmissionEnabled())
@@ -179,18 +194,7 @@ function createWsHandler({
       registry.sendToConnection(connection, buildServerErrorEnvelope('room_not_found', 'Room not found', envelope.id));
       return;
     }
-    if (
-      surface === 'widget' &&
-      ![
-        'hello',
-        'ping',
-        'room.join',
-        'room.leave',
-        'room.peer.update',
-        'room.voice.report',
-        'room.media.request'
-      ].includes(envelope.type)
-    ) {
+    if (ceiling.guestOnly && !GUEST_COMMANDS.has(envelope.type)) {
       registry.sendToConnection(connection, buildServerErrorEnvelope('forbidden', 'Command unavailable', envelope.id));
       return;
     }
@@ -203,8 +207,8 @@ function createWsHandler({
       return;
     }
     if (
-      surface === 'widget' &&
-      ((envelope.type === 'room.media.request' && envelope.payload.kind !== 'camera') ||
+      !ceiling.screenShare &&
+      ((envelope.type === 'room.media.request' && envelope.payload.kind === 'screen') ||
         (envelope.type === 'room.peer.update' &&
           ['screen', 'screenAudio', 'screenProfileId', 'screenStreamId', 'viewedScreenPeerId'].some((key) =>
             Object.hasOwn(envelope.payload.patch, key)
@@ -214,6 +218,14 @@ function createWsHandler({
         connection,
         buildServerErrorEnvelope('forbidden', 'Screen sharing unavailable', envelope.id)
       );
+      return;
+    }
+    if (
+      !ceiling.camera &&
+      ((envelope.type === 'room.media.request' && envelope.payload.kind === 'camera') ||
+        (envelope.type === 'room.peer.update' && Object.hasOwn(envelope.payload.patch, 'camera')))
+    ) {
+      registry.sendToConnection(connection, buildServerErrorEnvelope('forbidden', 'Camera unavailable', envelope.id));
       return;
     }
     switch (envelope.type) {
@@ -242,7 +254,7 @@ function createWsHandler({
         // A WebSocket can stay open while the account profile changes. Resolve the
         // session again at join time so a newly uploaded/deleted avatar is not
         // overwritten by the user snapshot captured when the socket first opened.
-        const currentSession = surface === 'widget' ? null : await resolveSessionUser(req);
+        const currentSession = ceiling.guestOnly ? null : await resolveSessionUser(req);
         if (connection.closed) return;
         const result = await roomRuntime.joinVoiceRoom(
           connection,
@@ -258,7 +270,7 @@ function createWsHandler({
               evt: LOG_EVENTS.ROOM_JOINED,
               connId: connection.id,
               userId: connection.userId || undefined,
-              roomId: surface === 'widget' ? undefined : joinRoomId,
+              roomId: ceiling.guestOnly ? undefined : joinRoomId,
               guest: connection.guest
             },
             'room joined'
@@ -269,7 +281,7 @@ function createWsHandler({
               evt: LOG_EVENTS.ROOM_JOIN_REJECTED,
               connId: connection.id,
               userId: connection.userId || undefined,
-              roomId: surface === 'widget' ? undefined : joinRoomId,
+              roomId: ceiling.guestOnly ? undefined : joinRoomId,
               code: result.code
             },
             'room join rejected'
@@ -293,7 +305,7 @@ function createWsHandler({
             evt: LOG_EVENTS.ROOM_LEFT,
             connId: connection.id,
             userId: connection.userId || undefined,
-            roomId: surface === 'widget' ? undefined : envelope.payload.roomId
+            roomId: ceiling.guestOnly ? undefined : envelope.payload.roomId
           },
           'room left'
         );
@@ -332,7 +344,7 @@ function createWsHandler({
             {
               evt: LOG_EVENTS.ROOM_MEDIA_REFUSED,
               connId: connection.id,
-              roomId: surface === 'widget' ? undefined : result.grant.roomId,
+              roomId: ceiling.guestOnly ? undefined : result.grant.roomId,
               kind: result.grant.kind,
               reason: result.grant.reason
             },
@@ -404,7 +416,7 @@ function createWsHandler({
           code: Number(code) || 0,
           reason: closeReasonText(reason).slice(0, 120) || undefined,
           durationMs: now() - connection.openedAt,
-          err: surface === 'widget' ? undefined : error || undefined
+          err: ceiling.guestOnly ? undefined : error || undefined
         },
         error ? 'ws closed after a socket error' : 'ws closed'
       );
@@ -426,7 +438,7 @@ function createWsHandler({
     // reject: an unhandled rejection ends the process and every call on it. A
     // failed session lookup (a pool timeout) costs only this socket.
     try {
-      const session = surface === 'widget' ? null : await resolveSessionUser(req);
+      const session = ceiling.guestOnly ? null : await resolveSessionUser(req);
       if (endedEarly) return;
       const sessionUser = session?.user || null;
 
@@ -462,7 +474,7 @@ function createWsHandler({
         return;
       }
 
-      if (surface === 'widget' && widgetLocalAllowed && !widgetLocalAllowed()) {
+      if (ceiling.requiresWidgetOwner && widgetLocalAllowed && !widgetLocalAllowed()) {
         socket.close(1008, 'Widget unavailable');
         return;
       }

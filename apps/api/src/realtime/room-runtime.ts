@@ -1,4 +1,5 @@
 import type { StoredRoom } from '../domains/rooms/room-views.ts';
+import { roomAllowsChat, roomAllowsSurface, ROOM_SURFACE_CEILINGS } from '../domains/rooms/room-surface.policy.ts';
 import type { RoomChatMessage } from '../domains/messaging/room-chat-views.ts';
 import type { ErrorCode } from '@voice-room/shared/contracts/errors';
 import type { ClientCommands, PeerLeaveReason, VoiceTarget } from '@voice-room/shared/contracts/realtime';
@@ -230,10 +231,9 @@ function createRoomRealtimeRuntime(deps: RoomRuntimeDeps) {
   ): Promise<RoomSnapshot | null> {
     const dbRoom = await getRoomStore().getRoom(roomId);
     if (!dbRoom) return null;
-    const recentMessages =
-      dbRoom.kind === 'widget'
-        ? []
-        : (await getRoomStore().listMessages(roomId, { limit: 100 })).map(publicChatMessage);
+    const recentMessages = roomAllowsChat(dbRoom, dbRoom.kind ?? 'main')
+      ? (await getRoomStore().listMessages(roomId, { limit: 100 })).map(publicChatMessage)
+      : [];
     // Presence is the last synchronous read: no awaited work may let this
     // snapshot overwrite a newer peer update that was already broadcast.
     const presence = presenceRooms.get(roomId);
@@ -265,7 +265,8 @@ function createRoomRealtimeRuntime(deps: RoomRuntimeDeps) {
     try {
       const boundary = await getRoomStore().getRoom(roomId);
       if (!current()) return;
-      if (!boundary || (boundary.kind ?? 'main') !== 'main' || connection.roomSurface === 'widget') return;
+      if (!roomAllowsSurface(boundary, 'main') || ROOM_SURFACE_CEILINGS[connection.roomSurface ?? 'main'].guestOnly)
+        return;
       const roomBan = await findRoomBan(roomId, userId, connection.clientIp || connection.guestIp || '');
       if (!current()) return;
       if (roomBan) {

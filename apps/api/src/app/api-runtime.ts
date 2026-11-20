@@ -4,7 +4,7 @@
 // through module scope.
 
 import { createWidgetRuntimeOwner, type WidgetRuntimeOwner } from '../domains/rooms/widget-runtime-owner.repository.ts';
-import { roomAllowsSurface } from '../domains/rooms/room-surface.policy.ts';
+import { roomAllowsAdmission } from '../domains/rooms/room-surface.policy.ts';
 import type http from 'node:http';
 import type { IncomingMessage } from 'node:http';
 import type { FastifyBaseLogger } from 'fastify';
@@ -117,13 +117,13 @@ export function createApiRuntime({ env = process.env }: { env?: NodeJS.ProcessEn
     config.WIDGET_ENABLED && widgetOwner !== null && (await widgetOwner.capture()) !== null;
   const limits = createRateLimits(config);
   const admissionService = createAdmissionService({
+    maxRoomPeers: config.MAX_ROOM_PEERS,
     livekitConfig: liveKit.config,
     credentialProvider: services.getLiveKitCredentialProvider,
     credentialBoundary: services.getCredentialBoundary,
     store: services.getRoomStore,
     roomExists: async (roomId) => Boolean(await hub.getRoom(roomId)),
-    roomAllowed: async (roomId, surface) =>
-      roomAllowsSurface(await hub.getRoom(roomId), surface) && (surface === 'main' || (await widgetCanAdmit())),
+    roomAllowed: async (roomId, surface) => roomAllowsAdmission(await hub.getRoom(roomId), surface, widgetCanAdmit),
     findRoomBan: hub.findRoomBan,
     waitForRosterPeer: hub.presence.waitForRosterPeer,
     currentRosterPeer: hub.presence.currentRosterPeer,

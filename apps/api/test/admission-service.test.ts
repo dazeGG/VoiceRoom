@@ -4,6 +4,7 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { TrackSource } from 'livekit-server-sdk';
 
 import {
   createAdmissionService,
@@ -67,6 +68,7 @@ function setup(overrides: Partial<AdmissionDeps> = {}, accountUserId: string | n
   };
   let muted = false;
   const deps: AdmissionDeps = {
+    maxRoomPeers: 12,
     livekitConfig: () => ENABLED,
     credentialProvider: () => ({
       async issueAdmission(input) {
@@ -553,6 +555,70 @@ test('mute permissions and "already gone" classification', () => {
   assert.equal(tokensMatch('abc', 'abd'), false);
   assert.equal(tokensMatch('', ''), false);
   assert.equal(tokensMatch('abc', 'abcd'), false);
+});
+
+test('server mute stays inside the declared grant and the surface ceiling', () => {
+  const { CAMERA, MICROPHONE, SCREEN_SHARE } = TrackSource;
+  // Muting drops only the microphone from what the participant was granted.
+  const muted = resolveServerMutePermission({ canPublishSources: [MICROPHONE, CAMERA, SCREEN_SHARE] }, true, 'meet');
+  assert.deepEqual(
+    [muted.canPublish, muted.canPublishSources, muted.canPublishData],
+    [true, [CAMERA, SCREEN_SHARE], false]
+  );
+  // A participant whose publishing LiveKit already revoked stays revoked on unmute.
+  const revoked = resolveServerMutePermission({ canPublish: false, canPublishSources: [CAMERA] }, false, 'meet');
+  assert.deepEqual([revoked.canPublish, revoked.canPublishSources], [false, []]);
+  // Muting a widget guest who could only speak leaves nothing to publish.
+  const silent = resolveServerMutePermission({ canPublishSources: [MICROPHONE] }, true, 'widget');
+  assert.deepEqual([silent.canPublish, silent.canPublishSources], [false, []]);
+  // A grant without a source list falls back to the surface ceiling.
+  const malformed = resolveServerMutePermission({}, true, 'widget');
+  assert.deepEqual(malformed.canPublishSources, [CAMERA]);
+});
+
+test('live widget mute and unmute preserve the camera and data denial', async () => {
+  const { CAMERA, MICROPHONE } = TrackSource;
+  let permission = { canPublishSources: [MICROPHONE, CAMERA], canPublishData: false };
+  const client = fake<LiveKitAdminClient>({
+    getParticipant: async () => ({ permission }),
+    updateParticipant: async (_room, _peer, _metadata, updated) => {
+      assert.ok(updated.canPublishSources);
+      assert.equal(fieldOf(updated, 'canPublishData'), false);
+      permission = { canPublishSources: updated.canPublishSources, canPublishData: false };
+    }
+  });
+  const admin = createLiveKitAdmin({
+    config: () => ENABLED,
+    roomName: String,
+    logger: recordingLogger,
+    clientFactory: () => client
+  });
+  assert.deepEqual(await admin.setParticipantMuted('widget-room', 'peer', true, 'widget'), { status: 'applied' });
+  assert.deepEqual(permission.canPublishSources, [CAMERA]);
+  assert.deepEqual(await admin.setParticipantMuted('widget-room', 'peer', false, 'widget'), { status: 'applied' });
+  assert.deepEqual(permission.canPublishSources, [CAMERA, MICROPHONE]);
+});
+
+test('live widget unmute intersects legacy and overbroad grants with the widget ceiling', async () => {
+  const { CAMERA, MICROPHONE, SCREEN_SHARE, SCREEN_SHARE_AUDIO } = TrackSource;
+  for (const sources of [[], [CAMERA, SCREEN_SHARE, SCREEN_SHARE_AUDIO]]) {
+    const updates: unknown[] = [];
+    const admin = createLiveKitAdmin({
+      config: () => ENABLED,
+      roomName: String,
+      logger: recordingLogger,
+      clientFactory: () =>
+        fake<LiveKitAdminClient>({
+          getParticipant: async () => ({ permission: { canPublishSources: sources, canPublishData: true } }),
+          updateParticipant: async (_room, _peer, _metadata, permission) => {
+            updates.push([permission.canPublishSources, fieldOf(permission, 'canPublishData')]);
+          }
+        })
+    });
+    const result = await admin.setParticipantMuted('widget-room', 'peer', false, 'widget');
+    assert.deepEqual(result, { status: 'applied' });
+    assert.deepEqual(updates, [[sources.length ? [CAMERA, MICROPHONE] : [MICROPHONE, CAMERA], false]]);
+  }
 });
 
 for (const accountUserId of [null, 'user-1']) {

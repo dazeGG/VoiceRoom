@@ -5,6 +5,7 @@ import type { Logger } from 'pino';
 import type { LiveRoom, LobbyRoom, StoredRoom } from './room-views.ts';
 import { createRoomId } from '../../platform/db/ids.ts';
 import { isRoomOwner } from './room.policy.ts';
+import type { RoomKind } from './room-surface.policy.ts';
 
 type RequestLog = { log?: Pick<Logger, 'warn' | 'error'> } | null;
 
@@ -15,7 +16,7 @@ export interface RoomsStore {
   roomIdExists?(roomId: string): Promise<boolean>;
   getRoom(roomId: string): Promise<StoredRoom | null>;
   createRoomWithQuota(input: {
-    kind?: 'main' | 'widget';
+    kind?: RoomKind;
     widgetChatEnabled?: boolean;
     creatorIp: string;
     isStatic: boolean;
@@ -60,7 +61,7 @@ export function createRoomsService(deps: RoomsServiceDeps) {
   }
 
   async function createRoom(input: {
-    kind?: 'main' | 'widget';
+    kind?: RoomKind;
     widgetChatEnabled?: boolean;
     creatorIp: string;
     isStatic: boolean;

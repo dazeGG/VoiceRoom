@@ -1,4 +1,4 @@
-import { RoomProof } from './rooms.ts';
+import { RoomCapabilities, RoomProof } from './rooms.ts';
 import { Type, type Static } from 'typebox';
 import { Value } from 'typebox/value';
 
@@ -153,7 +153,11 @@ export const WidgetRoomCreated = Type.Object({
   chat: Type.Boolean(),
   maxRoomPeers: Type.Number()
 });
-export const WidgetRoomInfo = Type.Object({ ...WidgetRoomCreated.properties, peers: Type.Number() });
+export const WidgetRoomInfo = Type.Object({
+  ...WidgetRoomCreated.properties,
+  capabilities: Type.Optional(RoomCapabilities),
+  peers: Type.Number()
+});
 
 export const WidgetCreateRoomBody = Type.Object(
   { chat: Type.Boolean(), proof: Type.Optional(RoomProof) },

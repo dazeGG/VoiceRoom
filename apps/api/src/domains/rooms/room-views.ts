@@ -9,6 +9,7 @@ import { avatarColorForPeerId } from './avatar-color.ts';
 import { failure, type Failure } from '../../platform/http/http-kit.ts';
 import type { WsConnection } from '../../realtime/registry.ts';
 import type { PeerVoice } from '../../realtime/voice-track.ts';
+import type { RoomKind } from './room-surface.policy.ts';
 
 /** A peer as the in-memory presence roster holds it. */
 export interface PresencePeer {
@@ -54,7 +55,7 @@ export interface PresencePeer {
 /** A room row as the store returns it. */
 export interface StoredRoom {
   /** Legacy in-memory fixtures without a discriminator belong to main. */
-  kind?: 'main' | 'widget';
+  kind?: RoomKind;
   widgetChatEnabled?: boolean;
   id: string;
   avatarKey?: string | null;

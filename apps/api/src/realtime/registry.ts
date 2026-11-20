@@ -11,6 +11,7 @@ import type { BoundedMap } from '../lib/bounded-map.ts';
 import { LOG_EVENTS } from '../lib/log-events.ts';
 import { createLogger } from '../lib/logger.ts';
 import type { RateLimiter } from '../lib/rate-limit.ts';
+import type { RoomSurface } from '../domains/rooms/room-surface.policy.ts';
 import type { Logger } from '../platform/types.ts';
 
 export type RealtimeSocket = {
@@ -22,7 +23,7 @@ export type RealtimeSocket = {
 export type ActiveVoice = { roomId: string; peerId: string; sessionToken: string; transportId: string };
 export type WsConnection = {
   /** Trusted upgrade adapter scope, never decoded from client frames. */
-  roomSurface?: 'main' | 'widget';
+  roomSurface?: RoomSurface;
   widgetQuiesced?: boolean;
   id: string;
   userId: string | null;
