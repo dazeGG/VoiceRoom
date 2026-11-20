@@ -244,6 +244,7 @@ jobs:
         env:
           WEB_DEPLOY_CONTRACT: checked
       - run: npm --workspace @voice-room/admin run test
+      - run: npm --workspace @voice-room/meet run test
 
   voice-join:
     name: Voice room join smoke
@@ -317,11 +318,12 @@ jobs:
       PERSONAL_HTTP_PORT: "5187"
       PERSONAL_HTTPS_PORT: "5443"
       PERSONAL_LIVEKIT_EXTERNAL_IP: "false"
+      PERSONAL_LIVEKIT_NODE_IP: 127.0.0.1
       PERSONAL_POSTGRES_PASSWORD: personal-ci-password
       PERSONAL_GATE_SECRET: personal-ci-gate-secret-at-least-32-bytes
       PERSONAL_LIVEKIT_API_KEY: personal-ci-key
       PERSONAL_LIVEKIT_API_SECRET: personal-ci-livekit-secret-at-least-32-bytes
-      PERSONAL_ROOM_IDLE_TTL_MS: "4000"
+      PERSONAL_ROOM_IDLE_TTL_MS: "10000"
       PERSONAL_ROOM_PRUNE_INTERVAL_MS: "250"
     steps:
       - uses: actions/checkout@v5
@@ -329,10 +331,13 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: npm
-      - run: npm ci --workspace @voice-room/api --workspace @voice-room/shared
+      - run: npm ci --workspace @voice-room/api --workspace @voice-room/meet --workspace @voice-room/shared --workspace @voice-room/ui --workspace @voice-room/call
+      - run: npx playwright install --with-deps chromium
       - name: Start the personal stack with clean project volumes
         run: docker compose -p "$PERSONAL_SMOKE_PROJECT" -f docker-compose.personal.yml up -d --build --wait --wait-timeout 120
       - run: node --test scripts/ci/personal-compose-smoke.test.mts
+      - name: Exercise a two-guest Meet call through Caddy
+        run: npm --workspace @voice-room/meet run e2e
       - name: Report personal service states
         if: failure()
         run: docker compose -p "$PERSONAL_SMOKE_PROJECT" -f docker-compose.personal.yml ps --all

@@ -1,0 +1,98 @@
+.meet-call {
+  position: relative;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-height: 30rem;
+  height: calc(100dvh - 65px);
+
+  &__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.85rem clamp(1rem, 4vw, 3rem) 0;
+  }
+
+  h1 {
+    margin: 0;
+    font-size: clamp(1rem, 3vw, 1.375rem);
+  }
+
+  &__connection {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    color: var(--vr-text-muted);
+    font-size: 0.875rem;
+
+    &::before {
+      content: '';
+      width: 0.45rem;
+      height: 0.45rem;
+      flex: 0 0 auto;
+      border-radius: 50%;
+      background: var(--vr-success);
+    }
+
+    &--waiting::before {
+      background: var(--vr-warning);
+    }
+  }
+
+  .room-layout {
+    min-height: 0;
+  }
+  .stage {
+    height: 100%;
+  }
+  .stage-strip {
+    grid-template-rows: minmax(0, 1fr);
+  }
+
+  // Meet opens the stream from the participant tile.
+  .participant--screen .participant__screen-action:not([hidden]) {
+    display: inline-flex;
+  }
+
+  &--screen .stage {
+    grid-template-rows: minmax(0, 1fr) auto;
+  }
+  &--screen .stage-strip {
+    height: 7rem;
+  }
+
+  &__toasts {
+    position: absolute;
+    inset: auto 1rem 6.5rem auto;
+    z-index: 4;
+    display: grid;
+    gap: 0.5rem;
+    width: min(20rem, calc(100% - 2rem));
+    pointer-events: none;
+  }
+
+  &__toast {
+    display: grid;
+    gap: 0.4rem;
+    padding: 0.75rem 1rem;
+    border: 1px solid var(--vr-line-strong);
+    border-radius: var(--radius-md);
+    background: var(--vr-surface-3);
+    box-shadow: var(--vr-shadow-toast);
+    pointer-events: auto;
+  }
+}
+
+@media (max-width: 480px) {
+  .meet-call .stage {
+    padding-inline: 0.75rem;
+    padding-bottom: 7.25rem;
+  }
+  .meet-call .room-dock {
+    padding-inline: 0.5rem;
+    bottom: 0.75rem;
+  }
+  .meet-call .room-dock__shell {
+    gap: 0.3rem;
+  }
+}

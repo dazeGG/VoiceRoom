@@ -1,0 +1,32 @@
+.meet-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: 3rem;
+  padding: 0.625rem 1rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: var(--vr-accent);
+  color: var(--vr-accent-ink);
+  font-weight: 700;
+  text-align: center;
+  text-decoration: none;
+
+  &:hover:not(:disabled) {
+    background: var(--vr-accent-hover);
+  }
+  &:disabled {
+    opacity: 0.6;
+  }
+
+  &--secondary {
+    border-color: var(--vr-line-strong);
+    background: var(--vr-surface-2);
+    color: var(--vr-text);
+
+    &:hover:not(:disabled) {
+      background: var(--vr-surface-3);
+    }
+  }
+}

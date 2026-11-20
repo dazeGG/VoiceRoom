@@ -18,6 +18,7 @@ FROM deps AS web-build
 COPY apps/web ./apps/web
 COPY apps/admin ./apps/admin
 COPY packages ./packages
+COPY scripts/build ./scripts/build
 RUN npm --workspace @voice-room/web run build \
   && npm --workspace @voice-room/admin run build \
   && node apps/web/scripts/emit-caddy-csp.ts apps/web/dist/index.html > /app/csp.caddy
@@ -79,13 +80,23 @@ COPY --from=web-build /app/apps/admin/dist /srv/admin
 
 CMD ["voiceroom-caddy"]
 
-FROM node:24.18.0-alpine3.23 AS personal-static
+FROM node:24.18.0-alpine3.23 AS meet-build
 WORKDIR /app
-COPY apps/web/scripts/emit-caddy-csp.ts ./
-COPY config/personal/index.html ./
-RUN node emit-caddy-csp.ts index.html "'self' {\$PERSONAL_SIGNAL_URL} stun: turn: turns:" > /app/csp.caddy
+COPY package.json package-lock.json ./
+COPY apps/meet/package.json ./apps/meet/package.json
+COPY packages/shared/package.json ./packages/shared/package.json
+COPY packages/ui/package.json ./packages/ui/package.json
+COPY packages/call/package.json ./packages/call/package.json
+RUN npm ci --workspace @voice-room/meet --workspace @voice-room/shared --workspace @voice-room/ui --workspace @voice-room/call
+
+COPY apps/meet ./apps/meet
+COPY packages ./packages
+COPY scripts/build ./scripts/build
+COPY apps/web/scripts/emit-caddy-csp.ts ./emit-caddy-csp.mts
+RUN npm --workspace @voice-room/meet run build \
+  && node emit-caddy-csp.mts apps/meet/dist/index.html "'self' {\$PERSONAL_SIGNAL_URL} stun: turn: turns:" > /app/csp.caddy
 
 FROM caddy:2.11.4-alpine AS personal-web
 COPY config/personal/Caddyfile /etc/caddy/Caddyfile
-COPY --from=personal-static /app/csp.caddy /etc/caddy/personal-csp.caddy
-COPY --from=personal-static /app/index.html /srv/meet/index.html
+COPY --from=meet-build /app/csp.caddy /etc/caddy/personal-csp.caddy
+COPY --from=meet-build /app/apps/meet/dist /srv/meet

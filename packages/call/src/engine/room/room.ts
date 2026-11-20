@@ -142,7 +142,7 @@ export function refreshRoomHeading(): void {
   document.title = `${heading} · VoiceRoom`;
 }
 
-function showRoomScreen(): void {
+export function showRoomScreen(): void {
   callPageState().$patch({ screen: 'room' });
   refreshRoomHeading();
   resetConnectionStatus();

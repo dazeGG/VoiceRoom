@@ -110,6 +110,8 @@ services:
           tcp_port: ${PERSONAL_RTC_TCP_PORT:-7881}
           udp_port: ${PERSONAL_RTC_UDP_PORT:-7882}
           use_external_ip: ${PERSONAL_LIVEKIT_EXTERNAL_IP:-true}
+          # Loopback-only CI can set its advertised ICE address explicitly.
+          node_ip: "${PERSONAL_LIVEKIT_NODE_IP:-}"
         keys:
           "${PERSONAL_LIVEKIT_API_KEY:?set PERSONAL_LIVEKIT_API_KEY}": "${PERSONAL_LIVEKIT_API_SECRET:?set PERSONAL_LIVEKIT_API_SECRET}"
     ports:

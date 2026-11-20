@@ -27,7 +27,7 @@ const ROOM_LOBBY_IMPORTS = {
   message: 'A room does not import the lobby: use @/entities or the room social context.'
 };
 const PORTABLE_IMPORT_MESSAGE = 'Portable packages cannot import applications or app aliases.';
-const PORTABLE_APP_IMPORTS = '^@(?:/|$)|^@voice-room/(?:admin|api|docs|site|web)(?:/|$)|(?:^|/)apps(?:/|$)';
+const PORTABLE_APP_IMPORTS = '^@(?:/|$)|^@voice-room/(?:admin|api|docs|meet|site|web)(?:/|$)|(?:^|/)apps(?:/|$)';
 
 export default tseslint.config(
   {
@@ -51,10 +51,10 @@ export default tseslint.config(
   },
   js.configs.recommended,
   ...tseslint.configs.strictTypeChecked,
-  // Vue rules apply to the web app and the portable packages.
+  // Vue rules apply to the Vue apps and the portable packages.
   ...vue.configs['flat/recommended-error'].map((config) => ({
     ...config,
-    files: config.files ?? ['apps/web/**/*.{ts,vue}', 'packages/{call,ui}/**/*.{ts,vue}']
+    files: config.files ?? ['apps/{meet,web}/**/*.{ts,vue}', 'packages/{call,ui}/**/*.{ts,vue}']
   })),
   {
     languageOptions: {
@@ -67,6 +67,7 @@ export default tseslint.config(
           './apps/admin/tsconfig.json',
           './apps/site/tsconfig.json',
           './apps/web/tsconfig.test.json',
+          './apps/meet/tsconfig.test.json',
           './packages/shared/tsconfig.test.json',
           './packages/ui/tsconfig.json',
           './packages/call/tsconfig.json',
@@ -167,7 +168,7 @@ export default tseslint.config(
   {
     // Browser code logs through @/shared/log so records reach the failure
     // report buffer; only the logger itself touches the console.
-    files: ['apps/web/src/**/*.{ts,vue}', 'packages/call/src/**/*.{ts,vue}'],
+    files: ['apps/{meet,web}/src/**/*.{ts,vue}', 'packages/call/src/**/*.{ts,vue}'],
     ignores: ['apps/web/src/shared/log.ts'],
     rules: { 'no-console': 'error' }
   },

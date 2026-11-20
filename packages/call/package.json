@@ -6,6 +6,7 @@
   "exports": {
     "./engine": "./src/engine/index.ts",
     "./engine/*": "./src/engine/*.ts",
+    "./guest": "./src/guest/index.ts",
     "./livekit-runtime": "./src/livekit-runtime.ts",
     "./rnnoise-node": "./src/rnnoise-node.ts",
     "./styles/*": "./src/styles/_*.scss",
