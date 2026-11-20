@@ -62,6 +62,33 @@ const messages = {
   call: ['Встреча', 'Meeting', 'Réunion'],
   reconnecting: ['Переподключаемся…', 'Reconnecting…', 'Reconnexion…'],
   connected: ['Подключено', 'Connected', 'Connecté'],
+  'chat.title': ['Чат встречи', 'Meeting chat', 'Chat de la réunion'],
+  'chat.close': ['Закрыть чат', 'Close chat', 'Fermer le chat'],
+  'chat.notice': [
+    'Сообщения не сохраняются. Новые участники не увидят предыдущие сообщения.',
+    'Messages are not stored. New participants cannot see earlier messages.',
+    'Les messages ne sont pas conservés. Les nouveaux participants ne voient pas les messages précédents.'
+  ],
+  'chat.messages': ['Сообщения встречи', 'Meeting messages', 'Messages de la réunion'],
+  'chat.empty': ['Сообщений пока нет.', 'No messages yet.', 'Aucun message pour le moment.'],
+  'chat.input': ['Сообщение', 'Message', 'Message'],
+  'chat.send': ['Отправить', 'Send', 'Envoyer'],
+  'chat.offline': [
+    'Чат станет доступен после восстановления связи.',
+    'Chat will be available when you reconnect.',
+    'Le chat sera disponible après votre reconnexion.'
+  ],
+  'chat.tooLong': ['Сократите сообщение.', 'Shorten your message.', 'Raccourcissez votre message.'],
+  'chat.rateLimited': [
+    'Сообщение не отправлено. Подождите немного и попробуйте снова.',
+    'Message not sent. Wait a moment and try again.',
+    'Message non envoyé. Patientez un instant, puis réessayez.'
+  ],
+  'chat.sendFailed': [
+    'Не удалось отправить сообщение.',
+    'Could not send your message.',
+    'Impossible d’envoyer votre message.'
+  ],
   'error.join': [
     'Не удалось присоединиться. Попробуйте ещё раз.',
     'Could not join. Please try again.',

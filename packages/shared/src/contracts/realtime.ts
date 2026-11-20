@@ -218,11 +218,9 @@ export const MediaGrant = Type.Union([
 ]);
 export type MediaGrant = Static<typeof MediaGrant>;
 
-/**
- * Every command the server handles, as a frame schema. Chat and DM sends still
- * travel over HTTP, so a command appears here only once the WS server handles
- * it: a client must not believe in a channel the server silently drops.
- */
+export const MEET_CHAT_MAX_BYTES = 2048;
+
+/** Every command the server handles, as a frame schema. Persistent chat and DM sends travel over HTTP. */
 export const ClientCommandFrames = {
   hello: Frame('hello', Type.Object({})),
   ping: Frame('ping', Type.Object({ at: Type.Number() })),
@@ -250,6 +248,7 @@ export const ClientCommandFrames = {
     'room.media.request',
     Type.Object({ ...VoiceTarget.properties, kind: MediaKind, profileId: Type.Optional(Type.String()) })
   ),
+  'meet.chat.send': Frame('meet.chat.send', Type.Object({ text: Type.String() })),
   /** A notice without an activity comes from a client older than the emoji picker and means typing. */
   'room.chat.typing': Frame(
     'room.chat.typing',
@@ -442,6 +441,10 @@ export const ServerEventFrames = {
   'room.voice.quality': Frame(
     'room.voice.quality',
     Type.Object({ ...RoomRef, peerId: Type.String(), level: Nullable(NetworkLevel), cause: Nullable(VoiceCause) })
+  ),
+  'meet.chat.message': Frame(
+    'meet.chat.message',
+    Type.Object({ id: Type.String(), authorId: PeerId, displayName: Type.String(), text: Type.String() })
   ),
   'room.chat.message': Frame('room.chat.message', Type.Object({ ...RoomRef, message: RoomMessage })),
   'room.chat.edited': Frame('room.chat.edited', Type.Object({ ...RoomRef, message: RoomMessage })),

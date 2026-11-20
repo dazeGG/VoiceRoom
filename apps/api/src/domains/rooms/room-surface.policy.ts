@@ -18,8 +18,7 @@ export const ROOM_SURFACE_CEILINGS: Readonly<Record<RoomSurface, Readonly<Surfac
 
 export function roomCapabilities(surface: RoomSurface, maxPeers: number): RoomCapabilities {
   const { screenShare, camera, chat } = ROOM_SURFACE_CEILINGS[surface];
-  // The ephemeral WebSocket handler has not shipped yet.
-  return { screenShare, camera, chat: chat === 'ephemeral' ? 'none' : chat, maxPeers };
+  return { screenShare, camera, chat, maxPeers };
 }
 
 export function roomAllowsSurface(room: RoomBoundary | null | undefined, surface: RoomSurface): boolean {
@@ -39,6 +38,10 @@ export async function roomAllowsAdmission(
 
 export function roomAllowsChat(room: RoomBoundary | null | undefined, surface: RoomSurface): boolean {
   return ROOM_SURFACE_CEILINGS[surface].chat === 'persistent' && roomAllowsSurface(room, surface);
+}
+
+export function roomAllowsEphemeralChat(room: RoomBoundary | null | undefined): boolean {
+  return ROOM_SURFACE_CEILINGS.meet.chat === 'ephemeral' && roomAllowsSurface(room, 'meet');
 }
 
 export function roomAllowsAttachments(room: RoomBoundary | null | undefined, surface: RoomSurface): boolean {

@@ -14,6 +14,7 @@ import { createFastifyApp } from '../platform/http/fastify-app.ts';
 import { asHttpServer, type ApiServer } from '../platform/http/http-server.ts';
 import { liveKitConnectSources, securityHeaders } from '../platform/http/security-headers.ts';
 import { startMaintenanceTimers } from '../platform/maintenance.ts';
+import { createMeetChat } from '../realtime/meet-chat.ts';
 import { createCallRealtime } from './call-realtime.ts';
 import { createCallRoomStore } from './call-room-store.ts';
 import { registerCallWebSocket } from './call-ws.routes.ts';
@@ -81,6 +82,7 @@ export function createPersonalRuntime({
     roomName: liveKit.roomName,
     recordRevokeFailure: () => {}
   });
+  const meetChat = createMeetChat(call.presence.rooms, call.registry);
 
   function createServer(): ApiServer {
     const app = createFastifyApp({
@@ -122,7 +124,7 @@ export function createPersonalRuntime({
       maxRoomPeers: config.MAX_ROOM_PEERS
     });
     registerAdmissionRoutes(app, { resolveSession: async () => null, clientIp: () => '' }, admission, 'meet');
-    registerCallWebSocket(app, 'meet', call.guestHandler('meet', { logger }));
+    registerCallWebSocket(app, 'meet', call.guestHandler('meet', { logger, meetChat }));
 
     const server = asHttpServer(app);
     server.once('close', call.presence.clearOccupancyRetries);

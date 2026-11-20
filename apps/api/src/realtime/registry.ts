@@ -16,9 +16,12 @@ import type { Logger } from '../platform/types.ts';
 
 export type RealtimeSocket = {
   readyState: number;
+  bufferedAmount?: number;
   send(data: string): void;
   close(code?: number, reason?: string): void;
 };
+
+const MEET_MAX_BUFFERED_BYTES = 64 * 1024;
 /** The voice seat a socket holds. */
 export type ActiveVoice = { roomId: string; peerId: string; sessionToken: string; transportId: string };
 export type WsConnection = {
@@ -273,7 +276,11 @@ function createConnectionRegistry({
   }
 
   function sendToConnection(connection: WsConnection, envelope: ServerEnvelope): boolean {
-    return sendWsEnvelope(connection.socket, envelope);
+    return sendWsEnvelope(
+      connection.socket,
+      envelope,
+      connection.roomSurface === 'meet' ? MEET_MAX_BUFFERED_BYTES : undefined
+    );
   }
 
   function sendToUser(userId: string, envelope: ServerEnvelope): number {

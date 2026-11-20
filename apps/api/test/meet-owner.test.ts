@@ -188,7 +188,7 @@ test('Meet creation requires an unexpired bearer grant before rate checks and qu
   assert.deepEqual(checked(MeetRoomStatus, status.json()), {
     ok: true,
     roomId: 'meeting',
-    capabilities: { screenShare: true, camera: true, chat: 'none', maxPeers: 8 },
+    capabilities: { screenShare: true, camera: true, chat: 'ephemeral', maxPeers: 8 },
     peers: 1
   });
   const otherSurface = await app.inject({ method: 'GET', url: `${url}/ordinary/status`, headers });

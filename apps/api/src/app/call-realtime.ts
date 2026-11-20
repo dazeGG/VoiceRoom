@@ -5,6 +5,7 @@ import { avatarColorForPeerId } from '../domains/rooms/avatar-color.ts';
 import { publicLobbyRoom, publicPeer } from '../domains/rooms/room-views.ts';
 import { tokensMatch } from '../platform/crypto/tokens-match.ts';
 import type { Timer } from '../platform/types.ts';
+import type { MeetChat } from '../realtime/meet-chat.ts';
 import { createConnectionRegistry } from '../realtime/registry.ts';
 import { createRoomPresence, type OccupancyStore, type RoomPresenceDeps } from '../realtime/room-presence.ts';
 import {
@@ -120,11 +121,13 @@ export function createCallRealtime(deps: {
     {
       logger,
       clientIp,
+      meetChat,
       widgetAdmissionEnabled,
       widgetLocalAllowed
     }: {
       logger: FastifyBaseLogger;
       clientIp?: (req: IncomingMessage) => string;
+      meetChat?: MeetChat;
       widgetAdmissionEnabled?: () => Promise<boolean>;
       widgetLocalAllowed?: () => boolean;
     }
@@ -135,6 +138,7 @@ export function createCallRealtime(deps: {
       surface,
       getBoundary: (roomId) => getRoomStore().getRoom(roomId),
       getClientIp: clientIp,
+      ...(meetChat && { meetChat }),
       ...(widgetAdmissionEnabled && { widgetAdmissionEnabled }),
       ...(widgetLocalAllowed && { widgetLocalAllowed }),
       logger
