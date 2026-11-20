@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Process doubles for Compose, host tools and the local HTTPS readiness probe."""
+"""Process doubles for Compose, host tools and the local TLS readiness probes."""
 
 import json
 import os
@@ -59,6 +59,10 @@ def compose():
     origin = values.get('PERSONAL_ORIGIN', f'https://{domain}')
     signal = values.get('PERSONAL_SIGNAL_URL', f'wss://{domain}')
     site = values.get('PERSONAL_CADDY_SITE', domain)
+    caddy = config['services']['caddy']
+    turn_domain = f'turn.{domain}' if caddy.get('environment', {}).get('TURN_ENABLED') == 'true' else ''
+    if turn_domain:
+        caddy['environment']['TURN_DOMAIN'] = turn_domain
     image = config['services']['api']['image']
     operations = {'config', 'pull', 'up', 'stop', 'run', 'exec', 'ps'}
     action = next(argument for argument in arguments if argument in operations)
@@ -77,7 +81,8 @@ def compose():
             if state.get('schema', image) != image:
                 print('database has incompatible migrations', file=sys.stderr)
                 return 1
-            state.update(image=image, origin=origin, signal=signal, site=site, schema=image, running=True)
+            state.update(image=image, origin=origin, signal=signal, site=site, schema=image, running=True,
+                         turn_domain=turn_domain)
             save('compose-state.json', state)
     elif action == 'stop':
         log('stop', services=args)
@@ -167,6 +172,17 @@ def uname():
     os.execv('/usr/bin/uname', [command, *arguments])
 
 
+def openssl():
+    if arguments[0] != 's_client':
+        os.execv(os.environ['GET_TEST_REAL_OPENSSL'], [command, *arguments])
+    name = option('-servername')
+    assert option('-connect') == '127.0.0.1:443', arguments
+    assert option('-verify_hostname') == name and '-verify_return_error' in arguments, arguments
+    state = load('compose-state.json')
+    log('turn-tls', name=name)
+    return int(not state.get('running') or state.get('turn_domain') != name or load('faults.json').get('turn') == name)
+
+
 if command == 'docker':
     sys.exit(compose())
 if command == 'dig':
@@ -175,10 +191,12 @@ if command == 'curl':
     sys.exit(curl())
 if command == 'uname':
     sys.exit(uname())
+if command == 'openssl':
+    sys.exit(openssl())
 if command == 'ss':
     occupied = os.environ.get('GET_TEST_BUSY_PORT')
-    if occupied and f'sport = :{occupied}' in arguments:
-        print(f'0.0.0.0:{occupied}')
+    if occupied and (f'sport = :{occupied}' in arguments or arguments == ['-H', '-aun']):
+        print(f'UNCONN 0 0 0.0.0.0:{occupied} 0.0.0.0:*')
     sys.exit(0)
 if command == 'mv':
     result = subprocess.run([os.environ['GET_TEST_REAL_MV'], *arguments], check=False)
