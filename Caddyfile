@@ -42,6 +42,10 @@ import /etc/caddy/sites.d/*.caddy
   }
 
   @immutable path /_app/immutable/* /assets/* /_astro/*
+  @public_immutable {
+    path /_app/immutable/* /assets/* /_astro/*
+    not path /_app/immutable/widget/*
+  }
   # The audio files joining a call needs: fixed names, a content hash in the query.
   @versioned_audio {
     path /rnnoise/* /audio-gate.worklet.js /desktop-audio-source.worklet.js
@@ -59,9 +63,10 @@ import /etc/caddy/sites.d/*.caddy
     }
   }
   header @immutable Cache-Control "public, max-age=31536000, immutable"
-  # Public module loader dependencies carry no credentials.
-  header @immutable Access-Control-Allow-Origin "*"
-  header @immutable Cross-Origin-Resource-Policy "cross-origin"
+  # Preserve the public asset headers, including dependencies of old widget loaders.
+  # The current loader is self-contained and the frame's chunks are same-origin.
+  header @public_immutable Access-Control-Allow-Origin "*"
+  header @public_immutable Cross-Origin-Resource-Policy "cross-origin"
   header @versioned_audio Cache-Control "public, max-age=31536000, immutable"
   header @emoji Cache-Control "public, max-age=2592000"
   header @web_fallback Cache-Control "no-cache"
@@ -82,7 +87,7 @@ import /etc/caddy/sites.d/*.caddy
     header {
       defer
       -X-Frame-Options
-      Content-Security-Policy "default-src 'self'; base-uri 'none'; object-src 'none'; form-action 'none'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; worker-src 'self'; connect-src 'self' wss://{$LIVEKIT_DOMAIN} https://{$LIVEKIT_DOMAIN} stun: turn: turns:; frame-ancestors https:"
+      import /etc/caddy/widget-csp.caddy
       Permissions-Policy "microphone=(self), camera=(self), display-capture=(), geolocation=(), payment=()"
       Cache-Control "no-cache"
       X-Robots-Tag "noindex"

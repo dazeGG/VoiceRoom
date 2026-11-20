@@ -8,6 +8,7 @@
     "./avatar-colors": "./src/avatar-colors.ts",
     "./avatar-initial": "./src/avatar-initial.ts",
     "./avatar-presentation": "./src/avatar-presentation.ts",
+    "./clipboard": "./src/clipboard.ts",
     "./device-list": "./src/device-list.ts",
     "./hotkey": "./src/hotkey.ts",
     "./icon-defaults": "./src/icon-defaults.ts",
@@ -17,9 +18,12 @@
     "./storage": "./src/storage.ts",
     "./tile-grid": "./src/tile-grid.ts",
     "./toast": "./src/toast.ts",
+    "./widget": "./src/widget.ts",
+    "./widget-frame-expansion": "./src/widget-frame-expansion.ts",
     "./fonts/*": "./src/assets/fonts/*",
     "./styles/components/*": "./src/styles/components/_*.scss",
     "./styles/room/*": "./src/styles/room/_*.scss",
+    "./styles/widget/*": "./src/styles/widget/_*.scss",
     "./styles/*": "./src/styles/_*.scss"
   },
   "scripts": {

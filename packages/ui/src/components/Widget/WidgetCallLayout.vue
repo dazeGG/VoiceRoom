@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import '@/styles/widget/_call.scss';
+import '../../styles/widget/_call.scss';
 import {
   Check,
   ChevronDown,
@@ -15,10 +15,10 @@ import {
   VideoOff
 } from '@lucide/vue';
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
-import ParticipantTileFace from '@/features/room/components/ParticipantTileFace.vue';
-import { fitWidgetTiles } from '@voice-room/ui/tile-grid';
-import { avatarInitial } from '@voice-room/ui/avatar-initial';
-import { copyText } from '@/shared/utils/clipboard';
+import ParticipantTileFace from '../ParticipantTileFace/ParticipantTileFace.vue';
+import { fitWidgetTiles } from '../../tile-grid';
+import { avatarInitial } from '../../avatar-initial';
+import { copyText } from '../../clipboard';
 
 type Device = 'input' | 'output' | 'camera';
 const props = withDefaults(
@@ -29,7 +29,7 @@ const props = withDefaults(
       self?: boolean;
       muted?: boolean;
       speaking?: boolean;
-      video?: HTMLVideoElement | undefined;
+      cameraStream?: MediaStream | null;
     }[];
     roomCode: string;
     status: string;
@@ -166,12 +166,6 @@ function escape(event: KeyboardEvent) {
   event.stopPropagation();
 }
 
-function showVideo(mount: unknown, video?: HTMLVideoElement) {
-  if (!(mount instanceof HTMLElement)) return;
-  if (video && video.parentNode !== mount) mount.replaceChildren(video);
-  else if (!video && mount.firstChild) mount.replaceChildren();
-}
-
 function openParticipantMenu(event: MouseEvent | KeyboardEvent, member: (typeof props.members)[number]) {
   if (props.preview || member.self) return;
   if (
@@ -224,7 +218,7 @@ function openParticipantMenu(event: MouseEvent | KeyboardEvent, member: (typeof 
             'participant--local': member.self,
             'participant--muted': member.muted,
             'participant--speaking': member.speaking,
-            'participant--camera': member.video
+            'participant--camera': member.cameraStream
           }"
           :data-peer-id="member.id"
           :role="preview || member.self ? undefined : 'button'"
@@ -235,12 +229,9 @@ function openParticipantMenu(event: MouseEvent | KeyboardEvent, member: (typeof 
           @contextmenu="openParticipantMenu($event, member)"
           @keydown="openParticipantMenu($event, member)"
         >
-          <div
-            :ref="(mount) => showVideo(mount, member.video)"
-            class="participant__camera"
-            :hidden="!member.video"
-            aria-hidden="true"
-          />
+          <div v-if="member.cameraStream" class="participant__camera" aria-hidden="true">
+            <video :srcObject.prop="member.cameraStream" autoplay muted playsinline />
+          </div>
           <ParticipantTileFace
             :name="member.name"
             :initials="avatarInitial(member.name)"

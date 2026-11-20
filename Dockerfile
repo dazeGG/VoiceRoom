@@ -5,23 +5,27 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 COPY apps/api/package.json ./apps/api/package.json
 COPY apps/web/package.json ./apps/web/package.json
+COPY apps/widget/package.json ./apps/widget/package.json
 COPY apps/admin/package.json ./apps/admin/package.json
 COPY apps/site/package.json ./apps/site/package.json
 COPY packages/shared/package.json ./packages/shared/package.json
 COPY packages/ui/package.json ./packages/ui/package.json
 COPY packages/call/package.json ./packages/call/package.json
-RUN npm ci --workspace @voice-room/api --workspace @voice-room/web --workspace @voice-room/admin \
+RUN npm ci --workspace @voice-room/api --workspace @voice-room/web --workspace @voice-room/admin --workspace @voice-room/widget \
   --workspace @voice-room/shared --workspace @voice-room/ui --workspace @voice-room/call --include-workspace-root
 
 FROM deps AS web-build
 
 COPY apps/web ./apps/web
+COPY apps/widget ./apps/widget
 COPY apps/admin ./apps/admin
 COPY packages ./packages
 COPY scripts/build ./scripts/build
 RUN npm --workspace @voice-room/web run build \
+  && npm --workspace @voice-room/widget run build \
   && npm --workspace @voice-room/admin run build \
-  && node apps/web/scripts/emit-caddy-csp.ts apps/web/dist/index.html > /app/csp.caddy
+  && node apps/web/scripts/emit-caddy-csp.ts apps/web/dist/index.html > /app/csp.caddy \
+  && node apps/web/scripts/emit-caddy-csp.ts apps/widget/dist/embed/v1/index.html "" https: > /app/widget-csp.caddy
 
 FROM node:24.18.0-alpine3.23 AS api
 LABEL org.voiceroom.capabilities="widget-boundary-v1"
@@ -73,8 +77,10 @@ COPY config/caddy/domains-available /etc/caddy/domains-available
 COPY --chmod=0755 config/caddy/entrypoint.sh /usr/local/bin/voiceroom-caddy
 COPY --chmod=0755 config/caddy/archive-assets.sh /usr/local/bin/voiceroom-archive-assets
 COPY --from=web-build /app/csp.caddy /etc/caddy/csp.caddy
+COPY --from=web-build /app/widget-csp.caddy /etc/caddy/widget-csp.caddy
 COPY config/caddy/admin-csp.caddy /etc/caddy/admin-csp.caddy
 COPY --from=web-build /app/apps/web/dist /srv/web
+COPY --from=web-build /app/apps/widget/dist /srv/web
 # The admin app, served only on ADMIN_DOMAIN behind the staff gate (Caddyfile).
 COPY --from=web-build /app/apps/admin/dist /srv/admin
 

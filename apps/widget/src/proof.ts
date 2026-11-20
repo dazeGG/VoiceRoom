@@ -1,7 +1,7 @@
 import { PowChallenge } from '@voice-room/shared/contracts/ops';
 import { widgetRequest } from './http';
-export async function widgetProof(): Promise<{ challenge: string; nonce: number } | null> {
-  const challenge = await widgetRequest('/api/pow-challenge', PowChallenge);
+export async function widgetProof(signal?: AbortSignal): Promise<{ challenge: string; nonce: number } | null> {
+  const challenge = await widgetRequest('/api/pow-challenge', PowChallenge, undefined, signal);
   if (!challenge.required) return null;
   if (
     !Number.isInteger(challenge.difficulty) ||
@@ -11,6 +11,7 @@ export async function widgetProof(): Promise<{ challenge: string; nonce: number 
   )
     throw new Error('Некорректная проверка создания комнаты');
   for (let nonce = 0; Date.now() < challenge.expiresAt; nonce++) {
+    signal?.throwIfAborted();
     const hash = new Uint8Array(
       await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`${challenge.challenge}:${nonce}`))
     );

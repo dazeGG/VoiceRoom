@@ -6,7 +6,7 @@ import {
   parseWidgetMessage,
   widgetOrigin
 } from '@voice-room/shared/contracts/widget';
-import { createWidgetFrameExpansion } from './frame-expansion';
+import { createWidgetFrameExpansion } from '@voice-room/ui/widget-frame-expansion';
 
 export function mountWidget(container: HTMLElement, serviceOrigin: string): () => void {
   const config = decodeWidgetEmbedConfig(container.dataset.config ?? '');

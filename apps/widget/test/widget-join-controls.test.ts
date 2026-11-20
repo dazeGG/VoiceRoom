@@ -1,7 +1,7 @@
 import { render, screen, fireEvent } from '@testing-library/vue';
 import userEvent from '@testing-library/user-event';
 import { expect, test, vi } from 'vitest';
-import WidgetJoinControls from '../src/features/widget/WidgetJoinControls.vue';
+import { WidgetJoinControls } from '@voice-room/ui/widget';
 
 test('join controls update guest fields and keep create separate from join submission', async () => {
   const view = render(WidgetJoinControls);

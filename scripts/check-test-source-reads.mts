@@ -20,6 +20,7 @@ const TREES = [
   'apps/meet/test',
   'apps/site/test',
   'apps/web/test',
+  'apps/widget/test',
   'packages/shared/test',
   'scripts/test'
 ];

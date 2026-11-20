@@ -1,9 +1,12 @@
 import '@voice-room/ui/styles/tokens';
 import '@voice-room/ui/styles/typography';
-import '@/styles/widget/_shell.scss';
+import '@voice-room/ui/styles/widget/shell';
 import { createApp } from 'vue';
+import { createPinia, setActivePinia } from 'pinia';
+import { installCallPorts } from '@voice-room/call/engine/ports';
 import { parseWidgetBootstrap, parseWidgetMessage } from '@voice-room/shared/contracts/widget';
 import WidgetShell from './WidgetShell.vue';
+import { createWidgetSession, widgetSessionKey } from './session';
 const mount = document.getElementById('widget');
 try {
   if (!mount) throw new Error('Не найден контейнер VoiceRoom');
@@ -15,6 +18,16 @@ try {
     const message = parseWidgetMessage(event.data);
     if (!message || message.type !== 'initialize' || message.nonce !== bootstrap.nonce || initialized) return;
     initialized = true;
+    const pinia = createPinia();
+    setActivePinia(pinia);
+    const session = createWidgetSession({
+      camera: bootstrap.config.camera !== false,
+      setCallActive(active) {
+        parent.postMessage({ version: 1, nonce: bootstrap.nonce, type: 'callState', active }, bootstrap.parentOrigin);
+      }
+    });
+    installCallPorts(session.ports, pinia);
+    app.use(pinia).provide(widgetSessionKey, session);
     app.mount(mount);
   };
   window.addEventListener('message', initialize);

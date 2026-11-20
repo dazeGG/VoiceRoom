@@ -69,13 +69,15 @@ test('Caddy imports the generated policy and the image builds it', () => {
   assert.match(ordinary, /X-Frame-Options "DENY"/);
   assert.match(embed, /@widget_embed path \/embed\/v1 \/embed\/v1\/ \/embed\/v1\/index\.html/);
   assert.match(embed, /header\s*\{\s*defer\s*-X-Frame-Options/);
-  assert.match(
-    embed,
-    /Content-Security-Policy "[^"\n]*script-src 'self' 'wasm-unsafe-eval'[^"\n]*frame-ancestors https:"/
-  );
+  assert.match(embed, /import \/etc\/caddy\/widget-csp\.caddy/);
   assert.match(embed, /display-capture=\(\)/);
   assert.match(dockerfile, /emit-caddy-csp\.ts apps\/web\/dist\/index\.html > \/app\/csp\.caddy/);
   assert.match(dockerfile, /COPY --from=web-build \/app\/csp\.caddy \/etc\/caddy\/csp\.caddy/);
+  assert.match(
+    dockerfile,
+    /emit-caddy-csp\.ts apps\/widget\/dist\/embed\/v1\/index\.html "" https: > \/app\/widget-csp\.caddy/
+  );
+  assert.match(dockerfile, /COPY --from=web-build \/app\/widget-csp\.caddy \/etc\/caddy\/widget-csp\.caddy/);
 });
 
 test('page CSP supports runtime LiveKit origins while production Caddy narrows them', () => {

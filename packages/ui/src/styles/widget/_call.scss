@@ -205,6 +205,10 @@
   object-fit: contain;
 }
 
+.widget-call .participant--local .participant__camera video {
+  transform: scaleX(-1);
+}
+
 .widget-call .room-dock--widget {
   position: static;
   padding: 0;
@@ -318,8 +322,4 @@
 .widget-call__settings input[type='range'] {
   padding: 0;
   accent-color: var(--vr-accent);
-}
-
-.widget-media {
-  display: none;
 }

@@ -27,7 +27,7 @@ const ROOM_LOBBY_IMPORTS = {
   message: 'A room does not import the lobby: use @/entities or the room social context.'
 };
 const PORTABLE_IMPORT_MESSAGE = 'Portable packages cannot import applications or app aliases.';
-const PORTABLE_APP_IMPORTS = '^@(?:/|$)|^@voice-room/(?:admin|api|docs|meet|site|web)(?:/|$)|(?:^|/)apps(?:/|$)';
+const PORTABLE_APP_IMPORTS = '^@(?:/|$)|^@voice-room/(?:admin|api|docs|meet|site|web|widget)(?:/|$)|(?:^|/)apps(?:/|$)';
 
 export default tseslint.config(
   {
@@ -54,7 +54,7 @@ export default tseslint.config(
   // Vue rules apply to the Vue apps and the portable packages.
   ...vue.configs['flat/recommended-error'].map((config) => ({
     ...config,
-    files: config.files ?? ['apps/{meet,web}/**/*.{ts,vue}', 'packages/{call,ui}/**/*.{ts,vue}']
+    files: config.files ?? ['apps/{meet,web,widget}/**/*.{ts,vue}', 'packages/{call,ui}/**/*.{ts,vue}']
   })),
   {
     languageOptions: {
@@ -68,6 +68,7 @@ export default tseslint.config(
           './apps/site/tsconfig.json',
           './apps/web/tsconfig.test.json',
           './apps/meet/tsconfig.test.json',
+          './apps/widget/tsconfig.test.json',
           './packages/shared/tsconfig.test.json',
           './packages/ui/tsconfig.json',
           './packages/call/tsconfig.json',

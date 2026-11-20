@@ -32,11 +32,11 @@ const STYLE_BODY = /<style\b[^>]*>(?<body>[\s\S]*?)<\/style>/g;
 const ONE_LINE_COMMENT = /^\s*(?:<!--.*-->|\/\/.*|\/\*.*\*\/)\s*$/;
 const CALL_ROOT = 'packages/call/src';
 const UI_ROOT = 'packages/ui/src';
-const SOURCE_ROOTS = ['apps/web/src', 'apps/meet/src', UI_ROOT, CALL_ROOT];
+const SOURCE_ROOTS = ['apps/web/src', 'apps/meet/src', 'apps/widget/src', UI_ROOT, CALL_ROOT];
 const REKA_WRAPPERS = ['apps/web/src/shared/ui/', 'packages/ui/src/components/'];
 const SASS_MODULE = /@(?:use|forward|import)\s*(['"])(?<module>[^'"]+)\1/g;
 const APP_STYLE_MODULE =
-  /^(?:pkg:)?@(?:\/|$)|^(?:pkg:)?@voice-room\/(?:admin|api|docs|site|web)(?:\/|$)|(?:^|\/)apps(?:\/|$)/;
+  /^(?:pkg:)?@(?:\/|$)|^(?:pkg:)?@voice-room\/(?:admin|api|docs|meet|site|web|widget)(?:\/|$)|(?:^|\/)apps(?:\/|$)/;
 
 const lineAt = (source: string, index: number) => source.slice(0, index).split('\n').length;
 
