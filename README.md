@@ -92,9 +92,9 @@ API-тестам нужна PostgreSQL в `TEST_DATABASE_URL`: на каждый
 
 ## Self-hosting
 
-Для установки на своём Linux-сервере используйте готовые образы и Docker Compose. В [быстром старте](./apps/docs/src/content/docs/self-hosting/install.md) описаны DNS, генерация `.env` и проверка первого звонка.
+Для временных видеовстреч на своём Linux-сервере установите VoiceRoom Meet одной командой. В [руководстве по Meet](./apps/docs/src/content/docs/self-hosting/install.md) описаны установка, подключение своего домена, DuckDNS или deSEC и проверка первого звонка.
 
-Все переменные окружения, Docker, TURN, бэкапы, CI/CD и миграции описаны в [`docs/SELF_HOSTING.md`](./docs/SELF_HOSTING.md). Модель доступа и подробности про аккаунты — в [`docs/SECURITY.md`](./docs/SECURITY.md).
+Для аккаунтов, постоянных комнат, истории чатов и админки используйте [установку полного стека](./docs/SELF_HOSTING.md#установка-полного-стека). Переменные окружения, Docker, TURN, бэкапы, CI/CD и миграции описаны в [`docs/SELF_HOSTING.md`](./docs/SELF_HOSTING.md), модель доступа — в [`docs/SECURITY.md`](./docs/SECURITY.md).
 
 ## Документация
 
