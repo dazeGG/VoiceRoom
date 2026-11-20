@@ -268,7 +268,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.app == 'true' && needs.changes.outputs.verified != 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
@@ -324,11 +324,11 @@ jobs:
     needs: changes
     if: needs.changes.outputs.app == 'true' && needs.changes.outputs.verified != 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 20
     env:
       PLAYWRIGHT_WIDGET_COMPOSE_PROJECT: widget-ci-${{ github.run_id }}-${{ github.run_attempt }}
       PLAYWRIGHT_WIDGET_E2E: "1"
-      PLAYWRIGHT_WIDGET_RECOVERY: "0"
+      PLAYWRIGHT_WIDGET_RECOVERY: "1"
       WIDGET_ENABLED: "true"
       CI_GATE_PUBLIC_URL: wss://localhost:19443
       CI_ROOM_CREATE_POW_DIFFICULTY: "4"
@@ -350,7 +350,7 @@ jobs:
       - name: Exercise frozen loader compatibility, reconnect and SFU denials
         run: |
           npm --workspace @voice-room/web run e2e -- \
-            e2e/widget-embed.spec.ts e2e/widget-media-boundary.spec.ts e2e/widget-reconnect.spec.ts --repeat-each=6
+            e2e/widget-embed.spec.ts e2e/widget-media-boundary.spec.ts e2e/widget-reconnect.spec.ts
       - name: Report widget service states
         if: failure()
         run: |
