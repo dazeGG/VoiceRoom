@@ -6,12 +6,20 @@ import {
 } from '@voice-room/shared/realtime';
 import type { ServerEnvelope } from '@voice-room/shared/realtime';
 
-type EnvelopeSocket = { readyState: number; send(data: string): void };
+type EnvelopeSocket = { readyState: number; bufferedAmount?: number; send(data: string): void };
 
-function sendWsEnvelope(socket: EnvelopeSocket | null | undefined, envelope: ServerEnvelope): boolean {
+function sendWsEnvelope(
+  socket: EnvelopeSocket | null | undefined,
+  envelope: ServerEnvelope,
+  maxBufferedBytes?: number
+): boolean {
   if (!socket || socket.readyState !== 1) return false;
   try {
-    socket.send(JSON.stringify(envelope));
+    const data = JSON.stringify(envelope);
+    if (maxBufferedBytes !== undefined && (socket.bufferedAmount ?? 0) + Buffer.byteLength(data) > maxBufferedBytes) {
+      return false;
+    }
+    socket.send(data);
     return true;
   } catch {
     return false;

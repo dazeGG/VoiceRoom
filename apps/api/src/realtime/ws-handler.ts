@@ -17,6 +17,7 @@ import type {
 } from '@voice-room/shared/contracts/realtime';
 import { buildServerEnvelope, buildServerErrorEnvelope, parseInboundMessage } from './envelope.ts';
 import { createTypingThrottle } from './typing-throttle.ts';
+import type { MeetChat } from './meet-chat.ts';
 import type { ConnectionRegistry, RealtimeSocket, WsConnection } from './registry.ts';
 import { BoundedMap } from '../lib/bounded-map.ts';
 import { LOG_EVENTS } from '../lib/log-events.ts';
@@ -64,6 +65,7 @@ type WsSocket = RealtimeSocket & {
 // A client opens with hello, its restored subscriptions and whatever it queued
 // offline; more than this before the session resolves is not a client.
 const MAX_EARLY_FRAMES = 64;
+const MAX_PENDING_MEET_COMMANDS = 32;
 const GUEST_COMMANDS = new Set<ClientCommand['type']>([
   'hello',
   'ping',
@@ -84,6 +86,7 @@ function createWsHandler({
   registry,
   roomRuntime,
   surface = 'main',
+  meetChat,
   getBoundary,
   widgetAdmissionEnabled,
   widgetLocalAllowed,
@@ -97,6 +100,7 @@ function createWsHandler({
 }: {
   registry: ConnectionRegistry;
   surface?: RoomSurface;
+  meetChat?: MeetChat;
   getBoundary?: (roomId: string) => Promise<RoomBoundary | null>;
   widgetAdmissionEnabled?: () => Promise<boolean>;
   widgetLocalAllowed?: () => boolean;
@@ -110,6 +114,7 @@ function createWsHandler({
   logger?: Pick<Logger, 'info' | 'warn' | 'error'>;
 }) {
   const ceiling = ROOM_SURFACE_CEILINGS[surface];
+  const meetQueues = new WeakMap<WsConnection, { pending: number; overflowed: boolean }>();
   // Every realtime failure is attributed to the connection and the message type
   // that caused it. Without both, a report of "the call keeps dropping" leaves
   // nothing to search: the socket is gone and the stack alone names no user.
@@ -194,7 +199,7 @@ function createWsHandler({
       registry.sendToConnection(connection, buildServerErrorEnvelope('room_not_found', 'Room not found', envelope.id));
       return;
     }
-    if (ceiling.guestOnly && !GUEST_COMMANDS.has(envelope.type)) {
+    if (ceiling.guestOnly && !GUEST_COMMANDS.has(envelope.type) && envelope.type !== 'meet.chat.send') {
       registry.sendToConnection(connection, buildServerErrorEnvelope('forbidden', 'Command unavailable', envelope.id));
       return;
     }
@@ -361,6 +366,13 @@ function createWsHandler({
           envelope.payload.roomId,
           envelope.payload.activity ?? 'typing'
         );
+        return;
+      }
+
+      case 'meet.chat.send': {
+        const code = surface === 'meet' && meetChat ? meetChat(connection, envelope.payload.text) : 'forbidden';
+        if (code)
+          registry.sendToConnection(connection, buildServerErrorEnvelope(code, 'Chat send refused', envelope.id));
         return;
       }
 
@@ -568,6 +580,25 @@ function createWsHandler({
     // or storage. Without this queue, JOIN→LEAVE and JOIN1→JOIN2 can execute
     // in reverse before the room runtime registers their intent.
     const envelope = parsed.envelope;
+    if (surface === 'meet') {
+      const queue = meetQueues.get(connection) ?? { pending: 0, overflowed: false };
+      if (queue.overflowed) return;
+      if (queue.pending >= MAX_PENDING_MEET_COMMANDS) {
+        queue.overflowed = true;
+        connection.socket.close(1008, 'Too many pending commands');
+        return;
+      }
+      queue.pending += 1;
+      meetQueues.set(connection, queue);
+      enqueueMessage(connection, envelope.type, async () => {
+        try {
+          if (!queue.overflowed) await handleMessage(connection, envelope, req);
+        } finally {
+          queue.pending -= 1;
+        }
+      });
+      return;
+    }
     enqueueMessage(connection, envelope.type, () => handleMessage(connection, envelope, req));
   }
 

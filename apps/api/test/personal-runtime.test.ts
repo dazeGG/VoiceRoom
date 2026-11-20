@@ -10,7 +10,7 @@ import { TokenVerifier } from 'livekit-server-sdk';
 import { createOwnerCapability } from '../src/domains/rooms/meet-owner.service.ts';
 import { createTestDatabase } from './db-harness.ts';
 import { request, socketDir, startServer, waitForHealthz, type ServerLogs } from './fakes/server-process.ts';
-import { joinVoiceRoom, openWs, sendWs, waitForWsType } from './ws-harness.ts';
+import { countWsType, joinVoiceRoom, openWs, sendRawWs, sendWs, waitForClose, waitForWsType } from './ws-harness.ts';
 
 const origin = 'https://meet.example.test';
 const livekitKey = 'meet-test-key';
@@ -25,7 +25,7 @@ async function until(check: () => Promise<boolean>, message: string): Promise<vo
   assert.fail(message);
 }
 
-test('personal process keeps only transient call state and purges it on expiry and an unclean restart', async (t) => {
+test('personal process keeps call and chat state transient and purges it on expiry and an unclean restart', async (t) => {
   const database = await createTestDatabase(t, { empty: true });
   const { dir, socketPath } = socketDir('voice-personal-');
   const ownerFile = path.join(dir, 'secret');
@@ -85,13 +85,16 @@ test('personal process keeps only transient call state and purges it on expiry a
       SELECT (
         (SELECT count(*) FROM voice_sessions) + (SELECT count(*) FROM voice_session_samples) +
         (SELECT count(*) FROM voice_call_events) + (SELECT count(*) FROM room_messages) +
+        (SELECT count(*) FROM room_message_mentions) + (SELECT count(*) FROM message_delivery_outbox) +
+        (SELECT count(*) FROM message_send_idempotency) + (SELECT count(*) FROM link_previews) +
+        (SELECT count(*) FROM user_notifications) + (SELECT count(*) FROM push_subscriptions) +
         (SELECT count(*) FROM product_snapshots) + (SELECT count(*) FROM system_snapshots) +
         (SELECT count(*) FROM user_activity_days) + (SELECT count(*) FROM notification_outbox) +
         (SELECT count(*) FROM widget_runtime_owners WHERE owner_id IS NOT NULL) +
         (SELECT count(*) FROM pg_stat_activity WHERE datname = current_database() AND query ILIKE 'LISTEN %')
       )::int AS forbidden
     `);
-    assert.equal(rows[0]?.forbidden, 0, 'Full-product recorder, sampler, listener, or widget owner was active');
+    assert.equal(rows[0]?.forbidden, 0, 'Personal runtime created full-product side effects');
   }
 
   for (const [method, pathname] of [
@@ -129,12 +132,23 @@ test('personal process keeps only transient call state and purges it on expiry a
     return body.roomId;
   }
 
-  async function join(roomId: string, name: string) {
-    const cookie = `vr_session=${randomUUID()}`;
+  async function connect(cookie?: string) {
     const guest = openWs(socketPath, { path: '/api/meet/ws', cookie });
     t.after(() => guest.ws.terminate());
     assert.deepEqual((await guest.ready).payload, { guest: true });
+    return guest;
+  }
+
+  function newCall(roomId: string, name: string) {
     const call = { roomId, peerId: randomUUID(), sessionToken: randomUUID(), name };
+    sensitiveValues.push(name, call.sessionToken);
+    return call;
+  }
+
+  async function join(roomId: string, name: string) {
+    const cookie = `vr_session=${randomUUID()}`;
+    const guest = await connect(cookie);
+    const call = newCall(roomId, name);
     const tokenRequest = { method: 'POST', pathname: '/api/meet/livekit-token', body: call, cookie };
     assert.equal((await request(socketPath, tokenRequest)).status, 409);
     const snapshot = await joinVoiceRoom(guest, call);
@@ -145,13 +159,14 @@ test('personal process keeps only transient call state and purges it on expiry a
 
     const admission = await request(socketPath, tokenRequest, LiveKitAdmission);
     assert.equal(admission.status, 200);
-    assert.equal(admission.body.capabilities?.chat, 'none');
+    assert.equal(admission.body.capabilities?.chat, 'ephemeral');
     const claims = await new TokenVerifier(livekitKey, livekitSecret).verify(admission.body.token);
     assert.equal(claims.sub, call.peerId);
     assert.ok(!claims.name);
+    assert.equal(claims.video?.canPublishData, false);
     const gateCredential = new URL(admission.body.url).searchParams.get('vr_gate_credential');
     assert.ok(gateCredential);
-    sensitiveValues.push(name, call.sessionToken, admission.body.token, gateCredential);
+    sensitiveValues.push(admission.body.token, gateCredential);
 
     const { rows: identities } = await database.pool.query<{ display_name: string; session_token_hash: string }>(
       'SELECT display_name, session_token_hash FROM room_peer_identities WHERE room_id = $1',
@@ -179,13 +194,101 @@ test('personal process keeps only transient call state and purges it on expiry a
 
   const first = await createRoom();
   const statusPath = `/api/meet/rooms/${first}/status`;
-  assert.equal((await request(socketPath, { pathname: statusPath }, MeetRoomStatus)).body.peers, 0);
+  const status = await request(socketPath, { pathname: statusPath }, MeetRoomStatus);
+  assert.equal(status.body.peers, 0);
+  assert.equal(status.body.capabilities?.chat, 'ephemeral');
   const { guest, call } = await join(first, 'Private Name After Leave');
-  sendWs(guest.ws, 'room.leave', call);
-  await until(
-    async () => (await request(socketPath, { pathname: statusPath })).status === 404,
-    'Idle call did not close'
+
+  const visitor = await connect();
+  const attempted = 'Private chat from an unattached visitor';
+  sensitiveValues.push(attempted);
+  sendWs(visitor.ws, 'meet.chat.send', { text: attempted });
+  assert.equal((await waitForWsType(visitor.frames, 'error')).error.code, 'forbidden');
+  sendRawWs(visitor.ws, { id: 'preview-attempt', type: 'room.preview.subscribe', payload: { roomId: first } });
+  assert.equal(
+    (await waitForWsType(visitor.frames, 'error', (frame) => frame.id === 'preview-attempt')).error.code,
+    'forbidden'
   );
+
+  const second = await connect();
+  const secondCall = newCall(first, 'Private Chat Recipient');
+  await joinVoiceRoom(second, secondCall);
+  const other = await connect();
+  const otherCall = newCall(await createRoom(), 'Private Guest in Another Room');
+  await joinVoiceRoom(other, otherCall);
+
+  const text = 'Private chat <b>hello</b> @example https://example.invalid/private-chat';
+  sensitiveValues.push(text);
+  // A forged target and author have no authority over chat routing or attribution.
+  sendRawWs(guest.ws, {
+    type: 'meet.chat.send',
+    payload: { text: `  ${text}  `, roomId: otherCall.roomId, authorId: otherCall.peerId, displayName: otherCall.name }
+  });
+  const [echo, delivery] = await Promise.all([
+    waitForWsType(guest.frames, 'meet.chat.message'),
+    waitForWsType(second.frames, 'meet.chat.message')
+  ]);
+  assert.ok(delivery.payload.id);
+  assert.deepEqual(delivery.payload, { id: delivery.payload.id, authorId: call.peerId, displayName: call.name, text });
+  assert.deepEqual(echo.payload, delivery.payload);
+
+  const closed = waitForClose(second.ws);
+  second.ws.close(1000);
+  assert.equal(await closed, 1000);
+  const offline = 'Private chat sent while the recipient was away';
+  sensitiveValues.push(offline);
+  sendWs(guest.ws, 'meet.chat.send', { text: offline });
+  await waitForWsType(guest.frames, 'meet.chat.message', (frame) => frame.payload.text === offline);
+
+  const reconnected = await connect();
+  const snapshot = await joinVoiceRoom(reconnected, secondCall);
+  assert.deepEqual(snapshot.payload.recentMessages, []);
+  assert.ok(snapshot.payload.peers.some((peer) => peer.id === secondCall.peerId));
+
+  const live = 'Private chat sent after the recipient rejoined';
+  sensitiveValues.push(live);
+  sendWs(guest.ws, 'meet.chat.send', { text: live });
+  await waitForWsType(reconnected.frames, 'meet.chat.message', (frame) => frame.payload.text === live);
+  await Promise.all(
+    [guest, reconnected, other, visitor].map(async ({ ws, frames }) => {
+      sendWs(ws, 'ping', { at: 1 });
+      await waitForWsType(frames, 'pong');
+    })
+  );
+  assert.equal(countWsType(guest.frames, 'meet.chat.message'), 3);
+  assert.equal(countWsType(second.frames, 'meet.chat.message'), 1);
+  assert.equal(countWsType(reconnected.frames, 'meet.chat.message'), 1);
+  assert.equal(countWsType(other.frames, 'meet.chat.message'), 0);
+  assert.equal(countWsType(visitor.frames, 'meet.chat.message'), 0);
+  assert.equal(countWsType(visitor.frames, 'room.snapshot'), 0);
+
+  for (let i = 0; i < 5; i++) {
+    const text = `Private chat consuming sender budget ${i}`;
+    sensitiveValues.push(text);
+    sendWs(guest.ws, 'meet.chat.send', { text });
+    await waitForWsType(guest.frames, 'meet.chat.message', (frame) => frame.payload.text === text);
+  }
+  const senderClosed = waitForClose(guest.ws);
+  guest.ws.close(1000);
+  assert.equal(await senderClosed, 1000);
+  const senderReconnected = await connect();
+  await joinVoiceRoom(senderReconnected, call);
+  const rateLimitedText = 'Private chat over budget after sender reconnect';
+  sensitiveValues.push(rateLimitedText);
+  sendWs(senderReconnected.ws, 'meet.chat.send', { text: rateLimitedText });
+  assert.equal((await waitForWsType(senderReconnected.frames, 'error')).error.code, 'rate_limited');
+  assert.equal(countWsType(senderReconnected.frames, 'meet.chat.message'), 0);
+  await assertNoFullSideEffects();
+  assertLogsPrivate();
+
+  sendWs(other.ws, 'room.leave', otherCall);
+  sendWs(reconnected.ws, 'room.leave', secondCall);
+  sendWs(senderReconnected.ws, 'room.leave', call);
+  await until(async () => {
+    const firstStatus = await request(socketPath, { pathname: statusPath });
+    const otherStatus = await request(socketPath, { pathname: `/api/meet/rooms/${otherCall.roomId}/status` });
+    return firstStatus.status === 404 && otherStatus.status === 404;
+  }, 'Idle calls did not close');
   const empty = { rooms: 0, peers: 0, credentials: 0, epochs: 0 };
   assert.deepEqual(await operationalCounts(), empty);
   await assertNoFullSideEffects();

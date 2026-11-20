@@ -188,7 +188,7 @@ test('Meet admission uses the stored room and roster, independent of widget owne
   assert.equal(admitted.status, 'issued');
   const json: unknown = JSON.parse(JSON.stringify({ ok: true, ...admitted.admission }));
   const answer = checked(LiveKitAdmission, json, 'Meet admission');
-  assert.deepEqual(answer.capabilities, { screenShare: true, camera: true, chat: 'none', maxPeers: 7 });
+  assert.deepEqual(answer.capabilities, { screenShare: true, camera: true, chat: 'ephemeral', maxPeers: 7 });
   const { canPublishSources, canPublishData } = videoGrant(answer.token);
   assert.deepEqual(canPublishSources, ['microphone', 'camera', 'screen_share', 'screen_share_audio']);
   assert.equal(canPublishData, false);
