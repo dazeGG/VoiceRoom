@@ -4,6 +4,7 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { TrackSource } from 'livekit-server-sdk';
 
 import {
   createAdmissionService,
@@ -553,6 +554,29 @@ test('mute permissions and "already gone" classification', () => {
   assert.equal(tokensMatch('abc', 'abd'), false);
   assert.equal(tokensMatch('', ''), false);
   assert.equal(tokensMatch('abc', 'abcd'), false);
+});
+
+test('live widget mute and unmute preserve the camera and data denial', async () => {
+  const { CAMERA, MICROPHONE } = TrackSource;
+  let permission = { canPublishSources: [MICROPHONE, CAMERA], canPublishData: false };
+  const client = fake<LiveKitAdminClient>({
+    getParticipant: async () => ({ permission }),
+    updateParticipant: async (_room, _peer, _metadata, updated) => {
+      assert.ok(updated.canPublishSources);
+      assert.equal(fieldOf(updated, 'canPublishData'), false);
+      permission = { canPublishSources: updated.canPublishSources, canPublishData: false };
+    }
+  });
+  const admin = createLiveKitAdmin({
+    config: () => ENABLED,
+    roomName: String,
+    logger: recordingLogger,
+    clientFactory: () => client
+  });
+  assert.deepEqual(await admin.setParticipantMuted('widget-room', 'peer', true), { status: 'applied' });
+  assert.deepEqual(permission.canPublishSources, [CAMERA]);
+  assert.deepEqual(await admin.setParticipantMuted('widget-room', 'peer', false), { status: 'applied' });
+  assert.deepEqual(permission.canPublishSources, [CAMERA, MICROPHONE]);
 });
 
 for (const accountUserId of [null, 'user-1']) {
