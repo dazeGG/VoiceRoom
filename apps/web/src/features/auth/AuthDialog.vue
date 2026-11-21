@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import { Spinner } from '@voice-room/ui/components';
+import { Dialog, Spinner } from '@voice-room/ui/components';
 import { useLocalizedText, currentErrorMessage } from '@/shared/i18n/localized-text';
 
 import { t } from '@/shared/i18n';
 import LanguageControl from '@/shared/i18n/LanguageControl.vue';
-import { CircleAlert, X } from '@lucide/vue';
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { CircleAlert } from '@lucide/vue';
+import { computed, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { normalizeRecoveryCode } from '@voice-room/shared/account-security';
 import { AccountFailure } from '@voice-room/shared/contracts/account';
@@ -66,8 +66,6 @@ const COPY: Record<AuthMode, { title: string; subtitle: string; submit: string; 
 const router = useRouter();
 const session = useSessionStore();
 
-const dialog = ref<HTMLDialogElement | null>(null);
-const loginInput = ref<HTMLInputElement | null>(null);
 const loginValue = ref('');
 const displayName = ref('');
 const recoveryCode = ref('');
@@ -83,23 +81,6 @@ const isLogin = computed(() => mode.value === 'login');
 const isRegister = computed(() => mode.value === 'register');
 const isRecover = computed(() => mode.value === 'recover');
 const copy = computed(() => COPY[mode.value]);
-
-onMounted(() => {
-  dialog.value?.showModal();
-  queueMicrotask(() => loginInput.value?.focus());
-});
-
-onBeforeUnmount(() => {
-  if (dialog.value?.open) dialog.value.close();
-});
-
-function handleBackdropClick(event: MouseEvent): void {
-  if (event.target === dialog.value) emit('close');
-}
-
-function handleCancel(): void {
-  emit('close');
-}
 
 function switchMode(nextMode: AuthMode): void {
   if (submitting.value) return;
@@ -195,140 +176,129 @@ async function restorePendingAccount(): Promise<void> {
 </script>
 
 <template>
-  <dialog
-    ref="dialog"
-    class="auth-dialog"
-    aria-labelledby="authDialogTitle"
-    @click="handleBackdropClick"
-    @cancel.prevent="handleCancel"
+  <Dialog
+    open
+    size="sm"
+    :title="copy.title"
+    :description="copy.subtitle"
+    initial-focus="#authLoginInput"
+    :on-close="() => emit('close')"
   >
-    <div class="auth-dialog__panel">
-      <button class="auth-dialog__close" type="button" :aria-label="t('Закрыть')" @click="emit('close')">
-        <X v-bind="iconMd" aria-hidden="true" />
+    <p class="auth-dialog__kicker">{{ t('Ваши комнаты всегда рядом') }}</p>
+
+    <form class="auth-dialog__form" @submit.prevent="handleSubmit">
+      <p v-if="error" class="auth-dialog__error" role="alert">
+        <CircleAlert v-bind="iconMd" aria-hidden="true" />{{ error }}
+      </p>
+
+      <div v-if="isLogin && pendingDeletionAt !== null" class="auth-dialog__restore" role="status">
+        <p>
+          {{ t('Этот аккаунт ожидает удаления — оно произойдёт') }} {{ dayMonth(pendingDeletionAt)
+          }}{{ t('. Восстановить его?') }}
+        </p>
+        <button class="auth-dialog__submit" type="button" :disabled="submitting" @click="restorePendingAccount()">
+          {{ t('Восстановить аккаунт') }}
+        </button>
+      </div>
+
+      <div class="auth-dialog__field">
+        <label class="auth-dialog__label" for="authLoginInput">{{ t('Логин') }}</label>
+        <input
+          id="authLoginInput"
+          v-model="loginValue"
+          class="auth-dialog__input"
+          maxlength="32"
+          autocapitalize="off"
+          autocomplete="username"
+          spellcheck="false"
+          :placeholder="t('Ваш логин')"
+          required
+        />
+      </div>
+
+      <div v-if="isRegister" class="auth-dialog__field">
+        <label class="auth-dialog__label" for="authDisplayNameInput">
+          {{ t('Отображаемое имя') }} <span class="auth-dialog__label-soft">{{ t('· необязательно') }}</span>
+        </label>
+        <input
+          id="authDisplayNameInput"
+          v-model="displayName"
+          class="auth-dialog__input"
+          maxlength="40"
+          autocomplete="nickname"
+          :placeholder="t('Как вас будут видеть в комнате')"
+        />
+      </div>
+
+      <div v-if="isRecover" class="auth-dialog__field">
+        <label class="auth-dialog__label" for="authRecoveryCodeInput">{{ t('Код восстановления') }}</label>
+        <input
+          id="authRecoveryCodeInput"
+          v-model="recoveryCode"
+          class="auth-dialog__input auth-dialog__input--code"
+          maxlength="32"
+          autocapitalize="characters"
+          autocomplete="one-time-code"
+          spellcheck="false"
+          placeholder="XXXX-XXXX-XXXX-XXXX"
+          required
+        />
+      </div>
+
+      <div class="auth-dialog__field">
+        <label class="auth-dialog__label" for="authPasswordInput">{{
+          isRecover ? t('Новый пароль') : t('Пароль')
+        }}</label>
+        <PasswordField
+          id="authPasswordInput"
+          v-model="password"
+          :autocomplete="isLogin ? 'current-password' : 'new-password'"
+          :placeholder="isLogin ? t('Ваш пароль') : t('Минимум 8 символов')"
+        />
+        <button v-if="isLogin" type="button" class="auth-dialog__forgot" @click="switchMode('recover')">
+          {{ t('Забыли пароль?') }}
+        </button>
+      </div>
+
+      <div v-if="!isLogin" class="auth-dialog__field">
+        <label class="auth-dialog__label" for="authPasswordConfirmInput">{{ t('Повторите пароль') }}</label>
+        <PasswordField
+          id="authPasswordConfirmInput"
+          v-model="passwordConfirm"
+          autocomplete="new-password"
+          :placeholder="t('Ещё раз')"
+        />
+      </div>
+
+      <p v-if="isRegister" class="auth-dialog__consent">
+        {{ t('Нажимая «') }}{{ copy.submit }}{{ t('», вы подтверждаете, что вам исполнилось 14 лет, принимаете') }}
+        <a href="/terms" target="_blank" rel="noopener">{{ t('Пользовательское соглашение') }}</a>
+        {{ t('и ознакомились с') }}
+        <a href="/privacy" target="_blank" rel="noopener">{{ t('Политикой обработки персональных данных') }}</a
+        >.
+      </p>
+
+      <button class="auth-dialog__submit" type="submit" :disabled="submitting || !session.loaded">
+        <template v-if="submitting">
+          <Spinner aria-hidden="true" />
+          {{ copy.submitting }}
+        </template>
+        <template v-else>{{ copy.submit }}</template>
       </button>
+    </form>
 
-      <div class="auth-dialog__heading">
-        <span class="auth-dialog__mark" aria-hidden="true"></span>
-        <p class="auth-dialog__kicker">{{ t('Ваши комнаты всегда рядом') }}</p>
-        <h1 id="authDialogTitle" class="auth-dialog__title">{{ copy.title }}</h1>
-        <p class="auth-dialog__subtitle">{{ copy.subtitle }}</p>
-      </div>
-
-      <form class="auth-dialog__form" @submit.prevent="handleSubmit">
-        <p v-if="error" class="auth-dialog__error" role="alert">
-          <CircleAlert v-bind="iconMd" aria-hidden="true" />{{ error }}
-        </p>
-
-        <div v-if="isLogin && pendingDeletionAt !== null" class="auth-dialog__restore" role="status">
-          <p>
-            {{ t('Этот аккаунт ожидает удаления — оно произойдёт') }} {{ dayMonth(pendingDeletionAt)
-            }}{{ t('. Восстановить его?') }}
-          </p>
-          <button class="auth-dialog__submit" type="button" :disabled="submitting" @click="restorePendingAccount()">
-            {{ t('Восстановить аккаунт') }}
-          </button>
-        </div>
-
-        <div class="auth-dialog__field">
-          <label class="auth-dialog__label" for="authLoginInput">{{ t('Логин') }}</label>
-          <input
-            id="authLoginInput"
-            ref="loginInput"
-            v-model="loginValue"
-            class="auth-dialog__input"
-            maxlength="32"
-            autocapitalize="off"
-            autocomplete="username"
-            spellcheck="false"
-            :placeholder="t('Ваш логин')"
-            required
-          />
-        </div>
-
-        <div v-if="isRegister" class="auth-dialog__field">
-          <label class="auth-dialog__label" for="authDisplayNameInput">
-            {{ t('Отображаемое имя') }} <span class="auth-dialog__label-soft">{{ t('· необязательно') }}</span>
-          </label>
-          <input
-            id="authDisplayNameInput"
-            v-model="displayName"
-            class="auth-dialog__input"
-            maxlength="40"
-            autocomplete="nickname"
-            :placeholder="t('Как вас будут видеть в комнате')"
-          />
-        </div>
-
-        <div v-if="isRecover" class="auth-dialog__field">
-          <label class="auth-dialog__label" for="authRecoveryCodeInput">{{ t('Код восстановления') }}</label>
-          <input
-            id="authRecoveryCodeInput"
-            v-model="recoveryCode"
-            class="auth-dialog__input auth-dialog__input--code"
-            maxlength="32"
-            autocapitalize="characters"
-            autocomplete="one-time-code"
-            spellcheck="false"
-            placeholder="XXXX-XXXX-XXXX-XXXX"
-            required
-          />
-        </div>
-
-        <div class="auth-dialog__field">
-          <label class="auth-dialog__label" for="authPasswordInput">{{
-            isRecover ? t('Новый пароль') : t('Пароль')
-          }}</label>
-          <PasswordField
-            id="authPasswordInput"
-            v-model="password"
-            :autocomplete="isLogin ? 'current-password' : 'new-password'"
-            :placeholder="isLogin ? t('Ваш пароль') : t('Минимум 8 символов')"
-          />
-          <button v-if="isLogin" type="button" class="auth-dialog__forgot" @click="switchMode('recover')">
-            {{ t('Забыли пароль?') }}
-          </button>
-        </div>
-
-        <div v-if="!isLogin" class="auth-dialog__field">
-          <label class="auth-dialog__label" for="authPasswordConfirmInput">{{ t('Повторите пароль') }}</label>
-          <PasswordField
-            id="authPasswordConfirmInput"
-            v-model="passwordConfirm"
-            autocomplete="new-password"
-            :placeholder="t('Ещё раз')"
-          />
-        </div>
-
-        <p v-if="isRegister" class="auth-dialog__consent">
-          {{ t('Нажимая «') }}{{ copy.submit }}{{ t('», вы подтверждаете, что вам исполнилось 14 лет, принимаете') }}
-          <a href="/terms" target="_blank" rel="noopener">{{ t('Пользовательское соглашение') }}</a>
-          {{ t('и ознакомились с') }}
-          <a href="/privacy" target="_blank" rel="noopener">{{ t('Политикой обработки персональных данных') }}</a
-          >.
-        </p>
-
-        <button class="auth-dialog__submit" type="submit" :disabled="submitting || !session.loaded">
-          <template v-if="submitting">
-            <Spinner aria-hidden="true" />
-            {{ copy.submitting }}
-          </template>
-          <template v-else>{{ copy.submit }}</template>
-        </button>
-      </form>
-
-      <p v-if="isLogin" class="auth-dialog__foot">
-        {{ t('Нет аккаунта?') }}
-        <button type="button" class="auth-dialog__link" @click="switchMode('register')">
-          {{ t('Зарегистрироваться') }}
-        </button>
-      </p>
-      <p v-else class="auth-dialog__foot">
-        {{ isRecover ? t('Вспомнили пароль?') : t('Уже есть аккаунт?') }}
-        <button type="button" class="auth-dialog__link" @click="switchMode('login')">{{ t('Войти') }}</button>
-      </p>
-      <div class="auth-dialog__language">
-        <LanguageControl />
-      </div>
+    <p v-if="isLogin" class="auth-dialog__foot">
+      {{ t('Нет аккаунта?') }}
+      <button type="button" class="auth-dialog__link" @click="switchMode('register')">
+        {{ t('Зарегистрироваться') }}
+      </button>
+    </p>
+    <p v-else class="auth-dialog__foot">
+      {{ isRecover ? t('Вспомнили пароль?') : t('Уже есть аккаунт?') }}
+      <button type="button" class="auth-dialog__link" @click="switchMode('login')">{{ t('Войти') }}</button>
+    </p>
+    <div class="auth-dialog__language">
+      <LanguageControl />
     </div>
-  </dialog>
+  </Dialog>
 </template>

@@ -3,12 +3,6 @@
 // the .dialog-danger-* rules that sat at its end are in ui/_dialog.scss).
 //
 // Svelte class -> BEM class (block "settings")
-//   .settings-overlay               -> .settings__overlay
-//   .settings-modal                 -> .settings__modal
-//   .room-settings-modal            -> .settings__modal--room   (room settings dialogs add it)
-//   .settings-head                  -> .settings__head
-//   .settings-title                 -> .settings__title
-//   .settings-close                 -> .settings__close
 //   .settings-body                  -> .settings__body
 //   .room-settings-body             -> .settings__body--room    (room settings dialogs add it)
 //   .settings-nav                   -> .settings__nav
@@ -46,11 +40,6 @@
 //   .settings-notification-empty    -> .settings__notification-empty
 //   .settings-blocked-users         -> .settings__blocked-users
 //   .settings-unblock-button        -> .settings__unblock-button
-//   .settings-overlay-games         -> .settings__overlay-games
-//
-// The account settings and the room settings sit in the shared Dialog (ui/_ui-dialog.scss), which
-// owns the overlay, the card and the title row. So .settings__overlay/__modal/__head/__title/__close
-// above are not used by the Vue markup any more; .settings__frame below replaces the card padding.
 //
 // Component <style> blocks of the Svelte settings components (SettingsDialog, ProfileSettings,
 // AppearanceSettings, SoundSettings, HotkeySettings, NotificationSettings, AppSettings):
@@ -81,11 +70,6 @@
 //   .settings-notification-title    -> .settings__notification-title
 //   .settings-notification-muted    -> .settings__notification-muted
 //   .settings-diagnostics-actions   -> .settings__diagnostics-actions
-//   .settings-overlay-window        -> .settings__overlay-window
-//   .settings-overlay-window-text/-name/-exe/-empty/-status -> .settings__overlay-window-text/-name/-exe/-empty/-status
-//   .settings-overlay-add           -> .settings__overlay-add
-//   .settings-overlay-allowed(-item)-> .settings__overlay-allowed(-item)
-//   .settings-overlay-remove        -> .settings__overlay-remove
 //
 // Other components' classes this file reaches (names the owning component takes):
 //   .ui-segment-item -> .ui-segment__item
@@ -97,65 +81,13 @@
 //   .settings-gate-fill[data-state='closed']        -> .settings__gate-fill--closed
 //   .settings-hotkey-row[data-disabled='true']      -> .settings__hotkey-row--disabled
 //   .settings-notification-dependent[data-disabled='true'] -> .settings__notification-dependent--disabled
-//   .settings-overlay-games[data-disabled='true']   -> .settings__overlay-games--disabled
 //     (these wrappers are plain divs/sections with no aria state of their own)
 @use 'pkg:@voice-room/ui/styles/mixins' as *;
-
-.settings__overlay {
-  @include modal-overlay(60, 32px);
-}
-
-.settings__modal {
-  display: flex;
-  flex-direction: column;
-  width: 940px;
-  max-width: 100%;
-  max-height: 90vh;
-  border: 1px solid var(--vr-line-strong);
-  border-radius: 22px;
-  background: var(--vr-surface);
-  box-shadow: var(--vr-shadow-modal);
-  overflow: hidden;
-}
-
-.settings__head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 20px 24px;
-  border-bottom: 1px solid var(--vr-line);
-}
-
-.settings__title {
-  color: var(--vr-text);
-  font-size: 1.0625rem;
-  font-weight: 600;
-  letter-spacing: -0.015em;
-}
-
-.settings__close {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  border: none;
-  border-radius: 9px;
-  background: transparent;
-  color: var(--vr-text-2);
-  cursor: pointer;
-  transition: background 0.15s ease;
-}
-
-.settings__close:hover {
-  background: var(--vr-hover);
-  color: var(--vr-text);
-}
 
 // The Dialog body pads and spaces its content; the settings body and its sidebar
 // run edge to edge under the title, as in the Svelte modal.
 .settings__frame {
-  margin: -20px -22px -22px;
+  margin: calc(-1 * var(--space-20)) calc(-1 * var(--space-24));
   border-top: 1px solid var(--vr-line);
 }
 
@@ -612,10 +544,6 @@
 }
 
 @include below($bp-phone) {
-  .settings__overlay {
-    padding: 16px;
-  }
-
   .settings__body,
   .settings__body:not(.settings__body--room) {
     flex-direction: column;

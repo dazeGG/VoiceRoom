@@ -118,12 +118,7 @@ function close(): void {
 
 <template>
   <!-- A security question outranks every other dialog in the lobby (_login-alert.scss lifts it). -->
-  <Dialog
-    :open="open"
-    :title="secured ? t('Защитите аккаунт') : t('Новый вход в аккаунт')"
-    :on-close="close"
-    :width="440"
-  >
+  <Dialog :open="open" :title="secured ? t('Защитите аккаунт') : t('Новый вход в аккаунт')" :on-close="close" size="sm">
     <div class="login-alert">
       <template v-if="secured">
         <p class="login-alert__text">

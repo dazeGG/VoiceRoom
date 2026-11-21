@@ -2,7 +2,7 @@
 // Svelte: RecoveryCodesDialog.svelte <style>.
 //
 // Svelte class -> BEM class (block "recovery-dialog")
-//   .recovery-dialog-layer .ui-dialog-overlay -> .ui-dialog__overlay:has(.recovery-dialog)
+//   .recovery-dialog-layer .ui-dialog-overlay -> .ui-overlay:has(.recovery-dialog)
 //     (the Dialog portals its overlay to <body>, so a wrapper cannot style it;
 //     the settings overlay sits at z-index 60)
 //   .recovery-form                   -> .recovery-dialog / .recovery-dialog__form
@@ -14,7 +14,7 @@
 //   .settings-field-label, .settings-input -> settings__field-label, settings__input
 @use 'pkg:@voice-room/ui/styles/mixins' as *;
 
-.ui-dialog__overlay:has(.recovery-dialog) {
+.ui-overlay:has(.recovery-dialog) {
   z-index: 100;
 }
 

@@ -12,7 +12,7 @@ const emit = defineEmits<{ register: []; continue: []; close: [] }>();
     :open="open"
     :title="t('Снова нужна комната?')"
     :on-close="() => emit('close')"
-    :width="430"
+    size="sm"
     initial-focus=".permanent-room-offer__register"
   >
     <p class="permanent-room-offer__text">

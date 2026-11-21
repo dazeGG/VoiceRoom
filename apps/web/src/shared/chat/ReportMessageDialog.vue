@@ -45,6 +45,7 @@ const REASONS: { value: ReportReason; label: string }[] = [
 ];
 
 const reasonLabelId = useId();
+const formId = useId();
 const selectedReason = ref<string | null>(null);
 const reason = computed(() => REASONS.find(({ value }) => value === selectedReason.value)?.value);
 const comment = ref('');
@@ -72,14 +73,8 @@ async function submit(): Promise<void> {
 </script>
 
 <template>
-  <Dialog
-    open
-    :title="t('Пожаловаться на сообщение')"
-    :on-close="() => emit('close')"
-    :width="460"
-    initial-focus="[role=radio]"
-  >
-    <form class="report-dialog" @submit.prevent="submit">
+  <Dialog open :title="t('Пожаловаться на сообщение')" :on-close="() => emit('close')" initial-focus="[role=radio]">
+    <form :id="formId" class="report-dialog" @submit.prevent="submit">
       <fieldset class="report-dialog__reasons">
         <legend :id="reasonLabelId" class="report-dialog__label">{{ t('Что не так с сообщением?') }}</legend>
         <RadioGroup v-model="selectedReason" :options="REASONS" name="report-reason" :aria-labelledby="reasonLabelId" />
@@ -104,13 +99,12 @@ async function submit(): Promise<void> {
       </p>
 
       <p v-if="error" class="report-dialog__error" role="alert">{{ error }}</p>
-
-      <div class="report-dialog__actions">
-        <Button variant="ghost" type="button" @click="emit('close')">{{ t('Отмена') }}</Button>
-        <Button variant="danger" type="submit" :disabled="!reason || sending">
-          {{ sending ? t('Отправляем…') : t('Отправить жалобу') }}
-        </Button>
-      </div>
     </form>
+    <template #footer>
+      <Button variant="ghost" type="button" @click="emit('close')">{{ t('Отмена') }}</Button>
+      <Button variant="primary" type="submit" :form="formId" :disabled="!reason" :busy="sending">
+        {{ sending ? t('Отправляем…') : t('Отправить жалобу') }}
+      </Button>
+    </template>
   </Dialog>
 </template>

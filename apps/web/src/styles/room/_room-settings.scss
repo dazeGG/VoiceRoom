@@ -3,7 +3,6 @@
 // shared Dialog; this partial holds what the Svelte component's own <style> had.
 //
 // Svelte class -> BEM class
-//   .room-settings-modal              -> Dialog width 780 (prop)
 //   .room-settings-body               -> .settings__body--room (home/_settings.scss)
 //   .room-settings-content            -> .room-settings__content
 //   .room-settings-notifications      -> .room-settings__notifications
@@ -18,7 +17,7 @@
 // The Dialog body pads and spaces its content; the settings body and its sidebar
 // run edge to edge under the title, as in the Svelte modal.
 .room-settings {
-  margin: -20px -22px -22px;
+  margin: calc(-1 * var(--space-20)) calc(-1 * var(--space-24));
   border-top: 1px solid var(--vr-line);
 }
 

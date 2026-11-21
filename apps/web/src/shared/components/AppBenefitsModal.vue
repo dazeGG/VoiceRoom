@@ -64,7 +64,7 @@ async function download(): Promise<void> {
 </script>
 
 <template>
-  <Dialog :open="open" :title="t('VoiceRoom на компьютере')" :on-close="() => emit('close')" :width="460">
+  <Dialog :open="open" :title="t('VoiceRoom на компьютере')" :on-close="() => emit('close')">
     <ul class="app-benefits">
       <li v-for="benefit in BENEFITS" :key="benefit.title" class="app-benefits__item">
         <strong class="app-benefits__title">{{ benefit.title }}</strong>
