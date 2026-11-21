@@ -17,7 +17,7 @@ function changeLanguage(event: Event): void {
   <div class="meet-shell">
     <header class="meet-shell__header">
       <RouterLink class="meet-shell__brand" to="/">
-        <span class="meet-shell__mark"><AudioLines :size="21" aria-hidden="true" /></span>
+        <span class="meet-shell__mark"><AudioLines aria-hidden="true" /></span>
         <span>VoiceRoom <strong>Meet</strong></span>
       </RouterLink>
       <select class="meet-shell__language" :value="locale" :aria-label="t('meet.language')" @change="changeLanguage">

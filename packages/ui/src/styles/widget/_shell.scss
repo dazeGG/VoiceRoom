@@ -2,8 +2,18 @@
 
 .widget-shell {
   --widget-radius: var(--radius-16);
-  --widget-control-radius: calc(var(--widget-radius) * 0.75);
-  --widget-small-radius: calc(var(--widget-radius) * 0.5);
+  --vr-surface-2: color-mix(in srgb, var(--vr-text) 7%, var(--vr-bg));
+  --vr-surface-3: color-mix(in srgb, var(--vr-text) 9%, var(--vr-bg));
+  --vr-surface-3-hover: color-mix(in srgb, var(--vr-text) 14%, var(--vr-bg));
+  --vr-line: color-mix(in srgb, var(--vr-text) 14%, transparent);
+  --vr-line-strong: color-mix(in srgb, var(--vr-text) 18%, var(--vr-bg));
+  --vr-accent-ink: var(--vr-bg);
+  --vr-accent-hover: color-mix(in oklch, var(--vr-accent), var(--vr-text) 12%);
+  --vr-accent-line: color-mix(in srgb, var(--vr-accent) 48%, transparent);
+  --vr-accent-soft: color-mix(in srgb, var(--vr-accent) 18%, transparent);
+  --vr-hover: color-mix(in srgb, var(--vr-text) 12%, transparent);
+  --vr-text-2: color-mix(in srgb, var(--vr-text) 85%, var(--vr-bg));
+  --vr-text-muted: color-mix(in srgb, var(--vr-text) 65%, var(--vr-bg));
   container-type: inline-size;
   display: flex;
   flex-direction: column;
@@ -22,63 +32,13 @@
   *::after {
     box-sizing: border-box;
   }
-
-  :where(button, input, select):not(:where(.room-dock__button, .room-dock__menu-button)) {
-    max-width: 100%;
-    min-height: var(--size-48);
-    border: 1px solid color-mix(in srgb, var(--vr-text) 15%, transparent);
-    border-radius: var(--widget-control-radius);
-    padding: var(--space-8) var(--space-12);
-    background: color-mix(in srgb, var(--vr-text) 5%, var(--vr-bg));
-    color: inherit;
-    font: inherit;
-    font-size: 1rem;
-  }
-
-  :where(input, select) {
-    min-width: 0;
-    width: 100%;
-  }
-
-  :where(input)::placeholder {
-    color: color-mix(in srgb, var(--vr-text) 50%, transparent);
-  }
-
-  :where(button):not(:where(.room-dock__button, .room-dock__menu-button)) {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: var(--space-6);
-    cursor: pointer;
-  }
-
-  :where(button):hover:not(:disabled, .room-dock__button, .room-dock__menu-button) {
-    filter: brightness(1.08);
-  }
-
-  :where(button, summary):focus-visible {
-    outline: var(--space-2) solid var(--vr-accent);
-    outline-offset: var(--space-2);
-  }
-
-  :where(input, select):focus-visible {
-    border-color: var(--vr-accent-line);
-    box-shadow: 0 0 0 calc(var(--space-6) / 2) var(--vr-accent-soft);
-    outline: none;
-  }
-
-  [role='alert'] {
-    padding: var(--space-8) var(--space-12);
-    border: 1px solid var(--vr-accent);
-    border-radius: var(--widget-control-radius);
-    font-size: 0.8125rem;
-  }
 }
 
 .widget-shell--preview {
   overflow: auto;
 
-  :disabled {
+  :disabled,
+  .ui-input:has(.ui-input__control:disabled) {
     opacity: 1;
     cursor: default;
   }
@@ -87,12 +47,10 @@
 .widget-shell__header {
   display: flex;
   justify-content: flex-end;
+}
 
-  button {
-    min-height: var(--size-32);
-    padding: var(--space-4) var(--space-8);
-    font-size: 0.75rem;
-  }
+.widget-shell__notice {
+  margin-block-start: var(--space-8);
 }
 
 .widget-shell__credit {
@@ -105,7 +63,7 @@
   a {
     color: inherit;
     text-decoration: underline;
-    text-underline-offset: 2px;
+    text-underline-offset: var(--space-2);
   }
 
   a:is(:hover, :focus-visible) {
@@ -125,7 +83,7 @@
     width: var(--space-4);
     height: var(--space-4);
     flex: none;
-    border-radius: 50%;
+    border-radius: var(--radius-pill);
     background: var(--vr-accent);
     content: '';
   }

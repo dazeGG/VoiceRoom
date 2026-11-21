@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { Slider } from '@voice-room/ui/components';
-import { onMounted, onBeforeUnmount, ref, computed } from 'vue';
+import { Button, Callout, IconButton, Slider } from '@voice-room/ui/components';
+import { onMounted, onBeforeUnmount, ref, computed, useTemplateRef } from 'vue';
 import { X } from '@lucide/vue';
 import { WIDGET_SERVICE_URL, parseWidgetMessage, type WidgetBootstrap } from '@voice-room/shared/contracts/widget';
 import { WidgetCallLayout, WidgetJoinControls } from '@voice-room/ui/widget';
@@ -34,6 +34,7 @@ const { entry } = session;
 const devices = useRoomDeviceUiStore();
 const toast = useToastUiStore();
 const notice = computed(() => toast.items.at(-1));
+const shell = useTemplateRef<HTMLElement>('shell');
 const code = ref('');
 const expandable = ref(false);
 const expanded = ref(false);
@@ -143,13 +144,19 @@ function leave() {
 }
 </script>
 <template>
-  <main class="widget-shell" :class="{ 'widget-shell--call': entry.joined }" :style="style">
+  <main ref="shell" class="widget-shell" :class="{ 'widget-shell--call': entry.joined }" :style="style">
     <header v-if="bootstrap.config.mode === 'floating' && !entry.joined" class="widget-shell__header">
-      <button type="button" @click="notify('requestCollapse')">Свернуть</button>
+      <Button size="sm" variant="outline" @click="notify('requestCollapse')">Свернуть</Button>
     </header>
     <div class="widget-shell__body">
       <p v-if="!entry.joined" role="status" class="widget-shell__status">{{ entry.status }}</p>
-      <p v-if="entry.error || notice" role="alert">{{ notice?.message || entry.error }}</p>
+      <Callout
+        v-if="entry.error || notice"
+        class="widget-shell__notice"
+        role="alert"
+        :tone="notice && notice.variant !== 'error' ? 'info' : 'danger'"
+        :title="notice?.message || entry.error"
+      />
       <WidgetJoinControls
         v-if="!entry.joined"
         v-model:name="entry.name"
@@ -182,13 +189,17 @@ function leave() {
       >
         <div class="widget-call__panel-head">
           <strong>{{ panelTitle }}</strong>
-          <button type="button" aria-label="Закрыть" title="Закрыть" @click="panel = null">
-            <X :size="16" aria-hidden="true" />
-          </button>
+          <IconButton label="Закрыть" :tooltip-target="shell ?? undefined" @click="panel = null">
+            <X aria-hidden="true" />
+          </IconButton>
         </div>
         <section v-if="visiblePanel === 'camera'" aria-label="Настройки камеры" class="widget-call__settings">
           <label
-            >Камера<select v-model="devices.cameraId" @change="run(() => switchCamera(devices.cameraId))">
+            >Камера<select
+              v-model="devices.cameraId"
+              class="ui-input ui-input--sm widget-call__select"
+              @change="run(() => switchCamera(devices.cameraId))"
+            >
               <option v-for="device in devices.cameraOptions" :key="device.value" :value="device.value">
                 {{ device.label }}
               </option>
@@ -197,14 +208,22 @@ function leave() {
         </section>
         <section v-else-if="visiblePanel === 'input'" aria-label="Настройки микрофона" class="widget-call__settings">
           <label
-            >Микрофон<select v-model="devices.microphoneId" @change="run(() => switchMicrophone())">
+            >Микрофон<select
+              v-model="devices.microphoneId"
+              class="ui-input ui-input--sm widget-call__select"
+              @change="run(() => switchMicrophone())"
+            >
               <option v-for="device in devices.microphoneOptions" :key="device.value" :value="device.value">
                 {{ device.label }}
               </option>
             </select></label
           >
           <label
-            >Шумоподавление<select v-model="devices.noiseMode" @change="run(switchNoiseMode)">
+            >Шумоподавление<select
+              v-model="devices.noiseMode"
+              class="ui-input ui-input--sm widget-call__select"
+              @change="run(switchNoiseMode)"
+            >
               <option value="rnnoise">RNNoise</option>
               <option value="browser">Браузерное</option>
               <option value="off">Выключено</option>
@@ -214,7 +233,11 @@ function leave() {
         <section v-else-if="visiblePanel === 'output'" aria-label="Настройки динамика" class="widget-call__settings">
           <label>
             Вывод звука
-            <select v-model="devices.outputDeviceId" @change="run(switchOutputDevice)">
+            <select
+              v-model="devices.outputDeviceId"
+              class="ui-input ui-input--sm widget-call__select"
+              @change="run(switchOutputDevice)"
+            >
               <option v-for="device in devices.outputOptions" :key="device.value" :value="device.value">
                 {{ device.label }}
               </option>
@@ -239,9 +262,9 @@ function leave() {
             :aria-value-text="Math.round(participantVolume * 100) + '%'"
             @value-change="updateVolume"
           />
-          <button type="button" @click="updateVolume(participantVolume === 0 ? 1 : 0)">
+          <Button size="sm" @click="updateVolume(participantVolume === 0 ? 1 : 0)">
             {{ participantVolume === 0 ? 'Включить локально' : 'Отключить локально' }}
-          </button>
+          </Button>
         </section>
       </WidgetCallLayout>
     </div>

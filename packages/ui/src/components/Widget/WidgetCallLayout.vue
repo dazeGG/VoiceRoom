@@ -14,8 +14,11 @@ import {
   Video,
   VideoOff
 } from '@lucide/vue';
-import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, ref, useTemplateRef, watch } from 'vue';
+import Button from '../Button/Button.vue';
+import IconButton from '../IconButton/IconButton.vue';
 import ParticipantTileFace from '../ParticipantTileFace/ParticipantTileFace.vue';
+import Tooltip from '../Tooltip/Tooltip.vue';
 import { fitWidgetTiles } from '../../tile-grid';
 import { avatarInitial } from '../../avatar-initial';
 import { copyText } from '../../clipboard';
@@ -61,13 +64,14 @@ const connection = computed(() => {
       return { state: 'idle', label: 'Определяем качество связи' };
   }
 });
+const call = useTemplateRef<HTMLElement>('call');
+const expandLabel = computed(() => (props.expanded ? 'Вернуть размер виджета' : 'Развернуть виджет'));
 
 const controls = computed(() =>
   (
     [
       {
         device: 'input',
-        variant: 'mic',
         icon: props.muted ? MicOff : Mic,
         pressed: !props.muted,
         tint: props.muted ? 'muted' : '',
@@ -76,7 +80,6 @@ const controls = computed(() =>
       },
       {
         device: 'output',
-        variant: 'output',
         icon: props.outputMuted ? HeadphoneOff : Headphones,
         pressed: !props.outputMuted,
         tint: props.outputMuted ? 'muted' : '',
@@ -85,7 +88,6 @@ const controls = computed(() =>
       },
       {
         device: 'camera',
-        variant: 'camera',
         icon: props.camera ? Video : VideoOff,
         pressed: !!props.camera,
         tint: props.camera ? 'on' : '',
@@ -180,34 +182,36 @@ function openParticipantMenu(event: MouseEvent | KeyboardEvent, member: (typeof 
 </script>
 
 <template>
-  <div class="widget-call" @keydown.esc="escape">
+  <div ref="call" class="widget-call" @keydown.esc="escape">
     <span class="widget-call__sr-only" role="status">{{ status }}</span>
     <header
       class="widget-call__header widget-call__chrome"
       :class="{ 'widget-call__header--copy-feedback': copyResult }"
     >
-      <button
-        type="button"
-        class="widget-call__code-button"
-        aria-label="Скопировать код комнаты"
-        :title="copyResult || 'Скопировать код комнаты'"
-        @click="copyRoomCode"
-      >
-        <code ref="codeNode" class="widget-call__code">{{ roomCode }}</code>
-        <Check v-if="copyResult === 'Код скопирован'" :size="14" aria-hidden="true" />
-        <Copy v-else :size="14" aria-hidden="true" />
-      </button>
+      <Tooltip text="Скопировать код комнаты" side="bottom" :portal-target="call ?? undefined">
+        <Button
+          class="widget-call__code-button"
+          variant="plain"
+          size="sm"
+          aria-label="Скопировать код комнаты"
+          @click="copyRoomCode"
+        >
+          <code ref="codeNode" class="widget-call__code">{{ roomCode }}</code>
+          <Check v-if="copyResult === 'Код скопирован'" aria-hidden="true" />
+          <Copy v-else aria-hidden="true" />
+        </Button>
+      </Tooltip>
       <span class="widget-call__copy-feedback" aria-live="polite">{{ copyResult }}</span>
-      <button
+      <IconButton
         v-if="floating"
-        type="button"
-        aria-label="Свернуть"
-        title="Свернуть"
+        label="Свернуть"
+        variant="outline"
+        :tooltip-target="call ?? undefined"
         :disabled="preview"
         @click="$emit('collapse')"
       >
-        <Minimize2 :size="16" aria-hidden="true" />
-      </button>
+        <Minimize2 aria-hidden="true" />
+      </IconButton>
     </header>
 
     <ul ref="grid" class="tile-grid widget-call__tiles" aria-label="Участники звонка" tabindex="0">
@@ -255,65 +259,68 @@ function openParticipantMenu(event: MouseEvent | KeyboardEvent, member: (typeof 
       <div class="room-dock__shell">
         <div v-for="control in controls" :key="control.device" class="room-dock__cluster">
           <div class="room-dock__split" :class="control.tint && `room-dock__split--${control.tint}`">
-            <button
-              type="button"
+            <IconButton
               class="room-dock__button"
-              :class="`room-dock__button--${control.variant}`"
-              :aria-label="control.label"
-              :title="control.label"
+              :size="44"
+              :label="control.label"
+              :tooltip-target="call ?? undefined"
               :aria-pressed="control.pressed"
               :disabled="preview"
               @click="$emit('toggleDevice', control.device)"
             >
               <component :is="control.icon" aria-hidden="true" />
-            </button>
-            <button
-              type="button"
+            </IconButton>
+            <IconButton
               class="room-dock__menu-button"
-              :aria-label="control.choose"
-              :title="control.choose"
+              :size="24"
+              :label="control.choose"
+              :tooltip-target="call ?? undefined"
               :aria-expanded="panel === control.device"
               @click="$emit('device', control.device)"
             >
               <ChevronDown aria-hidden="true" />
-            </button>
+            </IconButton>
           </div>
         </div>
         <span class="room-dock__divider" aria-hidden="true"></span>
         <div class="room-dock__connection-wrap">
-          <span
-            class="room-dock__connection"
-            :class="`room-dock__connection--${connection.state}`"
-            role="img"
-            :aria-label="connection.label"
-            :title="connection.label"
-          >
-            <span class="room-dock__bar"></span><span class="room-dock__bar"></span><span class="room-dock__bar"></span>
-          </span>
+          <Tooltip :text="connection.label" :portal-target="call ?? undefined">
+            <span
+              class="room-dock__connection"
+              :class="`room-dock__connection--${connection.state}`"
+              role="img"
+              tabindex="0"
+              :aria-label="connection.label"
+            >
+              <span class="room-dock__bar"></span><span class="room-dock__bar"></span
+              ><span class="room-dock__bar"></span>
+            </span>
+          </Tooltip>
         </div>
-        <button
-          type="button"
+        <IconButton
           class="room-dock__button room-dock__button--leave"
-          aria-label="Выйти"
-          title="Покинуть звонок"
+          label="Выйти"
+          :size="44"
+          :tooltip-target="call ?? undefined"
           :disabled="preview"
           @click="$emit('leave')"
         >
           <PhoneOff aria-hidden="true" />
-        </button>
+        </IconButton>
       </div>
     </div>
-    <button
+    <IconButton
       v-if="expandable"
-      type="button"
       class="widget-call__expand widget-call__chrome"
-      :aria-label="expanded ? 'Вернуть размер виджета' : 'Развернуть виджет'"
-      :title="expanded ? 'Вернуть размер виджета' : 'Развернуть виджет'"
+      :size="24"
+      variant="outline"
+      :label="expandLabel"
+      :tooltip-target="call ?? undefined"
       :aria-pressed="expanded"
       @click="$emit('expand', !expanded)"
     >
-      <Minimize2 v-if="expanded" :size="16" aria-hidden="true" />
-      <Maximize2 v-else :size="16" aria-hidden="true" />
-    </button>
+      <Minimize2 v-if="expanded" aria-hidden="true" />
+      <Maximize2 v-else aria-hidden="true" />
+    </IconButton>
   </div>
 </template>

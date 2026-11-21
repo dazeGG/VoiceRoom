@@ -20,6 +20,7 @@ import { createRoomCode } from '@voice-room/shared/validation';
 import { WidgetCallLayout, WidgetJoinControls } from '@voice-room/ui/widget';
 import { createWidgetFrameExpansion } from '@voice-room/ui/widget-frame-expansion';
 import {
+  Button,
   Field,
   IconButton,
   NumberField,
@@ -437,17 +438,17 @@ async function copyCode() {
                         <div v-if="demoDevice" class="widget-call__settings">
                           <label
                             >{{ demoDevices[demoDevice] }}
-                            <select disabled>
+                            <select class="ui-input ui-input--sm widget-call__select" disabled>
                               <option>По умолчанию</option>
                             </select></label
                           >
                           <label v-if="demoDevice === 'input'">
                             Шумоподавление
-                            <select disabled>
+                            <select class="ui-input ui-input--sm widget-call__select" disabled>
                               <option>RNNoise</option>
                             </select>
                           </label>
-                          <button type="button" @click="demoDevice = null">Закрыть</button>
+                          <Button size="sm" @click="demoDevice = null">Закрыть</Button>
                         </div>
                       </WidgetCallLayout>
                     </div>

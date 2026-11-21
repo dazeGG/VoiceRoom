@@ -2,14 +2,14 @@ import { defineStore } from 'pinia';
 import { ref } from 'vue';
 import type { ToastItem } from '@voice-room/ui/toast';
 
-// The web viewport manages timers while meet and widget use their own notice views.
+// Web and Meet use a toast viewport, while the widget keeps its own notice timers.
 export const useToastUiStore = defineStore('toast-ui', () => {
   const items = ref<ToastItem[]>([]);
   let counter = 0;
   let viewportManagesDuration = false;
 
-  function useViewportTimers(): void {
-    viewportManagesDuration = true;
+  function useViewportTimers(enabled = true): void {
+    viewportManagesDuration = enabled;
   }
 
   function dismissToastUi(id: string): void {
