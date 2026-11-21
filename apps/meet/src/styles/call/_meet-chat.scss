@@ -156,17 +156,30 @@
     gap: 0.5rem;
 
     input {
-      @include mixins.dialog-field;
+      width: 100%;
       min-width: 0;
+      min-height: var(--size-44);
+      padding: 0 var(--space-16);
+      border: 1px solid var(--vr-line-strong);
+      border-radius: var(--radius-12);
+      background: var(--vr-surface-2);
+      color: var(--vr-text);
+      font-family: var(--font-ui);
       font-size: 1rem;
+      outline: none;
+      transition: border-color 0.15s ease;
+
+      &::placeholder {
+        color: var(--vr-text-muted);
+      }
+
+      &:focus {
+        border-color: var(--vr-accent-line);
+        box-shadow: 0 0 0 3px var(--vr-accent-soft);
+      }
 
       &[aria-invalid='true'] {
         border-color: var(--vr-danger);
-      }
-
-      &:focus-visible {
-        outline: 2px solid var(--vr-accent);
-        outline-offset: 2px;
       }
     }
   }
