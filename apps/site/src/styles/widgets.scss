@@ -3,10 +3,10 @@
 @use 'pkg:@voice-room/ui/styles/room/tile-grid';
 
 .widget-intro {
-  margin-block: var(--space-xl);
+  margin-block: var(--space-32);
 
   h1 {
-    margin: 0 0 var(--space-sm);
+    margin: 0 0 var(--space-12);
     font-size: clamp(2rem, 1.5rem + 1.5vw, 2.75rem);
     line-height: 1.16;
     letter-spacing: -0.045em;
@@ -22,7 +22,7 @@
 .widget-preview__panel,
 .widget-segment {
   border: 1px solid var(--vr-line);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-16);
   background: var(--vr-surface-2);
 }
 
@@ -33,7 +33,7 @@
 
 .widget-preview__top,
 .widget-builder__group legend {
-  margin-block-end: var(--space-md);
+  margin-block-end: var(--space-16);
   font-size: 0.9375rem;
 }
 
@@ -42,7 +42,7 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-sm);
+  gap: var(--space-12);
   font-weight: 600;
 }
 
@@ -61,9 +61,9 @@
     position: relative;
     display: grid;
     min-inline-size: 0;
-    min-block-size: var(--interactive-lg);
+    min-block-size: var(--size-48);
     place-items: center;
-    padding-inline: var(--space-xs);
+    padding-inline: var(--space-8);
     border-radius: 11px;
     color: var(--vr-text-2);
     font-size: 0.8125rem;
@@ -103,13 +103,13 @@
 
   label {
     min-block-size: 32px;
-    padding-inline: var(--space-sm);
+    padding-inline: var(--space-12);
     border-radius: 9px;
   }
 }
 
 .widget-preview__body {
-  --preview-stage-inset: var(--preview-offset, var(--space-xl));
+  --preview-stage-inset: var(--preview-offset, var(--space-32));
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   border-block: 1px solid var(--vr-line);
@@ -125,7 +125,7 @@
 
 .widget-preview__sample {
   display: grid;
-  gap: var(--space-xs);
+  gap: var(--space-8);
   inline-size: calc(var(--preview-width, 360px) * var(--preview-scale, 1));
   min-inline-size: 0;
 }
@@ -163,7 +163,7 @@
   gap: 4px;
   padding: 24px 24px 6px;
   border: 0;
-  border-radius: var(--preview-radius, var(--radius-lg));
+  border-radius: var(--preview-radius, var(--radius-20));
   background: var(--preview-bg, var(--vr-surface-2));
   color: var(--preview-text, var(--vr-text));
   overflow-wrap: anywhere;
@@ -191,15 +191,15 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   align-items: start;
-  gap: var(--space-sm);
-  padding: var(--space-md);
+  gap: var(--space-12);
+  padding: var(--space-16);
 }
 
 .widget-preview__toolbar {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-xs) var(--space-sm);
+  gap: var(--space-8) var(--space-12);
   font-size: 0.9375rem;
   font-weight: 650;
 }
@@ -211,7 +211,7 @@
 .widget-preview__controls {
   display: grid;
   align-content: start;
-  gap: var(--space-sm);
+  gap: var(--space-12);
   overflow: auto;
 }
 
@@ -238,8 +238,8 @@
   display: flex;
   justify-content: center;
   align-items: center;
-  gap: var(--space-xs);
-  margin: var(--space-sm) var(--space-md);
+  gap: var(--space-8);
+  margin: var(--space-12) var(--space-16);
   color: var(--vr-text-muted);
   font-size: 0.75rem;
 }
@@ -267,8 +267,8 @@
 
 .widget-preview__field {
   display: grid;
-  gap: var(--space-xs);
-  margin-block-start: var(--space-xs);
+  gap: var(--space-8);
+  margin-block-start: var(--space-8);
   font-size: 0.8125rem;
 }
 
@@ -554,12 +554,12 @@
 .widget-preview__launcher {
   display: flex;
   align-items: center;
-  gap: var(--space-xs);
+  gap: var(--space-8);
   min-block-size: 2.75rem;
   min-inline-size: 0;
   border: 1px solid color-mix(in srgb, var(--preview-text, var(--vr-text)) 15%, transparent);
   border-radius: var(--preview-control-radius, calc(var(--preview-radius, 16px) * 0.75));
-  padding: var(--space-xs) var(--space-sm);
+  padding: var(--space-8) var(--space-12);
   font-size: 0.875rem;
 }
 
@@ -583,7 +583,7 @@
 .widget-preview__join {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: var(--space-xs);
+  gap: var(--space-8);
 }
 
 .widget-preview__launcher {
@@ -597,12 +597,12 @@
   display: grid;
   grid-template-columns: minmax(0, 420px) minmax(0, 1fr);
   align-items: start;
-  gap: var(--space-lg);
+  gap: var(--space-24);
 }
 
 .widget-builder__inputs {
   display: grid;
-  gap: var(--space-md);
+  gap: var(--space-16);
   align-content: start;
   min-width: 0;
 }
@@ -616,7 +616,7 @@
 .widget-builder__group {
   min-inline-size: 0;
   display: grid;
-  gap: var(--space-sm);
+  gap: var(--space-12);
   margin: 0;
   padding: 0;
   border: 0;
@@ -641,7 +641,7 @@
 .widget-builder__fields {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--space-xs);
+  gap: var(--space-8);
 }
 
 .widget-builder__fields {
@@ -650,7 +650,7 @@
 
 .widget-preview__settings .widget-builder__fields {
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--space-sm);
+  gap: var(--space-12);
 }
 
 .widget-builder__fields label,
@@ -659,7 +659,7 @@
   display: grid;
   min-inline-size: 0;
   align-content: start;
-  gap: var(--space-xs);
+  gap: var(--space-8);
   color: var(--vr-text-2);
   font-size: 0.8125rem;
 }
@@ -678,7 +678,7 @@
   flex-wrap: wrap;
   align-items: baseline;
   justify-content: space-between;
-  gap: 0 var(--space-xs);
+  gap: 0 var(--space-8);
   color: var(--vr-text-2);
   font-size: 0.8125rem;
 }
@@ -699,7 +699,7 @@
   margin: 0;
   padding: 0;
   border: 0;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-8);
   background: transparent;
   cursor: pointer;
 
@@ -756,10 +756,10 @@
 .widget-builder__inputs :is(input[type='number'], input[name='title'], select) {
   width: 100%;
   min-width: 0;
-  min-height: var(--interactive-lg);
-  padding: var(--space-xs) var(--space-sm);
+  min-height: var(--size-48);
+  padding: var(--space-8) var(--space-12);
   border: 1px solid var(--vr-line-strong);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-16);
   background: var(--vr-surface-2);
   color: var(--vr-text);
   font-family: inherit;
@@ -771,7 +771,7 @@
   display: grid;
   grid-template-columns: 2rem minmax(0, 1fr);
   align-items: center;
-  gap: var(--space-xs);
+  gap: var(--space-8);
   padding: 6px;
 }
 
@@ -787,7 +787,7 @@
   height: 2rem;
   padding: 0;
   border: 1px solid var(--vr-line-strong);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-8);
   background: transparent;
   overflow: hidden;
   cursor: pointer;
@@ -829,8 +829,8 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  min-block-size: var(--interactive-md);
-  gap: var(--space-sm);
+  min-block-size: var(--size-40);
+  gap: var(--space-12);
   cursor: pointer;
 }
 
@@ -873,7 +873,7 @@
 }
 
 :is(.widget-builder__inputs, .widget-preview__settings) :is(input, select):focus-visible {
-  outline: 2px solid var(--focus-border);
+  outline: 2px solid var(--vr-accent);
   outline-offset: 3px;
 }
 
@@ -888,14 +888,14 @@
 
 .widget-code {
   min-width: 0;
-  margin: var(--space-lg) 0 var(--space-2xl);
-  padding-block-start: var(--space-md);
+  margin: var(--space-24) 0 var(--space-48);
+  padding-block-start: var(--space-16);
   border-block-start: 1px solid var(--vr-line);
 }
 
 .widget-code__header {
   justify-content: space-between;
-  margin-block-end: var(--space-sm);
+  margin-block-end: var(--space-12);
 }
 .widget-code__copy {
   display: inline-grid;
@@ -904,7 +904,7 @@
   place-items: center;
   padding: 0;
   border: 0;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-8);
   background: transparent;
   color: var(--vr-text-2);
   cursor: pointer;
@@ -919,7 +919,7 @@
   }
 
   &:focus-visible {
-    outline: 2px solid var(--focus-border);
+    outline: 2px solid var(--vr-accent);
     outline-offset: 2px;
   }
 
@@ -936,7 +936,7 @@
 }
 .widget-code pre {
   margin: 0;
-  padding: var(--space-md);
+  padding: var(--space-16);
   border: 1px solid var(--vr-line);
   background: var(--vr-surface-2);
   color: var(--vr-text);
@@ -961,7 +961,7 @@
 }
 .widget-code__status:not(:empty, .visually-hidden),
 .widget-code__docs {
-  margin-block-start: var(--space-sm);
+  margin-block-start: var(--space-12);
 }
 
 .widget-code__docs {
@@ -978,17 +978,17 @@
 @media (max-width: 900px) {
   .widget-builder {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
-    gap: var(--space-md);
+    gap: var(--space-16);
   }
 
   .widget-preview__body {
-    --preview-stage-inset: var(--preview-offset, var(--space-md));
+    --preview-stage-inset: var(--preview-offset, var(--space-16));
   }
 }
 
 @media (max-width: 760px) {
   .widget-builder {
     grid-template-columns: minmax(0, 1fr);
-    gap: var(--space-lg);
+    gap: var(--space-24);
   }
 }

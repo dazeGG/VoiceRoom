@@ -4,7 +4,7 @@
   padding: 0;
   overflow: hidden;
   border: 1px solid var(--vr-line-strong);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-20);
   background: var(--vr-surface);
   color: var(--vr-text);
 
@@ -31,7 +31,7 @@
     max-block-size: 100%;
     margin: 0;
     padding-bottom: env(safe-area-inset-bottom);
-    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    border-radius: var(--radius-20) var(--radius-20) 0 0;
     overscroll-behavior: contain;
     box-shadow: var(--vr-shadow-modal);
   }
@@ -68,7 +68,7 @@
     gap: 0.55rem;
     margin: 0 1rem 0.75rem;
     padding: 0.65rem 0.75rem;
-    border-radius: var(--radius-sm);
+    border-radius: var(--radius-8);
     background: var(--vr-surface-3);
     color: var(--vr-text-2);
     font-size: 0.8125rem;
@@ -112,7 +112,7 @@
     max-inline-size: 94%;
     padding: 0.45rem 0.65rem;
     border: 1px solid var(--vr-line);
-    border-radius: var(--radius-md);
+    border-radius: var(--radius-16);
     background: var(--vr-surface-2);
     overflow-wrap: anywhere;
 

@@ -68,7 +68,7 @@ a {
     place-items: center;
     width: 2.125rem;
     height: 2.125rem;
-    border-radius: var(--radius-sm);
+    border-radius: var(--radius-8);
     background: var(--vr-accent);
     color: var(--vr-accent-ink);
   }
@@ -78,7 +78,7 @@ a {
     max-width: 9rem;
     padding-inline: 0.65rem;
     border: 1px solid var(--vr-line-strong);
-    border-radius: var(--radius-sm);
+    border-radius: var(--radius-8);
     background: var(--vr-surface-2);
     color: var(--vr-text);
   }
