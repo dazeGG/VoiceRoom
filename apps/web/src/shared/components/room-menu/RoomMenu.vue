@@ -1,13 +1,14 @@
 <script setup lang="ts">
+import EmojiText from '@/shared/chat/EmojiText.vue';
 import { t } from '@/shared/i18n';
 import { BellOff, ChevronDown } from '@lucide/vue';
 import type { RoomRelationship } from '@voice-room/shared/contracts/rooms';
 import { computed } from 'vue';
 import type { Friend } from '@/api/friends';
 import { useNotificationPreferencesStore } from '@/shared/notifications/preferences.store';
-import { Avatar, DropdownMenu, Ellipsis } from '@/shared/ui';
-import { iconSm } from '@/shared/ui/icons';
-import type { PopoverPlacement } from '@/shared/ui';
+import { Avatar, DropdownMenu, Ellipsis, Pressable } from '@voice-room/ui/components';
+import { iconSm } from '@voice-room/ui/icon-defaults';
+import type { PopoverPlacement } from '@voice-room/ui/components';
 import RoomMenuContent from './RoomMenuContent.vue';
 
 const props = withDefaults(
@@ -68,9 +69,11 @@ const roomMuted = computed(() => props.showNotificationControls && preferences.i
       :aria-label="t('Меню комнаты')"
     >
       <template #trigger>
-        <button :class="['room-menu__trigger', triggerClass]" type="button">
+        <Pressable :class="['room-menu__trigger', triggerClass]">
           <Avatar :name="name" :src="avatarUrl" shape="squircle" background="var(--vr-surface-3)" :size="avatarSize" />
-          <Ellipsis :text="name" :title="roomId" :class="['room-menu__title', titleClass]" />
+          <Ellipsis :text="name" :title="roomId" :class="['room-menu__title', titleClass]"
+            ><EmojiText :text="name"
+          /></Ellipsis>
           <span
             v-if="roomMuted"
             class="room-menu__notifications-muted"
@@ -83,7 +86,7 @@ const roomMuted = computed(() => props.showNotificationControls && preferences.i
           <span :class="['room-menu__chevron', chevronClass]" aria-hidden="true">
             <ChevronDown v-bind="iconSm" aria-hidden="true" />
           </span>
-        </button>
+        </Pressable>
       </template>
       <template #content="{ close }">
         <RoomMenuContent

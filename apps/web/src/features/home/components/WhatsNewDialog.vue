@@ -3,7 +3,14 @@
 import { t } from '@/shared/i18n';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { fetchWhatsNew, markWhatsNewSeen } from '@/api/auth';
-import { Button, DialogRoot, DialogPortal, DialogContent, DialogTitle, DialogDescription } from '@/shared/ui';
+import {
+  Button,
+  DialogRoot,
+  DialogPortal,
+  DialogContent,
+  DialogTitle,
+  DialogDescription
+} from '@voice-room/ui/components';
 import { WHATS_NEW_SLIDES, WHATS_NEW_SLIDE_MS, shouldShowWhatsNew } from '../model/whats-new';
 
 const props = withDefaults(defineProps<{ paused?: boolean }>(), { paused: false });
@@ -213,9 +220,9 @@ function onHover(event: PointerEvent, value: boolean): void {
             <span class="stories__kicker"
               >{{ t('Что нового в VoiceRoom ·') }} {{ index + 1 }} {{ t('из') }} {{ WHATS_NEW_SLIDES.length }}</span
             >
-            <button v-if="!last" class="stories__quiet" type="button" @click="finish(false)">
+            <Button v-if="!last" variant="plain" size="inline" class="stories__quiet" @click="finish(false)">
               {{ t('Пропустить') }}
-            </button>
+            </Button>
           </div>
 
           <div ref="stageEl" class="stories__stage" tabindex="0" @pointerdown="onPointerDown">
@@ -234,7 +241,9 @@ function onHover(event: PointerEvent, value: boolean): void {
           </div>
 
           <div class="stories__actions">
-            <button v-if="index > 0" class="stories__quiet" type="button" @click="step(-1)">{{ t('Назад') }}</button>
+            <Button v-if="index > 0" variant="plain" size="inline" class="stories__quiet" @click="step(-1)">{{
+              t('Назад')
+            }}</Button>
             <span class="stories__spacer"></span>
             <Button v-if="last && slide.action === 'appearance'" variant="ghost" type="button" @click="finish(true)">
               {{ t('Настроить') }}

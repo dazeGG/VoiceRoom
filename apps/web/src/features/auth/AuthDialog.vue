@@ -13,7 +13,7 @@ import { login, recoverAccount, register, restoreAccount, type AuthUser } from '
 import { ApiError, failureBody } from '@/api/client';
 import { APP_HOME } from '@/shared/app-home';
 import { dayMonth } from '@/shared/utils/date-format';
-import { iconMd } from '@/shared/ui/icons';
+import { iconMd } from '@voice-room/ui/icon-defaults';
 import { LOGIN_HINT, PASSWORD_MIN_LENGTH, blockedMessage, isValidPassword, normalizeLogin } from './account';
 import type { AuthMode } from './auth-mode';
 import { useSessionStore } from './session.store';
@@ -176,6 +176,7 @@ async function restorePendingAccount(): Promise<void> {
 
 <template>
   <Dialog
+    layer="auth"
     open
     size="sm"
     :title="copy.title"
@@ -229,7 +230,7 @@ async function restorePendingAccount(): Promise<void> {
           v-model="recoveryCode"
           class="auth-dialog__code"
           size="lg"
-          variant="mono"
+          variant="code"
           maxlength="32"
           autocapitalize="characters"
           autocomplete="one-time-code"
@@ -251,9 +252,9 @@ async function restorePendingAccount(): Promise<void> {
             :placeholder="isLogin ? t('Ваш пароль') : t('Минимум 8 символов')"
           />
         </Field>
-        <button v-if="isLogin" type="button" class="auth-dialog__forgot" @click="switchMode('recover')">
+        <Button v-if="isLogin" variant="plain" size="inline" class="auth-dialog__forgot" @click="switchMode('recover')">
           {{ t('Забыли пароль?') }}
-        </button>
+        </Button>
       </div>
 
       <Field v-if="!isLogin" id="authPasswordConfirmInput" :label="t('Повторите пароль')">
@@ -282,13 +283,15 @@ async function restorePendingAccount(): Promise<void> {
 
     <p v-if="isLogin" class="auth-dialog__foot">
       {{ t('Нет аккаунта?') }}
-      <button type="button" class="auth-dialog__link" @click="switchMode('register')">
+      <Button variant="plain" size="inline" class="auth-dialog__link" @click="switchMode('register')">
         {{ t('Зарегистрироваться') }}
-      </button>
+      </Button>
     </p>
     <p v-else class="auth-dialog__foot">
       {{ isRecover ? t('Вспомнили пароль?') : t('Уже есть аккаунт?') }}
-      <button type="button" class="auth-dialog__link" @click="switchMode('login')">{{ t('Войти') }}</button>
+      <Button variant="plain" size="inline" class="auth-dialog__link" @click="switchMode('login')">{{
+        t('Войти')
+      }}</Button>
     </p>
     <div class="auth-dialog__language">
       <LanguageControl />

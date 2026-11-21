@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Switch, SettingRow, SettingsGroup } from '@voice-room/ui/components';
+import { Switch, SettingRow, SettingsGroup, Avatar, Button } from '@voice-room/ui/components';
 import { t } from '@/shared/i18n';
 import { BellOff } from '@lucide/vue';
 import { computed, onMounted, ref } from 'vue';
@@ -8,8 +8,7 @@ import { fetchBlockedUsers, unblockUser, type PublicUser } from '@/api/friends';
 import { useNotificationPreferencesStore } from '@/shared/notifications/preferences.store';
 import { showBrowserNotification } from '@/shared/notifications/router';
 import EmojiText from '@/shared/chat/EmojiText.vue';
-import { Avatar } from '@/shared/ui';
-import { iconSm } from '@/shared/ui/icons';
+import { iconSm } from '@voice-room/ui/icon-defaults';
 import { displayNameOf } from '@/shared/utils/display-name';
 import { usePushNotificationsStore } from '../../model/push-notifications.store';
 import type { SettingsSupport } from '../../model/settings-support';
@@ -325,14 +324,15 @@ function toggleRoomNotifications(roomId: string): Promise<void> {
           <template #title><EmojiText :text="displayNameOf(blocked)" /> </template>
           <template v-if="blocked.login" #description>@{{ blocked.login }}</template>
           <template #control>
-            <button
+            <Button
+              variant="ghost"
+              size="sm"
               class="settings__unblock-button"
-              type="button"
               :disabled="Boolean(blockedUserSaving)"
               @click="void unblockBlockedUser(blocked.id)"
             >
               {{ blockedUserSaving === blocked.id ? t('Разблокируем…') : t('Разблокировать') }}
-            </button>
+            </Button>
           </template>
         </SettingRow>
       </template>

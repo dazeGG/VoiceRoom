@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { t } from '@/shared/i18n';
 import { ImagePlus } from '@lucide/vue';
-import { iconLg } from '@/shared/ui/icons';
+import { iconLg } from '@voice-room/ui/icon-defaults';
 </script>
 
 <template>

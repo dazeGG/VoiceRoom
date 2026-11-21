@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Send, X } from '@lucide/vue';
 import { MEET_CHAT_MAX_BYTES } from '@voice-room/shared/contracts/realtime';
-import { Callout, EmptyState, Field, IconButton, Textarea } from '@voice-room/ui/components';
+import { Callout, EmptyState, Field, IconButton, NativeDialog, Textarea } from '@voice-room/ui/components';
 import { t } from '@voice-room/ui/i18n';
 import { computed, onBeforeUnmount, onMounted, ref, useTemplateRef, watch } from 'vue';
 import type { MeetTransport } from '@/adapters/meet-transport';
@@ -11,7 +11,8 @@ const open = defineModel<boolean>({ required: true });
 const { messages, ready, error, send } = props.chat;
 const draft = ref('');
 const compact = ref(false);
-const dialog = useTemplateRef<HTMLDialogElement>('dialog');
+const dialogHost = useTemplateRef<{ dialog: HTMLDialogElement | null }>('dialog');
+const dialog = computed(() => dialogHost.value?.dialog);
 const log = useTemplateRef<HTMLDivElement>('log');
 const input = useTemplateRef<{ textarea: HTMLTextAreaElement | null }>('input');
 const titleId = `${props.panelId}-title`;
@@ -52,20 +53,10 @@ function updateScroll(): void {
   if (element) followMessages = element.scrollHeight - element.clientHeight - element.scrollTop <= 24;
 }
 
-watch(
-  [open, compact],
-  ([visible, mobile]) => {
-    const panel = dialog.value;
-    if (!panel) return;
-    if (!visible || (panel.open && panel.matches(':modal') !== mobile)) panel.close();
-    if (!visible || panel.open) return;
-    if (mobile) panel.showModal();
-    else panel.show();
-    followMessages = true;
-    scrollToLatest();
-  },
-  { flush: 'post' }
-);
+function onOpened(): void {
+  followMessages = true;
+  scrollToLatest();
+}
 
 watch(
   () => messages.value.at(-1)?.id,
@@ -76,7 +67,7 @@ watch(
 );
 
 function onClose(): void {
-  if (!dialog.value?.open) open.value = false;
+  open.value = false;
 }
 
 function closeDesktop(): void {
@@ -100,12 +91,15 @@ function submitOnEnter(event: KeyboardEvent): void {
 </script>
 
 <template>
-  <dialog
+  <NativeDialog
     :id="panelId"
     ref="dialog"
+    :open="open"
+    :modal="compact"
     class="meet-chat"
     :aria-labelledby="titleId"
     :aria-describedby="noticeId"
+    @opened="onOpened"
     @close="onClose"
     @keydown.esc="closeDesktop"
   >
@@ -143,6 +137,7 @@ function submitOnEnter(event: KeyboardEvent): void {
           <Textarea
             ref="input"
             v-model="draft"
+            variant="compact"
             name="message"
             autocomplete="off"
             rows="1"
@@ -168,5 +163,5 @@ function submitOnEnter(event: KeyboardEvent): void {
       </Field>
       <p :id="statusId" class="meet-chat__status" role="status">{{ status }}</p>
     </form>
-  </dialog>
+  </NativeDialog>
 </template>

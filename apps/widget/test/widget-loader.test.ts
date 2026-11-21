@@ -64,7 +64,7 @@ describe('widget loader', () => {
     expect(expandedWidth).toContain('48px');
     expect(frame.style.height).toContain('100dvh');
     expect(frame.style.height).toContain('108px');
-    expect(button.style.minHeight).toBe('48px');
+    expect(button.style.minHeight).toMatch(/^var\(--size-48,\s*48px\)$/);
     expect(button.style.getPropertyValue('--vr-bg')).toBe('#223344');
     expect(button.style.getPropertyValue('--vr-text')).toBe('#f0f1f2');
     expect(button.style.getPropertyValue('--vr-accent')).toBe('#ccef33');

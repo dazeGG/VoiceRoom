@@ -145,7 +145,7 @@ onBeforeUnmount(() => {
   </main>
   <template v-else-if="allowed">
     <RouterView />
-    <Toast id="toast" :toasts="toastItems" :on-dismiss="dismissToast">
+    <Toast id="toast" viewport-class="app-toast-viewport" :toasts="toastItems" :on-dismiss="dismissToast">
       <template #message="{ message }"><EmojiText :text="message" /></template>
     </Toast>
     <AppUpdateNotice :in-call="callActivity.active" />

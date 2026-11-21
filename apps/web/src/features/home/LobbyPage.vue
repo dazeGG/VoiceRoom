@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { IconButton, Badge, Splitter, type SplitterWidth } from '@voice-room/ui/components';
+import { IconButton, Badge, Splitter, type SplitterWidth, Avatar } from '@voice-room/ui/components';
 import { PanelLeftClose, PanelLeftOpen } from '@lucide/vue';
 import { t } from '@/shared/i18n';
 import type { InboxItem } from '@voice-room/shared/contracts/notifications';
@@ -19,7 +19,6 @@ import { useSessionStore } from '@/features/auth/session.store';
 import { usePageStore } from '@/stores/page.store';
 import { useNotificationPreferencesStore } from '@/shared/notifications/preferences.store';
 import { effectivePresenceStatus } from '@/shared/presence';
-import { Avatar } from '@/shared/ui';
 import { displayNameOf } from '@/shared/utils/display-name';
 import { extractRoomId } from '@/shared/utils/room';
 import CreateRoomDialog from './components/CreateRoomDialog.vue';
@@ -303,6 +302,7 @@ function roomDeleted(): void {
 <template>
   <Splitter
     v-model:collapsed="sidebarLayoutCollapsed"
+    side-class="lobby-shell__side"
     class="lobby-shell"
     :class="{
       'lobby-shell--sidebar-collapsed': sidebarLayoutCollapsed,

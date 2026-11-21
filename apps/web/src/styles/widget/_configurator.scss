@@ -96,17 +96,6 @@
   > legend + .widget-configurator__pair {
     margin-block-start: 0;
   }
-
-  .ui-segment {
-    width: 100%;
-  }
-
-  .ui-segment__item {
-    flex: 1;
-    min-height: var(--size-48);
-    padding-inline: var(--space-8);
-    font-size: 0.8125rem;
-  }
 }
 
 .widget-configurator__hint {
@@ -136,38 +125,6 @@
   align-items: center;
   gap: var(--space-8);
   color-scheme: dark;
-
-  // Keep injected color-picker shortcuts out of the two-control grid.
-  > :not(.widget-configurator__swatch, .ui-input) {
-    display: none !important;
-  }
-
-  .widget-configurator__swatch {
-    appearance: none;
-    forced-color-adjust: none;
-    width: 100%;
-    height: var(--size-40);
-    padding: 0;
-    overflow: hidden;
-    border: 1px solid var(--vr-line-strong);
-    border-radius: var(--radius-10);
-    background: transparent;
-    cursor: pointer;
-  }
-
-  input::-webkit-color-swatch-wrapper {
-    padding: 0;
-  }
-
-  input::-webkit-color-swatch {
-    border: 0;
-    border-radius: inherit;
-  }
-
-  input::-moz-color-swatch {
-    border: 0;
-    border-radius: inherit;
-  }
 }
 
 @media (forced-colors: active) {
@@ -326,18 +283,6 @@
     color: var(--vr-text-2);
     font-size: 0.875rem;
     line-height: 1.6;
-  }
-}
-
-.widget-configurator__code-field {
-  .ui-field__label {
-    @include visually-hidden;
-  }
-
-  .ui-textarea__control,
-  .ui-textarea__mirror {
-    font-family: var(--font-mono);
-    font-size: 12px;
   }
 }
 

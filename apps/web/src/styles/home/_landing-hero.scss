@@ -79,10 +79,6 @@
 
 .landing-hero__join-field {
   width: 170px;
-
-  .ui-field__label {
-    @include visually-hidden;
-  }
 }
 
 .landing-hero__disclaimer {

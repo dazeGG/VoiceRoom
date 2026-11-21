@@ -57,9 +57,9 @@ async function copyLink(): Promise<void> {
             </template>
             {{ t(copied ? 'meet.copied' : 'meet.copyLink') }}
           </Button>
-          <a class="ui-button ui-button--outline ui-button--size-lg meet-card__link" :href="joinUrl">
+          <Button variant="plain" size="lg" class="meet-card__link" :href="joinUrl">
             {{ t('meet.openMeeting') }} <ArrowRight aria-hidden="true" />
-          </a>
+          </Button>
         </div>
         <span v-if="copied" class="meet-shell__sr-only" role="status">{{ t('meet.copied') }}</span>
       </template>

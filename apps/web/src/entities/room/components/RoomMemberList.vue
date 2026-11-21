@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { badgeOf } from '@/shared/badges';
 import { t } from '@/shared/i18n';
 import { Ban, Ellipsis, User, UserX } from '@lucide/vue';
 import { presenceOfMember, type MembershipMember } from '@voice-room/shared/contracts/membership';
@@ -7,9 +8,18 @@ import type { ModerationDuration } from '@/api/moderation';
 import { useProfileCardUiStore } from '@/entities/profile-card/profile-card-ui.store';
 import { useSessionStore } from '@/features/auth/session.store';
 import type { ProfileCardPerson } from '@/shared/components/profile-card';
-import { AccountBadge, DropdownMenu, MenuSeparator, MenuItem, MenuSub } from '@/shared/ui';
-import { EmptyState, IconButton, ListItem } from '@voice-room/ui/components';
-import { iconMd } from '@/shared/ui/icons';
+import {
+  AccountBadge,
+  DropdownMenu,
+  MenuSeparator,
+  MenuItem,
+  MenuSub,
+  EmptyState,
+  IconButton,
+  ListItem,
+  Button
+} from '@voice-room/ui/components';
+import { iconMd } from '@voice-room/ui/icon-defaults';
 import { displayNameOf } from '@/shared/utils/display-name';
 import { BAN_DURATIONS, banRoomMember, kickRoomMember, type ModerationNotice } from '../room-moderation';
 import { useRoomMembershipStore } from '../room-membership.store';
@@ -136,7 +146,7 @@ async function ban(member: MembershipMember, duration: ModerationDuration): Prom
     </div>
     <div v-else-if="roster?.error && roster.members.length === 0" class="room-member-list__notice" role="alert">
       <p>{{ roster.error }}</p>
-      <button type="button" @click="membership.loadRoomMembership(roomId)">{{ t('Повторить') }}</button>
+      <Button variant="ghost" size="sm" @click="membership.loadRoomMembership(roomId)">{{ t('Повторить') }}</Button>
     </div>
     <template v-else>
       <template v-for="group in groups" :key="group.heading">
@@ -166,7 +176,7 @@ async function ban(member: MembershipMember, duration: ModerationDuration): Prom
               @activate="openMemberProfile(member, $event)"
             >
               <template #title>
-                {{ nameFor(member) }}<AccountBadge :user-id="member.userId" />
+                {{ nameFor(member) }}<AccountBadge :badge="badgeOf(member.userId)" />
                 <em v-if="member.userId === session.user?.id" class="room-member-list__you">{{ t('вы') }}</em>
               </template>
               <template v-if="canModerateMember(member)" #actions>
@@ -229,15 +239,16 @@ async function ban(member: MembershipMember, duration: ModerationDuration): Prom
         </ul>
       </template>
 
-      <button
+      <Button
         v-if="roster?.hasMore"
+        variant="outline"
+        size="md"
         class="room-member-list__more"
-        type="button"
         :disabled="roster.loading"
         @click="membership.loadRoomMembership(roomId, { append: true })"
       >
         {{ roster.loading ? t('Загрузка…') : t('Показать ещё') }}
-      </button>
+      </Button>
       <EmptyState v-else-if="roster?.loaded && roster.members.length === 0" :title="t('Никого не найдено')" compact />
     </template>
   </section>

@@ -1,10 +1,20 @@
 <script setup lang="ts">
-import { NavList, NavListGroup, NavListItem } from '@voice-room/ui/components';
-import { Spinner } from '@voice-room/ui/components';
+import {
+  NavList,
+  NavListGroup,
+  NavListItem,
+  Spinner,
+  AlertDialog,
+  Button,
+  Dialog,
+  Field,
+  TextField,
+  Select
+} from '@voice-room/ui/components';
 import { useLocalizedText, currentErrorMessage } from '@/shared/i18n/localized-text';
 
 import { t } from '@/shared/i18n';
-import { Ban, ChevronDown, SlidersHorizontal, Users } from '@lucide/vue';
+import { Ban, SlidersHorizontal, Users } from '@lucide/vue';
 import { Value } from 'typebox/value';
 import { computed, ref, watch } from 'vue';
 import { NotificationLevel } from '@voice-room/shared/contracts/notifications';
@@ -16,8 +26,6 @@ import RoomMemberList from '@/entities/room/components/RoomMemberList.vue';
 import { saveRoomAvatarChange, type RoomAvatarChange } from '@/entities/room/room-avatar-change';
 import { APP_HOME } from '@/shared/app-home';
 import { BAN_UNDO_DURATION_MS, type ModerationNoticeOptions } from '@/entities/room/room-moderation';
-import { AlertDialog, Button, Dialog, Field, TextField } from '@voice-room/ui/components';
-import { iconSm } from '@/shared/ui/icons';
 import { state as roomClientState } from '@voice-room/call/engine/core/room-runtime.store';
 import { applyRoomUpdated } from '@voice-room/call/engine/room/lifecycle';
 import { showToast } from '@voice-room/call/engine/ui/toast';
@@ -111,10 +119,9 @@ function cancelDeleteConfirmation(): void {
   if (!deleting.value) confirmingDelete.value = false;
 }
 
-async function saveNotificationLevel(event: Event): Promise<void> {
-  const select = event.currentTarget;
-  if (!(select instanceof HTMLSelectElement) || !Value.Check(NotificationLevel, select.value)) return;
-  notificationLevel.value = select.value;
+async function saveNotificationLevel(value: string): Promise<void> {
+  if (!Value.Check(NotificationLevel, value)) return;
+  notificationLevel.value = value;
   notificationSaving.value = true;
   try {
     await setRoomNotificationLevel(roomClientState.roomId, notificationLevel.value);
@@ -192,28 +199,24 @@ function onCancel(): void {
             </Field>
           </div>
 
-          <label class="room-settings__notifications">
-            <span class="settings__field-label">{{ t('Уведомления комнаты') }}</span>
-            <span class="room-settings__select-wrap">
-              <select
-                class="room-settings__select"
-                :value="notificationLevel"
-                :disabled="notificationSaving"
-                @change="saveNotificationLevel"
-              >
-                <option value="all">{{ t('Все сообщения') }}</option>
-                <option value="mentions">{{ t('Упоминания и ответы') }}</option>
-                <option value="none">{{ t('Выключены') }}</option>
-              </select>
-              <span class="room-settings__select-chevron" aria-hidden="true"><ChevronDown v-bind="iconSm" /></span>
-            </span>
-          </label>
+          <Field class="room-settings__notifications" :label="t('Уведомления комнаты')">
+            <Select
+              :model-value="notificationLevel"
+              :disabled="notificationSaving"
+              :options="[
+                { value: 'all', label: t('Все сообщения') },
+                { value: 'mentions', label: t('Упоминания и ответы') },
+                { value: 'none', label: t('Выключены') }
+              ]"
+              @value-change="saveNotificationLevel"
+            />
+          </Field>
 
           <div class="settings__actions">
-            <button class="settings__cancel" type="button" @click="onCancel">{{ t('Отмена') }}</button>
-            <button class="settings__save" type="submit" :disabled="saving || !dirty">
+            <Button variant="plain" class="settings__cancel" @click="onCancel">{{ t('Отмена') }}</Button>
+            <Button variant="primary" class="settings__save" type="submit" :disabled="saving || !dirty">
               <Spinner v-if="saving" aria-hidden="true" /> {{ t('Сохранить') }}
-            </button>
+            </Button>
           </div>
 
           <div class="dialog__danger-zone">

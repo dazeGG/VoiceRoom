@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { X } from '@lucide/vue';
-import { IconButton } from '@voice-room/ui/components';
+import { IconButton, Button } from '@voice-room/ui/components';
 import { t } from '@/shared/i18n';
 import { computed, onMounted, ref } from 'vue';
 import EmojiText from './EmojiText.vue';
@@ -59,13 +59,14 @@ onMounted(() => {
     </p>
 
     <p v-if="listState.loading" class="reactor-list__message" aria-live="polite">{{ t('Загрузка…') }}</p>
-    <button
+    <Button
       v-else-if="listState.nextCursor"
+      variant="ghost"
+      size="md"
       class="reactor-list__more"
-      type="button"
       @click="void store.loadReactors(messageId, emoji, true)"
     >
       {{ t('Показать ещё') }}
-    </button>
+    </Button>
   </section>
 </template>

@@ -115,14 +115,6 @@
     grid-template-columns: minmax(0, 1fr) auto;
     align-items: start;
     gap: var(--space-8);
-
-    .ui-textarea__mirror,
-    .ui-textarea__control {
-      min-height: var(--size-44);
-      max-height: calc(var(--size-44) * 2);
-      padding: var(--space-12);
-      line-height: var(--size-16);
-    }
   }
 
   &__status {

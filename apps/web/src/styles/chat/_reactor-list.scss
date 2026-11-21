@@ -66,9 +66,4 @@
 
 .reactor-list__more {
   width: 100%;
-  min-height: var(--size-40);
-  border: 0;
-  border-radius: var(--radius-8);
-  color: inherit;
-  background: color-mix(in oklch, var(--vr-bg), var(--vr-text) 10%);
 }

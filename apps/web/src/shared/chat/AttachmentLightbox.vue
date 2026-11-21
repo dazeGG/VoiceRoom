@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { IconButton } from '@voice-room/ui/components';
+import { IconButton, NativeDialog } from '@voice-room/ui/components';
 // Full-screen image viewer.
 //
 // It takes plain sources rather than message attachments, so the same viewer
@@ -9,8 +9,8 @@ import { IconButton } from '@voice-room/ui/components';
 // The native modal puts the viewer above the room, regardless of the chat's stacking context.
 import { t } from '@/shared/i18n';
 import { ChevronLeft, ChevronRight, Download, Minus, Plus, RotateCcw, X } from '@lucide/vue';
-import { computed, onMounted, ref } from 'vue';
-import { iconSm } from '@/shared/ui/icons';
+import { computed, ref } from 'vue';
+import { iconSm } from '@voice-room/ui/icon-defaults';
 
 export interface LightboxItem {
   src: string;
@@ -38,7 +38,6 @@ const offsetY = ref(0);
 const dragging = ref(false);
 let dragStartX = 0;
 let dragStartY = 0;
-const dialog = ref<HTMLDialogElement | null>(null);
 
 const item = computed(() => items[current.value]);
 const zoomed = computed(() => scale.value > MIN_SCALE + 0.001);
@@ -111,21 +110,14 @@ function keydown(event: KeyboardEvent): void {
     reset();
   }
 }
-
-function onBackdropClick(event: MouseEvent): void {
-  if (event.target === event.currentTarget) dialog.value?.close();
-}
-
-onMounted(() => dialog.value?.showModal());
 </script>
 
 <template>
-  <dialog
-    ref="dialog"
+  <NativeDialog
+    v-slot="{ close }"
     class="attachment-lightbox__backdrop"
-    :aria-label="t('Изображение {p0} из {p1}', { p0: current + 1, p1: items.length })"
+    :label="t('Изображение {p0} из {p1}', { p0: current + 1, p1: items.length })"
     @keydown="keydown"
-    @click="onBackdropClick"
     @contextmenu.stop
     @close="emit('close')"
   >
@@ -164,7 +156,7 @@ onMounted(() => dialog.value?.showModal());
           <a v-if="item?.downloadHref" :href="item.downloadHref" download rel="external" :aria-label="t('Скачать')"
             ><Download v-bind="iconSm" aria-hidden="true"
           /></a>
-          <IconButton :tooltip="false" autofocus :label="t('Закрыть просмотр')" :size="32" @click="dialog?.close()">
+          <IconButton :tooltip="false" autofocus :label="t('Закрыть просмотр')" :size="32" @click="close">
             <X aria-hidden="true" />
           </IconButton>
         </div>
@@ -217,5 +209,5 @@ onMounted(() => dialog.value?.showModal());
         </IconButton>
       </template>
     </div>
-  </dialog>
+  </NativeDialog>
 </template>

@@ -10,7 +10,7 @@ import { useLeaveScreenStore } from '@/features/room/leave-screen.store';
 import { getDesktopBoundaryPolicy } from '@/platform/desktop-boundary';
 import { APP_HOME } from '@/shared/app-home';
 import { createLogger, errorContext } from '@/shared/log';
-import { Button, Separator } from '@voice-room/ui/components';
+import { Button, Separator, Dialog } from '@voice-room/ui/components';
 
 const log = createLogger('room:leave');
 
@@ -67,42 +67,52 @@ async function afterAccountCreated(): Promise<void> {
 </script>
 
 <template>
-  <div v-if="leaveScreen.open" class="leave-screen" role="dialog" aria-modal="true" aria-labelledby="leaveScreenTitle">
-    <div class="leave-screen__card">
-      <h1 id="leaveScreenTitle" class="leave-screen__title">
-        {{ accountCreated ? t('Аккаунт создан') : t('Вы вышли из комнаты') }}
-      </h1>
-      <template v-if="offerAccount">
-        <p v-if="leaveScreen.isStatic" class="leave-screen__text">
-          {{ t('Создайте аккаунт, и эта комната сохранится у вас: вернётесь сюда без ссылки.') }}
-        </p>
-        <p v-else class="leave-screen__text">
-          {{ t('С аккаунтом у вас будут свои постоянные комнаты, друзья и личные сообщения.') }}
-        </p>
-      </template>
-      <p v-else class="leave-screen__text">
-        {{ t('Лобби, друзья и личные сообщения — на компьютере. С телефона можно вернуться в эту комнату.') }}
-      </p>
-      <div class="leave-screen__actions">
+  <Dialog
+    :open="leaveScreen.open"
+    size="full"
+    trim="bare"
+    layer="raised"
+    :closable="false"
+    close-disabled
+    :title="accountCreated ? t('Аккаунт создан') : t('Вы вышли из комнаты')"
+  >
+    <div class="leave-screen">
+      <div class="leave-screen__card">
+        <h1 id="leaveScreenTitle" class="leave-screen__title">
+          {{ accountCreated ? t('Аккаунт создан') : t('Вы вышли из комнаты') }}
+        </h1>
         <template v-if="offerAccount">
-          <Button variant="primary" type="button" @click="authMode = 'register'">{{ t('Создать аккаунт') }}</Button>
-          <Button v-if="mobile" variant="ghost" type="button" @click="rejoin">{{ t('Вернуться в звонок') }}</Button>
-          <Button v-else variant="ghost" type="button" @click="goHome">{{ t('Не сейчас') }}</Button>
+          <p v-if="leaveScreen.isStatic" class="leave-screen__text">
+            {{ t('Создайте аккаунт, и эта комната сохранится у вас: вернётесь сюда без ссылки.') }}
+          </p>
+          <p v-else class="leave-screen__text">
+            {{ t('С аккаунтом у вас будут свои постоянные комнаты, друзья и личные сообщения.') }}
+          </p>
         </template>
-        <Button v-else variant="primary" type="button" @click="rejoin">{{ t('Вернуться в звонок') }}</Button>
-      </div>
-      <template v-if="feedbackCall">
-        <Separator class="leave-screen__divider" decorative />
-        <CallFeedbackCard :key="feedbackKey" :call="feedbackCall" hosted @answered="feedbackThanked = true" />
-      </template>
-      <template v-else-if="feedbackThanked">
-        <Separator class="leave-screen__divider" decorative />
-        <p class="leave-screen__text leave-screen__thanks" role="status">
-          {{ t('Спасибо за отзыв! Это помогает делать звонки лучше.') }}
+        <p v-else class="leave-screen__text">
+          {{ t('Лобби, друзья и личные сообщения — на компьютере. С телефона можно вернуться в эту комнату.') }}
         </p>
-      </template>
+        <div class="leave-screen__actions">
+          <template v-if="offerAccount">
+            <Button variant="primary" type="button" @click="authMode = 'register'">{{ t('Создать аккаунт') }}</Button>
+            <Button v-if="mobile" variant="ghost" type="button" @click="rejoin">{{ t('Вернуться в звонок') }}</Button>
+            <Button v-else variant="ghost" type="button" @click="goHome">{{ t('Не сейчас') }}</Button>
+          </template>
+          <Button v-else variant="primary" type="button" @click="rejoin">{{ t('Вернуться в звонок') }}</Button>
+        </div>
+        <template v-if="feedbackCall">
+          <Separator class="leave-screen__divider" decorative />
+          <CallFeedbackCard :key="feedbackKey" :call="feedbackCall" hosted @answered="feedbackThanked = true" />
+        </template>
+        <template v-else-if="feedbackThanked">
+          <Separator class="leave-screen__divider" decorative />
+          <p class="leave-screen__text leave-screen__thanks" role="status">
+            {{ t('Спасибо за отзыв! Это помогает делать звонки лучше.') }}
+          </p>
+        </template>
+      </div>
     </div>
-  </div>
+  </Dialog>
 
   <AuthDialog
     v-if="authMode"

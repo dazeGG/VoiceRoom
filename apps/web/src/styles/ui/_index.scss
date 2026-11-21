@@ -11,6 +11,8 @@
 @forward 'pkg:@voice-room/ui/styles/components/slider';
 @forward 'pkg:@voice-room/ui/styles/components/switch';
 @forward 'pkg:@voice-room/ui/styles/components/button';
+@forward 'pkg:@voice-room/ui/styles/components/pressable';
+@forward 'pkg:@voice-room/ui/styles/components/color-field';
 @forward 'pkg:@voice-room/ui/styles/components/icon-button';
 @forward 'pkg:@voice-room/ui/styles/components/field';
 @forward 'pkg:@voice-room/ui/styles/components/input';
@@ -33,9 +35,9 @@
 @forward 'pkg:@voice-room/ui/styles/components/avatar-stack';
 @forward 'pkg:@voice-room/ui/styles/components/list-item';
 @forward 'pkg:@voice-room/ui/styles/components/settings-group';
-@forward 'account-badge';
-@forward 'icon';
-@forward 'mascot-icon';
+@forward 'pkg:@voice-room/ui/styles/components/account-badge';
+@forward 'pkg:@voice-room/ui/styles/components/brand-icon';
+@forward 'pkg:@voice-room/ui/styles/components/mascot-icon';
 @forward 'pkg:@voice-room/ui/styles/components/ui-dialog';
 @forward 'pkg:@voice-room/ui/styles/components/ui-alert-dialog';
 @forward 'pkg:@voice-room/ui/styles/components/ui-toast';

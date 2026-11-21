@@ -1,10 +1,9 @@
 <script setup lang="ts">
-import { Field, Spinner, TextField } from '@voice-room/ui/components';
+import { Field, Spinner, TextField, Button } from '@voice-room/ui/components';
 import { t } from '@/shared/i18n';
 import { ArrowRight } from '@lucide/vue';
 import { START_FEATURES } from '@/shared/start-features';
-import { Button } from '@/shared/ui';
-import { iconMd } from '@/shared/ui/icons';
+import { iconMd } from '@voice-room/ui/icon-defaults';
 import LandingFeatureGrid from './LandingFeatureGrid.vue';
 
 defineProps<{ creatingTemp: boolean; joining: boolean }>();
@@ -40,7 +39,7 @@ function onRoomCodeKeydown(event: KeyboardEvent): void {
 
       <form class="landing-hero__join" @submit.prevent="emit('join')">
         <!-- A search field keeps iCloud Passwords from offering logins here. -->
-        <Field class="landing-hero__join-field" :label="t('Код комнаты')">
+        <Field visually-hidden-label class="landing-hero__join-field" :label="t('Код комнаты')">
           <TextField
             v-model="roomCode"
             type="search"

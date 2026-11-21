@@ -50,24 +50,6 @@
   pointer-events: none;
 }
 
-.mobile-call-focus__unpin {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-8);
-  height: var(--size-48);
-  padding: 0 var(--space-16) 0 var(--space-16);
-  border: 1px solid var(--vr-line-strong);
-  border-radius: var(--radius-16);
-  background: var(--vr-scrim);
-  color: var(--vr-text);
-  -webkit-backdrop-filter: blur(12px);
-  backdrop-filter: blur(12px);
-  font: inherit;
-  font-size: 0.9375rem;
-  font-weight: 500;
-  white-space: nowrap;
-}
-
 .mobile-call-focus__strip {
   position: relative;
   display: flex;

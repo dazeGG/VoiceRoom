@@ -213,26 +213,9 @@
 
 .mobile-call-tile__screen {
   position: absolute;
-  top: 8px;
-  right: 8px;
+  top: var(--space-8);
+  right: var(--space-8);
   z-index: 4;
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-6);
-  height: var(--size-32);
-  padding: 0 var(--space-8);
-  border: 1px solid var(--vr-line-strong);
-  border-radius: var(--radius-10);
-  background: var(--vr-scrim);
-  color: var(--vr-text);
-  font: inherit;
-  font-size: 0.8125rem;
-  font-weight: 500;
-
-  :is(svg) {
-    width: var(--icon-16);
-    height: var(--icon-16);
-  }
 }
 
 // Narrow tiles (three in a row, the strip, the picture-in-picture) get a
@@ -255,7 +238,7 @@
     height: var(--icon-12);
   }
 
-  .mobile-call-tile__screen span {
+  .mobile-call-tile__screen-label {
     display: none;
   }
 }

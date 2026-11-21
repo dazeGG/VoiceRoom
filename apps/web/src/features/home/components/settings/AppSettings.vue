@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { IconButton, Switch, SettingRow, SettingsGroup } from '@voice-room/ui/components';
+import EmojiText from '@/shared/chat/EmojiText.vue';
+import { IconButton, Switch, SettingRow, SettingsGroup, Select, Button } from '@voice-room/ui/components';
 import { t } from '@/shared/i18n';
 import { X } from '@lucide/vue';
 import { computed, onMounted, ref, watch } from 'vue';
@@ -25,7 +26,6 @@ import {
 } from '@/platform/desktop-overlay';
 import { copyDesktopDiagnostics, openDesktopLogsFolder } from '@/platform/desktop-diagnostics';
 import { useNotificationPreferencesStore } from '@/shared/notifications/preferences.store';
-import { Select } from '@/shared/ui';
 import type { SettingsSupport } from '../../model/settings-support';
 import type { ToastOptions } from '../../model/toasts.store';
 
@@ -221,7 +221,8 @@ async function toggleSystemNotifications(): Promise<void> {
                   if (isOverlayAnchor(value)) void changeOverlay({ anchor: value });
                 }
               "
-            />
+              ><template #option-label="{ text }"><EmojiText :text="text" /></template
+            ></Select>
           </template>
         </SettingRow>
 
@@ -246,7 +247,8 @@ async function toggleSystemNotifications(): Promise<void> {
                   if (isOverlayAvatarSize(value)) void changeOverlay({ avatarSize: value });
                 }
               "
-            />
+              ><template #option-label="{ text }"><EmojiText :text="text" /></template
+            ></Select>
           </template>
         </SettingRow>
 
@@ -280,15 +282,16 @@ async function toggleSystemNotifications(): Promise<void> {
               <span class="settings__overlay-window-exe">{{ overlayForeground.label }}</span>
             </div>
             <span v-if="overlayForeground.game" class="settings__overlay-window-status">{{ t('Игра') }}</span>
-            <button
+            <Button
               v-else
+              variant="ghost"
+              size="sm"
               class="settings__overlay-add"
-              type="button"
               :disabled="overlaySaving || !overlayEnabled"
               @click="void addOverlayGame()"
             >
               {{ t('Добавить как игру') }}
-            </button>
+            </Button>
           </template>
           <span v-else class="settings__overlay-window-empty">{{
             t('Переключитесь в игру и вернитесь сюда — здесь появится её окно.')
@@ -372,12 +375,12 @@ async function toggleSystemNotifications(): Promise<void> {
       :description="t('Логи и сведения о системе помогут поддержке разобраться с проблемой.')"
     >
       <div class="settings__diagnostics-actions">
-        <button class="settings__unblock-button" type="button" @click="void openLogsFolder()">
+        <Button variant="ghost" size="sm" class="settings__unblock-button" @click="void openLogsFolder()">
           {{ t('Открыть папку логов') }}
-        </button>
-        <button class="settings__unblock-button" type="button" @click="void copyDiagnostics()">
+        </Button>
+        <Button variant="ghost" size="sm" class="settings__unblock-button" @click="void copyDiagnostics()">
           {{ t('Скопировать информацию о системе') }}
-        </button>
+        </Button>
       </div>
     </SettingsGroup>
   </div>

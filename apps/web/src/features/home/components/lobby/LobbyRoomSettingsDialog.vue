@@ -1,5 +1,14 @@
 <script setup lang="ts">
-import { NavList, NavListGroup, NavListItem } from '@voice-room/ui/components';
+import {
+  NavList,
+  NavListGroup,
+  NavListItem,
+  AlertDialog,
+  Button,
+  Dialog,
+  Field,
+  TextField
+} from '@voice-room/ui/components';
 import { useLocalizedText, currentErrorMessage } from '@/shared/i18n/localized-text';
 
 import { t } from '@/shared/i18n';
@@ -12,7 +21,6 @@ import RoomAvatarField from '@/entities/room/components/RoomAvatarField.vue';
 import RoomMemberList from '@/entities/room/components/RoomMemberList.vue';
 import { saveRoomAvatarChange, type RoomAvatarChange } from '@/entities/room/room-avatar-change';
 import { BAN_UNDO_DURATION_MS, type ModerationNoticeOptions } from '@/entities/room/room-moderation';
-import { AlertDialog, Button, Dialog, Field, TextField } from '@voice-room/ui/components';
 import { useToastsStore, type ToastOptions } from '../../model/toasts.store';
 
 type Section = 'general' | 'members' | 'bans';
@@ -173,10 +181,15 @@ function onClose(): void {
             </Field>
           </div>
           <div class="settings__actions">
-            <button class="settings__cancel" type="button" @click="emit('close')">{{ t('Отмена') }}</button
-            ><button class="settings__save" type="submit" :disabled="saving || !name.trim() || !dirty">
+            <Button variant="plain" class="settings__cancel" @click="emit('close')">{{ t('Отмена') }}</Button
+            ><Button
+              variant="primary"
+              class="settings__save"
+              type="submit"
+              :disabled="saving || !name.trim() || !dirty"
+            >
               {{ saving ? t('Сохраняем…') : t('Сохранить') }}
-            </button>
+            </Button>
           </div>
           <div class="dialog__danger-zone">
             <Button variant="danger-ghost" @click="openDeleteConfirmation">

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { badgeOf } from '@/shared/badges';
 // One author's run of messages in the room chat: the avatar and name (which
 // open the author's profile), then each message as a MessageBubble.
 import { t } from '@/shared/i18n';
@@ -11,7 +12,7 @@ import MessageBubble from '@/shared/chat/MessageBubble.vue';
 import type { MessageMenuState } from '@/shared/chat/message-menu-state';
 import type { ReactionStore } from '@/shared/chat/reaction-store';
 import StructuredMessageContent from '@/shared/chat/StructuredMessageContent.vue';
-import { AccountBadge, Avatar } from '@/shared/ui';
+import { AccountBadge, Avatar, Pressable } from '@voice-room/ui/components';
 import { clockTime } from '@/shared/utils/date-format';
 import { mentionsUser, type ChatGroup } from '../room-chat-view';
 
@@ -42,10 +43,10 @@ const profileLabel = computed(() =>
 
 <template>
   <div class="room-chat-group">
-    <button
+    <Pressable
       v-if="canOpenProfile"
+      display="inline-flex"
       class="room-chat-group__avatar-button room-chat-group__trigger"
-      type="button"
       aria-haspopup="dialog"
       :aria-label="profileLabel"
       @pointerenter="emit('previewProfile', $event)"
@@ -63,7 +64,7 @@ const profileLabel = computed(() =>
         :foreground="group.avatarForeground"
         :size="32"
       />
-    </button>
+    </Pressable>
     <Avatar
       v-else
       class="room-chat-group__avatar"
@@ -75,10 +76,10 @@ const profileLabel = computed(() =>
     />
     <div class="room-chat-group__main">
       <div class="room-chat-group__meta">
-        <button
+        <Pressable
           v-if="canOpenProfile"
+          display="inline-flex"
           class="room-chat-group__author room-chat-group__trigger"
-          type="button"
           aria-haspopup="dialog"
           :aria-label="profileLabel"
           @pointerenter="emit('previewProfile', $event)"
@@ -88,10 +89,10 @@ const profileLabel = computed(() =>
           @click="emit('openProfile', $event)"
           @contextmenu="emit('authorMenu', $event)"
         >
-          <EmojiText :text="group.name" /><AccountBadge :user-id="group.authorUserId" />
-        </button>
+          <EmojiText :text="group.name" /><AccountBadge :badge="badgeOf(group.authorUserId)" />
+        </Pressable>
         <span v-else class="room-chat-group__author">
-          <EmojiText :text="group.name" /><AccountBadge :user-id="group.authorUserId" />
+          <EmojiText :text="group.name" /><AccountBadge :badge="badgeOf(group.authorUserId)" />
         </span>
         <time class="room-chat-group__time" :datetime="new Date(group.messages[0].createdAt).toISOString()">{{
           clockTime(group.createdAt)

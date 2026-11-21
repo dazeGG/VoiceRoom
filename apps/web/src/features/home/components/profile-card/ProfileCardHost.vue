@@ -8,7 +8,7 @@ import { useProfileCardUiStore } from '@/entities/profile-card/profile-card-ui.s
 import { useSessionStore } from '@/features/auth/session.store';
 import { useRoomSocial } from '@/features/room/social';
 import { ProfileCard, type ProfileCardRelationship } from '@/shared/components/profile-card';
-import { HoverCard } from '@/shared/ui';
+import { HoverCard } from '@voice-room/ui/components';
 
 const emit = defineEmits<{ toast: [message: string] }>();
 

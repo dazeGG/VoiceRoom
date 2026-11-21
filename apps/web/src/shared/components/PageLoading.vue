@@ -2,7 +2,7 @@
 // Shown while a page's code downloads (lazy-page.ts), in the same card the
 // session check shows, so the wait reads as one.
 import { t } from '@/shared/i18n';
-import { MascotIcon } from '@/shared/ui';
+import { MascotIcon } from '@voice-room/ui/components';
 </script>
 
 <template>

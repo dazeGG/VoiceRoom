@@ -5,7 +5,7 @@
 
 import { vi } from 'vitest';
 import { markRaw } from 'vue';
-import type * as Canvas2DModule from '@/shared/ui/AvatarCropDialog/canvas-2d';
+import type * as Canvas2DModule from '@/shared/components/AvatarCropDialog/canvas-2d';
 
 function newContext(): Canvas2DModule.Canvas2D {
   return {

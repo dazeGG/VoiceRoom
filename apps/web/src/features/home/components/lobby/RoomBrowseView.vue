@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { IconButton } from '@voice-room/ui/components';
+import { IconButton, ControlGroup } from '@voice-room/ui/components';
 import { useLocalizedText } from '@/shared/i18n/localized-text';
 
 import { t } from '@/shared/i18n';
@@ -15,8 +15,8 @@ import { subscribeRoomPreview } from '@/entities/room/room-realtime';
 import { useSessionStore } from '@/features/auth/session.store';
 import RoomPanelHeader from '@/features/room/components/RoomPanelHeader.vue';
 import EmojiText from '@/shared/chat/EmojiText.vue';
-import { getAvatarPresentation } from '@/shared/ui/avatar-presentation';
-import { iconSm } from '@/shared/ui/icons';
+import { getAvatarPresentation } from '@voice-room/ui/avatar-presentation';
+import { iconSm } from '@voice-room/ui/icon-defaults';
 import { fitTiles } from '@voice-room/ui/tile-grid';
 import { roomDisplayName } from '../../model/rooms';
 import LobbyStreamTile from './LobbyStreamTile.vue';
@@ -169,24 +169,19 @@ function selectPanel(panel: Panel): void {
         @toast="(message: string) => emit('toast', message)"
       />
       <div class="room-preview__actions">
-        <div
-          class="ui-segment room-panel-switches room-panel-switches--topbar"
-          role="group"
-          :aria-label="t('Открыть раздел панели комнаты')"
+        <ControlGroup
+          class="room-panel-switches room-panel-switches--topbar"
+          :label="t('Открыть раздел панели комнаты')"
         >
           <IconButton
             class="room-panel-switches__button"
             :label="t('Чат')"
             :aria-pressed="activePanel === 'chat'"
             :size="32"
+            :dot="roomUnreadCount > 0"
             @click="selectPanel('chat')"
           >
             <MessageSquare aria-hidden="true" />
-            <span
-              v-if="roomUnreadCount > 0"
-              class="ui-segment__dot room-panel-switches__unread"
-              aria-hidden="true"
-            ></span>
           </IconButton>
           <IconButton
             class="room-panel-switches__button"
@@ -197,7 +192,7 @@ function selectPanel(panel: Panel): void {
           >
             <Users aria-hidden="true" />
           </IconButton>
-        </div>
+        </ControlGroup>
       </div>
     </header>
 

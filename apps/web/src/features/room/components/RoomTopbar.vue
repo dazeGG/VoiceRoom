@@ -1,13 +1,22 @@
 <script setup lang="ts">
-import { IconButton, Tooltip, Badge } from '@voice-room/ui/components';
+import {
+  IconButton,
+  Tooltip,
+  Badge,
+  DropdownMenu,
+  MenuSeparator,
+  MenuItem,
+  MenuLabel,
+  Button,
+  ControlGroup
+} from '@voice-room/ui/components';
 import { t } from '@/shared/i18n';
 import { Link, MessageSquare, UserPlus, Users } from '@lucide/vue';
 import { computed } from 'vue';
 import { useSessionStore } from '@/features/auth/session.store';
 import Topbar from '@/shared/components/Topbar.vue';
 import { RoomInviteFriendList, RoomMenu } from '@/shared/components/room-menu';
-import { DropdownMenu, MenuSeparator, MenuItem, MenuLabel } from '@/shared/ui';
-import { iconMd, iconSm } from '@/shared/ui/icons';
+import { iconMd, iconSm } from '@voice-room/ui/icon-defaults';
 import { copyText } from '@/shared/utils/clipboard';
 import { state as roomClientState } from '@voice-room/call/engine/core/room-runtime.store';
 import { getConnectionStatusView } from '@voice-room/call/engine/ui/status';
@@ -106,10 +115,10 @@ function notifyRoomsChanged(): void {
         <DropdownMenu :aria-label="t('Пригласить в комнату')">
           <template #trigger>
             <Tooltip :text="t('Пригласить')"
-              ><button class="room-topbar__invite-button" type="button">
-                <UserPlus v-bind="iconSm" aria-hidden="true" />
+              ><Button variant="outline" :aria-label="t('Пригласить')" size="sm" class="room-topbar__invite-button">
+                <template #icon><UserPlus v-bind="iconSm" aria-hidden="true" /></template>
                 <span class="room-topbar__invite-label">{{ t('Пригласить') }}</span>
-              </button></Tooltip
+              </Button></Tooltip
             >
           </template>
           <template #content="{ close }">
@@ -129,10 +138,9 @@ function notifyRoomsChanged(): void {
             </template>
           </template>
         </DropdownMenu>
-        <div
-          class="ui-segment room-panel-switches room-panel-switches--topbar"
-          role="group"
-          :aria-label="t('Открыть раздел панели комнаты')"
+        <ControlGroup
+          class="room-panel-switches room-panel-switches--topbar"
+          :label="t('Открыть раздел панели комнаты')"
         >
           <IconButton
             class="room-panel-switches__button"
@@ -159,7 +167,7 @@ function notifyRoomsChanged(): void {
           >
             <Users aria-hidden="true" />
           </IconButton>
-        </div>
+        </ControlGroup>
       </div>
     </div>
 

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Field, Spinner, SettingRow, SettingsGroup, TextField } from '@voice-room/ui/components';
+import { Field, Spinner, SettingRow, SettingsGroup, TextField, Button } from '@voice-room/ui/components';
 import { t } from '@/shared/i18n';
 import { KeyRound, Laptop, MonitorSmartphone } from '@lucide/vue';
 import { computed, onMounted, ref, watch } from 'vue';
@@ -14,7 +14,7 @@ import {
 } from '@/api/auth';
 import { isValidPassword, PASSWORD_MIN_LENGTH } from '@/features/auth/account';
 import { useSessionStore } from '@/features/auth/session.store';
-import { iconMd } from '@/shared/ui/icons';
+import { iconMd } from '@voice-room/ui/icon-defaults';
 import { formatLastSeen, recoveryCodesSummary, sessionDeviceLabel } from '../model/account-security';
 import type { ToastOptions } from '../model/toasts.store';
 import RecoveryCodesDialog from './RecoveryCodesDialog.vue';
@@ -35,7 +35,7 @@ const emit = defineEmits<{ toast: [message: string, options?: ToastOptions] }>()
 
 const { expectSessionEnd, clearSession } = useSessionStore();
 
-const recoveryCodesButton = ref<HTMLButtonElement>();
+const recoveryCodesButton = ref<{ button: HTMLElement | null }>();
 const currentPasswordInput = ref<{ input: HTMLInputElement | null }>();
 
 const recoveryCodes = ref<RecoveryCodesStatus | null>(null);
@@ -59,7 +59,7 @@ const recoveryCodesHighlighted = computed(() => props.highlightRecoveryCodes && 
 watch(
   recoveryCodesHighlighted,
   (highlighted) => {
-    if (highlighted) recoveryCodesButton.value?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    if (highlighted) recoveryCodesButton.value?.button?.scrollIntoView({ block: 'center', behavior: 'smooth' });
   },
   { flush: 'post' }
 );
@@ -183,14 +183,15 @@ async function endOtherSessions(): Promise<void> {
         </div>
         <div class="account-security__password-foot">
           <div class="settings__gate-hint">{{ t('После смены пароля завершатся все сеансы, включая этот.') }}</div>
-          <button
+          <Button
+            variant="primary"
             class="settings__save account-security__action"
             :class="{ 'account-security__action--highlight': highlightPassword }"
             type="submit"
             :disabled="changingPassword || !currentPassword || !newPassword"
           >
             <Spinner v-if="changingPassword" aria-hidden="true" /> {{ t('Сменить пароль') }}
-          </button>
+          </Button>
         </div>
       </form>
     </SettingsGroup>
@@ -209,15 +210,15 @@ async function endOtherSessions(): Promise<void> {
             <span class="account-security__icon" aria-hidden="true"><KeyRound v-bind="iconMd" /></span>
           </template>
           <template #control>
-            <button
+            <Button
               ref="recoveryCodesButton"
+              variant="primary"
               class="settings__save account-security__action"
               :class="{ 'account-security__action--highlight': recoveryCodesHighlighted }"
-              type="button"
               @click="codesDialogOpen = true"
             >
               {{ recoveryCodes.generatedAt ? t('Создать новые') : t('Создать коды') }}
-            </button>
+            </Button>
           </template>
         </SettingRow>
         <div v-if="lowOnCodes" class="settings__gate-hint">
@@ -231,14 +232,15 @@ async function endOtherSessions(): Promise<void> {
       :description="t('Где открыт ваш аккаунт. Незнакомый сеанс завершите — пароль после этого лучше сменить.')"
     >
       <template v-if="hasOtherSessions" #actions>
-        <button
+        <Button
+          variant="ghost"
+          size="sm"
           class="settings__unblock-button"
-          type="button"
           :disabled="endingOthers || Boolean(endingSessionId)"
           @click="void endOtherSessions()"
         >
           {{ endingOthers ? t('Завершаем…') : t('Выйти на других устройствах') }}
-        </button>
+        </Button>
       </template>
       <div v-if="loading && sessions.length === 0" class="settings__notification-empty" role="status">
         {{ t('Загружаем…') }}
@@ -262,14 +264,15 @@ async function endOtherSessions(): Promise<void> {
             }}{{ session.location ? ` · ${session.location}` : '' }}
           </template>
           <template v-if="!session.current" #control>
-            <button
+            <Button
+              variant="ghost"
+              size="sm"
               class="settings__unblock-button"
-              type="button"
               :disabled="endingOthers || Boolean(endingSessionId)"
               @click="void endSession(session)"
             >
               {{ endingSessionId === session.id ? t('Завершаем…') : t('Завершить') }}
-            </button>
+            </Button>
           </template>
         </SettingRow>
       </template>
@@ -287,9 +290,9 @@ async function endOtherSessions(): Promise<void> {
         "
       >
         <template #control>
-          <button class="settings__unblock-button" type="button" @click="deleteDialogOpen = true">
+          <Button variant="ghost" size="sm" class="settings__unblock-button" @click="deleteDialogOpen = true">
             {{ t('Удалить аккаунт') }}
-          </button>
+          </Button>
         </template>
       </SettingRow>
     </SettingsGroup>

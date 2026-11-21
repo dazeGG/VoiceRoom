@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { IconButton, Badge } from '@voice-room/ui/components';
+import { IconButton, Badge, Avatar, Pressable, ControlGroup } from '@voice-room/ui/components';
 import { t } from '@/shared/i18n';
 import { LayoutGrid, MessageSquare, Users } from '@lucide/vue';
 import { computed } from 'vue';
@@ -10,7 +10,6 @@ import { useMobileCallUiStore } from '@/features/room/mobile-call-ui.store';
 import { useParticipantsUiStore } from '@voice-room/call/engine/core/participants-ui.store';
 import { useRoomPanelToggleStore } from '@/features/room/room-panel-toggle.store';
 import { useVoiceSessionStore } from '@voice-room/call/engine/core/voice-session.store';
-import { Avatar } from '@/shared/ui';
 import { copyText } from '@/shared/utils/clipboard';
 import RoomCallTimer from './RoomCallTimer.vue';
 
@@ -53,9 +52,8 @@ function handleInviteClick(): void {
 
 <template>
   <header :class="['mobile-call-topbar', { 'mobile-call-topbar--duo': duo }]">
-    <button
+    <Pressable
       class="mobile-call-topbar__room"
-      type="button"
       :aria-label="t('Пригласить в «{p0}»', { p0: heading })"
       @click="handleInviteClick"
     >
@@ -74,8 +72,8 @@ function handleInviteClick(): void {
           <span>{{ participantsUi.getParticipantCount() }} {{ t('в звонке') }}</span>
         </span>
       </span>
-    </button>
-    <div class="ui-segment room-panel-switches mobile-call-topbar__actions" role="group" :aria-label="t('Звонок')">
+    </Pressable>
+    <ControlGroup class="room-panel-switches mobile-call-topbar__actions" :label="t('Звонок')">
       <IconButton
         v-if="!duo"
         class="room-panel-switches__button mobile-call-topbar__view"
@@ -118,6 +116,6 @@ function handleInviteClick(): void {
       >
         <Users aria-hidden="true" />
       </IconButton>
-    </div>
+    </ControlGroup>
   </header>
 </template>

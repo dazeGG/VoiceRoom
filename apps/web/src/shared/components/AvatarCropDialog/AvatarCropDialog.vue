@@ -191,6 +191,7 @@ async function save(): Promise<void> {
 
 <template>
   <Dialog
+    layer="nested"
     :open="open"
     size="lg"
     :title="title"

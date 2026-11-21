@@ -56,10 +56,6 @@
   min-width: 0;
 }
 
-.emoji-picker__search .ui-field__label {
-  @include visually-hidden;
-}
-
 .emoji-picker__tone-strip-option {
   display: grid;
   width: var(--size-32);

@@ -162,16 +162,6 @@ a {
   flex: 1;
   margin-inline: auto;
 
-  .ui-field__label {
-    @include ui.visually-hidden;
-  }
-
-  .ui-combobox__panel {
-    position: absolute;
-    z-index: 1;
-    inset: calc(100% + var(--space-4)) 0 auto;
-  }
-
   @include ui.below(ui.$bp-narrow) {
     max-width: none;
     flex-basis: 100%;

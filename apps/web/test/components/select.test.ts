@@ -1,9 +1,9 @@
 import { render, screen } from '@testing-library/vue';
 import userEvent from '@testing-library/user-event';
 import { expect, test, vi } from 'vitest';
-import { Field, type SelectSize } from '@voice-room/ui/components';
+import { Field, Select, type SelectSize } from '@voice-room/ui/components';
 import { defineComponent, h } from 'vue';
-import Select from '@/shared/ui/Select/Select.vue';
+import EmojiText from '@/shared/chat/EmojiText.vue';
 import { stubOverlayDom } from '../helpers/overlay-dom';
 
 stubOverlayDom();
@@ -109,7 +109,8 @@ test('a select without options does not open', async () => {
 
 test('web draws emoji artwork in the selected label and in the option list', async () => {
   render(Select, {
-    props: { modelValue: 'headset', options: [{ value: 'headset', label: 'Music 🎵' }] }
+    props: { modelValue: 'headset', options: [{ value: 'headset', label: 'Music 🎵' }] },
+    slots: { 'option-label': ({ text }: { text: string }) => h(EmojiText, { text }) }
   });
   const trigger = screen.getByRole('combobox');
   expect(trigger.querySelector('img')?.getAttribute('alt')).toBe('🎵');

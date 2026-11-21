@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { IconButton } from '@voice-room/ui/components';
+import { IconButton, DropdownMenu, MenuRadioGroup, MenuRadioItem } from '@voice-room/ui/components';
 // The phone dock: four big buttons and nothing to aim at. The phone picks the
 // microphone and its own volume keys stand in for muting the sound.
 import { t } from '@/shared/i18n';
-import { Check, Headphones, Mic, MicOff, PhoneOff, Smartphone, Video, VideoOff, Volume2 } from '@lucide/vue';
-import { computed } from 'vue';
+import { Headphones, Mic, MicOff, PhoneOff, Smartphone, Video, VideoOff, Volume2 } from '@lucide/vue';
+import { computed, watch } from 'vue';
 import { handleLeaveButtonClick } from '@voice-room/call/engine/room/room';
 import { toggleCamera } from '@voice-room/call/engine/services/camera-service';
 import { supportsAudioOutputSelection } from '@voice-room/call/engine/services/media-playback-service';
@@ -35,10 +35,12 @@ function outputKind(label: string): OutputKind {
   return 'speaker';
 }
 
-function toggleOutputMenu(): void {
-  mobileCall.outputOpen = !mobileCall.outputOpen;
-  if (mobileCall.outputOpen) void refreshDevices();
-}
+watch(
+  () => mobileCall.outputOpen,
+  (open) => {
+    if (open) void refreshDevices();
+  }
+);
 
 function handleCameraClick(): void {
   void toggleCamera();
@@ -53,39 +55,6 @@ function pickOutput(value: string): void {
 </script>
 
 <template>
-  <template v-if="mobileCall.outputOpen">
-    <button
-      class="mobile-call-dock__output-scrim"
-      type="button"
-      :aria-label="t('Закрыть выбор звука')"
-      @click="mobileCall.outputOpen = false"
-    ></button>
-    <div class="mobile-call-dock__output-menu" role="group" :aria-label="t('Куда выводить звук')">
-      <button
-        v-for="option in outputs"
-        :key="option.value"
-        class="mobile-call-dock__output-option"
-        type="button"
-        :aria-pressed="option.value === currentOutput?.value"
-        @click="pickOutput(String(option.value))"
-      >
-        <span class="mobile-call-dock__output-icon">
-          <Headphones v-if="option.kind === 'headset'" :size="20" aria-hidden="true" />
-          <Smartphone v-else-if="option.kind === 'earpiece'" :size="20" aria-hidden="true" />
-          <Volume2 v-else :size="20" aria-hidden="true" />
-        </span>
-        <span class="mobile-call-dock__output-label">{{ option.label }}</span>
-        <Check
-          v-if="option.value === currentOutput?.value"
-          class="mobile-call-dock__output-check"
-          :size="20"
-          :stroke-width="2.4"
-          aria-hidden="true"
-        />
-      </button>
-    </div>
-  </template>
-
   <div class="mobile-call-dock" role="group" :aria-label="t('Управление звонком')">
     <IconButton
       class="mobile-call-dock__button mobile-call-dock__button--mic"
@@ -99,19 +68,50 @@ function pickOutput(value: string): void {
       <MicOff v-if="callControls.ariaPressed" aria-hidden="true" />
       <Mic v-else aria-hidden="true" />
     </IconButton>
-    <IconButton
+    <DropdownMenu
       v-if="canPickOutput"
-      class="mobile-call-dock__button mobile-call-dock__button--output"
-      :label="t('Куда выводить звук')"
-      :aria-expanded="mobileCall.outputOpen"
-      :size="44"
-      variant="filled"
-      @click="toggleOutputMenu"
+      v-model:open="mobileCall.outputOpen"
+      :aria-label="t('Куда выводить звук')"
+      side="top"
+      align="center"
+      focus-checked
     >
-      <Headphones v-if="currentOutput?.kind === 'headset'" aria-hidden="true" />
-      <Smartphone v-else-if="currentOutput?.kind === 'earpiece'" aria-hidden="true" />
-      <Volume2 v-else aria-hidden="true" />
-    </IconButton>
+      <template #trigger>
+        <IconButton
+          class="mobile-call-dock__button mobile-call-dock__button--output"
+          :label="t('Куда выводить звук')"
+          :size="44"
+          variant="filled"
+        >
+          <Headphones v-if="currentOutput?.kind === 'headset'" aria-hidden="true" />
+          <Smartphone v-else-if="currentOutput?.kind === 'earpiece'" aria-hidden="true" />
+          <Volume2 v-else aria-hidden="true" />
+        </IconButton>
+      </template>
+      <template #content>
+        <MenuRadioGroup
+          :model-value="String(currentOutput?.value ?? '')"
+          @update:model-value="
+            (value) => {
+              if (value !== undefined) pickOutput(value);
+            }
+          "
+        >
+          <MenuRadioItem
+            v-for="option in outputs"
+            :key="option.value"
+            :value="String(option.value)"
+            :label="String(option.label)"
+          >
+            <template #icon>
+              <Headphones v-if="option.kind === 'headset'" aria-hidden="true" />
+              <Smartphone v-else-if="option.kind === 'earpiece'" aria-hidden="true" />
+              <Volume2 v-else aria-hidden="true" />
+            </template>
+          </MenuRadioItem>
+        </MenuRadioGroup>
+      </template>
+    </DropdownMenu>
     <IconButton
       :class="[
         'mobile-call-dock__button',

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Button, Callout } from '@voice-room/ui/components';
+import { Button, Callout, MascotIcon } from '@voice-room/ui/components';
 // What /r/:roomId shows on a load or a real navigation: the lobby for a
 // signed-in desktop visit, the room itself for a guest or a phone.
 import { t } from '@/shared/i18n';
@@ -9,7 +9,6 @@ import { signOut } from '@/features/home/model/sign-out';
 import { useToastsStore, type ToastOptions } from '@/features/home/model/toasts.store';
 import { loadRoomPage } from '@/features/room/prefetch';
 import { lazyPage } from '@/shared/components/lazy-page';
-import { MascotIcon } from '@/shared/ui';
 import { ProfileCardHost } from '@/features/home/components/profile-card';
 import OpenInAppScreen from '@/features/home/components/OpenInAppScreen.vue';
 import { applyDesktopBoundaryToDocument } from '@/platform/desktop-boundary';

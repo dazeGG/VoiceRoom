@@ -2,16 +2,11 @@
 // Svelte: LoginAlertDialog.svelte <style>.
 //
 // Svelte class -> BEM class (block "login-alert")
-//   .login-alert-layer .ui-dialog-overlay -> .ui-overlay:has(.login-alert)
 //     (the Dialog portals its overlay to <body>, so a wrapper cannot style it;
 //     a security question outranks every other dialog)
 //   .login-alert-device               -> .login-alert__device
 //   .login-alert-icon                 -> .login-alert__icon
 //   .login-alert-device strong/small  -> .login-alert__device-name / __device-when
-
-.ui-overlay:has(.login-alert) {
-  z-index: 110;
-}
 
 .login-alert__device {
   display: grid;

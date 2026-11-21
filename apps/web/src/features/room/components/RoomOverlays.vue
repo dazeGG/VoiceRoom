@@ -3,19 +3,20 @@ import {
   SegmentControl,
   RadioGroup,
   Separator,
-  Tooltip,
   IconButton,
   Button,
   Dialog,
   Field,
   Switch,
-  TextField
+  TextField,
+  RadioGroupItem,
+  Popover
 } from '@voice-room/ui/components';
 import { t } from '@/shared/i18n';
 import { AppWindow, Check, Monitor, Play, Settings } from '@lucide/vue';
 import { computed } from 'vue';
 import { createLogger, errorContext } from '@/shared/log';
-import { iconSm, iconXs } from '@/shared/ui/icons';
+import { iconSm, iconXs } from '@voice-room/ui/icon-defaults';
 import {
   cancelScreenSourcePicker,
   confirmScreenSourcePicker,
@@ -26,6 +27,15 @@ import { clearGuestNameError, handleGuestNameSubmit } from '@voice-room/call/eng
 import { useGuestNameUiStore } from '@voice-room/call/engine/core/guest-name-ui.store';
 import { useScreenSourceUiStore } from '@voice-room/call/engine/core/screen-source-ui.store';
 import { useStartUiStore } from '@voice-room/call/engine/core/start-ui.store';
+
+const fpsOptions = computed(() => [
+  { value: '30', label: '30' },
+  { value: '60', label: '60', description: t('60 к/с: плавнее, но вдвое больше нагрузки на кодирование и сеть') }
+]);
+
+function selectFps(value: string): void {
+  if (value === '30' || value === '60') screenSourceUi.fps = value;
+}
 
 const log = createLogger('room:overlays');
 
@@ -63,6 +73,10 @@ const summaryDetail = computed(
   () =>
     `${screenSourceUi.mode === 'text' ? t('Текст') : screenSourceUi.quality === 'high' ? 'HD' : 'SD'} · ${qualityLabel.value} · ${fpsLabel.value}${screenSourceUi.audio ? t(' · звук') : ''}`
 );
+
+function selectSource(value: string | null): void {
+  if (value !== null) screenSourceUi.selectedSourceId = value;
+}
 
 function selectScreenTab(value: string): void {
   if (value === 'screens' || value === 'windows') switchScreenTab(value);
@@ -125,6 +139,7 @@ function keepGuestNameOpen(): void {
 
   <Dialog
     :open="screenSourceUi.open"
+    overflow-visible
     size="lg"
     :title="t('Выберите, что показать')"
     :on-close="cancelScreenSourcePicker"
@@ -141,39 +156,44 @@ function keepGuestNameOpen(): void {
     />
 
     <!-- Source grid -->
-    <div id="screenSourceOptions" class="screen-source-dialog__options">
-      <button
-        v-for="source in filteredSources"
-        :key="source.id"
-        class="screen-source-dialog__option"
-        type="button"
-        :aria-pressed="source.id === screenSourceUi.selectedSourceId"
-        :aria-label="source.name"
-        @click="screenSourceUi.selectedSourceId = source.id"
-      >
-        <span class="screen-source-dialog__preview">
-          <img v-if="source.thumbnail" alt="" :src="source.thumbnail" />
-          <span v-else class="screen-source-dialog__placeholder" aria-hidden="true">
-            <span class="screen-source-dialog__placeholder-bar"></span>
-            <span class="screen-source-dialog__placeholder-left"></span>
-            <span class="screen-source-dialog__placeholder-right"></span>
+    <RadioGroup
+      id="screenSourceOptions"
+      class="screen-source-dialog__options"
+      :aria-label="t('Выберите, что показать')"
+      :model-value="screenSourceUi.selectedSourceId"
+      @update:model-value="selectSource"
+    >
+      <template #item>
+        <RadioGroupItem
+          v-for="source in filteredSources"
+          :key="source.id"
+          variant="tile"
+          :option="{ value: source.id, label: source.name }"
+        >
+          <span class="screen-source-dialog__preview">
+            <img v-if="source.thumbnail" alt="" :src="source.thumbnail" />
+            <span v-else class="screen-source-dialog__placeholder" aria-hidden="true">
+              <span class="screen-source-dialog__placeholder-bar"></span>
+              <span class="screen-source-dialog__placeholder-left"></span>
+              <span class="screen-source-dialog__placeholder-right"></span>
+            </span>
+            <span
+              v-if="source.id === screenSourceUi.selectedSourceId"
+              class="screen-source-dialog__check"
+              aria-hidden="true"
+            >
+              <Check v-bind="iconXs" color="var(--vr-accent-ink)" aria-hidden="true" />
+            </span>
           </span>
-          <span
-            v-if="source.id === screenSourceUi.selectedSourceId"
-            class="screen-source-dialog__check"
-            aria-hidden="true"
-          >
-            <Check v-bind="iconXs" color="var(--vr-accent-ink)" aria-hidden="true" />
+          <span class="screen-source-dialog__label">
+            <img v-if="source.appIcon" alt="" :src="source.appIcon" />
+            <Monitor v-else-if="source.type === 'screen'" v-bind="iconSm" aria-hidden="true" />
+            <AppWindow v-else v-bind="iconSm" aria-hidden="true" />
+            <span>{{ source.name }}</span>
           </span>
-        </span>
-        <span class="screen-source-dialog__label">
-          <img v-if="source.appIcon" alt="" :src="source.appIcon" />
-          <Monitor v-else-if="source.type === 'screen'" v-bind="iconSm" aria-hidden="true" />
-          <AppWindow v-else v-bind="iconSm" aria-hidden="true" />
-          <span>{{ source.name }}</span>
-        </span>
-      </button>
-    </div>
+        </RadioGroupItem>
+      </template>
+    </RadioGroup>
 
     <template #footer>
       <div class="screen-source-dialog__footer">
@@ -197,44 +217,35 @@ function keepGuestNameOpen(): void {
               size="sm"
               @change="selectQuality"
             />
-            <div class="screen-source-dialog__toggle-group" role="group" :aria-label="t('Частота кадров')">
-              <button
-                class="screen-source-dialog__toggle-button"
-                :aria-pressed="screenSourceUi.fps === '30'"
-                @click="screenSourceUi.fps = '30'"
-              >
-                30
-              </button>
-              <Tooltip :text="t('60 к/с: плавнее, но вдвое больше нагрузки на кодирование и сеть')">
-                <button
-                  class="screen-source-dialog__toggle-button"
-                  :aria-pressed="screenSourceUi.fps === '60'"
-                  @click="screenSourceUi.fps = '60'"
-                >
-                  60
-                </button>
-              </Tooltip>
-            </div>
+            <SegmentControl
+              :value="screenSourceUi.fps"
+              :options="fpsOptions"
+              v-bind="{ ariaLabel: t('Частота кадров') }"
+              size="sm"
+              @change="selectFps"
+            />
           </template>
 
           <!-- Settings gear + popover -->
-          <div class="screen-source-dialog__gear-wrap">
-            <IconButton
-              :aria-expanded="screenSourceUi.popOpen"
-              :label="t('Настройки стрима')"
-              :size="40"
-              variant="outline"
-              @click="screenSourceUi.popOpen = !screenSourceUi.popOpen"
-            >
-              <Settings aria-hidden="true" />
-            </IconButton>
-
-            <div
-              v-if="screenSourceUi.popOpen"
-              class="screen-source-dialog__popover"
-              role="dialog"
-              :aria-label="t('Настройки стрима')"
-            >
+          <Popover
+            v-model:open="screenSourceUi.popOpen"
+            role="dialog"
+            placement="top-end"
+            :aria-label="t('Настройки стрима')"
+          >
+            <template #trigger="{ open, toggle, panelId }">
+              <IconButton
+                :aria-expanded="open"
+                :aria-controls="panelId"
+                :label="t('Настройки стрима')"
+                :size="40"
+                variant="outline"
+                @click="toggle"
+              >
+                <Settings aria-hidden="true" />
+              </IconButton>
+            </template>
+            <template #content>
               <RadioGroup
                 :model-value="screenSourceUi.mode"
                 :options="modes"
@@ -246,30 +257,34 @@ function keepGuestNameOpen(): void {
                 <span class="screen-source-dialog__audio-label">{{ t('Звук стрима') }}</span>
                 <Switch v-model="screenSourceUi.audio" size="sm" v-bind="{ ariaLabel: t('Звук стрима') }" />
               </label>
-            </div>
-          </div>
+            </template>
+          </Popover>
 
           <!-- Launch -->
-          <button
+          <Button
+            variant="primary"
+            size="sm"
             class="screen-source-dialog__launch"
-            type="button"
             :disabled="!screenSourceUi.selectedSourceId"
             @click="confirmScreenSourcePicker"
           >
-            <Play v-bind="iconSm" fill="currentColor" aria-hidden="true" /> {{ t('Запустить') }}
-          </button>
+            <template #icon><Play v-bind="iconSm" fill="currentColor" aria-hidden="true" /></template>
+            {{ t('Запустить') }}
+          </Button>
         </div>
       </div>
     </template>
   </Dialog>
 
-  <button
+  <Button
     id="soundButton"
+    variant="ghost"
+    size="xl"
+    pill
     class="sound-button"
-    type="button"
     :hidden="!startUi.soundButtonVisible"
     @click="unlockAudio().catch((error: unknown) => log.warn('audio unlock failed', errorContext(error)))"
   >
     {{ t('Разрешить звук') }}
-  </button>
+  </Button>
 </template>

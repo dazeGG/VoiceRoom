@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Pressable } from '@voice-room/ui/components';
 // The call on a phone in portrait: it covers the room page with a full-screen
 // layout (grid, focus, or two people face to face) whose controls hide
 // themselves. Opening someone's screen hands the page back to the room stage.
@@ -87,15 +88,14 @@ onUnmounted(() => {
       <MobileCallDock />
     </div>
 
-    <button
+    <Pressable
       class="mobile-call__bubble"
-      type="button"
       :aria-label="t('Показать управление')"
       :inert="mobileCall.chromeVisible"
       @click="mobileCall.showChrome"
     >
       <RoomCallTimer variant="bubble" />
       <MicOff v-if="roomClientState.joined && isMicrophoneShownMuted()" :size="14" aria-hidden="true" />
-    </button>
+    </Pressable>
   </div>
 </template>

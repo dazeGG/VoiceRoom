@@ -6,17 +6,6 @@
 //   .mc-flip-icon                         -> .mobile-call-flip__icon
 //
 
-.mobile-call-flip.ui-button,
-.mobile-call-flip--round.ui-icon-button {
-  background: var(--vr-scrim);
-  backdrop-filter: blur(12px);
-  white-space: nowrap;
-}
-
-.mobile-call-flip--round.ui-icon-button {
-  border-radius: var(--radius-pill);
-}
-
 .mobile-call-flip__icon {
   display: inline-flex;
   transition: transform 450ms cubic-bezier(0.2, 0.8, 0.2, 1);

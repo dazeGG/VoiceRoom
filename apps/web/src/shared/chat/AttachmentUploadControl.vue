@@ -1,10 +1,8 @@
 <script setup lang="ts">
-import { IconButton } from '@voice-room/ui/components';
+import { IconButton, DropdownMenu, MenuItem, FileDrop } from '@voice-room/ui/components';
 import { t } from '@/shared/i18n';
 import { Image as ImageIcon, Plus } from '@lucide/vue';
-import { ref } from 'vue';
-import { DropdownMenu, MenuItem } from '@/shared/ui';
-import { iconSm } from '@/shared/ui/icons';
+import { iconSm } from '@voice-room/ui/icon-defaults';
 import type { AttachmentComposeStore } from './attachment-compose';
 
 const { store, disabled } = defineProps<{
@@ -14,42 +12,35 @@ const { store, disabled } = defineProps<{
 
 const emit = defineEmits<{ error: [message: string] }>();
 
-const input = ref<HTMLInputElement | null>(null);
-
 let closeMenu: ((restoreFocus?: boolean) => void) | undefined;
 
-function chooseFile(close: (restoreFocus?: boolean) => void): void {
+function chooseFile(choose: () => void, close: (restoreFocus?: boolean) => void): void {
   closeMenu = close;
-  input.value?.click();
+  choose();
 }
 
-async function addSelectedFiles(): Promise<void> {
-  const files = input.value?.files;
-  if (!files?.length) return;
+async function addSelectedFiles(files: File[]): Promise<void> {
   closeMenu?.(false);
   closeMenu = undefined;
   try {
     await store.addFiles(files);
   } catch (cause) {
     emit('error', cause instanceof Error ? cause.message : t('Не удалось загрузить изображение'));
-  } finally {
-    if (input.value) input.value.value = '';
   }
 }
 </script>
 
 <template>
-  <div class="attachment-upload">
-    <input
-      ref="input"
-      class="attachment-upload__input"
-      type="file"
-      accept="image/jpeg,image/png,image/webp"
-      multiple
-      tabindex="-1"
-      aria-hidden="true"
-      @change="void addSelectedFiles()"
-    />
+  <FileDrop
+    v-slot="{ choose }"
+    class="attachment-upload"
+    variant="trigger"
+    accept="image/jpeg,image/png,image/webp"
+    multiple
+    :disabled="disabled || store.drafts.length >= 4"
+    :validate-accept="false"
+    @files="void addSelectedFiles($event)"
+  >
     <DropdownMenu
       side="top"
       align="start"
@@ -65,11 +56,11 @@ async function addSelectedFiles(): Promise<void> {
         <MenuItem
           :label="t('Загрузить фото')"
           :disabled="disabled || store.drafts.length >= 4"
-          @select.prevent="chooseFile(close)"
+          @select.prevent="chooseFile(choose, close)"
         >
           <template #icon><ImageIcon v-bind="iconSm" /></template>
         </MenuItem>
       </template>
     </DropdownMenu>
-  </div>
+  </FileDrop>
 </template>

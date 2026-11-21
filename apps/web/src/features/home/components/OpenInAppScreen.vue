@@ -2,7 +2,7 @@
 import { t } from '@/shared/i18n';
 import { onMounted, ref } from 'vue';
 import { createDesktopDownload } from '@/platform/desktop-download';
-import { Button, Dialog } from '@/shared/ui';
+import { Button, Dialog } from '@voice-room/ui/components';
 
 const emit = defineEmits<{ retry: []; continue: [] }>();
 
@@ -25,7 +25,7 @@ async function download(): Promise<void> {
 </script>
 
 <template>
-  <Dialog open size="sm" :title="t('Открываем в приложении')" :on-close="() => emit('continue')">
+  <Dialog layer="raised" open size="sm" :title="t('Открываем в приложении')" :on-close="() => emit('continue')">
     <p class="open-in-app__text">
       {{
         t('Если VoiceRoom установлен, комната откроется в нём. Разрешите браузеру открыть приложение, если он спросит.')

@@ -3,8 +3,8 @@ import { t } from '@/shared/i18n';
 import { House } from '@lucide/vue';
 import { useStartUiStore } from '@voice-room/call/engine/core/start-ui.store';
 import { APP_HOME } from '@/shared/app-home';
-import { MascotIcon } from '@/shared/ui';
-import { iconMd } from '@/shared/ui/icons';
+import { MascotIcon } from '@voice-room/ui/components';
+import { iconMd } from '@voice-room/ui/icon-defaults';
 import { useCallPageStore } from '@voice-room/call/engine/core/call-page.store';
 
 const startUi = useStartUiStore();

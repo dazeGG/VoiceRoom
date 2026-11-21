@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { NavList, NavListGroup, NavListItem } from '@voice-room/ui/components';
+import { NavList, NavListGroup, NavListItem, Dialog } from '@voice-room/ui/components';
 // The open settings. Mounted fresh on every opening, so each tab starts from
 // what is saved; only the profile edits live here, so they survive a look at
 // another tab before saving.
@@ -10,7 +10,6 @@ import type { AuthUser, OwnedRoom } from '@/api/auth';
 import type { PublicUser } from '@/api/friends';
 import LegalLinks from '@/shared/components/LegalLinks.vue';
 import { useNotificationPreferencesStore } from '@/shared/notifications/preferences.store';
-import { Dialog } from '@/shared/ui';
 import { usePushNotificationsStore } from '../../model/push-notifications.store';
 import { readSettingsSupport } from '../../model/settings-support';
 import type { ToastOptions } from '../../model/toasts.store';
@@ -124,7 +123,7 @@ onBeforeUnmount(profile.dispose);
   <Dialog open size="lg" :title="t('Настройки')" :on-close="() => emit('close')">
     <div class="settings__frame">
       <div class="settings__body">
-        <NavList class="settings__nav" :label="t('Разделы настроек')">
+        <NavList responsive class="settings__nav" :label="t('Разделы настроек')">
           <NavListGroup class="settings__nav-main">
             <NavListItem
               v-for="item in navItems"

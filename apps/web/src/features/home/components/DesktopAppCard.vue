@@ -15,8 +15,8 @@ import {
   type DesktopBuildId
 } from '@/platform/desktop-builds';
 import { startDesktopBuildDownload } from '@/platform/desktop-download';
-import { MascotIcon } from '@/shared/ui';
-import { Icon, iconSm, iconXs } from '@/shared/ui/icons';
+import { MascotIcon, BrandIcon, Pressable, Button } from '@voice-room/ui/components';
+import { iconSm, iconXs } from '@voice-room/ui/icon-defaults';
 import { copyText } from '@/shared/utils/clipboard';
 
 // Embedded, it is a settings tab: no card of its own around it, the perks
@@ -106,17 +106,16 @@ async function copyCommand(): Promise<void> {
     </ul>
 
     <div class="desktop-card__builds">
-      <button
+      <Pressable
         v-for="build in DESKTOP_BUILDS"
         :key="build.id"
         class="desktop-card__build"
         :class="{ 'desktop-card__build--recommended': build.id === recommendedId }"
-        type="button"
         :disabled="downloadingId === build.id"
         @click="download(build.id)"
       >
         <span class="desktop-card__build-icon">
-          <Icon :icon="build.mac ? faApple : faWindows" size="sm" />
+          <BrandIcon :icon="build.mac ? faApple : faWindows" size="sm" />
         </span>
         <span class="desktop-card__build-copy">
           <span class="desktop-card__build-name">{{ build.label }}</span>
@@ -126,7 +125,7 @@ async function copyCommand(): Promise<void> {
         </span>
         <Check v-if="downloadingId === build.id" v-bind="iconSm" aria-hidden="true" />
         <Download v-else v-bind="iconSm" aria-hidden="true" />
-      </button>
+      </Pressable>
     </div>
 
     <div class="desktop-card__note">
@@ -139,11 +138,13 @@ async function copyCommand(): Promise<void> {
       </p>
       <div class="desktop-card__cmd">
         <code>{{ QUARANTINE_CMD }}</code>
-        <button type="button" @click="copyCommand">
-          <Check v-if="cmdCopied" v-bind="iconXs" aria-hidden="true" />
-          <Copy v-else v-bind="iconXs" aria-hidden="true" />
+        <Button variant="plain" size="sm" @click="copyCommand">
+          <template #icon
+            ><Check v-if="cmdCopied" v-bind="iconXs" aria-hidden="true" />
+            <Copy v-else v-bind="iconXs" aria-hidden="true"
+          /></template>
           {{ cmdCopied ? t('Скопировано') : t('Копировать') }}
-        </button>
+        </Button>
       </div>
     </div>
   </section>

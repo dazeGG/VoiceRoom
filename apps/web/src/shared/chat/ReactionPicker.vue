@@ -1,9 +1,8 @@
 <script setup lang="ts">
-import { IconButton } from '@voice-room/ui/components';
+import { IconButton, Popover } from '@voice-room/ui/components';
 import { t } from '@/shared/i18n';
 import { ref, watch } from 'vue';
 import { SmilePlus } from '@lucide/vue';
-import { Popover } from '@/shared/ui';
 import Emoji from './Emoji.vue';
 import EmojiPickerPanel from './EmojiPickerPanel.vue';
 import type { ReactionStore } from './reaction-store';

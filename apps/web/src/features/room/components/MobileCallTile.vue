@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Pressable, Button } from '@voice-room/ui/components';
 // One person on the phone layout. The picture is never cropped: it is fitted
 // whole, and a blurred copy of the same frame fills the rest of the tile.
 import { t } from '@/shared/i18n';
@@ -10,7 +11,7 @@ import { enterScreenView } from '@voice-room/call/engine/ui/screen-view';
 import { keepVideoFitted } from '@voice-room/call/engine/ui/video-fit';
 import EmojiText from '@/shared/chat/EmojiText.vue';
 import { createLogger, errorContext } from '@/shared/log';
-import { getAvatarPresentation } from '@/shared/ui/avatar-presentation';
+import { getAvatarPresentation } from '@voice-room/ui/avatar-presentation';
 
 const log = createLogger('room:mobile-tile');
 
@@ -142,22 +143,25 @@ function watchScreen(event: MouseEvent): void {
       <template v-else>{{ avatar.initials }}</template>
     </span>
     <!-- The whole tile is one button; the screen action below sits beside it, not inside. -->
-    <button class="mobile-call-tile__hit" type="button" :aria-label="spokenLabel" @click="emit('tap')"></button>
+    <Pressable inset class="mobile-call-tile__hit" :aria-label="spokenLabel" @click="emit('tap')"></Pressable>
     <div class="mobile-call-tile__name" aria-hidden="true">
       <span class="mobile-call-tile__name-text"><EmojiText :text="participant.name" /></span>
       <span v-if="participant.isLocal" class="mobile-call-tile__you">{{ t('вы') }}</span>
       <span v-if="participant.muted" class="mobile-call-tile__icon"><MicOff /></span>
       <span v-if="participant.deafened" class="mobile-call-tile__icon"><HeadphoneOff /></span>
     </div>
-    <button
+    <Button
       v-if="canWatch"
+      variant="outline"
+      scrim
+      :aria-label="t('Экран')"
+      size="sm"
       class="mobile-call-tile__screen"
-      type="button"
       :disabled="roomState.screenRequesting"
       @click="watchScreen"
     >
-      <MonitorPlay aria-hidden="true" />
-      <span>{{ t('Экран') }}</span>
-    </button>
+      <template #icon><MonitorPlay aria-hidden="true" /></template>
+      <span class="mobile-call-tile__screen-label">{{ t('Экран') }}</span>
+    </Button>
   </div>
 </template>

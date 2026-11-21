@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import EmojiText from '@/shared/chat/EmojiText.vue';
 import { t } from '@/shared/i18n';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import {
@@ -23,9 +24,10 @@ import {
   Switch,
   type SegmentOption,
   SettingRow,
-  SettingsGroup
+  SettingsGroup,
+  Select,
+  Button
 } from '@voice-room/ui/components';
-import { Select } from '@/shared/ui';
 import {
   enumerateMicrophones,
   enumerateSpeakers,
@@ -267,7 +269,8 @@ function previewNotificationSound(): void {
               :label="t('Микрофон')"
               size="md"
               @value-change="onMicChange"
-            />
+              ><template #option-label="{ text }"><EmojiText :text="text" /></template
+            ></Select>
           </template>
         </SettingRow>
         <SettingRow
@@ -295,6 +298,7 @@ function previewNotificationSound(): void {
         <SettingRow :label="t('Шумоподавление')" stacked>
           <template #control>
             <SegmentControl
+              layout="equal"
               class="settings__segment"
               :options="noiseOptions"
               :value="noiseMode"
@@ -350,7 +354,8 @@ function previewNotificationSound(): void {
               :label="t('Динамик')"
               size="md"
               @value-change="onSpeakerChange"
-            />
+              ><template #option-label="{ text }"><EmojiText :text="text" /></template
+            ></Select>
           </template>
         </SettingRow>
         <SettingRow
@@ -391,14 +396,15 @@ function previewNotificationSound(): void {
               <output class="settings__sound-value">{{ Math.round(notificationVolume) }}%</output>
             </div>
             <div class="settings__sound-actions">
-              <button
+              <Button
+                variant="ghost"
+                size="sm"
                 class="settings__sound-preview"
-                type="button"
                 :disabled="previewingSoundSet"
                 @click="previewNotificationSound"
               >
                 {{ previewingSoundSet ? t('Проверяем…') : t('Проверить набор') }}
-              </button>
+              </Button>
             </div>
           </template>
         </SettingRow>
@@ -428,6 +434,7 @@ function previewNotificationSound(): void {
       >
         <template #control>
           <SegmentControl
+            layout="equal"
             class="settings__segment"
             :options="MICROPHONE_MODE_OPTIONS"
             :value="microphoneMode"

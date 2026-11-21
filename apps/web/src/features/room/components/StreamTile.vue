@@ -7,7 +7,7 @@ import { getScreenProfileLabels } from '@voice-room/call/engine/media/profiles';
 import { playMediaElement } from '@voice-room/call/engine/services/media-playback-service';
 import { enterScreenView } from '@voice-room/call/engine/ui/screen-view';
 import { createLogger, errorContext } from '@/shared/log';
-import { getAvatarPresentation } from '@/shared/ui/avatar-presentation';
+import { getAvatarPresentation } from '@voice-room/ui/avatar-presentation';
 
 const { participant } = defineProps<{
   participant: Participant;
