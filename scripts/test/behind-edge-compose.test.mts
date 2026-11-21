@@ -22,6 +22,7 @@ const ServiceSchema = Type.Object({
   mem_limit: Type.Optional(Type.Union([Type.Number(), Type.String()])),
   oom_score_adj: Type.Optional(Type.Number()),
   cpu_shares: Type.Optional(Type.Number()),
+  cgroup_parent: Type.Optional(Type.String()),
   healthcheck: Type.Optional(Type.Object({ test: Type.Optional(Type.Array(Type.String())) }))
 });
 const ConfigSchema = Type.Object({
@@ -130,12 +131,14 @@ test('a stack behind the edge publishes no web ports, joins the edge network and
     assert.ok((service.oom_score_adj ?? 0) > 0, `${name} goes before production under OOM`);
     // Docker's default weight is 1024: production keeps it.
     assert.ok((service.cpu_shares ?? 1024) < 1024, `${name} yields the CPU to production`);
+    assert.equal(service.cgroup_parent, 'guests.slice', `${name} shares the guests' caps`);
   }
 });
 
-test('production keeps the default CPU weight', { skip: !compose }, () => {
+test('production keeps the default CPU weight and cgroup', { skip: !compose }, () => {
   for (const [name, service] of Object.entries(resolve(['docker-compose.yml']).services)) {
     assert.equal(service.cpu_shares, undefined, name);
+    assert.equal(service.cgroup_parent, undefined, name);
   }
 });
 
