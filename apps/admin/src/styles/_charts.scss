@@ -48,6 +48,7 @@
     height: var(--space-8);
     flex: none;
     border-radius: var(--radius-pill);
+    background: var(--chart-series-color, var(--vr-accent));
   }
 
   &__swatch {
@@ -158,8 +159,4 @@
     margin: 0;
     color: var(--vr-danger);
   }
-}
-
-.admin-vue-host {
-  display: contents;
 }

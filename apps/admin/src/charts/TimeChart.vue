@@ -138,7 +138,7 @@ const chart = computed(() => {
           .join('')
       : '';
 
-  const bars: { x: number; y: number; width: number; height: number; color: string }[] = [];
+  const bars: { x: number; y: number; width: number; height: number; color: ChartSeries['color'] }[] = [];
   if (kind === 'bar') {
     const barWidth = Math.max(1, step * 0.7);
     for (let index = 0; index < count; index += 1) {
@@ -200,7 +200,7 @@ const hovered = computed(() => {
       <span class="admin-chart__title">{{ title }}</span>
       <span class="admin-chart__legend">
         <span v-for="line in legend" :key="line.name" class="admin-chart__key">
-          <span class="admin-chart__swatch" :style="{ background: line.color }" />
+          <span class="admin-chart__swatch" :style="{ '--chart-series-color': line.color }" />
           <span>{{ line.name }}</span>
           <span v-if="line.latest !== null" class="admin-chart__value">{{ format(line.latest) }}</span>
         </span>
@@ -297,7 +297,7 @@ const hovered = computed(() => {
         <div v-if="hovered" class="admin-chart__tip" :style="{ left: hovered.left + 'px' }" role="status">
           <strong>{{ hovered.label }}</strong>
           <span v-for="point in hovered.points" :key="point.name">
-            <span class="admin-chart__dot" :style="{ background: point.color }" />
+            <span class="admin-chart__dot" :style="{ '--chart-series-color': point.color }" />
             {{ `${point.name}: ${point.value === null ? '—' : format(point.value)}` }}
           </span>
         </div>

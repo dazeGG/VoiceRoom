@@ -1,4 +1,3 @@
-import react from '@vitejs/plugin-react';
 import vue from '@vitejs/plugin-vue';
 import { NodePackageImporter } from 'sass';
 import { defineConfig } from 'vitest/config';
@@ -9,7 +8,7 @@ const DEV_HOST = process.env.VITE_DEV_HOST || '127.0.0.1';
 const DEV_PORT = Number(process.env.VITE_DEV_PORT) || 5181;
 
 export default defineConfig({
-  plugins: [vue(), react()],
+  plugins: [vue()],
   css: { preprocessorOptions: { scss: { importers: [new NodePackageImporter()] } } },
   server: {
     host: DEV_HOST,
@@ -21,7 +20,7 @@ export default defineConfig({
   },
   build: { outDir: 'dist', emptyOutDir: true },
   test: {
-    include: ['test/**/*.test.ts', 'test/**/*.test.tsx'],
+    include: ['test/**/*.test.ts'],
     environment: 'jsdom',
     setupFiles: ['test/setup.ts'],
     testTimeout: 20000,

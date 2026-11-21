@@ -1,0 +1,45 @@
+.admin-widget-state {
+  &__groups {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, calc(var(--space-64) * 6)), 1fr));
+    gap: var(--space-20);
+  }
+
+  &__facts {
+    margin: 0;
+  }
+
+  &__facts-title {
+    margin: 0 0 var(--space-8);
+    color: var(--vr-text-muted);
+    font-size: 0.8125rem;
+    font-weight: 600;
+  }
+
+  &__facts-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-4) var(--space-12);
+    border-block-start: calc(var(--space-2) / 2) solid var(--vr-line);
+    padding-block: var(--space-8);
+
+    dd {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: var(--space-8);
+      margin: 0;
+    }
+  }
+
+  &__facts-sub {
+    color: var(--vr-text-muted);
+    font-size: 0.75rem;
+  }
+
+  &__loading {
+    padding: var(--space-16);
+  }
+}

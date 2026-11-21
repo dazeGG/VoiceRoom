@@ -1,14 +1,19 @@
 <script setup lang="ts">
-import { computed, onMounted, onBeforeUnmount, ref, shallowRef, useTemplateRef, watch, watchEffect } from 'vue';
+import { computed, onMounted, ref, shallowRef, useTemplateRef, watch } from 'vue';
 import { Spinner } from '@voice-room/ui/components';
 import { fetchOpenReports, fetchOpenUserReports } from './api/admin.ts';
-import { provideFrame, type RefreshStatus } from './frame.ts';
-import { mountLegacyPages } from './legacy-pages.tsx';
+import { provideFrame } from './frame.ts';
 import type { HistoryRoom } from './pages/rooms/history-room.ts';
 import AccountsPage from './pages/AccountsPage.vue';
 import CallPage from './pages/CallPage.vue';
+import FeedbackPage from './pages/FeedbackPage.vue';
+import OverviewPage from './pages/OverviewPage.vue';
+import ProductPage from './pages/ProductPage.vue';
+import ReportsPage from './pages/ReportsPage.vue';
 import RoomsPage from './pages/RoomsPage.vue';
 import StaffPage from './pages/StaffPage.vue';
+import SystemPage from './pages/SystemPage.vue';
+import WidgetsPage from './pages/WidgetsPage.vue';
 import GlobalSearch from './shell/GlobalSearch.vue';
 import Sidebar from './shell/Sidebar.vue';
 import Topbar from './shell/Topbar.vue';
@@ -20,25 +25,14 @@ import Notice from './Notice.vue';
 const session = useStaffStore();
 const { location, go } = useAdminLocation();
 const { pageTitle, refresh } = provideFrame();
-const legacyRefresh = shallowRef<RefreshStatus | null>(null);
-const frame = {
-  setTitle: () => {},
-  setRefresh: (status: RefreshStatus | null) => {
-    legacyRefresh.value = status;
-  }
-};
 const openReports = ref(0);
 const canReview = useCan('reports.review');
 const roomFocus = shallowRef<HistoryRoom | null>(null);
 const liveFocus = shallowRef<{ roomId: string } | null>(null);
 const main = useTemplateRef<HTMLElement>('main');
-const pageHost = useTemplateRef<HTMLElement>('pageHost');
 
 const tabs = computed(() => (session.staff ? allowedTabs(session.staff.permissions) : []));
 const tab = computed(() => (tabs.value.includes(location.value.tab) ? location.value.tab : tabs.value[0]));
-const topbarRefresh = computed(() =>
-  tab.value === 'accounts' || tab.value === 'staff' || tab.value === 'rooms' ? refresh.value : legacyRefresh.value
-);
 const onCard = computed(() => tab.value === 'accounts' && location.value.accountId !== null);
 const call = computed(() => (tab.value === 'rooms' ? location.value.call : undefined));
 const crumb = computed(() => {
@@ -55,6 +49,9 @@ const title = computed(() => {
 
 function selectTab(next: AdminTab): void {
   go({ tab: next, accountId: null });
+}
+function showReports(): void {
+  selectTab('reports');
 }
 function selectFromSidebar(next: AdminTab): void {
   roomFocus.value = null;
@@ -116,33 +113,6 @@ watch([tab, () => location.value.tab], ([current, requested]) => {
   if (current && current !== requested) go({ tab: current, accountId: null }, true);
 });
 watch([tab, () => location.value.accountId, call], () => main.value?.scrollTo?.({ top: 0 }), { flush: 'post' });
-
-let pages: ReturnType<typeof mountLegacyPages> | undefined;
-watchEffect(
-  () => {
-    const host = pageHost.value;
-    const staff = session.staff;
-    const current = tab.value;
-    if (!host || !staff || !current) {
-      pages?.unmount();
-      pages = undefined;
-      return;
-    }
-    pages ??= mountLegacyPages(host);
-    pages.render({
-      staff,
-      frame,
-      location: { ...location.value, tab: current },
-      selectTab,
-      openAccount,
-      openCall,
-      openLiveRoom,
-      setOpenReports
-    });
-  },
-  { flush: 'post' }
-);
-onBeforeUnmount(() => pages?.unmount());
 </script>
 
 <template>
@@ -162,7 +132,7 @@ onBeforeUnmount(() => pages?.unmount());
       <Topbar
         :crumb="crumb"
         :title="title"
-        :refresh="topbarRefresh"
+        :refresh="refresh"
         :still="call?.kind === 'finished' ? 'Звонок завершён · данные не меняются' : null"
       >
         <GlobalSearch @open-account="openAccount" @open-room="openRoomHistory" />
@@ -197,7 +167,21 @@ onBeforeUnmount(() => pages?.unmount());
             @live-focused="clearLiveFocus"
           />
         </div>
-        <div v-else ref="pageHost" class="admin-frame__content" :class="{ 'admin-legacy': tab !== 'reports' }" />
+        <div v-else class="admin-frame__content">
+          <OverviewPage
+            v-if="tab === 'overview'"
+            @open-reports="showReports"
+            @open-tab="selectTab"
+            @open-account="openAccount"
+            @open-call="openCall"
+            @open-live-room="openLiveRoom"
+          />
+          <ProductPage v-else-if="tab === 'product'" />
+          <SystemPage v-else-if="tab === 'system'" />
+          <WidgetsPage v-else-if="tab === 'widgets'" @open-account="openAccount" @open-call="openCall" />
+          <ReportsPage v-else-if="tab === 'reports'" @resolved="setOpenReports" @open-account="openAccount" />
+          <FeedbackPage v-else-if="tab === 'feedback'" />
+        </div>
       </main>
     </div>
   </div>

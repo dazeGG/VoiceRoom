@@ -1,3 +1,16 @@
+.ui-button {
+  // Keep the kit's default type sizes when the browser's preferred font size changes.
+  font-size: 0.875rem;
+
+  &--size-sm {
+    font-size: 0.8125rem;
+  }
+
+  &--size-xl {
+    font-size: 0.9375rem;
+  }
+}
+
 .admin-section,
 .admin-section__body {
   display: flex;
@@ -86,7 +99,7 @@
   height: var(--space-8);
   flex: none;
   border-radius: var(--radius-pill);
-  background: var(--admin-tone, currentColor);
+  background: var(--admin-tone, var(--vr-text-muted));
 }
 
 .admin-tone {

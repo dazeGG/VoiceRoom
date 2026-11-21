@@ -23,7 +23,7 @@
   &__stretch {
     min-width: calc(var(--space-2) / 2);
     flex-basis: 0;
-    background: var(--net-tone);
+    background: var(--net-tone, var(--vr-text-3));
   }
 }
 
@@ -32,7 +32,7 @@
   height: var(--space-8);
   flex: none;
   border-radius: var(--radius-pill);
-  background: var(--net-tone);
+  background: var(--net-tone, var(--vr-text-3));
 }
 
 .admin-network-legend {
@@ -73,7 +73,7 @@
 
   > span {
     flex-basis: 0;
-    background: var(--net-tone);
+    background: var(--net-tone, var(--vr-text-3));
   }
 }
 

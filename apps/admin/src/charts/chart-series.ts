@@ -5,7 +5,7 @@ export interface ChartSeries {
   /** One value per label; null is a gap (not measured). */
   values: readonly (number | null)[];
   /** A colour token, e.g. 'var(--vr-accent)'. */
-  color: string;
+  color: `var(--vr-${string})`;
   /** A dashed line: a limit (the whole capacity) rather than a measurement. */
   dashed?: boolean | undefined;
 }
