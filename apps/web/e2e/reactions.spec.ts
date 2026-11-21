@@ -71,7 +71,9 @@ test('G70 supplemental mocked keyboard and pagination rendering remains determin
     (request) => request.method() === 'PUT' && request.url().includes('/api/reactions/')
   );
   await Promise.all([keyboardMutation, page.keyboard.press('Enter')]);
-  const thumbChip = page.locator('.reaction-summary__chip', { has: page.getByRole('button', { name: /реакцию 👍/i }) });
+  const thumbChip = page.locator('.reaction-summary .ui-tag', {
+    has: page.getByRole('button', { name: /реакцию 👍/i })
+  });
   const count = thumbChip.getByRole('button', { name: 'Показать пользователей: 120' });
   await expect(count).toBeVisible();
   await count.click();
@@ -117,7 +119,7 @@ test('G70-A03 late reaction response cannot revive a deleted message', async ({ 
   releaseMutation();
   await page.waitForTimeout(100);
   await expect(page.getByText('hostile reaction race')).toHaveCount(0);
-  await expect(page.locator('.reaction-summary__chip')).toHaveCount(0);
+  await expect(page.locator('.reaction-summary .ui-tag')).toHaveCount(0);
 });
 
 test('G70-A04 two accounts and a guest enforce the real mutation boundary across contexts', async ({
@@ -163,12 +165,15 @@ test('G70-A04 two accounts and a guest enforce the real mutation boundary across
   const mutation = await mutationResponse;
   expect(mutation.ok(), await mutation.text()).toBe(true);
   await expect(
-    member.locator('.reaction-summary__chip').getByText('1'),
+    member.locator('.reaction-summary .ui-tag').getByText('1'),
     'mutating member applies the authoritative API response'
   ).toBeVisible();
-  await expect(page.locator('.reaction-summary__chip').getByText('1'), 'owner receives reaction.updated').toBeVisible();
   await expect(
-    guest.locator('.reaction-summary__chip').getByText('1'),
+    page.locator('.reaction-summary .ui-tag').getByText('1'),
+    'owner receives reaction.updated'
+  ).toBeVisible();
+  await expect(
+    guest.locator('.reaction-summary .ui-tag').getByText('1'),
     'guest receives read-only reaction.updated'
   ).toBeVisible();
   await guestMessage.hover();
@@ -181,14 +186,14 @@ test('G70-A04 two accounts and a guest enforce the real mutation boundary across
   await expect(
     reconnected
       .locator('.message-bubble', { hasText: 'three-context reaction boundary' })
-      .locator('.reaction-summary__chip')
+      .locator('.reaction-summary .ui-tag')
       .getByText('1')
   ).toBeVisible();
   const ownerMessage = page.locator('.message-bubble', { hasText: 'three-context reaction boundary' });
   await ownerMessage.hover();
   await ownerMessage.getByRole('button', { name: 'Добавить быструю реакцию 👍' }).click();
   for (const target of [page, reconnected, guest])
-    await expect(target.locator('.reaction-summary__chip').getByText('2')).toBeVisible();
+    await expect(target.locator('.reaction-summary .ui-tag').getByText('2')).toBeVisible();
   await memberContext.close();
   await guestContext.close();
 });

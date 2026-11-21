@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Switch } from '@voice-room/ui/components';
+import { Switch, SettingRow, SettingsGroup } from '@voice-room/ui/components';
 import { t } from '@/shared/i18n';
 import { X } from '@lucide/vue';
 import { computed, onMounted, ref, watch } from 'vue';
@@ -180,95 +180,98 @@ async function toggleSystemNotifications(): Promise<void> {
 <template>
   <div class="settings__sound">
     <template v-if="support.overlay">
-      <div>
-        <div class="settings__gate-head">
-          <span class="settings__field-label">{{ t('Оверлей в игре') }}</span>
-          <Switch
-            :model-value="overlayEnabled"
-            v-bind="{ ariaLabel: t('Оверлей в игре') }"
-            :disabled="overlaySaving"
-            @update:model-value="void changeOverlay({ enabled: !overlayEnabled })"
-          />
-        </div>
-        <div class="settings__gate-hint">
-          {{ t('Панель только поверх') }} <strong>{{ t('игры') }}</strong>
-          {{
-            t(
-              'в оконном или borderless режиме: Steam, Epic, Riot, Xbox и то, что вы добавите ниже. Браузер, проводник и лаунчеры не считаются игрой. В exclusive fullscreen Windows отдаёт монитор игре — оверлея там не будет.'
-            )
-          }}
-        </div>
-      </div>
+      <SettingsGroup>
+        <SettingRow :label="t('Оверлей в игре')">
+          <template #description>
+            {{ t('Панель только поверх') }} <strong>{{ t('игры') }}</strong>
+            {{
+              t(
+                'в оконном или borderless режиме: Steam, Epic, Riot, Xbox и то, что вы добавите ниже. Браузер, проводник и лаунчеры не считаются игрой. В exclusive fullscreen Windows отдаёт монитор игре — оверлея там не будет.'
+              )
+            }}
+          </template>
+          <template #control>
+            <Switch
+              :model-value="overlayEnabled"
+              v-bind="{ ariaLabel: t('Оверлей в игре') }"
+              :disabled="overlaySaving"
+              @update:model-value="void changeOverlay({ enabled: !overlayEnabled })"
+            />
+          </template>
+        </SettingRow>
 
-      <div
-        class="settings__notification-dependent"
-        :class="{ 'settings__notification-dependent--disabled': !overlayEnabled }"
-      >
-        <span class="settings__field-label">{{ t('Положение') }}</span>
-        <Select
-          v-model="overlayAnchor"
-          :options="[
-            { value: 'top-left', label: t('Слева сверху') },
-            { value: 'top-right', label: t('Справа сверху') },
-            { value: 'bottom-left', label: t('Слева снизу') },
-            { value: 'bottom-right', label: t('Справа снизу') }
-          ]"
-          :label="t('Положение оверлея')"
-          size="md"
-          :disabled="overlaySaving || !overlayEnabled"
-          @value-change="
-            (value: string) => {
-              if (isOverlayAnchor(value)) void changeOverlay({ anchor: value });
-            }
-          "
-        />
-      </div>
+        <SettingRow
+          class="settings__notification-dependent"
+          :class="{ 'settings__notification-dependent--disabled': !overlayEnabled }"
+          :label="t('Положение')"
+        >
+          <template #control>
+            <Select
+              v-model="overlayAnchor"
+              :options="[
+                { value: 'top-left', label: t('Слева сверху') },
+                { value: 'top-right', label: t('Справа сверху') },
+                { value: 'bottom-left', label: t('Слева снизу') },
+                { value: 'bottom-right', label: t('Справа снизу') }
+              ]"
+              :label="t('Положение оверлея')"
+              size="md"
+              :disabled="overlaySaving || !overlayEnabled"
+              @value-change="
+                (value: string) => {
+                  if (isOverlayAnchor(value)) void changeOverlay({ anchor: value });
+                }
+              "
+            />
+          </template>
+        </SettingRow>
 
-      <div
-        class="settings__notification-dependent"
-        :class="{ 'settings__notification-dependent--disabled': !overlayEnabled }"
-      >
-        <span class="settings__field-label">{{ t('Размер аватаров') }}</span>
-        <Select
-          v-model="overlayAvatarSize"
-          :options="[
-            { value: 'small', label: t('Маленькие') },
-            { value: 'medium', label: t('Средние') },
-            { value: 'large', label: t('Большие') }
-          ]"
-          :label="t('Размер аватаров в оверлее')"
-          size="md"
-          :disabled="overlaySaving || !overlayEnabled"
-          @value-change="
-            (value: string) => {
-              if (isOverlayAvatarSize(value)) void changeOverlay({ avatarSize: value });
-            }
-          "
-        />
-      </div>
+        <SettingRow
+          class="settings__notification-dependent"
+          :class="{ 'settings__notification-dependent--disabled': !overlayEnabled }"
+          :label="t('Размер аватаров')"
+        >
+          <template #control>
+            <Select
+              v-model="overlayAvatarSize"
+              :options="[
+                { value: 'small', label: t('Маленькие') },
+                { value: 'medium', label: t('Средние') },
+                { value: 'large', label: t('Большие') }
+              ]"
+              :label="t('Размер аватаров в оверлее')"
+              size="md"
+              :disabled="overlaySaving || !overlayEnabled"
+              @value-change="
+                (value: string) => {
+                  if (isOverlayAvatarSize(value)) void changeOverlay({ avatarSize: value });
+                }
+              "
+            />
+          </template>
+        </SettingRow>
 
-      <div
-        class="settings__notification-dependent"
-        :class="{ 'settings__notification-dependent--disabled': !overlayEnabled }"
-      >
-        <div class="settings__gate-head">
-          <span class="settings__field-label">{{ t('Имена участников') }}</span>
-          <Switch
-            :model-value="overlayShowNames"
-            v-bind="{ ariaLabel: t('Имена участников') }"
-            :disabled="overlaySaving || !overlayEnabled"
-            @update:model-value="void changeOverlay({ showNames: !overlayShowNames })"
-          />
-        </div>
-        <div class="settings__gate-hint">{{ t('Если выключить, в игре останутся только аватары.') }}</div>
-      </div>
-
-      <section
+        <SettingRow
+          class="settings__notification-dependent"
+          :class="{ 'settings__notification-dependent--disabled': !overlayEnabled }"
+          :label="t('Имена участников')"
+        >
+          <template #description>{{ t('Если выключить, в игре останутся только аватары.') }}</template>
+          <template #control>
+            <Switch
+              :model-value="overlayShowNames"
+              v-bind="{ ariaLabel: t('Имена участников') }"
+              :disabled="overlaySaving || !overlayEnabled"
+              @update:model-value="void changeOverlay({ showNames: !overlayShowNames })"
+            />
+          </template>
+        </SettingRow>
+      </SettingsGroup>
+      <SettingsGroup
         class="settings__overlay-games"
         :class="{ 'settings__overlay-games--disabled': !overlayEnabled }"
-        aria-labelledby="overlayGamesTitle"
+        :heading="t('Последнее окно')"
       >
-        <span id="overlayGamesTitle" class="settings__field-label">{{ t('Последнее окно') }}</span>
         <div class="settings__overlay-window">
           <template v-if="overlayForeground?.exe">
             <div class="settings__overlay-window-text">
@@ -306,71 +309,69 @@ async function toggleSystemNotifications(): Promise<void> {
             </button>
           </li>
         </ul>
-      </section>
+      </SettingsGroup>
     </template>
 
-    <template v-if="support.autostart">
-      <div>
-        <div class="settings__gate-head">
-          <span class="settings__field-label">{{ t('Автозапуск') }}</span>
+    <SettingsGroup v-if="support.autostart">
+      <SettingRow :label="t('Автозапуск')">
+        <template #description>
+          <template v-if="autostartSupported">{{ t('VoiceRoom откроется при входе в систему.') }}</template>
+          <template v-else>{{ t('Автозапуск недоступен в этой сборке приложения.') }}</template>
+        </template>
+        <template #control>
           <Switch
             :model-value="openAtLogin"
             v-bind="{ ariaLabel: t('Автозапуск') }"
             :disabled="autostartSaving || !autostartSupported"
             @update:model-value="void changeAutostart({ openAtLogin: !openAtLogin })"
           />
-        </div>
-        <div class="settings__gate-hint">
-          <template v-if="autostartSupported">{{ t('VoiceRoom откроется при входе в систему.') }}</template>
-          <template v-else>{{ t('Автозапуск недоступен в этой сборке приложения.') }}</template>
-        </div>
-      </div>
+        </template>
+      </SettingRow>
 
-      <div
+      <SettingRow
         class="settings__notification-dependent"
         :class="{ 'settings__notification-dependent--disabled': !openAtLogin }"
+        :label="t('Автозапуск свёрнутым')"
       >
-        <div class="settings__gate-head">
-          <span class="settings__field-label">{{ t('Автозапуск свёрнутым') }}</span>
+        <template #description>
+          <template v-if="support.mac">{{
+            t('При автозапуске окно не откроется — VoiceRoom будет ждать в Dock.')
+          }}</template>
+          <template v-else>{{ t('При автозапуске окно не откроется — VoiceRoom будет ждать в трее.') }}</template>
+        </template>
+        <template #control>
           <Switch
             :model-value="startMinimized"
             v-bind="{ ariaLabel: t('Автозапуск свёрнутым') }"
             :disabled="autostartSaving || !autostartSupported || !openAtLogin"
             @update:model-value="void changeAutostart({ startMinimized: !startMinimized })"
           />
-        </div>
-        <div class="settings__gate-hint">
-          <template v-if="support.mac">{{
-            t('При автозапуске окно не откроется — VoiceRoom будет ждать в Dock.')
-          }}</template>
-          <template v-else>{{ t('При автозапуске окно не откроется — VoiceRoom будет ждать в трее.') }}</template>
-        </div>
-      </div>
+        </template>
+      </SettingRow>
 
-      <div v-if="!support.mac">
-        <div class="settings__gate-head">
-          <span class="settings__field-label">{{ t('Системные уведомления') }}</span>
-          <Switch
-            :model-value="systemNotificationsEnabled"
-            v-bind="{ ariaLabel: t('Системные уведомления') }"
-            @update:model-value="void toggleSystemNotifications()"
-          />
-        </div>
-        <div class="settings__gate-hint">
+      <SettingRow v-if="!support.mac" :label="t('Системные уведомления')">
+        <template #description>
           {{
             t(
               'Уведомления Windows о сообщениях и заявках в друзья, без системного звука. Звуки VoiceRoom и счётчик на панели задач от этого не зависят.'
             )
           }}
-        </div>
-      </div>
-    </template>
+        </template>
+        <template #control>
+          <Switch
+            :model-value="systemNotificationsEnabled"
+            v-bind="{ ariaLabel: t('Системные уведомления') }"
+            @update:model-value="void toggleSystemNotifications()"
+          />
+        </template>
+      </SettingRow>
+    </SettingsGroup>
 
-    <div v-if="support.diagnostics">
-      <span class="settings__field-label">{{ t('Диагностика') }}</span>
-      <div class="settings__gate-hint">
-        {{ t('Логи и сведения о системе помогут поддержке разобраться с проблемой.') }}
-      </div>
+    <SettingsGroup
+      v-if="support.diagnostics"
+      :heading="t('Диагностика')"
+      :description="t('Логи и сведения о системе помогут поддержке разобраться с проблемой.')"
+    >
       <div class="settings__diagnostics-actions">
         <button class="settings__unblock-button" type="button" @click="void openLogsFolder()">
           {{ t('Открыть папку логов') }}
@@ -379,6 +380,6 @@ async function toggleSystemNotifications(): Promise<void> {
           {{ t('Скопировать информацию о системе') }}
         </button>
       </div>
-    </div>
+    </SettingsGroup>
   </div>
 </template>

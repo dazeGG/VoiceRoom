@@ -4,6 +4,7 @@
 // blob. Undone with vi.unstubAllGlobals / vi.restoreAllMocks.
 
 import { vi } from 'vitest';
+import { markRaw } from 'vue';
 import type * as Canvas2DModule from '@/shared/ui/AvatarCropDialog/canvas-2d';
 
 function newContext(): Canvas2DModule.Canvas2D {
@@ -31,7 +32,12 @@ export function stubCanvasAndImages(options: { imageSize?: [number, number]; fai
   const exports: CanvasExport[] = [];
   fakeContext = newContext();
 
-  class LoadedImage {
+  class LoadedImage extends EventTarget {
+    constructor() {
+      super();
+      markRaw(this);
+    }
+
     naturalWidth = naturalWidth;
     naturalHeight = naturalHeight;
     onload: (() => void) | null = null;
@@ -42,7 +48,10 @@ export function stubCanvasAndImages(options: { imageSize?: [number, number]; fai
     }
     set src(value: string) {
       this.#src = value;
-      queueMicrotask(() => this.onload?.());
+      queueMicrotask(() => {
+        this.onload?.();
+        this.dispatchEvent(new Event('load'));
+      });
     }
   }
   vi.stubGlobal('Image', LoadedImage);

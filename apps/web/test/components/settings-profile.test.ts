@@ -42,7 +42,7 @@ async function renderSettings(user: AuthUser = saved) {
   return { ...view, props, session };
 }
 
-const profileImage = () => document.querySelector<HTMLImageElement>('.settings__profile-avatar img');
+const profileImage = () => screen.queryByRole('button', { name: 'Изменить аватар' })?.querySelector('img') ?? null;
 
 async function pickAndCrop(): Promise<void> {
   const input = instanceOf(document.querySelector('.settings__avatar-input'), HTMLInputElement, 'avatar input');

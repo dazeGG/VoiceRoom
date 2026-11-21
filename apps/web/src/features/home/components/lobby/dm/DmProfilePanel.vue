@@ -47,7 +47,7 @@ async function toggleMute(): Promise<void> {
         :src="peer.avatarUrl"
         :color-key="peer.avatarColorKey"
         :background="peer.avatarAccent || undefined"
-        :size="76"
+        :size="80"
         :online="presence === 'online'"
         :afk="presence === 'away'"
         :dnd="presence === 'dnd'"

@@ -64,7 +64,7 @@ const drop = new AttachmentDrop({
           :src="peer.avatarUrl"
           :color-key="peer.avatarColorKey"
           :background="peer.avatarAccent || undefined"
-          :size="38"
+          :size="40"
           :online="presence === 'online'"
           :afk="presence === 'away'"
           :dnd="presence === 'dnd'"

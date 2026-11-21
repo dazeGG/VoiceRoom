@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Switch } from '@voice-room/ui/components';
+import { Switch, SettingRow, SettingsGroup } from '@voice-room/ui/components';
 import { t } from '@/shared/i18n';
 import { BellOff } from '@lucide/vue';
 import { computed, onMounted, ref } from 'vue';
@@ -154,19 +154,10 @@ function toggleRoomNotifications(roomId: string): Promise<void> {
 
 <template>
   <div class="settings__sound">
-    <template v-if="!support.mac">
+    <SettingsGroup v-if="!support.mac">
       <!-- The desktop app keeps this switch in «Приложение». -->
-      <div :hidden="support.desktopApp && support.autostart">
-        <div class="settings__gate-head">
-          <span class="settings__field-label">{{ notificationToggleLabel }}</span>
-          <Switch
-            :model-value="browserNotificationsEnabled"
-            v-bind="{ ariaLabel: notificationToggleLabel }"
-            :disabled="pushNotifications.busy"
-            @update:model-value="void toggleBrowserNotifications()"
-          />
-        </div>
-        <div class="settings__gate-hint">
+      <SettingRow :hidden="support.desktopApp && support.autostart" :label="notificationToggleLabel">
+        <template #description>
           <template v-if="pushNotifications.supported && pushNotifications.active">{{
             t('Включены. События будут доставляться, когда вкладка закрыта.')
           }}</template>
@@ -186,32 +177,41 @@ function toggleRoomNotifications(roomId: string): Promise<void> {
           <template v-else>{{
             t('Нажмите переключатель, чтобы включить. Запрос выполняется только по вашему действию.')
           }}</template>
-        </div>
-        <p
-          v-if="pushNotifications.active && pushNotifications.localeSyncPending"
-          class="settings__gate-hint"
-          role="status"
-        >
-          {{ t('Язык приложения сохранён. Язык фоновых уведомлений обновится после синхронизации.') }}
-        </p>
-      </div>
 
-      <div
+          <p
+            v-if="pushNotifications.active && pushNotifications.localeSyncPending"
+            class="settings__gate-hint"
+            role="status"
+          >
+            {{ t('Язык приложения сохранён. Язык фоновых уведомлений обновится после синхронизации.') }}
+          </p>
+        </template>
+        <template #control>
+          <Switch
+            :model-value="browserNotificationsEnabled"
+            v-bind="{ ariaLabel: notificationToggleLabel }"
+            :disabled="pushNotifications.busy"
+            @update:model-value="void toggleBrowserNotifications()"
+          />
+        </template>
+      </SettingRow>
+
+      <SettingRow
         class="settings__notification-dependent"
         :class="{ 'settings__notification-dependent--disabled': !browserNotificationsEnabled }"
+        :label="t('Приватный текст уведомлений')"
+        :description="t('Скрывает текст сообщений в системных уведомлениях.')"
       >
-        <div class="settings__gate-head">
-          <span class="settings__field-label">{{ t('Приватный текст уведомлений') }}</span>
+        <template #control>
           <Switch
             :model-value="notificationPreferences.privateNotifications"
             v-bind="{ ariaLabel: t('Приватный текст уведомлений') }"
             :disabled="notificationSaving || !browserNotificationsEnabled"
             @update:model-value="void togglePrivateNotifications()"
           />
-        </div>
-        <div class="settings__gate-hint">{{ t('Скрывает текст сообщений в системных уведомлениях.') }}</div>
-      </div>
-    </template>
+        </template>
+      </SettingRow>
+    </SettingsGroup>
 
     <div class="settings__notification-ignore">
       <div>
@@ -222,20 +222,21 @@ function toggleRoomNotifications(roomId: string): Promise<void> {
       </div>
 
       <div class="settings__notification-targets">
-        <section class="settings__notification-group" aria-labelledby="notificationUsersTitle">
-          <span id="notificationUsersTitle" class="settings__field-label">{{ t('Пользователи') }}</span>
-          <div v-if="users.length > 0" class="settings__notification-list">
-            <div v-for="peer in users" :key="peer.id" class="settings__notification-row">
-              <Avatar
-                :name="displayNameOf(peer)"
-                :src="peer.avatarUrl"
-                :color-key="peer.avatarColorKey"
-                :background="peer.avatarAccent || undefined"
-                :size="32"
-              />
-              <span class="settings__notification-name">
+        <SettingsGroup :heading="t('Пользователи')">
+          <template v-if="users.length > 0">
+            <SettingRow v-for="peer in users" :key="peer.id">
+              <template #leading>
+                <Avatar
+                  :name="displayNameOf(peer)"
+                  :src="peer.avatarUrl"
+                  :color-key="peer.avatarColorKey"
+                  :background="peer.avatarAccent || undefined"
+                  :size="32"
+                />
+              </template>
+              <template #title>
                 <span class="settings__notification-title">
-                  <strong><EmojiText :text="displayNameOf(peer)" /></strong>
+                  <EmojiText :text="displayNameOf(peer)" />
                   <span
                     v-if="notificationPreferences.mutedPeerIds.includes(peer.id)"
                     class="settings__notification-muted"
@@ -246,33 +247,36 @@ function toggleRoomNotifications(roomId: string): Promise<void> {
                     <BellOff v-bind="iconSm" aria-hidden="true" />
                   </span>
                 </span>
-                <small>@{{ peer.login }}</small>
-              </span>
-              <Switch
-                :model-value="!notificationPreferences.mutedPeerIds.includes(peer.id)"
-                v-bind="{ ariaLabel: t('Получать уведомления от {p0}', { p0: displayNameOf(peer) }) }"
-                :disabled="Boolean(notificationTargetSaving)"
-                @update:model-value="void togglePeerNotifications(peer.id)"
-              />
-            </div>
-          </div>
+              </template>
+              <template #description>@{{ peer.login }}</template>
+              <template #control>
+                <Switch
+                  :model-value="!notificationPreferences.mutedPeerIds.includes(peer.id)"
+                  v-bind="{ ariaLabel: t('Получать уведомления от {p0}', { p0: displayNameOf(peer) }) }"
+                  :disabled="Boolean(notificationTargetSaving)"
+                  @update:model-value="void togglePeerNotifications(peer.id)"
+                />
+              </template>
+            </SettingRow>
+          </template>
           <div v-else class="settings__notification-empty">{{ t('Диалогов пока нет.') }}</div>
-        </section>
+        </SettingsGroup>
 
-        <section class="settings__notification-group" aria-labelledby="notificationRoomsTitle">
-          <span id="notificationRoomsTitle" class="settings__field-label">{{ t('Комнаты') }}</span>
-          <div v-if="rooms.length > 0" class="settings__notification-list">
-            <div v-for="room in rooms" :key="room.roomId" class="settings__notification-row">
-              <Avatar
-                :name="room.name?.trim() || room.roomId"
-                :src="room.avatarUrl"
-                shape="squircle"
-                background="var(--vr-surface-3)"
-                :size="32"
-              />
-              <span class="settings__notification-name">
+        <SettingsGroup :heading="t('Комнаты')">
+          <template v-if="rooms.length > 0">
+            <SettingRow v-for="room in rooms" :key="room.roomId">
+              <template #leading>
+                <Avatar
+                  :name="room.name?.trim() || room.roomId"
+                  :src="room.avatarUrl"
+                  shape="squircle"
+                  background="var(--vr-surface-3)"
+                  :size="32"
+                />
+              </template>
+              <template #title>
                 <span class="settings__notification-title">
-                  <strong><EmojiText :text="room.name?.trim() || t('Комната')" /></strong>
+                  <EmojiText :text="room.name?.trim() || t('Комната')" />
                   <span
                     v-if="notificationPreferences.mutedRoomIds.includes(room.roomId)"
                     class="settings__notification-muted"
@@ -283,51 +287,56 @@ function toggleRoomNotifications(roomId: string): Promise<void> {
                     <BellOff v-bind="iconSm" aria-hidden="true" />
                   </span>
                 </span>
-                <small>{{ room.roomId }}</small>
-              </span>
-              <Switch
-                :model-value="!notificationPreferences.mutedRoomIds.includes(room.roomId)"
-                v-bind="{ ariaLabel: t('Получать уведомления комнаты {p0}', { p0: room.name?.trim() || room.roomId }) }"
-                :disabled="Boolean(notificationTargetSaving)"
-                @update:model-value="void toggleRoomNotifications(room.roomId)"
-              />
-            </div>
-          </div>
+              </template>
+              <template #description>{{ room.roomId }}</template>
+              <template #control>
+                <Switch
+                  :model-value="!notificationPreferences.mutedRoomIds.includes(room.roomId)"
+                  v-bind="{
+                    ariaLabel: t('Получать уведомления комнаты {p0}', { p0: room.name?.trim() || room.roomId })
+                  }"
+                  :disabled="Boolean(notificationTargetSaving)"
+                  @update:model-value="void toggleRoomNotifications(room.roomId)"
+                />
+              </template>
+            </SettingRow>
+          </template>
           <div v-else class="settings__notification-empty">{{ t('Сохранённых комнат пока нет.') }}</div>
-        </section>
+        </SettingsGroup>
       </div>
     </div>
 
-    <section class="settings__notification-group settings__blocked-users" aria-labelledby="blockedUsersTitle">
-      <div>
-        <span id="blockedUsersTitle" class="settings__section-title">{{ t('Заблокированные пользователи') }}</span>
-        <div class="settings__gate-hint">{{ t('Разблокировка не восстанавливает дружбу и историю отношений.') }}</div>
-      </div>
+    <SettingsGroup
+      :heading="t('Заблокированные пользователи')"
+      :description="t('Разблокировка не восстанавливает дружбу и историю отношений.')"
+    >
       <div v-if="blockedUsersLoading" class="settings__notification-empty" role="status">{{ t('Загружаем…') }}</div>
-      <div v-else-if="blockedUsers.length > 0" class="settings__notification-list">
-        <div v-for="blocked in blockedUsers" :key="blocked.id" class="settings__notification-row">
-          <Avatar
-            :name="displayNameOf(blocked)"
-            :src="blocked.avatarUrl"
-            :color-key="blocked.avatarColorKey"
-            :background="blocked.avatarAccent || undefined"
-            :size="32"
-          />
-          <span class="settings__notification-name">
-            <strong><EmojiText :text="displayNameOf(blocked)" /></strong>
-            <small v-if="blocked.login">@{{ blocked.login }}</small>
-          </span>
-          <button
-            class="settings__unblock-button"
-            type="button"
-            :disabled="Boolean(blockedUserSaving)"
-            @click="void unblockBlockedUser(blocked.id)"
-          >
-            {{ blockedUserSaving === blocked.id ? t('Разблокируем…') : t('Разблокировать') }}
-          </button>
-        </div>
-      </div>
+      <template v-else-if="blockedUsers.length > 0">
+        <SettingRow v-for="blocked in blockedUsers" :key="blocked.id">
+          <template #leading>
+            <Avatar
+              :name="displayNameOf(blocked)"
+              :src="blocked.avatarUrl"
+              :color-key="blocked.avatarColorKey"
+              :background="blocked.avatarAccent || undefined"
+              :size="32"
+            />
+          </template>
+          <template #title><EmojiText :text="displayNameOf(blocked)" /> </template>
+          <template v-if="blocked.login" #description>@{{ blocked.login }}</template>
+          <template #control>
+            <button
+              class="settings__unblock-button"
+              type="button"
+              :disabled="Boolean(blockedUserSaving)"
+              @click="void unblockBlockedUser(blocked.id)"
+            >
+              {{ blockedUserSaving === blocked.id ? t('Разблокируем…') : t('Разблокировать') }}
+            </button>
+          </template>
+        </SettingRow>
+      </template>
       <div v-else class="settings__notification-empty">{{ t('Заблокированных пользователей нет.') }}</div>
-    </section>
+    </SettingsGroup>
   </div>
 </template>

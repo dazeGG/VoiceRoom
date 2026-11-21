@@ -41,7 +41,7 @@ const name = computed(() => roomDisplayName(props.room));
       :room-id="room.roomId"
       :name="name"
       :avatar-url="room.avatarUrl"
-      :avatar-size="34"
+      :avatar-size="36"
       trigger-class="room-view-header__trigger"
       title-class="room-view-header__name"
       chevron-class="room-view-header__chevron"

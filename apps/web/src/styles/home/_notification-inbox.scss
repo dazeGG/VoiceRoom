@@ -12,12 +12,8 @@
 //   .notification-inbox-body          -> .notification-inbox__body
 //   .notification-inbox-list          -> .notification-inbox__list
 //   li / li.unread                    -> .notification-inbox__item / --unread
-//   li button                         -> .notification-inbox__open
 //   .notification-inbox-dot           -> .notification-inbox__dot (--skeleton)
-//   .notification-inbox-text          -> .notification-inbox__text
 //   strong / strong.is-retracted      -> .notification-inbox__message / --retracted
-//   small                             -> .notification-inbox__meta
-//   .notification-inbox-reason/-room/-time -> .notification-inbox__reason/__room/__time
 //   .notification-inbox-state         -> .notification-inbox__state
 //   .notification-inbox-glyph (--error) -> .notification-inbox__glyph (--error)
 //   .notification-inbox-skeleton      -> .notification-inbox__skeleton
@@ -140,29 +136,6 @@
   list-style: none;
 }
 
-.notification-inbox__open {
-  display: flex;
-  width: 100%;
-  align-items: flex-start;
-  gap: 12px;
-  padding: 12px;
-  border: 0;
-  border-radius: 12px;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-  transition: background 0.14s ease;
-
-  &:hover,
-  &:focus-visible {
-    background: var(--vr-hover);
-    outline: none;
-  }
-}
-
-// The unread marker is a dot in the gutter rather than a filled row.
 .notification-inbox__dot {
   width: 8px;
   height: 8px;
@@ -172,64 +145,12 @@
   background: transparent;
 }
 
-.notification-inbox__item--unread .notification-inbox__dot {
-  background: var(--vr-accent);
-}
-
 .notification-inbox__dot--skeleton {
   background: var(--vr-surface-3);
 }
 
-.notification-inbox__text {
-  display: flex;
-  min-width: 0;
-  flex: 1;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.notification-inbox__message {
-  overflow: hidden;
-  overflow-wrap: anywhere;
-  color: var(--vr-text-2);
-  font-size: 0.875rem;
-  font-weight: 400;
-  line-height: 1.4;
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
-}
-
-.notification-inbox__item--unread .notification-inbox__message {
-  color: var(--vr-text);
-  font-weight: 600;
-}
-
 .notification-inbox__message--retracted {
   font-style: italic;
-}
-
-.notification-inbox__meta {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-  color: var(--vr-text-muted);
-  font-size: 0.75rem;
-}
-
-.notification-inbox__reason {
-  padding: 1px 7px;
-  border-radius: 999px;
-  background: var(--vr-hover);
-  color: var(--vr-text-2);
-  font-weight: 500;
-}
-
-.notification-inbox__item--unread .notification-inbox__reason {
-  background: var(--vr-accent-soft);
-  color: var(--vr-accent);
 }
 
 .notification-inbox__state {

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Spinner } from '@voice-room/ui/components';
+import { Spinner, SettingRow, SettingsGroup } from '@voice-room/ui/components';
 import { t } from '@/shared/i18n';
 import { KeyRound, Laptop, MonitorSmartphone } from '@lucide/vue';
 import { computed, onMounted, ref, watch } from 'vue';
@@ -157,8 +157,7 @@ async function endOtherSessions(): Promise<void> {
 
 <template>
   <div class="account-security">
-    <section class="settings__notification-group" aria-labelledby="accountPasswordTitle">
-      <span id="accountPasswordTitle" class="settings__section-title">{{ t('Пароль') }}</span>
+    <SettingsGroup :heading="t('Пароль')">
       <form class="account-security__password" @submit.prevent="submitPasswordChange">
         <div class="settings__password-fields">
           <label>
@@ -195,49 +194,45 @@ async function endOtherSessions(): Promise<void> {
           </button>
         </div>
       </form>
-    </section>
+    </SettingsGroup>
 
-    <section class="settings__notification-group" aria-labelledby="recoveryCodesTitle">
-      <span id="recoveryCodesTitle" class="settings__section-title">{{ t('Коды восстановления') }}</span>
+    <SettingsGroup :heading="t('Коды восстановления')">
       <div v-if="loading && !recoveryCodes" class="settings__notification-empty" role="status">
         {{ t('Загружаем…') }}
       </div>
       <template v-else-if="recoveryCodes">
-        <div
-          class="settings__notification-row account-security__row"
+        <SettingRow
           :class="{ 'account-security__row--warning': recoveryCodes.remaining === 0 || lowOnCodes }"
+          :label="recoveryCodes.remaining > 0 ? t('Коды созданы') : t('Коды не созданы')"
+          :description="recoveryCodesSummary(recoveryCodes)"
         >
-          <span class="account-security__icon" aria-hidden="true"><KeyRound v-bind="iconMd" /></span>
-          <span class="settings__notification-name">
-            <strong>{{ recoveryCodes.remaining > 0 ? t('Коды созданы') : t('Коды не созданы') }}</strong>
-            <small>{{ recoveryCodesSummary(recoveryCodes) }}</small>
-          </span>
-          <button
-            ref="recoveryCodesButton"
-            class="settings__save account-security__action"
-            :class="{ 'account-security__action--highlight': recoveryCodesHighlighted }"
-            type="button"
-            @click="codesDialogOpen = true"
-          >
-            {{ recoveryCodes.generatedAt ? t('Создать новые') : t('Создать коды') }}
-          </button>
-        </div>
+          <template #leading>
+            <span class="account-security__icon" aria-hidden="true"><KeyRound v-bind="iconMd" /></span>
+          </template>
+          <template #control>
+            <button
+              ref="recoveryCodesButton"
+              class="settings__save account-security__action"
+              :class="{ 'account-security__action--highlight': recoveryCodesHighlighted }"
+              type="button"
+              @click="codesDialogOpen = true"
+            >
+              {{ recoveryCodes.generatedAt ? t('Создать новые') : t('Создать коды') }}
+            </button>
+          </template>
+        </SettingRow>
         <div v-if="lowOnCodes" class="settings__gate-hint">
           {{ t('Кодов почти не осталось — создайте новый набор.') }}
         </div>
       </template>
-    </section>
+    </SettingsGroup>
 
-    <section class="settings__notification-group" aria-labelledby="accountSessionsTitle">
-      <div class="account-security__head">
-        <div>
-          <span id="accountSessionsTitle" class="settings__section-title">{{ t('Устройства') }}</span>
-          <div class="settings__gate-hint">
-            {{ t('Где открыт ваш аккаунт. Незнакомый сеанс завершите — пароль после этого лучше сменить.') }}
-          </div>
-        </div>
+    <SettingsGroup
+      :heading="t('Устройства')"
+      :description="t('Где открыт ваш аккаунт. Незнакомый сеанс завершите — пароль после этого лучше сменить.')"
+    >
+      <template v-if="hasOtherSessions" #actions>
         <button
-          v-if="hasOtherSessions"
           class="settings__unblock-button"
           type="button"
           :disabled="endingOthers || Boolean(endingSessionId)"
@@ -245,52 +240,60 @@ async function endOtherSessions(): Promise<void> {
         >
           {{ endingOthers ? t('Завершаем…') : t('Выйти на других устройствах') }}
         </button>
-      </div>
+      </template>
       <div v-if="loading && sessions.length === 0" class="settings__notification-empty" role="status">
         {{ t('Загружаем…') }}
       </div>
-      <div v-else-if="sessions.length > 0" class="settings__notification-list">
-        <div v-for="session in sessions" :key="session.id" class="settings__notification-row account-security__row">
-          <span class="account-security__icon" aria-hidden="true">
-            <MonitorSmartphone v-if="session.client === 'VoiceRoom Desktop'" v-bind="iconMd" />
-            <Laptop v-else v-bind="iconMd" />
-          </span>
-          <span class="settings__notification-name">
-            <strong>{{ sessionDeviceLabel(session) }}</strong>
-            <small>
-              {{ session.current ? t('Это устройство') : formatLastSeen(session.lastSeenAt)
-              }}{{ session.location ? ` · ${session.location}` : '' }}
-            </small>
-          </span>
-          <button
-            v-if="!session.current"
-            class="settings__unblock-button"
-            type="button"
-            :disabled="endingOthers || Boolean(endingSessionId)"
-            @click="void endSession(session)"
-          >
-            {{ endingSessionId === session.id ? t('Завершаем…') : t('Завершить') }}
-          </button>
-        </div>
-      </div>
+      <template v-else-if="sessions.length > 0">
+        <SettingRow
+          v-for="session in sessions"
+          :key="session.id"
+          role="group"
+          :aria-label="sessionDeviceLabel(session)"
+          :label="sessionDeviceLabel(session)"
+        >
+          <template #leading>
+            <span class="account-security__icon" aria-hidden="true">
+              <MonitorSmartphone v-if="session.client === 'VoiceRoom Desktop'" v-bind="iconMd" />
+              <Laptop v-else v-bind="iconMd" />
+            </span>
+          </template>
+          <template #description>
+            {{ session.current ? t('Это устройство') : formatLastSeen(session.lastSeenAt)
+            }}{{ session.location ? ` · ${session.location}` : '' }}
+          </template>
+          <template v-if="!session.current" #control>
+            <button
+              class="settings__unblock-button"
+              type="button"
+              :disabled="endingOthers || Boolean(endingSessionId)"
+              @click="void endSession(session)"
+            >
+              {{ endingSessionId === session.id ? t('Завершаем…') : t('Завершить') }}
+            </button>
+          </template>
+        </SettingRow>
+      </template>
       <div v-else class="settings__notification-empty">{{ t('Активных сеансов нет.') }}</div>
       <div v-if="sessions.some((session) => session.location)" class="settings__gate-hint">
         {{ t('Город определяется по IP-адресу с помощью') }}
         <a href="https://db-ip.com" target="_blank" rel="noreferrer">DB-IP</a>{{ t('; сам адрес не сохраняется.') }}
       </div>
-    </section>
+    </SettingsGroup>
 
-    <section class="settings__notification-group" aria-labelledby="accountDeletionTitle">
-      <span id="accountDeletionTitle" class="settings__section-title">{{ t('Удаление аккаунта') }}</span>
-      <div class="account-security__danger">
-        <div class="settings__gate-hint">
-          {{ t('Аккаунт скроется сразу и удалится через 7 дней. До этого его можно восстановить, войдя с паролем.') }}
-        </div>
-        <button class="settings__unblock-button" type="button" @click="deleteDialogOpen = true">
-          {{ t('Удалить аккаунт') }}
-        </button>
-      </div>
-    </section>
+    <SettingsGroup :heading="t('Удаление аккаунта')">
+      <SettingRow
+        :description="
+          t('Аккаунт скроется сразу и удалится через 7 дней. До этого его можно восстановить, войдя с паролем.')
+        "
+      >
+        <template #control>
+          <button class="settings__unblock-button" type="button" @click="deleteDialogOpen = true">
+            {{ t('Удалить аккаунт') }}
+          </button>
+        </template>
+      </SettingRow>
+    </SettingsGroup>
   </div>
 
   <DeleteAccountDialog

@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { AvatarFallback, AvatarImage, AvatarRoot } from 'reka-ui';
+import { computed } from 'vue';
 
 import { avatarInitial } from '../../avatar-initial';
 import { getAvatarColor } from '../../avatar-colors';
@@ -16,40 +17,35 @@ const props = withDefaults(defineProps<AvatarProps>(), {
   online: null,
   showDot: false,
   dnd: false,
-  afk: false,
-  ring: 'var(--vr-bg)'
+  afk: false
 });
 
-const fontSize = computed(() => Math.round(props.size * 0.39));
-// 11px on list-sized avatars, 17px on the big profile one.
-const large = computed(() => props.size >= 56);
-const dotSize = computed(() => (large.value ? 17 : 11));
 const presence = computed(() => (props.dnd ? 'dnd' : props.afk ? 'afk' : props.online ? 'online' : 'offline'));
-const initial = computed(() => avatarInitial(props.name));
 const palette = computed(() => getAvatarColor(props.colorKey));
-// A new src gets a fresh attempt: only the src that failed stays hidden.
-const failedSrc = ref<string | null>(null);
-const imageFailed = computed(() => failedSrc.value !== null && failedSrc.value === props.src);
 </script>
 
 <template>
-  <span
+  <AvatarRoot
+    :key="src ?? ''"
+    as="span"
     :class="['ui-avatar', { 'ui-avatar--squircle': shape === 'squircle' }]"
     :style="{
-      width: `${size}px`,
-      height: `${size}px`,
-      fontSize: `${fontSize}px`,
+      '--avatar-dimension': size === 80 ? undefined : `var(--size-${size}, ${size}px)`,
+      '--ring': ring,
       background: background || palette.background,
       color: foreground || (background ? 'var(--vr-text)' : palette.foreground)
     }"
     aria-hidden="true"
   >
-    <img v-if="src && !imageFailed" :src="src" alt="" @error="failedSrc = src" />
-    <template v-else>{{ initial }}</template>
+    <AvatarImage v-if="src" :src="src" alt="" />
+    <AvatarFallback>{{ avatarInitial(name) }}</AvatarFallback>
     <span
       v-if="showDot"
-      :class="['ui-avatar__dot', `ui-avatar__dot--${presence}`, { 'ui-avatar__dot--large': large }]"
-      :style="{ width: `${dotSize}px`, height: `${dotSize}px`, borderColor: ring }"
+      :class="[
+        'ui-avatar__dot',
+        `ui-avatar__dot--${presence}`,
+        { 'ui-avatar__dot--small': size <= 28, 'ui-avatar__dot--large': size >= 56 }
+      ]"
     />
-  </span>
+  </AvatarRoot>
 </template>

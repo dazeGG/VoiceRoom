@@ -28,7 +28,7 @@ const openLabel = computed(() => t('Открыть комнату {p0}', { p0: p
         shape="squircle"
         background="var(--vr-surface-3)"
         foreground="var(--vr-text)"
-        :size="38"
+        :size="40"
       />
       <div class="voice-call-widget__head-body">
         <div class="voice-call-widget__room-name" :title="voice.roomName"><EmojiText :text="voice.roomName" /></div>

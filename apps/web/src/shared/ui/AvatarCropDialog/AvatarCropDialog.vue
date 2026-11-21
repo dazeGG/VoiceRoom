@@ -243,12 +243,12 @@ async function save(): Promise<void> {
             class="avatar-crop__tile"
             :style="{ '--preview-accent': accent.background, '--preview-shadow': accent.shadow }"
           >
-            <Avatar :name="name" :src="previewUrl" :size="76" />
+            <Avatar :name="name" :src="previewUrl" :size="80" />
             <strong class="avatar-crop__name"><EmojiText :text="name || t('Ваш профиль')" /></strong>
             <span class="avatar-crop__caption">{{ t('плитка разговора') }}</span>
           </div>
           <div class="avatar-crop__card">
-            <Avatar :name="name" :src="previewUrl" :size="34" online show-dot ring="var(--vr-surface)" />
+            <Avatar :name="name" :src="previewUrl" :size="36" online show-dot ring="var(--vr-surface)" />
             <div class="avatar-crop__card-text">
               <strong class="avatar-crop__name"><EmojiText :text="name || t('Ваш профиль')" /></strong
               ><span class="avatar-crop__caption">{{ t('в сети') }}</span>

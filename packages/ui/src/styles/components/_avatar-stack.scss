@@ -15,16 +15,17 @@
 
 .avatar-stack__item,
 .avatar-stack__rest {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: var(--avatar-stack-size, 24px);
-  height: var(--avatar-stack-size, 24px);
-  margin-left: calc(var(--avatar-stack-size, 24px) * -0.28);
+  box-sizing: border-box;
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: var(--avatar-stack-size);
+  height: var(--avatar-stack-size);
+  margin-inline-start: calc(var(--avatar-stack-size) * -0.28);
   border: 2px solid var(--avatar-stack-ring, var(--vr-surface-2));
-  border-radius: 999px;
+  border-radius: 50%;
   font-family: var(--font-ui, sans-serif);
-  font-size: var(--avatar-stack-font, 0.625rem);
+  font-size: max(10px, calc(var(--avatar-stack-size) * 0.4));
   font-weight: 600;
   line-height: 1;
   letter-spacing: -0.04em;
@@ -32,7 +33,7 @@
 
 .avatar-stack__item:first-child,
 .avatar-stack__rest:first-child {
-  margin-left: 0;
+  margin-inline-start: 0;
 }
 
 .avatar-stack__item {
@@ -42,7 +43,7 @@
 }
 
 .avatar-stack__item .avatar-stack__avatar {
-  box-shadow: none;
+  --avatar-size: calc(var(--avatar-stack-size) - var(--space-4));
 }
 
 .avatar-stack__rest {

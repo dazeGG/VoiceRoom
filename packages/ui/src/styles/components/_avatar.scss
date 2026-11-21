@@ -7,18 +7,18 @@
 //   .ui-avatar-dot                 -> .ui-avatar__dot
 //   // Svelte: [data-status='dnd' | 'afk' | 'online' | 'offline'] (colour was inline)
 //                                  -> .ui-avatar__dot--dnd / --afk / --online / --offline
-//   (inline size/border/offset on the large avatar) -> .ui-avatar__dot--large (offset, border);
-//                                     width and height stay inline
 
 .ui-avatar {
+  --avatar-size: var(--avatar-dimension, 80px);
+
   position: relative;
   flex: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+  display: inline-grid;
+  place-items: center;
+  width: var(--avatar-size);
+  height: var(--avatar-size);
   border-radius: 50%;
-  font-family: var(--font-ui);
-  font-weight: 600;
+  font: 600 calc(var(--avatar-size) * 0.39) / 1 var(--font-ui);
   letter-spacing: -0.02em;
 }
 
@@ -35,16 +35,25 @@
 
 .ui-avatar__dot {
   position: absolute;
-  right: -2px;
-  bottom: -2px;
-  border-width: 2px;
+  right: calc(-1 * var(--space-2));
+  bottom: calc(-1 * var(--space-2));
+  box-sizing: content-box;
+  width: var(--space-12);
+  height: var(--space-12);
+  border: 2px solid var(--ring, var(--vr-bg));
   border-radius: 50%;
-  border-style: solid;
+}
+
+.ui-avatar__dot--small {
+  width: var(--space-8);
+  height: var(--space-8);
 }
 
 .ui-avatar__dot--large {
-  right: 1px;
-  bottom: 1px;
+  right: 0;
+  bottom: 0;
+  width: 14px;
+  height: 14px;
   border-width: 3px;
 }
 

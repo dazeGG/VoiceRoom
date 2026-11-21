@@ -31,7 +31,7 @@ const props = withDefaults(
   }>(),
   {
     avatarUrl: null,
-    avatarSize: 38,
+    avatarSize: 40,
     triggerClass: '',
     titleClass: '',
     chevronClass: '',

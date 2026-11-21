@@ -100,7 +100,7 @@ function closeCrop(): void {
       :title="editLabel"
       @click="input?.click()"
     >
-      <Avatar :name="name" :src="shownUrl" shape="squircle" background="var(--vr-surface-3)" :size="76" />
+      <Avatar :name="name" :src="shownUrl" shape="squircle" background="var(--vr-surface-3)" :size="80" />
     </button>
     <span class="room-avatar-field__camera" aria-hidden="true"><Camera v-bind="iconSm" /></span>
     <button
