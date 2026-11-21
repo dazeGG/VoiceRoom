@@ -7,7 +7,6 @@ import type { SliderProps } from './types';
 const props = withDefaults(defineProps<SliderProps>(), {
   min: 0,
   max: 100,
-  step: 1,
   snap: false,
   snapThreshold: 0,
   disabled: false,
@@ -32,6 +31,20 @@ function commit(next: number): void {
   emit('valueChange', clamped);
 }
 
+function handleArrow(event: KeyboardEvent): void {
+  if (props.disabled || (!event.shiftKey && props.step !== undefined)) return;
+  if (!['ArrowRight', 'ArrowUp', 'ArrowLeft', 'ArrowDown'].includes(event.key)) return;
+  const increasing = event.key === 'ArrowRight' || event.key === 'ArrowUp';
+  const step = props.step ?? 1;
+  const fraction = event.shiftKey ? 0.1 : 0.05;
+  const increment = Math.max(1, Math.round(((props.max - props.min) * fraction) / step));
+  const current = Math.round((value.value - props.min) / step);
+  const next = props.min + (current + (increasing ? increment : -increment)) * step;
+  event.preventDefault();
+  event.stopPropagation();
+  commit(Number(next.toPrecision(15)));
+}
+
 function handleUpdate(values: number[] | undefined): void {
   const resting = props.defaultValue ?? props.min;
   let next = values?.[0];
@@ -45,12 +58,12 @@ function handleUpdate(values: number[] | undefined): void {
 <template>
   <SliderRoot
     class="vr-slider"
-    :class="{ 'vr-slider--disabled': disabled }"
+    :aria-disabled="disabled || undefined"
     :style="{ '--slider-fraction': fraction }"
     :model-value="[value]"
     :min="min"
     :max="max"
-    :step="step"
+    :step="step ?? 1"
     :disabled="disabled"
     @update:model-value="handleUpdate"
     @pointerdown.capture="pointerActive = true"
@@ -64,7 +77,13 @@ function handleUpdate(values: number[] | undefined): void {
         <span v-if="showFill" class="vr-slider__fill"></span>
         <span class="vr-slider__thumb"></span>
       </SliderTrack>
-      <SliderThumb class="vr-slider__input" :aria-label="ariaLabel || t('Значение')" :aria-valuetext="ariaValueText" />
+      <SliderThumb
+        class="vr-slider__input"
+        :aria-label="ariaLabel || t('Значение')"
+        :aria-valuetext="ariaValueText"
+        :aria-disabled="disabled || undefined"
+        @keydown="handleArrow"
+      />
     </div>
   </SliderRoot>
 </template>

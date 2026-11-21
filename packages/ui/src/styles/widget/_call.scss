@@ -319,7 +319,11 @@
   font-size: inherit;
 }
 
-.widget-call__settings input[type='range'] {
-  padding: 0;
-  accent-color: var(--vr-accent);
+.widget-call__volume-head {
+  display: flex;
+  justify-content: space-between;
+
+  output {
+    font-family: var(--font-mono);
+  }
 }

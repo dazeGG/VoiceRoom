@@ -1,179 +1,114 @@
-// Select: a trigger button plus a Popover listbox.
-//
-// Svelte class -> BEM class
-//   .select-root                -> .select
-//   .select-trigger             -> .select__trigger
-//   .select-trigger--{variant}  -> .select__trigger--{variant} (field, home, compact, dock)
-//   .select-trigger-label       -> .select__label
-//   .select-trigger-chevron     -> .select__chevron
-//   .select-panel (panelClass)  -> .select__panel
-//   .popover-option             -> .select__option
-//
-// [data-*] -> aria
-//   .popover-option[data-selected='true'] -> .select__option[aria-selected='true']
+@use 'input';
+@use 'menu';
 
-.select {
-  width: 100%;
-  min-width: 0;
-}
+.ui-select {
+  @include input.surface;
 
-.select__trigger {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: var(--space-8);
   width: 100%;
   min-width: 0;
-  border: 1px solid var(--vr-line-strong);
-  border-radius: 12px;
-  min-height: 44px;
-  padding: 0 14px 0 15px;
-  background: var(--vr-surface-2);
-  color: var(--vr-text);
-  font-family: var(--font-ui);
-  font-size: 0.875rem;
-  font-weight: 400;
-  line-height: 1;
-  text-align: left;
+  height: var(--size-40);
+  padding-inline: var(--space-12);
+  border-radius: var(--radius-10);
+  font: 400 0.875rem/1 var(--font-ui);
+  text-align: start;
   cursor: pointer;
-  transition:
-    border-color 0.15s ease,
-    background 0.15s ease;
-}
 
-.select__trigger:hover:not(:disabled),
-.select__trigger[aria-expanded='true'] {
-  border-color: var(--vr-accent-line);
-}
+  &--sm {
+    gap: var(--space-6);
+    height: var(--size-32);
+    padding-inline: var(--space-8);
+    border-radius: var(--radius-8);
+    font-size: 0.8125rem;
+  }
 
-.select__trigger:disabled {
-  cursor: not-allowed;
-  opacity: 0.55;
-}
+  &--lg {
+    height: var(--size-44);
+    padding-inline: var(--space-16);
+    border-radius: var(--radius-12);
+  }
 
-.select__label {
-  flex: 1 1 auto;
-  min-width: 0;
-}
+  &--ghost {
+    width: auto;
+    max-width: 100%;
+    border-color: transparent;
+    background: transparent;
+    color: var(--vr-text-2);
 
-.select__chevron {
-  flex: none;
-  display: inline-flex;
-  color: var(--vr-text-muted);
-  transition: transform 0.16s ease;
-}
+    &:hover:not(:disabled) {
+      background: var(--vr-hover);
+      color: var(--vr-text);
+    }
+  }
 
-.select__trigger[aria-expanded='true'] .select__chevron {
-  transform: rotate(180deg);
-}
+  &:focus-visible,
+  &[aria-expanded='true'] {
+    @include input.focus;
+    outline: none;
+  }
 
-// Panel chrome lives on the Popover-owned div (passed via panelClass).
-.select__panel {
-  z-index: 150;
-  box-sizing: border-box;
-  min-width: var(--reka-select-trigger-width);
-  max-height: min(280px, 50vh, var(--reka-select-content-available-height));
-  border: 1px solid var(--vr-line-strong);
-  border-radius: 12px;
-  background: var(--vr-surface-2);
-  box-shadow: var(--vr-shadow-popover);
-  overflow: auto;
-  padding: 6px;
-}
+  &[aria-invalid='true'] {
+    border-color: var(--vr-danger);
+  }
 
-.select__trigger--field {
-  font-size: 0.875rem;
-}
+  &:disabled {
+    @include input.disabled;
+  }
 
-.select__trigger--home {
-  border-color: var(--vr-line-strong);
-}
+  &__value {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
 
-.select__trigger--home:hover:not(:disabled),
-.select__trigger--home[aria-expanded='true'] {
-  border-color: var(--vr-accent-line);
-  background: var(--vr-surface-2);
-}
+  &__chevron {
+    display: inline-flex;
+    flex: none;
+    color: var(--vr-text-muted);
+    transition: transform 160ms ease;
 
-.select__trigger--compact {
-  width: auto;
-  min-width: 0;
-  min-height: var(--interactive-md, 40px);
-  padding: 0 30px 0 12px;
-  border: none;
-  border-radius: 0;
-  background: transparent;
-  color: var(--vr-text-2);
-  font-size: 0.8125rem;
-}
+    svg {
+      width: var(--icon-18);
+      height: var(--icon-18);
+    }
+  }
 
-.select__trigger--compact:hover:not(:disabled),
-.select__trigger--compact[aria-expanded='true'] {
-  border-color: transparent;
-  background: var(--vr-hover);
-  color: var(--vr-text);
-}
+  &--sm &__chevron svg {
+    width: var(--icon-16);
+    height: var(--icon-16);
+  }
 
-.select__trigger--dock {
-  position: relative;
-  justify-content: flex-start;
-  gap: 0;
-  border-color: var(--vr-line-strong);
-  border-radius: var(--radius-sm, 10px);
-  padding: 10px 36px 10px 12px;
-  background: var(--vr-surface-2);
-  color: var(--vr-text);
-  font-size: 0.875rem;
-}
+  &--lg &__chevron svg {
+    width: var(--icon-20);
+    height: var(--icon-20);
+  }
 
-.select__trigger--dock .select__chevron {
-  position: absolute;
-  right: 11px;
-  top: 50%;
-  transform: translateY(-50%);
-}
+  &[aria-expanded='true'] &__chevron {
+    transform: rotate(180deg);
+  }
 
-.select__trigger--dock:hover:not(:disabled),
-.select__trigger--dock[aria-expanded='true'] {
-  border-color: var(--vr-accent-line);
-}
+  &__panel {
+    z-index: 150;
+    width: max-content;
+    min-width: var(--reka-select-trigger-width);
+    max-width: max(var(--reka-select-trigger-width), var(--reka-select-content-available-width));
+  }
 
-.select__trigger--dock[aria-expanded='true'] .select__chevron {
-  transform: translateY(-50%) rotate(180deg);
-}
+  &__viewport {
+    max-height: min(
+      calc(var(--space-64) * 5 - var(--space-4) * 2 - var(--space-2)),
+      calc(var(--reka-select-content-available-height) - var(--space-4) * 2 - var(--space-2))
+    );
+  }
 
-// Option row, rendered inside Select's content slot.
-.select__option {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  min-width: 0;
-  padding: 9px 10px;
-  border: none;
-  border-radius: 8px;
-  background: transparent;
-  font-family: var(--font-ui);
-  font-size: 0.875rem;
-  font-weight: 400;
-  color: var(--vr-text);
-  text-align: left;
-  cursor: pointer;
-  outline: none;
-  transition: background 0.14s ease;
-}
-
-.select__option:hover,
-.select__option:focus-visible {
-  background: var(--vr-hover);
-}
-
-.select__option[aria-selected='true'],
-.select__option:focus-visible {
-  background: var(--vr-accent-soft);
-}
-
-.select__option[aria-disabled='true'] {
-  cursor: default;
-  opacity: 0.55;
+  @media (prefers-reduced-motion: reduce) {
+    &__chevron {
+      transition: none;
+    }
+  }
 }

@@ -42,13 +42,17 @@ export function hotkeyMatchesEvent(binding: HotkeyBinding | null, event: Keyboar
 
 export function formatHotkeyBinding(binding: HotkeyBinding | null): string {
   if (!binding) return t('Не назначено');
+  return formatHotkeyKeys(binding).join(' + ');
+}
+
+export function formatHotkeyKeys(binding: HotkeyBinding): string[] {
   const parts: string[] = [];
   if (binding.ctrlKey) parts.push('Ctrl');
   if (binding.metaKey) parts.push('⌘');
   if (binding.altKey) parts.push(isApplePlatform() ? '⌥' : 'Alt');
   if (binding.shiftKey) parts.push('Shift');
   parts.push(formatHotkeyCode(binding.code));
-  return parts.join(' + ');
+  return parts;
 }
 
 export function isHotkeyModifierCode(code: string): boolean {
