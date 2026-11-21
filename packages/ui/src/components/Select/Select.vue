@@ -11,6 +11,7 @@ import {
 } from 'reka-ui';
 import { computed } from 'vue';
 import { iconSm } from '../../icon-defaults';
+import { useFieldControl } from '../Field/context';
 import { parsePlacement } from '../Popover/popover-placement';
 import type { SelectProps } from './types';
 
@@ -32,6 +33,7 @@ const fromItem = (value: string): string => (value === EMPTY_VALUE ? '' : value)
 const emit = defineEmits<{ valueChange: [value: string] }>();
 
 const value = defineModel<string>({ default: '' });
+const controlAttrs = useFieldControl();
 
 const selectedLabel = computed(
   () => props.options.find((option) => option.value === value.value)?.label ?? props.options[0]?.label ?? '—'
@@ -53,7 +55,12 @@ function choose(next: string | undefined): void {
       :disabled="disabled || options.length === 0"
       @update:model-value="(next) => choose(typeof next === 'string' ? fromItem(next) : undefined)"
     >
-      <SelectTrigger class="select__trigger" :class="`select__trigger--${variant}`" :aria-label="label || undefined">
+      <SelectTrigger
+        v-bind="controlAttrs()"
+        class="select__trigger"
+        :class="`select__trigger--${variant}`"
+        :aria-label="label || undefined"
+      >
         <span class="select__label">
           <span class="ellipsis" :title="selectedLabel || undefined"
             ><slot name="option-label" :text="selectedLabel">{{ selectedLabel }}</slot></span

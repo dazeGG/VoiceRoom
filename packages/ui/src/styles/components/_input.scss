@@ -1,0 +1,125 @@
+@mixin surface {
+  box-sizing: border-box;
+  border: calc(var(--space-2) / 2) solid var(--vr-line-strong);
+  background: var(--vr-surface-2);
+  color: var(--vr-text);
+  transition:
+    border-color 150ms ease,
+    box-shadow 150ms ease;
+
+  &:hover {
+    border-color: color-mix(in oklch, var(--vr-text), transparent 80%);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+  }
+}
+
+@mixin focus {
+  border-color: var(--vr-accent-line);
+  box-shadow: 0 0 0 calc(var(--space-6) / 2) var(--vr-accent-soft);
+}
+
+@mixin disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.ui-input {
+  @include surface;
+
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  min-width: 0;
+  height: var(--size-40);
+  padding-inline: var(--space-12);
+  border-radius: var(--radius-10);
+
+  &:focus-within {
+    @include focus;
+  }
+
+  &:has(.ui-input__control[aria-invalid='true']) {
+    border-color: var(--vr-danger);
+  }
+
+  &:has(.ui-input__control:disabled) {
+    @include disabled;
+  }
+
+  &__icon {
+    display: flex;
+    flex: none;
+    color: var(--vr-text-muted);
+
+    svg {
+      width: var(--icon-18);
+      height: var(--icon-18);
+    }
+  }
+
+  &__control {
+    flex: 1;
+    min-width: 0;
+    height: 100%;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: 400 0.875rem/1 var(--font-ui);
+
+    &:focus-visible {
+      outline: none;
+    }
+
+    &:disabled {
+      cursor: inherit;
+    }
+
+    &::placeholder {
+      color: var(--vr-text-muted);
+    }
+  }
+
+  &__actions {
+    display: flex;
+    flex: none;
+    gap: var(--space-2);
+    margin-inline-end: calc(var(--space-6) * -1);
+  }
+
+  &--sm {
+    gap: var(--space-6);
+    height: var(--size-32);
+    padding-inline: var(--space-8);
+    border-radius: var(--radius-8);
+
+    .ui-input__control {
+      font-size: 0.8125rem;
+    }
+
+    .ui-input__icon svg {
+      width: var(--icon-16);
+      height: var(--icon-16);
+    }
+  }
+
+  &--lg {
+    height: var(--size-44);
+    padding-inline: var(--space-16);
+    border-radius: var(--radius-12);
+
+    .ui-input__icon svg {
+      width: var(--icon-20);
+      height: var(--icon-20);
+    }
+  }
+
+  &--mono .ui-input__control {
+    font-family: var(--font-mono);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+}

@@ -1,0 +1,128 @@
+.ui-choices {
+  display: grid;
+  gap: var(--space-8);
+
+  &--cards {
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, calc(var(--space-48) * 3 + var(--space-6))), 1fr));
+  }
+}
+
+.ui-choice {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+  width: 100%;
+  min-height: var(--size-44);
+  padding: var(--space-12) var(--space-16);
+  border: calc(var(--space-2) / 2) solid var(--vr-line-strong);
+  border-radius: var(--radius-12);
+  background: var(--vr-surface-2);
+  color: var(--vr-text);
+  font: 400 0.875rem/1.3 var(--font-ui);
+  text-align: start;
+  cursor: pointer;
+  transition:
+    background 150ms ease,
+    border-color 150ms ease;
+
+  &:hover:not(:disabled) {
+    background: var(--vr-surface-2-hover);
+
+    .ui-radio {
+      border-color: var(--vr-text-2);
+    }
+  }
+
+  &[aria-checked='true'] {
+    border-color: var(--vr-accent-line);
+    background: var(--vr-accent-soft);
+
+    .ui-radio {
+      border-color: var(--vr-accent);
+
+      &::after {
+        transform: scale(1);
+      }
+    }
+  }
+
+  &:focus-visible {
+    outline: var(--space-2) solid var(--vr-accent);
+    outline-offset: var(--space-2);
+  }
+
+  &:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+
+  &__row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-12);
+    min-width: 0;
+  }
+
+  &__text {
+    display: grid;
+    gap: var(--space-2);
+    min-width: 0;
+  }
+
+  &__description {
+    color: var(--vr-text-muted);
+    font-size: 0.75rem;
+  }
+
+  &--card {
+    flex-direction: column;
+    align-items: stretch;
+    padding: var(--space-8) var(--space-8) var(--space-12);
+
+    .ui-choice__row {
+      gap: var(--space-8);
+      padding-inline: var(--space-4);
+    }
+  }
+
+  &__preview {
+    display: flex;
+    align-items: end;
+    gap: var(--space-6);
+    height: calc(var(--space-64) + var(--space-8));
+    padding: var(--radius-10);
+    border: calc(var(--space-2) / 2) solid var(--vr-line);
+    border-radius: var(--radius-8);
+    background: var(--vr-bg);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+  }
+}
+
+.ui-radio {
+  box-sizing: border-box;
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: var(--size-20);
+  height: var(--size-20);
+  border: var(--space-2) solid var(--vr-text-3);
+  border-radius: var(--radius-pill);
+
+  &::after {
+    width: var(--space-8);
+    height: var(--space-8);
+    border-radius: var(--radius-pill);
+    background: var(--vr-accent);
+    content: '';
+    transform: scale(0);
+    transition: transform 150ms var(--ease-out);
+
+    @media (prefers-reduced-motion: reduce) {
+      transition: none;
+    }
+  }
+}
