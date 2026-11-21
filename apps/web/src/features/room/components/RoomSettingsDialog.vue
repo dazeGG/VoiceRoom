@@ -16,7 +16,7 @@ import RoomMemberList from '@/entities/room/components/RoomMemberList.vue';
 import { saveRoomAvatarChange, type RoomAvatarChange } from '@/entities/room/room-avatar-change';
 import { APP_HOME } from '@/shared/app-home';
 import { BAN_UNDO_DURATION_MS, type ModerationNoticeOptions } from '@/entities/room/room-moderation';
-import { AlertDialog, Button, Dialog } from '@voice-room/ui/components';
+import { AlertDialog, Button, Dialog, Field, TextField } from '@voice-room/ui/components';
 import { iconSm } from '@/shared/ui/icons';
 import { state as roomClientState } from '@voice-room/call/engine/core/room-runtime.store';
 import { applyRoomUpdated } from '@voice-room/call/engine/room/lifecycle';
@@ -187,10 +187,9 @@ function onCancel(): void {
               :name="name || roomClientState.roomId"
               @error="(message: string) => (error = message)"
             />
-            <label class="room-settings__name-field">
-              <span class="settings__field-label">{{ t('Название') }}</span>
-              <input v-model="name" class="settings__input" maxlength="60" :placeholder="t('Название комнаты')" />
-            </label>
+            <Field class="room-settings__name-field" :label="t('Название')">
+              <TextField v-model="name" maxlength="60" :placeholder="t('Название комнаты')" />
+            </Field>
           </div>
 
           <label class="room-settings__notifications">

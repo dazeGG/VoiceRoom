@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { IconButton } from '@voice-room/ui/components';
 // Collapsed strip above the chat body. Collapsed it is just a count; expanded
 // it lists the pinned messages newest-first, each jumping to the message.
 import { t } from '@/shared/i18n';
@@ -45,16 +46,15 @@ function preview(text: string): string {
           <span class="pinned-bar__author"><EmojiText :text="pin.author.name || t('Участник')" /></span>
           <span class="pinned-bar__text">{{ preview(pin.text) }}</span>
         </button>
-        <button
+        <IconButton
           v-if="props.canUnpin"
-          class="pinned-bar__unpin"
-          type="button"
-          :aria-label="t('Открепить сообщение')"
-          :title="t('Открепить')"
+          :label="t('Открепить сообщение')"
+          :size="28"
+          variant="danger"
           @click="emit('unpin', pin.messageId)"
         >
-          <X v-bind="iconSm" aria-hidden="true" />
-        </button>
+          <X aria-hidden="true" />
+        </IconButton>
       </li>
     </ul>
   </div>

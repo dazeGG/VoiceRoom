@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { Spinner, SettingRow, SettingsGroup } from '@voice-room/ui/components';
+import { Field, IconButton, Spinner, SettingRow, SettingsGroup, TextField, Tooltip } from '@voice-room/ui/components';
 import { t } from '@/shared/i18n';
 import { Pencil, X } from '@lucide/vue';
-import { computed, ref, useId, type UnwrapNestedRefs } from 'vue';
+import { computed, ref, type UnwrapNestedRefs } from 'vue';
 import type { AuthUser } from '@/api/auth';
 import EmojiText from '@/shared/chat/EmojiText.vue';
 import { Avatar, AvatarCropDialog } from '@/shared/ui';
@@ -25,7 +25,6 @@ const emit = defineEmits<{
   toast: [message: string, options?: ToastOptions];
 }>();
 
-const nameId = useId();
 const avatarInput = ref<HTMLInputElement>();
 
 const label = computed(() => (props.user ? displayNameOf(props.user) : ''));
@@ -64,43 +63,43 @@ async function save(): Promise<void> {
             accept="image/jpeg,image/png,image/webp"
             @change="onAvatarFile"
           />
-          <button
-            type="button"
-            class="settings__avatar-edit"
-            :aria-label="avatarAction"
-            :title="avatarAction"
-            @click="avatarInput?.click()"
-          >
-            <Avatar
-              :name="label"
-              :src="avatarSrc"
-              :color-key="user?.avatarColorKey"
-              :background="user?.avatarAccent || undefined"
-              :size="56"
-            />
-            <span class="settings__avatar-overlay" aria-hidden="true">
-              <Pencil v-bind="iconSm" />
-            </span>
-          </button>
-          <button
+          <Tooltip :text="avatarAction">
+            <button
+              type="button"
+              class="settings__avatar-edit"
+              :aria-label="avatarAction"
+              @click="avatarInput?.click()"
+            >
+              <Avatar
+                :name="label"
+                :src="avatarSrc"
+                :color-key="user?.avatarColorKey"
+                :background="user?.avatarAccent || undefined"
+                :size="56"
+              />
+              <span class="settings__avatar-overlay" aria-hidden="true">
+                <Pencil v-bind="iconSm" />
+              </span>
+            </button>
+          </Tooltip>
+          <IconButton
             v-if="avatarSrc"
-            type="button"
             class="settings__avatar-remove"
-            :aria-label="t('Удалить аватар')"
-            :title="t('Удалить аватар')"
+            :size="24"
+            variant="danger"
+            :label="t('Удалить аватар')"
             @click="draft.removeAvatar"
           >
-            <X v-bind="iconSm" aria-hidden="true" />
-          </button></div
+            <X aria-hidden="true" />
+          </IconButton></div
       ></template>
       <template #title><EmojiText :text="label" /></template>
     </SettingRow>
     <SettingRow>
-      <template #title
-        ><label :for="nameId">{{ t('Имя') }}</label></template
-      >
-      <template #control>
-        <input :id="nameId" v-model="name" class="settings__input" maxlength="40" autocomplete="nickname" />
+      <template #title>
+        <Field :label="t('Имя')">
+          <TextField v-model="name" maxlength="40" autocomplete="nickname" />
+        </Field>
       </template>
     </SettingRow>
   </SettingsGroup>

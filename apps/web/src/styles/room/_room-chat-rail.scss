@@ -65,7 +65,7 @@ body.screen--room .room-chat-rail {
     width: auto;
     z-index: 20;
     border: 1px solid var(--vr-line-strong);
-    border-radius: 18px;
+    border-radius: var(--radius-16);
     background: var(--vr-surface);
     box-shadow: var(--vr-shadow-popover);
   }

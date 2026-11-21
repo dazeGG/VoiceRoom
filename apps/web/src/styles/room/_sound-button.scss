@@ -6,10 +6,10 @@
 //   .sound-button -> .sound-button
 
 .sound-button {
-  min-height: 48px;
+  min-height: var(--size-48);
   border: 1px solid var(--vr-line-strong);
-  border-radius: 999px;
-  padding: 0 18px;
+  border-radius: var(--radius-pill);
+  padding: 0 var(--space-16);
   background: var(--vr-surface-3);
   color: var(--vr-text);
   font-weight: 800;

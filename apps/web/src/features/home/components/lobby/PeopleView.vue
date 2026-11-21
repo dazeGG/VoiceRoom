@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { EmptyState, IconButton, ListItem } from '@voice-room/ui/components';
+import { EmptyState, Field, IconButton, ListItem, TextField } from '@voice-room/ui/components';
 import { getLocale, t } from '@/shared/i18n';
 import { Check, ChevronLeft, Copy, X } from '@lucide/vue';
 import { computed, ref } from 'vue';
@@ -101,27 +101,22 @@ function mutualLabel(count: number): string {
 
     <div class="people-view__label people-view__label--add">{{ t('Добавить друга') }}</div>
     <div class="people-view__add-bar">
-      <label class="people-view__add-field">
-        <span class="people-view__add-at">@</span>
-        <input
+      <Field class="people-view__add-field" :label="t('Логин друга')">
+        <TextField
           v-model="query"
-          class="people-view__add-input"
-          type="text"
+          variant="mono"
           :placeholder="t('логин друга')"
-          :aria-label="t('Логин друга')"
           autocapitalize="off"
           autocomplete="off"
           spellcheck="false"
           @keydown="onKeydown"
-        />
-      </label>
-      <Button
-        :variant="query.trim() ? 'primary' : 'ghost'"
-        size="lg"
-        :disabled="sending || !query.trim()"
-        @click="sendByLogin"
-        >{{ t('Отправить заявку') }}</Button
-      >
+        >
+          <template #leading>@</template>
+        </TextField>
+      </Field>
+      <Button :variant="query.trim() ? 'primary' : 'ghost'" :disabled="sending || !query.trim()" @click="sendByLogin">{{
+        t('Отправить заявку')
+      }}</Button>
     </div>
     <div class="people-view__hint">
       {{ t('Ваш логин') }} <code>@{{ user.login }}</code>

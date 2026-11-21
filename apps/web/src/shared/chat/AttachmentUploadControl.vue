@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { IconButton } from '@voice-room/ui/components';
 import { t } from '@/shared/i18n';
 import { Image as ImageIcon, Plus } from '@lucide/vue';
 import { ref } from 'vue';
@@ -56,9 +57,9 @@ async function addSelectedFiles(): Promise<void> {
       :disabled="disabled || store.drafts.length >= 4"
     >
       <template #trigger>
-        <button class="attachment-upload__button" type="button" :aria-label="t('Добавить вложение')">
-          <Plus v-bind="iconSm" aria-hidden="true" />
-        </button>
+        <IconButton :label="t('Добавить вложение')" :size="32">
+          <Plus aria-hidden="true" />
+        </IconButton>
       </template>
       <template #content="{ close }">
         <MenuItem

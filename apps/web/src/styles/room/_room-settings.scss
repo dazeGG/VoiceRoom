@@ -30,8 +30,8 @@
 .room-settings__content {
   display: flex;
   flex-direction: column;
-  gap: 24px;
-  padding: 24px;
+  gap: var(--space-24);
+  padding: var(--space-24);
 }
 
 .room-settings__notifications {
@@ -39,13 +39,13 @@
 }
 
 .room-settings__notifications .settings__field-label {
-  margin-bottom: 9px;
+  margin-bottom: var(--space-8);
 }
 
 .room-settings__profile-head {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: var(--space-16);
 }
 
 .room-settings__name-field {
@@ -60,7 +60,7 @@
   }
 
   .room-settings__content {
-    padding: 22px 18px;
+    padding: var(--space-20) var(--space-16);
   }
 }
 
@@ -71,14 +71,14 @@
 .room-settings__select {
   width: 100%;
   appearance: none;
-  min-height: 44px;
-  padding: 0 40px 0 14px;
+  min-height: var(--size-44);
+  padding: 0 var(--space-40) 0 var(--space-12);
   border: 1px solid var(--vr-line-strong);
-  border-radius: 12px;
+  border-radius: var(--radius-12);
   background: var(--vr-surface-2);
   color: var(--vr-text);
   font-family: var(--font-ui);
-  font-size: 0.90625rem;
+  font-size: 15px;
   font-weight: 500;
   outline: none;
   cursor: pointer;
@@ -92,6 +92,7 @@
 .room-settings__select:focus,
 .room-settings__select:focus-visible {
   border-color: var(--vr-accent-line);
+  box-shadow: 0 0 0 calc(var(--space-6) / 2) var(--vr-accent-soft);
 }
 
 .room-settings__select option {

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { IconButton } from '@voice-room/ui/components';
 // The compose field of one thread. It is mounted per thread, so the unsent
 // text it brings back and stores belongs to that thread alone.
 import { t } from '@/shared/i18n';
@@ -17,7 +18,6 @@ import ReplyTargetBar from '@/shared/chat/ReplyTargetBar.vue';
 import TypingIndicator from '@/shared/chat/TypingIndicator.vue';
 import { createTypingNotifier } from '@/shared/chat/typing';
 import { useChatDraft } from '@/shared/chat/use-chat-draft';
-import { iconSm } from '@/shared/ui/icons';
 import { useLobby } from '../../../model/lobby-context';
 import { useToastsStore } from '../../../model/toasts.store';
 
@@ -142,16 +142,17 @@ function insertEmoji(emoji: string): void {
           @input="onInput"
         />
         <ComposerEmojiPicker :user-id="selfId" @pick="insertEmoji" @browse="typingNotifier.notify('emoji')" />
-        <button
+        <IconButton
           class="dm-composer__send"
           type="submit"
-          :aria-label="t('Отправить')"
-          :title="t('Отправить')"
+          :label="t('Отправить')"
           :disabled="!(draftText.trim() || media?.canSend)"
+          :size="32"
+          variant="primary"
           @click="void submit()"
         >
-          <ArrowUp v-bind="iconSm" aria-hidden="true" />
-        </button>
+          <ArrowUp aria-hidden="true" />
+        </IconButton>
       </div>
     </div>
     <TypingIndicator :label="typingLabel" />

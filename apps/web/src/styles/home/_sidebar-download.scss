@@ -13,31 +13,6 @@ html.is-desktop .sidebar-download {
   display: none;
 }
 
-.sidebar-download__trigger {
-  flex: none;
-  width: 32px;
-  height: 32px;
-  border-radius: 9px;
-  border: none;
-  background: transparent;
-  color: var(--vr-text-2);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: background 0.15s ease;
-
-  &:hover {
-    background: var(--vr-hover);
-    color: var(--vr-text);
-  }
-
-  &[aria-expanded='true'] {
-    background: var(--vr-surface-3-hover);
-    color: var(--vr-text);
-  }
-}
-
 .sidebar-download__note {
   padding: var(--space-8) var(--space-8) var(--space-4);
   font-size: 0.75rem;

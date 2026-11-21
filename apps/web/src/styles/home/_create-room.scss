@@ -3,10 +3,6 @@
 //
 // Svelte class -> BEM class (block "create-room")
 //   .lr-dialog-form                 -> .create-room__form
-//   .lr-field                       -> .create-room__field
-//   .lr-field-label                 -> .create-room__label
-//   .lr-field-label-soft            -> .create-room__label-soft
-//   .lr-dialog-input                -> .create-room__input
 //   .lr-dialog-note (--ok, --warn)  -> .create-room__note (--ok, --warn)
 //   .lr-dialog-error                -> .create-room__error
 //
@@ -15,55 +11,17 @@
 .create-room__form {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: var(--space-16);
   padding-block-start: var(--space-16);
-}
-
-.create-room__field {
-  margin-bottom: 4px;
-}
-
-.create-room__label {
-  display: block;
-  font-size: 0.78125rem;
-  font-weight: 700;
-  color: var(--vr-text-2);
-  margin-bottom: 8px;
-}
-
-.create-room__label-soft {
-  color: var(--vr-text-muted);
-  font-weight: 500;
-}
-
-.create-room__input {
-  width: 100%;
-  border: 1px solid var(--vr-line-strong);
-  border-radius: var(--radius-md);
-  padding: 13px 15px;
-  background: var(--vr-bg);
-  color: var(--vr-text);
-  font-family: var(--font-ui);
-  font-size: 0.9375rem;
-  outline: none;
-  transition: border-color 0.15s ease;
-
-  &::placeholder {
-    color: var(--vr-text-muted);
-  }
-
-  &:focus {
-    border-color: var(--vr-accent);
-  }
 }
 
 .create-room__note {
   display: flex;
   align-items: center;
-  gap: 9px;
-  border-radius: var(--radius-md);
-  padding: 11px 13px;
-  font-size: 0.78125rem;
+  gap: var(--space-8);
+  border-radius: var(--radius-16);
+  padding: var(--space-12) var(--space-12);
+  font-size: 13px;
   line-height: 1.4;
 
   svg {
@@ -94,9 +52,9 @@
 .create-room__error {
   margin: 0;
   border: 1px solid color-mix(in oklch, var(--vr-danger), transparent 60%);
-  border-radius: var(--radius-md);
-  padding: 9px 12px;
+  border-radius: var(--radius-16);
+  padding: var(--space-8) var(--space-12);
   background: color-mix(in oklch, var(--vr-danger), transparent 88%);
   color: var(--vr-text);
-  font-size: 0.78125rem;
+  font-size: 13px;
 }

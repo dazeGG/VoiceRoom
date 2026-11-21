@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Badge } from '@voice-room/ui/components';
+import { Badge, Field, IconButton, TextField, Tooltip } from '@voice-room/ui/components';
 import { t } from '@/shared/i18n';
 import { BellOff, Plus, ShieldCheck, UserPlus, X } from '@lucide/vue';
 import { computed, ref, shallowRef } from 'vue';
@@ -132,33 +132,30 @@ function closeRoomContextMenu(): void {
            a search field is the one kind it leaves alone. The data-* skip
            attributes do the same for 1Password, LastPass and Bitwarden. -->
           <form class="voice-home__join" @submit.prevent="submitJoinCode">
-            <input
-              v-model="joinCode"
-              class="voice-home__join-input"
-              type="search"
-              name="room-search"
-              :placeholder="t('Код или ссылка')"
-              :aria-label="t('Код или ссылка на комнату')"
-              aria-describedby="roomAutoSaveHint"
-              autocapitalize="off"
-              autocomplete="off"
-              spellcheck="false"
-              data-1p-ignore
-              data-lpignore="true"
-              data-bwignore
-            />
-            <span id="roomAutoSaveHint" class="voice-home__hint">{{
-              t('Постоянные комнаты сохраняются автоматически')
-            }}</span>
-            <button
-              class="voice-home__join-button"
-              type="submit"
-              :title="t('Постоянные комнаты сохраняются автоматически')"
+            <Field
+              class="voice-home__join-field"
+              :label="t('Код или ссылка на комнату')"
+              :hint="t('Постоянные комнаты сохраняются автоматически')"
             >
-              {{ t('Войти в комнату') }}
-            </button>
+              <TextField
+                v-model="joinCode"
+                type="search"
+                variant="mono"
+                name="room-search"
+                :placeholder="t('Код или ссылка')"
+                autocapitalize="off"
+                autocomplete="off"
+                spellcheck="false"
+                data-1p-ignore
+                data-lpignore="true"
+                data-bwignore
+              />
+            </Field>
+            <Tooltip :text="t('Постоянные комнаты сохраняются автоматически')">
+              <Button variant="outline" type="submit">{{ t('Войти в комнату') }}</Button>
+            </Tooltip>
           </form>
-          <Button variant="primary" size="lg" @click="emit('createRoom')">
+          <Button variant="primary" @click="emit('createRoom')">
             <template #icon><Plus v-bind="iconSm" aria-hidden="true" /></template> {{ t('Создать комнату') }}
           </Button>
         </div>
@@ -177,15 +174,9 @@ function closeRoomContextMenu(): void {
           </span>
         </button>
         <Button variant="outline" size="sm" @click="emit('openRecoveryCodes')">{{ t('Создать коды') }}</Button>
-        <button
-          class="voice-home__callout-dismiss"
-          type="button"
-          :aria-label="t('Напомнить через 3 дня')"
-          :title="t('Напомнить через 3 дня')"
-          @click="emit('snoozeRecoveryCodes')"
-        >
-          <X v-bind="iconSm" aria-hidden="true" />
-        </button>
+        <IconButton :size="28" :label="t('Напомнить через 3 дня')" @click="emit('snoozeRecoveryCodes')"
+          ><X aria-hidden="true"
+        /></IconButton>
       </div>
 
       <div v-if="showRequestBanner" class="voice-home__callout voice-home__callout--request">
@@ -200,15 +191,7 @@ function closeRoomContextMenu(): void {
           <span class="voice-home__callout-sub">{{ t('Откройте, чтобы принять или отклонить') }}</span>
         </span>
         <Button variant="primary" size="sm" @click="lobby.showPeople">{{ t('Открыть') }}</Button>
-        <button
-          class="voice-home__callout-dismiss"
-          type="button"
-          :aria-label="t('Скрыть')"
-          :title="t('Скрыть')"
-          @click="dismissRequestBanner"
-        >
-          <X v-bind="iconSm" aria-hidden="true" />
-        </button>
+        <IconButton :size="28" :label="t('Скрыть')" @click="dismissRequestBanner"><X aria-hidden="true" /></IconButton>
       </div>
 
       <div v-if="rooms.length === 0" class="voice-home__empty">

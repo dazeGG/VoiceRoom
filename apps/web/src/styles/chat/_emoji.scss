@@ -7,8 +7,8 @@
 
 .emoji {
   display: inline-block;
-  width: var(--emoji-size, 22px);
-  height: var(--emoji-size, 22px);
+  width: var(--emoji-size, var(--icon-24));
+  height: var(--emoji-size, var(--icon-24));
   vertical-align: -0.15em;
   user-select: none;
 }
@@ -25,7 +25,7 @@
 
 // The platform font is the last resort, so it has to land on the same box.
 .emoji--text {
-  font-size: calc(var(--emoji-size, 22px) * 0.92);
-  line-height: var(--emoji-size, 22px);
+  font-size: calc(var(--emoji-size, var(--icon-24)) * 0.92);
+  line-height: var(--emoji-size, var(--icon-24));
   text-align: center;
 }

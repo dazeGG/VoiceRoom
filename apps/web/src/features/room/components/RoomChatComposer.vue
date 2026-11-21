@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { IconButton } from '@voice-room/ui/components';
 // The room chat's compose form: text with @mentions, emoji, attachments and a
 // reply target. Sending itself belongs to the panel, which owns the messages.
 import { t } from '@/shared/i18n';
@@ -26,7 +27,6 @@ import MentionAutocomplete from '@/shared/chat/MentionAutocomplete.vue';
 import ReplyTargetBar from '@/shared/chat/ReplyTargetBar.vue';
 import TypingIndicator from '@/shared/chat/TypingIndicator.vue';
 import { createTypingNotifier } from '@/shared/chat/typing';
-import { iconSm } from '@/shared/ui/icons';
 import type { OutgoingRoomMessage } from '../use-room-chat-session';
 
 const props = defineProps<{
@@ -209,15 +209,16 @@ const onPaste = (event: ClipboardEvent): Promise<void> =>
           @pick="(emoji: string) => input?.insertText(emoji)"
           @browse="typingNotifier.notify('emoji')"
         />
-        <button
+        <IconButton
           class="room-chat-composer__send"
           type="submit"
-          :aria-label="t('Отправить')"
-          :title="t('Отправить')"
+          :label="t('Отправить')"
           :disabled="!(text.trim() || media?.canSend)"
+          :size="32"
+          variant="primary"
         >
-          <ArrowUp v-bind="iconSm" aria-hidden="true" />
-        </button>
+          <ArrowUp aria-hidden="true" />
+        </IconButton>
       </div>
     </div>
     <MentionAutocomplete

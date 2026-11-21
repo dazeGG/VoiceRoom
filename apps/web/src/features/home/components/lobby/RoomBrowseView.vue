@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { IconButton } from '@voice-room/ui/components';
 import { useLocalizedText } from '@/shared/i18n/localized-text';
 
 import { t } from '@/shared/i18n';
@@ -173,31 +174,29 @@ function selectPanel(panel: Panel): void {
           role="group"
           :aria-label="t('Открыть раздел панели комнаты')"
         >
-          <button
-            class="ui-segment__item room-panel-switches__button"
-            type="button"
-            :aria-label="t('Чат')"
+          <IconButton
+            class="room-panel-switches__button"
+            :label="t('Чат')"
             :aria-pressed="activePanel === 'chat'"
-            :title="t('Чат')"
+            :size="32"
             @click="selectPanel('chat')"
           >
-            <MessageSquare v-bind="iconSm" aria-hidden="true" />
+            <MessageSquare aria-hidden="true" />
             <span
               v-if="roomUnreadCount > 0"
               class="ui-segment__dot room-panel-switches__unread"
               aria-hidden="true"
             ></span>
-          </button>
-          <button
-            class="ui-segment__item room-panel-switches__button"
-            type="button"
-            :aria-label="t('Участники')"
+          </IconButton>
+          <IconButton
+            class="room-panel-switches__button"
+            :label="t('Участники')"
             :aria-pressed="activePanel === 'participants'"
-            :title="t('Участники')"
+            :size="32"
             @click="selectPanel('participants')"
           >
-            <Users v-bind="iconSm" aria-hidden="true" />
-          </button>
+            <Users aria-hidden="true" />
+          </IconButton>
         </div>
       </div>
     </header>

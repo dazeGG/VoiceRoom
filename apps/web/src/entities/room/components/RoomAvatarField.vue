@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Tooltip, IconButton } from '@voice-room/ui/components';
 // The room avatar in room settings: the avatar opens a file picker and a crop
 // dialog, a corner button removes it, and nothing reaches the server until the
 // settings are saved. Mount it per opening (and per room) to start from what
@@ -92,28 +93,29 @@ function closeCrop(): void {
       accept="image/jpeg,image/png,image/webp"
       @change="pick"
     />
-    <button
-      class="room-avatar-field__edit"
-      type="button"
-      :disabled="disabled"
-      :aria-label="editLabel"
-      :title="editLabel"
-      @click="input?.click()"
-    >
-      <Avatar :name="name" :src="shownUrl" shape="squircle" background="var(--vr-surface-3)" :size="80" />
-    </button>
+    <Tooltip :text="editLabel">
+      <button
+        class="room-avatar-field__edit"
+        type="button"
+        :disabled="disabled"
+        :aria-label="editLabel"
+        @click="input?.click()"
+      >
+        <Avatar :name="name" :src="shownUrl" shape="squircle" background="var(--vr-surface-3)" :size="80" />
+      </button>
+    </Tooltip>
     <span class="room-avatar-field__camera" aria-hidden="true"><Camera v-bind="iconSm" /></span>
-    <button
+    <IconButton
       v-if="shownUrl"
       class="room-avatar-field__remove"
-      type="button"
       :disabled="disabled"
-      :aria-label="t('Удалить аватар комнаты')"
-      :title="t('Удалить аватар комнаты')"
+      :label="t('Удалить аватар комнаты')"
+      :size="24"
+      variant="danger"
       @click="remove"
     >
-      <X v-bind="iconSm" aria-hidden="true" />
-    </button>
+      <X aria-hidden="true" />
+    </IconButton>
   </div>
 
   <AvatarCropDialog

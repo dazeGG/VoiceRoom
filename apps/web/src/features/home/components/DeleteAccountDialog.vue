@@ -131,7 +131,13 @@ async function confirmDeletion(): Promise<void> {
       </div>
 
       <Field id="deleteAccountPassword" :label="t('Текущий пароль')">
-        <TextField v-model="password" type="password" autocomplete="current-password" placeholder="••••••••" />
+        <TextField
+          v-model="password"
+          size="lg"
+          type="password"
+          autocomplete="current-password"
+          placeholder="••••••••"
+        />
       </Field>
 
       <Checkbox :model-value="understood" @update:model-value="understood = $event === true">

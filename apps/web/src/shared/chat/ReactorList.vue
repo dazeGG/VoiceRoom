@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { X } from '@lucide/vue';
+import { IconButton } from '@voice-room/ui/components';
 import { t } from '@/shared/i18n';
 import { computed, onMounted, ref } from 'vue';
 import EmojiText from './EmojiText.vue';
@@ -29,9 +31,9 @@ onMounted(() => {
       <h3 id="reactor-list-title" ref="heading" class="reactor-list__title" tabindex="-1">
         {{ t('Реакция') }} <Emoji :emoji="emoji" :size="18" decorative />
       </h3>
-      <button class="reactor-list__close" type="button" :aria-label="t('Закрыть список')" @click="emit('close')">
-        ×
-      </button>
+      <IconButton :label="t('Закрыть список')" :size="40" @click="emit('close')">
+        <X aria-hidden="true" />
+      </IconButton>
     </header>
 
     <p v-if="listState.error" class="reactor-list__message" role="alert">{{ listState.error }}</p>

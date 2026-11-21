@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Spinner, Tabs, TabsPanel, type TabOption } from '@voice-room/ui/components';
+import { Field, Spinner, TextField, Tabs, TabsPanel, type TabOption } from '@voice-room/ui/components';
 import { useLocalizedText } from '@/shared/i18n/localized-text';
 
 import { t } from '@/shared/i18n';
@@ -60,19 +60,14 @@ function submit(): void {
         <TabsPanel v-for="item in items" :key="item.value" :value="item.value">
           <div class="create-room__form">
             <p v-if="item.value === 'permanent' && error" class="create-room__error" role="alert">{{ error }}</p>
-            <div class="create-room__field">
-              <label class="create-room__label" :for="formId + '-' + item.value">
-                {{ t('Название') }}
-                <span v-if="item.value === 'temp'" class="create-room__label-soft">{{ t('· необязательно') }}</span>
-              </label>
-              <input
-                :id="formId + '-' + item.value"
+            <Field :id="formId + '-' + item.value" :label="t('Название')" :optional="item.value === 'temp'">
+              <TextField
                 v-model="name"
-                class="create-room__input"
+                size="lg"
                 maxlength="60"
                 :placeholder="item.value === 'permanent' ? t('Название комнаты') : t('Название созвона')"
               />
-            </div>
+            </Field>
             <div v-if="item.value === 'permanent'" class="create-room__note create-room__note--ok">
               <Check v-bind="iconSm" aria-hidden="true" />
               <span>{{ t('Всегда остаётся в вашем списке — заходите в любой момент.') }}</span>

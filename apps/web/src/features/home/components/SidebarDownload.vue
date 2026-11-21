@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Spinner } from '@voice-room/ui/components';
+import { IconButton, Spinner } from '@voice-room/ui/components';
 import { t } from '@/shared/i18n';
 import { faApple, faWindows } from '@fortawesome/free-brands-svg-icons';
 import { Download } from '@lucide/vue';
@@ -8,7 +8,7 @@ import { fetchDesktopRelease, type DesktopRelease } from '@/api/desktop';
 import { DESKTOP_BUILDS, type DesktopBuildId } from '@/platform/desktop-builds';
 import { startDesktopBuildDownload } from '@/platform/desktop-download';
 import { DropdownMenu, MenuItem, MenuLabel } from '@/shared/ui';
-import { Icon, iconSm } from '@/shared/ui/icons';
+import { Icon } from '@/shared/ui/icons';
 
 const release = ref<DesktopRelease | null>(null);
 const releaseLoading = ref(false);
@@ -46,14 +46,9 @@ async function download(buildId: DesktopBuildId, close: () => void): Promise<voi
 <template>
   <DropdownMenu side="top" :aria-label="t('Скачать приложение')">
     <template #trigger>
-      <button
-        class="sidebar-download sidebar-download__trigger"
-        type="button"
-        :title="t('Скачать приложение')"
-        :aria-label="t('Скачать приложение')"
-      >
-        <Download v-bind="iconSm" />
-      </button>
+      <IconButton class="sidebar-download" :label="t('Скачать приложение')" :size="32">
+        <Download aria-hidden="true" />
+      </IconButton>
     </template>
 
     <template #content="{ close }">

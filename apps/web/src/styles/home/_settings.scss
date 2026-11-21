@@ -10,7 +10,6 @@
 //   .settings-content               -> .settings__content
 //   .settings-password-fields       -> .settings__password-fields
 //   .settings-field-label           -> .settings__field-label
-//   .settings-input                 -> .settings__input
 //   .settings-actions               -> .settings__actions
 //   .settings-save                  -> .settings__save
 //   .settings-cancel                -> .settings__cancel
@@ -41,8 +40,6 @@
 //   .settings-avatar-remove         -> .settings__avatar-remove
 //   .settings-appearance            -> .settings__appearance
 //   .settings-themes                -> .settings__themes
-//   .settings-theme(.is-selected)   -> .settings__theme(--selected)   (the card also carries .theme--<id>)
-//   .settings-theme-preview/-side/-mark/-main/-button/-label -> .settings__theme-preview/-side/-mark/-main/-button/-label
 //   .settings-theme-line(.is-short/.is-wide) -> .settings__theme-line(--short/--wide)
 //   .settings-gate                  -> .settings__gate
 //   .settings-sound-value           -> .settings__sound-value
@@ -89,9 +86,9 @@
   display: flex;
   flex: none;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--space-4);
   width: 200px;
-  padding: 14px 12px;
+  padding: var(--space-12) var(--space-12);
   border-right: 1px solid var(--vr-line);
 }
 
@@ -106,7 +103,7 @@
   flex: 1;
   min-height: 0;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--space-4);
 }
 
 .settings__nav-logout {
@@ -116,7 +113,7 @@
 .settings__content {
   flex: 1;
   min-width: 0;
-  padding: 20px 32px 32px;
+  padding: var(--space-20) var(--space-32) var(--space-32);
   overflow-x: hidden;
   overflow-y: auto;
 }
@@ -126,37 +123,33 @@
 .settings__password-fields {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 16px;
+  gap: var(--space-16);
 }
 
 .settings__field-label {
   display: block;
-  margin-bottom: 8px;
+  margin-bottom: var(--space-8);
   color: var(--vr-text-2);
   font-family: var(--font-ui);
   font-size: 0.8125rem;
   font-weight: 500;
 }
 
-.settings__input {
-  @include dialog-field;
-}
-
 .settings__actions {
   display: flex;
   justify-content: flex-end;
-  gap: 10px;
-  margin-top: 20px;
+  gap: var(--space-8);
+  margin-top: var(--space-20);
 }
 
 .settings__save {
   display: inline-flex;
   align-items: center;
-  gap: 9px;
-  min-height: 40px;
-  padding: 0 20px;
+  gap: var(--space-8);
+  min-height: var(--size-40);
+  padding: 0 var(--space-20);
   border: none;
-  border-radius: 11px;
+  border-radius: var(--radius-10);
   background: var(--vr-accent);
   color: var(--vr-accent-ink);
   font-family: var(--font-ui);
@@ -178,10 +171,10 @@
 }
 
 .settings__cancel {
-  min-height: 40px;
-  padding: 0 16px;
+  min-height: var(--size-40);
+  padding: 0 var(--space-16);
   border: none;
-  border-radius: 11px;
+  border-radius: var(--radius-10);
   background: transparent;
   color: var(--vr-text);
   font-family: var(--font-ui);
@@ -204,7 +197,7 @@
 .settings__sound {
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: var(--space-24);
   width: 100%;
   min-width: 0;
   max-width: 100%;
@@ -213,7 +206,7 @@
 .settings__sound-devices {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 16px;
+  gap: var(--space-16);
   min-width: 0;
   max-width: 100%;
 }
@@ -248,7 +241,7 @@
 }
 
 .settings__gate-hint {
-  margin-top: 12px;
+  margin-top: var(--space-12);
   color: var(--vr-text-muted);
   font-size: 0.75rem;
   line-height: 1.5;
@@ -256,7 +249,7 @@
 
 .settings__section-title {
   display: block;
-  margin-bottom: 10px;
+  margin-bottom: var(--space-8);
   color: var(--vr-text);
   font-family: var(--font-ui);
   font-size: 0.8125rem;
@@ -265,9 +258,9 @@
 
 .settings__hotkeys {
   display: grid;
-  gap: 18px;
+  gap: var(--space-16);
   border-top: 1px solid var(--vr-line);
-  padding-top: 22px;
+  padding-top: var(--space-20);
 }
 
 .settings__content > .settings__hotkeys {
@@ -279,7 +272,7 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(180px, 210px);
   align-items: center;
-  gap: 16px;
+  gap: var(--space-16);
 }
 
 // Svelte: [data-disabled='true']
@@ -300,16 +293,16 @@
 
 .settings__hotkey-description,
 .settings__hotkey-window-note {
-  margin-top: 3px;
+  margin-top: var(--space-2);
   color: var(--vr-text-muted);
-  font-size: 0.71875rem;
+  font-size: 12px;
   line-height: 1.45;
 }
 
 .settings__notification-ignore {
   display: grid;
-  gap: 18px;
-  padding-top: 2px;
+  gap: var(--space-16);
+  padding-top: var(--space-2);
 }
 
 .settings__notification-ignore > div:first-child .settings__section-title {
@@ -329,13 +322,13 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   align-items: start;
-  gap: 16px;
+  gap: var(--space-16);
 }
 
 .settings__notification-empty {
-  padding: 14px;
+  padding: var(--space-12);
   border: 1px dashed var(--vr-line);
-  border-radius: 12px;
+  border-radius: var(--radius-12);
   color: var(--vr-text-muted);
   font-size: 0.75rem;
   text-align: center;
@@ -343,10 +336,10 @@
 
 .settings__unblock-button {
   flex: none;
-  min-height: 34px;
-  padding: 0 12px;
+  min-height: var(--size-32);
+  padding: 0 var(--space-12);
   border: 1px solid var(--vr-line-strong);
-  border-radius: 10px;
+  border-radius: var(--radius-10);
   background: transparent;
   color: var(--vr-text);
   font: 500 0.8125rem var(--font-ui);
@@ -382,15 +375,15 @@
 
 .settings__hotkey-window-note {
   margin-top: 0;
-  border-radius: 9px;
-  padding: 9px 11px;
+  border-radius: var(--radius-8);
+  padding: var(--space-8) var(--space-12);
   background: var(--vr-surface);
 }
 
 @include below($bp-phone) {
   .settings__hotkey-row {
     grid-template-columns: 1fr;
-    gap: 8px;
+    gap: var(--space-8);
   }
 }
 
@@ -431,8 +424,8 @@
 .settings__avatar-control {
   position: relative;
   flex: none;
-  width: 56px;
-  height: 56px;
+  width: var(--size-56);
+  height: var(--size-56);
 }
 
 .settings__avatar-input {
@@ -444,8 +437,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 56px;
-  height: 56px;
+  width: var(--size-56);
+  height: var(--size-56);
   padding: 0;
   border: 0;
   border-radius: 50%;
@@ -474,99 +467,42 @@
 }
 
 :where(.settings__avatar-edit):focus-visible {
-  outline: 2px solid var(--vr-danger);
-  outline-offset: 3px;
+  outline: var(--space-2) solid var(--vr-accent);
+  outline-offset: var(--space-2);
 }
 
-.settings__avatar-remove {
+.settings__avatar-control .settings__avatar-remove {
   position: absolute;
   z-index: 1;
-  top: -5px;
-  right: -5px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
-  padding: 0;
-  border: 2px solid var(--vr-bg);
-  border-radius: 50%;
-  background: var(--vr-danger);
-  color: var(--vr-text);
-  cursor: pointer;
-  box-shadow: 0 2px 7px rgba(0, 0, 0, 0.34);
+  top: calc(-1 * var(--space-4));
+  right: calc(-1 * var(--space-4));
+  border-radius: var(--radius-pill);
   opacity: 0;
-  transition:
-    opacity 0.16s ease,
-    background 0.16s ease;
 }
 
-:where(.settings__avatar-control):hover .settings__avatar-remove,
-:where(.settings__avatar-control):focus-within .settings__avatar-remove {
+.settings__avatar-control:hover .settings__avatar-remove,
+.settings__avatar-control:focus-within .settings__avatar-remove {
   opacity: 1;
-}
-
-:where(.settings__avatar-remove):not(:disabled):hover {
-  background: color-mix(in oklch, var(--vr-danger), var(--vr-bg) 16%);
-}
-
-:where(.settings__avatar-remove):focus-visible {
-  outline: 2px solid var(--vr-text);
-  outline-offset: 2px;
-}
-
-:where(.settings__avatar-edit):disabled,
-:where(.settings__avatar-remove):disabled {
-  cursor: default;
-  opacity: 0.6;
 }
 
 // ---- appearance section (AppearanceSettings) ----
 
 .settings__appearance {
   display: grid;
-  gap: 14px;
+  gap: var(--space-12);
 }
 
 .settings__themes {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  gap: 14px;
-}
-
-.settings__theme {
-  position: relative;
-  display: grid;
-  gap: 10px;
-  padding: 10px;
-  border: 1px solid var(--vr-line-strong);
-  border-radius: 14px;
-  background: var(--vr-surface-2);
-  color: var(--vr-text);
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-
-.settings__theme-input {
-  @include visually-hidden;
-}
-
-.settings__theme:has(:focus-visible) {
-  outline: 2px solid var(--vr-accent);
-  outline-offset: 4px;
-}
-
-.settings__theme--selected {
-  border-color: transparent;
-  box-shadow: 0 0 0 2px var(--vr-accent);
+  gap: var(--space-12);
 }
 
 .settings__theme-preview {
   display: flex;
   height: 112px;
   overflow: hidden;
-  border-radius: 10px;
+  border-radius: var(--radius-10);
   background: var(--vr-bg);
   box-shadow: inset 0 0 0 1px var(--vr-line);
 }
@@ -575,23 +511,23 @@
   display: flex;
   flex: none;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--space-8);
   width: 38%;
-  padding: 12px 10px;
+  padding: var(--space-12) var(--space-8);
   background: var(--vr-surface);
 }
 
 .settings__theme-mark {
-  width: 16px;
-  height: 16px;
+  width: var(--size-16);
+  height: var(--size-16);
   background: var(--vr-accent);
   mask: url('/voiceroom-mascot.svg') center / contain no-repeat;
 }
 
 .settings__theme-line {
   display: block;
-  height: 7px;
-  border-radius: 4px;
+  height: var(--space-6);
+  border-radius: var(--radius-4);
   background: var(--vr-surface-3);
 }
 
@@ -604,7 +540,7 @@
   flex: 1;
   flex-direction: column;
   justify-content: space-between;
-  padding: 12px 10px;
+  padding: var(--space-12) var(--space-8);
 }
 
 .settings__theme-line--wide {
@@ -613,45 +549,23 @@
 
 .settings__theme-button {
   align-self: flex-end;
-  width: 46px;
-  height: 16px;
-  border-radius: 6px;
+  width: var(--size-44);
+  height: var(--size-16);
+  border-radius: var(--radius-6);
   background: var(--vr-accent);
-}
-
-.settings__theme-label {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 2px;
-  font-size: 0.875rem;
-  font-weight: 500;
-}
-
-.settings__theme-label svg {
-  color: var(--vr-accent);
-}
-
-// ---- sound and hotkeys (SoundSettings, HotkeySettings) ----
-
-.settings__sound-control {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: var(--space-12);
 }
 
 .settings__gate {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 58px;
   align-items: center;
-  gap: 14px;
+  gap: var(--space-12);
 }
 
 .settings__sound-value {
   color: var(--vr-text);
   font-family: var(--font-mono);
-  font-size: 0.78125rem;
+  font-size: 13px;
   font-weight: 500;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
@@ -660,13 +574,13 @@
 .settings__sound-actions {
   display: flex;
   justify-content: flex-end;
-  margin-top: 8px;
+  margin-top: var(--space-8);
 }
 
 .settings__sound-preview {
   border: 1px solid var(--vr-line-strong);
-  border-radius: 10px;
-  padding: 8px 12px;
+  border-radius: var(--radius-10);
+  padding: var(--space-8) var(--space-12);
   background: transparent;
   color: var(--vr-text);
   font-family: var(--font-ui);
@@ -691,7 +605,7 @@
   text-align: right;
   color: var(--vr-text);
   font-family: var(--font-mono);
-  font-size: 0.78125rem;
+  font-size: 13px;
   font-weight: 500;
   white-space: nowrap;
 }
@@ -707,7 +621,7 @@
 
 .settings__hotkey-list {
   display: grid;
-  gap: 14px;
+  gap: var(--space-12);
 }
 
 // ---- notifications (NotificationSettings) ----
@@ -716,7 +630,7 @@
   display: flex;
   align-items: center;
   overflow-wrap: anywhere;
-  gap: 6px;
+  gap: var(--space-6);
   min-width: 0;
 }
 
@@ -731,18 +645,18 @@
 .settings__diagnostics-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 10px;
+  gap: var(--space-8);
+  margin-top: var(--space-8);
 }
 
 .settings__overlay-window {
   display: flex;
   align-items: center;
-  gap: 12px;
-  min-height: 54px;
-  padding: 8px 8px 8px 14px;
+  gap: var(--space-12);
+  min-height: var(--size-56);
+  padding: var(--space-8) var(--space-8) var(--space-8) var(--space-12);
   border: 1px solid color-mix(in oklch, var(--vr-text-3), transparent 84%);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-16);
   background: color-mix(in oklch, var(--vr-surface-3), transparent 45%);
 }
 
@@ -750,7 +664,7 @@
   display: flex;
   flex: 1;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--space-2);
   min-width: 0;
 }
 
@@ -773,16 +687,16 @@
 }
 
 .settings__overlay-window-empty {
-  padding: 6px 0;
+  padding: var(--space-6) 0;
   color: var(--vr-text-muted);
-  font-size: 0.78125rem;
+  font-size: 13px;
   line-height: 1.45;
 }
 
 .settings__overlay-window-status {
   flex: none;
-  margin-right: 6px;
-  padding: 4px 10px;
+  margin-right: var(--space-6);
+  padding: var(--space-4) var(--space-8);
   border-radius: var(--radius-pill);
   background: color-mix(in oklch, var(--vr-online), transparent 86%);
   color: var(--vr-online);
@@ -791,13 +705,13 @@
 
 .settings__overlay-add {
   flex: none;
-  min-height: 36px;
-  padding: 0 14px;
+  min-height: var(--size-36);
+  padding: 0 var(--space-12);
   border: none;
-  border-radius: 11px;
+  border-radius: var(--radius-10);
   background: var(--vr-online);
   color: var(--vr-accent-ink);
-  font: 700 0.78125rem var(--font-ui);
+  font: 700 13px var(--font-ui);
   cursor: pointer;
   transition: filter 0.15s ease;
 }
@@ -814,8 +728,8 @@
 .settings__overlay-allowed {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
-  margin: 10px 0 0;
+  gap: var(--space-6);
+  margin: var(--space-8) 0 0;
   padding: 0;
   list-style: none;
 }
@@ -823,10 +737,10 @@
 .settings__overlay-allowed-item {
   display: inline-flex;
   align-items: center;
-  gap: 2px;
+  gap: var(--space-2);
   max-width: 100%;
-  min-height: 28px;
-  padding: 0 3px 0 11px;
+  min-height: var(--size-28);
+  padding: 0 var(--space-2) 0 var(--space-12);
   border-radius: var(--radius-pill);
   background: color-mix(in oklch, var(--vr-surface-3), transparent 25%);
   color: var(--vr-text);
@@ -837,23 +751,4 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.settings__overlay-remove {
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
-  border: none;
-  border-radius: 50%;
-  background: transparent;
-  color: var(--vr-text-muted);
-  cursor: pointer;
-}
-
-:where(.settings__overlay-remove):hover:not(:disabled) {
-  background: color-mix(in oklch, var(--vr-danger), transparent 84%);
-  color: var(--vr-danger);
 }

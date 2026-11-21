@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Button, Field, TextField } from '@voice-room/ui/components';
 import { t } from '@/shared/i18n';
 import { createRoomFromStart, handleRoomCodeKeydown, joinRoomByCode } from '@voice-room/call/engine/room/room-start';
 import { saveStartName, updateNameStatuses } from '@voice-room/call/engine/ui/names';
@@ -34,20 +35,19 @@ function handleCreateClick(): void {
 
     <section class="start-room__panel" :aria-label="t('Создать или найти комнату')">
       <form id="startForm" class="start-room__form" @submit="saveStartName">
-        <label class="start-room__field">
-          <span>{{ t('Ваше имя') }}</span>
-          <input
-            id="startNameInput"
+        <Field id="startNameInput" :label="t('Ваше имя')">
+          <TextField
             v-model="startUi.nameInput"
+            size="lg"
             maxlength="40"
             autocomplete="name"
             :placeholder="t('Ваше имя')"
             required
-            @input="updateNameStatuses(startUi.nameInput)"
+            @update:model-value="updateNameStatuses"
           />
-        </label>
+        </Field>
 
-        <button class="start-room__button start-room__button--secondary" type="submit">{{ t('Сохранить имя') }}</button>
+        <Button variant="outline" size="lg" type="submit">{{ t('Сохранить имя') }}</Button>
         <p
           id="startNameStatus"
           :class="['start-room__status', { 'start-room__status--dirty': startUi.savedNameState === 'dirty' }]"
@@ -61,21 +61,21 @@ function handleCreateClick(): void {
       </div>
 
       <div class="start-room__actions">
-        <button
+        <Button
           id="createRoomButton"
-          class="start-room__button start-room__button--primary"
+          variant="primary"
+          size="xl"
           type="button"
-          :disabled="startUi.createRoomLoading"
+          :busy="startUi.createRoomLoading"
           @click="handleCreateClick"
         >
           {{ startUi.createRoomLoading ? t('Создаём...') : t('Создать комнату') }}
-        </button>
+        </Button>
 
-        <label class="start-room__field">
-          <span>{{ t('Код комнаты') }}</span>
-          <input
-            id="roomCodeInput"
+        <Field id="roomCodeInput" :label="t('Код комнаты')">
+          <TextField
             v-model="startUi.roomCode"
+            size="lg"
             maxlength="120"
             autocapitalize="off"
             autocomplete="off"
@@ -83,16 +83,11 @@ function handleCreateClick(): void {
             placeholder="x7m2kq9p"
             @keydown="handleRoomCodeKeydown"
           />
-        </label>
+        </Field>
 
-        <button
-          id="joinByCodeButton"
-          class="start-room__button start-room__button--secondary"
-          type="button"
-          @click="joinRoomByCode"
-        >
+        <Button id="joinByCodeButton" variant="outline" size="lg" type="button" @click="joinRoomByCode">
           {{ t('Войти по коду') }}
-        </button>
+        </Button>
       </div>
     </section>
   </main>

@@ -42,7 +42,7 @@ function close(): void {
     :open="!hidden && (call !== null || thanked)"
     :title="call ? t('Как прошёл звонок?') : t('Спасибо!')"
     size="sm"
-    initial-focus=".call-feedback__thumb"
+    initial-focus=".call-feedback__thumbs button"
     :on-close="close"
   >
     <CallFeedbackCard v-if="call" :key="callKey" ref="card" :call="call" @answered="thanked = true" />

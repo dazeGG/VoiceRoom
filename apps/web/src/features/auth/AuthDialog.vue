@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Dialog, Spinner } from '@voice-room/ui/components';
+import { Button, Dialog, Field, TextField } from '@voice-room/ui/components';
 import { useLocalizedText, currentErrorMessage } from '@/shared/i18n/localized-text';
 
 import { t } from '@/shared/i18n';
@@ -16,7 +16,6 @@ import { dayMonth } from '@/shared/utils/date-format';
 import { iconMd } from '@/shared/ui/icons';
 import { LOGIN_HINT, PASSWORD_MIN_LENGTH, blockedMessage, isValidPassword, normalizeLogin } from './account';
 import type { AuthMode } from './auth-mode';
-import PasswordField from './PasswordField.vue';
 import { useSessionStore } from './session.store';
 
 const props = defineProps<{
@@ -196,17 +195,16 @@ async function restorePendingAccount(): Promise<void> {
           {{ t('Этот аккаунт ожидает удаления — оно произойдёт') }} {{ dayMonth(pendingDeletionAt)
           }}{{ t('. Восстановить его?') }}
         </p>
-        <button class="auth-dialog__submit" type="button" :disabled="submitting" @click="restorePendingAccount()">
+        <Button variant="primary" size="lg" :disabled="submitting" @click="restorePendingAccount">
           {{ t('Восстановить аккаунт') }}
-        </button>
+        </Button>
       </div>
 
-      <div class="auth-dialog__field">
-        <label class="auth-dialog__label" for="authLoginInput">{{ t('Логин') }}</label>
-        <input
-          id="authLoginInput"
+      <Field id="authLoginInput" :label="t('Логин')">
+        <TextField
           v-model="loginValue"
-          class="auth-dialog__input"
+          size="lg"
+          name="username"
           maxlength="32"
           autocapitalize="off"
           autocomplete="username"
@@ -214,28 +212,24 @@ async function restorePendingAccount(): Promise<void> {
           :placeholder="t('Ваш логин')"
           required
         />
-      </div>
+      </Field>
 
-      <div v-if="isRegister" class="auth-dialog__field">
-        <label class="auth-dialog__label" for="authDisplayNameInput">
-          {{ t('Отображаемое имя') }} <span class="auth-dialog__label-soft">{{ t('· необязательно') }}</span>
-        </label>
-        <input
-          id="authDisplayNameInput"
+      <Field v-if="isRegister" id="authDisplayNameInput" :label="t('Отображаемое имя')" optional>
+        <TextField
           v-model="displayName"
-          class="auth-dialog__input"
+          size="lg"
           maxlength="40"
           autocomplete="nickname"
           :placeholder="t('Как вас будут видеть в комнате')"
         />
-      </div>
+      </Field>
 
-      <div v-if="isRecover" class="auth-dialog__field">
-        <label class="auth-dialog__label" for="authRecoveryCodeInput">{{ t('Код восстановления') }}</label>
-        <input
-          id="authRecoveryCodeInput"
+      <Field v-if="isRecover" id="authRecoveryCodeInput" :label="t('Код восстановления')">
+        <TextField
           v-model="recoveryCode"
-          class="auth-dialog__input auth-dialog__input--code"
+          class="auth-dialog__code"
+          size="lg"
+          variant="mono"
           maxlength="32"
           autocapitalize="characters"
           autocomplete="one-time-code"
@@ -243,32 +237,35 @@ async function restorePendingAccount(): Promise<void> {
           placeholder="XXXX-XXXX-XXXX-XXXX"
           required
         />
-      </div>
+      </Field>
 
-      <div class="auth-dialog__field">
-        <label class="auth-dialog__label" for="authPasswordInput">{{
-          isRecover ? t('Новый пароль') : t('Пароль')
-        }}</label>
-        <PasswordField
-          id="authPasswordInput"
-          v-model="password"
-          :autocomplete="isLogin ? 'current-password' : 'new-password'"
-          :placeholder="isLogin ? t('Ваш пароль') : t('Минимум 8 символов')"
-        />
+      <div class="auth-dialog__password">
+        <Field id="authPasswordInput" :label="isRecover ? t('Новый пароль') : t('Пароль')">
+          <TextField
+            :key="isLogin ? 'current' : 'new'"
+            v-model="password"
+            name="password"
+            type="password"
+            size="lg"
+            :autocomplete="isLogin ? 'current-password' : 'new-password'"
+            :placeholder="isLogin ? t('Ваш пароль') : t('Минимум 8 символов')"
+          />
+        </Field>
         <button v-if="isLogin" type="button" class="auth-dialog__forgot" @click="switchMode('recover')">
           {{ t('Забыли пароль?') }}
         </button>
       </div>
 
-      <div v-if="!isLogin" class="auth-dialog__field">
-        <label class="auth-dialog__label" for="authPasswordConfirmInput">{{ t('Повторите пароль') }}</label>
-        <PasswordField
-          id="authPasswordConfirmInput"
+      <Field v-if="!isLogin" id="authPasswordConfirmInput" :label="t('Повторите пароль')">
+        <TextField
           v-model="passwordConfirm"
+          name="password-confirm"
+          type="password"
+          size="lg"
           autocomplete="new-password"
           :placeholder="t('Ещё раз')"
         />
-      </div>
+      </Field>
 
       <p v-if="isRegister" class="auth-dialog__consent">
         {{ t('Нажимая «') }}{{ copy.submit }}{{ t('», вы подтверждаете, что вам исполнилось 14 лет, принимаете') }}
@@ -278,13 +275,9 @@ async function restorePendingAccount(): Promise<void> {
         >.
       </p>
 
-      <button class="auth-dialog__submit" type="submit" :disabled="submitting || !session.loaded">
-        <template v-if="submitting">
-          <Spinner aria-hidden="true" />
-          {{ copy.submitting }}
-        </template>
-        <template v-else>{{ copy.submit }}</template>
-      </button>
+      <Button type="submit" variant="primary" size="lg" :busy="submitting" :disabled="!session.loaded">
+        {{ submitting ? copy.submitting : copy.submit }}
+      </Button>
     </form>
 
     <p v-if="isLogin" class="auth-dialog__foot">

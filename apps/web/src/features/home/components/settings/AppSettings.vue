@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Switch, SettingRow, SettingsGroup } from '@voice-room/ui/components';
+import { IconButton, Switch, SettingRow, SettingsGroup } from '@voice-room/ui/components';
 import { t } from '@/shared/i18n';
 import { X } from '@lucide/vue';
 import { computed, onMounted, ref, watch } from 'vue';
@@ -26,7 +26,6 @@ import {
 import { copyDesktopDiagnostics, openDesktopLogsFolder } from '@/platform/desktop-diagnostics';
 import { useNotificationPreferencesStore } from '@/shared/notifications/preferences.store';
 import { Select } from '@/shared/ui';
-import { iconSm } from '@/shared/ui/icons';
 import type { SettingsSupport } from '../../model/settings-support';
 import type { ToastOptions } from '../../model/toasts.store';
 
@@ -298,15 +297,15 @@ async function toggleSystemNotifications(): Promise<void> {
         <ul v-if="overlayAllowed.length" class="settings__overlay-allowed" :aria-label="t('Игры, добавленные вручную')">
           <li v-for="exe in overlayAllowed" :key="exe" class="settings__overlay-allowed-item" :title="exe">
             <span>{{ executableName(exe) }}</span>
-            <button
-              class="settings__overlay-remove"
-              type="button"
-              :aria-label="t('Убрать {p0}', { p0: executableName(exe) })"
+            <IconButton
+              :label="t('Убрать {p0}', { p0: executableName(exe) })"
               :disabled="overlaySaving || !overlayEnabled"
+              :size="24"
+              variant="danger"
               @click="void removeOverlayGame(exe)"
             >
-              <X v-bind="iconSm" aria-hidden="true" />
-            </button>
+              <X aria-hidden="true" />
+            </IconButton>
           </li>
         </ul>
       </SettingsGroup>

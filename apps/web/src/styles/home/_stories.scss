@@ -25,7 +25,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 16px;
+  padding: var(--space-16);
   background: color-mix(in srgb, var(--vr-bg) 62%, transparent);
   backdrop-filter: blur(4px);
   -webkit-backdrop-filter: blur(4px);
@@ -36,9 +36,9 @@
   max-height: calc(100dvh - 32px);
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: 14px 16px 16px;
+  padding: var(--space-12) var(--space-16) var(--space-16);
   border: 1px solid var(--vr-line-strong);
-  border-radius: var(--radius-xl);
+  border-radius: var(--radius-24);
   background: var(--vr-surface-2);
   box-shadow: var(--vr-shadow-popover);
   outline: none;
@@ -46,12 +46,12 @@
 
 .stories__progress {
   display: flex;
-  gap: 4px;
+  gap: var(--space-4);
 }
 
 .stories__segment {
   flex: 1;
-  height: 3px;
+  height: var(--space-2);
   overflow: hidden;
   border-radius: var(--radius-pill);
   background: color-mix(in oklch, var(--vr-text), transparent 82%);
@@ -87,9 +87,9 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  min-height: 30px;
-  margin: 8px 0 8px;
+  gap: var(--space-12);
+  min-height: var(--size-32);
+  margin: var(--space-8) 0 var(--space-8);
 }
 
 .stories__kicker {
@@ -98,9 +98,9 @@
 }
 
 .stories__quiet {
-  padding: 4px 8px;
+  padding: var(--space-4) var(--space-8);
   border: none;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-8);
   background: none;
   color: var(--vr-text-2);
   font: inherit;
@@ -119,8 +119,8 @@
   cursor: default;
 
   &:focus-visible {
-    outline: 2px solid var(--vr-accent);
-    outline-offset: 4px;
+    outline: var(--space-2) solid var(--vr-accent);
+    outline-offset: var(--space-2);
   }
 }
 
@@ -139,7 +139,7 @@
   height: auto;
   aspect-ratio: 4 / 3;
   border: 1px solid var(--vr-line);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-20);
   background: var(--vr-surface);
   object-fit: cover;
   user-select: none;
@@ -157,7 +157,7 @@
 }
 
 .stories__title {
-  margin: 16px 0 4px;
+  margin: var(--space-16) 0 var(--space-4);
   color: var(--vr-text);
   font-family: var(--font-ui);
   font-size: 1.125rem;
@@ -177,8 +177,8 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
-  margin-top: 16px;
+  gap: var(--space-8);
+  margin-top: var(--space-16);
 }
 
 .stories__spacer {

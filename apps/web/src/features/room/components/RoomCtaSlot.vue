@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { IconButton } from '@voice-room/ui/components';
 import { t } from '@/shared/i18n';
 import { MonitorDown, UserPlus, X } from '@lucide/vue';
 import { computed, onMounted, ref } from 'vue';
@@ -9,7 +10,7 @@ import { getDesktopBoundaryPolicy } from '@/platform/desktop-boundary';
 import { readOpenInAppSignals, shouldOfferOpenInApp } from '@/platform/open-in-app';
 import AppBenefitsModal from '@/shared/components/AppBenefitsModal.vue';
 import { Button } from '@/shared/ui';
-import { iconMd, iconSm } from '@/shared/ui/icons';
+import { iconMd } from '@/shared/ui/icons';
 import { isRoomEmbedded } from '@voice-room/call/engine/core/embed';
 import { state as roomClientState } from '@voice-room/call/engine/core/room-runtime.store';
 import { rejoinRoomSignedIn } from '@voice-room/call/engine/room/room';
@@ -91,14 +92,15 @@ function accept(): void {
       <Button size="sm" class="room-cta-slot__action" variant="primary" type="button" @click="accept">{{
         copy.action
       }}</Button>
-      <button
+      <IconButton
         class="room-cta-slot__close"
-        type="button"
-        :aria-label="t('Скрыть до следующего захода')"
+        :label="t('Скрыть до следующего захода')"
+        :size="28"
+        variant="filled"
         @click="dismissed = true"
       >
-        <X v-bind="iconSm" aria-hidden="true" />
-      </button>
+        <X aria-hidden="true" />
+      </IconButton>
     </aside>
     <!-- A mobile browser suspends the microphone when it leaves the foreground. -->
     <p v-if="mobile && roomClientState.joined" class="room-cta-slot__hint" role="note">

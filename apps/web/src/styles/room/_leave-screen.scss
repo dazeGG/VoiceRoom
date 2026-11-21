@@ -17,7 +17,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 24px;
+  padding: var(--space-24);
   background: color-mix(in srgb, var(--vr-bg) 78%, transparent);
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
@@ -26,13 +26,13 @@
 .leave-screen__card {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: var(--space-12);
   width: min(440px, 100%);
   max-height: 100%;
-  padding: 26px;
+  padding: var(--space-24);
   overflow-y: auto;
   border: 1px solid var(--vr-line-strong);
-  border-radius: var(--radius-xl);
+  border-radius: var(--radius-24);
   background: var(--vr-surface-2);
   box-shadow: var(--vr-shadow-popover);
   color: var(--vr-text);
@@ -60,15 +60,12 @@
 }
 
 .leave-screen__divider {
-  width: 100%;
-  margin: 6px 0;
-  border: 0;
-  border-top: 1px solid var(--vr-line);
+  margin: var(--space-6) 0;
 }
 
 .leave-screen__actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
-  margin-top: 6px;
+  gap: var(--space-8);
+  margin-top: var(--space-6);
 }

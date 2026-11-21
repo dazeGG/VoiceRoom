@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Progress } from '@voice-room/ui/components';
+import { IconButton, Progress } from '@voice-room/ui/components';
 import { t } from '@/shared/i18n';
 import { Image as ImageIcon, RotateCcw, X } from '@lucide/vue';
 import { computed, ref } from 'vue';
@@ -64,27 +64,29 @@ function view(draft: Draft): void {
           :error="Boolean(draft.error) || draft.state === 'failed'"
         />
 
-        <button
+        <IconButton
           v-if="draft.error || draft.state === 'failed'"
           class="attachment-composer__retry"
-          type="button"
-          :aria-label="t('Повторить загрузку')"
-          :title="draft.error || t('Не удалось обработать изображение')"
+          :label="t('Повторить загрузку')"
+          :aria-description="draft.error || t('Не удалось обработать изображение')"
           :disabled="disabled"
+          :size="28"
+          variant="filled"
           @click="void store.retry(draft)"
         >
-          <RotateCcw v-bind="iconSm" aria-hidden="true" />
-        </button>
+          <RotateCcw aria-hidden="true" />
+        </IconButton>
 
-        <button
+        <IconButton
           class="attachment-composer__remove"
-          type="button"
-          :aria-label="t('Удалить изображение {p0}', { p0: index + 1 })"
+          :label="t('Удалить изображение {p0}', { p0: index + 1 })"
           :disabled="disabled"
+          :size="24"
+          variant="filled"
           @click="remove(draft)"
         >
-          <X v-bind="iconSm" aria-hidden="true" />
-        </button>
+          <X aria-hidden="true" />
+        </IconButton>
       </li>
     </ol>
   </section>
