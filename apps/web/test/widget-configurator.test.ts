@@ -40,7 +40,7 @@ test('anonymous configurator updates every supported setting without starting it
     await fireEvent.keyDown(slider('Ширина'), { key: 'Home' });
     await fireEvent.keyDown(slider('Высота'), { key: 'End' });
     await fireEvent.keyDown(slider('Скругление'), { key: 'End' });
-    await fireEvent.update(numericField('Отступ'), '24');
+    await fireEvent.update(numericField('Отступ, px'), '24');
     await fireEvent.update(screen.getByLabelText('Положение'), 'top-left');
     await fireEvent.update(screen.getByLabelText('Заголовок виджета'), `Клуб 'Бэнг' & "ДнД" <3 • 100% голосом`);
     await fireEvent.update(screen.getByLabelText('Фон (HEX или RGB)'), 'rgb(16, 24, 32)');
@@ -90,13 +90,14 @@ test('anonymous configurator updates every supported setting without starting it
 test('inline preview dimensions and floating panel dimensions stay independent when switching placement', async () => {
   render(WidgetsPage);
   expect(screen.queryByLabelText('Положение')).toBeNull();
-  expect(screen.queryByLabelText('Отступ')).toBeNull();
+  expect(screen.queryByRole('spinbutton', { name: 'Отступ, px' })).toBeNull();
   await fireEvent.keyDown(await screen.findByRole('slider', { name: 'Ширина' }), { key: 'Home' });
   await fireEvent.click(screen.getByRole('radio', { name: 'Плавающая панель' }));
   expect(snippetConfig()).toMatchObject({ width: 360, height: 520 });
   await fireEvent.keyDown(await screen.findByRole('slider', { name: 'Ширина' }), { key: 'End' });
   await fireEvent.update(screen.getByLabelText('Положение'), 'top-right');
-  await fireEvent.update(numericField('Отступ'), '32');
+  await fireEvent.update(numericField('Отступ, px'), '32');
+  await fireEvent.blur(numericField('Отступ, px'));
   await fireEvent.click(screen.getByRole('radio', { name: 'Внутри страницы' }));
   expect(screen.queryByLabelText('Положение')).toBeNull();
   expect(snippetConfig()).toMatchObject({ mode: 'inline', corner: 'top-right', offset: 32 });
@@ -105,7 +106,7 @@ test('inline preview dimensions and floating panel dimensions stay independent w
   expect((await screen.findByRole('slider', { name: 'Ширина' })).getAttribute('aria-valuenow')).toBe('240');
   await fireEvent.click(screen.getByRole('radio', { name: 'Плавающая панель' }));
   expect(screen.getByLabelText('Положение')).toHaveProperty('value', 'top-right');
-  expect(numericField('Отступ')).toHaveProperty('value', '32');
+  expect(numericField('Отступ, px')).toHaveProperty('value', '32');
   expect(snippetConfig()).toMatchObject({ width: 960, height: 520 });
 });
 
@@ -123,13 +124,13 @@ test('the camera switch exports an explicit opt-out and removes the preview came
 test('invalid embed settings explain the accepted range and prevent copying an invalid snippet', async () => {
   render(WidgetsPage);
   await fireEvent.click(screen.getByRole('radio', { name: 'Плавающая панель' }));
-  await fireEvent.update(numericField('Отступ'), '49');
+  await fireEvent.update(numericField('Отступ, px'), '49');
   expect(screen.queryByRole('alert')).toBeNull();
-  await fireEvent.focusOut(numericField('Отступ'));
+  await fireEvent.focusOut(numericField('Отступ, px'));
   expect(screen.getByRole('alert').textContent).toContain('0–48 px');
   expect(snippetField().value).toBe('');
   expect(screen.getByRole('button', { name: 'Скопировать код' })).toHaveProperty('disabled', true);
-  await fireEvent.update(numericField('Отступ'), '16');
+  await fireEvent.update(numericField('Отступ, px'), '16');
   expect(screen.queryByRole('alert')).toBeNull();
 });
 

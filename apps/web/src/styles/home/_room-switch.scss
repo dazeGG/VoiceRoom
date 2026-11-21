@@ -3,7 +3,6 @@
 //
 // Svelte class -> BEM class (block "room-switch")
 //   .room-switch-text      -> .room-switch__text
-//   .room-switch-remember  -> .room-switch__remember
 //   .lr-dialog-actions     -> .home-dialog__actions (_home-dialog.scss)
 
 .room-switch__text {
@@ -11,20 +10,4 @@
   color: var(--vr-text-2);
   font-size: 0.875rem;
   line-height: 1.45;
-}
-
-.room-switch__remember {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--vr-text);
-  font-size: 0.875rem;
-  cursor: pointer;
-
-  input {
-    width: 16px;
-    height: 16px;
-    margin: 0;
-    accent-color: var(--vr-accent, currentColor);
-  }
 }

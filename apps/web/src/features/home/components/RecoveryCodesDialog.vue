@@ -4,6 +4,7 @@ import { useLocalizedText, currentErrorMessage } from '@/shared/i18n/localized-t
 import { t } from '@/shared/i18n';
 import { Copy, Download } from '@lucide/vue';
 import { ref, watch } from 'vue';
+import { Checkbox } from '@voice-room/ui/components';
 import { generateRecoveryCodes, type RecoveryCodesStatus } from '@/api/auth';
 import { Button, Dialog } from '@/shared/ui';
 import { iconSm } from '@/shared/ui/icons';
@@ -147,10 +148,9 @@ function downloadCodes(): void {
           <template #icon><Download v-bind="iconSm" aria-hidden="true" /></template> {{ t('Скачать .txt') }}
         </Button>
       </div>
-      <label class="recovery-dialog__confirm">
-        <input v-model="saved" type="checkbox" />
-        <span>{{ t('Я сохранил коды') }}</span>
-      </label>
+      <Checkbox :model-value="saved" class="recovery-dialog__confirm" @update:model-value="saved = $event === true">
+        {{ t('Я сохранил коды') }}
+      </Checkbox>
       <div class="home-dialog__actions">
         <Button variant="primary" type="button" :disabled="!saved" @click="close">{{ t('Готово') }}</Button>
       </div>

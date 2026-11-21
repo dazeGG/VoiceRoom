@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { t } from '@/shared/i18n';
 import { ref, watch } from 'vue';
+import { Checkbox } from '@voice-room/ui/components';
 import EmojiText from '@/shared/chat/EmojiText.vue';
 import { Button, Dialog } from '@/shared/ui';
 
@@ -27,10 +28,9 @@ watch(
     :width="430"
   >
     <p class="room-switch__text">{{ t('Вы покинете звонок в «') }}<EmojiText :text="fromName" />».</p>
-    <label class="room-switch__remember">
-      <input v-model="dontAskAgain" type="checkbox" />
-      <span>{{ t('Больше не спрашивать') }}</span>
-    </label>
+    <Checkbox :model-value="dontAskAgain" @update:model-value="dontAskAgain = $event === true">
+      {{ t('Больше не спрашивать') }}
+    </Checkbox>
     <div class="home-dialog__actions">
       <Button variant="ghost" type="button" @click="emit('cancel')">{{ t('Отмена') }}</Button>
       <Button variant="primary" type="button" @click="emit('confirm', dontAskAgain)">{{ t('Перейти') }}</Button>
