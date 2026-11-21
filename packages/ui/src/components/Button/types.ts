@@ -1,7 +1,8 @@
 export interface ButtonProps {
-  variant?: 'primary' | 'ghost' | 'outline' | 'soft' | 'danger' | 'danger-ghost' | undefined;
-  /** `lg` is 44px, `xl` 50px (landing calls to action). */
-  size?: 'md' | 'lg' | 'xl' | undefined;
+  variant?: 'primary' | 'ghost' | 'outline' | 'plain' | 'soft' | 'danger' | 'danger-ghost' | undefined;
+  /** Control heights: sm 32, md 40, lg 44, xl 48. */
+  size?: 'sm' | 'md' | 'lg' | 'xl' | undefined;
   type?: 'button' | 'submit' | undefined;
   disabled?: boolean | undefined;
+  busy?: boolean | undefined;
 }

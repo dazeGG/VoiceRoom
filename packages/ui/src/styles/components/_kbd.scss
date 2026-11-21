@@ -1,0 +1,22 @@
+.ui-kbd-group {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  gap: var(--space-4);
+}
+
+.ui-kbd {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--size-20);
+  height: var(--size-20);
+  padding: 0 var(--space-6);
+  border: 1px solid var(--vr-line-strong);
+  border-bottom-width: var(--space-2);
+  border-radius: var(--radius-6);
+  background: var(--vr-surface-3);
+  color: var(--vr-text-2);
+  font: 500 11px/1 var(--font-mono);
+}

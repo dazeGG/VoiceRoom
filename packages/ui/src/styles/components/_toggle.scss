@@ -1,0 +1,87 @@
+.ui-toggle {
+  position: relative;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-6);
+  min-width: var(--size-32);
+  height: var(--size-32);
+  padding: 0 var(--space-12);
+  border: 1px solid var(--vr-line-strong);
+  border-radius: var(--radius-8);
+  background: transparent;
+  color: var(--vr-text-2);
+  font: 600 13px/1 var(--font-ui);
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
+}
+
+.ui-toggle svg {
+  width: var(--icon-16);
+  height: var(--icon-16);
+}
+
+.ui-toggle:where(:hover):not(:disabled) {
+  background: var(--vr-hover);
+  color: var(--vr-text);
+}
+
+.ui-toggle[aria-pressed='true'] {
+  border-color: var(--vr-accent-line);
+  background: var(--vr-accent-soft);
+  color: var(--vr-accent);
+}
+
+.ui-toggle--size-lg {
+  min-width: var(--size-44);
+  height: var(--size-44);
+  padding-inline: var(--space-16);
+  gap: var(--space-8);
+  border-radius: var(--radius-12);
+  font-size: 14px;
+}
+
+.ui-toggle--size-lg svg {
+  width: var(--icon-20);
+  height: var(--icon-20);
+}
+
+.ui-toggle--tone-good[aria-pressed='true'] {
+  border-color: color-mix(in oklch, var(--vr-success), transparent 60%);
+  background: color-mix(in oklch, var(--vr-success), transparent 88%);
+  color: var(--vr-success);
+}
+
+.ui-toggle--tone-bad[aria-pressed='true'] {
+  border-color: color-mix(in oklch, var(--vr-danger), transparent 60%);
+  background: color-mix(in oklch, var(--vr-danger), transparent 88%);
+  color: var(--vr-danger);
+}
+
+.ui-toggle:disabled,
+.ui-toggle[aria-disabled='true'] {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.ui-toggle:focus-visible {
+  outline: var(--space-2) solid var(--vr-accent);
+  outline-offset: var(--space-2);
+}
+
+@media (pointer: coarse) {
+  .ui-toggle::before {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: max(100%, var(--size-44));
+    height: max(100%, var(--size-44));
+    content: '';
+    transform: translate(-50%, -50%);
+  }
+}
