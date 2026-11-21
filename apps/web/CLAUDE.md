@@ -16,7 +16,7 @@
 5. Imperative code (room client, services) reads stores with `useXStore()` after `setActivePinia(pinia)` in `main.ts`. Tests call `setActivePinia(createPinia())` in `beforeEach` (`renderWithApp` and `freshImport` do it).
 6. Styles: no `<style>` in `.vue` files. A component's block lives in `src/styles/<area>/_<block>.scss` or in `packages/call/src/styles` and `packages/ui/src/styles` for portable views and primitives. Web area indexes forward the partials in cascade order. Use BEM names (`room-dock`, `room-dock__button`, `room-dock__button--active`). `<style scoped>` only with a one-line comment above it saying why and an entry in `STYLE_ALLOWLIST` in `scripts/check-web-styles.mts`. Colours come from `pkg:@voice-room/ui/styles/tokens` (`--vr-*`), and breakpoints and repeated patterns from `pkg:@voice-room/ui/styles/mixins`. Sass module system only (`@use`/`@forward`), never `@import`. The "Svelte class -> BEM class" maps at the top of older partials record the pre-Vue selectors; new partials do not need one.
 7. State in markup: semantic state is `aria-*` (`aria-pressed`, `aria-expanded`, `aria-selected`, `aria-current`, `aria-busy`, `aria-disabled`) and the SCSS selects on it; visual-only state is a BEM modifier class via `:class`. No `data-*` for styling and no `[data-` in `.scss` (comments are not checked). `data-*` stays only where a third party sets it (Reka's `data-state`); we do not select on it.
-8. Reka UI sits behind our primitives (`Dialog`, `Popover`, `ContextMenu`, `Select`, `Slider`, `Switch`, `SegmentControl`). Only `src/shared/ui/**` and `packages/ui/src/components/**` import `reka-ui`.
+8. UI is built from the kit in `@voice-room/ui/components` (rules and sizes: `../../docs/DESIGN_SYSTEM.md` section 7). Reka UI sits behind those components; only `src/shared/ui/**` and `packages/ui/src/components/**` import `reka-ui`. Do not hand-roll a control the kit has; the few native controls kept on purpose are listed in section 8.
 9. Imports use the `@/` alias (`src/`). Layer rules are enforced by ESLint for these paths.
 10. `shared` never imports `features`; reuse shared UI and model utilities before adding abstractions.
 11. Browser, desktop, media and LiveKit fallbacks stay explicit and testable.
@@ -49,7 +49,7 @@ The widget frame and v1 loader live in `../widget`. Web's widget configurator us
 
 ## Styles layout
 
-`src/styles/main.scss` is imported once, by `src/main.ts`. It loads tokens and typography from `@voice-room/ui`, then `_base.scss`, `_desktop-shell.scss`, and `ui/ chat/ room/ home/ auth/ legal/ app/` (`_index.scss` forwards one partial per BEM block). Shared dialog chrome is `ui/_dialog.scss`; the account and room settings modal is `home/_settings.scss`.
+`src/styles/main.scss` is imported once, by `src/main.ts`. It loads tokens and typography from `@voice-room/ui`, then `_base.scss`, `_desktop-shell.scss`, and `ui/ chat/ room/ home/ auth/ legal/ app/` (`_index.scss` forwards one partial per BEM block). Dialog chrome is the kit `Dialog`; `ui/_dialog.scss` holds shared dialog content (errors, notes); the settings modal layout is `home/_settings.scss`.
 
 ## Tests
 

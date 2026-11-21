@@ -195,9 +195,8 @@ above, list it here so nobody copies the old pattern.
 | Without a database, routes answer 503 `internal_error` | `app/service-registry.ts`, `app/domain-services.ts` (no catalogued code; `http-kit.ts` masks status >= 500) | Add a catalogued code before surfacing a new 503 |
 | Device state has two sources of truth | `packages/call/src/engine/core/room-device-ui.store.ts` against `packages/call/src/engine/core/types.ts`, copied by hand in `packages/call/src/engine/ui/devices.ts` and `packages/call/src/engine/services/microphone-service.ts` | One owner per value; the UI reads it and the action writes it; type `noiseMode` as `NoiseMode` |
 | Reconnect jitter is written three times | `api/realtime.ts`, `packages/call/src/engine/recovery/realtime-recovery.ts`, `packages/call/src/engine/services/livekit/reconnect-policy.ts` | Do not add a fourth `Math.random()` backoff; share one jitter helper |
-| Listbox keyboard handling is copied | `features/home/components/lobby/Sidebar.vue` (own typeahead) against `shared/ui/Select/Select.vue` | Use `Select`; do not write another typeahead |
 | Screen profile ids are free strings in the room client | `packages/call/src/engine/core/types.ts`, `packages/call/src/engine/media/profiles.ts` | Narrow ids in the client; keep the wire field `PublicPeer.screenProfileId` a plain string |
-| Large components | `shared/chat/EmojiPickerPanel.vue` (506 lines) | Split by concern before adding to it |
+| Large components | `shared/chat/EmojiPickerPanel.vue` (495 lines) | Split by concern before adding to it |
 | The lobby store is large | `features/home/model/lobby.store.ts` (577 lines) | New lobby state goes in its own store or `use-*.ts` composable, not in `lobby.store.ts` |
 | `on(client)` query-shape guard: a value that is not a client falls back to the pool | `domains/media/attachment.repository.ts`, `domains/media/media-job.repository.ts` (`media-job-repository.test.ts` pins the fallback) | Kept on purpose. A new repository takes a typed `QueryClient` and does not guess the shape at run time |
 | Optional authorizers with a deny-all default | `domains/media/media-visibility.service.ts` (`authorizeDirectAttachment`, `authorizeRoomAttachment`; production passes both, `release-metrics.test.ts` builds without) | Kept on purpose. A new dependency is required in the factory's type, not optional with a default |
@@ -206,7 +205,7 @@ above, list it here so nobody copies the old pattern.
 | Internal error classes that are not a `DomainError` | `MediaError` in `domains/media/storage.ts` (storage codes), `FetchError` in `lib/link-preview-fetcher.ts` (no HTTP status), `MessageDeliveryFenceError` in `domains/messaging/` | An error that reaches a route is a `DomainError` with a catalogued code; add the code first. Keep the internal classes internal |
 | Run-time fail-safe on a typed result | `domains/moderation/moderation.service.ts` (`revoked?.status !== 'revoked'` on a typed `PrincipalRevocation` result) | Kept on purpose. Type a new port result as a union |
 | Optional `credentialBoundary` | `realtime/room-runtime.ts` (`RuntimeCredentialBoundary \| null`; null without a 32-byte gate secret, then leases revoke through the room store) | Kept on purpose. Do not add another nullable collaborator to `RoomRuntimeDeps` |
-| Large lobby components | `features/home/components/lobby/Sidebar.vue` (405 lines), `features/home/LobbyPage.vue` (374 lines) | Extract a composable or a child component before adding to either |
+| Large lobby components | `features/home/LobbyPage.vue` (494 lines), `features/home/components/lobby/Sidebar.vue` (284 lines) | Extract a composable or a child component before adding to either |
 
 Paths in the web rows without a package prefix are under `apps/web/src/`, the rest under
 `apps/api/src/`.
