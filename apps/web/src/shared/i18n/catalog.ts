@@ -597,6 +597,11 @@ export const english = {
   'Я сохранил коды': 'I saved the codes',
   Готово: 'Done',
   'Перейти в комнату «{p0}»?': 'Go to room “{p0}”?',
+  'Вы покинете звонок в «{p0}».': 'You will leave the call in “{p0}”.',
+  'Удалить комнату «{p0}»?': 'Delete room “{p0}”?',
+  'Удалить аккаунт?': 'Delete your account?',
+  'Аккаунт скроется, и все сеансы завершатся. Восстановить аккаунт можно до {p0}.':
+    'Your account will be hidden and all sessions will end. You can restore your account until {p0}.',
   'Вы покинете звонок в «': 'You will leave the call at "',
   'Больше не спрашивать': 'Don’t ask again',
   Перейти: 'Go',
@@ -2285,6 +2290,11 @@ export const french: Record<MessageKey, string> = {
   'Я сохранил коды': "J'ai enregistré les codes",
   Готово: 'Terminé',
   'Перейти в комнату «{p0}»?': 'Aller dans le salon « {p0} » ?',
+  'Вы покинете звонок в «{p0}».': 'Vous quitterez l’appel dans le salon « {p0} ».',
+  'Удалить комнату «{p0}»?': 'Supprimer le salon « {p0} » ?',
+  'Удалить аккаунт?': 'Supprimer votre compte ?',
+  'Аккаунт скроется, и все сеансы завершатся. Восстановить аккаунт можно до {p0}.':
+    'Votre compte sera masqué et toutes les sessions prendront fin. Vous pourrez le rétablir jusqu’au {p0}.',
   'Вы покинете звонок в «': 'Vous quitterez l\'appel au "',
   'Больше не спрашивать': 'Ne demandez plus',
   Перейти: 'Aller',

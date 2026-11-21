@@ -1,66 +1,122 @@
-// Dialog primitive (shared/ui/Dialog). Svelte: scoped styles of Dialog.svelte.
-//
-// Svelte class -> BEM class
-//   .ui-dialog-overlay -> .ui-dialog__overlay
-//   .ui-dialog-card    -> .ui-dialog__card
-//   .ui-dialog-head    -> .ui-dialog__head
-//   .ui-dialog-title   -> .ui-dialog__title
-//   .ui-dialog-close   -> .ui-dialog__close
-//   .ui-dialog-body    -> .ui-dialog__body
 @use '../mixins' as *;
 
-.ui-dialog__overlay {
-  @include modal-overlay(40, 24px);
+.ui-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-24);
+  background: var(--vr-backdrop);
+  backdrop-filter: blur(var(--space-4));
+  -webkit-backdrop-filter: blur(var(--space-4));
   pointer-events: auto;
 }
 
-.ui-dialog__card {
+.ui-dialog {
+  --dialog-width: 520px;
+
+  display: flex;
+  flex-direction: column;
+  width: min(var(--dialog-width), 100%);
+  max-height: calc(100dvh - var(--space-48));
+  overflow: hidden;
   border: 1px solid var(--vr-line-strong);
-  border-radius: 20px;
+  border-radius: var(--radius-20);
   background: var(--vr-surface);
   box-shadow: var(--vr-shadow-modal);
-  overflow: hidden;
+  animation: ui-dialog-in 120ms var(--ease-out);
+}
+
+.ui-dialog--sm {
+  --dialog-width: 400px;
+}
+
+.ui-dialog--lg {
+  --dialog-width: 720px;
 }
 
 .ui-dialog__head {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 20px 22px 16px;
+  flex: none;
+  align-items: flex-start;
+  gap: var(--space-12);
+  padding: var(--space-20) var(--space-20) 0 var(--space-24);
+}
+
+.ui-dialog__titles {
+  flex: 1;
+  min-width: 0;
+  padding-top: var(--space-6);
 }
 
 .ui-dialog__title {
+  margin: 0;
   color: var(--vr-text);
-  font-family: var(--font-ui);
-  font-size: 1.0625rem;
-  font-weight: 600;
+  font: 600 1.0625rem/1.25 var(--font-ui);
   letter-spacing: -0.015em;
+  overflow-wrap: anywhere;
 }
 
-.ui-dialog__close {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 30px;
-  height: 30px;
-  border: none;
-  border-radius: var(--radius-sm);
-  background: transparent;
+.ui-dialog__desc {
+  margin: var(--space-6) 0 0;
   color: var(--vr-text-2);
-  cursor: pointer;
-  transition:
-    background 0.15s ease,
-    color 0.15s ease;
-}
-
-.ui-dialog__close:hover {
-  background: var(--vr-hover);
-  color: var(--vr-text);
+  font-size: 0.875rem;
+  line-height: 1.5;
 }
 
 .ui-dialog__body {
   display: flex;
   flex-direction: column;
-  gap: 18px;
-  padding: 20px 22px 22px;
+  gap: var(--space-16);
+  min-height: 0;
+  padding: var(--space-20) var(--space-24);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.ui-dialog__foot {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-8);
+  padding: 0 var(--space-24) var(--space-24);
+}
+
+@keyframes ui-dialog-in {
+  from {
+    opacity: 0;
+    transform: translateY(var(--space-4));
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ui-dialog {
+    animation: none;
+  }
+}
+
+@include below($bp-phone) {
+  .ui-overlay:not(.ui-overlay--alert) {
+    padding: 0;
+  }
+
+  .ui-dialog:not(.ui-dialog--alert) {
+    width: 100%;
+    height: 100%;
+    max-height: none;
+    border: 0;
+    border-radius: 0;
+  }
+
+  .ui-dialog:not(.ui-dialog--alert) .ui-dialog__body {
+    flex: 1;
+  }
 }
