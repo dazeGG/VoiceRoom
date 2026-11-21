@@ -1,6 +1,11 @@
 @use 'menu';
 
 .ui-combobox {
+  &--inline {
+    display: grid;
+    gap: var(--space-4);
+  }
+
   &__panel {
     min-width: 0;
   }

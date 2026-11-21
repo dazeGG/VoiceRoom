@@ -28,6 +28,7 @@ export type PopoverProps = {
   ariaLabel?: string;
   rootClass?: string;
   panelClass?: string;
+  inset?: 'standard' | 'flush';
   /** Keep panel in the DOM when closed (for ids the vanilla client updates). */
   keepContentMounted?: boolean;
   /** Flip vertically on open when the preferred side would leave the viewport. */

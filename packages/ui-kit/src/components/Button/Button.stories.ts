@@ -47,6 +47,7 @@ type Story = StoryObj<typeof meta>;
 
 export const Primary: Story = {};
 export const Ghost: Story = { args: { variant: 'ghost' } };
+export const ExtraSmall: Story = { args: { size: 'xs' } };
 export const Outline: Story = { args: { variant: 'outline' } };
 export const Plain: Story = { args: { variant: 'plain' } };
 export const Soft: Story = { args: { variant: 'soft' } };

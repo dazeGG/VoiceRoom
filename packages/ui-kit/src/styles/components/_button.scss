@@ -31,6 +31,7 @@
   height: var(--icon-18);
 }
 
+.ui-button--size-xs,
 .ui-button--size-sm {
   height: var(--size-32);
   min-height: var(--size-32);
@@ -40,6 +41,13 @@
   font-size: 0.8125rem;
 }
 
+.ui-button--size-xs {
+  height: var(--size-28);
+  min-height: var(--size-28);
+}
+
+.ui-button--size-xs svg,
+.ui-button--size-xs .ui-button__icon .ui-spinner,
 .ui-button--size-sm svg,
 .ui-button--size-sm .ui-button__icon .ui-spinner {
   width: var(--icon-16);

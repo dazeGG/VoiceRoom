@@ -24,7 +24,11 @@ const emit = defineEmits<{ click: [event: MouseEvent] }>();
         'ui-icon-button',
         `ui-icon-button--${variant}`,
         `ui-icon-button--size-${size}`,
-        { 'ui-icon-button--scrim': scrim, 'ui-icon-button--pill': pill }
+        {
+          'ui-icon-button--scrim': scrim,
+          'ui-icon-button--pill': pill,
+          'ui-icon-button--neutral-expanded': neutralExpanded
+        }
       ]"
       :href="href && !disabled ? href : undefined"
       :type="href ? undefined : type"
@@ -49,7 +53,11 @@ const emit = defineEmits<{ click: [event: MouseEvent] }>();
       'ui-icon-button',
       `ui-icon-button--${variant}`,
       `ui-icon-button--size-${size}`,
-      { 'ui-icon-button--scrim': scrim, 'ui-icon-button--pill': pill }
+      {
+        'ui-icon-button--scrim': scrim,
+        'ui-icon-button--pill': pill,
+        'ui-icon-button--neutral-expanded': neutralExpanded
+      }
     ]"
     :href="href && !disabled ? href : undefined"
     :type="href ? undefined : type"

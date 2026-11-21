@@ -47,7 +47,7 @@ const emit = defineEmits<{ click: [event: MouseEvent] }>();
     "
   >
     <span v-if="busy || $slots.icon" class="ui-button__icon">
-      <Spinner v-if="busy" :size="size === 'sm' || size === 'md' ? 16 : 20" aria-hidden="true" />
+      <Spinner v-if="busy" :size="size === 'xs' || size === 'sm' || size === 'md' ? 16 : 20" aria-hidden="true" />
       <slot v-else name="icon" />
     </span>
     <slot />

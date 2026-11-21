@@ -1,16 +1,19 @@
 .ui-segment {
   display: inline-flex;
   align-items: center;
+  flex-wrap: wrap;
   box-sizing: border-box;
   gap: var(--space-2);
-  height: var(--size-40);
+  min-height: var(--size-40);
+  min-width: 0;
+  max-width: 100%;
   padding: calc(var(--space-6) / 2);
   border: calc(var(--space-2) / 2) solid var(--vr-line);
   border-radius: var(--radius-12);
   background: var(--vr-surface-2);
 
   &--sm {
-    height: var(--size-32);
+    min-height: var(--size-32);
     border-radius: var(--radius-10);
   }
 
@@ -19,7 +22,9 @@
     align-items: center;
     justify-content: center;
     gap: var(--space-6);
-    height: var(--size-32);
+    min-height: var(--size-32);
+    min-width: min-content;
+    max-width: 100%;
     padding-inline: var(--space-12);
     border: 0;
     border-radius: var(--radius-8);
@@ -52,7 +57,7 @@
   }
 
   &--sm .ui-segment__item {
-    height: var(--size-24);
+    min-height: var(--size-24);
     padding-inline: var(--space-8);
     border-radius: var(--radius-6);
     font-size: 0.75rem;
@@ -77,7 +82,8 @@
   width: 100%;
 
   .ui-segment__item {
-    flex: 1;
+    flex: 1 1 auto;
+    min-width: min-content;
   }
 }
 

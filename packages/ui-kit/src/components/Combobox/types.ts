@@ -13,9 +13,11 @@ export interface ComboboxProps {
   size?: 'sm' | 'md' | 'lg';
   placeholder?: string;
   autoFocus?: boolean;
-  /** Options are already filtered by the caller. Bind the input with v-model:query. */
   visuallyHiddenLabel?: boolean;
   overlay?: boolean;
+  /** Keep the results visible and let the host handle dismissal. */
+  inline?: boolean;
+  /** Options are already filtered by the caller. Bind the input with v-model:query. */
   externalFilter?: boolean;
   loading?: boolean;
   resultsLabel?: string;

@@ -2,6 +2,8 @@ export interface IconButtonProps {
   pill?: boolean;
   scrim?: boolean;
   dot?: boolean;
+  /** Keep a disclosure trigger neutral while its controlled region is open. */
+  neutralExpanded?: boolean;
   href?: string;
   label: string;
   size?: 24 | 28 | 32 | 40 | 44 | undefined;

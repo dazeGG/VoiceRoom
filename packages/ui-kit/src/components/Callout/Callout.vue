@@ -11,8 +11,9 @@ const icons = { info: Info, warning: TriangleAlert, danger: CircleAlert, accent:
 </script>
 
 <template>
-  <div :class="['ui-callout', `ui-callout--${tone}`]">
-    <span class="ui-callout__icon" aria-hidden="true">
+  <div :class="['ui-callout', `ui-callout--${tone}`, { 'ui-callout--pill': layout === 'pill' }]">
+    <span v-if="layout === 'pill'" class="ui-callout__dot" aria-hidden="true" />
+    <span v-else class="ui-callout__icon" aria-hidden="true">
       <slot name="icon"><component :is="icons[tone]" /></slot>
     </span>
     <div class="ui-callout__body">

@@ -22,7 +22,8 @@ const meta = {
           'Reka DropdownMenu for a list of actions.',
           '',
           '- Give the panel padding 4, radius 12 and a width from 220. Use a row of 36, or 48 when the row has two lines.',
-          '- In a row, use an indicator slot of 16, an icon of 16, the text, and on the right a shortcut (`ui-menu__shortcut`) or a submenu chevron.',
+          '- Align the rows to an indicator column of 16 only when the menu contains checkboxes or radio items.',
+          '- In a row, use an icon of 16, the text, and on the right a shortcut (`ui-menu__shortcut`) or a submenu chevron.',
           '- Use the `friendly` tone (`--vr-online`) for an action that brings people closer.',
           '- Put a `danger` item last, after a separator.',
           '- Take keyboard behaviour from Reka.'
@@ -82,6 +83,23 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {};
+export const PlainActions: Story = {
+  args: { ariaLabel: 'Действия с сообщением' },
+  render: (args) => ({
+    components: { DropdownMenu, IconButton, MenuItem, MenuSeparator, StoryIcon },
+    setup: () => ({ args }),
+    template: `
+      <DropdownMenu v-bind="args">
+        <template #trigger><IconButton label="Действия с сообщением"><StoryIcon name="ellipsis" /></IconButton></template>
+        <template #content>
+          <MenuItem label="Ответить"><template #icon><StoryIcon name="reply" /></template></MenuItem>
+          <MenuItem label="Скопировать текст"><template #icon><StoryIcon name="copy" /></template></MenuItem>
+          <MenuSeparator />
+          <MenuItem label="Удалить" tone="danger"><template #icon><StoryIcon name="trash-2" /></template></MenuItem>
+        </template>
+      </DropdownMenu>`
+  })
+};
 export const TopEnd: Story = {
   args: { side: 'top', align: 'end' },
   parameters: { layout: 'centered' }

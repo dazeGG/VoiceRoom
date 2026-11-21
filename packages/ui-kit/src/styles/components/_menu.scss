@@ -112,6 +112,10 @@
     place-items: center;
     color: var(--vr-accent);
   }
+
+  &--panel:not(:has([role='menuitemcheckbox'], [role='menuitemradio'])) &__indicator {
+    display: none;
+  }
   &__icon,
   &__chevron {
     display: inline-flex;

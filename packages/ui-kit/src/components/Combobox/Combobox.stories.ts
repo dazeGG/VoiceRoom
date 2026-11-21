@@ -72,3 +72,4 @@ export const WithAvatars: Story = {
 };
 
 export const Overlay: Story = { args: { overlay: true, visuallyHiddenLabel: true } };
+export const Inline: Story = { args: { inline: true, visuallyHiddenLabel: true, size: 'sm' } };
