@@ -7,6 +7,7 @@ import type { SliderProps } from './types';
 const props = withDefaults(defineProps<SliderProps>(), {
   min: 0,
   max: 100,
+  orientation: 'horizontal',
   snap: false,
   snapThreshold: 0,
   disabled: false,
@@ -57,7 +58,8 @@ function handleUpdate(values: number[] | undefined): void {
 
 <template>
   <SliderRoot
-    class="vr-slider"
+    :class="['vr-slider', { 'vr-slider--vertical': orientation === 'vertical' }]"
+    :orientation="orientation"
     :aria-disabled="disabled || undefined"
     :style="{ '--slider-fraction': fraction }"
     :model-value="[value]"

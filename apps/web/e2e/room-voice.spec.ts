@@ -119,6 +119,14 @@ test('a shared screen plays on a second peer and closes when the publisher stops
       )
       .toBeGreaterThan(0);
 
+    await viewer.locator('#screenVideo').hover();
+    await viewer.getByRole('button', { name: 'Выключить звук стрима' }).hover();
+    const volume = viewer.getByRole('slider', { name: 'Громкость стрима' });
+    await expect(volume).toBeVisible();
+    await expect(volume).toHaveAttribute('aria-orientation', 'vertical');
+    await volume.press('End');
+    await expect(volume).toHaveAttribute('aria-valuenow', '200');
+
     await share.click();
     await expect(share).toHaveAttribute('aria-pressed', 'false');
     await expect(viewer.locator('body')).not.toHaveClass(/\bscreen-view--open\b/);

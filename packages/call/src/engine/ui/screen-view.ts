@@ -292,7 +292,7 @@ export {
   toggleScreenFullscreen,
   toggleScreenMute,
   updateScreenFullscreenState,
-  updateScreenVolumeFromSlider
+  setScreenVolume
 } from './screen-stage-controls';
 
 import { createLogger, errorContext } from '../diagnostics';

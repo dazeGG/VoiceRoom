@@ -6,7 +6,6 @@
 //   .stream-volume-icon / -on / -off          -> .stream-volume__icon / --on / --off
 //   .stream-volume-popover                    -> .stream-volume__popover
 //   .stream-volume-value                      -> .stream-volume__value
-//   .stream-volume-track                      -> .stream-volume__track
 //   .stream-volume-slider                     -> .stream-volume__slider
 //
 // [data-*] -> aria
@@ -54,7 +53,7 @@
   border-radius: 999px;
   padding: var(--space-sm) 0 var(--space-md);
   background: color-mix(in srgb, var(--vr-bg) 72%, transparent);
-  box-shadow: 0 12px 28px oklch(5% 0.01 92 / 0.3);
+  box-shadow: var(--vr-shadow-popover);
   backdrop-filter: blur(10px);
   visibility: hidden;
   opacity: 0;
@@ -103,23 +102,7 @@
   color: color-mix(in oklch, var(--vr-text) 72%, transparent);
 }
 
-.stream-volume__track {
-  position: relative;
-  width: 100%;
-  height: 100px;
-}
-
 .stream-volume__slider {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 100px;
-  min-height: 0;
-  border: 0;
-  padding: 0;
-  background: transparent;
-  accent-color: var(--vr-text);
-  cursor: pointer;
-  transform: translate(-50%, -50%) rotate(-90deg);
-  transform-origin: center;
+  width: var(--size-32);
+  height: calc(var(--space-64) + var(--size-36));
 }

@@ -6,7 +6,7 @@ import {
   syncScreenVideoAudio,
   toggleScreenFullscreen,
   toggleScreenMute,
-  updateScreenVolumeFromSlider
+  setScreenVolume
 } from '@voice-room/call/engine/ui/screen-stage-controls';
 import { handleScreenStageClick } from '@voice-room/call/engine/ui/screen-view';
 import EmojiText from '@/shared/chat/EmojiText.vue';
@@ -20,14 +20,9 @@ const meta = computed(() => screenUi.getScreenMetaView());
 const volume = computed(() => screenUi.getStreamVolumeView());
 const fullscreen = computed(() => screenUi.getFullscreenView());
 
-function registerElements(
-  stage: HTMLElement | null,
-  video: HTMLVideoElement | null,
-  slider: HTMLInputElement | null
-): void {
+function registerElements(stage: HTMLElement | null, video: HTMLVideoElement | null): void {
   screenUi.registerScreenVideo(video);
   screenUi.registerScreenStage(stage);
-  screenUi.registerStreamVolumeSlider(slider);
   videoEl.value = video;
 }
 </script>
@@ -47,7 +42,7 @@ function registerElements(
     @interact="handleScreenStageClick"
     @active-change="screenUi.uiActive = $event"
     @toggle-mute="toggleScreenMute"
-    @update-volume="updateScreenVolumeFromSlider()"
+    @update-volume="setScreenVolume"
     @toggle-fullscreen="void toggleScreenFullscreen()"
   >
     <template #title="{ title }"><EmojiText :text="title" /></template>

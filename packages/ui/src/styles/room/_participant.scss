@@ -1,70 +1,39 @@
-// ParticipantTile (features/room/components/ParticipantTile.vue): one person's 16:9 tile in the room.
-//
-// Svelte class / selector -> BEM class
-//   .participant                              -> .participant (block; participant-context-ui.store.ts finds it by `.participant[data-peer-id]`)
-//   .participant-camera                       -> .participant__camera
-//   .voice-ring                               -> .participant__ring
-//   .avatar                                   -> .participant__avatar
-//   .participant-copy                         -> .participant__copy
-//   .participant h2                           -> .participant__heading
-//   .participant-name                         -> .participant__name
-//   .participant-you                          -> .participant__you
-//   .participant-muted-icon                   -> .participant__muted-icon
-//   .participant-deafened-icon                -> .participant__deafened-icon
-//   .participant p                            -> .participant__status
-//   .participant-screen-action                -> .participant__screen-action
-//   .participant-screen-action .lucide        -> .participant__screen-action svg
-//
-// [data-*] -> modifier class
-//   [data-variant='grid|focus|strip']         -> .participant--grid / --focus / --strip (no rule reads them)
-//   [data-local='true']                       -> .participant--local
-//   [data-muted='true']                       -> .participant--muted
-//   [data-deafened='true']                    -> .participant--deafened
-//   [data-screen='true']                      -> .participant--screen
-//   [data-camera='true']                      -> .participant--camera
-//   [data-speaking='true']                    -> .participant--speaking
-//   .participant-camera[data-mirrored='true'] -> .participant__camera--mirrored
-//   data-peer-id stays as an identity hook (focus restore), not styled
-//
-// Dropped as no-ops: `.participant[data-muted='true'] { opacity: 1 }`; the `[data-local]`/`[data-screen]` cursor rules
-// all said `cursor: pointer`, so the tile has one.
+@use '../components/avatar';
 
 .participant {
   --participant-pastel: var(--vr-surface-3);
   --participant-avatar-fg: var(--vr-text);
+  --participant-tile-bg: color-mix(in oklch, var(--participant-pastel), var(--vr-bg) 30%);
+  --participant-outline: inset 0 0 0 calc(var(--space-2) / 2) var(--vr-line);
   position: relative;
   display: grid;
   min-height: 0;
   height: auto;
   aspect-ratio: 16 / 9;
-  // Size container so descendant avatar/ring elements can scale down on short tiles.
   container-type: size;
   place-items: center;
   border: 0;
-  border-radius: 16px;
-  padding: 0;
+  border-radius: var(--radius-16);
   overflow: hidden;
-  // The avatar's colour fills the tile, 70% of it as before the redesign.
-  --participant-tile-bg: color-mix(in oklch, var(--participant-pastel), var(--vr-bg) 30%);
   background: var(--participant-tile-bg);
-  // The outline is inset so it is drawn over the video of a camera tile too.
-  box-shadow: inset 0 0 0 1px var(--vr-line);
+  box-shadow: var(--participant-outline);
   cursor: pointer;
-  // The speaking outline switches at once: it must not fade in and out.
   transition: background 180ms ease;
 
   &:hover {
     background: color-mix(in oklch, var(--participant-tile-bg), var(--vr-text) 5%);
   }
+
+  &:focus-visible {
+    outline: var(--space-2) solid var(--vr-accent);
+    outline-offset: var(--space-2);
+  }
 }
 
 .participant--speaking {
-  box-shadow: inset 0 0 0 2px var(--vr-accent);
+  --participant-outline: inset 0 0 0 var(--space-2) var(--vr-accent);
 }
 
-// A camera replaces the avatar; the name stays on top and the speaking
-// outline is drawn over the picture. The picture is never cropped: whatever
-// shape the camera sends is fitted whole, with dark bars beside it.
 .participant__camera {
   position: absolute;
   inset: 0;
@@ -83,19 +52,15 @@
     display: none;
   }
 
-  // An inset shadow would sit under the video, so the outline is an overlay.
+  // The picture covers the tile's background, so draw its outline over the video.
   &::after {
     position: absolute;
     inset: 0;
     z-index: 1;
     border-radius: inherit;
-    box-shadow: inset 0 0 0 1px var(--vr-line);
+    box-shadow: var(--participant-outline);
     content: '';
     pointer-events: none;
-  }
-
-  &.participant--speaking::after {
-    box-shadow: inset 0 0 0 2px var(--vr-accent);
   }
 
   .participant__copy {
@@ -103,16 +68,12 @@
   }
 }
 
-// The avatar grows with the tile, from 76px up to 160px, and never takes more
-// than 40% of its height; its letters keep their share of it.
 .participant__ring {
   display: grid;
-  height: min(40cqh, clamp(76px, 9cqw, 160px));
+  height: min(40cqh, clamp(76px, 20cqw, 160px));
   aspect-ratio: 1;
   container-type: size;
   place-items: center;
-  border-radius: 50%;
-  background: transparent;
 }
 
 .participant__avatar {
@@ -121,60 +82,53 @@
   width: 100%;
   height: 100%;
   place-items: center;
-  border: 0;
-  border-radius: 50%;
+  overflow: hidden;
+  border-radius: var(--radius-pill);
   background: var(--participant-pastel);
   color: var(--participant-avatar-fg);
-  font-size: min(1.375rem, 11.5cqh);
-  font-weight: 600;
-  overflow: hidden;
-
-  > img {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    border-radius: inherit;
-    object-fit: cover;
-  }
-}
-
-// In a tile the letters keep their share of an avatar of any size.
-:where(.participant__ring) > .participant__avatar {
   font-size: 29cqh;
+  font-weight: 600;
 }
 
-.participant--screen .participant__screen-action {
+.participant__avatar > img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  object-fit: cover;
+}
+
+.participant--screen .participant__screen-action,
+.participant__screen-action[hidden] {
   display: none;
 }
 
 .participant__copy {
   position: absolute;
-  left: 8px;
-  bottom: 8px;
+  inset: auto auto var(--space-8) var(--space-8);
   display: grid;
   justify-items: start;
-  gap: 4px;
-  max-width: calc(100% - 16px);
+  gap: var(--space-4);
+  max-width: calc(100% - var(--space-16));
   min-width: 0;
 }
 
 .participant__heading {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-6);
   max-width: 100%;
-  height: 26px;
+  height: var(--size-24);
   margin: 0;
   overflow: hidden;
-  border-radius: 8px;
-  padding: 0 9px;
+  border-radius: var(--radius-8);
+  padding-inline: var(--space-8);
   background: var(--vr-scrim);
   color: var(--vr-text);
   font-size: 0.8125rem;
   font-weight: 500;
   line-height: 1;
-  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
@@ -186,28 +140,21 @@
 
 .participant__you {
   flex: none;
-  color: var(--vr-text);
 }
 
 .participant__muted-icon,
 .participant__deafened-icon {
   display: none;
-  width: 14px;
-  height: 14px;
-  flex: 0 0 auto;
-  place-items: center;
+  flex: none;
   color: var(--vr-danger);
 
   svg {
-    width: 14px;
-    height: 14px;
+    width: var(--icon-16);
+    height: var(--icon-16);
   }
 }
 
-.participant--muted .participant__muted-icon {
-  display: grid;
-}
-
+.participant--muted .participant__muted-icon,
 .participant--deafened .participant__deafened-icon {
   display: grid;
 }
@@ -216,62 +163,13 @@
   max-width: 100%;
   margin: 0;
   overflow: hidden;
-  border-radius: 999px;
-  padding: 3px 7px;
+  border-radius: var(--radius-pill);
+  padding: var(--space-2) var(--space-8);
   background: var(--vr-scrim);
   color: var(--vr-text-2);
-  font-size: 0.76rem;
+  font-size: 0.75rem;
   font-weight: 500;
   line-height: 1.1;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.participant__screen-action {
-  display: inline-flex;
-  min-height: 30px;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  border: 0;
-  border-radius: 999px;
-  padding: 0 12px;
-  background: var(--vr-accent);
-  color: var(--vr-accent-ink);
-  font-size: 0.8125rem;
-  font-weight: 600;
-  line-height: 1;
-  white-space: nowrap;
-  transition: background 160ms var(--ease-out);
-
-  &:hover {
-    background: var(--vr-accent-hover);
-  }
-
-  svg {
-    width: 15px;
-    height: 15px;
-    flex: 0 0 auto;
-  }
-}
-
-// A small tile, many to a screen, gets a smaller name plate and no status line.
-@container (max-width: 239px) {
-  .participant__copy {
-    left: 6px;
-    bottom: 6px;
-    max-width: calc(100% - 12px);
-  }
-
-  .participant__heading {
-    height: 22px;
-    gap: 4px;
-    border-radius: 7px;
-    padding: 0 7px;
-    font-size: 0.75rem;
-  }
-
-  .participant__status {
-    display: none;
-  }
 }
