@@ -23,6 +23,8 @@ const props = withDefaults(
   { disabled: false, showQuickReactions: true }
 );
 
+defineSlots<{ trigger?(state: { toggle: () => void; panelId: string | undefined; open: boolean }): unknown }>();
+
 /** Bindable so a host toolbar can stay visible while the panel is open. */
 const open = defineModel<boolean>('open', { default: false });
 
@@ -84,19 +86,21 @@ async function choose(emoji: string, close: () => void): Promise<void> {
       panel-class="reaction-picker-panel"
     >
       <template #trigger="{ toggle, panelId }">
-        <button
-          class="reaction-picker__button reaction-picker__button--more"
-          type="button"
-          :disabled="disabled"
-          :aria-label="t('Открыть выбор эмодзи')"
-          :title="t('Добавить другую реакцию')"
-          aria-haspopup="dialog"
-          :aria-expanded="open"
-          :aria-controls="panelId"
-          @click="toggle"
-        >
-          <SmilePlus v-bind="iconSm" aria-hidden="true" />
-        </button>
+        <slot name="trigger" :toggle="toggle" :panel-id="panelId" :open="open">
+          <button
+            class="reaction-picker__button reaction-picker__button--more"
+            type="button"
+            :disabled="disabled"
+            :aria-label="t('Открыть выбор эмодзи')"
+            :title="t('Добавить другую реакцию')"
+            aria-haspopup="dialog"
+            :aria-expanded="open"
+            :aria-controls="panelId"
+            @click="toggle"
+          >
+            <SmilePlus v-bind="iconSm" aria-hidden="true" />
+          </button>
+        </slot>
       </template>
 
       <template #content="{ close }">

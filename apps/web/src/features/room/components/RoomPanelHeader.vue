@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { Badge } from '@voice-room/ui/components';
+import { computed } from 'vue';
+import { Tabs, type TabOption } from '@voice-room/ui/components';
 import { t } from '@/shared/i18n';
 import { PanelRightClose, X } from '@lucide/vue';
 import { iconSm } from '@/shared/ui/icons';
 
-withDefaults(
+const props = withDefaults(
   defineProps<{
     activeTab: 'chat' | 'participants';
     unread: number;
@@ -31,42 +32,35 @@ const emit = defineEmits<{
   selectParticipants: [];
   collapse: [];
 }>();
+
+const items = computed<TabOption<'chat' | 'participants'>[]>(() => [
+  { value: 'chat', label: t('Чат'), dot: props.unread > 0, id: props.chatTabId, panelId: props.chatPanelId },
+  {
+    value: 'participants',
+    label: t('Участники'),
+    ...(props.participantCount > 0 && { count: props.participantCount }),
+    id: props.participantsTabId,
+    panelId: props.participantsPanelId
+  }
+]);
+
+function select(tab: string): void {
+  if (tab === 'chat') emit('selectChat');
+  if (tab === 'participants') emit('selectParticipants');
+}
 </script>
 
 <template>
   <header class="room-panel-header">
-    <div class="room-panel-tabs room-panel-tabs--header" role="tablist" :aria-label="t('Раздел панели комнаты')">
-      <button
-        :id="chatTabId"
-        class="room-panel-tabs__tab"
-        type="button"
-        role="tab"
-        :aria-controls="chatPanelId"
-        :aria-label="t('Чат')"
-        :aria-selected="activeTab === 'chat'"
-        :title="t('Чат')"
-        @click="emit('selectChat')"
-      >
-        <span>{{ t('Чат') }}</span>
-        <Badge v-if="unread > 0" class="room-panel-tabs__unread" aria-hidden="true" variant="dot" />
-      </button>
-      <button
-        :id="participantsTabId"
-        class="room-panel-tabs__tab"
-        type="button"
-        role="tab"
-        :aria-controls="participantsPanelId"
-        :aria-label="t('Участники')"
-        :aria-selected="activeTab === 'participants'"
-        :title="t('Участники')"
-        @click="emit('selectParticipants')"
-      >
-        <span>{{ t('Участники') }}</span>
-        <span v-if="participantCount > 0" class="room-panel-tabs__count" aria-hidden="true">{{
-          participantCount
-        }}</span>
-      </button>
-    </div>
+    <Tabs
+      class="room-panel-header__tabs"
+      :items="items"
+      :model-value="activeTab"
+      :label="t('Раздел панели комнаты')"
+      variant="segmented"
+      stretch
+      @update:model-value="select"
+    />
     <button
       class="room-panel-header__collapse"
       type="button"

@@ -128,12 +128,12 @@ function notifyRoomsChanged(): void {
           </template>
         </DropdownMenu>
         <div
-          class="room-panel-tabs room-panel-tabs--topbar"
+          class="ui-segment room-panel-switches room-panel-switches--topbar"
           role="group"
           :aria-label="t('Открыть раздел панели комнаты')"
         >
           <button
-            class="room-panel-tabs__tab"
+            class="ui-segment__item room-panel-switches__button"
             type="button"
             :aria-label="t('Чат')"
             :aria-pressed="chatActive"
@@ -141,10 +141,16 @@ function notifyRoomsChanged(): void {
             @click="panelToggle.toggleRoomPanel('chat')"
           >
             <MessageSquare v-bind="iconSm" aria-hidden="true" />
-            <Badge v-if="roomUnreadCount > 0" class="room-panel-tabs__unread" aria-hidden="true" variant="dot" ring />
+            <Badge
+              v-if="roomUnreadCount > 0"
+              class="room-panel-switches__unread"
+              aria-hidden="true"
+              variant="dot"
+              ring
+            />
           </button>
           <button
-            class="room-panel-tabs__tab"
+            class="ui-segment__item room-panel-switches__button"
             type="button"
             :aria-label="t('Участники')"
             :aria-pressed="participantsActive"

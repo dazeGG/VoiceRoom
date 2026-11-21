@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { NavList, NavListGroup, NavListItem } from '@voice-room/ui/components';
 import { Spinner } from '@voice-room/ui/components';
 import { useLocalizedText, currentErrorMessage } from '@/shared/i18n/localized-text';
 
@@ -16,7 +17,7 @@ import { saveRoomAvatarChange, type RoomAvatarChange } from '@/entities/room/roo
 import { APP_HOME } from '@/shared/app-home';
 import { BAN_UNDO_DURATION_MS, type ModerationNoticeOptions } from '@/entities/room/room-moderation';
 import { AlertDialog, Button, Dialog } from '@voice-room/ui/components';
-import { iconMd, iconSm } from '@/shared/ui/icons';
+import { iconSm } from '@/shared/ui/icons';
 import { state as roomClientState } from '@voice-room/call/engine/core/room-runtime.store';
 import { applyRoomUpdated } from '@voice-room/call/engine/room/lifecycle';
 import { showToast } from '@voice-room/call/engine/ui/toast';
@@ -155,34 +156,19 @@ function onCancel(): void {
   <Dialog :open="roomSettingsUi.open" :title="t('Настройки комнаты')" size="lg" :on-close="onClose">
     <div class="room-settings">
       <div class="settings__body settings__body--room">
-        <nav class="settings__nav" :aria-label="t('Разделы настроек комнаты')">
-          <div class="settings__nav-main">
-            <button
-              class="settings__nav-item"
-              type="button"
-              :aria-current="section === 'general' ? 'true' : undefined"
-              @click="section = 'general'"
-            >
-              <SlidersHorizontal v-bind="iconMd" aria-hidden="true" /> {{ t('Основное') }}
-            </button>
-            <button
-              class="settings__nav-item"
-              type="button"
-              :aria-current="section === 'members' ? 'true' : undefined"
-              @click="section = 'members'"
-            >
-              <Users v-bind="iconMd" aria-hidden="true" /> {{ t('Участники') }}
-            </button>
-            <button
-              class="settings__nav-item"
-              type="button"
-              :aria-current="section === 'bans' ? 'true' : undefined"
-              @click="section = 'bans'"
-            >
-              <Ban v-bind="iconMd" aria-hidden="true" /> {{ t('Блокировки') }}
-            </button>
-          </div>
-        </nav>
+        <NavList class="settings__nav" :label="t('Разделы настроек комнаты')">
+          <NavListGroup class="settings__nav-main">
+            <NavListItem :label="t('Основное')" :current="section === 'general'" @click="section = 'general'">
+              <template #icon><SlidersHorizontal /></template>
+            </NavListItem>
+            <NavListItem :label="t('Участники')" :current="section === 'members'" @click="section = 'members'">
+              <template #icon><Users /></template>
+            </NavListItem>
+            <NavListItem :label="t('Блокировки')" :current="section === 'bans'" @click="section = 'bans'">
+              <template #icon><Ban /></template>
+            </NavListItem>
+          </NavListGroup>
+        </NavList>
 
         <div v-if="section === 'members'" class="settings__content room-settings__content">
           <RoomMemberList :room-id="roomClientState.roomId" can-moderate :on-notify="notifyModeration" />

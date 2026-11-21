@@ -2,7 +2,7 @@
 // The room chat's compose form: text with @mentions, emoji, attachments and a
 // reply target. Sending itself belongs to the panel, which owns the messages.
 import { t } from '@/shared/i18n';
-import { onBeforeUnmount, onMounted, ref, nextTick } from 'vue';
+import { onBeforeUnmount, onMounted, ref, nextTick, useId } from 'vue';
 import { ArrowUp } from '@lucide/vue';
 import type { MembershipMember } from '@voice-room/shared/contracts/membership';
 import {
@@ -52,6 +52,7 @@ const session = useSessionStore();
 const membership = useRoomMembershipStore();
 const input = ref<ComposerHandle | null>(null);
 const { text, mentions } = props.draft;
+const mentionListId = useId();
 
 const typingNotifier = createTypingNotifier((activity) => {
   if (props.roomId) getAppRealtime().send('room.chat.typing', { roomId: props.roomId, activity });
@@ -187,6 +188,13 @@ const onPaste = (event: ClipboardEvent): Promise<void> =>
           class="room-chat-composer__input"
           :maxlength="MAX_ROOM_MESSAGE_LENGTH"
           markdown
+          :aria-controls="mentions.isOpen ? mentionListId : undefined"
+          :aria-autocomplete="mentions.isOpen ? 'list' : undefined"
+          :aria-activedescendant="
+            mentions.isOpen && mentions.candidates[mentions.activeIndex]
+              ? mentionListId + '-' + mentions.candidates[mentions.activeIndex]?.userId
+              : undefined
+          "
           :placeholder="t('Написать в комнату…')"
           @keydown="onKeydown"
           @input="onInput"
@@ -214,6 +222,7 @@ const onPaste = (event: ClipboardEvent): Promise<void> =>
     </div>
     <MentionAutocomplete
       v-if="mentions.isOpen"
+      :id="mentionListId"
       :candidates="mentions.candidates"
       :active-index="mentions.activeIndex"
       @select="chooseMention"

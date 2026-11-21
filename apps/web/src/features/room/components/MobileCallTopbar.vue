@@ -75,11 +75,11 @@ function handleInviteClick(): void {
         </span>
       </span>
     </button>
-    <div class="room-panel-tabs mobile-call-topbar__actions" role="group" :aria-label="t('Звонок')">
+    <div class="ui-segment room-panel-switches mobile-call-topbar__actions" role="group" :aria-label="t('Звонок')">
       <button
         v-if="!duo"
         type="button"
-        class="room-panel-tabs__tab mobile-call-topbar__view"
+        class="ui-segment__item room-panel-switches__button mobile-call-topbar__view"
         :aria-label="viewLabel"
         :title="viewLabel"
         @click="mobileCall.toggleMobileCallView"
@@ -102,17 +102,17 @@ function handleInviteClick(): void {
       </button>
       <button
         type="button"
-        class="room-panel-tabs__tab"
+        class="ui-segment__item room-panel-switches__button"
         :aria-label="t('Чат')"
         :aria-pressed="panels.isRoomPanelOpen('chat')"
         @click="panels.toggleRoomPanel('chat')"
       >
         <MessageSquare :size="18" aria-hidden="true" />
-        <Badge v-if="unread > 0" class="room-panel-tabs__unread" aria-hidden="true" variant="dot" ring />
+        <Badge v-if="unread > 0" class="room-panel-switches__unread" aria-hidden="true" variant="dot" ring />
       </button>
       <button
         type="button"
-        class="room-panel-tabs__tab"
+        class="ui-segment__item room-panel-switches__button"
         :aria-label="t('Участники')"
         :aria-pressed="panels.isRoomPanelOpen('participants')"
         @click="panels.toggleRoomPanel('participants')"

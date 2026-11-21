@@ -1,6 +1,6 @@
 // MobileCallTopbar (features/room/components/MobileCallTopbar.vue): the call's own
 // top bar. Svelte: the <style> of MobileCallTopbar.svelte. The chat and participants
-// buttons are the shared room-panel-tabs control (_room-panel-tabs.scss).
+// buttons are the shared room-panel-switches control (_room-panel-switches.scss).
 //
 // Svelte class -> BEM class
 //   .mc-topbar                            -> .mobile-call-topbar
@@ -9,16 +9,16 @@
 //   .mc-topbar-title                      -> .mobile-call-topbar__title
 //   .mc-topbar-meta                       -> .mobile-call-topbar__meta
 //   .mc-topbar-dot                        -> .mobile-call-topbar__dot
-//   .mc-topbar-actions                    -> .mobile-call-topbar__actions (with .room-panel-tabs)
-//   .mc-topbar-actions button             -> .room-panel-tabs__tab inside .mobile-call-topbar__actions
+//   .mc-topbar-actions                    -> .mobile-call-topbar__actions (with .room-panel-switches)
+//   .mc-topbar-actions button             -> .room-panel-switches__button inside .mobile-call-topbar__actions
 //   .mc-topbar-view                       -> .mobile-call-topbar__view
-//   .room-panel-tab-unread                -> .room-panel-tabs__unread
+//   .room-panel-tab-unread                -> .room-panel-switches__unread
 //   .room-call-timer--topbar              -> .room-call-timer--topbar
 //   .mobile-call[data-chrome='hidden']    -> .mobile-call--chrome-hidden
 //
 // [data-*] -> modifier class
 //   .mc-topbar[data-duo='true']           -> .mobile-call-topbar--duo
-//   button[data-active]                   -> aria-pressed (room-panel-tabs)
+//   button[data-active]                   -> aria-pressed (room-panel-switches)
 
 .mobile-call-topbar {
   position: absolute;
@@ -122,7 +122,7 @@
 .mobile-call-topbar__actions {
   flex: none;
 
-  .room-panel-tabs__tab {
+  .room-panel-switches__button {
     width: 40px;
     height: 40px;
   }

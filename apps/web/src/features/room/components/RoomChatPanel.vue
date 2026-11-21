@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Separator } from '@voice-room/ui/components';
 // The one room chat. The in-room rail and the lobby preview differ only in how
 // the viewer is identified and in who owns the surrounding panel chrome, so
 // both render this component instead of keeping parallel implementations.
@@ -355,9 +356,9 @@ const canReport = computed(() =>
             class="room-chat-panel__day"
             :aria-label="day.label"
           >
-            <div class="room-chat-panel__day-divider" role="separator" :aria-label="day.label">
+            <Separator class="room-chat-panel__day-divider" :aria-label="day.label">
               <span class="room-chat-panel__day-label">{{ day.label }}</span>
-            </div>
+            </Separator>
             <RoomChatMessageGroup
               v-for="group in day.groups"
               :key="group.key"

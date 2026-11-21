@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { NavList, NavListGroup, NavListItem } from '@voice-room/ui/components';
 import { useLocalizedText, currentErrorMessage } from '@/shared/i18n/localized-text';
 
 import { t } from '@/shared/i18n';
@@ -12,7 +13,6 @@ import RoomMemberList from '@/entities/room/components/RoomMemberList.vue';
 import { saveRoomAvatarChange, type RoomAvatarChange } from '@/entities/room/room-avatar-change';
 import { BAN_UNDO_DURATION_MS, type ModerationNoticeOptions } from '@/entities/room/room-moderation';
 import { AlertDialog, Button, Dialog } from '@voice-room/ui/components';
-import { iconMd } from '@/shared/ui/icons';
 import { useToastsStore, type ToastOptions } from '../../model/toasts.store';
 
 type Section = 'general' | 'members' | 'bans';
@@ -136,34 +136,19 @@ function onClose(): void {
   <Dialog :open="Boolean(room)" :title="t('Настройки комнаты')" size="lg" :on-close="onClose">
     <div v-if="room" class="room-settings">
       <div class="settings__body settings__body--room">
-        <nav class="settings__nav" :aria-label="t('Разделы настроек комнаты')">
-          <div class="settings__nav-main">
-            <button
-              class="settings__nav-item"
-              type="button"
-              :aria-current="section === 'general' ? 'true' : undefined"
-              @click="section = 'general'"
-            >
-              <SlidersHorizontal v-bind="iconMd" aria-hidden="true" />{{ t('Основное') }}
-            </button>
-            <button
-              class="settings__nav-item"
-              type="button"
-              :aria-current="section === 'members' ? 'true' : undefined"
-              @click="section = 'members'"
-            >
-              <Users v-bind="iconMd" aria-hidden="true" />{{ t('Участники') }}
-            </button>
-            <button
-              class="settings__nav-item"
-              type="button"
-              :aria-current="section === 'bans' ? 'true' : undefined"
-              @click="section = 'bans'"
-            >
-              <Ban v-bind="iconMd" aria-hidden="true" />{{ t('Блокировки') }}
-            </button>
-          </div>
-        </nav>
+        <NavList class="settings__nav" :label="t('Разделы настроек комнаты')">
+          <NavListGroup class="settings__nav-main">
+            <NavListItem :label="t('Основное')" :current="section === 'general'" @click="section = 'general'">
+              <template #icon><SlidersHorizontal /></template>
+            </NavListItem>
+            <NavListItem :label="t('Участники')" :current="section === 'members'" @click="section = 'members'">
+              <template #icon><Users /></template>
+            </NavListItem>
+            <NavListItem :label="t('Блокировки')" :current="section === 'bans'" @click="section = 'bans'">
+              <template #icon><Ban /></template>
+            </NavListItem>
+          </NavListGroup>
+        </NavList>
 
         <div v-if="section === 'members'" class="settings__content room-settings__content">
           <RoomMemberList :room-id="room.roomId" can-moderate :on-notify="notifyModeration" />

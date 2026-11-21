@@ -80,9 +80,8 @@
   letter-spacing: 0.02em;
 }
 
-.room-invite-list {
-  max-height: min(calc(var(--size-56) * 5), 50vh);
-  overflow-y: auto;
+.room-invite-list__search {
+  padding: var(--space-4);
 }
 
 .room-invite-list__empty {

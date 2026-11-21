@@ -78,7 +78,9 @@ test('the invite list puts online friends first, alphabetically, and disables th
     presentUserIds: new Set(['u-a']),
     onClose: vi.fn()
   });
-  const items = screen.getAllByRole('menuitem');
+  await userEvent.click(screen.getByRole('menuitem', { name: 'Найти друга' }));
+  await screen.findByRole('combobox', { name: 'Найти друга' });
+  const items = await screen.findAllByRole('option');
   expect(items.map((item) => item.textContent?.trim().replace(/\s+/g, ' '))).toEqual([
     expect.stringContaining('Анна'),
     expect.stringContaining('Вера'),
@@ -93,7 +95,8 @@ test('inviting rings the friend into the room and closes the menu; a failure is 
   const close = vi.fn();
   const onToast = vi.fn();
   await renderInviteList({ friends: [friend('u-v', 'Вера', true)], roomId: 'room-a', onClose: close, onToast });
-  await userEvent.click(screen.getByRole('menuitem'));
+  await userEvent.click(screen.getByRole('menuitem', { name: 'Найти друга' }));
+  await userEvent.click(await screen.findByRole('option', { name: /Вера/ }));
   expect(calls[0]).toMatchObject({ method: 'POST', url: '/api/rooms/room-a/ring', body: { userId: 'u-v' } });
   expect(onToast).toHaveBeenCalledWith('Вера приглашён в комнату');
   expect(close).toHaveBeenCalled();
@@ -101,8 +104,25 @@ test('inviting rings the friend into the room and closes the menu; a failure is 
   cleanup();
   stubFetch({ 'POST /api/rooms/room-a/ring': { status: 429, body: { ok: false, error: 'Слишком часто' } } });
   await renderInviteList({ friends: [friend('u-v', 'Вера', true)], roomId: 'room-a', onClose: vi.fn(), onToast });
-  await userEvent.click(screen.getByRole('menuitem'));
+  await userEvent.click(screen.getByRole('menuitem', { name: 'Найти друга' }));
+  await userEvent.click(await screen.findByRole('option', { name: /Вера/ }));
   expect(onToast).toHaveBeenLastCalledWith('Слишком часто');
+});
+
+test('keyboard search closes the results before it dismisses the invite menu', async () => {
+  const user = userEvent.setup();
+  await renderInviteList({ friends: [friend('u-v', 'Вера', true)], roomId: 'room-a', onClose: vi.fn() });
+  screen.getByRole('menuitem', { name: 'Найти друга' }).focus();
+  await user.keyboard('{Enter}');
+  const input = await screen.findByRole('combobox', { name: 'Найти друга' });
+  await screen.findByRole('option', { name: /Вера/ });
+  expect(document.activeElement).toBe(input);
+
+  await user.type(input, 'u-v');
+  await user.keyboard('{Escape}');
+  expect(screen.queryByRole('listbox')).toBeNull();
+  expect(screen.getByRole('menu', { name: 'Позвать друга' })).toBeTruthy();
+  expect(document.activeElement).toBe(input);
 });
 
 test('with no friends the list says how to get some', async () => {
