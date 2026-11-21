@@ -1,7 +1,4 @@
-import '@voice-room/ui/styles/tokens';
-import '@voice-room/ui/styles/typography';
-import '@voice-room/ui/styles/widget/shell';
-import '@voice-room/ui/styles/components/slider';
+import './styles.scss';
 import { createApp } from 'vue';
 import { createPinia, setActivePinia } from 'pinia';
 import { installCallPorts } from '@voice-room/call/engine/ports';

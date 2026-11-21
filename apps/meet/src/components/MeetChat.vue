@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { Info, Send, X } from '@lucide/vue';
+import { Send, X } from '@lucide/vue';
 import { MEET_CHAT_MAX_BYTES } from '@voice-room/shared/contracts/realtime';
+import { Callout, EmptyState, Field, IconButton, Textarea } from '@voice-room/ui/components';
 import { t } from '@voice-room/ui/i18n';
 import { computed, onBeforeUnmount, onMounted, ref, useTemplateRef, watch } from 'vue';
 import type { MeetTransport } from '@/adapters/meet-transport';
@@ -12,7 +13,7 @@ const draft = ref('');
 const compact = ref(false);
 const dialog = useTemplateRef<HTMLDialogElement>('dialog');
 const log = useTemplateRef<HTMLDivElement>('log');
-const input = useTemplateRef<HTMLInputElement>('input');
+const input = useTemplateRef<{ textarea: HTMLTextAreaElement | null }>('input');
 const titleId = `${props.panelId}-title`;
 const noticeId = `${props.panelId}-notice`;
 const inputId = `${props.panelId}-input`;
@@ -29,6 +30,7 @@ const status = computed(() => {
 
 let followMessages = true;
 let viewport: MediaQueryList | undefined;
+let compositionEndedAt = -Infinity;
 
 function updateViewport(): void {
   compact.value = viewport?.matches ?? false;
@@ -85,7 +87,15 @@ function submit(): void {
   if (!ready.value || !trimmed.value || tooLong.value || !send(trimmed.value)) return;
   draft.value = '';
   followMessages = true;
-  input.value?.focus();
+  input.value?.textarea?.focus();
+}
+
+function submitOnEnter(event: KeyboardEvent): void {
+  if (event.shiftKey) return;
+  event.preventDefault();
+  // Safari can deliver compositionend before the Enter that confirmed the IME candidate.
+  if (event.isComposing || Math.abs(event.timeStamp - compositionEndedAt) < 50) return;
+  submit();
 }
 </script>
 
@@ -101,20 +111,11 @@ function submit(): void {
   >
     <header class="meet-chat__header">
       <h2 :id="titleId">{{ t('meet.chat.title') }}</h2>
-      <button
-        class="meet-button meet-button--secondary meet-chat__close"
-        type="button"
-        :aria-label="t('meet.chat.close')"
-        autofocus
-        @click="open = false"
-      >
-        <X :size="19" aria-hidden="true" />
-      </button>
+      <IconButton :label="t('meet.chat.close')" :tooltip-target="dialog ?? undefined" autofocus @click="open = false">
+        <X aria-hidden="true" />
+      </IconButton>
     </header>
-    <p :id="noticeId" class="meet-chat__notice">
-      <Info :size="17" aria-hidden="true" />
-      {{ t('meet.chat.notice') }}
-    </p>
+    <Callout :id="noticeId" class="meet-chat__notice" :title="t('meet.chat.notice')" />
     <div
       ref="log"
       class="meet-chat__log"
@@ -123,7 +124,7 @@ function submit(): void {
       tabindex="0"
       @scroll.passive="updateScroll"
     >
-      <p v-if="!messages.length" class="meet-chat__empty">{{ t('meet.chat.empty') }}</p>
+      <EmptyState v-if="!messages.length" :title="t('meet.chat.empty')" compact />
       <ol v-else class="meet-chat__messages" role="list">
         <li
           v-for="message in messages"
@@ -137,31 +138,34 @@ function submit(): void {
       </ol>
     </div>
     <form class="meet-chat__composer" method="post" @submit.prevent="submit">
-      <div class="meet-chat__field">
-        <label :for="inputId">{{ t('meet.chat.input') }}</label>
+      <Field :id="inputId" :label="t('meet.chat.input')">
         <div class="meet-chat__controls">
-          <input
-            :id="inputId"
+          <Textarea
             ref="input"
             v-model="draft"
-            type="text"
             name="message"
             autocomplete="off"
+            rows="1"
             enterkeyhint="send"
             :maxlength="MEET_CHAT_MAX_BYTES"
+            :show-count="false"
             :aria-invalid="tooLong"
             :aria-describedby="status ? statusId : undefined"
+            @compositionend="compositionEndedAt = $event.timeStamp"
+            @keydown.enter="submitOnEnter"
           />
-          <button
-            class="meet-button meet-chat__send"
+          <IconButton
             type="submit"
-            :aria-label="t('meet.chat.send')"
+            variant="primary"
+            :size="44"
+            :label="t('meet.chat.send')"
+            :tooltip-target="dialog ?? undefined"
             :disabled="!ready || !trimmed || tooLong"
           >
-            <Send :size="18" aria-hidden="true" />
-          </button>
+            <Send aria-hidden="true" />
+          </IconButton>
         </div>
-      </div>
+      </Field>
       <p :id="statusId" class="meet-chat__status" role="status">{{ status }}</p>
     </form>
   </dialog>
