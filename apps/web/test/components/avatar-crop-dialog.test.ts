@@ -1,8 +1,11 @@
 import { render, screen } from '@testing-library/vue';
 import userEvent from '@testing-library/user-event';
-import { afterEach, expect, test, vi } from 'vitest';
+import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import AvatarCropDialog from '@/shared/ui/AvatarCropDialog/AvatarCropDialog.vue';
 import { stubCanvasAndImages } from '../helpers/fake-canvas.ts';
+import { stubOverlayDom } from '../helpers/overlay-dom';
+
+beforeEach(stubOverlayDom);
 
 vi.mock(
   '@/shared/ui/AvatarCropDialog/canvas-2d.ts',

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Slider } from '@voice-room/ui/components';
 import { onMounted, onBeforeUnmount, ref, computed } from 'vue';
 import { X } from '@lucide/vue';
 import { WIDGET_SERVICE_URL, parseWidgetMessage, type WidgetBootstrap } from '@voice-room/shared/contracts/widget';
@@ -44,6 +45,7 @@ const panelLabels = {
   camera: 'Настройки камеры'
 };
 const participantId = ref('');
+const participantVolume = ref(1);
 const participants = computed(() =>
   [...(state.self ? [state.self] : []), ...state.peers.values()].map((peer) => ({
     id: peer.id,
@@ -64,10 +66,6 @@ const panelTitle = computed(() => {
   const current = visiblePanel.value;
   if (current === 'participant') return selectedParticipant.value?.name;
   return current ? panelLabels[current] : '';
-});
-const participantVolume = computed(() => {
-  const peer = state.peers.get(participantId.value);
-  return peer ? getParticipantAudioPreference(getParticipantAudioPreferenceKey(peer.accountUserId, peer.id)).volume : 1;
 });
 const outputBlocked = computed(() => state.voiceConnection === 'playback-blocked' || state.audioUnlockPending);
 const style = computed(() => ({
@@ -105,13 +103,11 @@ async function run(action: () => Promise<unknown>) {
 function updateVolume(value: number) {
   const peer = state.peers.get(participantId.value);
   if (!peer) return;
-  storeParticipantAudioPreference(getParticipantAudioPreferenceKey(peer.accountUserId, peer.id), {
+  const preference = storeParticipantAudioPreference(getParticipantAudioPreferenceKey(peer.accountUserId, peer.id), {
     volume: Math.min(1, Math.max(0, value))
   });
+  participantVolume.value = preference.volume;
   applyRemoteParticipantAudioPreferences(peer);
-}
-function volume(event: Event) {
-  if (event.target instanceof HTMLInputElement) updateVolume(Number(event.target.value));
 }
 function togglePanel(next: Device) {
   panel.value = panel.value === next ? null : next;
@@ -129,6 +125,13 @@ function toggleDevice(device: Device) {
 function showParticipant(id: string) {
   panel.value = panel.value === 'participant' && participantId.value === id ? null : 'participant';
   participantId.value = id;
+  const peer = state.peers.get(id);
+  if (peer) {
+    participantVolume.value = Math.min(
+      1,
+      getParticipantAudioPreference(getParticipantAudioPreferenceKey(peer.accountUserId, id)).volume
+    );
+  }
 }
 function enter(action: () => Promise<void>) {
   panel.value = null;
@@ -223,9 +226,19 @@ function leave() {
           class="widget-call__settings"
           aria-label="Громкость участника"
         >
-          <label
-            >Громкость<input type="range" min="0" max="1" step="0.05" :value="participantVolume" @input="volume"
-          /></label>
+          <div class="widget-call__volume-head">
+            <span>Громкость</span>
+            <output aria-hidden="true">{{ Math.round(participantVolume * 100) }}%</output>
+          </div>
+          <Slider
+            :model-value="participantVolume"
+            :min="0"
+            :max="1"
+            :step="0.05"
+            aria-label="Громкость"
+            :aria-value-text="Math.round(participantVolume * 100) + '%'"
+            @value-change="updateVolume"
+          />
           <button type="button" @click="updateVolume(participantVolume === 0 ? 1 : 0)">
             {{ participantVolume === 0 ? 'Включить локально' : 'Отключить локально' }}
           </button>

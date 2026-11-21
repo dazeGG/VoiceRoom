@@ -4,6 +4,7 @@ export interface SegmentOption<T extends string = string> {
   disabled?: boolean;
   /** Shows an accent dot, e.g. unread messages behind a tab. */
   dot?: boolean;
+  count?: number;
 }
 
 export interface SegmentControlProps<T extends string> {

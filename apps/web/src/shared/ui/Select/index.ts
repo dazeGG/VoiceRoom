@@ -1,2 +1,2 @@
 export { default as Select } from './Select.vue';
-export type { SelectOption, SelectProps, SelectVariant } from '@voice-room/ui/components';
+export type { SelectOption, SelectProps, SelectSize, SelectVariant } from '@voice-room/ui/components';

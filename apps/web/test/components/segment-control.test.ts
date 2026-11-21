@@ -1,7 +1,8 @@
 import { render, screen } from '@testing-library/vue';
 import userEvent from '@testing-library/user-event';
 import { expect, test, vi } from 'vitest';
-import SegmentControl from '@/shared/ui/SegmentControl/SegmentControl.vue';
+import { SegmentControl } from '@voice-room/ui/components';
+import { defineComponent, h, ref } from 'vue';
 
 const options = [
   { value: 'chat', label: 'Чат' },
@@ -26,10 +27,26 @@ test('clicking the selected option reports it again', async () => {
 
 test('arrow keys move to the next enabled option', async () => {
   const onChange = vi.fn();
-  render(SegmentControl, { props: { options, value: 'people', onChange, ariaLabel: 'Режим' } });
-  screen.getByRole('radio', { name: 'Участники' }).focus();
+  const value = ref('people');
+  const Host = defineComponent({
+    render: () =>
+      h(SegmentControl<string>, {
+        options,
+        value: value.value,
+        ariaLabel: 'Режим',
+        size: 'sm',
+        onChange: (next: string) => {
+          value.value = next;
+          onChange(next);
+        }
+      })
+  });
+  render(Host);
+  await userEvent.tab();
+  expect(document.activeElement).toBe(screen.getByRole('radio', { name: 'Участники', checked: true }));
   await userEvent.keyboard('{ArrowRight}');
   expect(onChange).toHaveBeenLastCalledWith('chat');
+  expect(document.activeElement).toBe(screen.getByRole('radio', { name: 'Чат', checked: true }));
 });
 
 test('the group is a tablist or a radiogroup and items carry no aria-pressed', () => {
@@ -40,4 +57,11 @@ test('the group is a tablist or a radiogroup and items carry no aria-pressed', (
   render(SegmentControl, { props: { options, value: 'chat', ariaLabel: 'Режим' } });
   expect(screen.getByRole('radiogroup', { name: 'Режим' })).toBeTruthy();
   for (const radio of screen.getAllByRole('radio')) expect(radio.hasAttribute('aria-pressed')).toBe(false);
+});
+
+test('displays a count alongside the option name', () => {
+  render(SegmentControl, {
+    props: { options: [{ value: 'chat', label: 'Чат', count: 0, dot: true }], value: 'chat', ariaLabel: 'Режим' }
+  });
+  expect(screen.getByRole('radio', { name: 'Чат', description: '0' })).toBeTruthy();
 });

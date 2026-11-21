@@ -1,12 +1,14 @@
 <script setup lang="ts">
-import { t } from '@/shared/i18n';
+import { t } from '../../i18n';
 import { RotateCcw } from '@lucide/vue';
-import { iconSm } from '@/shared/ui/icons';
-import { onBeforeUnmount, onMounted, ref } from 'vue';
-import { formatHotkeyBinding, hotkeyBindingFromEvent, isHotkeyModifierCode } from './hotkey';
-import type { HotkeyBinding, HotkeyRecorderProps } from './types';
+import { computed, onBeforeUnmount, onMounted, ref, useId, useTemplateRef } from 'vue';
+import { formatHotkeyKeys, hotkeyBindingFromEvent, type HotkeyBinding } from '../../hotkey';
+import { useFieldControl } from '../Field/context';
+import IconButton from '../IconButton/IconButton.vue';
+import Kbd from '../Kbd/Kbd.vue';
+import type { HotkeyFieldProps } from './types';
 
-const props = withDefaults(defineProps<HotkeyRecorderProps>(), {
+const props = withDefaults(defineProps<HotkeyFieldProps>(), {
   defaultValue: null,
   disabled: false,
   ariaLabel: ''
@@ -17,7 +19,11 @@ const emit = defineEmits<{ recordingChange: [recording: boolean]; valueChange: [
 const value = defineModel<HotkeyBinding | null>({ default: null });
 
 const recording = ref(false);
-const recorderButton = ref<HTMLButtonElement>();
+const controlAttrs = useFieldControl();
+const valueId = useId();
+const keys = computed(() => (value.value ? formatHotkeyKeys(value.value) : []));
+const recorderButton = useTemplateRef<HTMLButtonElement>('recorderButton');
+const fieldAttrs = computed(() => controlAttrs({}, valueId));
 
 function startRecording(): void {
   if (props.disabled) return;
@@ -40,7 +46,6 @@ function captureKey(event: KeyboardEvent): void {
     stopRecording();
     return;
   }
-  if (isHotkeyModifierCode(event.code)) return;
 
   const next = hotkeyBindingFromEvent(event);
   if (!next) return;
@@ -71,30 +76,33 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="hotkey-recorder" @focusout="handleFocusOut">
+  <div class="ui-input ui-hotkey" @focusout="handleFocusOut">
     <button
+      v-bind="fieldAttrs"
       ref="recorderButton"
-      class="hotkey-recorder__field"
-      :data-hotkey-recorder-recording="String(recording)"
+      class="ui-input__control ui-hotkey__trigger"
       type="button"
       :disabled="disabled"
-      :aria-label="ariaLabel || t('Горячая клавиша')"
+      :aria-label="ariaLabel || (fieldAttrs.id ? undefined : t('Горячая клавиша'))"
       :aria-pressed="recording"
       @click="startRecording"
     >
-      <span class="hotkey-recorder__value" :class="{ 'hotkey-recorder__value--empty': !value }">
-        {{ recording ? t('Нажмите клавиши…') : formatHotkeyBinding(value) }}
+      <span v-if="recording" class="ui-hotkey__dot" aria-hidden="true"></span>
+      <span :id="valueId" class="ui-hotkey__keys">
+        <template v-if="recording">{{ t('Нажмите клавиши…') }}</template>
+        <Kbd v-else-if="keys.length" :keys="keys" />
+        <template v-else>{{ t('Не назначено') }}</template>
       </span>
     </button>
-    <button
-      class="hotkey-recorder__reset"
-      type="button"
-      :disabled="disabled"
-      :aria-label="t('Сбросить: {p0}', { p0: ariaLabel || t('Горячая клавиша') })"
-      :title="t('Сбросить')"
-      @click="reset"
-    >
-      <RotateCcw v-bind="iconSm" aria-hidden="true" />
-    </button>
+    <div class="ui-input__actions">
+      <IconButton
+        :size="28"
+        :disabled="disabled"
+        :label="t('Сбросить: {p0}', { p0: ariaLabel || t('Горячая клавиша') })"
+        @click="reset"
+      >
+        <RotateCcw aria-hidden="true" />
+      </IconButton>
+    </div>
   </div>
 </template>

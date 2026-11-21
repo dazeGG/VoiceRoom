@@ -11,7 +11,7 @@
 //   .crop-stage                      -> .avatar-crop__stage
 //   .crop-stage--circle / --squircle -> .avatar-crop__stage--circle / --squircle
 //   canvas                           -> .avatar-crop__canvas
-//   .crop-zoom (its input)           -> .avatar-crop__zoom (.avatar-crop__zoom-input)
+//   .crop-zoom (its input)           -> .avatar-crop__zoom
 //   .crop-preview                    -> .avatar-crop__preview
 //   .crop-preview-label              -> .avatar-crop__preview-label
 //   .crop-user-tile (strong, span)   -> .avatar-crop__tile (.avatar-crop__name, .avatar-crop__caption)
@@ -117,18 +117,20 @@
 
 .avatar-crop__zoom {
   display: grid;
-  grid-template-columns: auto 1fr;
-  align-items: center;
-  gap: 14px;
-  margin: 18px auto 0;
-  max-width: 430px;
+  gap: var(--space-4);
+  margin: var(--space-16) auto 0;
+  max-width: calc(var(--space-64) * 7);
   color: var(--vr-text-2);
   font-size: 0.75rem;
-  font-weight: 700;
 }
 
-.avatar-crop__zoom-input {
-  accent-color: var(--vr-accent);
+.avatar-crop__zoom-head {
+  display: flex;
+  justify-content: space-between;
+
+  output {
+    font-family: var(--font-mono);
+  }
 }
 
 .avatar-crop__preview {

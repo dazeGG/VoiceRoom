@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Switch } from '@voice-room/ui/components';
 import { t } from '@/shared/i18n';
 import { X } from '@lucide/vue';
 import { computed, onMounted, ref, watch } from 'vue';
@@ -182,17 +183,12 @@ async function toggleSystemNotifications(): Promise<void> {
       <div>
         <div class="settings__gate-head">
           <span class="settings__field-label">{{ t('Оверлей в игре') }}</span>
-          <button
-            class="settings__switch"
-            type="button"
-            role="switch"
-            :aria-checked="overlayEnabled"
-            :aria-label="t('Оверлей в игре')"
+          <Switch
+            :model-value="overlayEnabled"
+            v-bind="{ ariaLabel: t('Оверлей в игре') }"
             :disabled="overlaySaving"
-            @click="void changeOverlay({ enabled: !overlayEnabled })"
-          >
-            <span class="settings__switch-knob" aria-hidden="true"></span>
-          </button>
+            @update:model-value="void changeOverlay({ enabled: !overlayEnabled })"
+          />
         </div>
         <div class="settings__gate-hint">
           {{ t('Панель только поверх') }} <strong>{{ t('игры') }}</strong>
@@ -218,7 +214,7 @@ async function toggleSystemNotifications(): Promise<void> {
             { value: 'bottom-right', label: t('Справа снизу') }
           ]"
           :label="t('Положение оверлея')"
-          variant="field"
+          size="md"
           :disabled="overlaySaving || !overlayEnabled"
           @value-change="
             (value: string) => {
@@ -241,7 +237,7 @@ async function toggleSystemNotifications(): Promise<void> {
             { value: 'large', label: t('Большие') }
           ]"
           :label="t('Размер аватаров в оверлее')"
-          variant="field"
+          size="md"
           :disabled="overlaySaving || !overlayEnabled"
           @value-change="
             (value: string) => {
@@ -257,17 +253,12 @@ async function toggleSystemNotifications(): Promise<void> {
       >
         <div class="settings__gate-head">
           <span class="settings__field-label">{{ t('Имена участников') }}</span>
-          <button
-            class="settings__switch"
-            type="button"
-            role="switch"
-            :aria-checked="overlayShowNames"
-            :aria-label="t('Имена участников')"
+          <Switch
+            :model-value="overlayShowNames"
+            v-bind="{ ariaLabel: t('Имена участников') }"
             :disabled="overlaySaving || !overlayEnabled"
-            @click="void changeOverlay({ showNames: !overlayShowNames })"
-          >
-            <span class="settings__switch-knob" aria-hidden="true"></span>
-          </button>
+            @update:model-value="void changeOverlay({ showNames: !overlayShowNames })"
+          />
         </div>
         <div class="settings__gate-hint">{{ t('Если выключить, в игре останутся только аватары.') }}</div>
       </div>
@@ -322,17 +313,12 @@ async function toggleSystemNotifications(): Promise<void> {
       <div>
         <div class="settings__gate-head">
           <span class="settings__field-label">{{ t('Автозапуск') }}</span>
-          <button
-            class="settings__switch"
-            type="button"
-            role="switch"
-            :aria-checked="openAtLogin"
-            :aria-label="t('Автозапуск')"
+          <Switch
+            :model-value="openAtLogin"
+            v-bind="{ ariaLabel: t('Автозапуск') }"
             :disabled="autostartSaving || !autostartSupported"
-            @click="void changeAutostart({ openAtLogin: !openAtLogin })"
-          >
-            <span class="settings__switch-knob" aria-hidden="true"></span>
-          </button>
+            @update:model-value="void changeAutostart({ openAtLogin: !openAtLogin })"
+          />
         </div>
         <div class="settings__gate-hint">
           <template v-if="autostartSupported">{{ t('VoiceRoom откроется при входе в систему.') }}</template>
@@ -346,17 +332,12 @@ async function toggleSystemNotifications(): Promise<void> {
       >
         <div class="settings__gate-head">
           <span class="settings__field-label">{{ t('Автозапуск свёрнутым') }}</span>
-          <button
-            class="settings__switch"
-            type="button"
-            role="switch"
-            :aria-checked="startMinimized"
-            :aria-label="t('Автозапуск свёрнутым')"
+          <Switch
+            :model-value="startMinimized"
+            v-bind="{ ariaLabel: t('Автозапуск свёрнутым') }"
             :disabled="autostartSaving || !autostartSupported || !openAtLogin"
-            @click="void changeAutostart({ startMinimized: !startMinimized })"
-          >
-            <span class="settings__switch-knob" aria-hidden="true"></span>
-          </button>
+            @update:model-value="void changeAutostart({ startMinimized: !startMinimized })"
+          />
         </div>
         <div class="settings__gate-hint">
           <template v-if="support.mac">{{
@@ -369,16 +350,11 @@ async function toggleSystemNotifications(): Promise<void> {
       <div v-if="!support.mac">
         <div class="settings__gate-head">
           <span class="settings__field-label">{{ t('Системные уведомления') }}</span>
-          <button
-            class="settings__switch"
-            type="button"
-            role="switch"
-            :aria-checked="systemNotificationsEnabled"
-            :aria-label="t('Системные уведомления')"
-            @click="void toggleSystemNotifications()"
-          >
-            <span class="settings__switch-knob" aria-hidden="true"></span>
-          </button>
+          <Switch
+            :model-value="systemNotificationsEnabled"
+            v-bind="{ ariaLabel: t('Системные уведомления') }"
+            @update:model-value="void toggleSystemNotifications()"
+          />
         </div>
         <div class="settings__gate-hint">
           {{

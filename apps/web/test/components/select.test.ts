@@ -1,6 +1,8 @@
 import { render, screen } from '@testing-library/vue';
 import userEvent from '@testing-library/user-event';
 import { expect, test, vi } from 'vitest';
+import { Field, type SelectSize } from '@voice-room/ui/components';
+import { defineComponent, h } from 'vue';
 import Select from '@/shared/ui/Select/Select.vue';
 import { stubOverlayDom } from '../helpers/overlay-dom';
 
@@ -115,3 +117,21 @@ test('web draws emoji artwork in the selected label and in the option list', asy
   await userEvent.click(trigger);
   expect(screen.getByRole('option').querySelector('img')?.getAttribute('alt')).toBe('🎵');
 });
+
+test.each<SelectSize>(['sm', 'md', 'lg'])(
+  'select size %s keeps its field label and keyboard selection',
+  async (size) => {
+    const onValueChange = vi.fn();
+    const Host = defineComponent({
+      render: () =>
+        h(Field, { label: 'Микрофон', error: 'Выберите микрофон' }, () => h(Select, { size, options, onValueChange }))
+    });
+    render(Host);
+    const trigger = screen.getByRole('combobox', { name: 'Микрофон', description: 'Выберите микрофон' });
+    expect(trigger.getAttribute('aria-invalid')).toBe('true');
+    await userEvent.tab();
+    expect(document.activeElement).toBe(trigger);
+    await userEvent.keyboard('{ArrowDown}{ArrowDown}{Enter}');
+    expect(onValueChange).toHaveBeenLastCalledWith('headset');
+  }
+);

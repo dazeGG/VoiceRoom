@@ -29,12 +29,10 @@
 //   .screen-source-pop-icon/-info/-title/-desc/-radio/-dot -> .screen-source-dialog__preset-icon/-info/-title/-desc/-radio/-dot
 //   .screen-source-pop-sep           -> .screen-source-dialog__popover-sep
 //   .screen-source-pop-audio(-label) -> .screen-source-dialog__audio(-label)
-//   .screen-source-toggle(-knob)     -> .screen-source-dialog__switch(-knob)
 //   .screen-source-launch            -> .screen-source-dialog__launch
 //   @keyframes screen-pop            -> @keyframes screen-source-dialog-pop
 //
 // [data-*] -> aria / modifier class
-//   .screen-source-toggle[data-on='true'] -> .screen-source-dialog__switch--on
 //   (tabs, options, toggle buttons, gear and presets already select on aria-pressed)
 @use 'pkg:@voice-room/ui/styles/mixins' as *;
 
@@ -573,6 +571,7 @@
   background: transparent;
   color: inherit;
   transition: background 140ms var(--ease-out);
+  cursor: pointer;
 }
 
 .screen-source-dialog__audio:hover {
@@ -583,36 +582,6 @@
   font-size: 0.84rem;
   font-weight: 600;
   color: var(--vr-text);
-}
-
-.screen-source-dialog__switch {
-  position: relative;
-  display: flex;
-  flex: 0 0 auto;
-  width: 36px;
-  height: 21px;
-  border-radius: 11px;
-  background: var(--vr-surface-3);
-  transition: background 180ms var(--ease-out);
-}
-
-.screen-source-dialog__switch--on {
-  background: var(--vr-online);
-}
-
-.screen-source-dialog__switch-knob {
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 17px;
-  height: 17px;
-  border-radius: 50%;
-  background: var(--vr-text);
-  transition: transform 180ms var(--ease-out);
-}
-
-.screen-source-dialog__switch--on .screen-source-dialog__switch-knob {
-  transform: translateX(15px);
 }
 
 // ---- launch ----

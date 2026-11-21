@@ -74,7 +74,7 @@ export function isTypingTarget(target: EventTarget | null): boolean {
   return Boolean(
     target.isContentEditable ||
     target.closest(
-      'input, textarea, select, [contenteditable="true"], [role="textbox"], [data-hotkey-recorder-recording="true"]'
+      'input, textarea, select, [contenteditable="true"], [role="textbox"], .ui-hotkey__trigger[aria-pressed="true"]'
     )
   );
 }

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Switch } from '@voice-room/ui/components';
 import { t } from '@/shared/i18n';
 import { AppWindow, Check, Monitor, Play, Settings, Type, X } from '@lucide/vue';
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
@@ -300,23 +301,10 @@ function onGuestNameKeydown(event: KeyboardEvent): void {
                 </button>
               </div>
               <div class="screen-source-dialog__popover-sep"></div>
-              <button
-                class="screen-source-dialog__audio"
-                role="switch"
-                :aria-checked="screenSourceUi.audio"
-                @click="screenSourceUi.audio = !screenSourceUi.audio"
-              >
+              <label class="screen-source-dialog__audio">
                 <span class="screen-source-dialog__audio-label">{{ t('Звук стрима') }}</span>
-                <span
-                  :class="[
-                    'screen-source-dialog__switch',
-                    { 'screen-source-dialog__switch--on': screenSourceUi.audio }
-                  ]"
-                  aria-hidden="true"
-                >
-                  <span class="screen-source-dialog__switch-knob"></span>
-                </span>
-              </button>
+                <Switch v-model="screenSourceUi.audio" size="sm" v-bind="{ ariaLabel: t('Звук стрима') }" />
+              </label>
             </div>
           </div>
 

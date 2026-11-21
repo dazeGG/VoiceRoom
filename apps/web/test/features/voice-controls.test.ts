@@ -22,8 +22,7 @@ const { isMicrophoneShownMuted } = await import('@voice-room/call/engine/core/mi
 const { beginPushToTalk, endPushToTalk, toggleMicrophoneMuted, toggleOutputMute } =
   await import('@voice-room/call/engine/ui/controls');
 const { getStoredMicrophoneVolume, persistMicrophoneVolume } = await import('@voice-room/call/engine/core/settings');
-const { formatHotkeyBinding, hotkeyBindingFromEvent, hotkeyMatchesEvent } =
-  await import('@/shared/ui/HotkeyRecorder/hotkey.ts');
+const { formatHotkeyBinding, hotkeyBindingFromEvent, hotkeyMatchesEvent } = await import('@voice-room/ui/hotkey');
 
 const key = (overrides: KeyboardEventInit = {}) =>
   new KeyboardEvent('keydown', {

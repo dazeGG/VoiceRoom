@@ -1,13 +1,10 @@
 export * from './Select';
 export * from './Ellipsis';
-export * from './HotkeyRecorder';
 export * from './AvatarCropDialog';
 export * from './Badge';
 export * from './AccountBadge';
-export * from './Switch';
 export * from './ToastStack';
 export * from './MascotIcon';
-export * from './SegmentControl';
 export { Avatar, AvatarStack, Button, ContextMenu, Dialog, Slider } from '@voice-room/ui/components';
 export { DialogContent, DialogDescription, DialogPortal, DialogRoot, DialogTitle } from '@voice-room/ui/components';
 export { Popover, PopoverDivider, PopoverMenuItem, PopoverMenuLabel, PopoverSubmenu } from '@voice-room/ui/components';

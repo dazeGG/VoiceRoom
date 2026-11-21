@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { ChevronDown } from '@lucide/vue';
+import { Check, ChevronDown } from '@lucide/vue';
 import {
   SelectContent,
   SelectItem,
+  SelectItemIndicator,
   SelectItemText,
   SelectPortal,
   SelectRoot,
@@ -10,10 +11,11 @@ import {
   SelectViewport
 } from 'reka-ui';
 import { computed } from 'vue';
-import { iconSm } from '../../icon-defaults';
 import { useFieldControl } from '../Field/context';
 import { parsePlacement } from '../Popover/popover-placement';
 import type { SelectProps } from './types';
+
+defineOptions({ inheritAttrs: false });
 
 const props = withDefaults(defineProps<SelectProps>(), {
   options: () => [],
@@ -21,7 +23,8 @@ const props = withDefaults(defineProps<SelectProps>(), {
   disabled: false,
   placement: 'bottom-start',
   flip: false,
-  variant: 'field'
+  size: 'md',
+  variant: 'default'
 });
 
 // Reka's SelectItem throws on an empty value, but a device list starts with one
@@ -49,56 +52,47 @@ function choose(next: string | undefined): void {
 </script>
 
 <template>
-  <div class="select">
-    <SelectRoot
-      :model-value="toItem(value)"
-      :disabled="disabled || options.length === 0"
-      @update:model-value="(next) => choose(typeof next === 'string' ? fromItem(next) : undefined)"
+  <SelectRoot
+    :model-value="toItem(value)"
+    :disabled="disabled || options.length === 0"
+    @update:model-value="(next) => choose(typeof next === 'string' ? fromItem(next) : undefined)"
+  >
+    <SelectTrigger
+      v-bind="controlAttrs({ ...$attrs, 'aria-label': label || $attrs['aria-label'] })"
+      class="ui-select"
+      :class="[`ui-select--${size}`, { 'ui-select--ghost': variant === 'ghost' }]"
     >
-      <SelectTrigger
-        v-bind="controlAttrs()"
-        class="select__trigger"
-        :class="`select__trigger--${variant}`"
+      <span class="ui-select__value" :title="selectedLabel || undefined">
+        <slot name="option-label" :text="selectedLabel">{{ selectedLabel }}</slot>
+      </span>
+      <span class="ui-select__chevron" aria-hidden="true">
+        <ChevronDown />
+      </span>
+    </SelectTrigger>
+
+    <SelectPortal>
+      <SelectContent
+        class="ui-menu ui-select__panel"
+        position="popper"
+        loop
+        :side="axis.vertical"
+        :align="axis.horizontal"
+        :side-offset="4"
+        :avoid-collisions="flip"
+        :collision-padding="8"
         :aria-label="label || undefined"
       >
-        <span class="select__label">
-          <span class="ellipsis" :title="selectedLabel || undefined"
-            ><slot name="option-label" :text="selectedLabel">{{ selectedLabel }}</slot></span
-          >
-        </span>
-        <span class="select__chevron" aria-hidden="true">
-          <ChevronDown v-bind="iconSm" />
-        </span>
-      </SelectTrigger>
-
-      <SelectPortal>
-        <SelectContent
-          class="select__panel"
-          position="popper"
-          loop
-          :side="axis.vertical"
-          :align="axis.horizontal"
-          :side-offset="10"
-          :avoid-collisions="flip"
-          :collision-padding="8"
-          :aria-label="label || undefined"
-        >
-          <SelectViewport>
-            <SelectItem
-              v-for="option in options"
-              :key="option.value"
-              class="select__option"
-              :value="toItem(option.value)"
-            >
-              <SelectItemText>
-                <span class="ellipsis" :title="option.label || undefined"
-                  ><slot name="option-label" :text="option.label">{{ option.label }}</slot></span
-                >
-              </SelectItemText>
-            </SelectItem>
-          </SelectViewport>
-        </SelectContent>
-      </SelectPortal>
-    </SelectRoot>
-  </div>
+        <SelectViewport class="ui-select__viewport">
+          <SelectItem v-for="option in options" :key="option.value" class="ui-menu__item" :value="toItem(option.value)">
+            <SelectItemText class="ui-menu__text">
+              <span class="ellipsis" :title="option.label || undefined"
+                ><slot name="option-label" :text="option.label">{{ option.label }}</slot></span
+              >
+            </SelectItemText>
+            <SelectItemIndicator class="ui-menu__indicator" aria-hidden="true"><Check /></SelectItemIndicator>
+          </SelectItem>
+        </SelectViewport>
+      </SelectContent>
+    </SelectPortal>
+  </SelectRoot>
 </template>

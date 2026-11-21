@@ -28,15 +28,15 @@
   min-width: 0;
 }
 
-.language-control__select.select__trigger {
+.language-control__select.ui-select {
   appearance: none;
-  padding-right: 38px;
+  padding-inline-end: var(--space-40);
 }
 
 .language-control__chevron {
   position: absolute;
   top: 50%;
-  right: 14px;
+  inset-inline-end: var(--space-12);
   transform: translateY(-50%);
   pointer-events: none;
   color: var(--vr-text-muted);
@@ -81,7 +81,7 @@
     min-height: 0;
   }
 
-  .language-control__select.select__trigger {
+  .language-control__select.ui-select {
     padding: 0;
     border: 0;
     opacity: 0;

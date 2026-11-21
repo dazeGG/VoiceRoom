@@ -1,0 +1,30 @@
+@use 'input';
+
+.ui-hotkey {
+  &:has(.ui-hotkey__trigger[aria-pressed='true']) {
+    @include input.focus;
+  }
+
+  &__trigger {
+    display: flex;
+    align-items: center;
+    gap: var(--space-8);
+    cursor: pointer;
+    text-align: start;
+  }
+
+  &__keys {
+    display: flex;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--vr-text-muted);
+  }
+
+  &__dot {
+    flex: none;
+    width: var(--space-8);
+    height: var(--space-8);
+    border-radius: var(--radius-pill);
+    background: var(--vr-danger);
+  }
+}

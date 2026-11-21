@@ -7,7 +7,7 @@ import { deriveAvatarAccent, dominantAvatarColor } from '@voice-room/shared/avat
 import { DialogContent, DialogPortal, DialogRoot, DialogTitle } from 'reka-ui';
 import { ref, shallowRef, watch } from 'vue';
 import EmojiText from '@/shared/chat/EmojiText.vue';
-import { Avatar, isToastPress } from '@voice-room/ui/components';
+import { Avatar, Slider, isToastPress } from '@voice-room/ui/components';
 import type { AvatarCropDialogProps } from './types';
 import { context2d, type Canvas2D } from './canvas-2d';
 
@@ -261,18 +261,20 @@ function onOpenAutoFocus(event: Event): void {
                   @wheel="onWheel"
                 ></canvas>
               </div>
-              <label class="avatar-crop__zoom">
-                <span>{{ t('Масштаб') }}</span>
-                <input
-                  v-model.number="zoom"
-                  class="avatar-crop__zoom-input"
-                  type="range"
-                  min="1"
-                  max="3"
-                  step="0.01"
+              <div class="avatar-crop__zoom">
+                <div class="avatar-crop__zoom-head">
+                  <span>{{ t('Масштаб') }}</span>
+                  <output aria-hidden="true">{{ Math.round(zoom * 100) }}%</output>
+                </div>
+                <Slider
+                  v-model="zoom"
+                  :min="1"
+                  :max="3"
+                  :step="0.01"
                   :aria-label="t('Масштаб изображения')"
+                  :aria-value-text="Math.round(zoom * 100) + '%'"
                 />
-              </label>
+              </div>
             </section>
 
             <aside class="avatar-crop__preview" :aria-label="t('Предпросмотр')">
