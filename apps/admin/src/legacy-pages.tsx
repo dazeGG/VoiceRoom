@@ -3,7 +3,6 @@ import { createRoot } from 'react-dom/client';
 import { FrameContext, type Frame } from './frame.tsx';
 import { StaffContext, type Staff } from './staff.tsx';
 import type { AdminLocation, AdminTab, CallRef } from './tabs.ts';
-import { AccountsPage } from './pages/AccountsPage.tsx';
 import { CallPage } from './pages/CallPage.tsx';
 import { FeedbackPage } from './pages/FeedbackPage.tsx';
 import { OverviewPage } from './pages/OverviewPage.tsx';
@@ -11,7 +10,6 @@ import { ProductPage } from './pages/ProductPage.tsx';
 import { ReportsPage } from './pages/ReportsPage.tsx';
 import { RoomsPage } from './pages/RoomsPage.tsx';
 import { WidgetsPage } from './pages/WidgetsPage.tsx';
-import { StaffPage } from './pages/StaffPage.tsx';
 import { SystemPage } from './pages/SystemPage.tsx';
 
 export interface HistoryRoom {
@@ -65,14 +63,6 @@ function Pages({
         ) : null}
         {tab === 'product' ? <ProductPage /> : null}
         {tab === 'system' ? <SystemPage /> : null}
-        {tab === 'accounts' ? (
-          <AccountsPage
-            accountId={location.accountId}
-            onOpenAccount={openAccount}
-            onOpenCall={openCall}
-            onShowCalls={() => selectTab('rooms')}
-          />
-        ) : null}
         {tab === 'rooms' && callOpen ? (
           <CallPage
             key={callOpen.kind === 'live' ? `live-${callOpen.roomId}` : callOpen.callId}
@@ -94,7 +84,6 @@ function Pages({
         {tab === 'widgets' ? <WidgetsPage onOpenAccount={openAccount} onOpenCall={openCall} /> : null}
         {tab === 'reports' ? <ReportsPage onResolved={setOpenReports} onOpenAccount={openAccount} /> : null}
         {tab === 'feedback' ? <FeedbackPage /> : null}
-        {tab === 'staff' ? <StaffPage /> : null}
       </FrameContext.Provider>
     </StaffContext.Provider>
   );

@@ -4,6 +4,8 @@ import { Spinner } from '@voice-room/ui/components';
 import { fetchOpenReports, fetchOpenUserReports } from './api/admin.ts';
 import { provideFrame, type RefreshStatus } from './frame.ts';
 import { mountLegacyPages, type HistoryRoom } from './legacy-pages.tsx';
+import AccountsPage from './pages/AccountsPage.vue';
+import StaffPage from './pages/StaffPage.vue';
 import GlobalSearch from './shell/GlobalSearch.vue';
 import Sidebar from './shell/Sidebar.vue';
 import Topbar from './shell/Topbar.vue';
@@ -14,15 +16,10 @@ import Notice from './Notice.vue';
 
 const session = useStaffStore();
 const { location, go } = useAdminLocation();
-const { pageTitle, refresh, reportTitle, reportRefresh } = provideFrame();
-const legacyTitle = ref<string | null>(null);
+const { pageTitle, refresh } = provideFrame();
 const legacyRefresh = shallowRef<RefreshStatus | null>(null);
-reportTitle(legacyTitle);
-reportRefresh(legacyRefresh);
 const frame = {
-  setTitle: (title: string | null) => {
-    legacyTitle.value = title;
-  },
+  setTitle: () => {},
   setRefresh: (status: RefreshStatus | null) => {
     legacyRefresh.value = status;
   }
@@ -36,6 +33,9 @@ const pageHost = useTemplateRef<HTMLElement>('pageHost');
 
 const tabs = computed(() => (session.staff ? allowedTabs(session.staff.permissions) : []));
 const tab = computed(() => (tabs.value.includes(location.value.tab) ? location.value.tab : tabs.value[0]));
+const topbarRefresh = computed(() =>
+  tab.value === 'accounts' || tab.value === 'staff' ? refresh.value : legacyRefresh.value
+);
 const onCard = computed(() => tab.value === 'accounts' && location.value.accountId !== null);
 const call = computed(() => (tab.value === 'rooms' ? location.value.call : undefined));
 const crumb = computed(() => {
@@ -62,6 +62,9 @@ function openAccount(accountId: string | null): void {
 }
 function openCall(next: CallRef): void {
   go({ tab: 'rooms', accountId: null, call: next });
+}
+function showCalls(): void {
+  selectTab('rooms');
 }
 function openRoomHistory(room: HistoryRoom): void {
   roomFocus.value = room;
@@ -160,13 +163,24 @@ onBeforeUnmount(() => pages?.unmount());
       <Topbar
         :crumb="crumb"
         :title="title"
-        :refresh="refresh"
+        :refresh="topbarRefresh"
         :still="call?.kind === 'finished' ? 'Звонок завершён · данные не меняются' : null"
       >
         <GlobalSearch @open-account="openAccount" @open-room="openRoomHistory" />
       </Topbar>
       <main ref="main" class="admin-frame__main">
-        <div ref="pageHost" class="admin-frame__content admin-legacy" />
+        <div v-if="tab === 'accounts'" class="admin-frame__content">
+          <AccountsPage
+            :account-id="location.accountId"
+            @open-account="openAccount"
+            @open-call="openCall"
+            @show-calls="showCalls"
+          />
+        </div>
+        <div v-else-if="tab === 'staff'" class="admin-frame__content">
+          <StaffPage />
+        </div>
+        <div v-else ref="pageHost" class="admin-frame__content" :class="{ 'admin-legacy': tab !== 'reports' }" />
       </main>
     </div>
   </div>

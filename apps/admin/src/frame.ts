@@ -52,9 +52,9 @@ export function provideFrame() {
 }
 
 export function usePageTitle(title: MaybeRefOrGetter<string | null>): void {
-  inject(frameKey)?.title.report(title);
+  inject(frameKey, null)?.title.report(title);
 }
 
 export function useRefreshStatus(status: MaybeRefOrGetter<RefreshStatus | null>): void {
-  inject(frameKey)?.refresh.report(status);
+  inject(frameKey, null)?.refresh.report(status);
 }

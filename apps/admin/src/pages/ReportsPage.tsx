@@ -14,7 +14,7 @@ import { useAdminResource } from '../load-state.ts';
 import { Notice } from '../Notice.tsx';
 import { Avatar, Button, Empty, Pill } from '../ui/index.tsx';
 import './ReportsPage.css';
-import { UserReports } from './UserReports.tsx';
+import { UserReportsBridge } from './UserReportsBridge.tsx';
 
 const REFRESH_MS = 60_000;
 
@@ -65,8 +65,10 @@ export function ReportsPage({
   }, [messageCount, userCount, onResolved]);
   return (
     <>
-      <MessageReports onResolved={setMessageCount} onOpenAccount={onOpenAccount} />
-      <UserReports onResolved={setUserCount} onOpenAccount={onOpenAccount} />
+      <div className="admin-legacy">
+        <MessageReports onResolved={setMessageCount} onOpenAccount={onOpenAccount} />
+      </div>
+      <UserReportsBridge onResolved={setUserCount} onOpenAccount={onOpenAccount} />
     </>
   );
 }

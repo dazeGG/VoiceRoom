@@ -4,6 +4,11 @@
 @use 'frame';
 @use 'sidebar';
 @use 'shared';
+@use 'accounts';
+@use 'account-panel';
+@use 'account-card';
+@use 'staff';
+@use 'user-reports';
 @use 'legacy';
 
 // The legacy pages still use some of the same class names. Their unlayered
@@ -34,6 +39,7 @@
   @include meta.load-css('pkg:@voice-room/ui/styles/components/switch');
   @include meta.load-css('pkg:@voice-room/ui/styles/components/tabs');
   @include meta.load-css('pkg:@voice-room/ui/styles/components/tag');
+  @include meta.load-css('pkg:@voice-room/ui/styles/components/textarea');
   @include meta.load-css('pkg:@voice-room/ui/styles/components/tooltip');
   @include meta.load-css('pkg:@voice-room/ui/styles/components/ui-alert-dialog');
   @include meta.load-css('pkg:@voice-room/ui/styles/components/ui-dialog');

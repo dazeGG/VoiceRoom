@@ -206,6 +206,32 @@ test('the reports item keeps the fresh poll count while the reports page stays o
   expect(screen.getByLabelText('открытых: 3')).toBeTruthy();
 });
 
+test('reviewing a user report subtracts it from the menu count with message reports still open', async () => {
+  window.history.replaceState(null, '', '/reports');
+  signedInAs('moderator', 1, {
+    'GET /api/admin/user-reports': {
+      body: {
+        ok: true,
+        reports: [
+          {
+            id: 'user-r1',
+            reason: 'abuse',
+            comment: '',
+            createdAt: 1,
+            reporter: { userId: 'alice', login: 'alice', displayName: 'Alice' },
+            target: { userId: 'bob', login: 'bob', displayName: 'Bob', deleted: false }
+          }
+        ]
+      }
+    },
+    'POST /api/admin/user-reports/user-r1/resolve': { body: { ok: true, resolved: 1 } }
+  });
+  renderWithApp(App);
+  expect(await screen.findByLabelText('открытых: 2')).toBeTruthy();
+  await userEvent.click(await screen.findByRole('button', { name: 'Рассмотрено' }));
+  expect(await screen.findByLabelText('открытых: 1')).toBeTruthy();
+});
+
 test('the menu folds to a rail and stays folded after a reload', async () => {
   signedInAs('moderator');
   const first = renderWithApp(App);

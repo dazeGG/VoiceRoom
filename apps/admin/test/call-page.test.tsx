@@ -15,7 +15,6 @@ import type {
   VoiceMinute
 } from '@voice-room/shared/contracts/admin';
 import type { RoomCallDetail } from '@voice-room/shared/contracts/feedback';
-import { cpuConclusion } from '../src/pages/AccountPanel.tsx';
 import { delayOf, heardSummary, verdictOf, worstOf } from '../src/pages/call/verdict.ts';
 import { CallPage } from '../src/pages/CallPage.tsx';
 import { FIRST_STATIC_VIEW, StaticRooms } from '../src/pages/rooms/StaticRooms.tsx';
@@ -357,14 +356,6 @@ test('one side of a voice weighs minutes by their speech and keeps its worst mom
     worstConcealedPct: 5,
     worstGaps: null
   });
-});
-
-test('a computer busy far beyond VoiceRoom is only a hint, and only with bad minutes on top', () => {
-  const cpu = { appAvgPct: 20, systemAvgPct: 90, calls: 4, criticalCalls: 3, relievedCalls: 1 };
-  expect(cpuConclusion(cpu, 10)).toContain('скорее всего, параллельно запущена игра');
-  expect(cpuConclusion(cpu, 0)).not.toContain('игра');
-  expect(cpuConclusion({ ...cpu, systemAvgPct: 40 }, 10)).not.toContain('игра');
-  expect(cpuConclusion({ ...cpu, criticalCalls: 0 }, 10)).toBe('Перегрузок процессора в звонках не было.');
 });
 
 test('the quality bar counts only minutes known and rounds to whole shares', () => {

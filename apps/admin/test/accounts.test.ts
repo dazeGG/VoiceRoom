@@ -4,17 +4,18 @@
 // offers nothing against a staff member's account; the mark shows by the name;
 // a card has its own address; and each role is offered only what it may do.
 
-import { cleanup, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, screen, waitFor, within } from '@testing-library/vue';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import type { AccountDetail, AccountRow, AccountsPage } from '@voice-room/shared/contracts/admin';
-import { forgetBadges } from '../src/badges.ts';
-import { AccountsPage as AccountsSection } from '../src/pages/AccountsPage.tsx';
+import { forgetBadges, loadBadges } from '../src/badges.ts';
+import AccountsSection from '../src/pages/AccountsPage.vue';
 import { locationFromPath, pathOf } from '../src/tabs.ts';
-import { AccountBadge } from '../src/ui/index.tsx';
+import AccountBadge from '../src/ui/AccountBadge.vue';
 import { describeAction } from '../src/accounts.ts';
 import { stubChartBox } from './helpers/chart-box.ts';
-import { renderAs, stubApi, type Call, type Reply } from './helpers/harness.tsx';
+import { stubApi, type Call, type Reply } from './helpers/api.ts';
+import { renderAsStaff } from './helpers/render.ts';
 
 const DAY = 24 * 60 * 60 * 1000;
 
@@ -86,9 +87,9 @@ test('the list asks for what is searched, filtered and sorted, and a row shows t
     ])
   });
   const onOpenAccount = vi.fn();
-  renderAs(
-    <AccountsSection onOpenCall={vi.fn()} onShowCalls={vi.fn()} accountId={null} onOpenAccount={onOpenAccount} />
-  );
+  renderAsStaff(AccountsSection, {
+    props: { accountId: null, onOpenAccount, onOpenCall: vi.fn(), onShowCalls: vi.fn() }
+  });
 
   const alice = await screen.findByRole('button', { name: /Алиса/ });
   expect(screen.getByText('@alice')).toBeTruthy();
@@ -101,9 +102,8 @@ test('the list asks for what is searched, filtered and sorted, and a row shows t
   await userEvent.type(screen.getByRole('searchbox', { name: 'Поиск аккаунта' }), 'ali');
   await waitFor(() => expect(lastParam(asked(), 'q')).toBe('ali'));
 
-  await userEvent.click(
-    within(screen.getByRole('radiogroup', { name: 'Показать' })).getByRole('radio', { name: 'Заблокированные' })
-  );
+  await userEvent.click(screen.getByRole('combobox', { name: 'Показать' }));
+  await userEvent.click(await screen.findByRole('option', { name: 'Заблокированные' }));
   await waitFor(() => expect(lastParam(asked(), 'filter')).toBe('blocked'));
 
   await userEvent.click(screen.getByRole('button', { name: 'Дней' }));
@@ -122,7 +122,9 @@ test('the list asks for what is searched, filtered and sorted, and a row shows t
 
 test('a staff member is called a сотрудник in the list', async () => {
   stubApi({ 'GET /api/admin/accounts': page([row({ admin: true })]) });
-  renderAs(<AccountsSection onOpenCall={vi.fn()} onShowCalls={vi.fn()} accountId={null} onOpenAccount={vi.fn()} />);
+  renderAsStaff(AccountsSection, {
+    props: { accountId: null, onOpenAccount: vi.fn(), onOpenCall: vi.fn(), onShowCalls: vi.fn() }
+  });
   expect(await screen.findByText('сотрудник')).toBeTruthy();
 });
 
@@ -147,7 +149,9 @@ test('the card blocks with a term and a reason, then offers to lift it', async (
     'GET /api/admin/accounts/u-alice': { body: detail() },
     'POST /api/admin/accounts/u-alice/block': { body: blocked }
   });
-  renderAs(<AccountsSection onOpenCall={vi.fn()} onShowCalls={vi.fn()} accountId="u-alice" onOpenAccount={vi.fn()} />);
+  renderAsStaff(AccountsSection, {
+    props: { accountId: 'u-alice', onOpenAccount: vi.fn(), onOpenCall: vi.fn(), onShowCalls: vi.fn() }
+  });
 
   await screen.findByRole('heading', { name: /Алиса/ });
   expect(screen.getByText('Кухня')).toBeTruthy();
@@ -178,7 +182,9 @@ test('deleting asks for the login again and a reason', async () => {
       })
     }
   });
-  renderAs(<AccountsSection onOpenCall={vi.fn()} onShowCalls={vi.fn()} accountId="u-alice" onOpenAccount={vi.fn()} />);
+  renderAsStaff(AccountsSection, {
+    props: { accountId: 'u-alice', onOpenAccount: vi.fn(), onOpenCall: vi.fn(), onShowCalls: vi.fn() }
+  });
   await userEvent.click(await screen.findByRole('button', { name: 'Удалить аккаунт…' }));
   const dialog = await screen.findByRole('dialog', { name: 'Удалить аккаунт' });
   const submit = within(dialog).getByRole('button', { name: 'Удалить аккаунт' });
@@ -207,14 +213,16 @@ test('a staff account offers no sanctions, but may be marked official', async ()
       }
     })
   });
-  renderAs(<AccountsSection onOpenCall={vi.fn()} onShowCalls={vi.fn()} accountId="u-root" onOpenAccount={vi.fn()} />);
+  renderAsStaff(AccountsSection, {
+    props: { accountId: 'u-root', onOpenAccount: vi.fn(), onOpenCall: vi.fn(), onShowCalls: vi.fn() }
+  });
   await screen.findByText(/аккаунт сотрудника/);
   expect(screen.queryByRole('button', { name: 'Заблокировать…' })).toBeNull();
   expect(screen.queryByRole('button', { name: 'Удалить аккаунт…' })).toBeNull();
-  expect(screen.queryByTitle('Официальный аккаунт')).toBeNull();
+  expect(screen.queryByRole('img', { name: 'Официальный аккаунт' })).toBeNull();
 
   await userEvent.click(screen.getByRole('switch', { name: 'Официальный аккаунт' }));
-  await screen.findByTitle('Официальный аккаунт');
+  await screen.findByRole('img', { name: 'Официальный аккаунт' });
   expect(calls.find((call) => call.method === 'POST')?.body).toEqual({ badge: 'official' });
 });
 
@@ -222,12 +230,12 @@ test('the mark shows only by a marked account', async () => {
   stubApi({
     'GET /api/badges': { body: { ok: true, badges: [{ userId: 'u-official', badge: 'official' }] } }
   });
-  const { container } = renderAs(<AccountBadge userId="u-someone" />);
+  renderAsStaff(AccountBadge, { props: { userId: 'u-someone' } });
   await waitFor(() => expect(fetch).toHaveBeenCalled());
-  expect(container.querySelector('.ui-account-badge')).toBeNull();
+  expect(screen.queryByRole('img', { name: 'Официальный аккаунт' })).toBeNull();
   cleanup();
-  renderAs(<AccountBadge userId="u-official" />);
-  await screen.findByTitle('Официальный аккаунт');
+  renderAsStaff(AccountBadge, { props: { userId: 'u-official' } });
+  await screen.findByRole('img', { name: 'Официальный аккаунт' });
 });
 
 test('an account card has its own address under the accounts section', () => {
@@ -253,8 +261,9 @@ test('the log words a role given and taken away', () => {
 test('a moderator is offered a timed block and sign-out; an admin also delete, the mark and a block for good', async () => {
   stubApi({ 'GET /api/admin/accounts/u-alice': { body: detail() } });
 
-  renderAs(
-    <AccountsSection onOpenCall={vi.fn()} onShowCalls={vi.fn()} accountId="u-alice" onOpenAccount={vi.fn()} />,
+  renderAsStaff(
+    AccountsSection,
+    { props: { accountId: 'u-alice', onOpenAccount: vi.fn(), onOpenCall: vi.fn(), onShowCalls: vi.fn() } },
     'moderator'
   );
   await userEvent.click(await screen.findByRole('button', { name: 'Заблокировать…' }));
@@ -267,8 +276,9 @@ test('a moderator is offered a timed block and sign-out; an admin also delete, t
   expect(screen.queryByRole('switch', { name: 'Официальный аккаунт' })).toBeNull();
   cleanup();
 
-  renderAs(
-    <AccountsSection onOpenCall={vi.fn()} onShowCalls={vi.fn()} accountId="u-alice" onOpenAccount={vi.fn()} />,
+  renderAsStaff(
+    AccountsSection,
+    { props: { accountId: 'u-alice', onOpenAccount: vi.fn(), onOpenCall: vi.fn(), onShowCalls: vi.fn() } },
     'admin'
   );
   await userEvent.click(await screen.findByRole('button', { name: 'Заблокировать…' }));
@@ -284,16 +294,18 @@ test('a moderator lifts a block with an end but not one without', async () => {
     detail({ account: row({ status: 'blocked' }), block: { at: Date.now(), until, reason: 'Спам' } });
 
   stubApi({ 'GET /api/admin/accounts/u-alice': { body: blockedFor(Date.now() + DAY) } });
-  renderAs(
-    <AccountsSection onOpenCall={vi.fn()} onShowCalls={vi.fn()} accountId="u-alice" onOpenAccount={vi.fn()} />,
+  renderAsStaff(
+    AccountsSection,
+    { props: { accountId: 'u-alice', onOpenAccount: vi.fn(), onOpenCall: vi.fn(), onShowCalls: vi.fn() } },
     'moderator'
   );
   expect(await screen.findByRole('button', { name: 'Разблокировать' })).toBeTruthy();
   cleanup();
 
   stubApi({ 'GET /api/admin/accounts/u-alice': { body: blockedFor(null) } });
-  renderAs(
-    <AccountsSection onOpenCall={vi.fn()} onShowCalls={vi.fn()} accountId="u-alice" onOpenAccount={vi.fn()} />,
+  renderAsStaff(
+    AccountsSection,
+    { props: { accountId: 'u-alice', onOpenAccount: vi.fn(), onOpenCall: vi.fn(), onShowCalls: vi.fn() } },
     'moderator'
   );
   await screen.findByText(/Заблокирован навсегда/);
@@ -308,12 +320,13 @@ test('a mark list that failed to load is asked for again by the next look', asyn
         ? { status: 500, body: { ok: false, error: 'boom', code: 'internal_error' } }
         : { body: { ok: true, badges: [{ userId: 'u-official', badge: 'official' }] } }
   });
-  renderAs(<AccountBadge userId="u-official" />);
-  await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
-  expect(screen.queryByTitle('Официальный аккаунт')).toBeNull();
+  renderAsStaff(AccountBadge, { props: { userId: 'u-official' } });
+  expect((await loadBadges()).size).toBe(0);
+  expect(fetch).toHaveBeenCalledTimes(1);
+  expect(screen.queryByRole('img', { name: 'Официальный аккаунт' })).toBeNull();
   cleanup();
 
   failing = false;
-  renderAs(<AccountBadge userId="u-official" />);
-  await screen.findByTitle('Официальный аккаунт');
+  renderAsStaff(AccountBadge, { props: { userId: 'u-official' } });
+  await screen.findByRole('img', { name: 'Официальный аккаунт' });
 });

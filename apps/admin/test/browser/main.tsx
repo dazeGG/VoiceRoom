@@ -1,18 +1,34 @@
-import { AccountBlockDialog } from '../../src/pages/AccountBlockDialog';
-import { AccountDeleteDialog } from '../../src/pages/AccountDeleteDialog';
+import { createApp } from 'vue';
+import { createPinia } from 'pinia';
+import type { Staff } from '../../src/staff.store.ts';
+import AccountDialogsFixture from './AccountDialogsFixture.vue';
 import { TimeRangePicker } from '../../src/TimeRangePicker';
 import { PRODUCT_PRESETS, type TimeRange } from '../../src/time-range';
-import { StrictMode, useState } from 'react';
+import { StrictMode, useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Dialog, Popover, Segment, Button } from '../../src/ui/index.tsx';
 import { GlobalSearch } from '../../src/shell/GlobalSearch';
 import { Sidebar } from '../../src/shell/Sidebar';
 import { StaffContext, useStaff } from '../../src/staff';
-import '../../src/styles/theme.css';
 import '../../src/pages/ProductPage.css';
 import '../../src/styles/app.css';
-import '../../src/ui/ui.css';
+import '../../src/styles/main.scss';
 import '../../src/shell/shell.css';
+
+const fixtureStaff: Staff = {
+  user: {
+    id: 'fixture',
+    login: 'fixture',
+    displayName: 'Fixture',
+    avatarUrl: null,
+    avatarColorKey: 'blue',
+    avatarAccent: null
+  },
+  role: 'admin',
+  permissions: ['accounts.view'],
+  siteUrl: 'http://127.0.0.1:15180'
+};
+
 function Navigation() {
   const staff = useStaff();
   return (
@@ -26,31 +42,26 @@ function Navigation() {
     />
   );
 }
+function VueAccountDialogs() {
+  const host = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!host.current) return;
+    const app = createApp(AccountDialogsFixture, { staff: fixtureStaff });
+    app.use(createPinia());
+    app.mount(host.current);
+    return () => app.unmount();
+  }, []);
+  return <div ref={host} />;
+}
+
 function Fixture() {
   const [open, setOpen] = useState(false);
   const [value, setValue] = useState('a');
-  const [block, setBlock] = useState(false);
-  const [remove, setRemove] = useState(false);
-  const [submits, setSubmits] = useState(0);
   const [range, setRange] = useState<TimeRange>({ kind: 'preset', id: '7d' });
   return (
-    <StaffContext.Provider
-      value={{
-        user: {
-          id: 'fixture',
-          login: 'fixture',
-          displayName: 'Fixture',
-          avatarUrl: null,
-          avatarColorKey: 'blue',
-          avatarAccent: null
-        },
-        role: 'admin',
-        permissions: ['accounts.view'],
-        siteUrl: 'http://127.0.0.1:15180'
-      }}
-    >
+    <StaffContext.Provider value={fixtureStaff}>
       <Navigation />
-      <main style={{ padding: 24, marginLeft: 240 }}>
+      <main className="admin-legacy" style={{ padding: 24, marginLeft: 240 }}>
         <div className="ui-table-scroll" data-testid="retention-scroll" style={{ background: 'var(--vr-surface)' }}>
           <table className="product-table">
             <thead>
@@ -94,36 +105,14 @@ function Fixture() {
           )}
         </Popover>
         <Button>Outside</Button>
-        <Button onClick={() => setBlock(true)}>Open block</Button>
-        <Button onClick={() => setRemove(true)}>Open delete</Button>
-        <output aria-label="Submissions">{submits}</output>
         <TimeRangePicker value={range} onChange={setRange} presets={PRODUCT_PRESETS} withTime={false} />
         <output aria-label="Range">{range.kind}</output>
-        <AccountBlockDialog
-          open={block}
-          name="Fixture"
-          onClose={() => setBlock(false)}
-          onConfirm={async () => {
-            setSubmits((n) => n + 1);
-            setBlock(false);
-            return null;
-          }}
-        />
-        <AccountDeleteDialog
-          open={remove}
-          login="fixture"
-          onClose={() => setRemove(false)}
-          onConfirm={async () => {
-            setSubmits((n) => n + 1);
-            setRemove(false);
-            return null;
-          }}
-        />
         <Dialog open={open} title="Fixture modal" onClose={() => setOpen(false)}>
           <input aria-label="Reason" />
           <Button onClick={() => setOpen(false)}>Done</Button>
         </Dialog>
       </main>
+      <VueAccountDialogs />
     </StaffContext.Provider>
   );
 }

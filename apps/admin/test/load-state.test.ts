@@ -297,3 +297,37 @@ test('a first request that fails leaves no data and is not busy', async () => {
   expect(result.busy).toBe(false);
   expect(result.loadedAt).toBeNull();
 });
+
+test('the poll pauses on a detail view and resumes a full interval after returning', async () => {
+  const { fetcher, request } = heldFetcher<number>();
+  const { rerender } = renderResource(
+    (view) =>
+      proxyRefs(
+        useAdminResource(fetcher, [], {
+          failureText: FAILURE_TEXT,
+          refreshMs: () => (view() === 'list' ? REFRESH_MS : undefined)
+        })
+      ),
+    'list'
+  );
+  await answer(request(0), 1);
+  await tick(REFRESH_MS / 2);
+  await rerender('detail');
+  await tick(REFRESH_MS);
+  expect(fetcher).toHaveBeenCalledTimes(1);
+
+  await rerender('list');
+  await tick(REFRESH_MS - 1);
+  expect(fetcher).toHaveBeenCalledTimes(1);
+  await tick(1);
+  expect(fetcher).toHaveBeenCalledTimes(2);
+});
+
+test('a successful write supersedes an older read that is still pending', async () => {
+  const { fetcher, request } = heldFetcher<string>();
+  const { result } = renderResource(() => proxyRefs(useAdminResource(fetcher, [], { failureText: FAILURE_TEXT })));
+  result.update(() => 'saved');
+  await answer(request(0), 'old');
+  expect(result.data).toBe('saved');
+  expect(result.busy).toBe(false);
+});

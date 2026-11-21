@@ -1,0 +1,138 @@
+@use 'pkg:@voice-room/ui/styles/mixins' as ui;
+
+.admin-staff {
+  display: grid;
+  align-items: start;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-16);
+
+  @media (width > #{ui.$bp-narrow}) {
+    grid-template-columns: minmax(0, 1fr) minmax(calc(var(--space-64) * 4), 32%);
+  }
+
+  &__side,
+  &__grant,
+  &__summary {
+    display: grid;
+    gap: var(--space-12);
+  }
+
+  &__grant {
+    margin-block: var(--space-12);
+  }
+
+  &__list,
+  &__summary {
+    padding: 0;
+    list-style: none;
+  }
+
+  &__member,
+  &__summary-line {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-8) var(--space-12);
+  }
+
+  &__member {
+    padding-block: var(--space-4);
+
+    > .ui-list-item {
+      min-width: min(100%, calc(var(--space-64) * 2));
+      flex: 1;
+    }
+
+    & + li {
+      border-block-start: calc(var(--space-2) / 2) solid var(--vr-line);
+    }
+  }
+
+  &__quiet,
+  &__summary-line span,
+  &__main .admin-panel__header small {
+    color: var(--vr-text-muted);
+  }
+
+  &__quiet {
+    font-size: 0.8125rem;
+  }
+
+  &__summary-line {
+    justify-content: space-between;
+  }
+
+  &__pips {
+    display: flex;
+    gap: var(--space-4);
+    margin-block-start: var(--space-4);
+
+    > span {
+      height: var(--space-4);
+      flex: 1;
+      border-radius: var(--radius-pill);
+      background: var(--admin-tone, var(--vr-text-2));
+    }
+
+    > .admin-staff__pip--empty {
+      background: var(--vr-surface-3);
+    }
+  }
+}
+
+.admin-rights {
+  overflow: auto;
+
+  &__table {
+    width: 100%;
+    border-collapse: collapse;
+
+    th,
+    td {
+      border-block-end: calc(var(--space-2) / 2) solid var(--vr-line);
+      padding: var(--space-8);
+      text-align: center;
+      overflow-wrap: anywhere;
+    }
+
+    th:first-child {
+      text-align: start;
+    }
+
+    th small {
+      display: block;
+      color: var(--vr-text-muted);
+      font-weight: 400;
+    }
+
+    th[scope='row'] {
+      width: 40%;
+    }
+  }
+
+  &__group th {
+    color: var(--vr-text-2);
+    background: var(--vr-surface-2);
+  }
+
+  &__yes {
+    color: var(--vr-success);
+  }
+  &__no {
+    color: var(--vr-text-muted);
+  }
+
+  &__note {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-8);
+    color: var(--vr-text-muted);
+    font-size: 0.8125rem;
+  }
+
+  svg {
+    width: var(--icon-16);
+    height: var(--icon-16);
+    flex: none;
+  }
+}

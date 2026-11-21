@@ -105,13 +105,13 @@ test('admin modal blocks programmatic background focus and resets account forms'
     await page.getByRole('button', { name: 'Open ' + kind }).click();
     const modal = page.getByRole('dialog');
     await modal.getByLabel('Причина', { exact: true }).fill('Fixture reason');
-    await page.getByRole('button', { name: 'Outside', exact: true }).evaluate((el) => el.focus());
+    await page.getByText('Outside', { exact: true }).evaluate((el) => el.focus());
     expect(await modal.evaluate((el) => el.contains(document.activeElement))).toBe(true);
     await page.keyboard.press('Escape');
     await page.getByRole('button', { name: 'Open ' + kind }).click();
     await expect(modal.getByLabel('Причина', { exact: true })).toHaveValue('');
     await modal.getByLabel('Причина', { exact: true }).fill('Fixture reason');
-    if (kind === 'delete') await modal.locator('#deleteLogin').fill('fixture');
+    if (kind === 'delete') await modal.getByRole('textbox', { name: /Введите логин/ }).fill('fixture');
     await modal
       .getByRole('button', { name: kind === 'block' ? 'Заблокировать' : 'Удалить аккаунт', exact: true })
       .click();
