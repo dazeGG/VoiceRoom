@@ -4,9 +4,9 @@
 
 - Живые компоненты: Storybook в `packages/ui` (`npm run storybook`, порт 6006).
 - Брендбук с токенами: https://claude.ai/artifact/XS3241pLesrkV6YwuJUadt.
-- Макет UI-кита (целевой вид всех компонентов): https://claude.ai/artifact/DkN8mn6hcZbu9Fj34KKGx8.
+- Макет UI-кита (исходный вид всех компонентов): https://claude.ai/artifact/DkN8mn6hcZbu9Fj34KKGx8.
 
-Разделы 1–6 — правила, они действуют уже сейчас. Раздел 7 описывает целевой набор компонентов, а раздел 8 — что из него уже есть в коде. Не выдавайте целевое состояние за текущее.
+Разделы 1–7 — правила и компоненты, они действуют сейчас. Раздел 8 — что в каком приложении уже на ките.
 
 ## 1. Голос и тексты
 
@@ -44,7 +44,7 @@
 
 ## 4. Размерная сетка
 
-Все размеры — ступени шкалы с шагом 4px. Имя токена — его значение в пикселях. Токены сетки лежат в `_tokens.scss` рядом со старыми; новый код берёт только их.
+Все размеры — ступени шкалы с шагом 4px. Имя токена — его значение в пикселях. Токены сетки лежат в `_tokens.scss`; других размерных токенов нет.
 
 | Семейство | Токены |
 | --- | --- |
@@ -88,7 +88,7 @@
 
 ### Переход со старых значений
 
-Старые токены остаются, пока все блоки не перейдут на сетку. Переводите блок целиком, а не по одному свойству.
+Переход завершён, старых токенов больше нет. Таблица — для чтения старого кода и истории. Переводя значение, переводите и связанные с ним: ширину `100% + N` вместе с отступом `-N`.
 
 | Что | Сейчас в коде | По сетке |
 | --- | --- | --- |
@@ -127,7 +127,7 @@
 
 ## 7. Компоненты
 
-Целевой набор — 41 компонент на сетке из раздела 4. Компоненты живут в `packages/ui/src/components/<Name>/` (`<Name>.vue`, `types.ts`, `index.ts`, `<Name>.stories.ts`), стиль — в `packages/ui/src/styles/components/_<block>.scss` по BEM, с префиксом блока `ui-`.
+41 компонент на сетке из раздела 4. Компоненты живут в `packages/ui/src/components/<Name>/` (`<Name>.vue`, `types.ts`, `index.ts`, `<Name>.stories.ts`), стиль — в `packages/ui/src/styles/components/_<block>.scss` по BEM, с префиксом блока `ui-`.
 
 Правила для всех компонентов:
 
@@ -205,22 +205,29 @@
 
 VisuallyHidden, ScrollArea и Collapsible — по необходимости (миксин `visually-hidden` и стилизованные скроллбары уже есть). Accordion, PinInput, TagsInput, Editable, Menubar, NavigationMenu, Pagination, Calendar, DateField, DatePicker, TimeField, Stepper, Tree и AspectRatio не нужны: таких сценариев в продукте нет. Выбор периода в админке появится вместе с её переходом на Vue.
 
-## 8. Текущее состояние и план перехода
+## 8. Текущее состояние
 
-Что есть в коде сейчас:
+Все 41 компонент из раздела 7 есть в `packages/ui/src/components` (экспорт — `packages/ui/src/components.ts`), у каждого — story, поведение покрыто тестами в `apps/web/test/components`. Старые токены (`--radius-sm/md/lg/xl`, `--space-2xs…2xl`, `--interactive-*`, `--focus-border`, `--focus-ring`) удалены; `iconSm` = 16.
 
-| Компонент | Где | Основа |
-| --- | --- | --- |
-| Avatar, AvatarStack, Button, ContextMenu, Dialog, Popover (+ PopoverMenuItem, PopoverSubmenu, PopoverDivider), Select, Slider, ParticipantTileFace | `packages/ui/src/components` | Reka: ContextMenu, Dialog, Popover, Select, Slider |
-| Switch, SegmentControl, Badge, AccountBadge, HotkeyRecorder, ToastStack, Ellipsis, MascotIcon, AvatarCropDialog | `apps/web/src/shared/ui` | Reka: Switch, ToggleGroup |
-| Админка | `apps/admin` | React, свои стили |
+| Приложение | Состояние |
+| --- | --- |
+| `apps/web` | На компонентах кита и токенах сетки |
+| `packages/call` (плитки, док, сцена экрана, настройки устройств) | На ките; громкость стрима — `Slider`, движок читает реактивное значение |
+| `apps/meet` | На ките, док и сцена — общие из `packages/call` |
+| `apps/widget` | На ките; стили ограничены корнем `#widget`, загрузчик и протокол фрейма не менялись |
+| `apps/site` | Свои страницы на токенах из `packages/ui` |
+| `apps/admin` | Пока React со своими стилями и своими переменными в `src/styles/app.css`; переписывается на Vue и кит |
 
-Остальное — ручные реализации в `apps/web` и `packages/call`, список «что заменяет» — у каждого компонента в макете UI-кита.
+В `apps/web/src/shared/ui` остаются обёртки и вещи, которых нет в ките: `Select` (кит + эмодзи в пунктах), `AccountBadge` (значок подтверждённого аккаунта), `AvatarCropDialog`, `Ellipsis`, `MascotIcon`, иконки.
 
-План, по одной ветке `feature/*` и PR в `develop` на шаг:
+Нативными оставлены намеренно: поля файла и цвета (системные диалоги), `<select>` языка, уведомлений и положения виджета (системное меню), редакторы сообщений на `contenteditable` (эмодзи и каретка), виртуализированная сетка эмодзи и полоска тонов, кнопки-плитки и превью профиля на аватарах. Новые такие места согласуйте с этим списком.
 
-1. Токены сетки, Storybook в `packages/ui`, этот документ.
-2. Компоненты кита в `packages/ui` группами (действия, ввод, оверлеи, статусы, люди и структура), у каждого — story и тест. Компоненты из `apps/web/src/shared/ui` переезжают в `packages/ui`.
-3. Перевод `apps/web` по зонам (диалоги и вход, настройки, лобби, комната и чат) и `packages/call` (док, плитки) на компоненты кита и токены сетки; старые токены удаляются, когда на них не остаётся ссылок.
-4. `apps/meet` и `apps/widget`.
-5. `apps/admin` переписывается на Vue и кит.
+### Storybook
+
+`npm run storybook` (порт 6006), сборка — `npm --workspace @voice-room/ui run build-storybook` в `packages/ui/storybook-static`. Переключатель темы в тулбаре ставит `theme--graphite-*` на `<html>`.
+
+- `Foundations` — цвета, аватары, типографика, сетка, отступы, радиусы, иконки; читает настоящие токены.
+- `Components/<группа>/<Компонент>` — Actions, Inputs, Navigation, Overlays, Feedback, People, Structure, Call.
+- `Apps/Meet/*`, `Apps/Widget/*` — экраны входа и звонка на фиктивных данных.
+
+Stories компонентов лежат рядом с компонентом; stories звонка — в `packages/call/src/views/stories`, stories meet — в `apps/meet/src/stories` (так `packages/ui` не зависит от `call` и приложений).
