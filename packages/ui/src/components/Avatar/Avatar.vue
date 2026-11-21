@@ -22,6 +22,8 @@ const props = withDefaults(defineProps<AvatarProps>(), {
 
 const presence = computed(() => (props.dnd ? 'dnd' : props.afk ? 'afk' : props.online ? 'online' : 'offline'));
 const palette = computed(() => getAvatarColor(props.colorKey));
+
+defineSlots<{ fallback?(): unknown }>();
 </script>
 
 <template>
@@ -38,7 +40,9 @@ const palette = computed(() => getAvatarColor(props.colorKey));
     aria-hidden="true"
   >
     <AvatarImage v-if="src" :src="src" alt="" />
-    <AvatarFallback>{{ avatarInitial(name) }}</AvatarFallback>
+    <AvatarFallback
+      ><slot name="fallback">{{ avatarInitial(name) }}</slot></AvatarFallback
+    >
     <span
       v-if="showDot"
       :class="[

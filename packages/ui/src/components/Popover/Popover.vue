@@ -33,7 +33,7 @@ function toggle(): void {
 }
 
 function focusTrigger(): void {
-  const triggerEl = root.value?.firstElementChild;
+  const triggerEl = root.value?.querySelector(`[aria-controls="${panelId}"]`) ?? root.value?.firstElementChild;
   if (triggerEl instanceof HTMLElement) {
     queueMicrotask(() => triggerEl.focus());
   }

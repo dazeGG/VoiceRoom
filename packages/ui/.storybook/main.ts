@@ -5,7 +5,7 @@ import { mergeConfig } from 'vite';
 
 const config: StorybookConfig = {
   framework: '@storybook/vue3-vite',
-  stories: ['../src/**/*.stories.ts', '../src/**/*.mdx'],
+  stories: ['../src/**/*.stories.ts', '../src/**/*.mdx', '../../call/src/views/**/*.stories.ts'],
   addons: ['@storybook/addon-docs', '@storybook/addon-a11y'],
   core: { disableTelemetry: true },
   viteFinal(config) {

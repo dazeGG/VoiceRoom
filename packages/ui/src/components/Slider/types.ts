@@ -2,6 +2,7 @@ export type SliderProps = {
   min?: number;
   max?: number;
   step?: number;
+  orientation?: 'horizontal' | 'vertical';
   defaultValue?: number;
   snap?: boolean;
   snapThreshold?: number;

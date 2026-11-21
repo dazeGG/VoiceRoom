@@ -99,3 +99,29 @@ select {
   padding: 0 var(--space-16) var(--space-16);
   margin-top: calc(-1 * var(--size-28));
 }
+
+.story-participant-tile {
+  width: min(calc(10 * var(--size-48)), 100vw - var(--space-64));
+}
+
+.story-participant-tile--small {
+  width: min(calc(5 * var(--size-48)), 100vw - var(--space-64));
+}
+
+.story-participant-tile--large {
+  width: min(calc(18 * var(--size-48)), 100vw - var(--space-64));
+}
+
+.story-participant-tile__sizes {
+  display: grid;
+  gap: var(--space-16);
+}
+
+.story-room-dock {
+  position: relative;
+  display: grid;
+  width: min(calc(12 * var(--size-48)), 100vw - var(--space-64));
+  height: calc(10 * var(--size-48));
+  border-radius: var(--radius-20);
+  background: var(--vr-surface);
+}

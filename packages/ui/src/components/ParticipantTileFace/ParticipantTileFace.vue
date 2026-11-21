@@ -1,8 +1,7 @@
 <script setup lang="ts">
 import { HeadphoneOff, MicOff } from '@lucide/vue';
-import { ref } from 'vue';
 import { t } from '../../i18n';
-import { iconSm } from '../../icon-defaults';
+import Avatar from '../Avatar/Avatar.vue';
 
 defineProps<{
   name: string;
@@ -17,22 +16,19 @@ defineSlots<{
   badge?(): unknown;
   default?(): unknown;
 }>();
-
-// A changed URL gets its own load attempt.
-const failedAvatarUrl = ref<string>();
 </script>
 
 <template>
   <div class="participant__ring" aria-hidden="true">
-    <span class="participant__avatar">
-      <img
-        v-if="avatarSrc && failedAvatarUrl !== avatarSrc"
-        :src="avatarSrc"
-        alt=""
-        @error="failedAvatarUrl = avatarSrc"
-      />
-      <template v-else>{{ initials }}</template>
-    </span>
+    <Avatar
+      class="participant__avatar"
+      :name="name"
+      :src="avatarSrc"
+      background="var(--participant-pastel)"
+      foreground="var(--participant-avatar-fg)"
+    >
+      <template #fallback>{{ initials }}</template>
+    </Avatar>
   </div>
   <div class="participant__copy">
     <h2 class="participant__heading">
@@ -42,10 +38,10 @@ const failedAvatarUrl = ref<string>();
       <slot name="badge" />
       <span v-if="local" class="participant__you">{{ t('вы') }}</span>
       <span class="participant__muted-icon" :aria-label="t('Микрофон выключен')" :title="t('Микрофон выключен')">
-        <MicOff v-bind="iconSm" />
+        <MicOff aria-hidden="true" />
       </span>
       <span class="participant__deafened-icon" :aria-label="t('Звук выключен')" :title="t('Звук выключен')">
-        <HeadphoneOff v-bind="iconSm" />
+        <HeadphoneOff aria-hidden="true" />
       </span>
     </h2>
     <p v-if="statusLabel" class="participant__status">{{ statusLabel }}</p>

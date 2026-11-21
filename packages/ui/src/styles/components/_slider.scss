@@ -1,6 +1,7 @@
 .vr-slider {
   --slider-thumb: var(--size-16);
   --slider-track-h: var(--space-8);
+  --slider-position: calc(var(--slider-thumb) / 2 + (100% - var(--slider-thumb)) * var(--slider-fraction));
   display: grid;
   min-width: 0;
   touch-action: none;
@@ -26,7 +27,7 @@
 .vr-slider__fill {
   position: absolute;
   inset: 0 auto 0 0;
-  width: calc(var(--slider-thumb) / 2 + (100% - var(--slider-thumb)) * var(--slider-fraction));
+  width: var(--slider-position);
   border-radius: inherit;
   background: var(--slider-fill, var(--vr-accent));
 }
@@ -34,7 +35,7 @@
 .vr-slider__thumb {
   position: absolute;
   top: 50%;
-  left: calc(var(--slider-thumb) / 2 + (100% - var(--slider-thumb)) * var(--slider-fraction));
+  left: var(--slider-position);
   width: var(--slider-thumb);
   height: var(--slider-thumb);
   border-radius: var(--radius-pill);
@@ -50,6 +51,35 @@
   border-radius: var(--radius-pill);
   background: transparent;
   outline: none;
+}
+
+.vr-slider--vertical {
+  .vr-slider__control {
+    justify-items: center;
+    width: var(--size-32);
+    height: 100%;
+  }
+
+  .vr-slider__track {
+    width: var(--slider-track-h);
+    height: 100%;
+  }
+
+  .vr-slider__fill {
+    inset: auto 0 0;
+    width: 100%;
+    height: var(--slider-position);
+  }
+
+  .vr-slider__thumb {
+    inset: auto auto var(--slider-position) 50%;
+    transform: translate(-50%, 50%);
+  }
+
+  .vr-slider__input {
+    width: var(--size-32);
+    height: var(--slider-thumb);
+  }
 }
 
 .vr-slider__control:focus-within .vr-slider__track {
