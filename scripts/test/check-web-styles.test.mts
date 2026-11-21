@@ -20,8 +20,7 @@ function tree(t: TestContext, files: Record<string, string>, sourceDir = 'apps/w
 test('a clean tree passes', (t) => {
   const { repo } = tree(t, {
     'styles/ui/_dialog.scss': ".dialog__tab[aria-selected='true'] { color: var(--vr-text); }\n",
-    'App.vue': '<script setup lang="ts">\nconst x = 1;\n</script>\n\n<template><p>{{ x }}</p></template>\n',
-    'shared/ui/Dialog.vue': '<script setup lang="ts">\nimport { DialogRoot } from \'reka-ui\';\n</script>\n'
+    'App.vue': '<script setup lang="ts">\nconst x = 1;\n</script>\n\n<template><p>{{ x }}</p></template>\n'
   });
   assert.deepEqual(checkWebStyles(repo), []);
 });
@@ -104,20 +103,20 @@ test('an allowlist entry whose file has no <style> block is reported', (t) => {
   assert.match(problems[0] ?? '', /allowlist entry without a <style> block/);
 });
 
-test('a reka-ui import fails outside shared/ui and passes inside it', (t) => {
+test('a reka-ui import fails anywhere in an app, shared/ui included', (t) => {
   const { repo } = tree(t, {
     'features/A.vue': '<script setup lang="ts">\nimport { DialogRoot } from \'reka-ui\';\n</script>\n',
     'features/b.ts': "export { SelectRoot } from 'reka-ui/select';\n",
     'features/c.ts': "const load = () => import('reka-ui');\n",
-    'features/d.ts': "// import { Dialog } from 'reka-ui' is only for shared/ui\nexport const d = 1;\n",
-    'shared/ui/Dialog.vue': '<script setup lang="ts">\nimport { DialogRoot } from \'reka-ui\';\n</script>\n',
-    'shared/ui/select.ts': "import { SelectRoot } from 'reka-ui/select';\nexport { SelectRoot };\n"
+    'features/d.ts': "// import { Dialog } from 'reka-ui' is only for the kit\nexport const d = 1;\n",
+    'shared/ui/Dialog.vue': '<script setup lang="ts">\nimport { DialogRoot } from \'reka-ui\';\n</script>\n'
   });
   const problems = checkWebStyles(repo).sort();
-  assert.equal(problems.length, 3);
+  assert.equal(problems.length, 4);
   assert.match(problems[0] ?? '', /^apps\/web\/src\/features\/A\.vue:2 reka-ui import/);
   assert.match(problems[1] ?? '', /^apps\/web\/src\/features\/b\.ts:1 reka-ui import/);
   assert.match(problems[2] ?? '', /^apps\/web\/src\/features\/c\.ts:1 reka-ui import/);
+  assert.match(problems[3] ?? '', /^apps\/web\/src\/shared\/ui\/Dialog\.vue:2 reka-ui import/);
 });
 
 test('portable components may wrap Reka and follow the shared style conventions', (t) => {
@@ -164,6 +163,6 @@ test('call styles use portable Sass modules and call views use portable UI wrapp
   );
   assert.deepEqual(checkWebStyles(repo).sort(), [
     'packages/call/src/styles/_call.scss:2 portable call cannot load styles from applications',
-    'packages/call/src/views/CallDock.vue:1 reka-ui import outside the primitive directories; use a UI wrapper'
+    'packages/call/src/views/CallDock.vue:1 reka-ui import outside the kit; use or extend a packages/ui component'
   ]);
 });
