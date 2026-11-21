@@ -7,18 +7,11 @@
 //   .reaction-picker-head               -> .emoji-picker__head
 //   .reaction-picker-search-row         -> .emoji-picker__search-row
 //   .reaction-picker-search             -> .emoji-picker__search
-//   .reaction-picker-search input       -> .emoji-picker__input
-//   .sr-only (search label)             -> .emoji-picker__label
 //   .reaction-tone                      -> .emoji-picker__tone
-//   .reaction-tone-trigger              -> .emoji-picker__tone-trigger
-//   .reaction-tone-menu                 -> .emoji-picker__tone-menu
-//   .reaction-tone-option               -> .emoji-picker__tone-option
-//   .reaction-tone-option.is-active     -> .emoji-picker__tone-option[aria-checked='true']
 //   .reaction-tone-strip                -> .emoji-picker__tone-strip
 //   .reaction-tone-strip button         -> .emoji-picker__tone-strip-option
 //   .reaction-picker-anchors            -> .emoji-picker__anchors
 //   .reaction-picker-anchor             -> .emoji-picker__anchor
-//   .reaction-picker-anchor.is-active   -> .emoji-picker__anchor--active
 //   .reaction-picker-body               -> .emoji-picker__body
 //   .reaction-picker-spacer             -> .emoji-picker__spacer
 //   .reaction-picker-section            -> .emoji-picker__section
@@ -47,14 +40,14 @@
   display: flex;
   flex: none;
   flex-direction: column;
-  gap: 12px;
-  padding: 14px 14px 10px;
+  gap: var(--space-12);
+  padding: var(--space-12) var(--space-12) var(--space-8);
 }
 
 .emoji-picker__search-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-8);
   min-width: 0;
 }
 
@@ -63,87 +56,23 @@
   min-width: 0;
 }
 
-.emoji-picker__label {
+.emoji-picker__search .ui-field__label {
   @include visually-hidden;
 }
 
-.emoji-picker__input {
-  width: 100%;
-  height: 44px;
-  box-sizing: border-box;
-  padding: 0 14px;
-  border: 1px solid var(--vr-line);
-  border-radius: 15px;
-  background: color-mix(in oklch, var(--vr-surface-3), transparent 45%);
-  color: var(--vr-text);
-  font-family: var(--font-ui);
-  font-size: 0.90625rem;
-
-  &::placeholder {
-    color: var(--vr-text-2);
-  }
-
-  &:focus {
-    border-color: color-mix(in oklch, var(--vr-accent), transparent 40%);
-    outline: none;
-  }
-}
-
-.emoji-picker__tone {
-  position: relative;
-  flex: none;
-}
-
-.emoji-picker__tone-trigger {
-  display: grid;
-  width: 44px;
-  height: 44px;
-  place-items: center;
-  border: 1px solid var(--vr-line);
-  border-radius: 15px;
-  background: color-mix(in oklch, var(--vr-surface-3), transparent 45%);
-  cursor: pointer;
-
-  &:hover,
-  &:focus-visible {
-    border-color: color-mix(in oklch, var(--vr-accent), transparent 40%);
-    outline: none;
-  }
-}
-
-.emoji-picker__tone-menu {
-  position: absolute;
-  z-index: 2;
-  top: calc(100% + 6px);
-  inset-inline-end: 0;
-  display: flex;
-  gap: 2px;
-  border: 1px solid var(--vr-line);
-  border-radius: 13px;
-  padding: 4px;
-  background: var(--vr-bg);
-  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.42);
-}
-
-.emoji-picker__tone-option,
 .emoji-picker__tone-strip-option {
   display: grid;
-  width: 34px;
-  height: 34px;
+  width: var(--size-32);
+  height: var(--size-32);
   place-items: center;
   border: 0;
-  border-radius: 10px;
+  border-radius: var(--radius-8);
   background: transparent;
   cursor: pointer;
-}
 
-.emoji-picker__tone-option:hover,
-.emoji-picker__tone-option:focus-visible,
-.emoji-picker__tone-option[aria-checked='true'],
-.emoji-picker__tone-strip-option:hover,
-.emoji-picker__tone-strip-option:focus-visible {
-  background: color-mix(in oklch, var(--vr-accent), transparent 86%);
-  outline: none;
+  &:hover {
+    background: var(--vr-accent-soft);
+  }
 }
 
 // One line, always: wrapping to a second row cost the grid a whole row of
@@ -151,31 +80,19 @@
 .emoji-picker__anchors {
   display: flex;
   flex-wrap: nowrap;
-  gap: 4px;
+  gap: var(--space-4);
 }
 
-.emoji-picker__anchor {
-  display: grid;
-  width: 36px;
-  height: 36px;
+.emoji-picker__anchors .emoji-picker__anchor {
   flex: 1 1 0;
   min-width: 0;
-  place-items: center;
-  border: 0;
-  border-radius: 13px;
-  background: color-mix(in oklch, var(--vr-surface-3), transparent 55%);
-  font-size: 1.125rem;
+  font-size: 18px;
   line-height: 1;
-  cursor: pointer;
-  transition: background 120ms ease;
 
-  &:hover {
-    background: color-mix(in oklch, var(--vr-accent), transparent 86%);
+  &[aria-current='true'] {
+    background: var(--vr-accent-soft);
+    color: var(--vr-accent);
   }
-}
-
-.emoji-picker__anchor--active {
-  background: color-mix(in oklch, var(--vr-accent), transparent 86%);
 }
 
 .emoji-picker__body {
@@ -183,7 +100,7 @@
   max-height: min(368px, 58vh);
   min-height: 0;
   flex: 1 1 auto;
-  padding: 2px 14px 14px;
+  padding: var(--space-2) var(--space-12) var(--space-12);
   overflow-y: auto;
 
   &:focus {
@@ -201,11 +118,11 @@
   position: absolute;
   inset-inline: 0;
   display: flex;
-  height: 28px;
+  height: var(--size-28);
   align-items: center;
   color: var(--vr-text-muted);
   font-family: var(--font-mono);
-  font-size: 0.65625rem;
+  font-size: 11px;
   letter-spacing: 0.14em;
   text-transform: uppercase;
 }
@@ -215,23 +132,22 @@
   inset-inline: 0;
   display: grid;
   grid-template-columns: repeat(8, 1fr);
-  gap: 4px;
+  gap: var(--space-4);
 }
 
 .emoji-picker__cell {
   position: relative;
   display: grid;
-  height: 44px;
+  height: var(--size-44);
   place-items: center;
   border: 0;
-  border-radius: 13px;
+  border-radius: var(--radius-12);
   background: transparent;
   cursor: pointer;
 
   &:hover,
   &:focus-visible {
-    background: color-mix(in oklch, var(--vr-accent), transparent 86%);
-    outline: none;
+    background: var(--vr-accent-soft);
   }
 }
 
@@ -248,7 +164,7 @@
 }
 
 .emoji-picker__empty {
-  margin: 8px 0;
+  margin: var(--space-8) 0;
   color: var(--vr-text-muted);
   font-size: 0.8125rem;
   text-align: center;
@@ -262,12 +178,12 @@
   display: flex;
   width: max-content;
   align-items: center;
-  gap: 2px;
+  gap: var(--space-2);
   border: 1px solid var(--vr-line);
-  border-radius: 15px;
+  border-radius: var(--radius-16);
   // Padding, gap and swatch size are mirrored by the TONE_* constants, which
   // clamp the strip inside the panel before it can be measured.
-  padding: 5px;
+  padding: var(--space-4);
   background: var(--vr-bg);
   box-shadow: 0 14px 30px rgba(0, 0, 0, 0.46);
   // Overlaps its tile by a couple of pixels: a gap here is a dead zone the

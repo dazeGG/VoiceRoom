@@ -87,9 +87,8 @@
 }
 
 .vr-slider__control:focus-within .vr-slider__thumb {
-  box-shadow:
-    0 0 0 var(--space-2) var(--vr-accent-line),
-    var(--vr-shadow-toast);
+  outline: var(--space-2) solid var(--vr-accent);
+  outline-offset: var(--space-2);
 }
 
 .vr-slider[aria-disabled='true'] {

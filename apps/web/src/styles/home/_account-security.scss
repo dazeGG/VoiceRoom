@@ -2,16 +2,16 @@
 
 .account-security {
   display: grid;
-  gap: 22px;
+  gap: var(--space-20);
 }
 
 .account-security__icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 10px;
+  width: var(--size-32);
+  height: var(--size-32);
+  border-radius: var(--radius-10);
   background: var(--vr-surface-3);
   color: var(--vr-text-2);
 }
@@ -21,7 +21,7 @@
 }
 
 .account-security__action {
-  padding: 8px 14px;
+  padding: var(--space-8) var(--space-12);
   font-size: 0.8125rem;
 }
 
@@ -43,8 +43,8 @@
 @media (prefers-reduced-motion: reduce) {
   .account-security__action--highlight {
     animation: none;
-    outline: 2px solid var(--vr-accent);
-    outline-offset: 3px;
+    outline: var(--space-2) solid var(--vr-accent);
+    outline-offset: var(--space-2);
   }
 }
 
@@ -52,8 +52,8 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  margin-top: 12px;
+  gap: var(--space-12);
+  margin-top: var(--space-12);
 }
 
 .account-security__password-foot .settings__gate-hint {

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Badge, EmptyState, ListItem } from '@voice-room/ui/components';
+import { Tooltip, Button, IconButton, Badge, EmptyState, ListItem } from '@voice-room/ui/components';
 // The panel you reach from the bell. It answers two questions — what happened
 // and how long ago — and offers exactly one bulk action. "К первому
 // непрочитанному" is gone: every unread row is already one click away, and
@@ -71,25 +71,15 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onWindowKeydown));
         <span v-if="inbox.unreadCount" class="notification-inbox__count">{{ inbox.unreadCount }}</span>
       </h2>
       <div class="notification-inbox__tools">
-        <button
-          v-if="inbox.unreadCount"
-          class="notification-inbox__read-all"
-          type="button"
-          :title="t('Отметить все прочитанными')"
-          @click="void inbox.markAllRead()"
+        <Tooltip :text="t('Отметить все прочитанными')"
+          ><Button v-if="inbox.unreadCount" variant="plain" size="sm" @click="void inbox.markAllRead()">
+            <template #icon><Check v-bind="iconSm" aria-hidden="true" /></template>
+            <span>{{ t('Прочитать все') }}</span>
+          </Button></Tooltip
         >
-          <Check v-bind="iconSm" aria-hidden="true" />
-          <span>{{ t('Прочитать все') }}</span>
-        </button>
-        <button
-          v-if="onClose"
-          class="notification-inbox__dismiss"
-          type="button"
-          :aria-label="t('Закрыть')"
-          @click="onClose"
-        >
-          <X v-bind="iconSm" aria-hidden="true" />
-        </button>
+        <IconButton v-if="onClose" :label="t('Закрыть')" :size="32" @click="onClose">
+          <X aria-hidden="true" />
+        </IconButton>
       </div>
     </header>
 

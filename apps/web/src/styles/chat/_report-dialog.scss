@@ -4,14 +4,12 @@
 //   .report-form                 -> .report-dialog
 //   .report-reasons              -> .report-dialog__reasons
 //   .report-label                -> .report-dialog__label
-//   .report-soft                 -> .report-dialog__soft
-//   .report-comment              -> .report-dialog__comment
 //   .report-note                 -> .report-dialog__note
 //   .report-error                -> .report-dialog__error
 
 .report-dialog {
   display: grid;
-  gap: 16px;
+  gap: var(--space-16);
 }
 
 .report-dialog__reasons {
@@ -22,34 +20,12 @@
 
 .report-dialog__label {
   display: block;
-  margin-bottom: 8px;
+  margin-bottom: var(--space-8);
   padding: 0;
   color: var(--vr-text-2);
   font-family: var(--font-ui);
   font-size: 0.8125rem;
   font-weight: 500;
-}
-
-.report-dialog__soft {
-  color: var(--vr-text-muted);
-  font-weight: 400;
-}
-
-.report-dialog__comment {
-  width: 100%;
-  padding: 10px 14px;
-  border: 1px solid var(--vr-line-strong);
-  border-radius: 12px;
-  background: var(--vr-surface-2);
-  color: var(--vr-text);
-  font: inherit;
-  font-size: 0.875rem;
-  resize: vertical;
-  outline: none;
-
-  &:focus {
-    border-color: var(--vr-accent-line);
-  }
 }
 
 .report-dialog__note,

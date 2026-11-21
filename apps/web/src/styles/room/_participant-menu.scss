@@ -13,12 +13,12 @@
   display: flex;
   width: min(288px, calc(100vw - 28px));
   flex-direction: column;
-  gap: 2px;
+  gap: var(--space-2);
 }
 
 .participant-menu__note {
   margin: 0;
-  padding: 4px 12px 10px;
+  padding: var(--space-4) var(--space-12) var(--space-8);
   color: var(--vr-text-muted);
   font-size: 0.8125rem;
   line-height: 1.45;
@@ -27,21 +27,21 @@
 .participant-menu__volume {
   display: flex;
   flex-direction: column;
-  gap: 9px;
-  padding: 10px 12px 12px;
+  gap: var(--space-8);
+  padding: var(--space-8) var(--space-12) var(--space-12);
 }
 
 .participant-menu__volume-head {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--space-8);
 }
 
 .participant-menu__volume-label {
   display: inline-flex;
   flex: 1;
   align-items: center;
-  gap: 10px;
+  gap: var(--space-8);
   color: var(--vr-text);
   font-size: 0.875rem;
   font-weight: 600;
@@ -50,5 +50,5 @@
 .participant-menu__volume-value {
   color: var(--vr-text-muted);
   font-family: var(--font-mono);
-  font-size: 0.71875rem;
+  font-size: 12px;
 }

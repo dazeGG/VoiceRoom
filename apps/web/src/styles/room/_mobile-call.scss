@@ -94,11 +94,11 @@
   z-index: 5;
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  height: 28px;
-  padding: 0 11px;
+  gap: var(--space-8);
+  height: var(--size-28);
+  padding: 0 var(--space-12);
   border: 0;
-  border-radius: 9px;
+  border-radius: var(--radius-8);
   background: var(--vr-scrim);
   color: var(--vr-danger);
   -webkit-backdrop-filter: blur(10px);

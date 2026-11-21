@@ -21,9 +21,9 @@
   display: flex;
   min-width: 0;
   align-items: flex-start;
-  width: calc(100% + 42px);
-  margin: 2px 0 0 -42px;
-  padding: 3px 38px 3px 42px;
+  width: calc(100% + var(--space-40));
+  margin: var(--space-2) 0 0 calc(-1 * var(--space-40));
+  padding: var(--space-2) var(--space-40) var(--space-2) var(--space-40);
   color: var(--vr-text);
   font-size: 0.875rem;
   line-height: 1.45;
@@ -37,7 +37,7 @@
     position: absolute;
     z-index: -1;
     inset: -3px -20px;
-    border-radius: 12px;
+    border-radius: var(--radius-12);
     background: transparent;
     transition: background 120ms ease;
   }
@@ -57,7 +57,7 @@
 
 .message-bubble--first::before {
   top: -25px;
-  left: -42px;
+  left: calc(-1 * var(--space-40));
 }
 
 // A message that names you stays lit, so it is findable by scrolling back. The
@@ -94,7 +94,7 @@
   display: grid;
   min-width: 0;
   max-width: min(720px, 100%);
-  gap: 6px;
+  gap: var(--space-6);
 
   .attachment-mosaic {
     width: min(560px, 100%);

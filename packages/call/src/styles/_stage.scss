@@ -3,9 +3,9 @@
   display: grid;
   min-height: 100%;
   grid-template-rows: minmax(0, 1fr);
-  gap: var(--space-md);
+  gap: var(--space-16);
   overflow: hidden;
-  padding: 20px 20px 96px;
+  padding: var(--space-20) var(--space-20) calc(var(--space-64) + var(--space-32));
   background: transparent;
   // The host panel can reduce the stage width without changing the window width.
   container-type: inline-size;

@@ -63,7 +63,12 @@ button {
 
 button:disabled {
   cursor: not-allowed;
-  opacity: 0.56;
+  opacity: 0.55;
+}
+
+:where(button, a[href], summary, [role='gridcell']):focus-visible {
+  outline: var(--space-2) solid var(--vr-accent);
+  outline-offset: var(--space-2);
 }
 
 .lucide {
@@ -82,8 +87,8 @@ button:disabled {
 }
 
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: var(--space-8);
+  height: var(--space-8);
 }
 
 ::-webkit-scrollbar-track,
@@ -93,7 +98,7 @@ button:disabled {
 
 ::-webkit-scrollbar-thumb {
   border: 2px solid transparent;
-  border-radius: 99px;
+  border-radius: var(--radius-pill);
   background: var(--vr-accent);
   background-clip: padding-box;
 }
@@ -106,13 +111,13 @@ button:disabled {
   display: grid;
   min-height: 100dvh;
   grid-template-rows: auto 1fr;
-  padding: var(--space-lg);
-  gap: var(--space-lg);
+  padding: var(--space-24);
+  gap: var(--space-24);
 }
 
 // Svelte: body:not([data-screen='room'])
 body:not(.screen--room) .app-shell {
-  padding-inline: 40px;
+  padding-inline: var(--space-40);
 }
 
 body:not(.screen--room) .topbar {
@@ -126,9 +131,9 @@ body:not(.screen--room) .topbar {
   grid-template-columns: minmax(0, 1fr) minmax(340px, 452px);
   align-items: start;
   align-content: start;
-  gap: clamp(var(--space-lg), 4vw, 56px);
+  gap: clamp(var(--space-24), 4vw, var(--space-48));
   margin-inline: auto;
-  padding-top: clamp(24px, 6vh, 72px);
+  padding-top: clamp(var(--space-24), 6vh, 72px);
 }
 
 .start-layout__copy {
@@ -148,16 +153,16 @@ body:not(.screen--room) .topbar {
 
 @include below($bp-narrow) {
   .app-shell {
-    padding: var(--space-md);
+    padding: var(--space-16);
   }
 
   body:not(.screen--room) .app-shell {
-    padding-inline: 20px;
+    padding-inline: var(--space-20);
   }
 
   .start-layout {
     grid-template-columns: 1fr;
-    gap: var(--space-xl);
+    gap: var(--space-32);
   }
 
   .start-layout__copy h1 {

@@ -4,7 +4,7 @@ import { useLocalizedText, currentErrorMessage } from '@/shared/i18n/localized-t
 import { t } from '@/shared/i18n';
 import { Copy, Download } from '@lucide/vue';
 import { ref, useId, watch } from 'vue';
-import { Checkbox } from '@voice-room/ui/components';
+import { Checkbox, Field, TextField } from '@voice-room/ui/components';
 import { generateRecoveryCodes, type RecoveryCodesStatus } from '@/api/auth';
 import { Button, Dialog } from '@/shared/ui';
 import { iconSm } from '@/shared/ui/icons';
@@ -115,17 +115,16 @@ function downloadCodes(): void {
       <p v-if="replacing" class="recovery-dialog__warning">
         {{ t('Новые коды заменят старые — старые сразу перестанут работать.') }}
       </p>
-      <div>
-        <label class="settings__field-label" for="recoveryPasswordInput">{{ t('Текущий пароль') }}</label>
-        <input
-          id="recoveryPasswordInput"
+      <Field id="recoveryPasswordInput" :label="t('Текущий пароль')">
+        <TextField
           v-model="password"
-          class="settings__input"
+          size="lg"
+          name="current-password"
           type="password"
           autocomplete="current-password"
           placeholder="••••••••"
         />
-      </div>
+      </Field>
       <p v-if="error" class="recovery-dialog__error" role="alert">{{ error }}</p>
     </form>
     <div v-else class="recovery-dialog">

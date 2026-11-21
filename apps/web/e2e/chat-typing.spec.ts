@@ -77,7 +77,7 @@ test('the room chat shows who is typing from the call to someone reading it in t
     await enterRoom(caller, roomId);
     const rail = caller.locator('.room-chat-rail').first();
     if (await rail.evaluate((element) => element instanceof HTMLElement && element.hidden)) {
-      await caller.locator('button[title="Чат"]').first().click();
+      await caller.getByRole('button', { name: 'Чат', exact: true }).first().click();
     }
     const composer = caller.locator('.room-chat-rail').getByPlaceholder('Написать в комнату…');
     await expect(composer).toBeVisible({ timeout: 20_000 });

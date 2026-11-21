@@ -13,9 +13,9 @@
   display: grid;
   place-content: center;
   justify-items: center;
-  gap: 8px;
+  gap: var(--space-8);
   border: 2px dashed color-mix(in oklch, var(--vr-accent) 72%, white);
-  border-radius: 18px;
+  border-radius: var(--radius-16);
   color: var(--vr-text);
   background: color-mix(in oklch, var(--vr-bg), transparent 8%);
   backdrop-filter: blur(12px);
@@ -33,10 +33,10 @@
 
 .attachment-drop-overlay__icon {
   display: grid;
-  width: 54px;
-  height: 54px;
+  width: var(--size-56);
+  height: var(--size-56);
   place-items: center;
-  border-radius: 16px;
+  border-radius: var(--radius-16);
   color: var(--vr-bg);
   background: var(--vr-accent);
 }

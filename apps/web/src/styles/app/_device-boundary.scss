@@ -12,7 +12,7 @@
   min-height: 100dvh;
   display: grid;
   place-items: center;
-  padding: 24px;
+  padding: var(--space-24);
   color: var(--vr-text);
   background: var(--vr-bg);
   font-family: var(--font-ui);
@@ -21,14 +21,14 @@
 .device-boundary__card {
   box-sizing: border-box;
   width: min(100%, 520px);
-  padding: clamp(24px, 7vw, 48px);
+  padding: clamp(var(--space-24), 7vw, var(--space-48));
   border: 1px solid var(--vr-line-strong);
-  border-radius: 24px;
+  border-radius: var(--radius-24);
   background: var(--vr-surface);
 }
 
 .device-boundary__title {
-  margin: 8px 0 16px;
+  margin: var(--space-8) 0 var(--space-16);
   font-size: clamp(1.75rem, 8vw, 3rem);
   line-height: 1.05;
 }

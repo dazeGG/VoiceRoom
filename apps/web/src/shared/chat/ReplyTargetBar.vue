@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { IconButton } from '@voice-room/ui/components';
 // The composer row that shows which message the draft answers. It renders
 // inside the bordered composer field, directly above the text row and on the
 // same footing as pending image attachments, so the draft reads as one input
@@ -29,14 +30,8 @@ const emit = defineEmits<{ cancel: [] }>();
       :interactive="Boolean(props.onJump) && !target.deleted"
       @jump="props.onJump?.($event)"
     />
-    <button
-      class="reply-target__cancel"
-      type="button"
-      :aria-label="t('Отменить ответ')"
-      :title="t('Отменить ответ')"
-      @click="emit('cancel')"
-    >
-      <X :size="16" aria-hidden="true" />
-    </button>
+    <IconButton :label="t('Отменить ответ')" :size="28" @click="emit('cancel')">
+      <X aria-hidden="true" />
+    </IconButton>
   </div>
 </template>

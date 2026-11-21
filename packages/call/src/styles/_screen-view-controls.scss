@@ -20,8 +20,8 @@
   z-index: 2;
   display: flex;
   align-items: flex-end;
-  gap: var(--space-xs);
-  padding: var(--space-xs);
+  gap: var(--space-8);
+  padding: var(--space-8);
   background: transparent;
   opacity: 1;
   pointer-events: auto;
@@ -34,11 +34,11 @@
 
 .screen-view-controls__button {
   display: grid;
-  width: 42px;
-  height: 42px;
+  width: var(--size-40);
+  height: var(--size-40);
   place-items: center;
   border: 1px solid var(--vr-line-strong);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-8);
   padding: 0;
   background: color-mix(in srgb, var(--vr-bg) 88%, transparent);
   color: var(--vr-text);
@@ -55,8 +55,8 @@
   }
 
   svg {
-    width: 21px;
-    height: 21px;
+    width: var(--icon-20);
+    height: var(--icon-20);
   }
 }
 

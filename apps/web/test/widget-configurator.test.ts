@@ -161,10 +161,10 @@ test('copy action writes the current snippet and a settings change clears stale 
   const copy = screen.getByRole('button', { name: 'Скопировать код' });
   expect(copy.textContent?.trim()).toBe('');
   await fireEvent.click(copy);
-  await waitFor(() => expect(copy.getAttribute('title')).toBe('Скопировано'));
+  expect(await screen.findByText('Код скопирован.')).toBeTruthy();
   expect(writeText).toHaveBeenCalledWith(original);
   await fireEvent.keyDown(slider('Скругление'), { key: 'End' });
-  expect(copy.getAttribute('title')).toBe('Скопировать код');
+  expect(screen.queryByText('Код скопирован.')).toBeNull();
   await fireEvent.click(copy);
   await waitFor(() => expect(writeText).toHaveBeenLastCalledWith(snippetField().value));
   expect(snippetField().value).not.toBe(original);

@@ -20,7 +20,7 @@
   // Optional bar (auto) + the tile grid which fills the remaining height.
   grid-template-rows: auto minmax(0, 1fr);
   min-height: 0;
-  gap: var(--space-sm);
+  gap: var(--space-12);
   container-type: size;
 }
 
@@ -40,18 +40,18 @@ body.stage-summary--hidden {
   min-width: 0;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-sm);
+  gap: var(--space-12);
 }
 
 .stage-strip__title {
   display: grid;
   min-width: 0;
-  gap: 2px;
+  gap: var(--space-2);
 }
 
 .stage-strip__kicker {
   color: var(--vr-text-2);
-  font-size: 0.72rem;
+  font-size: 12px;
   font-weight: 800;
   letter-spacing: 0.06em;
   line-height: 1;
@@ -61,7 +61,7 @@ body.stage-summary--hidden {
 .stage-strip__summary {
   overflow: hidden;
   color: var(--vr-text);
-  font-size: 0.92rem;
+  font-size: 15px;
   font-weight: 800;
   line-height: 1.1;
   text-overflow: ellipsis;
@@ -70,12 +70,12 @@ body.stage-summary--hidden {
 
 .stage-strip__toggle {
   display: grid;
-  width: 34px;
-  height: 34px;
+  width: var(--size-32);
+  height: var(--size-32);
   flex: 0 0 auto;
   place-items: center;
   border: 1px solid var(--vr-line-strong);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-8);
   padding: 0;
   background: var(--vr-bg);
   color: var(--vr-text-2);
@@ -91,8 +91,8 @@ body.stage-summary--hidden {
   }
 
   svg {
-    width: 19px;
-    height: 19px;
+    width: var(--icon-18);
+    height: var(--icon-18);
     transition: transform 160ms var(--ease-out);
   }
 }
@@ -120,5 +120,5 @@ body.screen-view--open {
 }
 
 body.screen-view--open.strip--collapsed .stage-strip {
-  max-height: 42px;
+  max-height: var(--size-40);
 }

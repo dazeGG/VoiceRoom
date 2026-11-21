@@ -31,23 +31,23 @@
 }
 
 .room-call-timer--topbar {
-  gap: 8px;
+  gap: var(--space-8);
   color: var(--vr-text-2);
   font-size: 0.8125rem;
 }
 
 // The phone shows the timer alone over the call while its controls are hidden.
 .room-call-timer--bubble {
-  gap: 8px;
+  gap: var(--space-8);
   color: var(--vr-text);
-  font-size: 0.78125rem;
+  font-size: 13px;
 }
 
 .room-call-timer--topbar::before,
 .room-call-timer--bubble::before {
   content: '';
-  width: 6px;
-  height: 6px;
+  width: var(--space-6);
+  height: var(--space-6);
   border-radius: 50%;
   background: var(--vr-accent);
   box-shadow: 0 0 0 3px var(--vr-accent-soft);

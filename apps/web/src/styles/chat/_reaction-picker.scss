@@ -11,33 +11,6 @@
 .reaction-picker {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-4);
   overflow: visible;
-}
-
-.reaction-picker__button {
-  display: grid;
-  width: 36px;
-  height: 36px;
-  place-items: center;
-  border: 0;
-  border-radius: 12px;
-  padding: 0;
-  background: transparent;
-  color: inherit;
-  cursor: pointer;
-  transition:
-    background 120ms ease,
-    color 120ms ease;
-
-  &:hover,
-  &:focus-visible {
-    background: color-mix(in oklch, var(--vr-accent), transparent 86%);
-    color: var(--vr-accent);
-    outline: none;
-  }
-}
-
-.reaction-picker__button--more {
-  color: color-mix(in oklch, currentColor, transparent 42%);
 }

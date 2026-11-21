@@ -11,10 +11,8 @@
 //   .call-feedback-close     -> (gone: the Dialog's own cross)
 //   .call-feedback-thumbs    -> .call-feedback__thumbs
 //   .call-feedback-thumb     -> .call-feedback__thumb
-//   .is-good / .is-bad       -> .call-feedback__thumb--good / --bad
 //   .call-feedback-details   -> .call-feedback__details
 //   .call-feedback-tags      -> .call-feedback__tags
-//   .call-feedback-comment   -> .call-feedback__comment
 //   .call-feedback-actions   -> .call-feedback__actions
 //   .call-feedback-thanks    -> .call-feedback__thanks
 //   .call-feedback-overlay, .call-feedback (window) -> (gone: ui/_dialog.scss)
@@ -24,14 +22,14 @@
 
 .call-feedback {
   display: grid;
-  gap: 12px;
+  gap: var(--space-12);
 }
 
 .call-feedback__head {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 12px;
+  gap: var(--space-12);
 }
 
 .call-feedback__title {
@@ -41,7 +39,7 @@
 }
 
 .call-feedback__sub {
-  margin: 3px 0 0;
+  margin: var(--space-2) 0 0;
   color: var(--vr-text-muted);
   font-size: 0.8125rem;
 }
@@ -49,77 +47,28 @@
 .call-feedback__thumbs {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 10px;
-}
-
-.call-feedback__thumb {
-  display: grid;
-  height: 44px;
-  place-items: center;
-  border: 1px solid var(--vr-line);
-  border-radius: 12px;
-  background: var(--vr-surface-2);
-  color: var(--vr-text-2);
-  cursor: pointer;
-  transition:
-    border-color 0.14s ease,
-    background 0.14s ease,
-    color 0.14s ease;
-
-  &:hover {
-    background: var(--vr-surface-2-hover);
-    color: var(--vr-text);
-  }
-}
-
-.call-feedback__thumb--good[aria-pressed='true'] {
-  border-color: var(--vr-success);
-  background: color-mix(in oklch, var(--vr-success), transparent 88%);
-  color: var(--vr-success);
-}
-
-.call-feedback__thumb--bad[aria-pressed='true'] {
-  border-color: var(--vr-danger);
-  background: color-mix(in oklch, var(--vr-danger), transparent 88%);
-  color: var(--vr-danger);
+  gap: var(--space-8);
 }
 
 .call-feedback__details {
   display: grid;
-  gap: 12px;
+  gap: var(--space-12);
 }
 
 .call-feedback__tags {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: var(--space-6);
   margin: 0;
   padding: 0;
   border: 0;
 
   legend {
-    margin-bottom: 8px;
+    margin-bottom: var(--space-8);
     padding: 0;
     color: var(--vr-text-2);
     font-size: 0.8125rem;
     font-weight: 500;
-  }
-}
-
-.call-feedback__comment {
-  width: 100%;
-  padding: 8px 12px;
-  border: 1px solid var(--vr-line-strong);
-  border-radius: 12px;
-  background: var(--vr-surface-2);
-  color: var(--vr-text);
-  font: inherit;
-  font-size: 0.84375rem;
-  resize: vertical;
-  outline: none;
-
-  &:focus {
-    border-color: var(--vr-accent-line);
   }
 }
 

@@ -39,41 +39,8 @@
 // ---- tabs ----
 
 .screen-source-dialog__tabs {
-  display: inline-flex;
-  gap: 4px;
   align-self: flex-start;
-  flex: none;
-  padding: 4px;
-  background: var(--vr-bg);
-  border: 1px solid var(--vr-line);
-  border-radius: 13px;
 }
-
-.screen-source-dialog__tab {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  border: none;
-  border-radius: 9px;
-  padding: 8px 15px;
-  background: transparent;
-  color: var(--vr-text-2);
-  font-size: 0.84rem;
-  font-weight: 600;
-  transition: color 140ms var(--ease-out);
-}
-
-.screen-source-dialog__tab[aria-pressed='true'] {
-  background: var(--vr-accent);
-  color: var(--vr-accent-ink);
-  font-weight: 700;
-}
-
-.screen-source-dialog__tab:not([aria-pressed='true']):hover {
-  color: var(--vr-text);
-}
-
-// ---- source grid ----
 
 .screen-source-dialog__options {
   display: grid;
@@ -88,8 +55,8 @@
   grid-template-rows: auto minmax(42px, auto);
   gap: 0;
   border: 1.5px solid var(--vr-line);
-  border-radius: 15px;
-  padding: 9px;
+  border-radius: var(--radius-16);
+  padding: var(--space-8);
   background: var(--vr-surface);
   color: inherit;
   text-align: left;
@@ -104,8 +71,9 @@
 }
 
 .screen-source-dialog__option:not([aria-pressed='true']):hover,
-.screen-source-dialog__option:not([aria-pressed='true']):focus-visible {
-  border-color: var(--vr-line-strong);
+.screen-source-dialog__option:focus-visible {
+  outline: var(--space-2) solid var(--vr-accent);
+  outline-offset: calc(-1 * var(--space-2));
   background: var(--vr-surface-3);
 }
 
@@ -114,7 +82,7 @@
   display: block;
   width: 100%;
   aspect-ratio: 16 / 10;
-  border-radius: 11px;
+  border-radius: var(--radius-10);
   overflow: hidden;
   background: var(--vr-bg);
 }
@@ -142,8 +110,8 @@
   left: 11px;
   top: 11px;
   right: 11px;
-  height: 7px;
-  border-radius: 3px;
+  height: var(--space-6);
+  border-radius: var(--radius-4);
   background: var(--vr-surface-3-hover);
 }
 
@@ -153,7 +121,7 @@
   top: 26px;
   width: 38%;
   bottom: 12px;
-  border-radius: 6px;
+  border-radius: var(--radius-6);
   background: var(--vr-surface-3);
 }
 
@@ -163,7 +131,7 @@
   top: 26px;
   right: 11px;
   bottom: 12px;
-  border-radius: 6px;
+  border-radius: var(--radius-6);
   background: var(--vr-surface-3);
 }
 
@@ -175,8 +143,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
+  width: var(--size-24);
+  height: var(--size-24);
   border-radius: 50%;
   background: var(--vr-text);
 }
@@ -184,9 +152,9 @@
 .screen-source-dialog__label {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-8);
   min-width: 0;
-  padding: 12px 4px 2px;
+  padding: var(--space-12) var(--space-4) var(--space-2);
   color: var(--vr-text-2);
   font-size: 0.875rem;
   font-weight: 700;
@@ -199,8 +167,8 @@
 }
 
 .screen-source-dialog__label img {
-  width: 20px;
-  height: 20px;
+  width: var(--size-20);
+  height: var(--size-20);
   flex: 0 0 auto;
 }
 
@@ -234,7 +202,7 @@
 .screen-source-dialog__summary {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--space-8);
   min-width: 0;
   flex: 1;
 }
@@ -244,10 +212,10 @@
   align-items: center;
   justify-content: center;
   flex: 0 0 auto;
-  width: 36px;
-  height: 36px;
+  width: var(--size-36);
+  height: var(--size-36);
   border: 1px solid var(--vr-line);
-  border-radius: 10px;
+  border-radius: var(--radius-10);
   background: var(--vr-surface-3);
   color: var(--vr-text-2);
 }
@@ -257,7 +225,7 @@
 }
 
 .screen-source-dialog__summary-name {
-  font-size: 0.84rem;
+  font-size: 13px;
   font-weight: 700;
   color: var(--vr-text);
   white-space: nowrap;
@@ -266,10 +234,10 @@
 }
 
 .screen-source-dialog__summary-detail {
-  font-size: 0.69rem;
+  font-size: 11px;
   font-family: var(--font-mono, monospace);
   color: var(--vr-text-muted);
-  margin-top: 2px;
+  margin-top: var(--space-2);
 }
 
 .screen-source-dialog__footer-actions {
@@ -283,20 +251,20 @@
 // SD / HD and 30 / 60 toggles.
 .screen-source-dialog__toggle-group {
   display: inline-flex;
-  gap: 3px;
-  padding: 3px;
+  gap: var(--space-2);
+  padding: var(--space-2);
   background: var(--vr-bg);
   border: 1px solid var(--vr-line);
-  border-radius: 11px;
+  border-radius: var(--radius-10);
 }
 
 .screen-source-dialog__toggle-button {
   border: none;
-  border-radius: 8px;
-  padding: 8px 16px;
+  border-radius: var(--radius-8);
+  padding: var(--space-8) var(--space-16);
   background: transparent;
   color: var(--vr-text-2);
-  font-size: 0.81rem;
+  font-size: 13px;
   font-weight: 600;
   transition:
     background 140ms var(--ease-out),
@@ -319,45 +287,19 @@
   position: relative;
 }
 
-.screen-source-dialog__gear {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 42px;
-  height: 42px;
-  flex: 0 0 auto;
-  border: 1px solid var(--vr-line);
-  border-radius: 11px;
-  background: var(--vr-surface-3);
-  color: var(--vr-text-2);
-  transition:
-    background 140ms var(--ease-out),
-    color 140ms var(--ease-out),
-    border-color 140ms var(--ease-out);
-}
-
-.screen-source-dialog__gear[aria-pressed='true'] {
-  border-color: color-mix(in oklch, var(--vr-text) 70%, transparent);
-  background: var(--vr-surface-3);
-  color: var(--vr-text);
-}
-
-.screen-source-dialog__gear:not([aria-pressed='true']):hover {
-  background: var(--vr-surface-3-hover);
-  color: var(--vr-text);
-}
-
 .screen-source-dialog__popover {
   position: absolute;
   right: 0;
-  bottom: calc(100% + 10px);
+  bottom: calc(100% + var(--space-8));
   width: min(320px, calc(100vw - var(--space-48)));
   z-index: 30;
-  padding: 16px;
+  display: grid;
+  gap: var(--space-12);
+  padding: var(--space-16);
   background: var(--vr-surface-2);
   border: 1px solid var(--vr-line-strong);
-  border-radius: 16px;
-  box-shadow: 0 24px 60px oklch(0% 0 0 / 0.55);
+  border-radius: var(--radius-16);
+  box-shadow: var(--vr-shadow-popover);
   animation: screen-source-dialog-pop 160ms var(--ease-out);
   transform-origin: bottom right;
 }
@@ -374,131 +316,15 @@
   }
 }
 
-.screen-source-dialog__popover-label {
-  padding: 2px 4px 12px;
-  font-family: var(--font-ui, sans-serif);
-  font-size: 0.66rem;
-  font-weight: 500;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: var(--vr-text-muted);
-}
-
-.screen-source-dialog__presets {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.screen-source-dialog__preset {
-  display: flex;
-  align-items: center;
-  gap: 11px;
-  width: 100%;
-  padding: 9px;
-  border: 1px solid transparent;
-  border-radius: 11px;
-  background: transparent;
-  color: inherit;
-  text-align: left;
-  transition:
-    background 140ms var(--ease-out),
-    border-color 140ms var(--ease-out);
-}
-
-.screen-source-dialog__preset[aria-pressed='true'] {
-  background: var(--vr-surface-3);
-  border-color: color-mix(in oklch, var(--vr-text) 28%, transparent);
-}
-
-.screen-source-dialog__preset:not([aria-pressed='true']):hover {
-  background: var(--vr-surface-3);
-}
-
-.screen-source-dialog__preset-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex: 0 0 auto;
-  width: 34px;
-  height: 34px;
-  border-radius: 9px;
-  background: var(--vr-surface-3);
-  color: var(--vr-text-2);
-  transition:
-    background 140ms var(--ease-out),
-    color 140ms var(--ease-out);
-}
-
-.screen-source-dialog__preset[aria-pressed='true'] .screen-source-dialog__preset-icon {
-  background: var(--vr-surface-3-hover);
-  color: var(--vr-text);
-}
-
-.screen-source-dialog__preset-info {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  min-width: 0;
-}
-
-.screen-source-dialog__preset-title {
-  font-size: 0.84rem;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-  color: var(--vr-text-2);
-  transition: color 140ms var(--ease-out);
-}
-
-.screen-source-dialog__preset[aria-pressed='true'] .screen-source-dialog__preset-title {
-  color: var(--vr-text);
-}
-
-.screen-source-dialog__preset-desc {
-  font-size: 0.72rem;
-  color: var(--vr-text-muted);
-  margin-top: 1px;
-}
-
-.screen-source-dialog__preset-radio {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex: 0 0 auto;
-  width: 18px;
-  height: 18px;
-  border: 1.6px solid color-mix(in oklch, var(--vr-text) 22%, transparent);
-  border-radius: 50%;
-  transition: border-color 140ms var(--ease-out);
-}
-
-.screen-source-dialog__preset[aria-pressed='true'] .screen-source-dialog__preset-radio {
-  border-color: var(--vr-text);
-}
-
-.screen-source-dialog__preset-dot {
-  display: block;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--vr-text);
-}
-
-.screen-source-dialog__popover-sep {
-  margin: 12px 0 0;
-  padding-top: 14px;
-  border-top: 1px solid var(--vr-line);
-}
-
 .screen-source-dialog__audio {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: var(--space-8);
   width: 100%;
-  padding: 9px 8px;
+  padding: var(--space-8) var(--space-8);
   border: none;
-  border-radius: 10px;
+  border-radius: var(--radius-10);
   background: transparent;
   color: inherit;
   transition: background 140ms var(--ease-out);
@@ -510,7 +336,7 @@
 }
 
 .screen-source-dialog__audio-label {
-  font-size: 0.84rem;
+  font-size: 13px;
   font-weight: 600;
   color: var(--vr-text);
 }
@@ -520,14 +346,14 @@
 .screen-source-dialog__launch {
   display: flex;
   align-items: center;
-  gap: 8px;
-  height: 42px;
-  padding: 0 20px;
+  gap: var(--space-8);
+  height: var(--size-40);
+  padding: 0 var(--space-20);
   border: none;
-  border-radius: 12px;
+  border-radius: var(--radius-12);
   background: var(--vr-accent);
   color: var(--vr-accent-ink);
-  font-size: 0.91rem;
+  font-size: 15px;
   font-weight: 700;
   letter-spacing: -0.01em;
   transition:

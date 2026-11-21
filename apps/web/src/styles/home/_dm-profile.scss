@@ -27,12 +27,12 @@
   scrollbar-color: var(--vr-line) transparent;
 
   &::-webkit-scrollbar {
-    width: 8px;
+    width: var(--space-8);
   }
 
   &::-webkit-scrollbar-thumb {
     background: var(--vr-line-strong);
-    border-radius: 4px;
+    border-radius: var(--radius-4);
   }
 }
 
@@ -42,38 +42,20 @@
   background: color-mix(in oklch, var(--profile-cover-accent, var(--vr-surface-3)) 30%, var(--vr-surface-2));
 }
 
-.dm-profile__close {
+.dm-profile .dm-profile__close {
   position: absolute;
   top: 50%;
-  right: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 34px;
-  height: 34px;
+  right: var(--space-12);
   transform: translateY(-50%);
-  border: none;
-  border-radius: 9px;
-  background: var(--vr-scrim);
-  color: var(--vr-text);
-  cursor: pointer;
-  transition:
-    background 0.15s ease,
-    color 0.15s ease;
-
-  &:hover {
-    background: var(--vr-bg);
-    color: var(--vr-text);
-  }
 }
 
 .dm-profile__body {
-  padding: 0 20px 24px;
-  margin-top: -24px;
+  padding: 0 var(--space-20) var(--space-24);
+  margin-top: calc(-1 * var(--space-24));
 }
 
 .dm-profile__name {
-  margin-top: 12px;
+  margin-top: var(--space-12);
   color: var(--vr-text);
   font-size: 1.25rem;
   font-weight: 600;
@@ -81,23 +63,23 @@
 }
 
 .dm-profile__handle {
-  margin-top: 2px;
+  margin-top: var(--space-2);
   color: var(--vr-text-2);
   font-family: var(--font-mono);
-  font-size: 0.78125rem;
+  font-size: 13px;
 }
 
 .dm-profile__stats {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 10px;
-  margin-top: 18px;
+  gap: var(--space-8);
+  margin-top: var(--space-16);
 }
 
 .dm-profile__stat {
-  padding: 13px 14px;
+  padding: var(--space-12) var(--space-12);
   border: 1px solid var(--vr-line);
-  border-radius: 14px;
+  border-radius: var(--radius-12);
   background: var(--vr-surface-2);
 }
 
@@ -109,7 +91,7 @@
 }
 
 .dm-profile__stat-label {
-  margin-top: 2px;
+  margin-top: var(--space-2);
   color: var(--vr-text-2);
   font-size: 0.6875rem;
 }
@@ -118,13 +100,13 @@
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  gap: 10px;
+  gap: var(--space-8);
   width: 100%;
-  min-height: 40px;
-  margin-top: 14px;
+  min-height: var(--size-40);
+  margin-top: var(--space-12);
   border: 0;
-  border-radius: 11px;
-  padding: 0 14px;
+  border-radius: var(--radius-10);
+  padding: 0 var(--space-12);
   background: var(--vr-hover);
   color: var(--vr-text);
   font-family: var(--font-ui);
@@ -154,7 +136,7 @@
 }
 
 .dm-profile__action--danger {
-  margin-top: 10px;
+  margin-top: var(--space-8);
   background: transparent;
   color: var(--vr-danger);
 

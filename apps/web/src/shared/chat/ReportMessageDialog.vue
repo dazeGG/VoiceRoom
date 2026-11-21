@@ -6,7 +6,7 @@ import { useLocalizedText, currentErrorMessage } from '@/shared/i18n/localized-t
 import { t } from '@/shared/i18n';
 import { computed, ref, useId } from 'vue';
 import { REPORT_COMMENT_MAX_LENGTH } from '@voice-room/shared/contracts/reports';
-import { RadioGroup } from '@voice-room/ui/components';
+import { Field, Textarea, RadioGroup } from '@voice-room/ui/components';
 import { fileReport, type ReportReason, type ReportTarget } from '@/api/reports';
 import { Button, Dialog } from '@/shared/ui';
 
@@ -80,19 +80,13 @@ async function submit(): Promise<void> {
         <RadioGroup v-model="selectedReason" :options="REASONS" name="report-reason" :aria-labelledby="reasonLabelId" />
       </fieldset>
 
-      <div>
-        <label class="report-dialog__label" for="reportComment"
-          >{{ t('Комментарий') }} <span class="report-dialog__soft">{{ t('· необязательно') }}</span></label
-        >
-        <textarea
-          id="reportComment"
+      <Field id="reportComment" :label="t('Комментарий')" optional>
+        <Textarea
           v-model="comment"
-          class="report-dialog__comment"
-          rows="3"
           :maxlength="REPORT_COMMENT_MAX_LENGTH"
           :placeholder="t('Что ещё стоит знать модератору')"
-        ></textarea>
-      </div>
+        />
+      </Field>
 
       <p class="report-dialog__note">
         {{ t('Жалобу рассмотрит администратор сервиса. Автор сообщения не узнает, кто пожаловался.') }}

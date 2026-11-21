@@ -11,8 +11,7 @@ import { computed, ref, watchEffect } from 'vue';
 import { CALL_FEEDBACK_COMMENT_MAX_LENGTH, CALL_FEEDBACK_TAGS_BY_RATING } from '@voice-room/shared/contracts/feedback';
 import { CALL_FEEDBACK_TAG_LABELS } from '@/shared/i18n/feedback-labels';
 import type { CallFeedbackCall, CallFeedbackRating, CallFeedbackTag } from '@/api/feedback';
-import { Button, Tag } from '@voice-room/ui/components';
-import { iconMd } from '@/shared/ui/icons';
+import { Field, Textarea, Toggle, Button, Tag } from '@voice-room/ui/components';
 import { useCallFeedbackStore } from './call-feedback.store';
 
 const props = withDefaults(defineProps<{ call: CallFeedbackCall; hosted?: boolean }>(), { hosted: false });
@@ -81,24 +80,18 @@ defineExpose({ close });
     </div>
 
     <div class="call-feedback__thumbs">
-      <button
-        class="call-feedback__thumb call-feedback__thumb--good"
-        type="button"
+      <Toggle
+        size="lg"
+        tone="good"
         :aria-label="t('Хорошо')"
-        :aria-pressed="rating === 'good'"
-        @click="choose('good')"
+        :pressed="rating === 'good'"
+        @update:pressed="choose('good')"
       >
-        <ThumbsUp v-bind="iconMd" aria-hidden="true" />
-      </button>
-      <button
-        class="call-feedback__thumb call-feedback__thumb--bad"
-        type="button"
-        :aria-label="t('Плохо')"
-        :aria-pressed="rating === 'bad'"
-        @click="choose('bad')"
-      >
-        <ThumbsDown v-bind="iconMd" aria-hidden="true" />
-      </button>
+        <ThumbsUp aria-hidden="true" />
+      </Toggle>
+      <Toggle size="lg" tone="bad" :aria-label="t('Плохо')" :pressed="rating === 'bad'" @update:pressed="choose('bad')">
+        <ThumbsDown aria-hidden="true" />
+      </Toggle>
     </div>
 
     <form v-if="rating" class="call-feedback__details" @submit.prevent="send">
@@ -114,14 +107,13 @@ defineExpose({ close });
           {{ CALL_FEEDBACK_TAG_LABELS[tag] }}
         </Tag>
       </fieldset>
-      <textarea
-        v-model="comment"
-        class="call-feedback__comment"
-        :aria-label="t('Комментарий')"
-        rows="2"
-        :maxlength="CALL_FEEDBACK_COMMENT_MAX_LENGTH"
-        :placeholder="rating === 'good' ? t('Что ещё улучшить?') : t('Что случилось? Расскажите подробнее')"
-      ></textarea>
+      <Field :label="t('Комментарий')" optional>
+        <Textarea
+          v-model="comment"
+          :maxlength="CALL_FEEDBACK_COMMENT_MAX_LENGTH"
+          :placeholder="rating === 'good' ? t('Что ещё улучшить?') : t('Что случилось? Расскажите подробнее')"
+        />
+      </Field>
       <div class="call-feedback__actions">
         <Button variant="primary" type="submit">{{ t('Отправить') }}</Button>
       </div>

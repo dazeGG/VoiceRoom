@@ -8,9 +8,9 @@
 }
 
 .boot-splash__mark {
-  width: 40px;
-  height: 40px;
-  border-radius: 12px;
+  width: var(--size-40);
+  height: var(--size-40);
+  border-radius: var(--radius-12);
   background: var(--vr-surface-3);
   animation: boot-splash-pulse 1.2s ease-in-out infinite;
 }

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Badge } from '@voice-room/ui/components';
+import { IconButton, Tooltip, Badge } from '@voice-room/ui/components';
 import { t } from '@/shared/i18n';
 import { Link, MessageSquare, UserPlus, Users } from '@lucide/vue';
 import { computed } from 'vue';
@@ -105,10 +105,12 @@ function notifyRoomsChanged(): void {
         <RoomCallTimer />
         <DropdownMenu :aria-label="t('Пригласить в комнату')">
           <template #trigger>
-            <button class="room-topbar__invite-button" type="button" :title="t('Пригласить')">
-              <UserPlus v-bind="iconSm" aria-hidden="true" />
-              <span class="room-topbar__invite-label">{{ t('Пригласить') }}</span>
-            </button>
+            <Tooltip :text="t('Пригласить')"
+              ><button class="room-topbar__invite-button" type="button">
+                <UserPlus v-bind="iconSm" aria-hidden="true" />
+                <span class="room-topbar__invite-label">{{ t('Пригласить') }}</span>
+              </button></Tooltip
+            >
           </template>
           <template #content="{ close }">
             <MenuItem :label="t('Скопировать ссылку')" @select.prevent="void copyInviteLink(close)">
@@ -132,15 +134,14 @@ function notifyRoomsChanged(): void {
           role="group"
           :aria-label="t('Открыть раздел панели комнаты')"
         >
-          <button
-            class="ui-segment__item room-panel-switches__button"
-            type="button"
-            :aria-label="t('Чат')"
+          <IconButton
+            class="room-panel-switches__button"
+            :label="t('Чат')"
             :aria-pressed="chatActive"
-            :title="t('Чат')"
+            :size="32"
             @click="panelToggle.toggleRoomPanel('chat')"
           >
-            <MessageSquare v-bind="iconSm" aria-hidden="true" />
+            <MessageSquare aria-hidden="true" />
             <Badge
               v-if="roomUnreadCount > 0"
               class="room-panel-switches__unread"
@@ -148,17 +149,16 @@ function notifyRoomsChanged(): void {
               variant="dot"
               ring
             />
-          </button>
-          <button
-            class="ui-segment__item room-panel-switches__button"
-            type="button"
-            :aria-label="t('Участники')"
+          </IconButton>
+          <IconButton
+            class="room-panel-switches__button"
+            :label="t('Участники')"
             :aria-pressed="participantsActive"
-            :title="t('Участники')"
+            :size="32"
             @click="panelToggle.toggleRoomPanel('participants')"
           >
-            <Users v-bind="iconSm" aria-hidden="true" />
-          </button>
+            <Users aria-hidden="true" />
+          </IconButton>
         </div>
       </div>
     </div>

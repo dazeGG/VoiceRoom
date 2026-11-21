@@ -4,7 +4,7 @@
   width: min(100%, 27rem);
   padding: clamp(1.25rem, 5vw, 2rem);
   border: 1px solid var(--vr-line-strong);
-  border-radius: var(--radius-xl);
+  border-radius: var(--radius-24);
   background: var(--vr-surface);
   box-shadow: var(--vr-shadow-dock);
 
@@ -27,7 +27,7 @@
     height: 3rem;
     margin-bottom: 0.25rem;
     border: 1px solid var(--vr-accent-line);
-    border-radius: var(--radius-md);
+    border-radius: var(--radius-16);
     background: var(--vr-accent-soft);
     color: var(--vr-accent);
   }
@@ -48,7 +48,7 @@
     min-height: 3rem;
     padding: 0.625rem 0.75rem;
     border: 1px solid var(--vr-line-strong);
-    border-radius: var(--radius-sm);
+    border-radius: var(--radius-8);
     background: var(--vr-surface-2);
     color: var(--vr-text);
     font-size: max(1rem, 1em);

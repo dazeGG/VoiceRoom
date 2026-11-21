@@ -4,35 +4,35 @@
 
 .room-member-list {
   display: grid;
-  gap: 4px;
+  gap: var(--space-4);
   min-width: 240px;
 }
 
 .room-member-list__heading {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-6);
   margin: 0;
-  padding: 6px 10px 8px;
+  padding: var(--space-6) var(--space-8) var(--space-8);
   color: var(--vr-text-2);
-  font-size: 0.78125rem;
+  font-size: 13px;
   font-weight: 500;
 }
 
 .room-member-list__heading:not(:first-child) {
-  margin-top: 14px;
+  margin-top: var(--space-12);
 }
 
 .room-member-list__count {
   color: var(--vr-text-muted);
   font-family: var(--font-mono);
-  font-size: 0.71875rem;
+  font-size: 12px;
   font-weight: 400;
 }
 
 .room-member-list__list {
   display: grid;
-  gap: 2px;
+  gap: var(--space-2);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -43,7 +43,7 @@
 }
 
 .room-member-list__you {
-  margin-left: 6px;
+  margin-left: var(--space-6);
   color: var(--vr-text-muted);
   font-size: 0.8125rem;
   font-style: normal;
@@ -57,9 +57,9 @@
 
 .room-member-list__more {
   justify-self: stretch;
-  min-height: 38px;
+  min-height: var(--size-40);
   border: 1px solid var(--vr-line-strong);
-  border-radius: 10px;
+  border-radius: var(--radius-10);
   background: transparent;
   color: var(--vr-text);
 }

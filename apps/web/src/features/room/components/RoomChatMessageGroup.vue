@@ -48,7 +48,6 @@ const profileLabel = computed(() =>
       type="button"
       aria-haspopup="dialog"
       :aria-label="profileLabel"
-      :title="profileLabel"
       @pointerenter="emit('previewProfile', $event)"
       @pointerleave="emit('leaveProfile', $event)"
       @focus="emit('previewProfile', $event)"

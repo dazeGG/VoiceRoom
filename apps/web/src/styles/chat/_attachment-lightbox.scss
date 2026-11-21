@@ -14,47 +14,37 @@
 .attachment-lightbox__counter {
   margin-right: auto;
   font-family: var(--font-mono);
-  font-size: 0.78125rem;
+  font-size: 13px;
   opacity: 0.75;
 }
 
 .attachment-lightbox__tools {
   display: flex;
   align-items: center;
-  gap: 2px;
-  padding: 4px;
-  border-radius: 13px;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  border-radius: var(--radius-12);
   background: color-mix(in oklch, var(--vr-bg), transparent 28%);
 
-  button,
   a {
     display: grid;
-    width: 34px;
-    height: 34px;
+    width: var(--size-32);
+    height: var(--size-32);
     place-items: center;
     border: 0;
-    border-radius: 9px;
+    border-radius: var(--radius-8);
     background: transparent;
     color: inherit;
     cursor: pointer;
   }
 
-  button:hover:not(:disabled),
-  button:focus-visible,
-  a:hover,
-  a:focus-visible {
-    background: color-mix(in oklch, var(--vr-bg), transparent 62%);
-    outline: none;
-  }
-
-  button:disabled {
-    cursor: default;
-    opacity: 0.4;
+  a:hover {
+    background: var(--vr-hover);
   }
 }
 
 .attachment-lightbox__scale {
-  min-width: 44px;
+  min-width: var(--size-44);
   font-family: var(--font-mono);
   font-size: 0.75rem;
   text-align: center;
@@ -96,17 +86,11 @@
   transition: none;
 }
 
-.attachment-lightbox__previous,
-.attachment-lightbox__next {
+.attachment-lightbox .attachment-lightbox__previous,
+.attachment-lightbox .attachment-lightbox__next {
   position: absolute;
   top: 50%;
-  width: 48px;
-  height: 64px;
-  border: 0;
-  border-radius: 10px;
-  font-size: 2.375rem;
-  color: var(--vr-text);
-  background: color-mix(in oklch, var(--vr-bg), transparent 45%);
+  transform: translateY(-50%);
 }
 
 .attachment-lightbox__previous {

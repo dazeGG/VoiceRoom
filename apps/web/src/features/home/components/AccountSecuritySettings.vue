@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Spinner, SettingRow, SettingsGroup } from '@voice-room/ui/components';
+import { Field, Spinner, SettingRow, SettingsGroup, TextField } from '@voice-room/ui/components';
 import { t } from '@/shared/i18n';
 import { KeyRound, Laptop, MonitorSmartphone } from '@lucide/vue';
 import { computed, onMounted, ref, watch } from 'vue';
@@ -36,7 +36,7 @@ const emit = defineEmits<{ toast: [message: string, options?: ToastOptions] }>()
 const { expectSessionEnd, clearSession } = useSessionStore();
 
 const recoveryCodesButton = ref<HTMLButtonElement>();
-const currentPasswordInput = ref<HTMLInputElement>();
+const currentPasswordInput = ref<{ input: HTMLInputElement | null }>();
 
 const recoveryCodes = ref<RecoveryCodesStatus | null>(null);
 const sessions = ref<AccountSession[]>([]);
@@ -66,7 +66,8 @@ watch(
 
 watch(
   [() => props.highlightPassword, currentPasswordInput],
-  ([highlight, input], _before, onCleanup) => {
+  ([highlight, field], _before, onCleanup) => {
+    const input = field?.input;
     if (!highlight || !input) return;
     // After the settings dialog has placed its own initial focus.
     const timer = window.setTimeout(() => {
@@ -160,27 +161,25 @@ async function endOtherSessions(): Promise<void> {
     <SettingsGroup :heading="t('Пароль')">
       <form class="account-security__password" @submit.prevent="submitPasswordChange">
         <div class="settings__password-fields">
-          <label>
-            <span class="settings__field-label">{{ t('Текущий пароль') }}</span>
-            <input
+          <Field :label="t('Текущий пароль')">
+            <TextField
               ref="currentPasswordInput"
               v-model="currentPassword"
-              class="settings__input"
+              name="current-password"
               type="password"
               placeholder="••••••••"
               autocomplete="current-password"
             />
-          </label>
-          <label>
-            <span class="settings__field-label">{{ t('Новый пароль') }}</span>
-            <input
+          </Field>
+          <Field :label="t('Новый пароль')">
+            <TextField
               v-model="newPassword"
-              class="settings__input"
+              name="new-password"
               type="password"
               :placeholder="t('Минимум {p0} символов', { p0: PASSWORD_MIN_LENGTH })"
               autocomplete="new-password"
             />
-          </label>
+          </Field>
         </div>
         <div class="account-security__password-foot">
           <div class="settings__gate-hint">{{ t('После смены пароля завершатся все сеансы, включая этот.') }}</div>

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Badge } from '@voice-room/ui/components';
+import { IconButton, Badge } from '@voice-room/ui/components';
 import { t } from '@/shared/i18n';
 import { LayoutGrid, MessageSquare, Users } from '@lucide/vue';
 import { computed } from 'vue';
@@ -76,12 +76,11 @@ function handleInviteClick(): void {
       </span>
     </button>
     <div class="ui-segment room-panel-switches mobile-call-topbar__actions" role="group" :aria-label="t('Звонок')">
-      <button
+      <IconButton
         v-if="!duo"
-        type="button"
-        class="ui-segment__item room-panel-switches__button mobile-call-topbar__view"
-        :aria-label="viewLabel"
-        :title="viewLabel"
+        class="room-panel-switches__button mobile-call-topbar__view"
+        :label="viewLabel"
+        :size="44"
         @click="mobileCall.toggleMobileCallView"
       >
         <!-- One big frame over three small ones: the focus layout. -->
@@ -98,27 +97,27 @@ function handleInviteClick(): void {
           <rect x="7" y="13" width="4" height="3.5" rx="1" fill="currentColor" />
           <rect x="12.5" y="13" width="4" height="3.5" rx="1" fill="currentColor" />
         </svg>
-        <LayoutGrid v-else :size="18" aria-hidden="true" />
-      </button>
-      <button
-        type="button"
-        class="ui-segment__item room-panel-switches__button"
-        :aria-label="t('Чат')"
+        <LayoutGrid v-else aria-hidden="true" />
+      </IconButton>
+      <IconButton
+        class="room-panel-switches__button"
+        :label="t('Чат')"
         :aria-pressed="panels.isRoomPanelOpen('chat')"
+        :size="44"
         @click="panels.toggleRoomPanel('chat')"
       >
-        <MessageSquare :size="18" aria-hidden="true" />
+        <MessageSquare aria-hidden="true" />
         <Badge v-if="unread > 0" class="room-panel-switches__unread" aria-hidden="true" variant="dot" ring />
-      </button>
-      <button
-        type="button"
-        class="ui-segment__item room-panel-switches__button"
-        :aria-label="t('Участники')"
+      </IconButton>
+      <IconButton
+        class="room-panel-switches__button"
+        :label="t('Участники')"
         :aria-pressed="panels.isRoomPanelOpen('participants')"
+        :size="44"
         @click="panels.toggleRoomPanel('participants')"
       >
-        <Users :size="18" aria-hidden="true" />
-      </button>
+        <Users aria-hidden="true" />
+      </IconButton>
     </div>
   </header>
 </template>

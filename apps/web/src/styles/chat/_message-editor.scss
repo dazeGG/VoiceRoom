@@ -8,7 +8,7 @@
 
 .message-editor {
   display: grid;
-  gap: 6px;
+  gap: var(--space-6);
 }
 
 .message-editor--dm {
@@ -16,5 +16,5 @@
 }
 
 .message-editor--chat {
-  margin-top: 4px;
+  margin-top: var(--space-4);
 }

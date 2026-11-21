@@ -20,12 +20,14 @@ import { createRoomCode } from '@voice-room/shared/validation';
 import { WidgetCallLayout, WidgetJoinControls } from '@voice-room/ui/widget';
 import { createWidgetFrameExpansion } from '@voice-room/ui/widget-frame-expansion';
 import {
-  Button,
   Field,
+  IconButton,
   NumberField,
   SegmentControl,
   Slider,
   Switch,
+  Textarea,
+  TextField,
   type SegmentOption
 } from '@voice-room/ui/components';
 import { copyText } from '@/shared/utils/clipboard';
@@ -97,7 +99,7 @@ const copiedCode = ref('');
 let copyTimer: ReturnType<typeof setTimeout> | undefined;
 const failedCode = ref('');
 const showValidation = ref(false);
-const codeField = ref<HTMLTextAreaElement | null>(null);
+const codeField = ref<{ textarea: HTMLTextAreaElement | null } | null>(null);
 const placementOptions: SegmentOption<WidgetConfig['mode']>[] = [
   { value: 'inline', label: 'Внутри страницы' },
   { value: 'floating', label: 'Плавающая панель' }
@@ -117,6 +119,9 @@ function updateColorCode(key: ColorKey, code: string) {
   colorCodes[key] = code;
   const color = normalizeWidgetColor(code);
   if (color) config[key] = color;
+}
+function updateColorSwatch(key: ColorKey, event: Event): void {
+  if (event.target instanceof HTMLInputElement) updateColorCode(key, event.target.value);
 }
 const result = computed(() => {
   if (colors.some(({ key }) => !normalizeWidgetColor(colorCodes[key]))) {
@@ -193,8 +198,8 @@ async function copyCode() {
   } catch {
     if (result.value.code !== code) return;
     failedCode.value = code;
-    codeField.value?.focus();
-    codeField.value?.select();
+    codeField.value?.textarea?.focus();
+    codeField.value?.textarea?.select();
   }
 }
 </script>
@@ -236,15 +241,14 @@ async function copyCode() {
             }}
           </p>
           <div v-if="isFloating" class="widget-configurator__pair">
-            <label class="widget-configurator__field"
-              >Положение
-              <select v-model="config.corner" name="corner">
+            <Field v-slot="{ control }" label="Положение">
+              <select v-bind="control" v-model="config.corner" class="ui-select" name="corner">
                 <option value="bottom-right">Справа внизу</option>
                 <option value="bottom-left">Слева внизу</option>
                 <option value="top-right">Справа вверху</option>
                 <option value="top-left">Слева вверху</option>
               </select>
-            </label>
+            </Field>
             <Field label="Отступ, px">
               <NumberField
                 :model-value="offset"
@@ -275,32 +279,36 @@ async function copyCode() {
 
         <fieldset class="widget-configurator__group">
           <legend>Оформление</legend>
-          <label class="widget-configurator__field">
-            Заголовок виджета
-            <input v-model="title" class="widget-configurator__title-input" :maxlength="WIDGET_TITLE_LIMIT" />
-          </label>
+          <Field label="Заголовок виджета">
+            <TextField v-model="title" :maxlength="WIDGET_TITLE_LIMIT" />
+          </Field>
           <div class="widget-configurator__colors">
-            <div v-for="color in colors" :key="color.key" class="widget-configurator__color">
-              <label :for="`widget-${color.key}`">{{ color.label }}</label>
+            <Field
+              v-for="color in colors"
+              :key="color.key"
+              :label="`${color.label} (HEX или RGB)`"
+              :error="
+                showValidation && !normalizeWidgetColor(colorCodes[color.key]) ? 'Введите HEX или RGB.' : undefined
+              "
+            >
               <div class="widget-configurator__color-control">
                 <input
-                  :id="`widget-${color.key}`"
+                  class="widget-configurator__swatch"
                   :value="config[color.key]"
                   :name="color.key"
+                  :aria-label="color.label"
                   type="color"
-                  @input="updateColorCode(color.key, ($event.target as HTMLInputElement).value)"
+                  @input="updateColorSwatch(color.key, $event)"
                 />
-                <input
-                  :aria-label="`${color.label} (HEX или RGB)`"
-                  :aria-invalid="showValidation && !normalizeWidgetColor(colorCodes[color.key])"
-                  :value="colorCodes[color.key]"
-                  type="text"
+                <TextField
+                  :model-value="colorCodes[color.key]"
+                  variant="mono"
                   spellcheck="false"
                   autocomplete="off"
-                  @input="updateColorCode(color.key, ($event.target as HTMLInputElement).value)"
+                  @update:model-value="updateColorCode(color.key, $event)"
                 />
               </div>
-            </div>
+            </Field>
           </div>
           <div class="widget-configurator__radius widget-configurator__size">
             <span class="widget-configurator__size-label">
@@ -472,26 +480,14 @@ async function copyCode() {
     <section class="widget-configurator__code" aria-labelledby="widget-code-heading">
       <div class="widget-configurator__code-head">
         <h2 id="widget-code-heading">Код вставки</h2>
-        <Button
-          variant="ghost"
-          class="widget-configurator__copy"
-          aria-label="Скопировать код"
-          :title="copied ? 'Скопировано' : 'Скопировать код'"
-          :disabled="!result.code"
-          @click="copyCode"
-        >
-          <Check v-if="copied" :size="18" aria-hidden="true" />
-          <Copy v-else :size="18" aria-hidden="true" />
-        </Button>
+        <IconButton label="Скопировать код" :disabled="!result.code" @click="copyCode">
+          <Check v-if="copied" aria-hidden="true" />
+          <Copy v-else aria-hidden="true" />
+        </IconButton>
       </div>
-      <textarea
-        ref="codeField"
-        :value="result.code"
-        aria-labelledby="widget-code-heading"
-        readonly
-        rows="4"
-        spellcheck="false"
-      />
+      <Field class="widget-configurator__code-field" label="Код вставки">
+        <Textarea ref="codeField" :model-value="result.code" readonly spellcheck="false" />
+      </Field>
       <p v-if="result.error && showValidation" role="alert" class="widget-configurator__error">{{ result.error }}</p>
       <p v-if="copyFailed" role="status">Не удалось скопировать автоматически. Код выделен — нажмите Ctrl+C или ⌘C.</p>
       <span class="widget-configurator__sr-only" aria-live="polite">{{ copied ? 'Код скопирован.' : '' }}</span>

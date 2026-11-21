@@ -10,7 +10,7 @@ import { useLeaveScreenStore } from '@/features/room/leave-screen.store';
 import { getDesktopBoundaryPolicy } from '@/platform/desktop-boundary';
 import { APP_HOME } from '@/shared/app-home';
 import { createLogger, errorContext } from '@/shared/log';
-import { Button } from '@/shared/ui';
+import { Button, Separator } from '@voice-room/ui/components';
 
 const log = createLogger('room:leave');
 
@@ -92,11 +92,11 @@ async function afterAccountCreated(): Promise<void> {
         <Button v-else variant="primary" type="button" @click="rejoin">{{ t('Вернуться в звонок') }}</Button>
       </div>
       <template v-if="feedbackCall">
-        <hr class="leave-screen__divider" />
+        <Separator class="leave-screen__divider" decorative />
         <CallFeedbackCard :key="feedbackKey" :call="feedbackCall" hosted @answered="feedbackThanked = true" />
       </template>
       <template v-else-if="feedbackThanked">
-        <hr class="leave-screen__divider" />
+        <Separator class="leave-screen__divider" decorative />
         <p class="leave-screen__text leave-screen__thanks" role="status">
           {{ t('Спасибо за отзыв! Это помогает делать звонки лучше.') }}
         </p>

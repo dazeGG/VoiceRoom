@@ -13,14 +13,14 @@
   display: grid;
   min-height: calc(100vh - 96px);
   place-items: center;
-  padding: 48px 20px;
+  padding: var(--space-48) var(--space-20);
 }
 
 .auth-loader__card {
   width: min(100%, 420px);
-  padding: 34px;
+  padding: var(--space-32);
   border: 1px solid var(--vr-line);
-  border-radius: 24px;
+  border-radius: var(--radius-24);
   background:
     radial-gradient(circle at 50% 0%, color-mix(in oklch, var(--vr-text) 11%, transparent), transparent 58%),
     var(--vr-surface);
@@ -30,11 +30,11 @@
 
 .auth-loader__orb {
   display: inline-flex;
-  margin-bottom: 18px;
+  margin-bottom: var(--space-16);
 }
 
 .auth-loader__kicker {
-  margin: 0 0 8px;
+  margin: 0 0 var(--space-8);
   color: var(--vr-text-muted);
   font-family: var(--font-ui);
   font-size: 0.6875rem;
@@ -51,13 +51,13 @@
 
 .auth-loader__lines {
   display: grid;
-  gap: 10px;
-  margin-top: 24px;
+  gap: var(--space-8);
+  margin-top: var(--space-24);
 }
 
 .auth-loader__line {
-  height: 10px;
-  border-radius: 999px;
+  height: var(--space-8);
+  border-radius: var(--radius-pill);
   background: linear-gradient(90deg, var(--vr-surface-3), var(--vr-surface-3-hover), var(--vr-surface-3));
   animation: auth-loader-shimmer 1.4s ease-in-out infinite;
 

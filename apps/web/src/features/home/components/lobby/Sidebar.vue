@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Badge } from '@voice-room/ui/components';
+import { Tooltip, IconButton, Badge } from '@voice-room/ui/components';
 import { t } from '@/shared/i18n';
 import { Bell, BellOff, LayoutDashboard, Settings, UserPlus, Users } from '@lucide/vue';
 import { computed, ref } from 'vue';
@@ -127,27 +127,21 @@ async function selectStatus(value: string | undefined, close: () => void): Promi
 <template>
   <aside class="sidebar">
     <div class="sidebar__top">
-      <button class="sidebar__head" type="button" :title="t('Главная')" @click="emit('goHome')">
-        <span class="sidebar__brand-mark" role="img" aria-label="VoiceRoom"></span>
-        <span class="sidebar__brand-name">VoiceRoom</span>
-        <BetaMark />
-      </button>
-      <button
-        v-if="adminUrl"
-        class="sidebar__icon-button"
-        type="button"
-        :title="t('Админка')"
-        :aria-label="t('Открыть админку')"
-        @click="openAdmin"
-      >
-        <LayoutDashboard v-bind="iconSm" aria-hidden="true" />
+      <Tooltip :text="t('Главная')"
+        ><button class="sidebar__head" type="button" @click="emit('goHome')">
+          <span class="sidebar__brand-mark" role="img" aria-label="VoiceRoom"></span>
+          <span class="sidebar__brand-name">VoiceRoom</span>
+          <BetaMark /></button
+      ></Tooltip>
+      <IconButton v-if="adminUrl" :label="t('Открыть админку')" :size="32" @click="openAdmin">
+        <LayoutDashboard aria-hidden="true" />
         <span
           v-if="adminBadge > 0"
           class="sidebar__count"
           :aria-label="t('открытых жалоб: {p0}', { p0: adminBadge })"
           >{{ countLabel(adminBadge) }}</span
         >
-      </button>
+      </IconButton>
     </div>
 
     <div class="sidebar__scroll">
@@ -157,15 +151,10 @@ async function selectStatus(value: string | undefined, close: () => void): Promi
           }}<span v-if="lobby.friends.length > 0" class="sidebar__section-count">{{ lobby.friends.length }}</span></span
         >
         <div class="sidebar__section-actions">
-          <button
-            class="sidebar__mini-button"
-            type="button"
-            :title="t('Заявки и добавить друга')"
-            @click="emit('openPeople')"
-          >
-            <UserPlus v-bind="iconSm" aria-hidden="true" />
+          <IconButton :label="t('Заявки и добавить друга')" :size="28" @click="emit('openPeople')">
+            <UserPlus aria-hidden="true" />
             <span v-if="lobby.incomingRequestCount > 0" class="sidebar__mini-button-dot"></span>
-          </button>
+          </IconButton>
         </div>
       </div>
 
@@ -274,28 +263,20 @@ async function selectStatus(value: string | undefined, close: () => void): Promi
       </DropdownMenu>
       <div class="sidebar__profile-actions">
         <SidebarDownload />
-        <button
-          class="sidebar__icon-button"
-          type="button"
-          :title="t('Уведомления')"
-          :aria-label="t('Открыть уведомления')"
+        <IconButton
+          :label="t('Открыть уведомления')"
           :aria-expanded="notificationsOpen"
+          :size="32"
           @click="emit('openNotifications')"
         >
-          <Bell v-bind="iconSm" aria-hidden="true" />
+          <Bell aria-hidden="true" />
           <span v-if="notificationUnreadCount > 0" class="sidebar__count">{{
             countLabel(notificationUnreadCount)
           }}</span>
-        </button>
-        <button
-          class="sidebar__icon-button"
-          type="button"
-          :title="t('Настройки')"
-          :aria-label="t('Открыть настройки')"
-          @click="emit('openSettings')"
-        >
-          <Settings v-bind="iconSm" aria-hidden="true" />
-        </button>
+        </IconButton>
+        <IconButton :label="t('Открыть настройки')" :size="32" @click="emit('openSettings')">
+          <Settings aria-hidden="true" />
+        </IconButton>
       </div>
     </div>
     <FriendContextMenu v-model="friendMenu" @toast="emit('toast', $event)" />

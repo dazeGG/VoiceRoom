@@ -205,7 +205,7 @@ test('the lobby preview runs the same room chat as the rail, with jumpable quote
   await enterRoom(page, roomId);
   const rail = page.locator('.room-chat-rail').first();
   if (await rail.evaluate((element) => element instanceof HTMLElement && element.hidden)) {
-    await page.locator('button[title="Чат"]').first().click();
+    await page.getByRole('button', { name: 'Чат', exact: true }).first().click();
   }
   const railBody = page.locator('.room-chat-rail .room-chat-panel__body');
   await expect(railBody).toBeVisible({ timeout: 20_000 });

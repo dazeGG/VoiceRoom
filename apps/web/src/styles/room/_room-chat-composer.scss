@@ -12,15 +12,15 @@
   position: relative;
   display: flex;
   flex-direction: column;
-  padding: 0.875rem 18px 18px;
+  padding: 0.875rem var(--space-16) var(--space-16);
   --chat-typing-inset: 20px;
 
   .attachment-upload {
-    margin-top: 5px;
+    margin-top: var(--space-4);
   }
 
   .composer-emoji-picker {
-    margin-top: 5px;
+    margin-top: var(--space-4);
   }
 }
 
@@ -33,8 +33,8 @@
   flex: 1;
   min-width: 0;
   border: 1px solid var(--vr-line-strong);
-  border-radius: 13px;
-  padding: 10px 14px 10px 8px;
+  border-radius: var(--radius-12);
+  padding: var(--space-8) var(--space-12) var(--space-8) var(--space-8);
   background: var(--vr-surface-2);
   color: var(--vr-text);
   font-family: var(--font-ui);
@@ -45,7 +45,7 @@
   // The field grows with its text up to the cap, then scrolls.
   box-sizing: border-box;
   overflow-y: auto;
-  min-height: 42px;
+  min-height: var(--size-40);
   max-height: 140px;
   line-height: 1.35;
 
@@ -56,32 +56,10 @@
   &:focus,
   &:focus-visible {
     border-color: var(--vr-accent-line);
-    box-shadow: none;
+    box-shadow: 0 0 0 calc(var(--space-6) / 2) var(--vr-accent-soft);
   }
 }
 
 .room-chat-composer__send {
-  display: grid;
-  flex: none;
-  place-items: center;
-  width: 34px;
-  height: 34px;
-  margin: 6px 6px 6px 0;
-  border: 0;
-  border-radius: 10px;
-  background: var(--vr-accent);
-  color: var(--vr-accent-ink);
-  cursor: pointer;
-  transition: background 0.15s ease;
-
-  &:hover:not(:disabled) {
-    background: var(--vr-accent-hover);
-  }
-
-  &:disabled {
-    background: var(--vr-surface-3);
-    color: var(--vr-text-muted);
-    cursor: default;
-    opacity: 1;
-  }
+  margin: var(--space-6) var(--space-6) var(--space-6) 0;
 }

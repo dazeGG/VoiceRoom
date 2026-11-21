@@ -1,9 +1,8 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-import { Tabs, type TabOption } from '@voice-room/ui/components';
+import { IconButton, Tabs, type TabOption } from '@voice-room/ui/components';
 import { t } from '@/shared/i18n';
 import { PanelRightClose, X } from '@lucide/vue';
-import { iconSm } from '@/shared/ui/icons';
 
 const props = withDefaults(
   defineProps<{
@@ -61,14 +60,13 @@ function select(tab: string): void {
       stretch
       @update:model-value="select"
     />
-    <button
-      class="room-panel-header__collapse"
-      type="button"
-      :aria-label="mobile ? t('Закрыть панель') : t('Свернуть панель')"
+    <IconButton
+      :label="mobile ? t('Закрыть панель') : t('Свернуть панель')"
+      :size="mobile ? 44 : 32"
       @click="emit('collapse')"
     >
-      <X v-if="mobile" v-bind="iconSm" aria-hidden="true" />
-      <PanelRightClose v-else v-bind="iconSm" aria-hidden="true" />
-    </button>
+      <X v-if="mobile" aria-hidden="true" />
+      <PanelRightClose v-else aria-hidden="true" />
+    </IconButton>
   </header>
 </template>

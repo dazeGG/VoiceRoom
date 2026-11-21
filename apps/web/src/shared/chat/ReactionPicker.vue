@@ -1,8 +1,8 @@
 <script setup lang="ts">
+import { IconButton } from '@voice-room/ui/components';
 import { t } from '@/shared/i18n';
 import { ref, watch } from 'vue';
 import { SmilePlus } from '@lucide/vue';
-import { iconSm } from '@/shared/ui/icons';
 import { Popover } from '@/shared/ui';
 import Emoji from './Emoji.vue';
 import EmojiPickerPanel from './EmojiPickerPanel.vue';
@@ -63,18 +63,17 @@ async function choose(emoji: string, close: () => void): Promise<void> {
 <template>
   <div v-if="!store.isDeleted(messageId)" class="reaction-picker" role="group" :aria-label="t('Быстрые реакции')">
     <template v-if="showQuickReactions">
-      <button
+      <IconButton
         v-for="emoji in frequentEmoji"
         :key="emoji"
         class="reaction-picker__button"
-        type="button"
         :disabled="disabled"
-        :aria-label="t('Добавить быструю реакцию {p0}', { p0: emoji })"
-        :title="t('Реакция {p0}', { p0: emoji })"
+        :label="t('Добавить быструю реакцию {p0}', { p0: emoji })"
+        :size="32"
         @click="void react(emoji)"
       >
         <Emoji :emoji="emoji" :size="20" decorative />
-      </button>
+      </IconButton>
     </template>
     <Popover
       v-model:open="open"
@@ -87,19 +86,18 @@ async function choose(emoji: string, close: () => void): Promise<void> {
     >
       <template #trigger="{ toggle, panelId }">
         <slot name="trigger" :toggle="toggle" :panel-id="panelId" :open="open">
-          <button
+          <IconButton
             class="reaction-picker__button reaction-picker__button--more"
-            type="button"
             :disabled="disabled"
-            :aria-label="t('Открыть выбор эмодзи')"
-            :title="t('Добавить другую реакцию')"
+            :label="t('Открыть выбор эмодзи')"
             aria-haspopup="dialog"
             :aria-expanded="open"
             :aria-controls="panelId"
+            :size="32"
             @click="toggle"
           >
-            <SmilePlus v-bind="iconSm" aria-hidden="true" />
-          </button>
+            <SmilePlus aria-hidden="true" />
+          </IconButton>
         </slot>
       </template>
 

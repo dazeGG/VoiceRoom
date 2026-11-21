@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { IconButton } from '@voice-room/ui/components';
 // Full-screen image viewer.
 //
 // It takes plain sources rather than message attachments, so the same viewer
@@ -7,7 +8,7 @@
 //
 // The native modal puts the viewer above the room, regardless of the chat's stacking context.
 import { t } from '@/shared/i18n';
-import { Download, Minus, Plus, RotateCcw, X } from '@lucide/vue';
+import { ChevronLeft, ChevronRight, Download, Minus, Plus, RotateCcw, X } from '@lucide/vue';
 import { computed, onMounted, ref } from 'vue';
 import { iconSm } from '@/shared/ui/icons';
 
@@ -132,32 +133,40 @@ onMounted(() => dialog.value?.showModal());
       <header class="attachment-lightbox__header">
         <span class="attachment-lightbox__counter">{{ current + 1 }} / {{ items.length }}</span>
         <div class="attachment-lightbox__tools">
-          <button type="button" :disabled="!zoomed" :aria-label="t('Уменьшить')" @click="zoomTo(scale - STEP)">
-            <Minus v-bind="iconSm" aria-hidden="true" />
-          </button>
+          <IconButton
+            :tooltip="false"
+            :disabled="!zoomed"
+            :label="t('Уменьшить')"
+            :size="32"
+            @click="zoomTo(scale - STEP)"
+          >
+            <Minus aria-hidden="true" />
+          </IconButton>
           <span class="attachment-lightbox__scale">{{ Math.round(scale * 100) }}%</span>
-          <button
-            type="button"
+          <IconButton
+            :tooltip="false"
             :disabled="scale >= MAX_SCALE"
-            :aria-label="t('Увеличить')"
+            :label="t('Увеличить')"
+            :size="32"
             @click="zoomTo(scale + STEP)"
           >
-            <Plus v-bind="iconSm" aria-hidden="true" />
-          </button>
-          <button
-            type="button"
+            <Plus aria-hidden="true" />
+          </IconButton>
+          <IconButton
+            :tooltip="false"
             :disabled="!zoomed && !offsetX && !offsetY"
-            :aria-label="t('Исходный размер')"
+            :label="t('Исходный размер')"
+            :size="32"
             @click="reset"
           >
-            <RotateCcw v-bind="iconSm" aria-hidden="true" />
-          </button>
+            <RotateCcw aria-hidden="true" />
+          </IconButton>
           <a v-if="item?.downloadHref" :href="item.downloadHref" download rel="external" :aria-label="t('Скачать')"
             ><Download v-bind="iconSm" aria-hidden="true"
           /></a>
-          <button type="button" autofocus :aria-label="t('Закрыть просмотр')" @click="dialog?.close()">
-            <X v-bind="iconSm" aria-hidden="true" />
-          </button>
+          <IconButton :tooltip="false" autofocus :label="t('Закрыть просмотр')" :size="32" @click="dialog?.close()">
+            <X aria-hidden="true" />
+          </IconButton>
         </div>
       </header>
 
@@ -186,22 +195,26 @@ onMounted(() => dialog.value?.showModal());
       </div>
 
       <template v-if="items.length > 1">
-        <button
+        <IconButton
+          :tooltip="false"
           class="attachment-lightbox__previous"
-          type="button"
-          :aria-label="t('Предыдущее изображение')"
+          :label="t('Предыдущее изображение')"
+          :size="40"
+          variant="filled"
           @click="move(-1)"
         >
-          ‹
-        </button>
-        <button
+          <ChevronLeft aria-hidden="true" />
+        </IconButton>
+        <IconButton
+          :tooltip="false"
           class="attachment-lightbox__next"
-          type="button"
-          :aria-label="t('Следующее изображение')"
+          :label="t('Следующее изображение')"
+          :size="40"
+          variant="filled"
           @click="move(1)"
         >
-          ›
-        </button>
+          <ChevronRight aria-hidden="true" />
+        </IconButton>
       </template>
     </div>
   </dialog>

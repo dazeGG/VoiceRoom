@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Badge, Splitter, type SplitterWidth } from '@voice-room/ui/components';
+import { IconButton, Badge, Splitter, type SplitterWidth } from '@voice-room/ui/components';
 import { PanelLeftClose, PanelLeftOpen } from '@lucide/vue';
 import { t } from '@/shared/i18n';
 import type { InboxItem } from '@voice-room/shared/contracts/notifications';
@@ -358,19 +358,18 @@ function roomDeleted(): void {
             />
           </div>
         </div>
-        <button
+        <IconButton
           ref="sidebarToggle"
-          class="sidebar__icon-button lobby-shell__sidebar-toggle"
-          type="button"
+          class="lobby-shell__sidebar-toggle"
           aria-controls="lobby-sidebar"
           :aria-expanded="sidebarVisible"
-          :aria-label="sidebarToggleLabel"
-          :title="sidebarToggleLabel"
+          :label="sidebarToggleLabel"
+          :size="32"
           @click="sidebar.toggle"
         >
-          <PanelLeftClose v-if="!sidebarLayoutCollapsed" :size="16" aria-hidden="true" />
-          <PanelLeftOpen v-else :size="16" aria-hidden="true" />
-        </button>
+          <PanelLeftClose v-if="!sidebarLayoutCollapsed" aria-hidden="true" />
+          <PanelLeftOpen v-else aria-hidden="true" />
+        </IconButton>
         <Transition name="lobby-sidebar-peek" :css="sidebarLayoutCollapsed && !sidebarDragging">
           <Sidebar
             v-show="sidebarVisible"

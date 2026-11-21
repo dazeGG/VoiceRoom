@@ -64,7 +64,7 @@
 .avatar-crop__preview {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: var(--space-12);
 }
 
 .avatar-crop__preview-label {
@@ -81,14 +81,14 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  border-radius: 18px;
+  gap: var(--space-8);
+  border-radius: var(--radius-16);
   background: var(--preview-accent);
   box-shadow: var(--preview-shadow);
 }
 
 .avatar-crop__tile .avatar-crop__name {
-  margin-top: 5px;
+  margin-top: var(--space-4);
 }
 
 .avatar-crop__caption {
@@ -99,10 +99,10 @@
 .avatar-crop__card {
   display: flex;
   align-items: center;
-  gap: 11px;
-  padding: 13px;
+  gap: var(--space-12);
+  padding: var(--space-12);
   border: 1px solid var(--vr-line);
-  border-radius: 14px;
+  border-radius: var(--radius-12);
   background: var(--vr-surface);
 }
 
@@ -110,7 +110,7 @@
   display: flex;
   min-width: 0;
   flex-direction: column;
-  gap: 3px;
+  gap: var(--space-2);
 }
 
 .avatar-crop__card .avatar-crop__name {

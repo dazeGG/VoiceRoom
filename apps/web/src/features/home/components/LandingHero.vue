@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Spinner } from '@voice-room/ui/components';
+import { Field, Spinner, TextField } from '@voice-room/ui/components';
 import { t } from '@/shared/i18n';
 import { ArrowRight } from '@lucide/vue';
 import { START_FEATURES } from '@/shared/start-features';
@@ -39,24 +39,25 @@ function onRoomCodeKeydown(event: KeyboardEvent): void {
       </Button>
 
       <form class="landing-hero__join" @submit.prevent="emit('join')">
-        <!-- A search field, so iCloud Passwords does not offer logins here. -->
-        <input
-          v-model="roomCode"
-          class="landing-hero__join-input"
-          type="search"
-          name="room-search"
-          :placeholder="t('Код комнаты')"
-          :aria-label="t('Код комнаты')"
-          maxlength="120"
-          autocapitalize="off"
-          autocomplete="off"
-          spellcheck="false"
-          data-1p-ignore
-          data-lpignore="true"
-          data-bwignore
-          @keydown="onRoomCodeKeydown"
-        />
-        <button class="landing-hero__join-btn" type="submit" :disabled="joining">{{ t('Войти в комнату') }}</button>
+        <!-- A search field keeps iCloud Passwords from offering logins here. -->
+        <Field class="landing-hero__join-field" :label="t('Код комнаты')">
+          <TextField
+            v-model="roomCode"
+            type="search"
+            variant="mono"
+            name="room-search"
+            :placeholder="t('Код комнаты')"
+            maxlength="120"
+            autocapitalize="off"
+            autocomplete="off"
+            spellcheck="false"
+            data-1p-ignore
+            data-lpignore="true"
+            data-bwignore
+            @keydown="onRoomCodeKeydown"
+          />
+        </Field>
+        <Button variant="outline" type="submit" :disabled="joining">{{ t('Войти в комнату') }}</Button>
       </form>
     </div>
 
