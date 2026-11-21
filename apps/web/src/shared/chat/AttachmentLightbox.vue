@@ -1,12 +1,10 @@
 <script setup lang="ts">
-import { IconButton, NativeDialog } from '@voice-room/ui/components';
+import { Dialog, IconButton } from '@voice-room/ui/components';
 // Full-screen image viewer.
 //
 // It takes plain sources rather than message attachments, so the same viewer
 // opens a picture already in the chat and one still sitting in the composer —
 // the moment you most want a closer look is before you send it.
-//
-// The native modal puts the viewer above the room, regardless of the chat's stacking context.
 import { t } from '@/shared/i18n';
 import { ChevronLeft, ChevronRight, Download, Minus, Plus, RotateCcw, X } from '@lucide/vue';
 import { computed, ref } from 'vue';
@@ -113,10 +111,14 @@ function keydown(event: KeyboardEvent): void {
 </script>
 
 <template>
-  <NativeDialog
+  <Dialog
     v-slot="{ close }"
-    class="attachment-lightbox__backdrop"
-    :label="t('Изображение {p0} из {p1}', { p0: current + 1, p1: items.length })"
+    open
+    layout="media"
+    trim="bare"
+    :closable="false"
+    :title="t('Изображение {p0} из {p1}', { p0: current + 1, p1: items.length })"
+    initial-focus=".attachment-lightbox__close"
     @keydown="keydown"
     @contextmenu.stop
     @close="emit('close')"
@@ -156,7 +158,13 @@ function keydown(event: KeyboardEvent): void {
           <a v-if="item?.downloadHref" :href="item.downloadHref" download rel="external" :aria-label="t('Скачать')"
             ><Download v-bind="iconSm" aria-hidden="true"
           /></a>
-          <IconButton :tooltip="false" autofocus :label="t('Закрыть просмотр')" :size="32" @click="close">
+          <IconButton
+            class="attachment-lightbox__close"
+            :tooltip="false"
+            :label="t('Закрыть просмотр')"
+            :size="32"
+            @click="close"
+          >
             <X aria-hidden="true" />
           </IconButton>
         </div>
@@ -209,5 +217,5 @@ function keydown(event: KeyboardEvent): void {
         </IconButton>
       </template>
     </div>
-  </NativeDialog>
+  </Dialog>
 </template>

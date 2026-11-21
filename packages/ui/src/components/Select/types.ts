@@ -18,9 +18,8 @@ export type SelectProps = {
   label?: string | undefined;
   disabled?: boolean | undefined;
   placement?: PopoverPlacement | undefined;
+  portalTarget?: HTMLElement | undefined;
   flip?: boolean | undefined;
   size?: SelectSize | undefined;
   variant?: SelectVariant | undefined;
 };
-
-export type NativeSelectProps = Omit<SelectProps, 'native' | 'placement' | 'flip'>;

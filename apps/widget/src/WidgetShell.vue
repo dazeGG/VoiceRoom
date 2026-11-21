@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Button, Callout, IconButton, NativeSelect, Slider } from '@voice-room/ui/components';
+import { Button, Callout, Field, IconButton, Select, Slider } from '@voice-room/ui/components';
 import { onMounted, onBeforeUnmount, ref, computed, useTemplateRef } from 'vue';
 import { X } from '@lucide/vue';
 import { WIDGET_SERVICE_URL, parseWidgetMessage, type WidgetBootstrap } from '@voice-room/shared/contracts/widget';
@@ -199,44 +199,50 @@ function leave() {
           </IconButton>
         </div>
         <section v-if="visiblePanel === 'camera'" aria-label="Настройки камеры" class="widget-call__settings">
-          <label
-            >Камера<NativeSelect
+          <Field label="Камера">
+            <Select
               v-model="devices.cameraId"
-              class="widget-call__select"
               size="sm"
+              flip
+              :portal-target="shell ?? undefined"
               :options="devices.cameraOptions"
               @value-change="run(() => switchCamera(devices.cameraId))"
-          /></label>
+            />
+          </Field>
         </section>
         <section v-else-if="visiblePanel === 'input'" aria-label="Настройки микрофона" class="widget-call__settings">
-          <label
-            >Микрофон<NativeSelect
+          <Field label="Микрофон">
+            <Select
               v-model="devices.microphoneId"
-              class="widget-call__select"
               size="sm"
+              flip
+              :portal-target="shell ?? undefined"
               :options="devices.microphoneOptions"
               @value-change="run(switchMicrophone)"
-          /></label>
-          <label
-            >Шумоподавление<NativeSelect
+            />
+          </Field>
+          <Field label="Шумоподавление">
+            <Select
               v-model="devices.noiseMode"
-              class="widget-call__select"
               size="sm"
+              flip
+              :portal-target="shell ?? undefined"
               :options="noiseOptions"
               @value-change="run(switchNoiseMode)"
-          /></label>
+            />
+          </Field>
         </section>
         <section v-else-if="visiblePanel === 'output'" aria-label="Настройки динамика" class="widget-call__settings">
-          <label>
-            Вывод звука
-            <NativeSelect
+          <Field label="Вывод звука">
+            <Select
               v-model="devices.outputDeviceId"
-              class="widget-call__select"
               size="sm"
+              flip
+              :portal-target="shell ?? undefined"
               :options="devices.outputOptions"
               @value-change="run(switchOutputDevice)"
             />
-          </label>
+          </Field>
         </section>
         <section
           v-else-if="visiblePanel === 'participant' && selectedParticipant"

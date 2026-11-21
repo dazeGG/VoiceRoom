@@ -266,7 +266,8 @@ test('Meet chat delivers once and reconnects without a backlog', async ({ page, 
     await join(alice, link.href, 'Alice');
     await join(charlie, link.href, 'Charlie');
 
-    await alice.getByRole('button', { name: 'Meeting chat', exact: true }).click();
+    const desktopToggle = alice.getByRole('button', { name: 'Meeting chat', exact: true });
+    await desktopToggle.click();
     const mobileToggle = charlie.getByRole('button', { name: 'Meeting chat', exact: true });
     await mobileToggle.click();
     const mobileChat = charlie.getByRole('dialog', { name: 'Meeting chat' });
@@ -278,6 +279,18 @@ test('Meet chat delivers once and reconnects without a backlog', async ({ page, 
     const charlieSend = mobileChat.getByRole('button', { name: 'Send', exact: true });
     const first = '<b>Only plain text</b>';
     await aliceDraft.fill(first);
+    await desktopToggle.click();
+    await expect(aliceDraft).toBeHidden();
+    await desktopToggle.click();
+    await expect(aliceDraft).toHaveValue(first);
+
+    await charlieDraft.fill('Mobile draft');
+    await charlieDraft.press('Escape');
+    await expect(mobileChat).toBeHidden();
+    await expect(mobileToggle).toBeFocused();
+    await mobileToggle.click();
+    await expect(charlieDraft).toHaveValue('Mobile draft');
+
     await aliceSend.click();
     await expect(mobileChat.getByText(first, { exact: true })).toHaveCount(1);
     await expect(mobileChat.getByText('Alice', { exact: true })).toBeVisible();

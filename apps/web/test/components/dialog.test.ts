@@ -112,3 +112,44 @@ test('a press on a toast raised over the dialog does not close it', async () => 
   expect(onClosed).not.toHaveBeenCalled();
   expect(screen.getByRole('dialog')).toBeTruthy();
 });
+
+test.each([false, true])(
+  'the panel exposes the right modality and preserves the trigger (modal: %s)',
+  async (modal) => {
+    const outsideAction = vi.fn();
+    const Host = defineComponent(() => {
+      const open = ref(false);
+      return () => [
+        h('button', { onClick: () => (open.value = !open.value) }, 'Чат'),
+        h('button', { onClick: outsideAction }, 'Следующее действие'),
+        h(
+          UiDialog,
+          { open: open.value, title: 'Чат встречи', layout: 'panel', modal, onClose: () => (open.value = false) },
+          () => h('input', { 'aria-label': 'Сообщение' })
+        )
+      ];
+    });
+    const { container } = render(Host);
+    const trigger = screen.getByRole('button', { name: 'Чат' });
+    await userEvent.click(trigger);
+    const panel = await screen.findByRole('dialog', { name: 'Чат встречи' });
+    expect(container.contains(panel)).toBe(!modal);
+    expect(panel.getAttribute('aria-modal')).toBe(modal ? 'true' : null);
+
+    if (!modal) {
+      const close = screen.getByRole('button', { name: 'Закрыть' });
+      await vi.waitFor(() => expect(document.activeElement).toBe(close));
+      await userEvent.tab({ shift: true });
+      expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Следующее действие' }));
+      await userEvent.click(screen.getByRole('button', { name: 'Следующее действие' }));
+      await userEvent.keyboard('{Escape}');
+      expect(outsideAction).toHaveBeenCalledOnce();
+      expect(screen.getByRole('dialog')).toBe(panel);
+    }
+
+    await userEvent.click(screen.getByRole('textbox', { name: 'Сообщение' }));
+    await userEvent.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog')).toBeNull();
+    await vi.waitFor(() => expect(document.activeElement).toBe(trigger));
+  }
+);

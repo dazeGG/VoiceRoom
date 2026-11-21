@@ -54,3 +54,28 @@ export const WithoutCloseButton: Story = { args: { closable: false } };
 
 export const FullScreen: Story = { args: { size: 'full', layer: 'raised' } };
 export const Bare: Story = { args: { trim: 'bare', closable: false, layer: 'nested' } };
+
+export const BottomPanel: Story = {
+  args: { layout: 'panel', closeLabel: 'Закрыть панель' }
+};
+
+export const InlinePanel: Story = {
+  args: { layout: 'panel', modal: false, closeLabel: 'Закрыть панель' }
+};
+
+export const MediaOverDialog: Story = {
+  args: { title: 'Просмотр вложения', layout: 'media', trim: 'bare', closable: false },
+  render: (args) => ({
+    components: { Button, Dialog },
+    setup: () => ({ args, open: ref(false), viewing: ref(false) }),
+    template: `
+      <Button @click="open = true">Открыть вложения</Button>
+      <Dialog :open="open" title="Вложения" layer="auth" :on-close="() => (open = false)">
+        <Button @click="viewing = true">Посмотреть изображение</Button>
+        <Dialog v-slot="{ close }" v-bind="args" :open="viewing" :on-close="() => (viewing = false)">
+          <Button @click="close">Закрыть просмотр</Button>
+        </Dialog>
+      </Dialog>
+    `
+  })
+};

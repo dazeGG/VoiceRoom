@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/vue3-vite';
-import { ref } from 'vue';
+import { ref, useTemplateRef } from 'vue';
 import Field from '../Field/Field.vue';
 import Select from './Select.vue';
 
@@ -64,6 +64,22 @@ export const Empty: Story = { args: { options: [] } };
 export const BottomEnd: Story = { args: { placement: 'bottom-end' } };
 export const TopStart: Story = { args: { placement: 'top-start' } };
 export const TopEnd: Story = { args: { placement: 'top-end' } };
+export const SystemPicker: Story = { args: { native: true, size: 'sm' } };
+
+export const LocalPanel: Story = {
+  args: { label: '', size: 'sm' },
+  render: (args) => ({
+    components: { Field, Select },
+    setup: () => ({ args, value: ref(''), preview: useTemplateRef<HTMLElement>('preview') }),
+    template: `
+      <section ref="preview">
+        <Field label="Микрофон">
+          <Select v-bind="args" v-model="value" :portal-target="preview ?? undefined" />
+        </Field>
+      </section>
+    `
+  })
+};
 
 export const CustomLabel: Story = {
   render: (args) => ({

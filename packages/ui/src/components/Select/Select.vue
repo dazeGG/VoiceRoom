@@ -13,7 +13,6 @@ import {
 import { computed } from 'vue';
 import { useFieldControl } from '../Field/context';
 import { parsePlacement } from '../Popover/popover-placement';
-import NativeSelect from './NativeSelect.vue';
 import type { SelectProps } from './types';
 
 defineOptions({ inheritAttrs: false });
@@ -50,15 +49,27 @@ function choose(next: string | undefined): void {
   value.value = next;
   if (changed) emit('valueChange', next);
 }
+
+function onNativeChange(event: Event): void {
+  if (event.currentTarget instanceof HTMLSelectElement) choose(event.currentTarget.value);
+}
 </script>
 
 <template>
-  <NativeSelect
+  <select
     v-if="native"
-    v-bind="{ ...$attrs, options, label, disabled, size, variant, name, iconOnly }"
-    :model-value="value"
-    @value-change="choose"
-  />
+    v-bind="controlAttrs({ ...$attrs, 'aria-label': label || $attrs['aria-label'] })"
+    class="ui-select"
+    :class="[`ui-select--${size}`, { 'ui-select--ghost': variant === 'ghost', 'ui-select--icon-only': iconOnly }]"
+    :value="value"
+    :name="name"
+    :disabled="disabled || options.length === 0"
+    @change="onNativeChange"
+  >
+    <option v-for="option in options" :key="option.value" :value="option.value" :lang="option.lang">
+      {{ option.label }}
+    </option>
+  </select>
   <SelectRoot
     v-else
     v-bind="name ? { name } : {}"
@@ -79,7 +90,7 @@ function choose(next: string | undefined): void {
       </span>
     </SelectTrigger>
 
-    <SelectPortal>
+    <SelectPortal v-bind="portalTarget ? { to: portalTarget } : {}">
       <SelectContent
         class="ui-menu ui-select__panel"
         position="popper"

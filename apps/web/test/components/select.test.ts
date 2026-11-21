@@ -1,8 +1,8 @@
-import { render, screen } from '@testing-library/vue';
+import { render, screen, within } from '@testing-library/vue';
 import userEvent from '@testing-library/user-event';
 import { expect, test, vi } from 'vitest';
 import { Field, Select, type SelectSize } from '@voice-room/ui/components';
-import { defineComponent, h } from 'vue';
+import { defineComponent, h, shallowRef } from 'vue';
 import EmojiText from '@/shared/chat/EmojiText.vue';
 import { stubOverlayDom } from '../helpers/overlay-dom';
 
@@ -136,3 +136,34 @@ test.each<SelectSize>(['sm', 'md', 'lg'])(
     expect(onValueChange).toHaveBeenLastCalledWith('headset');
   }
 );
+
+test('the system picker still reports a language change through Select', async () => {
+  const onValueChange = vi.fn();
+  render(Select, {
+    props: {
+      native: true,
+      label: 'Язык',
+      options: [
+        { value: '', label: 'Русский' },
+        { value: 'fr', label: 'Français', lang: 'fr' }
+      ],
+      onValueChange
+    }
+  });
+  await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Язык' }), 'fr');
+  expect(screen.getByRole('option', { name: 'Français', selected: true })).toBeTruthy();
+  expect(onValueChange).toHaveBeenCalledExactlyOnceWith('fr');
+});
+
+test('the dropdown stays inside its provided theme container', async () => {
+  const Host = defineComponent(() => {
+    const preview = shallowRef<HTMLElement | null>(null);
+    return () => [
+      h('section', { ref: preview, 'aria-label': 'Виджет' }),
+      h(Select, { label: 'Устройство', options, portalTarget: preview.value ?? undefined })
+    ];
+  });
+  render(Host);
+  await userEvent.click(screen.getByRole('combobox', { name: 'Устройство' }));
+  expect(within(screen.getByRole('region', { name: 'Виджет' })).getByRole('listbox')).toBeTruthy();
+});

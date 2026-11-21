@@ -7,15 +7,12 @@ export interface DialogProps {
   description?: string;
   size?: DialogSize;
   layer?: 'raised' | 'nested' | 'security' | 'auth';
+  layout?: 'standard' | 'media' | 'panel';
+  modal?: boolean;
   trim?: 'standard' | 'bare';
   overflowVisible?: boolean;
   closable?: boolean;
+  closeLabel?: string;
   closeDisabled?: boolean;
   initialFocus?: string;
-}
-
-export interface NativeDialogProps {
-  label?: string;
-  open?: boolean;
-  modal?: boolean;
 }

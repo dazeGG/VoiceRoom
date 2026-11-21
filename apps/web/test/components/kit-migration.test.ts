@@ -10,8 +10,6 @@ import {
   Field,
   FileDrop,
   MascotIcon,
-  NativeDialog,
-  NativeSelect,
   Pressable,
   RadioGroup,
   RadioGroupItem
@@ -90,24 +88,6 @@ test('a FileDrop custom trigger opens its file input and reports the picked file
   expect(onFiles).toHaveBeenCalledWith([photo]);
 });
 
-test('the native select picks a different device and exposes its label', async () => {
-  const onValueChange = vi.fn();
-  render(NativeSelect, {
-    props: {
-      label: 'Вывод звука',
-      options: [
-        { value: '', label: 'По умолчанию' },
-        { value: 'speakers', label: 'Колонки' }
-      ],
-      onValueChange
-    }
-  });
-  const select = screen.getByRole('combobox', { name: 'Вывод звука' });
-  await userEvent.selectOptions(select, 'speakers');
-  expect(screen.getByRole('option', { name: 'Колонки', selected: true })).toBeTruthy();
-  expect(onValueChange).toHaveBeenCalledWith('speakers');
-});
-
 test('a full-screen dialog gives custom content the dialog title and keeps Escape inside', async () => {
   const onClose = vi.fn();
   render(Dialog, {
@@ -126,41 +106,6 @@ test('a full-screen dialog gives custom content the dialog title and keeps Escap
   expect(screen.getByRole('button', { name: 'Вернуться' })).toBeTruthy();
   await userEvent.keyboard('{Escape}');
   expect(onClose).not.toHaveBeenCalled();
-});
-
-test('native dialog opens a browser modal and reports closing from a custom control', async () => {
-  const prototype = HTMLDialogElement.prototype;
-  Object.defineProperties(prototype, {
-    showModal: {
-      configurable: true,
-      value(this: HTMLDialogElement) {
-        this.open = true;
-      }
-    },
-    close: {
-      configurable: true,
-      value(this: HTMLDialogElement) {
-        this.open = false;
-        this.dispatchEvent(new Event('close'));
-      }
-    }
-  });
-  try {
-    const onClose = vi.fn();
-    render(NativeDialog, {
-      props: { label: 'Просмотр изображения', onClose },
-      slots: {
-        default: ({ close }: { close: () => void }) => h(Pressable, { onClick: close }, () => 'Закрыть')
-      }
-    });
-    expect(screen.getByRole('dialog', { name: 'Просмотр изображения' })).toBeTruthy();
-    await userEvent.click(screen.getByRole('button', { name: 'Закрыть' }));
-    expect(onClose).toHaveBeenCalledOnce();
-    expect(screen.queryByRole('dialog')).toBeNull();
-  } finally {
-    Reflect.deleteProperty(prototype, 'showModal');
-    Reflect.deleteProperty(prototype, 'close');
-  }
 });
 
 test('a radio tile accepts custom content and responds to the next arrow key', async () => {
