@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { EmptyState } from '@voice-room/ui/components';
 // The panel you reach from the bell. It answers two questions — what happened
 // and how long ago — and offers exactly one bulk action. "К первому
 // непрочитанному" is gone: every unread row is already one click away, and
@@ -119,10 +120,9 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onWindowKeydown));
         </div>
         <p>{{ t('Загружаем…') }}</p>
       </div>
-      <div v-else-if="inbox.items.length === 0" class="notification-inbox__state">
-        <span class="notification-inbox__glyph"><Bell :size="20" aria-hidden="true" /></span>
-        <p>{{ t('Новых уведомлений нет') }}</p>
-      </div>
+      <EmptyState v-else-if="inbox.items.length === 0" :title="t('Новых уведомлений нет')" compact>
+        <template #icon><Bell /></template>
+      </EmptyState>
       <template v-else>
         <ul class="notification-inbox__list">
           <li

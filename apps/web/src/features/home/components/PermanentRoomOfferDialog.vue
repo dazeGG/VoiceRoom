@@ -1,6 +1,7 @@
 <script setup lang="ts">
+import { Button, Callout } from '@voice-room/ui/components';
 import { t } from '@/shared/i18n';
-import { Button, Dialog } from '@/shared/ui';
+import { Dialog } from '@/shared/ui';
 
 defineProps<{ open: boolean }>();
 
@@ -15,18 +16,29 @@ const emit = defineEmits<{ register: []; continue: []; close: [] }>();
     size="sm"
     initial-focus=".permanent-room-offer__register"
   >
-    <p class="permanent-room-offer__text">
-      {{
+    <Callout
+      tone="accent"
+      :title="t('Постоянная комната')"
+      :text="
         t(
           'Гостевая комната удаляется, когда все выходят, поэтому ссылку приходится каждый раз отправлять заново. С аккаунтом комната постоянная: одна ссылка навсегда, а друзья заходят по ней без регистрации.'
         )
-      }}
-    </p>
-    <div class="permanent-room-offer__actions">
-      <Button class="permanent-room-offer__register" variant="primary" type="button" @click="emit('register')">
-        {{ t('Создать аккаунт') }}
-      </Button>
-      <Button variant="ghost" type="button" @click="emit('continue')">{{ t('Продолжить без аккаунта') }}</Button>
-    </div>
+      "
+    >
+      <template #actions>
+        <Button
+          class="permanent-room-offer__register"
+          variant="primary"
+          size="sm"
+          type="button"
+          @click="emit('register')"
+        >
+          {{ t('Создать аккаунт') }}
+        </Button>
+        <Button variant="ghost" size="sm" type="button" @click="emit('continue')">{{
+          t('Продолжить без аккаунта')
+        }}</Button>
+      </template>
+    </Callout>
   </Dialog>
 </template>

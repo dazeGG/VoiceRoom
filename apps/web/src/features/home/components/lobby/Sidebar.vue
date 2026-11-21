@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Badge } from '@voice-room/ui/components';
 import { t } from '@/shared/i18n';
 import { Bell, BellOff, LayoutDashboard, Settings, UserPlus, Users } from '@lucide/vue';
 import { computed, ref } from 'vue';
@@ -8,16 +9,7 @@ import EmojiText from '@/shared/chat/EmojiText.vue';
 import BetaMark from '@/shared/components/BetaMark.vue';
 import { useNotificationPreferencesStore } from '@/shared/notifications/preferences.store';
 import { effectivePresenceStatus, normalizePresenceStatus, type PresenceStatus } from '@/shared/presence';
-import {
-  AccountBadge,
-  Avatar,
-  Badge,
-  Button,
-  DropdownMenu,
-  MenuLabel,
-  MenuRadioGroup,
-  MenuRadioItem
-} from '@/shared/ui';
+import { AccountBadge, Avatar, Button, DropdownMenu, MenuLabel, MenuRadioGroup, MenuRadioItem } from '@/shared/ui';
 import { iconSm } from '@/shared/ui/icons';
 import { displayNameOf } from '@/shared/utils/display-name';
 import type { ActiveVoice } from '../../model/active-voice';
@@ -226,9 +218,9 @@ async function selectStatus(value: string | undefined, close: () => void): Promi
           </div>
           <Badge
             v-if="entry.unreadCount > 0"
-            :tone="notificationPreferences.mutedPeerIds.includes(entry.user.id) ? 'muted' : 'default'"
-            >{{ entry.unreadCount }}</Badge
-          >
+            :tone="notificationPreferences.mutedPeerIds.includes(entry.user.id) ? 'muted' : 'accent'"
+            :count="entry.unreadCount"
+          />
         </button>
       </template>
     </div>

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { EmptyState } from '@voice-room/ui/components';
 import { getLocale, t } from '@/shared/i18n';
 import { Check, ChevronLeft, Copy, X } from '@lucide/vue';
 import { computed, ref } from 'vue';
@@ -137,7 +138,7 @@ function mutualLabel(count: number): string {
         <div class="people-view__column-label">
           {{ t('Входящие') }} <span class="people-view__count">{{ incoming.length }}</span>
         </div>
-        <p v-if="incoming.length === 0" class="people-view__empty">{{ t('Новых заявок нет.') }}</p>
+        <EmptyState v-if="incoming.length === 0" :title="t('Новых заявок нет.')" compact />
         <template v-else>
           <div
             v-for="request in incoming"
@@ -184,7 +185,7 @@ function mutualLabel(count: number): string {
         <div class="people-view__column-label">
           {{ t('Исходящие') }} <span class="people-view__count">{{ outgoing.length }}</span>
         </div>
-        <p v-if="outgoing.length === 0" class="people-view__empty">{{ t('Вы пока никому не отправляли заявки.') }}</p>
+        <EmptyState v-if="outgoing.length === 0" :title="t('Вы пока никому не отправляли заявки.')" compact />
         <template v-else>
           <div v-for="request in outgoing" :key="request.id" class="people-view__request">
             <Avatar

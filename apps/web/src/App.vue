@@ -5,6 +5,8 @@
 import { t } from '@/shared/i18n';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { RouterView, useRoute, useRouter } from 'vue-router';
+import { Toast } from '@voice-room/ui/components';
+import { useToastUiStore } from '@voice-room/call/engine/core/toast-ui.store';
 import { loadAccountBadges } from '@/api/badges';
 import { onContractViolation } from '@/api/contract-violations';
 import { useAppUpdateStore } from '@/features/app-update/app-update.store';
@@ -13,12 +15,14 @@ import { reloadNavigationsOnUpdate } from '@/features/app-update/update-navigati
 import { createVersionCheck } from '@/features/app-update/version-check';
 import { useCallFeedbackStore } from '@/features/call-feedback/call-feedback.store';
 import CallFeedbackPrompt from '@/features/call-feedback/CallFeedbackPrompt.vue';
+import { useToastsStore } from '@/features/home/model/toasts.store';
 import { useLeaveScreenStore } from '@/features/room/leave-screen.store';
 import { applyDesktopBoundaryToDocument } from '@/platform/desktop-boundary';
 import { bindDesktopSystem } from '@/platform/desktop-system';
 import { isMobileRoute } from '@/platform/mobile-routes';
 import { useCallActivityStore } from '@/shared/call-activity.store';
 import { installEmojiCopy } from '@/shared/chat/emoji-copy';
+import EmojiText from '@/shared/chat/EmojiText.vue';
 import { useThemeStore } from '@/shared/theme/theme.store';
 
 const route = useRoute();
@@ -28,6 +32,16 @@ const callActivity = useCallActivityStore();
 const callFeedback = useCallFeedbackStore();
 const leaveScreen = useLeaveScreenStore();
 const theme = useThemeStore();
+const toasts = useToastsStore();
+const roomToasts = useToastUiStore();
+roomToasts.useViewportTimers();
+
+const toastItems = computed(() => [...toasts.items, ...roomToasts.items]);
+
+function dismissToast(id: string): void {
+  if (toasts.items.some((toast) => toast.id === id)) toasts.dismissToast(id);
+  else roomToasts.dismissToastUi(id);
+}
 
 const boundaryReady = ref(false);
 const desktopAllowed = ref(false);
@@ -131,6 +145,9 @@ onBeforeUnmount(() => {
   </main>
   <template v-else-if="allowed">
     <RouterView />
+    <Toast id="toast" :toasts="toastItems" :on-dismiss="dismissToast">
+      <template #message="{ message }"><EmojiText :text="message" /></template>
+    </Toast>
     <AppUpdateNotice :in-call="callActivity.active" />
     <!-- The leave screen asks the question itself, as the bottom of its own window. -->
     <CallFeedbackPrompt :hidden="callActivity.active || leaveScreen.open" />

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Badge } from '@voice-room/ui/components';
 import { t } from '@/shared/i18n';
 import { Link, MessageSquare, UserPlus, Users } from '@lucide/vue';
 import { computed } from 'vue';
@@ -140,7 +141,7 @@ function notifyRoomsChanged(): void {
             @click="panelToggle.toggleRoomPanel('chat')"
           >
             <MessageSquare v-bind="iconSm" aria-hidden="true" />
-            <span v-if="roomUnreadCount > 0" class="room-panel-tabs__unread" aria-hidden="true"></span>
+            <Badge v-if="roomUnreadCount > 0" class="room-panel-tabs__unread" aria-hidden="true" variant="dot" ring />
           </button>
           <button
             class="room-panel-tabs__tab"

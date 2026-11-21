@@ -14,7 +14,6 @@
 //   .is-good / .is-bad       -> .call-feedback__thumb--good / --bad
 //   .call-feedback-details   -> .call-feedback__details
 //   .call-feedback-tags      -> .call-feedback__tags
-//   .call-feedback-tag       -> .call-feedback__tag
 //   .call-feedback-comment   -> .call-feedback__comment
 //   .call-feedback-actions   -> .call-feedback__actions
 //   .call-feedback-thanks    -> .call-feedback__thanks
@@ -104,30 +103,6 @@
     color: var(--vr-text-2);
     font-size: 0.8125rem;
     font-weight: 500;
-  }
-}
-
-.call-feedback__tag {
-  min-height: 30px;
-  padding: 0 12px;
-  border: 1px solid var(--vr-line);
-  border-radius: 999px;
-  background: var(--vr-surface-2);
-  color: var(--vr-text);
-  font: inherit;
-  font-size: 0.8125rem;
-  cursor: pointer;
-  transition:
-    border-color 0.14s ease,
-    background 0.14s ease;
-
-  &:hover {
-    background: var(--vr-surface-2-hover);
-  }
-
-  &[aria-pressed='true'] {
-    border-color: var(--vr-accent-line);
-    background: color-mix(in oklch, var(--vr-accent), transparent 88%);
   }
 }
 

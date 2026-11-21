@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Button, Callout } from '@voice-room/ui/components';
 import { t } from '@/shared/i18n';
 import { MonitorSmartphone } from '@lucide/vue';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
@@ -120,33 +121,25 @@ function close(): void {
   <!-- A security question outranks every other dialog in the lobby (_login-alert.scss lifts it). -->
   <Dialog :open="open" :title="secured ? t('Защитите аккаунт') : t('Новый вход в аккаунт')" :on-close="close" size="sm">
     <div class="login-alert">
-      <template v-if="secured">
-        <p class="login-alert__text">
-          {{
-            secured.sessionEnded
-              ? t('Сеанс на том устройстве завершён — там аккаунт больше не открыт.')
-              : t('Сеанс на том устройстве уже был завершён.')
-          }}
-          {{ t('Если это были не вы, кто-то мог узнать ваш пароль.') }}
-        </p>
-        <div class="login-alert__actions login-alert__actions--stack">
-          <button class="login-alert__button login-alert__button--danger" type="button" @click="secure('password')">
-            {{ t('Сменить пароль') }}
-          </button>
-          <button
-            class="login-alert__button login-alert__button--ghost"
-            type="button"
-            @click="secure('recovery-codes')"
-          >
-            {{
-              secured.recoveryCodes.remaining > 0 ? t('Обновить коды восстановления') : t('Создать коды восстановления')
-            }}
-          </button>
-          <button class="login-alert__later" type="button" @click="secured = null">{{ t('Позже') }}</button>
-        </div>
-      </template>
-      <template v-else-if="current">
-        <p class="login-alert__text">{{ loginAlertHeadline(current) }}{{ t('. Это были вы?') }}</p>
+      <Callout
+        v-if="secured"
+        tone="danger"
+        :title="
+          secured.sessionEnded
+            ? t('Сеанс на том устройстве завершён — там аккаунт больше не открыт.')
+            : t('Сеанс на том устройстве уже был завершён.')
+        "
+        :text="t('Если это были не вы, кто-то мог узнать ваш пароль.')"
+      >
+        <template #actions>
+          <Button variant="danger" size="sm" @click="secure('password')">{{ t('Сменить пароль') }}</Button>
+          <Button size="sm" @click="secure('recovery-codes')">{{
+            secured.recoveryCodes.remaining > 0 ? t('Обновить коды восстановления') : t('Создать коды восстановления')
+          }}</Button>
+          <Button variant="plain" size="sm" @click="secured = null">{{ t('Позже') }}</Button>
+        </template>
+      </Callout>
+      <Callout v-else-if="current" tone="warning" :title="loginAlertHeadline(current) + t('. Это были вы?')">
         <div class="login-alert__device">
           <span class="login-alert__icon" aria-hidden="true"><MonitorSmartphone v-bind="iconMd" /></span>
           <div>
@@ -154,25 +147,15 @@ function close(): void {
             <small class="login-alert__device-when">{{ loginAlertWhen(current) }}</small>
           </div>
         </div>
-        <div class="login-alert__actions">
-          <button
-            class="login-alert__button login-alert__button--danger"
-            type="button"
-            :disabled="answering"
-            @click="void answer('denied')"
-          >
-            {{ t('Это не я') }}
-          </button>
-          <button
-            class="login-alert__button login-alert__button--safe"
-            type="button"
-            :disabled="answering"
-            @click="void answer('confirmed')"
-          >
-            {{ t('Это я') }}
-          </button>
-        </div>
-      </template>
+        <template #actions>
+          <Button variant="danger-ghost" size="sm" :disabled="answering" @click="void answer('denied')">{{
+            t('Это не я')
+          }}</Button>
+          <Button variant="soft" size="sm" :disabled="answering" @click="void answer('confirmed')">{{
+            t('Это я')
+          }}</Button>
+        </template>
+      </Callout>
     </div>
   </Dialog>
 </template>

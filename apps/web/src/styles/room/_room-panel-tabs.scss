@@ -79,17 +79,12 @@
 }
 
 .room-panel-tabs__unread {
+  --badge-ring: var(--vr-surface-2);
   position: absolute;
-  top: 5px;
-  right: 7px;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--vr-accent);
-  box-shadow: 0 0 0 2px var(--vr-surface-2);
+  top: var(--space-6);
+  right: var(--space-8);
 }
 
 .room-panel-tabs--header .room-panel-tabs__unread {
   position: static;
-  box-shadow: none;
 }

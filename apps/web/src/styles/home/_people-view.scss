@@ -16,7 +16,6 @@
 //   .lr-grid-2                            -> .people-view__columns
 //   .lr-eyebrow.people-column-label       -> .people-view__column-label
 //   .people-count                         -> .people-view__count
-//   .lr-empty                             -> .people-view__empty
 //   .lr-req-card                          -> .people-view__request (+ --incoming)
 //   .people-request-copy                  -> .people-view__request-copy
 //   .lr-req-name.people-truncate          -> .people-view__request-name
@@ -170,12 +169,6 @@
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
   gap: 14px;
-}
-
-.people-view__empty {
-  margin: 0;
-  color: var(--vr-text-muted);
-  font-size: 0.84375rem;
 }
 
 .people-view__request {

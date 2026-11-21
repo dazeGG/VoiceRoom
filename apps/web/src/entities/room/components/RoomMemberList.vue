@@ -8,7 +8,7 @@ import { useProfileCardUiStore } from '@/entities/profile-card/profile-card-ui.s
 import { useSessionStore } from '@/features/auth/session.store';
 import type { ProfileCardPerson } from '@/shared/components/profile-card';
 import { AccountBadge, DropdownMenu, MenuSeparator, MenuItem, MenuSub } from '@/shared/ui';
-import { Avatar } from '@voice-room/ui/components';
+import { Avatar, EmptyState } from '@voice-room/ui/components';
 import { iconMd } from '@/shared/ui/icons';
 import { displayNameOf } from '@/shared/utils/display-name';
 import { BAN_DURATIONS, banRoomMember, kickRoomMember, type ModerationNotice } from '../room-moderation';
@@ -248,9 +248,7 @@ async function ban(member: MembershipMember, duration: ModerationDuration): Prom
       >
         {{ roster.loading ? t('Загрузка…') : t('Показать ещё') }}
       </button>
-      <p v-else-if="roster?.loaded && roster.members.length === 0" class="room-member-list__empty">
-        {{ t('Никого не найдено') }}
-      </p>
+      <EmptyState v-else-if="roster?.loaded && roster.members.length === 0" :title="t('Никого не найдено')" compact />
     </template>
   </section>
 </template>

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Badge } from '@voice-room/ui/components';
 import { t } from '@/shared/i18n';
 import { PanelRightClose, X } from '@lucide/vue';
 import { iconSm } from '@/shared/ui/icons';
@@ -47,7 +48,7 @@ const emit = defineEmits<{
         @click="emit('selectChat')"
       >
         <span>{{ t('Чат') }}</span>
-        <span v-if="unread > 0" class="room-panel-tabs__unread" aria-hidden="true"></span>
+        <Badge v-if="unread > 0" class="room-panel-tabs__unread" aria-hidden="true" variant="dot" />
       </button>
       <button
         :id="participantsTabId"
