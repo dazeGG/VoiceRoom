@@ -92,7 +92,7 @@
 // picks the rest: 20–24 -> radius-6, icon 12–16; 28–32 -> radius-8, icon-16;
 // 36–40 -> radius-10, icon-18; 44–48 -> radius-12, icon-20. A nested element
 // takes its parent's radius minus the gap between them. New code uses only
-// these grid values. See docs/DESIGN_SYSTEM.md for the sizing rules.
+// these grid values. See DESIGN.md, "Size grid", for the sizing rules.
 :root {
   --size-16: 16px;
   --size-20: 20px;

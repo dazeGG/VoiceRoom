@@ -90,7 +90,7 @@ export default tseslint.config(
     rules: {
       // Prettier owns the layout of templates, as it does everywhere else.
       ...vue.configs['no-layout-rules'].rules,
-      // apps/web/CLAUDE.md: <script setup lang="ts"> only.
+      // apps/web/AGENTS.md: <script setup lang="ts"> only.
       'vue/block-lang': ['error', { script: { lang: 'ts' } }],
       'vue/component-api-style': ['error', ['script-setup']],
       // Component names are single words (Button, Dialog, Select); templates

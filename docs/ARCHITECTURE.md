@@ -237,7 +237,7 @@ styles/                 SCSS: tokens, mixins and one partial per BEM block
   (`features/room/social.ts`); `entities`, `shared`, `platform` and `api`
   never import `features/home` or `features/room`. ESLint enforces both.
 - Vue 3 `<script setup lang="ts">` only; the rules are in
-  `apps/web/CLAUDE.md`.
+  `apps/web/AGENTS.md`.
 - `watch`/`watchEffect` synchronise with the outside world (DOM, listeners,
   timers). Values computed from state are `computed`; reactions to a user
   action belong in the action function, not in a watcher on the state it

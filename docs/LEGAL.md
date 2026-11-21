@@ -12,7 +12,7 @@ is an engineering summary, not legal advice.
 | Published personal data policy (152-FZ art. 18.1 part 2) | `/privacy` — `apps/web/src/features/legal/PrivacyPolicy.vue` |
 | Terms of use: minimum age 14, forbidden content, reports, intermediary liability | `/terms` — `TermsOfService.vue` |
 | Attribution required by CC BY 4.0 (Twemoji, DB-IP, Font Awesome) and other licences | `/licenses` — `Licenses.vue` |
-| Acceptance at sign-up | the notice above «Создать аккаунт» in `AuthDialog.vue` |
+| Acceptance at sign-up | the notice above «Создать аккаунт» (Create an account) in `AuthDialog.vue` |
 | Legal pages reachable from everywhere, phones included | landing footer, settings sidebar, `lib/platform/mobile-routes.ts` |
 | Reports to the operator and removal of any message (art. 1253.1, 149-FZ art. 15.1 takedowns) | `POST /api/reports`, the admin app's reports section (`apps/admin`), `apps/api/src/domains/reports` |
 | No IP address kept in the database: stays in voice, room creators and guest room bans keep a keyed hash of it (an IPv6 address by its /64) | `apps/api/src/lib/ip-key.ts`; old guest bans are keyed by the API's `room_ban_ip_key` maintenance task |
@@ -53,7 +53,7 @@ retention period, change it there too.
 
 ## For a lawyer
 
-- Whether the service counts as an «организатор распространения информации»
+- Whether the service counts as an «организатор распространения информации» (information dissemination organizer)
   (149-FZ art. 10.1). Inclusion in the register brings storage of messages and
   metadata and, for messengers, user identification by phone number.
 - Whether login-and-password sign-up meets the 406-FZ authorisation rules
@@ -77,7 +77,7 @@ retention period, change it there too.
   comes from reading the SDK 6.9.1 classes, not from captured traffic, and we
   found no RuStore list of what the SDK sends. Recheck on an SDK upgrade.
 - RuStore pushes carry readable text, unlike Web Push; «Скрывать текст
-  уведомлений» removes the message text, not the sender's name in the title.- Deleted direct messages stay in the database as soft-deleted rows; only room
+  уведомлений» (Hide notification text) removes the message text, not the sender's name in the title.- Deleted direct messages stay in the database as soft-deleted rows; only room
   messages are purged 30 days after deletion. The policy promises the purge for
   room messages only.
 - The production logging profile must be installed before shipping the journal
