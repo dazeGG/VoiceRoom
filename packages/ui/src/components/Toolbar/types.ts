@@ -1,5 +1,6 @@
 export interface ToolbarProps {
   label: string;
+  variant?: 'floating' | 'bare';
 }
 
 export interface ToolbarActionProps {

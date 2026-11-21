@@ -37,6 +37,50 @@
   --dialog-width: 720px;
 }
 
+.ui-overlay--raised {
+  z-index: 60;
+}
+.ui-overlay--nested {
+  z-index: 100;
+}
+.ui-overlay--security {
+  z-index: 110;
+}
+.ui-overlay--auth {
+  z-index: 120;
+}
+
+.ui-overlay--full {
+  padding: 0;
+}
+
+.ui-dialog--full {
+  width: 100%;
+  height: 100%;
+  max-height: none;
+  border: 0;
+  border-radius: 0;
+}
+
+.ui-dialog--bare {
+  background: transparent;
+  box-shadow: none;
+
+  .ui-dialog__body {
+    flex: 1;
+    display: block;
+    padding: 0;
+  }
+}
+
+.ui-dialog__head--hidden {
+  @include visually-hidden;
+}
+
+.ui-dialog--overflow-visible {
+  overflow: visible;
+}
+
 .ui-dialog__head {
   display: flex;
   flex: none;

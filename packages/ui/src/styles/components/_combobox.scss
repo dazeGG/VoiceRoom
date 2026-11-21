@@ -27,3 +27,9 @@
     font-size: 0.8125rem;
   }
 }
+
+.ui-combobox__panel--overlay {
+  position: absolute;
+  z-index: 1;
+  inset: calc(100% + var(--space-4)) 0 auto;
+}

@@ -7,7 +7,7 @@ export interface RadioOption {
 
 export interface RadioGroupProps {
   options?: readonly RadioOption[] | undefined;
-  variant?: 'list' | 'card' | undefined;
+  variant?: 'list' | 'card' | 'tile' | undefined;
   disabled?: boolean | undefined;
   name?: string | undefined;
   required?: boolean | undefined;

@@ -68,3 +68,5 @@ export const CustomItems: Story = {
     </RadioGroup>`
   })
 };
+
+export const Tiles: Story = { args: { variant: 'tile' } };

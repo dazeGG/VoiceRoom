@@ -1,6 +1,8 @@
 export interface FieldProps {
   id?: string | undefined;
   label: string;
+  visuallyHiddenLabel?: boolean;
+  visuallyHiddenHint?: boolean;
   optional?: boolean | undefined;
   hint?: string | undefined;
   error?: string | undefined;

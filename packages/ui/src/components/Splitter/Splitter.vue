@@ -93,6 +93,7 @@ function onKeydown(event: KeyboardEvent): void {
     <SplitterPanel
       ref="pane"
       class="ui-splitter__pane ui-splitter__pane--side"
+      :class="sideClass"
       :default-size="defaultWidth"
       :min-size="minWidth"
       :max-size="maxWidth"

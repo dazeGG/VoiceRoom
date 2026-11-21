@@ -13,6 +13,7 @@ import {
 import { computed } from 'vue';
 import { useFieldControl } from '../Field/context';
 import { parsePlacement } from '../Popover/popover-placement';
+import NativeSelect from './NativeSelect.vue';
 import type { SelectProps } from './types';
 
 defineOptions({ inheritAttrs: false });
@@ -52,7 +53,15 @@ function choose(next: string | undefined): void {
 </script>
 
 <template>
+  <NativeSelect
+    v-if="native"
+    v-bind="{ ...$attrs, options, label, disabled, size, variant, name, iconOnly }"
+    :model-value="value"
+    @value-change="choose"
+  />
   <SelectRoot
+    v-else
+    v-bind="name ? { name } : {}"
     :model-value="toItem(value)"
     :disabled="disabled || options.length === 0"
     @update:model-value="(next) => choose(typeof next === 'string' ? fromItem(next) : undefined)"
@@ -83,7 +92,13 @@ function choose(next: string | undefined): void {
         :aria-label="label || undefined"
       >
         <SelectViewport class="ui-select__viewport">
-          <SelectItem v-for="option in options" :key="option.value" class="ui-menu__item" :value="toItem(option.value)">
+          <SelectItem
+            v-for="option in options"
+            :key="option.value"
+            class="ui-menu__item"
+            :lang="option.lang"
+            :value="toItem(option.value)"
+          >
             <SelectItemText class="ui-menu__text">
               <span class="ellipsis" :title="option.label || undefined"
                 ><slot name="option-label" :text="option.label">{{ option.label }}</slot></span

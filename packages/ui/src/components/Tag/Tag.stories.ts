@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/vue3-vite';
 import { ref } from 'vue';
+import TagCount from './TagCount.vue';
 import Tag from './Tag.vue';
 import type { TagProps } from './types';
 
@@ -26,3 +27,11 @@ export const Reaction: Story = {
   args: { size: 'sm', variant: 'reaction', emoji: '🔥', count: 3, selectable: true, label: 'Реакция 🔥' }
 };
 export const OwnReaction: Story = { args: { ...Reaction.args, pressed: true } };
+
+export const ReactionCount: Story = {
+  render: () => ({
+    components: { Tag, TagCount },
+    template:
+      '<Tag variant="reaction" emoji="👍"><template #count><TagCount :count="4" label="Показать пользователей: 4" /></template></Tag>'
+  })
+};

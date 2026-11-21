@@ -51,3 +51,6 @@ export const Small: Story = { args: { size: 'sm' } };
 export const Medium: Story = { args: { description: 'Пригласите друзей в голосовую комнату.' } };
 export const Large: Story = { args: { size: 'lg' } };
 export const WithoutCloseButton: Story = { args: { closable: false } };
+
+export const FullScreen: Story = { args: { size: 'full', layer: 'raised' } };
+export const Bare: Story = { args: { trim: 'bare', closable: false, layer: 'nested' } };

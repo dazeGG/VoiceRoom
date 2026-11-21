@@ -5,6 +5,7 @@
   "type": "module",
   "exports": {
     "./components": "./src/components.ts",
+    "./components/widget-launcher": "./src/components/WidgetLauncher/index.ts",
     "./avatar-colors": "./src/avatar-colors.ts",
     "./avatar-initial": "./src/avatar-initial.ts",
     "./avatar-presentation": "./src/avatar-presentation.ts",

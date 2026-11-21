@@ -6,7 +6,7 @@ defineProps<ToolbarProps>();
 </script>
 
 <template>
-  <ToolbarRoot class="ui-toolbar" :aria-label="label" loop>
+  <ToolbarRoot :class="variant === 'bare' ? 'ui-toolbar--bare' : 'ui-toolbar'" :aria-label="label" loop>
     <slot />
   </ToolbarRoot>
 </template>

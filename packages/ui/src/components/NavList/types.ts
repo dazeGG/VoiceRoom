@@ -1,4 +1,5 @@
 export interface NavListProps {
+  responsive?: boolean;
   label: string;
 }
 
@@ -7,6 +8,7 @@ export interface NavListGroupProps {
 }
 
 export interface NavListItemProps {
+  iconOnly?: boolean;
   label: string;
   href?: string;
   /** A location accepted by the host application's RouterLink. */

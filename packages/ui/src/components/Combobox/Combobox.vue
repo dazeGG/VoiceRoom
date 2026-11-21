@@ -79,7 +79,7 @@ function updateQuery(next: string): void {
 </script>
 
 <template>
-  <Field v-slot="{ control }" :label="label">
+  <Field v-slot="{ control }" :label="label" :visually-hidden-label="visuallyHiddenLabel">
     <ComboboxRoot
       ref="root"
       v-model:open="expanded"
@@ -107,7 +107,12 @@ function updateQuery(next: string): void {
         />
         <slot name="trailing" />
       </ComboboxAnchor>
-      <ComboboxContent class="ui-combobox__panel ui-menu" :aria-label="resultsLabel" :aria-busy="loading || undefined">
+      <ComboboxContent
+        class="ui-combobox__panel ui-menu"
+        :class="{ 'ui-combobox__panel--overlay': overlay }"
+        :aria-label="resultsLabel"
+        :aria-busy="loading || undefined"
+      >
         <ComboboxViewport class="ui-combobox__viewport">
           <ComboboxGroup v-for="[group, items] in groups" :key="group">
             <ComboboxLabel v-if="group" class="ui-menu__label">{{ group }}</ComboboxLabel>

@@ -6,6 +6,8 @@
 @use 'pkg:@voice-room/ui/styles/components/list-item';
 @use 'pkg:@voice-room/ui/styles/components/settings-group';
 @use 'pkg:@voice-room/ui/styles/components/button';
+@use 'pkg:@voice-room/ui/styles/components/pressable';
+@use 'pkg:@voice-room/ui/styles/components/color-field';
 @use 'pkg:@voice-room/ui/styles/components/icon-button';
 @use 'pkg:@voice-room/ui/styles/components/field';
 @use 'pkg:@voice-room/ui/styles/components/input';
@@ -39,6 +41,9 @@
 @use 'pkg:@voice-room/ui/styles/components/ui-toast';
 @use 'pkg:@voice-room/ui/styles/components/callout';
 @use 'pkg:@voice-room/ui/styles/components/badge';
+@use 'pkg:@voice-room/ui/styles/components/account-badge';
+@use 'pkg:@voice-room/ui/styles/components/mascot-icon';
+@use 'pkg:@voice-room/ui/styles/components/brand-icon';
 @use 'pkg:@voice-room/ui/styles/components/tag';
 @use 'pkg:@voice-room/ui/styles/components/progress';
 @use 'pkg:@voice-room/ui/styles/components/empty';

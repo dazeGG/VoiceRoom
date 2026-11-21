@@ -56,3 +56,8 @@ export const Join: Story = {
     template: '<Button v-bind="args">Войти</Button>'
   })
 };
+
+export const Inline: Story = { args: { variant: 'plain', size: 'inline' } };
+export const Link: Story = { args: { variant: 'plain', href: '#rooms' } };
+export const Scrim: Story = { args: { scrim: true, pill: true } };
+export const Wrapping: Story = { args: { wrap: true, layout: 'spaced', fill: true } };

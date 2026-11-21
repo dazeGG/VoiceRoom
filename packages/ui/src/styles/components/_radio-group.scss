@@ -126,3 +126,34 @@
     }
   }
 }
+
+.ui-choice--tile {
+  display: grid;
+  min-width: 0;
+  grid-template-rows: auto minmax(var(--size-44), auto);
+  padding: var(--space-8);
+  border: 1px solid var(--vr-line);
+  border-radius: var(--radius-16);
+  background: var(--vr-surface);
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+
+  &[aria-checked='true'] {
+    border-color: var(--vr-line-strong);
+    background: var(--vr-surface-3);
+  }
+
+  &:hover:not(:disabled) {
+    background: var(--vr-surface-3);
+  }
+  &:focus-visible {
+    outline: var(--space-2) solid var(--vr-accent);
+    outline-offset: calc(-1 * var(--space-2));
+  }
+  &:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+}

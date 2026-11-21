@@ -20,10 +20,11 @@ const attrs = computed(() => {
     v-bind="attrs"
     class="ui-nav__item"
     :class="{ 'ui-nav__item--danger': tone === 'danger' }"
+    :aria-label="iconOnly ? label : undefined"
     @click="emit('click', $event)"
   >
     <span v-if="$slots.icon" class="ui-nav__icon" aria-hidden="true"><slot name="icon" /></span>
-    <span class="ui-nav__text">{{ label }}</span>
+    <span v-if="!iconOnly" class="ui-nav__text">{{ label }}</span>
     <slot name="trailing" />
   </component>
 </template>

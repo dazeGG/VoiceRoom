@@ -1,4 +1,5 @@
 export interface SplitterProps {
+  sideClass?: string;
   label: string;
   width: number;
   minWidth: number;

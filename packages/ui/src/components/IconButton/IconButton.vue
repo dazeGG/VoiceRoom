@@ -17,26 +17,52 @@ const emit = defineEmits<{ click: [event: MouseEvent] }>();
 
 <template>
   <Tooltip v-if="tooltip" :text="label" :shortcut="shortcut" :portal-target="tooltipTarget">
-    <button
+    <component
+      :is="href ? 'a' : 'button'"
       v-bind="$attrs"
-      :class="['ui-icon-button', `ui-icon-button--${variant}`, `ui-icon-button--size-${size}`]"
-      :type="type"
-      :disabled="disabled"
+      :class="[
+        'ui-icon-button',
+        `ui-icon-button--${variant}`,
+        `ui-icon-button--size-${size}`,
+        { 'ui-icon-button--scrim': scrim, 'ui-icon-button--pill': pill }
+      ]"
+      :href="href && !disabled ? href : undefined"
+      :type="href ? undefined : type"
+      :disabled="href ? undefined : disabled"
+      :aria-disabled="href && disabled ? true : undefined"
       :aria-label="label"
-      @click="emit('click', $event)"
+      @click="
+        (event: MouseEvent) => {
+          if (!disabled) emit('click', event);
+        }
+      "
     >
       <slot />
-    </button>
+      <span v-if="dot" class="ui-icon-button__dot" aria-hidden="true" />
+    </component>
   </Tooltip>
-  <button
+  <component
+    :is="href ? 'a' : 'button'"
     v-else
     v-bind="$attrs"
-    :class="['ui-icon-button', `ui-icon-button--${variant}`, `ui-icon-button--size-${size}`]"
-    :type="type"
-    :disabled="disabled"
+    :class="[
+      'ui-icon-button',
+      `ui-icon-button--${variant}`,
+      `ui-icon-button--size-${size}`,
+      { 'ui-icon-button--scrim': scrim, 'ui-icon-button--pill': pill }
+    ]"
+    :href="href && !disabled ? href : undefined"
+    :type="href ? undefined : type"
+    :disabled="href ? undefined : disabled"
+    :aria-disabled="href && disabled ? true : undefined"
     :aria-label="label"
-    @click="emit('click', $event)"
+    @click="
+      (event: MouseEvent) => {
+        if (!disabled) emit('click', event);
+      }
+    "
   >
     <slot />
-  </button>
+    <span v-if="dot" class="ui-icon-button__dot" aria-hidden="true" />
+  </component>
 </template>

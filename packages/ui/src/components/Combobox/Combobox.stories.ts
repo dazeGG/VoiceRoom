@@ -54,3 +54,5 @@ export const WithAvatars: Story = {
       </Combobox>`
   })
 };
+
+export const Overlay: Story = { args: { overlay: true, visuallyHiddenLabel: true } };

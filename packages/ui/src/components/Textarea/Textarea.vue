@@ -17,7 +17,7 @@ const controlAttrs = useFieldControl();
 </script>
 
 <template>
-  <div class="ui-textarea" :class="$attrs.class">
+  <div class="ui-textarea" :class="[$attrs.class, variant && 'ui-textarea--' + variant]">
     <div class="ui-textarea__sizer">
       <span class="ui-textarea__mirror" aria-hidden="true">{{ (value || placeholder || '') + ' ' }}</span>
       <textarea

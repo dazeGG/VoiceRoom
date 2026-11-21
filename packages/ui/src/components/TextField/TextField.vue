@@ -22,7 +22,14 @@ function clear(): void {
 </script>
 
 <template>
-  <div class="ui-input" :class="[`ui-input--${size}`, { 'ui-input--mono': variant === 'mono' }, $attrs.class]">
+  <div
+    class="ui-input"
+    :class="[
+      `ui-input--${size}`,
+      { 'ui-input--mono': variant === 'mono' || variant === 'code', 'ui-input--code': variant === 'code' },
+      $attrs.class
+    ]"
+  >
     <span v-if="$slots.leading" class="ui-input__icon" aria-hidden="true"><slot name="leading" /></span>
     <input
       v-bind="controlAttrs({ ...$attrs, class: undefined })"

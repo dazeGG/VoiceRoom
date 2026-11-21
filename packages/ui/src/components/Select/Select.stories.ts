@@ -64,3 +64,11 @@ export const Empty: Story = { args: { options: [] } };
 export const BottomEnd: Story = { args: { placement: 'bottom-end' } };
 export const TopStart: Story = { args: { placement: 'top-start' } };
 export const TopEnd: Story = { args: { placement: 'top-end' } };
+
+export const CustomLabel: Story = {
+  render: (args) => ({
+    components: { Select },
+    setup: () => ({ args }),
+    template: '<Select v-bind="args"><template #option-label="{ text }"><strong>{{ text }}</strong></template></Select>'
+  })
+};

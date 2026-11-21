@@ -14,6 +14,8 @@ export interface ComboboxProps {
   placeholder?: string;
   autoFocus?: boolean;
   /** Options are already filtered by the caller. Bind the input with v-model:query. */
+  visuallyHiddenLabel?: boolean;
+  overlay?: boolean;
   externalFilter?: boolean;
   loading?: boolean;
   resultsLabel?: string;

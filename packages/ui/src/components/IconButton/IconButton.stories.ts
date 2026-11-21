@@ -50,3 +50,7 @@ export const Expanded: Story = {
     template: '<IconButton v-bind="args" aria-expanded="true"><StoryIcon name="mic" /></IconButton>'
   })
 };
+
+export const Unread: Story = { args: { dot: true } };
+export const Scrim: Story = { args: { scrim: true, pill: true } };
+export const Link: Story = { args: { href: '#rooms' } };
