@@ -197,7 +197,7 @@ async function selectStatus(value: string | undefined, close: () => void): Promi
             :afk="friendPresence(entry) === 'away'"
             :dnd="friendPresence(entry) === 'dnd'"
             show-dot
-            :size="30"
+            :size="32"
             ring="var(--vr-surface)"
           />
           <div class="sidebar__row-body">

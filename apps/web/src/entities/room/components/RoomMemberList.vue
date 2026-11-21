@@ -8,7 +8,7 @@ import { useProfileCardUiStore } from '@/entities/profile-card/profile-card-ui.s
 import { useSessionStore } from '@/features/auth/session.store';
 import type { ProfileCardPerson } from '@/shared/components/profile-card';
 import { AccountBadge, DropdownMenu, MenuSeparator, MenuItem, MenuSub } from '@/shared/ui';
-import { Avatar, EmptyState } from '@voice-room/ui/components';
+import { EmptyState, IconButton, ListItem } from '@voice-room/ui/components';
 import { iconMd } from '@/shared/ui/icons';
 import { displayNameOf } from '@/shared/utils/display-name';
 import { BAN_DURATIONS, banRoomMember, kickRoomMember, type ModerationNotice } from '../room-moderation';
@@ -145,96 +145,86 @@ async function ban(member: MembershipMember, duration: ModerationDuration): Prom
         </h3>
         <ul class="room-member-list__list" :aria-label="group.label">
           <li v-for="member in group.members" :key="member.userId" class="room-member-list__item">
-            <div class="room-member-list__row">
-              <button
-                class="room-member-list__member"
-                type="button"
-                aria-haspopup="dialog"
-                :aria-label="t('Профиль {p0}', { p0: nameFor(member) })"
-                @pointerenter="previewProfileCardFor(profilePerson(member), $event)"
-                @pointerleave="leaveProfileCardPreview"
-                @focus="previewProfileCardFor(profilePerson(member), $event)"
-                @blur="leaveProfileCardPreview"
-                @click="openMemberProfile(member, $event)"
-              >
-                <Avatar
-                  :name="nameFor(member)"
-                  :src="member.avatarUrl"
-                  :color-key="member.avatarColorKey"
-                  :size="32"
-                  show-dot
-                  :online="member.presenceStatus !== 'offline'"
-                  :dnd="member.presenceStatus === 'dnd'"
-                  :afk="member.presenceStatus === 'afk'"
-                />
-                <span class="room-member-list__text"
-                  ><strong class="room-member-list__name"
-                    >{{ nameFor(member) }}<AccountBadge :user-id="member.userId" /><em
-                      v-if="member.userId === session.user?.id"
-                      class="room-member-list__you"
-                      >{{ t('вы') }}</em
-                    ></strong
-                  ><small class="room-member-list__login">@{{ member.login }}</small></span
+            <ListItem
+              interactive
+              aria-haspopup="dialog"
+              :aria-label="t('Профиль {p0}', { p0: nameFor(member) })"
+              :avatar="{
+                name: nameFor(member),
+                src: member.avatarUrl,
+                colorKey: member.avatarColorKey,
+                showDot: true,
+                online: member.presenceStatus !== 'offline',
+                dnd: member.presenceStatus === 'dnd',
+                afk: member.presenceStatus === 'afk'
+              }"
+              :caption="'@' + member.login"
+              @pointerenter="previewProfileCardFor(profilePerson(member), $event)"
+              @pointerleave="leaveProfileCardPreview"
+              @focus="previewProfileCardFor(profilePerson(member), $event)"
+              @blur="leaveProfileCardPreview"
+              @activate="openMemberProfile(member, $event)"
+            >
+              <template #title>
+                {{ nameFor(member) }}<AccountBadge :user-id="member.userId" />
+                <em v-if="member.userId === session.user?.id" class="room-member-list__you">{{ t('вы') }}</em>
+              </template>
+              <template v-if="canModerateMember(member)" #actions>
+                <DropdownMenu
+                  :aria-label="t('Действия с {p0}', { p0: nameFor(member) })"
+                  :disabled="banningUserId === member.userId"
                 >
-              </button>
+                  <template #trigger>
+                    <IconButton
+                      :size="28"
+                      :label="t('Действия с {p0}', { p0: nameFor(member) })"
+                      @click="rememberMenuAnchor"
+                      @keydown="rememberMenuAnchor"
+                    >
+                      <Ellipsis aria-hidden="true" />
+                    </IconButton>
+                  </template>
 
-              <DropdownMenu
-                v-if="canModerateMember(member)"
-                :aria-label="t('Действия с {p0}', { p0: nameFor(member) })"
-                :disabled="banningUserId === member.userId"
-              >
-                <template #trigger>
-                  <button
-                    class="room-member-list__menu-trigger"
-                    type="button"
-                    :aria-label="t('Действия с {p0}', { p0: nameFor(member) })"
-                    :title="t('Действия')"
-                    @click="rememberMenuAnchor"
-                    @keydown="rememberMenuAnchor"
-                  >
-                    <Ellipsis v-bind="iconMd" aria-hidden="true" />
-                  </button>
-                </template>
-
-                <template #content="{ close }">
-                  <MenuItem :label="t('Профиль')" @select.prevent="showProfileFromMenu(member, close)">
-                    <template #icon><User v-bind="iconMd" aria-hidden="true" /></template>
-                  </MenuItem>
-                  <MenuSeparator />
-                  <MenuItem
-                    :label="t('Выгнать')"
-                    tone="danger"
-                    :disabled="!livePeerId(member)"
-                    @select.prevent="
-                      close();
-                      void kick(member);
-                    "
-                  >
-                    <template #icon><UserX v-bind="iconMd" aria-hidden="true" /></template>
-                  </MenuItem>
-                  <MenuSub
-                    :label="t('Заблокировать')"
-                    tone="danger"
-                    :aria-label="t('Срок блокировки {p0}', { p0: nameFor(member) })"
-                  >
-                    <template #icon><Ban v-bind="iconMd" aria-hidden="true" /></template>
-                    <template #default="{ close: closeSubmenu }">
-                      <MenuItem
-                        v-for="option in BAN_DURATIONS"
-                        :key="option.value"
-                        :label="option.label"
-                        tone="danger"
-                        @select.prevent="
-                          closeSubmenu();
-                          close();
-                          void ban(member, option.value);
-                        "
-                      />
-                    </template>
-                  </MenuSub>
-                </template>
-              </DropdownMenu>
-            </div>
+                  <template #content="{ close }">
+                    <MenuItem :label="t('Профиль')" @select.prevent="showProfileFromMenu(member, close)">
+                      <template #icon><User v-bind="iconMd" aria-hidden="true" /></template>
+                    </MenuItem>
+                    <MenuSeparator />
+                    <MenuItem
+                      :label="t('Выгнать')"
+                      tone="danger"
+                      :disabled="!livePeerId(member)"
+                      @select.prevent="
+                        close();
+                        void kick(member);
+                      "
+                    >
+                      <template #icon><UserX v-bind="iconMd" aria-hidden="true" /></template>
+                    </MenuItem>
+                    <MenuSub
+                      :label="t('Заблокировать')"
+                      tone="danger"
+                      :aria-label="t('Срок блокировки {p0}', { p0: nameFor(member) })"
+                    >
+                      <template #icon><Ban v-bind="iconMd" aria-hidden="true" /></template>
+                      <template #default="{ close: closeSubmenu }">
+                        <MenuItem
+                          v-for="option in BAN_DURATIONS"
+                          :key="option.value"
+                          :label="option.label"
+                          tone="danger"
+                          @select.prevent="
+                            closeSubmenu();
+                            close();
+                            void ban(member, option.value);
+                          "
+                        />
+                      </template>
+                    </MenuSub>
+                  </template>
+                </DropdownMenu>
+              </template>
+            </ListItem>
           </li>
         </ul>
       </template>

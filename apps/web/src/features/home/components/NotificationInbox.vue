@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { EmptyState } from '@voice-room/ui/components';
+import { Badge, EmptyState, ListItem } from '@voice-room/ui/components';
 // The panel you reach from the bell. It answers two questions — what happened
 // and how long ago — and offers exactly one bulk action. "К первому
 // непрочитанному" is gone: every unread row is already one click away, and
@@ -125,33 +125,24 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onWindowKeydown));
       </EmptyState>
       <template v-else>
         <ul class="notification-inbox__list">
-          <li
-            v-for="item in inbox.items"
-            :key="item.id"
-            class="notification-inbox__item"
-            :class="{ 'notification-inbox__item--unread': !item.readAt }"
-          >
-            <button class="notification-inbox__open" type="button" @click="open(item)">
-              <span class="notification-inbox__dot" aria-hidden="true"></span>
-              <span class="notification-inbox__text">
-                <strong
-                  class="notification-inbox__message"
-                  :class="{ 'notification-inbox__message--retracted': Boolean(item.retractedAt) }"
-                  ><EmojiText
+          <li v-for="item in inbox.items" :key="item.id" class="notification-inbox__item">
+            <ListItem interactive :time="agoLabel(item.createdAt)" @activate="open(item)">
+              <template #leading>
+                <Badge v-if="!item.readAt" variant="dot" aria-hidden="true" />
+                <span v-else class="notification-inbox__dot" aria-hidden="true"></span>
+              </template>
+              <template #title>
+                <span :class="{ 'notification-inbox__message--retracted': item.retractedAt }">
+                  <EmojiText
                     :text="item.retractedAt ? t('Сообщение недоступно') : item.body || t('Новое уведомление')"
-                /></strong>
-                <small class="notification-inbox__meta">
-                  <span class="notification-inbox__reason">{{ reasonLabel(item.reasons) }}</span>
-                  <span v-if="roomLabel?.(item.roomId)" class="notification-inbox__room">{{
-                    roomLabel(item.roomId)
-                  }}</span>
-                  <template v-if="agoLabel(item.createdAt)">
-                    <span aria-hidden="true">·</span>
-                    <span class="notification-inbox__time">{{ agoLabel(item.createdAt) }}</span>
-                  </template>
-                </small>
-              </span>
-            </button>
+                  />
+                </span>
+              </template>
+              <template #caption>
+                {{ reasonLabel(item.reasons) }}
+                <template v-if="roomLabel?.(item.roomId)"> · {{ roomLabel(item.roomId) }}</template>
+              </template>
+            </ListItem>
           </li>
         </ul>
         <button

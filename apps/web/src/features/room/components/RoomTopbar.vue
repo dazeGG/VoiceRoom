@@ -77,7 +77,7 @@ function notifyRoomsChanged(): void {
           :room-id="roomClientState.roomId"
           :name="heading"
           :avatar-url="roomClientState.roomAvatarUrl"
-          :avatar-size="38"
+          :avatar-size="40"
           trigger-class="room-topbar__heading-trigger"
           title-class="room-topbar__heading-title"
           chevron-class="room-topbar__heading-chevron"

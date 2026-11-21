@@ -119,7 +119,7 @@ async function removeBookmark(): Promise<void> {
 <template>
   <div class="room-menu-content" data-room-menu-content>
     <div class="room-menu-content__head">
-      <Avatar :name="name" :src="avatarUrl" shape="squircle" background="var(--vr-surface-3)" :size="44" />
+      <Avatar :name="name" :src="avatarUrl" shape="squircle" background="var(--vr-surface-3)" :size="40" />
       <div class="room-menu-content__info">
         <Ellipsis class="room-menu-content__name" :text="name" />
         <Ellipsis class="room-menu-content__code" :text="roomId" />

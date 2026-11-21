@@ -16,9 +16,6 @@
 //   .settings-cancel                -> .settings__cancel
 //   .settings-sound                 -> .settings__sound
 //   .settings-sound-devices         -> .settings__sound-devices
-//   .settings-sound-device          -> .settings__sound-device
-//   .settings-sound-head            -> .settings__sound-head
-//   .settings-gate-head             -> .settings__gate-head
 //   .settings-gate-body             -> .settings__gate-body
 //   .settings-gate-fill             -> .settings__gate-fill
 //   .settings-gate-hint             -> .settings__gate-hint
@@ -30,34 +27,23 @@
 //   .settings-hotkey-window-note    -> .settings__hotkey-window-note
 //   .settings-notification-ignore   -> .settings__notification-ignore
 //   .settings-notification-dependent -> .settings__notification-dependent
-//   .settings-notification-group    -> .settings__notification-group
 //   .settings-notification-targets  -> .settings__notification-targets
-//   .settings-notification-list     -> .settings__notification-list
-//   .settings-notification-row      -> .settings__notification-row
-//   .settings-notification-name     -> .settings__notification-name
 //   .settings-notification-empty    -> .settings__notification-empty
-//   .settings-blocked-users         -> .settings__blocked-users
 //   .settings-unblock-button        -> .settings__unblock-button
 //
 // Component <style> blocks of the Svelte settings components (SettingsDialog, ProfileSettings,
 // AppearanceSettings, SoundSettings, HotkeySettings, NotificationSettings, AppSettings):
 //   (new)                           -> .settings__frame        (cancels the Dialog body padding)
-//   .settings-profile-head          -> .settings__profile-head
 //   .settings-avatar-control        -> .settings__avatar-control
-//   .settings-profile-avatar        -> .settings__profile-avatar
 //   .settings-avatar-input          -> .settings__avatar-input
 //   .settings-avatar-edit           -> .settings__avatar-edit
 //   .settings-avatar-overlay        -> .settings__avatar-overlay
 //   .settings-avatar-remove         -> .settings__avatar-remove
-//   .settings-profile-name          -> .settings__profile-name
-//   .settings-profile-sub           -> .settings__profile-sub
-//   .settings-fields                -> .settings__fields
 //   .settings-appearance            -> .settings__appearance
 //   .settings-themes                -> .settings__themes
 //   .settings-theme(.is-selected)   -> .settings__theme(--selected)   (the card also carries .theme--<id>)
 //   .settings-theme-preview/-side/-mark/-main/-button/-label -> .settings__theme-preview/-side/-mark/-main/-button/-label
 //   .settings-theme-line(.is-short/.is-wide) -> .settings__theme-line(--short/--wide)
-//   .settings-sound-device-section  -> .settings__sound-device-section
 //   .settings-gate                  -> .settings__gate
 //   .settings-sound-value           -> .settings__sound-value
 //   .settings-sound-actions         -> .settings__sound-actions
@@ -232,34 +218,9 @@
   max-width: 100%;
 }
 
-.settings__sound-device {
-  display: grid;
-  align-content: start;
-  gap: 22px;
-  min-width: 0;
-}
-
-.settings__sound-device > *,
-.settings__sound-device .vr-slider {
-  width: 100%;
-  min-width: 0;
-  max-width: 100%;
-}
-
 // Gate — an on/off switch over the in-room dock control: one slider on a live
 // mic-level meter. Off parks the threshold at the floor («Выкл») and greys the
 // meter out.
-.settings__gate-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 14px;
-}
-
-.settings__gate-head .settings__field-label {
-  margin-bottom: 0;
-}
-
 .settings__gate-body {
   transition: opacity 0.2s ease;
 }
@@ -284,17 +245,6 @@
 // Svelte: [data-state='closed']
 .settings__gate-fill--closed {
   background: var(--vr-text-3);
-}
-
-.settings__sound-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 9px;
-}
-
-.settings__sound-head .settings__field-label {
-  margin-bottom: 0;
 }
 
 .settings__gate-hint {
@@ -375,59 +325,11 @@
   opacity: 0.48;
 }
 
-.settings__notification-group {
-  min-width: 0;
-}
-
 .settings__notification-targets {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   align-items: start;
   gap: 16px;
-}
-
-.settings__notification-list {
-  display: grid;
-  gap: 4px;
-}
-
-.settings__notification-row {
-  display: grid;
-  grid-template-columns: 32px minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 11px;
-  min-height: 48px;
-  padding: 6px 8px;
-  border-radius: 9px;
-}
-
-.settings__notification-row:hover {
-  background: var(--vr-hover);
-}
-
-.settings__notification-name,
-.settings__notification-name strong,
-.settings__notification-name small {
-  display: block;
-  min-width: 0;
-}
-
-.settings__notification-name strong {
-  overflow: hidden;
-  color: var(--vr-text);
-  font-size: 0.8125rem;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.settings__notification-name small {
-  margin-top: 1px;
-  overflow: hidden;
-  color: var(--vr-text-muted);
-  font-family: var(--font-mono);
-  font-size: 0.65625rem;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .settings__notification-empty {
@@ -437,10 +339,6 @@
   color: var(--vr-text-muted);
   font-size: 0.75rem;
   text-align: center;
-}
-
-.settings__blocked-users {
-  margin-top: 4px;
 }
 
 .settings__unblock-button {
@@ -466,8 +364,6 @@
 
 // Desktop overlay: the last window before VoiceRoom, offered as a game.
 .settings__overlay-games {
-  padding-top: 18px;
-  border-top: 1px solid var(--vr-line);
   transition: opacity 0.16s ease;
 }
 
@@ -532,34 +428,11 @@
 
 // ---- profile section (ProfileSettings) ----
 
-.settings__profile-head {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  margin-bottom: 28px;
-}
-
 .settings__avatar-control {
   position: relative;
   flex: none;
   width: 56px;
   height: 56px;
-}
-
-.settings__profile-avatar {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 56px;
-  height: 56px;
-  border-radius: 50%;
-  font-size: 1.375rem;
-  font-weight: 700;
-  color: var(--vr-text);
-}
-
-.settings__profile-avatar img {
-  border-radius: inherit;
 }
 
 .settings__avatar-input {
@@ -646,27 +519,6 @@
 :where(.settings__avatar-remove):disabled {
   cursor: default;
   opacity: 0.6;
-}
-
-.settings__profile-name {
-  color: var(--vr-text);
-  font-size: 1.0625rem;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-}
-
-.settings__profile-sub {
-  margin-top: 3px;
-  color: var(--vr-text-muted);
-  font-family: var(--font-mono);
-  font-size: 0.71875rem;
-}
-
-.settings__fields {
-  display: flex;
-  flex-direction: column;
-  gap: 22px;
-  width: 100%;
 }
 
 // ---- appearance section (AppearanceSettings) ----
@@ -782,9 +634,11 @@
 
 // ---- sound and hotkeys (SoundSettings, HotkeySettings) ----
 
-.settings__sound-device-section {
-  padding-top: 20px;
-  border-top: 1px solid var(--vr-line);
+.settings__sound-control {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-12);
 }
 
 .settings__gate {
@@ -861,6 +715,7 @@
 .settings__notification-title {
   display: flex;
   align-items: center;
+  overflow-wrap: anywhere;
   gap: 6px;
   min-width: 0;
 }

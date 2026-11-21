@@ -334,7 +334,7 @@ function roomDeleted(): void {
                 :online="friend.presence === 'online'"
                 :afk="friend.presence === 'away'"
                 :dnd="friend.presence === 'dnd'"
-                :size="30"
+                :size="32"
                 show-dot
                 ring="var(--vr-surface)"
               />

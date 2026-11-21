@@ -101,7 +101,7 @@ watch(
           v-else
           :items="meta.viewerAvatars"
           :max-avatars="null"
-          :size="22"
+          :size="24"
           :aria-label="t('Смотрят стрим')"
           class="screen-meta__avatar-stack"
         />

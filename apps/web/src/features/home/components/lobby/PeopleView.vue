@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import { EmptyState } from '@voice-room/ui/components';
+import { EmptyState, IconButton, ListItem } from '@voice-room/ui/components';
 import { getLocale, t } from '@/shared/i18n';
 import { Check, ChevronLeft, Copy, X } from '@lucide/vue';
 import { computed, ref } from 'vue';
 import type { AuthUser } from '@/api/auth';
 import EmojiText from '@/shared/chat/EmojiText.vue';
-import { Avatar, Button } from '@/shared/ui';
-import { iconMd, iconSm, iconXs } from '@/shared/ui/icons';
+import { Button } from '@/shared/ui';
+import { iconSm, iconXs } from '@/shared/ui/icons';
 import { copyText } from '@/shared/utils/clipboard';
 import { displayNameOf } from '@/shared/utils/display-name';
 import { useLobby } from '../../model/lobby-context';
@@ -140,44 +140,42 @@ function mutualLabel(count: number): string {
         </div>
         <EmptyState v-if="incoming.length === 0" :title="t('Новых заявок нет.')" compact />
         <template v-else>
-          <div
+          <ListItem
             v-for="request in incoming"
             :key="request.id"
-            class="people-view__request people-view__request--incoming"
+            :avatar="{
+              name: displayNameOf(request.user),
+              src: request.user.avatarUrl,
+              colorKey: request.user.avatarColorKey,
+              background: request.user.avatarAccent
+            }"
           >
-            <Avatar
-              :name="displayNameOf(request.user)"
-              :src="request.user.avatarUrl"
-              :color-key="request.user.avatarColorKey"
-              :background="request.user.avatarAccent || undefined"
-              :size="44"
-            />
-            <div class="people-view__request-copy">
-              <div class="people-view__request-name"><EmojiText :text="displayNameOf(request.user)" /></div>
-              <div class="people-view__request-handle">@{{ request.user.login }}</div>
-              <div class="people-view__request-meta">{{ mutualLabel(request.mutualFriends) }}</div>
-            </div>
-            <div class="people-view__request-actions">
-              <button
-                class="people-view__request-button people-view__request-button--accept"
-                type="button"
-                :title="t('Принять')"
+            <template #title><EmojiText :text="displayNameOf(request.user)" /></template>
+            <template #caption>
+              @{{ request.user.login }} <span aria-hidden="true">·</span>
+              <span>{{ mutualLabel(request.mutualFriends) }}</span>
+            </template>
+            <template #actions>
+              <IconButton
+                :label="t('Принять')"
+                variant="primary"
+                :size="28"
                 :disabled="busy[request.id]"
                 @click="run(request.id, () => lobby.acceptRequest(request.id), t('Заявка принята'))"
               >
-                <Check v-bind="iconMd" aria-hidden="true" />
-              </button>
-              <button
-                class="people-view__request-button people-view__request-button--decline"
-                type="button"
-                :title="t('Отклонить')"
+                <Check aria-hidden="true" />
+              </IconButton>
+              <IconButton
+                :label="t('Отклонить')"
+                variant="danger"
+                :size="28"
                 :disabled="busy[request.id]"
                 @click="run(request.id, () => lobby.declineRequest(request.id), t('Заявка отклонена'))"
               >
-                <X v-bind="iconSm" aria-hidden="true" />
-              </button>
-            </div>
-          </div>
+                <X aria-hidden="true" />
+              </IconButton>
+            </template>
+          </ListItem>
         </template>
       </div>
 
@@ -187,29 +185,30 @@ function mutualLabel(count: number): string {
         </div>
         <EmptyState v-if="outgoing.length === 0" :title="t('Вы пока никому не отправляли заявки.')" compact />
         <template v-else>
-          <div v-for="request in outgoing" :key="request.id" class="people-view__request">
-            <Avatar
-              :name="displayNameOf(request.user)"
-              :src="request.user.avatarUrl"
-              :color-key="request.user.avatarColorKey"
-              :background="request.user.avatarAccent || undefined"
-              :size="44"
-            />
-            <div class="people-view__request-copy">
-              <div class="people-view__request-name"><EmojiText :text="displayNameOf(request.user)" /></div>
-              <div class="people-view__request-handle">@{{ request.user.login }}</div>
-              <div class="people-view__request-pending">
-                <span class="people-view__request-pending-dot"></span>{{ t('заявка отправлена · ждём ответа') }}
-              </div>
-            </div>
-            <Button
-              variant="outline"
-              size="sm"
-              :disabled="busy[request.id]"
-              @click="run(request.id, () => lobby.cancelRequest(request.id), t('Заявка отменена'))"
-              >{{ t('Отменить') }}</Button
-            >
-          </div>
+          <ListItem
+            v-for="request in outgoing"
+            :key="request.id"
+            :avatar="{
+              name: displayNameOf(request.user),
+              src: request.user.avatarUrl,
+              colorKey: request.user.avatarColorKey,
+              background: request.user.avatarAccent
+            }"
+            :caption="`@${request.user.login} · ${t('заявка отправлена · ждём ответа')}`"
+          >
+            <template #title><EmojiText :text="displayNameOf(request.user)" /></template>
+            <template #actions>
+              <IconButton
+                :label="t('Отменить')"
+                variant="default"
+                :size="28"
+                :disabled="busy[request.id]"
+                @click="run(request.id, () => lobby.cancelRequest(request.id), t('Заявка отменена'))"
+              >
+                <X aria-hidden="true" />
+              </IconButton>
+            </template>
+          </ListItem>
         </template>
       </div>
     </div>
