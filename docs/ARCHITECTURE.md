@@ -7,7 +7,7 @@ differ. Import rules live in `config/import-boundaries.v1.json` and `eslint.conf
 ## 1. Repository shape: one monorepo
 
 API, web, Meet, widget, site, admin, and the shared workspaces stay in one repository. `apps/admin` is
-the React staff console (admin.voiceroom.ru), signed in by handoff from the
+the Vue staff console (admin.voiceroom.ru), built on `packages/ui` and signed in by handoff from the
 main site; it talks to the API's admin routes.
 
 - `packages/shared` owns the wire contracts (validators, realtime envelopes,
