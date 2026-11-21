@@ -135,7 +135,6 @@
 
 .widget-configurator__field select,
 .widget-configurator__title-input,
-.widget-configurator__number,
 .widget-configurator__color-control {
   min-width: 0;
   min-height: var(--interactive-lg);
@@ -153,40 +152,10 @@
   font-size: 1rem;
 }
 
-.widget-configurator__number {
-  display: flex;
-  align-items: center;
-  padding-inline: var(--space-sm);
-  gap: var(--space-xs);
-
-  input {
-    width: 100%;
-    min-width: 0;
-    min-height: 50px;
-    padding: 0;
-    border: 0;
-    background: transparent;
-    color: inherit;
-    font: inherit;
-    font-size: 1rem;
-  }
-
-  > span {
-    color: var(--vr-text-muted);
-    font-family: var(--font-mono);
-    font-size: 0.75rem;
-  }
-}
-
-.widget-configurator__number:focus-within,
 .widget-configurator__color-control:focus-within {
   border-color: var(--focus-border);
   outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
-}
-
-.widget-configurator__number input:focus-visible {
-  outline: none;
 }
 
 .widget-configurator__colors {

@@ -19,14 +19,29 @@ import {
 import { createRoomCode } from '@voice-room/shared/validation';
 import { WidgetCallLayout, WidgetJoinControls } from '@voice-room/ui/widget';
 import { createWidgetFrameExpansion } from '@voice-room/ui/widget-frame-expansion';
-import { Button } from '@voice-room/ui/components';
+import { Button, Field, NumberField, Slider } from '@voice-room/ui/components';
 import { SegmentControl } from '@/shared/ui/SegmentControl';
 import type { SegmentOption } from '@/shared/ui/SegmentControl/types';
 import { Switch } from '@/shared/ui/Switch';
-import { Slider } from '@voice-room/ui/components';
 import { copyText } from '@/shared/utils/clipboard';
 
 const config = reactive({ ...defaultWidgetConfig });
+const offset = ref<number | null>(config.offset);
+// Reka commits on blur. Keep the draft available to the preview while the user types.
+const offsetDraft = ref<number>();
+const previewOffset = computed(() => offsetDraft.value ?? offset.value ?? NaN);
+
+function previewTypedOffset(event: Event): void {
+  if (!(event.target instanceof HTMLInputElement)) return;
+  const typed = event.target.value.trim();
+  offsetDraft.value = typed ? Number(typed.replace(',', '.')) : NaN;
+}
+
+function commitOffset(value: number | null): void {
+  offset.value = value;
+  offsetDraft.value = undefined;
+}
+
 const cameraAllowed = ref(true);
 const stage = ref<HTMLElement | null>(null);
 const demoViewport = ref<HTMLElement | null>(null);
@@ -105,6 +120,7 @@ const result = computed(() => {
   try {
     const settings = {
       ...config,
+      offset: previewOffset.value,
       ...(isFloating.value ? panelSize : {}),
       ...(cameraAllowed.value ? {} : { camera: false }),
       ...(heading.value === DEFAULT_WIDGET_TITLE ? {} : { title: heading.value })
@@ -224,15 +240,18 @@ async function copyCode() {
                 <option value="top-left">Слева вверху</option>
               </select>
             </label>
-            <label class="widget-configurator__field"
-              >Отступ
-              <span class="widget-configurator__number"
-                ><input v-model.number="config.offset" name="offset" type="number" min="0" max="48" /><span
-                  aria-hidden="true"
-                  >px</span
-                ></span
-              >
-            </label>
+            <Field label="Отступ, px">
+              <NumberField
+                :model-value="offset"
+                name="offset"
+                :min="0"
+                :max="48"
+                allow-invalid
+                @input="previewTypedOffset"
+                @blur="offsetDraft = undefined"
+                @update:model-value="commitOffset"
+              />
+            </Field>
             <div v-for="(limits, dimension) in WIDGET_SIZE_LIMITS" :key="dimension" class="widget-configurator__size">
               <span class="widget-configurator__size-label">
                 <span>{{ sizeLabels[dimension] }}</span
@@ -360,7 +379,7 @@ async function copyCode() {
         </fieldset>
         <div
           class="widget-configurator__canvas"
-          :style="{ padding: config.mode === 'floating' ? `${config.offset}px` : undefined }"
+          :style="{ padding: config.mode === 'floating' ? `${previewOffset}px` : undefined }"
         >
           <div ref="stage" class="widget-configurator__stage">
             <div class="widget-configurator__sample" :style="sampleStyle">

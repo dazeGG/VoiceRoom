@@ -3,6 +3,7 @@ import { useLocalizedText, currentErrorMessage } from '@/shared/i18n/localized-t
 
 import { t } from '@/shared/i18n';
 import { computed, ref, watchEffect } from 'vue';
+import { Checkbox } from '@voice-room/ui/components';
 import { fetchAccountDeletionPreview, requestAccountDeletion, type AccountDeletionPreview } from '@/api/auth';
 import { useSessionStore } from '@/features/auth/session.store';
 import EmojiText from '@/shared/chat/EmojiText.vue';
@@ -127,10 +128,9 @@ async function confirmDeletion(): Promise<void> {
         />
       </div>
 
-      <label class="delete-account__confirm">
-        <input v-model="understood" type="checkbox" />
-        <span>{{ t('Я понимаю, что через') }} {{ graceDays }} {{ t('дней аккаунт удалится навсегда') }}</span>
-      </label>
+      <Checkbox :model-value="understood" @update:model-value="understood = $event === true">
+        {{ t('Я понимаю, что через') }} {{ graceDays }} {{ t('дней аккаунт удалится навсегда') }}
+      </Checkbox>
 
       <p v-if="error" class="delete-account__error" role="alert">{{ error }}</p>
 

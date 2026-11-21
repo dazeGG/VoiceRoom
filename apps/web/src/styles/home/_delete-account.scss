@@ -11,7 +11,6 @@
 //   .delete-account-room             -> .delete-account__room
 //   .delete-account-room strong      -> .delete-account__room-name
 //   .delete-account-room small       -> .delete-account__room-fate
-//   .delete-account-confirm          -> .delete-account__confirm
 //   .delete-account-submit           -> .delete-account__submit
 //   .settings-field-label, .settings-input -> settings__field-label, settings__input
 
@@ -72,22 +71,6 @@
   margin-top: 2px;
   color: var(--vr-text-muted);
   font-size: 0.78125rem;
-}
-
-.delete-account__confirm {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--vr-text);
-  font-size: 0.875rem;
-  cursor: pointer;
-
-  input {
-    width: 16px;
-    height: 16px;
-    margin: 0;
-    accent-color: var(--vr-danger);
-  }
 }
 
 .delete-account__submit {

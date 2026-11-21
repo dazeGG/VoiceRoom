@@ -4,8 +4,9 @@
 import { useLocalizedText, currentErrorMessage } from '@/shared/i18n/localized-text';
 
 import { t } from '@/shared/i18n';
-import { ref } from 'vue';
+import { computed, ref, useId } from 'vue';
 import { REPORT_COMMENT_MAX_LENGTH } from '@voice-room/shared/contracts/reports';
+import { RadioGroup } from '@voice-room/ui/components';
 import { fileReport, type ReportReason, type ReportTarget } from '@/api/reports';
 import { Button, Dialog } from '@/shared/ui';
 
@@ -43,7 +44,9 @@ const REASONS: { value: ReportReason; label: string }[] = [
   }
 ];
 
-const reason = ref<ReportReason | null>(null);
+const reasonLabelId = useId();
+const selectedReason = ref<string | null>(null);
+const reason = computed(() => REASONS.find(({ value }) => value === selectedReason.value)?.value);
 const comment = ref('');
 const sending = ref(false);
 const error = useLocalizedText();
@@ -74,27 +77,12 @@ async function submit(): Promise<void> {
     :title="t('Пожаловаться на сообщение')"
     :on-close="() => emit('close')"
     :width="460"
-    initial-focus="[name=report-reason]"
+    initial-focus="[role=radio]"
   >
     <form class="report-dialog" @submit.prevent="submit">
       <fieldset class="report-dialog__reasons">
-        <legend class="report-dialog__label">{{ t('Что не так с сообщением?') }}</legend>
-        <label
-          v-for="option in REASONS"
-          :key="option.value"
-          class="report-dialog__reason"
-          :class="{ 'report-dialog__reason--selected': reason === option.value }"
-        >
-          <input
-            v-model="reason"
-            class="report-dialog__reason-input"
-            type="radio"
-            name="report-reason"
-            :value="option.value"
-          />
-          <span class="report-dialog__reason-mark" aria-hidden="true"></span>
-          <span class="report-dialog__reason-text">{{ option.label }}</span>
-        </label>
+        <legend :id="reasonLabelId" class="report-dialog__label">{{ t('Что не так с сообщением?') }}</legend>
+        <RadioGroup v-model="selectedReason" :options="REASONS" name="report-reason" :aria-labelledby="reasonLabelId" />
       </fieldset>
 
       <div>
