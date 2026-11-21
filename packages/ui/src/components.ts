@@ -4,6 +4,7 @@ export * from './components/Button';
 export * from './components/Checkbox';
 export * from './components/ContextMenu';
 export * from './components/Dialog';
+export * from './components/AlertDialog';
 export * from './components/Field';
 export * from './components/FileDrop';
 export * from './components/HotkeyField';

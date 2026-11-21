@@ -15,7 +15,7 @@ import RoomMemberList from '@/entities/room/components/RoomMemberList.vue';
 import { saveRoomAvatarChange, type RoomAvatarChange } from '@/entities/room/room-avatar-change';
 import { APP_HOME } from '@/shared/app-home';
 import { BAN_UNDO_DURATION_MS, type ModerationNoticeOptions } from '@/entities/room/room-moderation';
-import { Dialog } from '@/shared/ui';
+import { AlertDialog, Button, Dialog } from '@voice-room/ui/components';
 import { iconMd, iconSm } from '@/shared/ui/icons';
 import { state as roomClientState } from '@voice-room/call/engine/core/room-runtime.store';
 import { applyRoomUpdated } from '@voice-room/call/engine/room/lifecycle';
@@ -30,6 +30,7 @@ const roomSettingsUi = useRoomSettingsStore();
 
 const name = ref('');
 const error = useLocalizedText();
+const deleteError = useLocalizedText();
 const saving = ref(false);
 const confirmingDelete = ref(false);
 const deleting = ref(false);
@@ -87,6 +88,7 @@ async function save(): Promise<void> {
 async function confirmDelete(): Promise<void> {
   if (deleting.value) return;
   deleting.value = true;
+  deleteError.value = '';
   roomSettingsUi.deleting = true;
   try {
     await deleteRoom(roomClientState.roomId);
@@ -94,9 +96,18 @@ async function confirmDelete(): Promise<void> {
   } catch (err) {
     deleting.value = false;
     roomSettingsUi.deleting = false;
-    error.value = () =>
+    deleteError.value = () =>
       err instanceof Error && currentErrorMessage(err) ? currentErrorMessage(err) : t('Не удалось удалить комнату');
   }
+}
+
+function openDeleteConfirmation(): void {
+  deleteError.value = '';
+  confirmingDelete.value = true;
+}
+
+function cancelDeleteConfirmation(): void {
+  if (!deleting.value) confirmingDelete.value = false;
 }
 
 async function saveNotificationLevel(event: Event): Promise<void> {
@@ -141,7 +152,7 @@ function onCancel(): void {
 </script>
 
 <template>
-  <Dialog :open="roomSettingsUi.open" :title="t('Настройки комнаты')" :width="780" :on-close="onClose">
+  <Dialog :open="roomSettingsUi.open" :title="t('Настройки комнаты')" size="lg" :on-close="onClose">
     <div class="room-settings">
       <div class="settings__body settings__body--room">
         <nav class="settings__nav" :aria-label="t('Разделы настроек комнаты')">
@@ -221,22 +232,21 @@ function onCancel(): void {
           </div>
 
           <div class="dialog__danger-zone">
-            <template v-if="confirmingDelete">
-              <p class="dialog__danger-note">
-                {{ t('Комната будет удалена для всех участников. Это действие нельзя отменить.') }}
-              </p>
-              <div class="dialog__danger-actions">
-                <button class="settings__cancel" type="button" :disabled="deleting" @click="confirmingDelete = false">
-                  {{ t('Отмена') }}
-                </button>
-                <button class="dialog__danger-confirm" type="button" :disabled="deleting" @click="confirmDelete">
-                  <Spinner v-if="deleting" aria-hidden="true" /> {{ t('Удалить навсегда') }}
-                </button>
-              </div>
-            </template>
-            <button v-else class="dialog__danger-trigger" type="button" @click="confirmingDelete = true">
+            <Button variant="danger-ghost" @click="openDeleteConfirmation">
               {{ t('Удалить комнату') }}
-            </button>
+            </Button>
+            <AlertDialog
+              :open="confirmingDelete"
+              :title="t('Удалить комнату «{p0}»?', { p0: roomClientState.roomName || roomClientState.roomId })"
+              :description="t('Комната будет удалена для всех участников. Это действие нельзя отменить.')"
+              :confirm-label="deleting ? t('Удаляем…') : t('Удалить')"
+              tone="danger"
+              :busy="deleting"
+              @cancel="cancelDeleteConfirmation"
+              @confirm="confirmDelete"
+            >
+              <p v-if="deleteError" class="dialog__error" role="alert">{{ deleteError }}</p>
+            </AlertDialog>
           </div>
         </form>
       </div>

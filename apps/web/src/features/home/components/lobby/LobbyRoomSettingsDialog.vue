@@ -11,7 +11,7 @@ import RoomAvatarField from '@/entities/room/components/RoomAvatarField.vue';
 import RoomMemberList from '@/entities/room/components/RoomMemberList.vue';
 import { saveRoomAvatarChange, type RoomAvatarChange } from '@/entities/room/room-avatar-change';
 import { BAN_UNDO_DURATION_MS, type ModerationNoticeOptions } from '@/entities/room/room-moderation';
-import { Dialog } from '@/shared/ui';
+import { AlertDialog, Button, Dialog } from '@voice-room/ui/components';
 import { iconMd } from '@/shared/ui/icons';
 import { useToastsStore, type ToastOptions } from '../../model/toasts.store';
 
@@ -33,6 +33,7 @@ const saving = ref(false);
 const deleting = ref(false);
 const confirmDelete = ref(false);
 const error = useLocalizedText();
+const deleteError = useLocalizedText();
 const avatarChange = ref<RoomAvatarChange>({ kind: 'keep' });
 const cropOpen = ref(false);
 const section = ref<Section>('general');
@@ -75,15 +76,26 @@ async function remove(): Promise<void> {
   const room = props.room;
   if (!room || deleting.value) return;
   deleting.value = true;
+  deleteError.value = '';
   try {
     await deleteRoom(room.roomId);
     emit('deleted');
     emit('close');
     emit('toast', t('Комната удалена'));
   } catch (cause) {
-    error.value = () => (cause instanceof Error ? currentErrorMessage(cause) : t('Не удалось удалить комнату'));
+    deleteError.value = () => (cause instanceof Error ? currentErrorMessage(cause) : t('Не удалось удалить комнату'));
+  } finally {
     deleting.value = false;
   }
+}
+
+function openDeleteConfirmation(): void {
+  deleteError.value = '';
+  confirmDelete.value = true;
+}
+
+function cancelDeleteConfirmation(): void {
+  if (!deleting.value) confirmDelete.value = false;
 }
 
 function notifyModeration(message: string, options: ModerationNoticeOptions = {}): void {
@@ -121,7 +133,7 @@ function onClose(): void {
 </script>
 
 <template>
-  <Dialog :open="Boolean(room)" :title="t('Настройки комнаты')" :width="780" :on-close="onClose">
+  <Dialog :open="Boolean(room)" :title="t('Настройки комнаты')" size="lg" :on-close="onClose">
     <div v-if="room" class="room-settings">
       <div class="settings__body settings__body--room">
         <nav class="settings__nav" :aria-label="t('Разделы настроек комнаты')">
@@ -183,18 +195,21 @@ function onClose(): void {
             </button>
           </div>
           <div class="dialog__danger-zone">
-            <template v-if="confirmDelete">
-              <p class="dialog__danger-note">{{ t('Комната будет удалена для всех участников.') }}</p>
-              <div class="dialog__danger-actions">
-                <button class="settings__cancel" type="button" @click="confirmDelete = false">{{ t('Отмена') }}</button
-                ><button class="dialog__danger-confirm" type="button" :disabled="deleting" @click="remove">
-                  {{ t('Удалить навсегда') }}
-                </button>
-              </div>
-            </template>
-            <button v-else class="dialog__danger-trigger" type="button" @click="confirmDelete = true">
+            <Button variant="danger-ghost" @click="openDeleteConfirmation">
               {{ t('Удалить комнату') }}
-            </button>
+            </Button>
+            <AlertDialog
+              :open="confirmDelete"
+              :title="t('Удалить комнату «{p0}»?', { p0: room.name || room.roomId })"
+              :description="t('Комната будет удалена для всех участников. Это действие нельзя отменить.')"
+              :confirm-label="deleting ? t('Удаляем…') : t('Удалить')"
+              tone="danger"
+              :busy="deleting"
+              @cancel="cancelDeleteConfirmation"
+              @confirm="remove"
+            >
+              <p v-if="deleteError" class="dialog__error" role="alert">{{ deleteError }}</p>
+            </AlertDialog>
           </div>
         </form>
       </div>

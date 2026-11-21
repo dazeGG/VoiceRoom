@@ -3,28 +3,12 @@
 
 import { screen } from '@testing-library/vue';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, expect, test, vi } from 'vitest';
+import { expect, test, vi } from 'vitest';
 import AuthDialog from '@/features/auth/AuthDialog.vue';
 import { useSessionStore } from '@/features/auth/session.store';
 import { stubFetch } from '../fixtures/fetch';
 import { authUser } from '../fixtures/users';
 import { renderWithApp } from '../helpers/render';
-
-beforeEach(() => {
-  // jsdom has no modal dialogs.
-  for (const [name, open] of [
-    ['showModal', true],
-    ['close', false]
-  ] as const) {
-    if (name in HTMLDialogElement.prototype) continue;
-    Object.defineProperty(HTMLDialogElement.prototype, name, {
-      configurable: true,
-      value(this: HTMLDialogElement) {
-        this.open = open;
-      }
-    });
-  }
-});
 
 async function renderDialog(mode: 'login' | 'recover') {
   const onAuthenticated = vi.fn();
@@ -38,8 +22,7 @@ test('language selection follows the sign-in form rather than displacing its hea
   const language = screen.getByRole('combobox', { name: 'Язык' });
   const submit = screen.getByRole('button', { name: 'Войти' });
   expect(submit.compareDocumentPosition(language) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
-  expect(language.closest('.auth-dialog__heading')).toBeNull();
-  expect(language.closest('.auth-dialog__language')).not.toBeNull();
+  expect(screen.getByRole('dialog', { name: 'Вход' }).contains(language)).toBe(true);
 });
 
 test('a recovery code signs in with a new password; a malformed code is refused first', async () => {

@@ -18,7 +18,6 @@
 //   .room-layout, .stage                  -> unchanged (RoomStage.vue)
 //   .screen-meta, .screen-meta-title, -detail -> .screen-meta, .screen-meta__title, __detail
 //   .screen-view-controls, .screen-control-button -> .screen-view-controls, .screen-view-controls__button
-//   .screen-source-dialog, -panel, -heading h2, -options -> .screen-source-dialog, __panel, __heading h2, __options (_screen-source-dialog.scss)
 //   .chat-rail-collapse                   -> .room-panel-header__collapse
 //   .heading-actions, .room-heading (stacked) -> not used by any ported component; left out
 //
@@ -137,24 +136,6 @@ body.lobby--embedded .room-embedded-shell .topbar {
   .screen-view-controls__button {
     width: 40px;
     height: 40px;
-  }
-
-  .screen-source-dialog {
-    padding: var(--space-sm);
-  }
-
-  .screen-source-dialog__panel {
-    max-height: calc(100vh - 24px);
-    padding: var(--space-md);
-  }
-
-  .screen-source-dialog__heading h2 {
-    font-size: 1.24rem;
-  }
-
-  .screen-source-dialog__options {
-    max-height: calc(100vh - 160px);
-    grid-template-columns: 1fr;
   }
 }
 

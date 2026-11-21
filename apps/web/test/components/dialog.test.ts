@@ -59,6 +59,32 @@ test('Escape closes and focus returns to the opener', async () => {
   await vi.waitFor(() => expect(document.activeElement).toBe(opener));
 });
 
+test('the localized close button closes the dialog', async () => {
+  const { onClosed } = await openDialog();
+  await userEvent.click(screen.getByRole('button', { name: 'Закрыть' }));
+  expect(onClosed).toHaveBeenCalledTimes(1);
+  expect(screen.queryByRole('dialog')).toBeNull();
+});
+
+test('the dialog exposes its description, size and footer with the close button hidden', async () => {
+  render(UiDialog, {
+    props: {
+      open: true,
+      title: 'Настройки',
+      description: 'Настройки звонка',
+      size: 'lg',
+      closable: false,
+      onClose: vi.fn()
+    },
+    slots: { footer: () => h('button', { type: 'button' }, 'Сохранить') }
+  });
+
+  const dialog = await screen.findByRole('dialog', { name: 'Настройки', description: 'Настройки звонка' });
+  expect(dialog.classList.contains('ui-dialog--lg')).toBe(true);
+  expect(dialog.contains(screen.getByRole('button', { name: 'Сохранить' }))).toBe(true);
+  expect(screen.queryByRole('button', { name: 'Закрыть' })).toBeNull();
+});
+
 test('a press outside the card closes, a press inside does not', async () => {
   const { onClosed, dialog } = await openDialog();
   await userEvent.click(dialog);

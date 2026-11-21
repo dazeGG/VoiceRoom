@@ -2,12 +2,11 @@
 import { useLocalizedText, currentErrorMessage } from '@/shared/i18n/localized-text';
 
 import { t } from '@/shared/i18n';
-import { Check, X } from '@lucide/vue';
+import { Check } from '@lucide/vue';
 import { deriveAvatarAccent, dominantAvatarColor } from '@voice-room/shared/avatar-accent';
-import { DialogContent, DialogPortal, DialogRoot, DialogTitle } from 'reka-ui';
 import { ref, shallowRef, watch } from 'vue';
 import EmojiText from '@/shared/chat/EmojiText.vue';
-import { Avatar, Slider, isToastPress } from '@voice-room/ui/components';
+import { Avatar, Button, Dialog, Slider } from '@voice-room/ui/components';
 import type { AvatarCropDialogProps } from './types';
 import { context2d, type Canvas2D } from './canvas-2d';
 
@@ -188,135 +187,93 @@ async function save(): Promise<void> {
     saving.value = false;
   }
 }
-
-// Reka traps Tab, closes on Escape and on a press outside the card, and returns
-// focus to the previously focused element. A save in flight blocks closing.
-function onOpenChange(next: boolean): void {
-  if (!next && !saving.value) props.onClose();
-}
-
-function blockWhileSaving(event: Event): void {
-  if (saving.value || isToastPress(event)) event.preventDefault();
-}
-
-function onOpenAutoFocus(event: Event): void {
-  const root = event.target;
-  if (!(root instanceof HTMLElement)) return;
-  const target = root.querySelector('[data-dialog-initial-focus]');
-  if (!(target instanceof HTMLElement)) return;
-  event.preventDefault();
-  target.focus({ preventScroll: true });
-}
 </script>
 
 <template>
-  <DialogRoot :open="open" @update:open="onOpenChange">
-    <DialogPortal>
-      <!-- Not DialogOverlay: it locks body scroll and the original had no lock. -->
-      <div v-if="open" class="avatar-crop__overlay">
-        <DialogContent
-          class="avatar-crop__dialog"
-          :aria-describedby="undefined"
-          @open-auto-focus="onOpenAutoFocus"
-          @escape-key-down="blockWhileSaving"
-          @pointer-down-outside="blockWhileSaving"
-          @interact-outside="blockWhileSaving"
+  <Dialog
+    :open="open"
+    size="lg"
+    :title="title"
+    :description="t('Перетащите изображение, масштабируйте ползунком или колесом')"
+    :close-disabled="saving"
+    :on-close="onClose"
+  >
+    <div class="avatar-crop__body">
+      <section class="avatar-crop__editor">
+        <div
+          class="avatar-crop__stage"
+          :class="{
+            'avatar-crop__stage--circle': shape === 'circle',
+            'avatar-crop__stage--squircle': shape === 'squircle'
+          }"
         >
-          <header class="avatar-crop__head">
-            <div>
-              <DialogTitle as="h2" class="avatar-crop__title">{{ title }}</DialogTitle>
-              <p class="avatar-crop__hint">{{ t('Перетащите изображение, масштабируйте ползунком или колесом') }}</p>
-            </div>
-            <button
-              class="avatar-crop__close"
-              type="button"
-              :aria-label="t('Закрыть')"
-              :disabled="saving"
-              data-dialog-initial-focus
-              @click="onClose"
-            >
-              <X :size="18" />
-            </button>
-          </header>
-
-          <div class="avatar-crop__body">
-            <section class="avatar-crop__editor">
-              <div
-                class="avatar-crop__stage"
-                :class="{
-                  'avatar-crop__stage--circle': shape === 'circle',
-                  'avatar-crop__stage--squircle': shape === 'squircle'
-                }"
-              >
-                <canvas
-                  ref="canvas"
-                  class="avatar-crop__canvas"
-                  width="512"
-                  height="512"
-                  :aria-label="t('Область кадрирования')"
-                  @pointerdown="onPointerDown"
-                  @pointermove="onPointerMove"
-                  @pointerup="endDrag"
-                  @pointercancel="endDrag"
-                  @wheel="onWheel"
-                ></canvas>
-              </div>
-              <div class="avatar-crop__zoom">
-                <div class="avatar-crop__zoom-head">
-                  <span>{{ t('Масштаб') }}</span>
-                  <output aria-hidden="true">{{ Math.round(zoom * 100) }}%</output>
-                </div>
-                <Slider
-                  v-model="zoom"
-                  :min="1"
-                  :max="3"
-                  :step="0.01"
-                  :aria-label="t('Масштаб изображения')"
-                  :aria-value-text="Math.round(zoom * 100) + '%'"
-                />
-              </div>
-            </section>
-
-            <aside class="avatar-crop__preview" :aria-label="t('Предпросмотр')">
-              <span class="avatar-crop__preview-label">{{ t('Предпросмотр') }}</span>
-              <template v-if="kind === 'user'">
-                <div
-                  class="avatar-crop__tile"
-                  :style="{ '--preview-accent': accent.background, '--preview-shadow': accent.shadow }"
-                >
-                  <Avatar :name="name" :src="previewUrl" :size="76" />
-                  <strong class="avatar-crop__name"><EmojiText :text="name || t('Ваш профиль')" /></strong>
-                  <span class="avatar-crop__caption">{{ t('плитка разговора') }}</span>
-                </div>
-                <div class="avatar-crop__card">
-                  <Avatar :name="name" :src="previewUrl" :size="34" online show-dot ring="var(--vr-surface)" />
-                  <div class="avatar-crop__card-text">
-                    <strong class="avatar-crop__name"><EmojiText :text="name || t('Ваш профиль')" /></strong
-                    ><span class="avatar-crop__caption">{{ t('в сети') }}</span>
-                  </div>
-                </div>
-              </template>
-              <div v-else class="avatar-crop__card">
-                <Avatar :name="name" :src="previewUrl" shape="squircle" :size="48" background="var(--vr-surface-3)" />
-                <div class="avatar-crop__card-text">
-                  <strong class="avatar-crop__name"><EmojiText :text="name || t('Комната')" /></strong
-                  ><span class="avatar-crop__caption">{{ t('карточка лобби') }}</span>
-                </div>
-              </div>
-            </aside>
+          <canvas
+            ref="canvas"
+            class="avatar-crop__canvas"
+            width="512"
+            height="512"
+            :aria-label="t('Область кадрирования')"
+            @pointerdown="onPointerDown"
+            @pointermove="onPointerMove"
+            @pointerup="endDrag"
+            @pointercancel="endDrag"
+            @wheel="onWheel"
+          ></canvas>
+        </div>
+        <div class="avatar-crop__zoom">
+          <div class="avatar-crop__zoom-head">
+            <span>{{ t('Масштаб') }}</span>
+            <output aria-hidden="true">{{ Math.round(zoom * 100) }}%</output>
           </div>
+          <Slider
+            v-model="zoom"
+            :min="1"
+            :max="3"
+            :step="0.01"
+            :aria-label="t('Масштаб изображения')"
+            :aria-value-text="Math.round(zoom * 100) + '%'"
+          />
+        </div>
+      </section>
 
-          <p v-if="error" class="avatar-crop__error" role="alert">{{ error }}</p>
-          <footer class="avatar-crop__actions">
-            <button class="avatar-crop__cancel" type="button" :disabled="saving" @click="onClose">
-              {{ t('Отмена') }}
-            </button>
-            <button class="avatar-crop__save" type="button" :disabled="saving || !image" @click="save">
-              <Check :size="17" aria-hidden="true" /> {{ t('Готово') }}
-            </button>
-          </footer>
-        </DialogContent>
-      </div>
-    </DialogPortal>
-  </DialogRoot>
+      <aside class="avatar-crop__preview" :aria-label="t('Предпросмотр')">
+        <span class="avatar-crop__preview-label">{{ t('Предпросмотр') }}</span>
+        <template v-if="kind === 'user'">
+          <div
+            class="avatar-crop__tile"
+            :style="{ '--preview-accent': accent.background, '--preview-shadow': accent.shadow }"
+          >
+            <Avatar :name="name" :src="previewUrl" :size="76" />
+            <strong class="avatar-crop__name"><EmojiText :text="name || t('Ваш профиль')" /></strong>
+            <span class="avatar-crop__caption">{{ t('плитка разговора') }}</span>
+          </div>
+          <div class="avatar-crop__card">
+            <Avatar :name="name" :src="previewUrl" :size="34" online show-dot ring="var(--vr-surface)" />
+            <div class="avatar-crop__card-text">
+              <strong class="avatar-crop__name"><EmojiText :text="name || t('Ваш профиль')" /></strong
+              ><span class="avatar-crop__caption">{{ t('в сети') }}</span>
+            </div>
+          </div>
+        </template>
+        <div v-else class="avatar-crop__card">
+          <Avatar :name="name" :src="previewUrl" shape="squircle" :size="48" background="var(--vr-surface-3)" />
+          <div class="avatar-crop__card-text">
+            <strong class="avatar-crop__name"><EmojiText :text="name || t('Комната')" /></strong
+            ><span class="avatar-crop__caption">{{ t('карточка лобби') }}</span>
+          </div>
+        </div>
+      </aside>
+    </div>
+
+    <p v-if="error" class="avatar-crop__error" role="alert">{{ error }}</p>
+    <template #footer>
+      <Button variant="ghost" :disabled="saving" @click="onClose">
+        {{ t('Отмена') }}
+      </Button>
+      <Button variant="primary" :busy="saving" :disabled="!image" @click="save">
+        <template #icon><Check aria-hidden="true" /></template>
+        {{ t('Готово') }}
+      </Button>
+    </template>
+  </Dialog>
 </template>

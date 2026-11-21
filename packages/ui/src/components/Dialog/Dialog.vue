@@ -1,13 +1,14 @@
 <script setup lang="ts">
 import { t } from '../../i18n';
 import { X } from '@lucide/vue';
-import { DialogContent, DialogPortal, DialogRoot, DialogTitle } from 'reka-ui';
-import { iconSm } from '../../icon-defaults';
+import { DialogContent, DialogDescription, DialogPortal, DialogRoot, DialogTitle } from 'reka-ui';
+import IconButton from '../IconButton/IconButton.vue';
 import { isToastPress } from './toast-press';
 import type { DialogProps } from './types';
 
 const props = withDefaults(defineProps<DialogProps>(), {
-  width: 430,
+  size: 'md',
+  closable: true,
   initialFocus: '[data-dialog-initial-focus]'
 });
 
@@ -24,11 +25,11 @@ function onOpenAutoFocus(event: Event): void {
 }
 
 function keepOnToastPress(event: Event): void {
-  if (isToastPress(event)) event.preventDefault();
+  if (props.closeDisabled || isToastPress(event)) event.preventDefault();
 }
 
 function onOpenChange(next: boolean): void {
-  if (!next) props.onClose();
+  if (!next && !props.closeDisabled) props.onClose();
 }
 </script>
 
@@ -36,30 +37,39 @@ function onOpenChange(next: boolean): void {
   <DialogRoot :open="open" @update:open="onOpenChange">
     <DialogPortal>
       <!-- Not DialogOverlay: it locks body scroll and the original had no lock. -->
-      <div v-if="open" class="ui-dialog__overlay">
+      <div v-if="open" class="ui-overlay">
         <DialogContent
-          class="ui-dialog__card"
-          :style="{ width: `min(${width}px, 100%)` }"
-          :aria-describedby="undefined"
+          v-bind="description ? {} : { 'aria-describedby': undefined }"
+          :class="['ui-dialog', `ui-dialog--${size}`]"
+          aria-modal="true"
           @open-auto-focus="onOpenAutoFocus"
           @pointer-down-outside="keepOnToastPress"
           @interact-outside="keepOnToastPress"
         >
-          <div class="ui-dialog__head">
-            <DialogTitle as="span" class="ui-dialog__title">{{ title }}</DialogTitle>
-            <button
+          <header class="ui-dialog__head">
+            <div class="ui-dialog__titles">
+              <DialogTitle as="h2" class="ui-dialog__title">{{ title }}</DialogTitle>
+              <DialogDescription v-if="description" class="ui-dialog__desc">{{ description }}</DialogDescription>
+            </div>
+            <IconButton
+              v-if="closable"
               class="ui-dialog__close"
-              type="button"
-              :aria-label="t('Закрыть')"
+              :label="t('Закрыть')"
+              :size="32"
+              :tooltip="false"
+              :disabled="closeDisabled"
               data-dialog-initial-focus
-              @click="onClose"
+              @click="onOpenChange(false)"
             >
-              <X v-bind="iconSm" aria-hidden="true" />
-            </button>
-          </div>
+              <X aria-hidden="true" />
+            </IconButton>
+          </header>
           <div class="ui-dialog__body">
             <slot />
           </div>
+          <footer v-if="$slots.footer" class="ui-dialog__foot">
+            <slot name="footer" />
+          </footer>
         </DialogContent>
       </div>
     </DialogPortal>

@@ -3,10 +3,6 @@
 // .screen-source-* rules of responsive.css.
 //
 // Svelte class -> BEM class
-//   .screen-source-dialog            -> .screen-source-dialog
-//   .screen-source-panel             -> .screen-source-dialog__panel
-//   .screen-source-heading           -> .screen-source-dialog__heading
-//   .screen-source-close             -> .screen-source-dialog__close
 //   .screen-source-tabs / -tab       -> .screen-source-dialog__tabs / __tab
 //   .screen-source-options           -> .screen-source-dialog__options
 //   .screen-source-option            -> .screen-source-dialog__option
@@ -36,69 +32,8 @@
 //   (tabs, options, toggle buttons, gear and presets already select on aria-pressed)
 @use 'pkg:@voice-room/ui/styles/mixins' as *;
 
-.screen-source-dialog {
-  position: fixed;
-  inset: 0;
-  z-index: 20;
-  display: grid;
-  place-items: center;
-  padding: var(--space-lg);
-  background: color-mix(in srgb, var(--vr-bg) 76%, transparent);
-}
-
-.screen-source-dialog__panel {
-  display: flex;
-  flex-direction: column;
-  width: min(1040px, 100%);
-  max-height: min(740px, calc(100vh - 48px));
-  border: 1px solid var(--vr-line-strong);
-  border-radius: 22px;
-  overflow: hidden;
-  background:
-    radial-gradient(78% 90% at 100% 0%, color-mix(in oklch, var(--vr-surface-3), transparent 74%), transparent 56%),
-    radial-gradient(60% 74% at 0% 4%, color-mix(in oklch, var(--vr-surface), transparent 82%), transparent 54%),
-    var(--vr-surface-2);
-  box-shadow: 0 34px 80px oklch(10% 0.01 92 / 0.6);
-}
-
-// ---- header ----
-
-.screen-source-dialog__heading {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--space-md);
-  padding: 26px 28px 0;
-}
-
-.screen-source-dialog__heading h2 {
-  margin: 0;
-  font-size: 1.45rem;
-  font-weight: 800;
-  line-height: 1.08;
-  letter-spacing: -0.02em;
-  color: var(--vr-text);
-}
-
-.screen-source-dialog__close {
-  display: grid;
-  width: 38px;
-  height: 38px;
-  flex: 0 0 auto;
-  place-items: center;
-  border: 1px solid var(--vr-line-strong);
-  border-radius: 11px;
-  padding: 0;
-  background: var(--vr-surface-3);
-  color: var(--vr-text-2);
-  transition:
-    background 140ms var(--ease-out),
-    color 140ms var(--ease-out);
-}
-
-.screen-source-dialog__close:hover {
-  background: var(--vr-surface-3-hover);
-  color: var(--vr-text);
+.ui-dialog:has(.screen-source-dialog__footer) {
+  overflow: visible;
 }
 
 // ---- tabs ----
@@ -106,7 +41,8 @@
 .screen-source-dialog__tabs {
   display: inline-flex;
   gap: 4px;
-  margin: 20px 28px 0;
+  align-self: flex-start;
+  flex: none;
   padding: 4px;
   background: var(--vr-bg);
   border: 1px solid var(--vr-line);
@@ -141,13 +77,9 @@
 
 .screen-source-dialog__options {
   display: grid;
-  flex: 1;
-  min-height: 0;
-  max-height: min(560px, calc(100vh - 280px));
+  flex: none;
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 16px;
-  padding: 20px 28px 26px;
-  overflow: auto;
+  gap: var(--space-16);
 }
 
 .screen-source-dialog__option {
@@ -294,10 +226,8 @@
 .screen-source-dialog__footer {
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding: 16px 20px;
-  border-top: 1px solid var(--vr-line);
-  background: color-mix(in oklch, var(--vr-bg), transparent 50%);
+  width: 100%;
+  gap: var(--space-12);
   flex-wrap: wrap;
 }
 
@@ -345,8 +275,9 @@
 .screen-source-dialog__footer-actions {
   display: flex;
   align-items: center;
-  gap: 10px;
-  flex: 0 0 auto;
+  gap: var(--space-8);
+  justify-content: flex-end;
+  flex-wrap: wrap;
 }
 
 // SD / HD and 30 / 60 toggles.
@@ -420,7 +351,7 @@
   position: absolute;
   right: 0;
   bottom: calc(100% + 10px);
-  width: 320px;
+  width: min(320px, calc(100vw - var(--space-48)));
   z-index: 30;
   padding: 16px;
   background: var(--vr-surface-2);
@@ -616,21 +547,17 @@
 // ---- small screens ----
 
 @include below($bp-phone-sm) {
-  .screen-source-dialog {
-    padding: var(--space-sm);
-  }
-
-  .screen-source-dialog__panel {
-    max-height: calc(100vh - 24px);
-    padding: var(--space-md);
-  }
-
-  .screen-source-dialog__heading h2 {
-    font-size: 1.24rem;
-  }
-
   .screen-source-dialog__options {
-    max-height: calc(100vh - 160px);
     grid-template-columns: 1fr;
+  }
+
+  .screen-source-dialog__footer {
+    position: relative;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .screen-source-dialog__gear-wrap {
+    position: static;
   }
 }

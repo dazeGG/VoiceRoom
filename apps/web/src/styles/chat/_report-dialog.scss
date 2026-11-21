@@ -8,7 +8,6 @@
 //   .report-comment              -> .report-dialog__comment
 //   .report-note                 -> .report-dialog__note
 //   .report-error                -> .report-dialog__error
-//   .report-actions              -> .report-dialog__actions
 
 .report-dialog {
   display: grid;
@@ -66,10 +65,4 @@
 
 .report-dialog__error {
   color: var(--vr-danger);
-}
-
-.report-dialog__actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
 }

@@ -130,11 +130,11 @@ function confirmBlock(): void {
     initial-focus="[data-friend-block-cancel]"
   >
     <p>{{ t('Пользователь больше не сможет писать вам и звать в комнаты. Дружба будет разорвана.') }}</p>
-    <div class="home-dialog__actions">
+    <template #footer>
       <Button variant="ghost" type="button" data-friend-block-cancel @click="blockTarget = null">{{
         t('Отмена')
       }}</Button>
       <Button variant="danger" type="button" @click="confirmBlock">{{ t('Заблокировать') }}</Button>
-    </div>
+    </template>
   </Dialog>
 </template>

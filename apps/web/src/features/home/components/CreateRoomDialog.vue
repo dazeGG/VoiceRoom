@@ -4,7 +4,7 @@ import { useLocalizedText } from '@/shared/i18n/localized-text';
 
 import { t } from '@/shared/i18n';
 import { Check, Clock } from '@lucide/vue';
-import { ref, watch } from 'vue';
+import { ref, useId, watch } from 'vue';
 import { Button, Dialog } from '@/shared/ui';
 import { iconSm } from '@/shared/ui/icons';
 
@@ -13,6 +13,7 @@ const props = defineProps<{ open: boolean; creating: boolean }>();
 const emit = defineEmits<{ close: []; create: [payload: { name: string; isStatic: boolean }] }>();
 
 const tab = ref<'permanent' | 'temp'>('permanent');
+const formId = useId();
 const name = ref('');
 const error = useLocalizedText();
 const permanentTab = ref<HTMLButtonElement | null>(null);
@@ -70,7 +71,7 @@ function onTabsKeydown(event: KeyboardEvent): void {
     :open="open"
     :title="t('Новая комната')"
     :on-close="() => emit('close')"
-    :width="430"
+    size="sm"
     initial-focus="#createRoomPermanentTab"
   >
     <div class="create-room__tabs" role="tablist" :aria-label="t('Тип комнаты')" tabindex="-1" @keydown="onTabsKeydown">
@@ -102,7 +103,7 @@ function onTabsKeydown(event: KeyboardEvent): void {
       </button>
     </div>
 
-    <form class="create-room__form" @submit.prevent="submit">
+    <form :id="formId" class="create-room__form" @submit.prevent="submit">
       <p v-if="error" class="create-room__error" role="alert">{{ error }}</p>
 
       <div class="create-room__field">
@@ -141,14 +142,13 @@ function onTabsKeydown(event: KeyboardEvent): void {
           t('Код появится после создания. После выхода всех участников комната исчезнет примерно через 15 минут.')
         }}</span>
       </div>
-
-      <div class="home-dialog__actions">
-        <Button variant="ghost" type="button" @click="emit('close')">{{ t('Отмена') }}</Button>
-        <Button variant="primary" type="submit" :disabled="creating">
-          <Spinner v-if="creating" aria-hidden="true" />
-          {{ tab === 'permanent' ? t('Создать комнату') : t('Создать на время') }}
-        </Button>
-      </div>
     </form>
+    <template #footer>
+      <Button variant="ghost" type="button" @click="emit('close')">{{ t('Отмена') }}</Button>
+      <Button variant="primary" type="submit" :form="formId" :disabled="creating">
+        <Spinner v-if="creating" aria-hidden="true" />
+        {{ tab === 'permanent' ? t('Создать комнату') : t('Создать на время') }}
+      </Button>
+    </template>
   </Dialog>
 </template>

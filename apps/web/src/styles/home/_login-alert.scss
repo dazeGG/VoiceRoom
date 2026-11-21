@@ -2,7 +2,7 @@
 // Svelte: LoginAlertDialog.svelte <style>.
 //
 // Svelte class -> BEM class (block "login-alert")
-//   .login-alert-layer .ui-dialog-overlay -> .ui-dialog__overlay:has(.login-alert)
+//   .login-alert-layer .ui-dialog-overlay -> .ui-overlay:has(.login-alert)
 //     (the Dialog portals its overlay to <body>, so a wrapper cannot style it;
 //     a security question outranks every other dialog)
 //   .login-alert-text                 -> .login-alert__text
@@ -13,7 +13,7 @@
 //   .login-alert-button (--safe, --danger, --ghost) -> .login-alert__button (same modifiers)
 //   .login-alert-later                -> .login-alert__later
 
-.ui-dialog__overlay:has(.login-alert) {
+.ui-overlay:has(.login-alert) {
   z-index: 110;
 }
 

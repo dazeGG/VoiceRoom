@@ -42,7 +42,6 @@ import {
   syncScreenVideoAudio,
   updateScreenFullscreenState
 } from './ui/screen-view';
-import { closeScreenSourceOnEscape } from './ui/screen-source-picker';
 
 import { createLogger, errorContext, reportClientLogs } from './diagnostics';
 import { DISPLAY_NAME_STORAGE_KEY, readStorage } from './core/storage';
@@ -236,7 +235,6 @@ export function mountRoomClient(
   syncScreenVideoAudio();
   bindScreenStageIdleUi(listenerSignal);
 
-  document.addEventListener('keydown', closeScreenSourceOnEscape, { signal: listenerSignal });
   document.addEventListener('pointerdown', handleAudioUnlockGesture, { passive: true, signal: listenerSignal });
   document.addEventListener('keydown', handleAudioUnlockGesture, { signal: listenerSignal });
   document.addEventListener('fullscreenchange', updateScreenFullscreenState, { signal: listenerSignal });

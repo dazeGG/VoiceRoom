@@ -72,16 +72,6 @@ function closeScreenSourcePicker() {
   return request;
 }
 
-export function closeScreenSourceOnBackdrop(event: MouseEvent | PointerEvent): void {
-  if (event.target instanceof Element && event.target.id === 'screenSourceDialog') cancelScreenSourcePicker();
-}
-
-export function closeScreenSourceOnEscape(event: KeyboardEvent): void {
-  if (event.key !== 'Escape' || !state.screenSourceRequest) return;
-  event.preventDefault();
-  cancelScreenSourcePicker();
-}
-
 function getTabSources(sources: DesktopCaptureSource[], tab: 'screens' | 'windows'): DesktopCaptureSource[] {
   return sources.filter((s) => (tab === 'screens' ? s.type === 'screen' : s.type !== 'screen'));
 }
