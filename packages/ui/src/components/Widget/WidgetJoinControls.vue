@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { KeyRound, Plus } from '@lucide/vue';
 import { DEFAULT_WIDGET_TITLE } from '@voice-room/shared/contracts/widget';
+import Button from '../Button/Button.vue';
+import Field from '../Field/Field.vue';
+import TextField from '../TextField/TextField.vue';
 
 withDefaults(defineProps<{ preview?: boolean; title?: string | undefined }>(), {
   preview: false,
@@ -14,31 +17,40 @@ defineEmits<{ create: []; join: [] }>();
 <template>
   <div class="widget-entry">
     <h1 class="widget-entry__title">{{ title }}</h1>
-    <label class="widget-entry__field">
-      Ваше имя
-      <input v-model="name" :disabled="preview" maxlength="80" placeholder="Как вас зовут?" autocomplete="nickname" />
-    </label>
+    <Field class="widget-entry__field" label="Ваше имя">
+      <TextField
+        v-model="name"
+        size="lg"
+        name="name"
+        :disabled="preview"
+        maxlength="80"
+        placeholder="Как вас зовут?"
+        autocomplete="nickname"
+      />
+    </Field>
     <form class="widget-entry__form" @submit.prevent="$emit('join')">
-      <button class="widget-entry__create" type="button" :disabled="preview" @click="$emit('create')">
-        <Plus :size="18" aria-hidden="true" />Создать комнату
-      </button>
+      <Button variant="primary" size="lg" :disabled="preview" @click="$emit('create')">
+        <template #icon><Plus aria-hidden="true" /></template>
+        Создать комнату
+      </Button>
       <span class="widget-entry__divider">или войти по коду</span>
       <div class="widget-entry__join">
-        <label class="widget-entry__code">
-          <KeyRound :size="17" aria-hidden="true" />
-          <span class="widget-entry__sr-only">Код комнаты</span>
-          <input
-            v-model="code"
-            :disabled="preview"
-            required
-            maxlength="48"
-            placeholder="Код комнаты"
-            autocapitalize="none"
-            spellcheck="false"
-            autocomplete="off"
-          />
-        </label>
-        <button type="submit" :disabled="preview">Войти</button>
+        <TextField
+          v-model="code"
+          size="lg"
+          name="code"
+          :disabled="preview"
+          required
+          maxlength="48"
+          aria-label="Код комнаты"
+          placeholder="Код комнаты"
+          autocapitalize="none"
+          spellcheck="false"
+          autocomplete="off"
+        >
+          <template #leading><KeyRound /></template>
+        </TextField>
+        <Button size="lg" variant="outline" type="submit" :disabled="preview">Войти</Button>
       </div>
     </form>
   </div>

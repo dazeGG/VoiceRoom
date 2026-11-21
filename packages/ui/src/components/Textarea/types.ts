@@ -4,4 +4,5 @@ export interface TextareaProps {
   disabled?: boolean | undefined;
   readonly?: boolean | undefined;
   maxlength?: number | undefined;
+  showCount?: boolean | undefined;
 }

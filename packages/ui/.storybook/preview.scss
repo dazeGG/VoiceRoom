@@ -125,3 +125,9 @@ select {
   border-radius: var(--radius-20);
   background: var(--vr-surface);
 }
+
+.widget-shell.story-widget {
+  width: min(calc(var(--size-48) * 8), 100%);
+  height: calc(var(--size-48) * 8);
+  min-height: 0;
+}

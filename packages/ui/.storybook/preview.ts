@@ -1,5 +1,11 @@
 import type { Preview } from '@storybook/vue3-vite';
+import { setup } from '@storybook/vue3-vite';
+import { createPinia } from 'pinia';
 import './preview.scss';
+
+setup((app) => {
+  app.use(createPinia());
+});
 
 const themes = ['graphite-volt', 'graphite-ice', 'graphite-coral'] as const;
 

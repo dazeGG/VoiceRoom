@@ -3,6 +3,7 @@ export interface IconButtonProps {
   size?: 24 | 28 | 32 | 40 | 44 | undefined;
   variant?: 'default' | 'filled' | 'outline' | 'soft' | 'primary' | 'danger' | undefined;
   tooltip?: boolean | undefined;
+  tooltipTarget?: HTMLElement | undefined;
   shortcut?: string[] | undefined;
   disabled?: boolean | undefined;
   type?: 'button' | 'submit' | undefined;

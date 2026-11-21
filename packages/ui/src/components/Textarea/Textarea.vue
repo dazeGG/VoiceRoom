@@ -5,12 +5,13 @@ import type { TextareaProps } from './types';
 
 defineOptions({ inheritAttrs: false });
 
-const props = defineProps<TextareaProps>();
+const props = withDefaults(defineProps<TextareaProps>(), { showCount: true });
 const value = defineModel<string>({ default: '' });
 const countId = useId();
 const textarea = useTemplateRef<HTMLTextAreaElement>('textarea');
 defineExpose({ textarea });
 const hasLimit = computed(() => props.maxlength !== undefined && props.maxlength >= 0);
+const countVisible = computed(() => hasLimit.value && props.showCount);
 const overLimit = computed(() => props.maxlength !== undefined && value.value.length > props.maxlength);
 const controlAttrs = useFieldControl();
 </script>
@@ -24,7 +25,7 @@ const controlAttrs = useFieldControl();
         v-bind="
           controlAttrs(
             { 'aria-invalid': overLimit || undefined, ...$attrs, class: undefined },
-            hasLimit ? countId : undefined
+            countVisible ? countId : undefined
           )
         "
         v-model="value"
@@ -36,7 +37,12 @@ const controlAttrs = useFieldControl();
         :maxlength="hasLimit ? maxlength : undefined"
       />
     </div>
-    <span v-if="hasLimit" :id="countId" class="ui-textarea__count" :class="{ 'ui-textarea__count--over': overLimit }">
+    <span
+      v-if="countVisible"
+      :id="countId"
+      class="ui-textarea__count"
+      :class="{ 'ui-textarea__count--over': overLimit }"
+    >
       {{ value.length }} / {{ maxlength }}
     </span>
   </div>

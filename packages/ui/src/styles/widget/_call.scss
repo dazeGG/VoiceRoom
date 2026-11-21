@@ -21,24 +21,17 @@
     padding-block-start: 0;
   }
 
-  [role='alert'] {
+  .widget-shell__notice {
     flex: none;
-    max-height: 4rem;
+    max-height: var(--space-64);
     margin: 0 0 var(--space-8);
     overflow: auto;
   }
 }
 
 .widget-call {
-  --call-line: color-mix(in srgb, var(--vr-text) 14%, var(--vr-bg));
-  --vr-surface-2: color-mix(in srgb, var(--vr-text) 7%, var(--vr-bg));
-  --vr-surface-3: color-mix(in srgb, var(--vr-text) 9%, var(--vr-bg));
-  --vr-line: color-mix(in srgb, var(--vr-text) 14%, transparent);
-  --vr-line-strong: var(--call-line);
   --vr-scrim: color-mix(in srgb, var(--vr-bg) 86%, transparent);
-  --vr-accent-soft: color-mix(in srgb, var(--vr-accent) 18%, var(--vr-bg));
   --vr-video-bg: var(--vr-bg);
-  --vr-hover: color-mix(in srgb, var(--vr-text) 12%, transparent);
   position: relative;
   display: grid;
   min-height: 0;
@@ -51,16 +44,8 @@
   position: relative;
   display: flex;
   min-width: 0;
-  min-height: var(--size-28);
   align-items: center;
   gap: var(--space-8);
-
-  button {
-    min-width: var(--size-28);
-    min-height: var(--size-28);
-    padding: var(--space-2);
-    border-radius: var(--widget-small-radius);
-  }
 }
 
 .widget-call__copy-feedback:not(:empty) {
@@ -69,8 +54,8 @@
   inset-block-start: 100%;
   inset-inline-start: 0;
   padding: var(--space-4) var(--space-8);
-  border: 1px solid var(--call-line);
-  border-radius: var(--widget-small-radius);
+  border: 1px solid var(--vr-line-strong);
+  border-radius: var(--radius-8);
   background: var(--vr-bg);
   font-size: 0.6875rem;
   pointer-events: none;
@@ -85,8 +70,6 @@
   max-width: 80%;
   margin-inline-end: auto;
   padding-inline: var(--space-4);
-  border-color: transparent;
-  background: transparent;
   color: var(--vr-text);
 
   code {
@@ -105,11 +88,8 @@
 .widget-call .widget-call__expand {
   position: absolute;
   z-index: 2;
-  inset: auto 0 -22px auto;
-  width: var(--size-24);
-  min-height: var(--size-24);
-  padding: var(--space-2);
-  border-radius: var(--widget-small-radius);
+  inset: auto 0 calc(-1 * var(--space-24)) auto;
+  background: var(--vr-surface-2);
 }
 
 @media (hover: hover) and (pointer: fine) {
@@ -143,7 +123,7 @@
   gap: var(--space-8);
   margin: 0;
   list-style: none;
-  scrollbar-color: var(--call-line) transparent;
+  scrollbar-color: var(--vr-line-strong) transparent;
   scrollbar-gutter: auto;
 
   &.widget-call__tiles--fit {
@@ -157,7 +137,7 @@
 }
 
 .widget-call__tiles > li {
-  flex: 0 0 var(--tile-width, min(100%, 480px));
+  flex: 0 0 var(--tile-width, min(100%, calc(var(--size-48) * 10)));
   min-width: 0;
 }
 
@@ -170,10 +150,6 @@
 .widget-call .participant {
   --participant-pastel: color-mix(in srgb, var(--vr-accent) 24%, var(--vr-bg));
   border-radius: var(--widget-radius);
-
-  .participant__heading {
-    border-radius: var(--widget-small-radius);
-  }
 }
 
 @container (max-height: 58px) {
@@ -183,8 +159,8 @@
   }
 
   .widget-call .participant__copy {
-    inset: auto 2px 2px;
-    max-width: calc(100% - 4px);
+    inset: auto var(--space-2) var(--space-2);
+    max-width: calc(100% - var(--space-4));
   }
 
   .widget-call .participant__heading {
@@ -228,13 +204,9 @@
   :is(.room-dock__button, .room-dock__menu-button):focus-visible {
     outline-offset: calc(-1 * var(--space-2));
   }
-
-  :is(.room-dock__split, .room-dock__button--leave, .room-dock__connection) {
-    border-radius: var(--widget-control-radius);
-  }
 }
 
-@container (max-width: 319px) {
+@container (width < 328px) {
   .widget-call .room-dock--widget {
     .room-dock__shell {
       gap: var(--space-4);
@@ -280,14 +252,14 @@
 .widget-call .widget-call__panel {
   position: absolute;
   z-index: 1;
-  inset: auto 0 54px;
+  inset: auto 0 var(--size-56);
   width: auto;
-  max-height: calc(100% - 80px);
+  max-height: calc(100% - var(--size-40) * 2);
   transform: none;
   padding: var(--space-8);
   overflow: auto;
-  border: 1px solid var(--call-line);
-  border-radius: var(--widget-radius);
+  border: 1px solid var(--vr-line-strong);
+  border-radius: var(--radius-12);
   background: var(--vr-surface-2);
 }
 
@@ -297,13 +269,6 @@
   justify-content: space-between;
   gap: var(--space-8);
   margin-block-end: var(--space-8);
-
-  button {
-    min-width: var(--size-28);
-    min-height: var(--size-28);
-    padding: var(--space-4);
-    border-radius: var(--widget-small-radius);
-  }
 }
 
 .widget-call__settings,
@@ -313,10 +278,10 @@
   font-size: 0.8125rem;
 }
 
-.widget-call__settings :is(input, select, button) {
-  min-height: var(--size-36);
-  padding: var(--space-6) var(--space-8);
-  font-size: inherit;
+.widget-call__select {
+  width: 100%;
+  font: inherit;
+  outline: none;
 }
 
 .widget-call__volume-head {
