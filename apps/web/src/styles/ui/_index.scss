@@ -1,9 +1,10 @@
 // Shared UI primitives and dialogs: one partial per BEM block.
 @forward 'dialog';
-@forward 'hotkey-recorder';
-@forward 'segment-control';
+@forward 'pkg:@voice-room/ui/styles/components/hotkey';
+@forward 'pkg:@voice-room/ui/styles/components/dropzone';
+@forward 'pkg:@voice-room/ui/styles/components/segment';
 @forward 'pkg:@voice-room/ui/styles/components/slider';
-@forward 'switch';
+@forward 'pkg:@voice-room/ui/styles/components/switch';
 @forward 'pkg:@voice-room/ui/styles/components/button';
 @forward 'pkg:@voice-room/ui/styles/components/icon-button';
 @forward 'pkg:@voice-room/ui/styles/components/field';

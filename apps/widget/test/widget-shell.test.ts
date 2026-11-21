@@ -1,4 +1,5 @@
 import { render, fireEvent, screen } from '@testing-library/vue';
+import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { createPinia, setActivePinia } from 'pinia';
 import { markRaw, reactive } from 'vue';
@@ -31,6 +32,14 @@ class FakeStream {
 beforeEach(() => {
   vi.clearAllMocks();
   vi.stubGlobal('MediaStream', FakeStream);
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe(): void {}
+      unobserve(): void {}
+      disconnect(): void {}
+    }
+  );
   Object.assign(state, createInitialRoomState(), { peerId: 'self', localConnectionQuality: 'good', joined: true });
   createParticipant({ id: 'self', name: 'Вы' });
 });
@@ -114,7 +123,10 @@ test('the in-call dock keeps per-participant controls available from their video
   await fireEvent.click(screen.getByRole('button', { name: 'Закрыть' }));
   await fireEvent.contextMenu(participant);
   expectSameTiles();
-  await fireEvent.update(screen.getByRole('slider', { name: 'Громкость' }), '0.5');
+  const slider = screen.getByRole('slider', { name: 'Громкость' });
+  slider.focus();
+  await userEvent.keyboard('{ArrowLeft>10/}');
+  expect(slider.getAttribute('aria-valuenow')).toBe('0.5');
   const preference = getParticipantAudioPreferenceKey(peer.accountUserId, peer.id);
   expect(getParticipantAudioPreference(preference).volume).toBe(0.5);
   await fireEvent.click(screen.getByRole('button', { name: 'Отключить локально' }));

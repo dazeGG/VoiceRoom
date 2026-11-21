@@ -17,7 +17,8 @@ import {
   type MicrophoneMode
 } from '@voice-room/call/engine';
 import { withSavedDeviceMissing } from '@/shared/audio/device-list';
-import { SegmentControl, Select, Slider, type SegmentOption } from '@/shared/ui';
+import { SegmentControl, Slider, Switch, type SegmentOption } from '@voice-room/ui/components';
+import { Select } from '@/shared/ui';
 import {
   enumerateMicrophones,
   enumerateSpeakers,
@@ -257,7 +258,7 @@ function previewNotificationSound(): void {
             v-model="micId"
             :options="microphoneOptions"
             :label="t('Микрофон')"
-            variant="field"
+            size="md"
             @value-change="onMicChange"
           />
         </div>
@@ -293,16 +294,7 @@ function previewNotificationSound(): void {
         <div class="settings__sound-device-section">
           <div class="settings__gate-head">
             <span class="settings__field-label">{{ t('Гейт') }}</span>
-            <button
-              class="settings__switch"
-              type="button"
-              role="switch"
-              :aria-checked="gateOn"
-              :aria-label="t('Шумовой гейт')"
-              @click="toggleGate"
-            >
-              <span class="settings__switch-knob" aria-hidden="true"></span>
-            </button>
+            <Switch :model-value="gateOn" v-bind="{ ariaLabel: t('Шумовой гейт') }" @update:model-value="toggleGate" />
           </div>
 
           <div class="settings__gate-body" :class="{ 'settings__gate-body--disabled': !gateOn }">
@@ -343,7 +335,7 @@ function previewNotificationSound(): void {
             v-model="speakerId"
             :options="speakerOptions"
             :label="t('Динамик')"
-            variant="field"
+            size="md"
             @value-change="onSpeakerChange"
           />
         </div>
@@ -397,16 +389,11 @@ function previewNotificationSound(): void {
     <div>
       <div class="settings__gate-head">
         <span class="settings__field-label">{{ t('Спрашивать перед переходом в другую комнату') }}</span>
-        <button
-          class="settings__switch"
-          type="button"
-          role="switch"
-          :aria-checked="confirmRoomSwitch"
-          :aria-label="t('Спрашивать перед переходом в другую комнату')"
-          @click="toggleRoomSwitchConfirm"
-        >
-          <span class="settings__switch-knob" aria-hidden="true"></span>
-        </button>
+        <Switch
+          :model-value="confirmRoomSwitch"
+          v-bind="{ ariaLabel: t('Спрашивать перед переходом в другую комнату') }"
+          @update:model-value="toggleRoomSwitchConfirm"
+        />
       </div>
       <div class="settings__gate-hint">
         {{ t('Когда вы уже в голосе, VoiceRoom уточнит, прежде чем переключить звонок.') }}

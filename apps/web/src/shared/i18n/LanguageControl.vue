@@ -27,7 +27,7 @@ function select(event: Event): void {
     </span>
     <span class="language-control__picker">
       <select
-        class="language-control__select select__trigger"
+        class="language-control__select ui-select"
         :value="locale.current"
         :aria-label="t('Язык')"
         @change="select"

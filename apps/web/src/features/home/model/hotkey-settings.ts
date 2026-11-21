@@ -2,7 +2,7 @@
 // shut for good, so clearing that key switches the microphone back to open.
 
 import { setMicrophoneMode, writeHotkeyBinding, type HotkeyAction } from '@voice-room/call/engine';
-import type { HotkeyBinding } from '@/shared/ui/HotkeyRecorder/types';
+import type { HotkeyBinding } from '@voice-room/ui/hotkey';
 import { readSoundSettings } from './sound-settings';
 
 /** Stores the binding; answers true when that switched push-to-talk off. */

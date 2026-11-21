@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { t } from '@voice-room/ui/i18n';
-import { Select, Slider } from '@voice-room/ui/components';
+import { Select, Slider, Switch } from '@voice-room/ui/components';
 import { GATE_THRESHOLD_MAX_DB, GATE_THRESHOLD_MIN_DB } from '../engine/core/config';
 import { NOISE_MODE_SELECT_OPTIONS } from '../engine/core/room-device-ui.store';
 import type { GateControlView } from '../engine/ui/devices';
@@ -24,7 +24,7 @@ const emit = defineEmits<{
         :model-value="state.microphoneId"
         :options="state.microphoneOptions"
         :label="t('Микрофон')"
-        variant="dock"
+        size="sm"
         flip
         @value-change="emit('select', 'microphone', $event)"
       />
@@ -51,24 +51,20 @@ const emit = defineEmits<{
         :model-value="state.noiseMode"
         :options="NOISE_MODE_SELECT_OPTIONS"
         :label="t('Шумоподавление')"
-        variant="dock"
+        size="sm"
         flip
         @value-change="emit('select', 'noiseMode', $event)"
       />
     </label>
     <div class="room-dock__field">
       <div class="room-dock__gate-head">
-        <span>{{ t('Гейт') }}</span>
-        <button
-          class="room-dock__gate-switch"
-          type="button"
-          role="switch"
-          :aria-checked="gate.gateOn"
-          :aria-label="t('Шумовой гейт')"
-          @click="emit('toggleGate')"
-        >
-          <span class="room-dock__gate-switch-knob" aria-hidden="true"></span>
-        </button>
+        <span>{{ t('Шумовой гейт') }}</span>
+        <Switch
+          size="sm"
+          :model-value="gate.gateOn"
+          v-bind="{ ariaLabel: t('Шумовой гейт') }"
+          @update:model-value="emit('toggleGate')"
+        />
       </div>
       <div :class="['room-dock__gate-control', { 'room-dock__gate-control--disabled': !gate.markerActive }]">
         <Slider
@@ -99,7 +95,7 @@ const emit = defineEmits<{
       :model-value="state.outputDeviceId"
       :options="state.outputOptions"
       :label="t('Динамик')"
-      variant="dock"
+      size="sm"
       flip
       :disabled="state.outputDisabled"
       @value-change="emit('select', 'output', $event)"
@@ -111,7 +107,7 @@ const emit = defineEmits<{
       :model-value="state.cameraId"
       :options="state.cameraOptions"
       :label="t('Камера')"
-      variant="dock"
+      size="sm"
       flip
       @value-change="emit('select', 'camera', $event)"
     />

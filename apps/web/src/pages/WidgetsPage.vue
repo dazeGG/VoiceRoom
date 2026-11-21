@@ -19,10 +19,15 @@ import {
 import { createRoomCode } from '@voice-room/shared/validation';
 import { WidgetCallLayout, WidgetJoinControls } from '@voice-room/ui/widget';
 import { createWidgetFrameExpansion } from '@voice-room/ui/widget-frame-expansion';
-import { Button, Field, NumberField, Slider } from '@voice-room/ui/components';
-import { SegmentControl } from '@/shared/ui/SegmentControl';
-import type { SegmentOption } from '@/shared/ui/SegmentControl/types';
-import { Switch } from '@/shared/ui/Switch';
+import {
+  Button,
+  Field,
+  NumberField,
+  SegmentControl,
+  Slider,
+  Switch,
+  type SegmentOption
+} from '@voice-room/ui/components';
 import { copyText } from '@/shared/utils/clipboard';
 
 const config = reactive({ ...defaultWidgetConfig });

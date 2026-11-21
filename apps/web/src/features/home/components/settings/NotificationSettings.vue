@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Switch } from '@voice-room/ui/components';
 import { t } from '@/shared/i18n';
 import { BellOff } from '@lucide/vue';
 import { computed, onMounted, ref } from 'vue';
@@ -158,17 +159,12 @@ function toggleRoomNotifications(roomId: string): Promise<void> {
       <div :hidden="support.desktopApp && support.autostart">
         <div class="settings__gate-head">
           <span class="settings__field-label">{{ notificationToggleLabel }}</span>
-          <button
-            class="settings__switch"
-            type="button"
-            role="switch"
-            :aria-checked="browserNotificationsEnabled"
-            :aria-label="notificationToggleLabel"
+          <Switch
+            :model-value="browserNotificationsEnabled"
+            v-bind="{ ariaLabel: notificationToggleLabel }"
             :disabled="pushNotifications.busy"
-            @click="void toggleBrowserNotifications()"
-          >
-            <span class="settings__switch-knob" aria-hidden="true"></span>
-          </button>
+            @update:model-value="void toggleBrowserNotifications()"
+          />
         </div>
         <div class="settings__gate-hint">
           <template v-if="pushNotifications.supported && pushNotifications.active">{{
@@ -206,17 +202,12 @@ function toggleRoomNotifications(roomId: string): Promise<void> {
       >
         <div class="settings__gate-head">
           <span class="settings__field-label">{{ t('Приватный текст уведомлений') }}</span>
-          <button
-            class="settings__switch"
-            type="button"
-            role="switch"
-            :aria-checked="notificationPreferences.privateNotifications"
-            :aria-label="t('Приватный текст уведомлений')"
+          <Switch
+            :model-value="notificationPreferences.privateNotifications"
+            v-bind="{ ariaLabel: t('Приватный текст уведомлений') }"
             :disabled="notificationSaving || !browserNotificationsEnabled"
-            @click="void togglePrivateNotifications()"
-          >
-            <span class="settings__switch-knob" aria-hidden="true"></span>
-          </button>
+            @update:model-value="void togglePrivateNotifications()"
+          />
         </div>
         <div class="settings__gate-hint">{{ t('Скрывает текст сообщений в системных уведомлениях.') }}</div>
       </div>
@@ -257,17 +248,12 @@ function toggleRoomNotifications(roomId: string): Promise<void> {
                 </span>
                 <small>@{{ peer.login }}</small>
               </span>
-              <button
-                class="settings__switch"
-                type="button"
-                role="switch"
-                :aria-checked="!notificationPreferences.mutedPeerIds.includes(peer.id)"
-                :aria-label="t('Получать уведомления от {p0}', { p0: displayNameOf(peer) })"
+              <Switch
+                :model-value="!notificationPreferences.mutedPeerIds.includes(peer.id)"
+                v-bind="{ ariaLabel: t('Получать уведомления от {p0}', { p0: displayNameOf(peer) }) }"
                 :disabled="Boolean(notificationTargetSaving)"
-                @click="void togglePeerNotifications(peer.id)"
-              >
-                <span class="settings__switch-knob" aria-hidden="true"></span>
-              </button>
+                @update:model-value="void togglePeerNotifications(peer.id)"
+              />
             </div>
           </div>
           <div v-else class="settings__notification-empty">{{ t('Диалогов пока нет.') }}</div>
@@ -299,17 +285,12 @@ function toggleRoomNotifications(roomId: string): Promise<void> {
                 </span>
                 <small>{{ room.roomId }}</small>
               </span>
-              <button
-                class="settings__switch"
-                type="button"
-                role="switch"
-                :aria-checked="!notificationPreferences.mutedRoomIds.includes(room.roomId)"
-                :aria-label="t('Получать уведомления комнаты {p0}', { p0: room.name?.trim() || room.roomId })"
+              <Switch
+                :model-value="!notificationPreferences.mutedRoomIds.includes(room.roomId)"
+                v-bind="{ ariaLabel: t('Получать уведомления комнаты {p0}', { p0: room.name?.trim() || room.roomId }) }"
                 :disabled="Boolean(notificationTargetSaving)"
-                @click="void toggleRoomNotifications(room.roomId)"
-              >
-                <span class="settings__switch-knob" aria-hidden="true"></span>
-              </button>
+                @update:model-value="void toggleRoomNotifications(room.roomId)"
+              />
             </div>
           </div>
           <div v-else class="settings__notification-empty">{{ t('Сохранённых комнат пока нет.') }}</div>

@@ -30,8 +30,6 @@
 //   .settings-gate-body             -> .settings__gate-body
 //   .settings-gate-fill             -> .settings__gate-fill
 //   .settings-gate-hint             -> .settings__gate-hint
-//   .settings-switch                -> .settings__switch
-//   .settings-switch-knob           -> .settings__switch-knob
 //   .settings-section-title         -> .settings__section-title
 //   .settings-hotkeys               -> .settings__hotkeys
 //   .settings-hotkey-row            -> .settings__hotkey-row
@@ -90,7 +88,6 @@
 //   .settings-overlay-remove        -> .settings__overlay-remove
 //
 // Other components' classes this file reaches (names the owning component takes):
-//   .select-root -> .select    .select-trigger -> .select__trigger    .vr-slider (unchanged)
 //   .ui-segment-item -> .ui-segment__item
 //
 // [data-*] -> aria / modifier class
@@ -356,8 +353,6 @@
 }
 
 .settings__sound-device > *,
-.settings__sound-device .select,
-.settings__sound-device .select__trigger,
 .settings__sound-device .vr-slider {
   width: 100%;
   min-width: 0;
@@ -376,50 +371,6 @@
 
 .settings__gate-head .settings__field-label {
   margin-bottom: 0;
-}
-
-.settings__switch {
-  position: relative;
-  flex: none;
-  width: 40px;
-  height: 24px;
-  padding: 0;
-  border: 0;
-  border-radius: 999px;
-  background: var(--vr-surface-3);
-  cursor: pointer;
-  transition:
-    background 0.16s ease,
-    border-color 0.16s ease;
-}
-
-.settings__switch::after {
-  content: '';
-  position: absolute;
-  inset: -10px -4px;
-  border-radius: var(--radius-pill);
-}
-
-.settings__switch[aria-checked='true'] {
-  background: var(--vr-accent);
-}
-
-.settings__switch-knob {
-  position: absolute;
-  top: 3px;
-  left: 3px;
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  background: var(--vr-text-2);
-  transition:
-    left 0.16s ease,
-    background 0.16s ease;
-}
-
-.settings__switch[aria-checked='true'] .settings__switch-knob {
-  left: 19px;
-  background: var(--vr-accent-ink);
 }
 
 .settings__gate-body {
@@ -535,10 +486,6 @@
 // Svelte: [data-disabled='true']
 .settings__notification-dependent--disabled {
   opacity: 0.48;
-}
-
-.settings__switch:disabled {
-  cursor: not-allowed;
 }
 
 .settings__notification-group {
