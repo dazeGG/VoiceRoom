@@ -1,9 +1,10 @@
 // Who is signed in to the admin app and what they may do, for every section.
 
 import { createContext, useContext } from 'react';
-import type { StaffMe, StaffPermission } from '@voice-room/shared/contracts/staff';
+import type { StaffPermission } from '@voice-room/shared/contracts/staff';
+import type { Staff } from './staff.store.ts';
 
-export type Staff = Omit<StaffMe, 'ok'>;
+export type { Staff } from './staff.store.ts';
 
 export const StaffContext = createContext<Staff | null>(null);
 

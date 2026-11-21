@@ -2,14 +2,9 @@
 // the latest request failed, whether one is out, and when it last heard back.
 
 import { useCallback, useEffect, useEffectEvent, useRef, useState, type DependencyList } from 'react';
-import { ApiError } from './api/client.ts';
+import { loadFailure, type LoadFailure } from './load-failure.ts';
 
-export type LoadFailure = { kind: 'forbidden' | 'failed'; message: string };
-
-export function loadFailure(cause: unknown, fallback: string): LoadFailure {
-  if (cause instanceof ApiError && cause.status === 403) return { kind: 'forbidden', message: '' };
-  return { kind: 'failed', message: cause instanceof Error && cause.message ? cause.message : fallback };
-}
+export { loadFailure, type LoadFailure } from './load-failure.ts';
 
 export interface AdminResource<T> {
   /** The last answer; null before the first. A failed request keeps it. */

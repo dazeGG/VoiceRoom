@@ -1,4 +1,22 @@
-import { beforeAll } from 'vitest';
+import { cleanup } from '@testing-library/vue';
+import { afterEach, beforeAll, beforeEach, vi } from 'vitest';
+
+afterEach(cleanup);
+
+beforeEach(() => {
+  // Reka positions and scrolls overlays through browser APIs that jsdom lacks.
+  for (const method of ['hasPointerCapture', 'setPointerCapture', 'releasePointerCapture', 'scrollIntoView']) {
+    Object.defineProperty(Element.prototype, method, { value: () => false, configurable: true });
+  }
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+  );
+});
 
 // jsdom has no dialog lifecycle APIs. This adapter only models visibility and
 // initial focus; actual modal inertness/Tab/Escape behavior is browser-tested.

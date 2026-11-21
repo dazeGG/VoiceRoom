@@ -4,13 +4,14 @@ import { TimeRangePicker } from '../../src/TimeRangePicker';
 import { PRODUCT_PRESETS, type TimeRange } from '../../src/time-range';
 import { StrictMode, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { Dialog, Popover, Segment, Button } from '../../src/ui';
+import { Dialog, Popover, Segment, Button } from '../../src/ui/index.tsx';
 import { GlobalSearch } from '../../src/shell/GlobalSearch';
 import { Sidebar } from '../../src/shell/Sidebar';
 import { StaffContext, useStaff } from '../../src/staff';
 import '../../src/styles/theme.css';
 import '../../src/pages/ProductPage.css';
 import '../../src/styles/app.css';
+import '../../src/ui/ui.css';
 import '../../src/shell/shell.css';
 function Navigation() {
   const staff = useStaff();

@@ -1,5 +1,5 @@
 {
-  // The admin app (React). Strict like the rest of the repository: no implicit
+  // The Vue shell and React pages share the strict compiler settings: no implicit
   // any, exact optional properties, checked index access.
   "compilerOptions": {
     "target": "ES2022",
@@ -20,5 +20,5 @@
     "skipLibCheck": true,
     "types": ["vite/client", "node"]
   },
-  "include": ["src/**/*.ts", "src/**/*.tsx", "test/**/*.ts", "test/**/*.tsx", "vite.config.ts"]
+  "include": ["src/**/*.ts", "src/**/*.tsx", "src/**/*.vue", "test/**/*.ts", "test/**/*.tsx", "test/**/*.vue", "vite.config.ts"]
 }

@@ -4,15 +4,16 @@
 // the top bar says where you are, how fresh the numbers are and asks again on
 // a click; the search finds accounts and rooms and opens them.
 
-import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/vue';
+import { renderWithApp } from './helpers/render.ts';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import type { AccountDetail, AccountRow, LiveRoom } from '@voice-room/shared/contracts/admin';
 import type { AdminReport } from '@voice-room/shared/contracts/reports';
 import type { StaffRole } from '@voice-room/shared/contracts/staff';
-import { App } from '../src/App.tsx';
+import App from '../src/App.vue';
 import { stubChartBox } from './helpers/chart-box.ts';
-import { staffOf, stubApi, type Route } from './helpers/harness.tsx';
+import { staffOf, stubApi, type Route } from './helpers/api.ts';
 
 let restoreChartBox = () => {};
 beforeEach(() => {
@@ -21,7 +22,6 @@ beforeEach(() => {
   restoreChartBox = stubChartBox();
 });
 afterEach(() => {
-  cleanup();
   restoreChartBox();
   vi.unstubAllGlobals();
   vi.useRealTimers();
@@ -104,7 +104,7 @@ async function sections(): Promise<string[]> {
 
 test('a moderator sees accounts, rooms and reports, and no numbers or staff', async () => {
   signedInAs('moderator');
-  render(<App />);
+  renderWithApp(App);
   expect(await sections()).toEqual(['Пользователи', 'Комнаты', 'Виджеты', 'Жалобы']);
   // A group with nothing the role may open is not shown at all.
   expect(within(await menu()).queryByText('Аналитика')).toBeNull();
@@ -115,7 +115,7 @@ test('a moderator sees accounts, rooms and reports, and no numbers or staff', as
 
 test('a superadmin sees every section in the menu order, the staff one included', async () => {
   signedInAs('superadmin');
-  render(<App />);
+  renderWithApp(App);
   expect(await sections()).toEqual([
     'Обзор',
     'Продукт',
@@ -135,7 +135,7 @@ test('a superadmin sees every section in the menu order, the staff one included'
 test('the address keeps the section across a reload, and the top bar names it', async () => {
   window.history.replaceState(null, '', '/staff');
   signedInAs('superadmin');
-  render(<App />);
+  renderWithApp(App);
   const staffLink = within(await menu()).getByRole('link', { name: 'Сотрудники' });
   expect(staffLink.getAttribute('aria-current')).toBe('page');
   expect(staffLink.getAttribute('href')).toBe('/staff');
@@ -146,7 +146,7 @@ test('the address keeps the section across a reload, and the top bar names it', 
 test('a menu item opens its section', async () => {
   window.history.replaceState(null, '', '/accounts');
   signedInAs('moderator');
-  render(<App />);
+  renderWithApp(App);
   await userEvent.click(within(await menu()).getByRole('link', { name: 'Жалобы' }));
   expect(window.location.pathname).toBe('/reports');
   expect(screen.getByRole('heading', { level: 1, name: 'Жалобы' })).toBeTruthy();
@@ -154,7 +154,7 @@ test('a menu item opens its section', async () => {
 
 test('the reports item counts the open reports', async () => {
   signedInAs('moderator', 3);
-  render(<App />);
+  renderWithApp(App);
   expect(await screen.findByLabelText('открытых: 3')).toBeTruthy();
 });
 
@@ -176,7 +176,7 @@ test('the reports item discovers user reports even before opening the review pag
       }
     }
   });
-  render(<App />);
+  renderWithApp(App);
   expect(await screen.findByLabelText('открытых: 2')).toBeTruthy();
 });
 
@@ -196,7 +196,7 @@ test('the reports item keeps the fresh poll count while the reports page stays o
       };
     }
   });
-  render(<App />);
+  renderWithApp(App);
   expect(await screen.findByLabelText('открытых: 1')).toBeTruthy();
 
   await vi.advanceTimersByTimeAsync(60_000);
@@ -208,7 +208,7 @@ test('the reports item keeps the fresh poll count while the reports page stays o
 
 test('the menu folds to a rail and stays folded after a reload', async () => {
   signedInAs('moderator');
-  const first = render(<App />);
+  const first = renderWithApp(App);
   await userEvent.click(await screen.findByRole('button', { name: 'Свернуть боковую панель' }));
   expect(screen.queryByRole('navigation', { name: 'Разделы' })).toBeNull();
   // The rail still opens every section.
@@ -216,10 +216,10 @@ test('the menu folds to a rail and stays folded after a reload', async () => {
   expect(within(rail).getByRole('link', { name: 'Комнаты' })).toBeTruthy();
   first.unmount();
 
-  const second = render(<App />);
+  const second = renderWithApp(App);
   await userEvent.click(await screen.findByRole('button', { name: 'Развернуть боковую панель' }));
   second.unmount();
-  render(<App />);
+  renderWithApp(App);
   expect(await screen.findByRole('button', { name: 'Свернуть боковую панель' })).toBeTruthy();
 });
 
@@ -228,7 +228,7 @@ test('a narrow window starts with the menu folded', async () => {
   window.innerWidth = 800;
   try {
     signedInAs('moderator');
-    render(<App />);
+    renderWithApp(App);
     expect(await screen.findByRole('button', { name: 'Развернуть боковую панель' })).toBeTruthy();
   } finally {
     window.innerWidth = width;
@@ -238,7 +238,7 @@ test('a narrow window starts with the menu folded', async () => {
 test('the folded menu opens over the content under the mouse, and Escape closes it', async () => {
   window.localStorage.setItem('vr-admin-sidebar-collapsed', 'true');
   signedInAs('moderator', 2);
-  render(<App />);
+  renderWithApp(App);
   const rail = await screen.findByRole('navigation', { name: 'Разделы, кратко' });
   expect(await within(rail).findByRole('link', { name: 'Жалобы, открытых: 2' })).toBeTruthy();
   expect(screen.queryByRole('navigation', { name: 'Разделы' })).toBeNull();
@@ -257,7 +257,7 @@ test('the folded menu opens over the content under the mouse, and Escape closes 
 
 test('the menu edge is resized from the keyboard and folds with Home', async () => {
   signedInAs('moderator');
-  render(<App />);
+  renderWithApp(App);
   const edge = await screen.findByRole('separator', { name: 'Ширина боковой панели' });
   expect(edge.getAttribute('aria-valuenow')).toBe('280');
   edge.focus();
@@ -279,7 +279,7 @@ test('the menu edge is resized from the keyboard and folds with Home', async () 
 test('the width saved before comes back, and the profile names the login and role', async () => {
   window.localStorage.setItem('vr-admin-sidebar-width', '360');
   signedInAs('admin');
-  render(<App />);
+  renderWithApp(App);
   const edge = await screen.findByRole('separator', { name: 'Ширина боковой панели' });
   expect(edge.getAttribute('aria-valuenow')).toBe('360');
   expect(screen.getByText('@staff · админ')).toBeTruthy();
@@ -294,7 +294,7 @@ test('the widgets section is in the menu only for those who may see the rooms', 
     'GET /api/admin/user-reports': { body: { ok: true, reports: [] } },
     'GET /api/admin/reports': { body: { ok: true, reports: [] } }
   });
-  render(<App />);
+  renderWithApp(App);
   expect(await sections()).toEqual(['Пользователи', 'Жалобы']);
 });
 
@@ -313,10 +313,11 @@ test("an account's card puts the account's name in the top bar under the account
     actions: []
   };
   signedInAs('moderator', 0, { 'GET /api/admin/accounts/u-alice': { body: detail } });
-  render(<App />);
-  expect(await screen.findByRole('heading', { level: 1, name: 'Алиса' })).toBeTruthy();
-  const top = document.querySelector<HTMLElement>('header.top');
-  expect(top && within(top).getByText('Пользователи')).toBeTruthy();
+  renderWithApp(App);
+  const title = await screen.findByRole('heading', { level: 1, name: 'Алиса' });
+  const topbar = screen.getAllByRole('banner').find((banner) => banner.contains(title));
+  if (!topbar) throw new Error('The top bar is missing');
+  expect(within(topbar).getByText('Пользователи')).toBeTruthy();
 });
 
 test('the top bar says how fresh the rooms are and asks again on a click', async () => {
@@ -329,7 +330,7 @@ test('the top bar says how fresh the rooms are and asks again on a click', async
     },
     'GET /api/admin/rooms/calls': { body: { ok: true, calls: [], next: null, keepDays: 90 } }
   });
-  render(<App />);
+  renderWithApp(App);
   expect(await screen.findByText(/Обновлено/)).toBeTruthy();
   expect(screen.getByText('· каждые 5 с')).toBeTruthy();
   const before = asked;
@@ -340,7 +341,7 @@ test('the top bar says how fresh the rooms are and asks again on a click', async
 test('a section that does not refresh by itself shows no refresh status', async () => {
   window.history.replaceState(null, '', '/staff');
   signedInAs('superadmin');
-  render(<App />);
+  renderWithApp(App);
   await menu();
   expect(screen.queryByRole('button', { name: 'Обновить' })).toBeNull();
 });
@@ -355,12 +356,12 @@ test('the search finds accounts and rooms in voice, and Enter opens the first', 
     'GET /api/admin/rooms': { body: { ok: true, rooms: [kitchen] } },
     'GET /api/admin/rooms/calls': { body: { ok: true, calls: [], next: null, keepDays: 90 } }
   });
-  render(<App />);
+  renderWithApp(App);
   const search = await screen.findByRole('combobox', { name: 'Поиск по аккаунтам и комнатам' });
 
   await userEvent.type(search, 'кух');
   const found = await screen.findByRole('listbox', { name: 'Найдено' });
-  expect(within(found).getByRole('option', { name: /Кухня/ })).toBeTruthy();
+  expect(await within(found).findByRole('option', { name: /Кухня/ })).toBeTruthy();
   expect(
     calls.some((call) => call.url.pathname === '/api/admin/accounts' && call.url.searchParams.get('q') === 'кух')
   ).toBe(true);
@@ -381,7 +382,7 @@ test('a room found by the search opens the rooms section with its call history',
     'GET /api/admin/rooms': { body: { ok: true, rooms: [kitchen] } },
     'GET /api/admin/rooms/calls': { body: { ok: true, calls: [], next: null, keepDays: 90 } }
   });
-  render(<App />);
+  renderWithApp(App);
   await userEvent.type(await screen.findByRole('combobox', { name: 'Поиск по аккаунтам и комнатам' }), 'kitchen');
   await userEvent.click(await screen.findByRole('option', { name: /Кухня/ }));
   expect(window.location.pathname).toBe('/rooms');
@@ -395,14 +396,37 @@ test('nothing found is said so', async () => {
     'GET /api/admin/accounts': { body: { ok: true, accounts: [], total: 0, page: 1, pageSize: 50 } },
     'GET /api/admin/rooms': { body: { ok: true, rooms: [] } }
   });
-  render(<App />);
+  renderWithApp(App);
   await userEvent.type(await screen.findByRole('combobox', { name: 'Поиск по аккаунтам и комнатам' }), 'zzz');
   expect(await screen.findByText('Ничего не найдено')).toBeTruthy();
 });
 
+test('search highlights the first result and navigates across result groups with arrows', async () => {
+  window.history.replaceState(null, '', '/staff');
+  signedInAs('superadmin', 0, {
+    'GET /api/admin/accounts': {
+      body: { ok: true, accounts: [alice()], total: 1, page: 1, pageSize: 50 }
+    },
+    'GET /api/admin/rooms': { body: { ok: true, rooms: [kitchen] } },
+    'GET /api/admin/rooms/calls': { body: { ok: true, calls: [], next: null, keepDays: 90 } }
+  });
+  renderWithApp(App);
+  const user = userEvent.setup();
+  const search = await screen.findByRole('combobox', { name: 'Поиск по аккаунтам и комнатам' });
+  await user.type(search, 'kitchen');
+  const results = await screen.findByRole('listbox', { name: 'Найдено' });
+  const account = await within(results).findByRole('option', { name: /Алиса/ });
+  const room = within(results).getByRole('option', { name: /Кухня/ });
+  expect(search.getAttribute('aria-activedescendant')).toBe(account.id);
+  await user.keyboard('{ArrowDown}');
+  expect(search.getAttribute('aria-activedescendant')).toBe(room.id);
+  await user.keyboard('{Enter}');
+  expect(window.location.pathname).toBe('/rooms');
+});
+
 test('Ctrl+K puts the cursor in the search', async () => {
   signedInAs('moderator');
-  render(<App />);
+  renderWithApp(App);
   const search = await screen.findByRole('combobox', { name: 'Поиск по аккаунтам и комнатам' });
   await userEvent.keyboard('{Control>}k{/Control}');
   expect(document.activeElement).toBe(search);

@@ -25,7 +25,7 @@ import type { StaffRole } from '@voice-room/shared/contracts/staff';
 import type { Staff } from '../staff.tsx';
 import { TAB_GROUPS, TAB_LABELS, pathOf, type AdminTab } from '../tabs.ts';
 import { Avatar } from '../ui/index.tsx';
-import { useSidebar } from './use-sidebar.ts';
+import { useSidebar } from './use-sidebar.react.ts';
 import './sidebar.css';
 
 const TAB_ICONS: Record<AdminTab, LucideIcon> = {

@@ -1,0 +1,40 @@
+@use 'sass:meta';
+@use 'pkg:@voice-room/ui/styles/tokens';
+@use 'pkg:@voice-room/ui/styles/typography';
+@use 'frame';
+@use 'sidebar';
+@use 'shared';
+@use 'legacy';
+
+// The legacy pages still use some of the same class names. Their unlayered
+// styles take precedence inside the React mount during the migration.
+@layer admin-kit {
+  @include meta.load-css('pkg:@voice-room/ui/styles/components/avatar');
+  @include meta.load-css('pkg:@voice-room/ui/styles/components/avatar-stack');
+  @include meta.load-css('pkg:@voice-room/ui/styles/components/badge');
+  @include meta.load-css('pkg:@voice-room/ui/styles/components/button');
+  @include meta.load-css('pkg:@voice-room/ui/styles/components/callout');
+  @include meta.load-css('pkg:@voice-room/ui/styles/components/card');
+  @include meta.load-css('pkg:@voice-room/ui/styles/components/combobox');
+  @include meta.load-css('pkg:@voice-room/ui/styles/components/empty');
+  @include meta.load-css('pkg:@voice-room/ui/styles/components/field');
+  @include meta.load-css('pkg:@voice-room/ui/styles/components/icon-button');
+  @include meta.load-css('pkg:@voice-room/ui/styles/components/input');
+  @include meta.load-css('pkg:@voice-room/ui/styles/components/kbd');
+  @include meta.load-css('pkg:@voice-room/ui/styles/components/list-item');
+  @include meta.load-css('pkg:@voice-room/ui/styles/components/menu');
+  @include meta.load-css('pkg:@voice-room/ui/styles/components/nav');
+  @include meta.load-css('pkg:@voice-room/ui/styles/components/popover');
+  @include meta.load-css('pkg:@voice-room/ui/styles/components/progress');
+  @include meta.load-css('pkg:@voice-room/ui/styles/components/segment');
+  @include meta.load-css('pkg:@voice-room/ui/styles/components/select');
+  @include meta.load-css('pkg:@voice-room/ui/styles/components/settings-group');
+  @include meta.load-css('pkg:@voice-room/ui/styles/components/skeleton');
+  @include meta.load-css('pkg:@voice-room/ui/styles/components/spinner');
+  @include meta.load-css('pkg:@voice-room/ui/styles/components/switch');
+  @include meta.load-css('pkg:@voice-room/ui/styles/components/tabs');
+  @include meta.load-css('pkg:@voice-room/ui/styles/components/tag');
+  @include meta.load-css('pkg:@voice-room/ui/styles/components/tooltip');
+  @include meta.load-css('pkg:@voice-room/ui/styles/components/ui-alert-dialog');
+  @include meta.load-css('pkg:@voice-room/ui/styles/components/ui-dialog');
+}

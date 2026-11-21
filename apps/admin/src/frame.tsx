@@ -4,19 +4,9 @@
 // a single section) both are quietly ignored.
 
 import { createContext, useContext, useEffect } from 'react';
+import type { RefreshStatus } from './frame.ts';
 
-export interface RefreshStatus {
-  /** When the section last heard back; null before the first answer. */
-  at: number | null;
-  /** How often it asks by itself. */
-  everyMs: number;
-  /** A request is out. */
-  busy: boolean;
-  /** Ask again now. */
-  reload: () => void;
-  /** What it asks for that often, where it is not everything on screen: "звонки каждые 5 с". */
-  what?: string;
-}
+export type { RefreshStatus } from './frame.ts';
 
 export interface Frame {
   setTitle: (title: string | null) => void;

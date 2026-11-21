@@ -24,6 +24,22 @@ export const Small: Story = { args: { size: 'sm' } };
 export const Medium: Story = { args: { size: 'md' } };
 export const Large: Story = { args: { size: 'lg' } };
 export const Empty: Story = { args: { options: [], open: true } };
+export const GroupedResults: Story = {
+  args: {
+    label: 'Найти аккаунт или комнату',
+    resultsLabel: 'Найдено',
+    externalFilter: true,
+    open: true,
+    query: 'кух',
+    options: [
+      { value: 'account-kitchen', label: 'Олег', description: '@kitchen', group: 'Аккаунты' },
+      { value: 'room-kitchen', label: 'Кухня', group: 'Комнаты' }
+    ]
+  }
+};
+export const LoadingResults: Story = {
+  args: { ...GroupedResults.args, options: [], loading: true }
+};
 export const WithAvatars: Story = {
   args: {
     open: true,

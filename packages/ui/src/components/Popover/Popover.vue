@@ -57,14 +57,22 @@ function onDismissAttempt(reason: PopoverCloseReason, event: Event, target: Even
   }
 }
 
-// Escape is handled here, not by Reka: Reka gives it to the topmost layer only,
-// which is not always this popover.
-function onWindowKeydown(event: KeyboardEvent): void {
+function dismissOnEscape(event: KeyboardEvent, insideDialog = false): void {
   if (!open.value || event.key !== 'Escape') return;
   const menu = event.target instanceof Element ? event.target.closest('[role="menu"]') : null;
   if (menu && menu !== panel.value && panel.value?.contains(menu)) return;
+  if (insideDialog) {
+    // Consume Escape before the enclosing modal can close.
+    event.preventDefault();
+    event.stopPropagation();
+  }
   if (props.onBeforeClose?.('escape') === false) return;
-  close(true);
+  close();
+}
+
+// Reka gives Escape to the topmost layer only, even when it is not this popover.
+function onWindowKeydown(event: KeyboardEvent): void {
+  dismissOnEscape(event);
 }
 
 onMounted(() => window.addEventListener('keydown', onWindowKeydown));
@@ -104,6 +112,10 @@ function focusMenuItem(index: number): void {
 }
 
 function onPanelKeydown(event: KeyboardEvent): void {
+  if (props.role === 'dialog') {
+    dismissOnEscape(event, true);
+    return;
+  }
   if (props.role !== 'menu') return;
   const items = menuItems();
   if (items.length === 0) return;

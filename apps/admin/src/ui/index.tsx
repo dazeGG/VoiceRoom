@@ -17,8 +17,8 @@ import {
   type ReactNode,
   type SelectHTMLAttributes
 } from 'react';
-import { useBadges } from '../badges.ts';
-import './ui.css';
+import { loadBadges } from '../badges.ts';
+import type { AccountBadge as AccountBadgeType } from '@voice-room/shared/contracts/users';
 
 type ButtonVariant = 'primary' | 'outline' | 'ghost' | 'danger' | 'danger-outline';
 
@@ -347,7 +347,16 @@ export function Stat({
 
 /** The official mark beside a name, when the account carries one. */
 export function AccountBadge({ userId }: { userId: string }) {
-  const badges = useBadges();
+  const [badges, setBadges] = useState<Map<string, AccountBadgeType>>(new Map());
+  useEffect(() => {
+    let alive = true;
+    void loadBadges().then((value) => {
+      if (alive) setBadges(value);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
   const badge = badges.get(userId);
   if (!badge) return null;
   const label = badge === 'official' ? 'Официальный аккаунт' : 'Подтверждённый аккаунт';

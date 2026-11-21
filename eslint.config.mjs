@@ -55,7 +55,7 @@ export default tseslint.config(
   // Vue rules apply to the Vue apps and the portable packages.
   ...vue.configs['flat/recommended-error'].map((config) => ({
     ...config,
-    files: config.files ?? ['apps/{meet,web,widget}/**/*.{ts,vue}', 'packages/{call,ui}/**/*.{ts,vue}']
+    files: config.files ?? ['apps/{admin,meet,web,widget}/**/*.{ts,vue}', 'packages/{call,ui}/**/*.{ts,vue}']
   })),
   {
     languageOptions: {
@@ -161,7 +161,7 @@ export default tseslint.config(
     }
   },
   {
-    // The admin app (React): hooks are called the same way every render and
+    // The admin's remaining React code: hooks are called the same way every render and
     // effects name what they read.
     files: ['apps/admin/**/*.{ts,tsx}'],
     plugins: { 'react-hooks': reactHooks },
