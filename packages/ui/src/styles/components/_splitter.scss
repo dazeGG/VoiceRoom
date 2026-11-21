@@ -1,0 +1,53 @@
+.ui-splitter {
+  &__pane {
+    min-width: 0;
+  }
+
+  &__pane--main {
+    display: flex;
+    flex-direction: column;
+  }
+
+  &__handle {
+    position: relative;
+    z-index: 1;
+    flex: 0 0 var(--space-8);
+    margin-inline: calc(-1 * var(--space-4));
+    padding: 0;
+    border: 0;
+    background: transparent;
+    cursor: col-resize;
+    touch-action: none;
+
+    &::after {
+      position: absolute;
+      inset-block: 0;
+      inset-inline-start: 50%;
+      width: var(--space-2);
+      background: var(--vr-line);
+      content: '';
+      transform: translateX(-50%);
+      transition: background 150ms ease;
+    }
+
+    &:hover::after,
+    &--dragging::after {
+      background: var(--vr-accent-line);
+    }
+
+    &:focus-visible {
+      outline: none;
+
+      &::after {
+        background: var(--vr-accent);
+      }
+    }
+  }
+
+  @media (forced-colors: active) {
+    &__handle:focus-visible {
+      outline: var(--space-2) solid;
+      outline-offset: calc(-1 * var(--space-2));
+    }
+  }
+}

@@ -1,0 +1,82 @@
+.ui-nav {
+  &,
+  &__group {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    min-width: 0;
+  }
+
+  &__label {
+    margin: 0;
+    padding: var(--space-12) var(--space-12) var(--space-4);
+    color: var(--vr-text-muted);
+    font: 500 0.75rem/1.3 var(--font-ui);
+  }
+
+  &__item {
+    display: flex;
+    align-items: center;
+    gap: var(--space-8);
+    width: 100%;
+    height: var(--size-36);
+    min-width: 0;
+    padding-inline: var(--space-12);
+    border: 0;
+    border-radius: var(--radius-10);
+    background: transparent;
+    color: var(--vr-text-2);
+    font: 400 0.875rem/1 var(--font-ui);
+    text-align: start;
+    text-decoration: none;
+    cursor: pointer;
+
+    &:hover:not(:disabled) {
+      background: var(--vr-hover);
+      color: var(--vr-text);
+    }
+
+    &[aria-current='page'] {
+      background: var(--vr-surface-3);
+      color: var(--vr-text);
+      font-weight: 500;
+    }
+
+    &:focus-visible {
+      outline: var(--space-2) solid var(--vr-accent);
+      outline-offset: calc(-1 * var(--space-2));
+    }
+
+    &:disabled {
+      cursor: not-allowed;
+      opacity: 0.6;
+    }
+  }
+
+  &__item--danger,
+  &__item--danger:hover:not(:disabled) {
+    color: var(--vr-danger);
+  }
+
+  &__item--danger:hover:not(:disabled) {
+    background: var(--vr-danger-hover);
+  }
+
+  &__icon {
+    display: inline-flex;
+    flex: none;
+
+    svg {
+      width: var(--icon-16);
+      height: var(--icon-16);
+    }
+  }
+
+  &__text {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}

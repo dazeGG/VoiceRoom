@@ -8,14 +8,17 @@ import {
   Reply,
   SmilePlus,
   Trash2,
+  User,
   UserPlus,
   Bold,
+  Italic,
   KeyRound,
   Mic,
   Plus,
   Search,
   ThumbsDown,
-  ThumbsUp
+  ThumbsUp,
+  Undo2
 } from '@lucide/vue';
 
 defineProps<{
@@ -28,14 +31,17 @@ defineProps<{
     | 'reply'
     | 'smile-plus'
     | 'trash-2'
+    | 'user'
     | 'user-plus'
     | 'bold'
+    | 'italic'
     | 'key-round'
     | 'mic'
     | 'plus'
     | 'search'
     | 'thumbs-down'
-    | 'thumbs-up';
+    | 'thumbs-up'
+    | 'undo-2';
 }>();
 
 const icons = {
@@ -47,14 +53,17 @@ const icons = {
   reply: Reply,
   'smile-plus': SmilePlus,
   'trash-2': Trash2,
+  user: User,
   'user-plus': UserPlus,
   bold: Bold,
+  italic: Italic,
   'key-round': KeyRound,
   mic: Mic,
   plus: Plus,
   search: Search,
   'thumbs-down': ThumbsDown,
-  'thumbs-up': ThumbsUp
+  'thumbs-up': ThumbsUp,
+  'undo-2': Undo2
 };
 </script>
 

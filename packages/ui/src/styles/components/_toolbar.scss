@@ -1,0 +1,22 @@
+.ui-toolbar {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  border: 1px solid var(--vr-line-strong);
+  border-radius: var(--radius-12);
+  background: var(--vr-surface-2);
+  box-shadow: var(--vr-shadow-popover);
+
+  & &__toggle {
+    box-sizing: border-box;
+    width: var(--size-32);
+    padding: 0;
+    border-color: transparent;
+    border-radius: var(--radius-8);
+
+    &:focus-visible {
+      outline-offset: calc(-1 * var(--space-2));
+    }
+  }
+}

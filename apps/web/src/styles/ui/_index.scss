@@ -3,6 +3,11 @@
 @forward 'pkg:@voice-room/ui/styles/components/hotkey';
 @forward 'pkg:@voice-room/ui/styles/components/dropzone';
 @forward 'pkg:@voice-room/ui/styles/components/segment';
+@forward 'pkg:@voice-room/ui/styles/components/tabs';
+@forward 'pkg:@voice-room/ui/styles/components/nav';
+@forward 'pkg:@voice-room/ui/styles/components/toolbar';
+@forward 'pkg:@voice-room/ui/styles/components/separator';
+@forward 'pkg:@voice-room/ui/styles/components/splitter';
 @forward 'pkg:@voice-room/ui/styles/components/slider';
 @forward 'pkg:@voice-room/ui/styles/components/switch';
 @forward 'pkg:@voice-room/ui/styles/components/button';
@@ -37,6 +42,7 @@
 @forward 'pkg:@voice-room/ui/styles/components/menu';
 @forward 'pkg:@voice-room/ui/styles/components/hovercard';
 @forward 'pkg:@voice-room/ui/styles/components/select';
+@forward 'pkg:@voice-room/ui/styles/components/combobox';
 @forward 'topbar';
 @forward 'feature-list';
 @forward 'legal-links';

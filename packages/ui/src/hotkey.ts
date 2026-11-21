@@ -93,6 +93,6 @@ function formatHotkeyCode(code: string): string {
   return labels[code] || code;
 }
 
-function isApplePlatform(): boolean {
+export function isApplePlatform(): boolean {
   return typeof navigator !== 'undefined' && /Mac|iPod|iPhone|iPad/.test(navigator.platform);
 }
