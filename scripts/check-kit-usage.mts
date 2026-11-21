@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Everything is built from the UI kit (docs/DESIGN_SYSTEM.md, "Только кит").
+// Everything is built from the UI kit (DESIGN.md and AGENTS.md, "Kit only").
 // Run by `npm run check`. Exits 1 and lists every violation as `file:line reason`.
 //
 // In the templates of every app and of the call views (the kit itself,
@@ -198,9 +198,7 @@ if (import.meta.main) {
   const repoRoot = resolve(import.meta.dirname, '..');
   const problems = checkKitUsage(repoRoot);
   if (problems.length > 0) {
-    process.stderr.write(
-      `Build it from the UI kit (docs/DESIGN_SYSTEM.md, «Только кит»):\n${problems.sort().join('\n')}\n`
-    );
+    process.stderr.write(`Build it from the UI kit (DESIGN.md, "Kit only"):\n${problems.sort().join('\n')}\n`);
     process.exit(1);
   }
 }

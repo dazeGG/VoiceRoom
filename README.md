@@ -94,12 +94,12 @@ API, Web, Admin, Widget и Meet выпускаются отдельными се
 
 Для временных видеовстреч на своём Linux-сервере установите VoiceRoom Meet одной командой. В [руководстве по Meet](./apps/docs/src/content/docs/self-hosting/install.md) описаны установка, подключение своего домена, DuckDNS или deSEC и проверка первого звонка.
 
-Для аккаунтов, постоянных комнат, истории чатов и админки используйте [установку полного стека](./docs/SELF_HOSTING.md#установка-полного-стека). Переменные окружения, Docker, TURN, бэкапы, CI/CD и миграции описаны в [`docs/SELF_HOSTING.md`](./docs/SELF_HOSTING.md), модель доступа — в [`docs/SECURITY.md`](./docs/SECURITY.md).
+Для аккаунтов, постоянных комнат, истории чатов и админки используйте [установку полного стека](./docs/SELF_HOSTING.md#full-stack-installation). Переменные окружения, Docker, TURN, бэкапы, CI/CD и миграции описаны в [`docs/SELF_HOSTING.md`](./docs/SELF_HOSTING.md), модель доступа — в [`docs/SECURITY.md`](./docs/SECURITY.md).
 
 ## Документация
 
 - [Публичная справка VoiceRoom](https://docs.voiceroom.ru) содержит инструкции по звонкам, комнатам, звуку и экрану, приложению для компьютера и виджету.
-- Архитектура и разработка: [архитектура](./docs/ARCHITECTURE.md), [дизайн-система](./docs/DESIGN_SYSTEM.md) (живые компоненты — `npm run storybook`), [Git Flow](./docs/GIT_FLOW.md), [производительность](./docs/PERFORMANCE.md), [логирование](./docs/LOGGING.md).
+- Архитектура и разработка: [архитектура](./docs/ARCHITECTURE.md), [дизайн-система](./DESIGN.md) (живые компоненты — `npm run storybook`), [Git Flow](./docs/GIT_FLOW.md), [производительность](./docs/PERFORMANCE.md), [логирование](./docs/LOGGING.md).
 - Эксплуатация и безопасность: [self-hosting](./docs/SELF_HOSTING.md), [безопасность](./docs/SECURITY.md), [LiveKit gate](./docs/LIVEKIT_GATE.md), [юридические вопросы](./docs/LEGAL.md).
 - Медиа: [запуск и диагностика трансляций](./docs/SCREEN_STARTUP.md).
 - Мобильные контракты: [удаление аккаунта](./docs/MOBILE.md#android-account-deletion-cookie-response-boundary), [жизненный цикл Ring](./docs/MOBILE.md#ring-lifecycle-for-android-v1), [жалобы пользователей](./docs/MOBILE.md#user-reporting-mobile-v1-backend-slice).

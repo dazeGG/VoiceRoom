@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/vue3-vite';
 
 import { getAvatarColor } from '../avatar-colors';
 
-// Live view of docs/DESIGN_SYSTEM.md sections 2–4: every swatch, text style and
+// Live view of DESIGN.md "Colour", "Typography" and "Size grid": every swatch, text style and
 // grid step reads the real token, so a token change shows up here at once.
 
 const meta = {
