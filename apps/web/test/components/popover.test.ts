@@ -89,27 +89,6 @@ describe('Popover', () => {
     expect(panel.hasAttribute('aria-labelledby')).toBe(false);
   });
 
-  test('a press inside a submenu does not close the popover that owns it; Escape closes only the submenu', async () => {
-    renderPopover({ withSubmenu: true });
-    await userEvent.click(screen.getByRole('button', { name: 'open' }));
-    const row = await screen.findByRole('menuitem', { name: 'Ещё' });
-    await userEvent.click(row);
-    const nested = await screen.findByRole('menuitem', { name: 'Вложенный' });
-    await userEvent.click(nested);
-    expect(screen.queryByRole('menu', { name: 'Меню open' })).not.toBeNull();
-
-    nested.focus();
-    await userEvent.keyboard('{Escape}');
-    await settle();
-    expect(screen.queryByRole('menuitem', { name: 'Вложенный' })).toBeNull();
-    expect(document.activeElement).toBe(row);
-    expect(screen.queryByRole('menu', { name: 'Меню open' })).not.toBeNull();
-
-    await userEvent.keyboard('{Escape}');
-    await settle();
-    expect(screen.queryByRole('menu')).toBeNull();
-  });
-
   describe('keepContentMounted', () => {
     test('the closed panel stays in the DOM, hidden, and opening it focuses its first item', async () => {
       const { trigger } = renderPopover({ keepContentMounted: true });

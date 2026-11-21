@@ -46,13 +46,11 @@ function close(restoreFocus = true): void {
 
 function isInsidePopover(target: EventTarget | null): boolean {
   if (!(target instanceof Node)) return false;
-  if (root.value?.contains(target) || panel.value?.contains(target)) return true;
-  return target instanceof Element && Boolean(target.closest(`[data-overlay-owner="${panelId}"]`));
+  return Boolean(root.value?.contains(target) || panel.value?.contains(target));
 }
 
 // Reka reports every dismissal attempt, also from a force-mounted panel that is
-// closed. A closed panel ignores them; for an open one the trigger, the panel and
-// a submenu owned by this popover are inside, and `onBeforeClose` may veto the rest.
+// closed. A closed panel ignores them; the trigger and panel are inside.
 function onDismissAttempt(reason: PopoverCloseReason, event: Event, target: EventTarget | null): void {
   if (!open.value || isInsidePopover(target) || props.onBeforeClose?.(reason) === false) {
     event.preventDefault();
@@ -60,10 +58,9 @@ function onDismissAttempt(reason: PopoverCloseReason, event: Event, target: Even
 }
 
 // Escape is handled here, not by Reka: Reka gives it to the topmost layer only,
-// which is not always this popover. A submenu it owns takes the key first.
+// which is not always this popover.
 function onWindowKeydown(event: KeyboardEvent): void {
   if (!open.value || event.key !== 'Escape') return;
-  if (document.querySelector(`[data-overlay-owner="${panelId}"]`)) return;
   if (props.onBeforeClose?.('escape') === false) return;
   close(true);
 }
@@ -174,19 +171,20 @@ const closedAndKept = computed(() => props.keepContentMounted && !open.value);
               :id="panelId"
               ref="panel"
               :class="[
-                'popover__panel',
+                'ui-popover popover__panel',
                 panelClass,
                 { 'popover__panel--closed': closedAndKept, 'popover__panel--floating': floating }
               ]"
               :data-overlay-id="panelId"
               :role="role"
-              :aria-label="ariaLabel || undefined"
+              :aria-label="ariaLabel || title || undefined"
               :aria-labelledby="undefined"
               :aria-hidden="closedAndKept ? true : undefined"
               :hidden="closedAndKept"
               tabindex="-1"
               @keydown="onPanelKeydown"
             >
+              <h2 v-if="title" class="ui-popover__title">{{ title }}</h2>
               <slot name="content" v-bind="contentState" />
             </div>
           </PopoverContent>

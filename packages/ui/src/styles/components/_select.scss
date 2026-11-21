@@ -99,6 +99,10 @@
     max-width: max(var(--reka-select-trigger-width), var(--reka-select-content-available-width));
   }
 
+  &__viewport .ui-menu__indicator {
+    margin-inline-start: auto;
+  }
+
   &__viewport {
     max-height: min(
       calc(var(--space-64) * 5 - var(--space-4) * 2 - var(--space-2)),

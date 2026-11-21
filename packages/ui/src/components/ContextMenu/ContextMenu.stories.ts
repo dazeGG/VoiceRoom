@@ -1,53 +1,52 @@
 import type { Meta, StoryObj } from '@storybook/vue3-vite';
+import StoryIcon from '../../../.storybook/StoryIcon.vue';
 import { ref, shallowRef } from 'vue';
 import Button from '../Button/Button.vue';
-import { PopoverDivider, PopoverMenuItem } from '../Popover';
+import { MenuItem } from '../MenuItem';
+import { MenuSeparator } from '../MenuSeparator';
 import ContextMenu from './ContextMenu.vue';
+import ContextMenuHeaderButton from './ContextMenuHeaderButton.vue';
+import type { ContextMenuProps } from './types';
 
 const meta = {
-  title: 'Components/ContextMenu',
+  title: 'Components/Overlays/ContextMenu',
   component: ContextMenu,
   tags: ['autodocs'],
-  args: { open: false, x: 0, y: 0, ariaLabel: 'Действия с комнатой', role: 'menu', padded: true },
-  render: (args) => ({
-    components: { Button, ContextMenu, PopoverDivider, PopoverMenuItem },
+  args: { open: false, x: 0, y: 0, ariaLabel: 'Действия с сообщением', headerLabel: 'Быстрые реакции' },
+  render: (args: ContextMenuProps) => ({
+    components: {
+      StoryIcon,
+      Button,
+      ContextMenu,
+      ContextMenuHeaderButton,
+      MenuItem,
+      MenuSeparator
+    },
     setup() {
-      const open = ref(false);
-      const x = ref(0);
-      const y = ref(0);
+      const point = ref({ x: args.x, y: args.y });
+      const open = ref(args.open);
       const trigger = shallowRef<HTMLElement | null>(null);
       function show(event: MouseEvent): void {
         if (!(event.currentTarget instanceof HTMLElement)) return;
         trigger.value = event.currentTarget;
         const rect = event.currentTarget.getBoundingClientRect();
-        x.value = event.clientX || rect.left;
-        y.value = event.clientY || rect.bottom;
+        point.value = { x: event.clientX || rect.left, y: event.clientY || rect.bottom };
         open.value = true;
       }
-      return { args, open, x, y, trigger, show };
+      return { args, open, point, trigger, show };
     },
     template: `
-      <Button aria-haspopup="menu" :aria-expanded="open" @click="show" @contextmenu.prevent="show">
-        Открыть меню комнаты
-      </Button>
-      <ContextMenu v-bind="args" :open="open" :x="x" :y="y" :restore-focus="trigger" @close="open = false">
-        <template #default="{ close }">
-          <template v-if="args.role === 'dialog'">
-            <p>Пригласите друзей в комнату.</p>
-            <Button @click="close()">Готово</Button>
-          </template>
-          <template v-else-if="args.role === 'listbox'">
-            <PopoverMenuItem label="Все сообщения" role="option" selected @click="close()" />
-            <PopoverMenuItem label="Только упоминания" role="option" @click="close()" />
-          </template>
-          <template v-else>
-            <PopoverMenuItem label="Войти" @click="close()" />
-            <PopoverMenuItem label="Создать комнату" variant="accent" @click="close()" />
-            <PopoverMenuItem label="Копировать ссылку" disabled />
-            <PopoverDivider />
-            <PopoverMenuItem label="Удалить комнату" variant="danger" @click="close()" />
-          </template>
+      <Button aria-haspopup="menu" :aria-expanded="open" @click="show" @contextmenu.prevent="show">Открыть действия</Button>
+      <ContextMenu v-bind="{ ...args, ...point }" :open="open" :restore-focus="trigger" @close="open = false">
+        <template #header="{ close }">
+          <ContextMenuHeaderButton label="Нравится" @click="close()"><StoryIcon name="thumbs-up" /></ContextMenuHeaderButton>
+          <ContextMenuHeaderButton label="Поддержать" :pressed="true" @click="close()"><StoryIcon name="heart" /></ContextMenuHeaderButton>
+          <ContextMenuHeaderButton label="Поставить реакцию" @click="close()"><StoryIcon name="smile-plus" /></ContextMenuHeaderButton>
         </template>
+        <MenuItem label="Ответить"><template #icon><StoryIcon name="reply" /></template></MenuItem>
+        <MenuItem label="Скопировать текст" shortcut="Ctrl+C"><template #icon><StoryIcon name="copy" /></template></MenuItem>
+        <MenuSeparator />
+        <MenuItem label="Удалить" tone="danger" shortcut="Del"><template #icon><StoryIcon name="trash-2" /></template></MenuItem>
       </ContextMenu>
     `
   })
@@ -56,7 +55,4 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const Default: Story = {};
-export const Bare: Story = { args: { padded: false } };
-export const Listbox: Story = { args: { role: 'listbox', ariaLabel: 'Уведомления' } };
-export const DialogPanel: Story = { args: { role: 'dialog', ariaLabel: 'Пригласить друзей' } };
+export const WithReactions: Story = {};
