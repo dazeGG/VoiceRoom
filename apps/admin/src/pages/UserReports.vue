@@ -60,7 +60,7 @@ async function decide(report: AdminUserReport, action: UserReportResolveBody['ac
     <Callout v-if="error" :title="error" tone="danger" role="alert" />
     <ul class="admin-user-reports__list" aria-label="Жалобы на пользователей">
       <li v-for="{ report, reports } in groups" :key="report.target.userId">
-        <Card>
+        <Card class="admin-user-reports__card">
           <div class="admin-user-reports__heading">
             <h3>
               {{ report.target.displayName || 'Удалённый аккаунт' }}

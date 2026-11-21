@@ -1,6 +1,7 @@
 @use 'pkg:@voice-room/ui/styles/tokens';
 @use 'pkg:@voice-room/ui/styles/typography';
 @use 'pkg:@voice-room/ui/styles/components/button';
+@use 'pkg:@voice-room/ui/styles/components/pressable';
 @use 'pkg:@voice-room/ui/styles/components/callout';
 @use 'pkg:@voice-room/ui/styles/components/empty';
 @use 'pkg:@voice-room/ui/styles/components/field';
@@ -10,6 +11,7 @@
 @use 'pkg:@voice-room/ui/styles/components/textarea';
 @use 'pkg:@voice-room/ui/styles/components/tooltip';
 @use 'pkg:@voice-room/ui/styles/components/ui-toast';
+@use 'pkg:@voice-room/ui/styles/components/ui-dialog';
 @use 'pkg:@voice-room/ui/styles/components/kbd';
 @use 'pkg:@voice-room/ui/styles/components/separator';
 @use 'pkg:@voice-room/ui/styles/components/popover';

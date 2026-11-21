@@ -36,7 +36,7 @@
   &__identity {
     gap: var(--space-16);
 
-    & + .ui-callout {
+    & + .admin-account-card__notice {
       margin-block-start: var(--space-12);
     }
   }

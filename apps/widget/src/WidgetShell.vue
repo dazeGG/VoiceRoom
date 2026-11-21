@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Button, Callout, IconButton, Slider } from '@voice-room/ui/components';
+import { Button, Callout, Field, IconButton, Select, Slider } from '@voice-room/ui/components';
 import { onMounted, onBeforeUnmount, ref, computed, useTemplateRef } from 'vue';
 import { X } from '@lucide/vue';
 import { WIDGET_SERVICE_URL, parseWidgetMessage, type WidgetBootstrap } from '@voice-room/shared/contracts/widget';
@@ -32,6 +32,11 @@ const props = defineProps<{ bootstrap: WidgetBootstrap }>();
 const session = useWidgetSession();
 const { entry } = session;
 const devices = useRoomDeviceUiStore();
+const noiseOptions = [
+  { value: 'rnnoise', label: 'RNNoise' },
+  { value: 'browser', label: 'Браузерное' },
+  { value: 'off', label: 'Выключено' }
+];
 const toast = useToastUiStore();
 const notice = computed(() => toast.items.at(-1));
 const shell = useTemplateRef<HTMLElement>('shell');
@@ -194,55 +199,50 @@ function leave() {
           </IconButton>
         </div>
         <section v-if="visiblePanel === 'camera'" aria-label="Настройки камеры" class="widget-call__settings">
-          <label
-            >Камера<select
+          <Field label="Камера">
+            <Select
               v-model="devices.cameraId"
-              class="ui-input ui-input--sm widget-call__select"
-              @change="run(() => switchCamera(devices.cameraId))"
-            >
-              <option v-for="device in devices.cameraOptions" :key="device.value" :value="device.value">
-                {{ device.label }}
-              </option>
-            </select></label
-          >
+              size="sm"
+              flip
+              :portal-target="shell ?? undefined"
+              :options="devices.cameraOptions"
+              @value-change="run(() => switchCamera(devices.cameraId))"
+            />
+          </Field>
         </section>
         <section v-else-if="visiblePanel === 'input'" aria-label="Настройки микрофона" class="widget-call__settings">
-          <label
-            >Микрофон<select
+          <Field label="Микрофон">
+            <Select
               v-model="devices.microphoneId"
-              class="ui-input ui-input--sm widget-call__select"
-              @change="run(() => switchMicrophone())"
-            >
-              <option v-for="device in devices.microphoneOptions" :key="device.value" :value="device.value">
-                {{ device.label }}
-              </option>
-            </select></label
-          >
-          <label
-            >Шумоподавление<select
+              size="sm"
+              flip
+              :portal-target="shell ?? undefined"
+              :options="devices.microphoneOptions"
+              @value-change="run(switchMicrophone)"
+            />
+          </Field>
+          <Field label="Шумоподавление">
+            <Select
               v-model="devices.noiseMode"
-              class="ui-input ui-input--sm widget-call__select"
-              @change="run(switchNoiseMode)"
-            >
-              <option value="rnnoise">RNNoise</option>
-              <option value="browser">Браузерное</option>
-              <option value="off">Выключено</option>
-            </select></label
-          >
+              size="sm"
+              flip
+              :portal-target="shell ?? undefined"
+              :options="noiseOptions"
+              @value-change="run(switchNoiseMode)"
+            />
+          </Field>
         </section>
         <section v-else-if="visiblePanel === 'output'" aria-label="Настройки динамика" class="widget-call__settings">
-          <label>
-            Вывод звука
-            <select
+          <Field label="Вывод звука">
+            <Select
               v-model="devices.outputDeviceId"
-              class="ui-input ui-input--sm widget-call__select"
-              @change="run(switchOutputDevice)"
-            >
-              <option v-for="device in devices.outputOptions" :key="device.value" :value="device.value">
-                {{ device.label }}
-              </option>
-            </select>
-          </label>
+              size="sm"
+              flip
+              :portal-target="shell ?? undefined"
+              :options="devices.outputOptions"
+              @value-change="run(switchOutputDevice)"
+            />
+          </Field>
         </section>
         <section
           v-else-if="visiblePanel === 'participant' && selectedParticipant"

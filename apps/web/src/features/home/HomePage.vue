@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Button, Callout } from '@voice-room/ui/components';
+import { Button, Callout, MascotIcon } from '@voice-room/ui/components';
 import { t } from '@/shared/i18n';
 import LanguageControl from '@/shared/i18n/LanguageControl.vue';
 import { ArrowRight } from '@lucide/vue';
@@ -15,7 +15,6 @@ import { APP_HOME } from '@/shared/app-home';
 import { lazyPage } from '@/shared/components/lazy-page';
 import LegalLinks from '@/shared/components/LegalLinks.vue';
 import Topbar from '@/shared/components/Topbar.vue';
-import { MascotIcon } from '@/shared/ui';
 import { extractRoomId } from '@/shared/utils/room';
 import { usePageStore } from '@/stores/page.store';
 import DesktopAppCard from './components/DesktopAppCard.vue';

@@ -186,22 +186,6 @@
 
 .room-bans__more {
   justify-self: stretch;
-  min-height: var(--size-40);
-  border: 1px solid var(--vr-line-strong);
-  border-radius: var(--radius-10);
-  background: transparent;
-  color: var(--vr-text);
-  font: 600 0.8125rem var(--font-ui);
-  cursor: pointer;
-}
-
-.room-bans__more:hover:not(:disabled) {
-  background: var(--vr-hover);
-}
-
-.room-bans__more:disabled {
-  cursor: default;
-  opacity: 0.6;
 }
 
 @media (max-width: 520px) {

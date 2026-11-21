@@ -85,13 +85,8 @@
     white-space: nowrap;
   }
 
-  &__person.ui-button {
+  &__person {
     width: 100%;
-    min-height: var(--size-48);
-    height: auto;
-    justify-content: flex-start;
-    padding: var(--space-4);
-    text-align: start;
   }
 
   &__identity {

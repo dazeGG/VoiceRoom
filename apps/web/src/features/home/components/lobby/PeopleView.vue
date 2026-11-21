@@ -1,12 +1,11 @@
 <script setup lang="ts">
-import { EmptyState, Field, IconButton, ListItem, TextField } from '@voice-room/ui/components';
+import { EmptyState, Field, IconButton, ListItem, TextField, Button } from '@voice-room/ui/components';
 import { getLocale, t } from '@/shared/i18n';
 import { Check, ChevronLeft, Copy, X } from '@lucide/vue';
 import { computed, ref } from 'vue';
 import type { AuthUser } from '@/api/auth';
 import EmojiText from '@/shared/chat/EmojiText.vue';
-import { Button } from '@/shared/ui';
-import { iconSm, iconXs } from '@/shared/ui/icons';
+import { iconSm, iconXs } from '@voice-room/ui/icon-defaults';
 import { copyText } from '@/shared/utils/clipboard';
 import { displayNameOf } from '@/shared/utils/display-name';
 import { useLobby } from '../../model/lobby-context';
@@ -94,9 +93,10 @@ function mutualLabel(count: number): string {
 
 <template>
   <div class="people-view">
-    <button class="people-view__back" type="button" @click="emit('home')">
-      <ChevronLeft v-bind="iconSm" aria-hidden="true" /> {{ t('На главную') }}
-    </button>
+    <Button variant="plain" size="sm" class="people-view__back" @click="emit('home')">
+      <template #icon><ChevronLeft v-bind="iconSm" aria-hidden="true" /></template>
+      {{ t('На главную') }}
+    </Button>
     <div class="people-view__title">{{ t('Друзья и заявки') }}</div>
 
     <div class="people-view__label people-view__label--add">{{ t('Добавить друга') }}</div>
@@ -120,10 +120,10 @@ function mutualLabel(count: number): string {
     </div>
     <div class="people-view__hint">
       {{ t('Ваш логин') }} <code>@{{ user.login }}</code>
-      <button class="people-view__copy" type="button" @click="copyLogin">
-        <Copy v-bind="iconXs" aria-hidden="true" />
+      <Button variant="plain" size="inline" class="people-view__copy" @click="copyLogin">
+        <template #icon><Copy v-bind="iconXs" aria-hidden="true" /></template>
         {{ copied ? t('скопировано') : t('копировать') }}
-      </button>
+      </Button>
       {{ t('— поделитесь им, чтобы вас нашли.') }}
     </div>
 

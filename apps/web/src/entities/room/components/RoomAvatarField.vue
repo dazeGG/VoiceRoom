@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Tooltip, IconButton } from '@voice-room/ui/components';
+import { Tooltip, IconButton, Avatar, Pressable, FileDrop } from '@voice-room/ui/components';
 // The room avatar in room settings: the avatar opens a file picker and a crop
 // dialog, a corner button removes it, and nothing reaches the server until the
 // settings are saved. Mount it per opening (and per room) to start from what
@@ -7,8 +7,8 @@ import { Tooltip, IconButton } from '@voice-room/ui/components';
 import { t } from '@/shared/i18n';
 import { Camera, X } from '@lucide/vue';
 import { computed, onBeforeUnmount, ref, shallowRef } from 'vue';
-import { Avatar, AvatarCropDialog } from '@/shared/ui';
-import { iconSm } from '@/shared/ui/icons';
+import { AvatarCropDialog } from '@/shared/components/AvatarCropDialog';
+import { iconSm } from '@voice-room/ui/icon-defaults';
 import type { RoomAvatarChange } from '../room-avatar-change';
 
 // Two roots (the field and the crop dialog): attributes go to the field.
@@ -33,7 +33,6 @@ const change = defineModel<RoomAvatarChange>('change', { default: () => ({ kind:
 /** The crop dialog is up: it owns Escape and focus until it closes. */
 const cropping = defineModel<boolean>('cropping', { default: false });
 
-const input = ref<HTMLInputElement | null>(null);
 const file = shallowRef<File | null>(null);
 const previewUrl = ref('');
 
@@ -46,11 +45,7 @@ onBeforeUnmount(() => {
   if (previewUrl.value) URL.revokeObjectURL(previewUrl.value);
 });
 
-function pick(event: Event): void {
-  const target = event.currentTarget;
-  if (!(target instanceof HTMLInputElement)) return;
-  const selected = target.files?.[0] ?? null;
-  target.value = '';
+function pick([selected]: File[]): void {
   if (!selected) return;
   if (!selected.type.startsWith('image/')) {
     emit('error', t('Выберите изображение JPEG, PNG или WebP'));
@@ -86,24 +81,27 @@ function closeCrop(): void {
 
 <template>
   <div class="room-avatar-field" v-bind="$attrs">
-    <input
-      ref="input"
-      class="room-avatar-field__input"
-      type="file"
+    <FileDrop
+      v-slot="{ choose }"
+      variant="trigger"
+      :input-label="t('Аватар')"
       accept="image/jpeg,image/png,image/webp"
-      @change="pick"
-    />
-    <Tooltip :text="editLabel">
-      <button
-        class="room-avatar-field__edit"
-        type="button"
-        :disabled="disabled"
-        :aria-label="editLabel"
-        @click="input?.click()"
-      >
-        <Avatar :name="name" :src="shownUrl" shape="squircle" background="var(--vr-surface-3)" :size="80" />
-      </button>
-    </Tooltip>
+      :validate-accept="false"
+      :disabled="disabled"
+      @files="pick"
+    >
+      <Tooltip :text="editLabel">
+        <Pressable
+          display="inline-flex"
+          class="room-avatar-field__edit"
+          :disabled="disabled"
+          :aria-label="editLabel"
+          @click="choose"
+        >
+          <Avatar :name="name" :src="shownUrl" shape="squircle" background="var(--vr-surface-3)" :size="80" />
+        </Pressable>
+      </Tooltip>
+    </FileDrop>
     <span class="room-avatar-field__camera" aria-hidden="true"><Camera v-bind="iconSm" /></span>
     <IconButton
       v-if="shownUrl"

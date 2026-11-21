@@ -1,3 +1,5 @@
+@use '../mixins' as *;
+
 .ui-field {
   display: grid;
   gap: var(--space-6);
@@ -36,4 +38,8 @@
       height: var(--icon-12);
     }
   }
+}
+.ui-field__label--hidden,
+.ui-field__hint--hidden {
+  @include visually-hidden;
 }

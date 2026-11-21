@@ -9,6 +9,7 @@
   @include meta.load-css('pkg:@voice-room/ui/styles/components/field');
   @include meta.load-css('pkg:@voice-room/ui/styles/components/icon-button');
   @include meta.load-css('pkg:@voice-room/ui/styles/components/input');
+  @include meta.load-css('pkg:@voice-room/ui/styles/components/select');
   @include meta.load-css('pkg:@voice-room/ui/styles/components/slider');
   @include meta.load-css('pkg:@voice-room/ui/styles/components/tooltip');
 }

@@ -4,7 +4,13 @@
 - `apps/api` is the Fastify/PostgreSQL/LiveKit backend.
 - `apps/web` is the Vue/Vite frontend.
 - `apps/admin` serves the staff console. `apps/widget` owns the public embed. `apps/meet` and `apps/get` make up the personal bundle.
-- `packages/ui` owns the UI kit: tokens, styles and Vue components on Reka UI, with Storybook (`npm run storybook`). `docs/DESIGN_SYSTEM.md` is the source of truth for tokens, the size grid and component rules; new UI uses its components and grid tokens.
+- `packages/ui` owns the UI kit: tokens, styles and Vue components on Reka UI, with Storybook (`npm run storybook`). `docs/DESIGN_SYSTEM.md` is the source of truth for tokens, the size grid and component rules.
+
+## Kit only
+- Every UI in `apps/web`, `apps/admin`, `apps/meet`, `apps/widget` and `packages/call` views is built from `@voice-room/ui/components`. No native controls, hand-made ARIA widgets, hand-written `ui-*` classes, or `.ui-*` selectors in app styles. A custom clickable surface is the kit `Pressable`.
+- A missing component, variant or prop goes into the kit first (`packages/ui`, with its story and test), then the app uses it. Never a local copy, a restyled wrapper or a temporary variant in an app: that is a second source of truth.
+- App styles lay components out; they never change a component's colour, size, radius, type or states. Sizes are grid tokens, colours `--vr-*`.
+- `npm run check` enforces this (`scripts/check-kit-usage.mts`). An exception is an entry in its `KIT_EXCEPTIONS` with the reason; the list stays empty. Full rules: `docs/DESIGN_SYSTEM.md`, «Только кит».
 - `packages/shared` owns contracts shared by API and Web. Update shared contracts before their consumers.
 - `docs/GIT_FLOW.md` is the source of truth for branches, commits, pull requests, hotfixes, and releases.
 - A release may add a `docs/RELEASE_<version>_PLAN.md` target-state plan; none is active now. Do not describe an unmet gate as already implemented.

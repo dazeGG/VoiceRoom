@@ -7,8 +7,7 @@ withDefaults(defineProps<SeparatorProps>(), { orientation: 'horizontal', decorat
 
 <template>
   <RekaSeparator
-    class="ui-separator"
-    :class="`ui-separator--${orientation}`"
+    :class="variant === 'resize' ? 'ui-separator--resize' : ['ui-separator', 'ui-separator--' + orientation]"
     :orientation="orientation"
     :decorative="decorative"
   >

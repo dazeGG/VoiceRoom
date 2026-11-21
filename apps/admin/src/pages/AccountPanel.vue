@@ -140,9 +140,9 @@ function describeCall(call: RoomCall) {
 <template>
   <aside class="admin-account-panel" :aria-label="name ? `Аккаунт: ${name}` : 'Аккаунт'">
     <Notice v-if="failure && !detail" :failure="failure" @retry="reload" />
-    <Card v-else-if="!detail || !account"><p aria-busy="true">Загружаем…</p></Card>
+    <Card v-else-if="!detail || !account" class="admin-account-panel__card"><p aria-busy="true">Загружаем…</p></Card>
     <template v-else>
-      <Card as="section">
+      <Card class="admin-account-panel__card" as="section">
         <div class="admin-account-panel__identity">
           <Avatar
             :name="name"
@@ -160,7 +160,8 @@ function describeCall(call: RoomCall) {
         <Button
           v-if="inCall"
           variant="soft"
-          class="admin-account-panel__live"
+          layout="spaced"
+          wrap
           @click="emit('openCall', { kind: 'live', roomId: inCall.roomId })"
         >
           <PhoneCall aria-hidden="true" />
@@ -201,7 +202,12 @@ function describeCall(call: RoomCall) {
         </dl>
       </Card>
 
-      <Card v-if="detail.voice30d !== undefined" as="section" aria-label="Связь за 30 дней">
+      <Card
+        v-if="detail.voice30d !== undefined"
+        class="admin-account-panel__card"
+        as="section"
+        aria-label="Связь за 30 дней"
+      >
         <header class="admin-account-panel__head">
           <h3>Связь за 30 дней</h3>
           <span v-if="voice">{{ formatMinutes(voice.minutes) }}</span>
@@ -226,7 +232,7 @@ function describeCall(call: RoomCall) {
         <p v-else class="admin-account-panel__quiet">За 30 дней не был в войсе.</p>
       </Card>
 
-      <Card v-if="cpu" as="section" aria-label="Процессор в звонках">
+      <Card v-if="cpu" class="admin-account-panel__card" as="section" aria-label="Процессор в звонках">
         <header class="admin-account-panel__head">
           <h3>Процессор в звонках</h3>
           <span>по отчётам клиента</span>
@@ -243,7 +249,7 @@ function describeCall(call: RoomCall) {
         <p class="admin-account-panel__quiet">{{ cpuConclusion(cpu, voice?.quality.bad ?? 0) }}</p>
       </Card>
 
-      <Card v-if="canRooms" as="section" aria-label="Последние звонки">
+      <Card v-if="canRooms" class="admin-account-panel__card" as="section" aria-label="Последние звонки">
         <header class="admin-account-panel__head">
           <h3>Последние звонки</h3>
           <Button variant="plain" size="sm" @click="emit('showCalls')">Все</Button>

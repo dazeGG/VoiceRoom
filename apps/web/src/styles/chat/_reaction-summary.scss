@@ -7,22 +7,6 @@
   margin-top: var(--space-4);
 }
 
-.reaction-summary__count {
-  height: 100%;
-  padding: 0 var(--space-8) 0 var(--space-2);
-  border: 0;
-  border-radius: var(--radius-pill);
-  background: transparent;
-  color: inherit;
-  font: 500 12px/1 var(--font-mono);
-  cursor: pointer;
-
-  &:focus-visible {
-    outline: var(--space-2) solid var(--vr-accent);
-    outline-offset: var(--space-2);
-  }
-}
-
 .reaction-summary__error {
   @include visually-hidden;
 }

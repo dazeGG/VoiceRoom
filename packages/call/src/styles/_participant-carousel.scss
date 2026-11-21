@@ -120,18 +120,6 @@
   }
 }
 
-.participant-carousel__nav {
-  display: grid;
-  width: var(--size-32);
-  height: var(--size-32);
-  place-items: center;
-  border: 1px solid var(--vr-line-strong);
-  border-radius: 50%;
-  background: var(--vr-surface-2);
-  color: var(--vr-text-2);
-  cursor: pointer;
-}
-
 // Arrows appear only when there is another page on that side.
 .participant-carousel__nav--hidden {
   visibility: hidden;

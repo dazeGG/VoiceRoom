@@ -27,3 +27,5 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Formatting: Story = {};
+
+export const Bare: Story = { args: { variant: 'bare' } };

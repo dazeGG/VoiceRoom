@@ -29,7 +29,9 @@ import {
   Switch,
   Textarea,
   TextField,
-  type SegmentOption
+  type SegmentOption,
+  Select,
+  ColorField
 } from '@voice-room/ui/components';
 import { copyText } from '@/shared/utils/clipboard';
 
@@ -116,13 +118,22 @@ const colorCodes = reactive({
   accent: config.accent
 });
 type ColorKey = keyof typeof colorCodes;
+const cornerOptions = [
+  { value: 'bottom-right', label: 'Справа внизу' },
+  { value: 'bottom-left', label: 'Слева внизу' },
+  { value: 'top-right', label: 'Справа вверху' },
+  { value: 'top-left', label: 'Слева вверху' }
+] as const;
+
+function selectCorner(value: string): void {
+  const option = cornerOptions.find((corner) => corner.value === value);
+  if (option) config.corner = option.value;
+}
+
 function updateColorCode(key: ColorKey, code: string) {
   colorCodes[key] = code;
   const color = normalizeWidgetColor(code);
   if (color) config[key] = color;
-}
-function updateColorSwatch(key: ColorKey, event: Event): void {
-  if (event.target instanceof HTMLInputElement) updateColorCode(key, event.target.value);
 }
 const result = computed(() => {
   if (colors.some(({ key }) => !normalizeWidgetColor(colorCodes[key]))) {
@@ -229,6 +240,7 @@ async function copyCode() {
         <fieldset class="widget-configurator__group">
           <legend>Размещение</legend>
           <SegmentControl
+            layout="responsive"
             :value="config.mode"
             :options="placementOptions"
             v-bind="{ ariaLabel: 'Размещение' }"
@@ -242,13 +254,14 @@ async function copyCode() {
             }}
           </p>
           <div v-if="isFloating" class="widget-configurator__pair">
-            <Field v-slot="{ control }" label="Положение">
-              <select v-bind="control" v-model="config.corner" class="ui-select" name="corner">
-                <option value="bottom-right">Справа внизу</option>
-                <option value="bottom-left">Слева внизу</option>
-                <option value="top-right">Справа вверху</option>
-                <option value="top-left">Слева вверху</option>
-              </select>
+            <Field label="Положение">
+              <Select
+                native
+                :model-value="config.corner"
+                name="corner"
+                :options="cornerOptions"
+                @value-change="selectCorner"
+              />
             </Field>
             <Field label="Отступ, px">
               <NumberField
@@ -293,13 +306,12 @@ async function copyCode() {
               "
             >
               <div class="widget-configurator__color-control">
-                <input
-                  class="widget-configurator__swatch"
-                  :value="config[color.key]"
+                <ColorField
+                  secondary
+                  :model-value="config[color.key]"
                   :name="color.key"
                   :aria-label="color.label"
-                  type="color"
-                  @input="updateColorSwatch(color.key, $event)"
+                  @update:model-value="updateColorCode(color.key, $event)"
                 />
                 <TextField
                   :model-value="colorCodes[color.key]"
@@ -377,6 +389,7 @@ async function copyCode() {
           </div>
           <div class="widget-configurator__preview-actions">
             <SegmentControl
+              layout="responsive"
               :value="previewScreen"
               :options="screenOptions"
               v-bind="{ ariaLabel: 'Экран виджета' }"
@@ -438,15 +451,22 @@ async function copyCode() {
                         <div v-if="demoDevice" class="widget-call__settings">
                           <label
                             >{{ demoDevices[demoDevice] }}
-                            <select class="ui-input ui-input--sm widget-call__select" disabled>
-                              <option>По умолчанию</option>
-                            </select></label
-                          >
+                            <Select
+                              class="widget-call__select"
+                              native
+                              size="sm"
+                              :options="[{ value: '', label: 'По умолчанию' }]"
+                              disabled
+                          /></label>
                           <label v-if="demoDevice === 'input'">
                             Шумоподавление
-                            <select class="ui-input ui-input--sm widget-call__select" disabled>
-                              <option>RNNoise</option>
-                            </select>
+                            <Select
+                              class="widget-call__select"
+                              native
+                              size="sm"
+                              :options="[{ value: '', label: 'RNNoise' }]"
+                              disabled
+                            />
                           </label>
                           <Button size="sm" @click="demoDevice = null">Закрыть</Button>
                         </div>
@@ -486,8 +506,8 @@ async function copyCode() {
           <Copy v-else aria-hidden="true" />
         </IconButton>
       </div>
-      <Field class="widget-configurator__code-field" label="Код вставки">
-        <Textarea ref="codeField" :model-value="result.code" readonly spellcheck="false" />
+      <Field visually-hidden-label class="widget-configurator__code-field" label="Код вставки">
+        <Textarea ref="codeField" variant="mono" :model-value="result.code" readonly spellcheck="false" />
       </Field>
       <p v-if="result.error && showValidation" role="alert" class="widget-configurator__error">{{ result.error }}</p>
       <p v-if="copyFailed" role="status">Не удалось скопировать автоматически. Код выделен — нажмите Ctrl+C или ⌘C.</p>

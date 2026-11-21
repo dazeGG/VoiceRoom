@@ -53,7 +53,6 @@
 //   .settings-diagnostics-actions   -> .settings__diagnostics-actions
 //
 // Other components' classes this file reaches (names the owning component takes):
-//   .ui-segment-item -> .ui-segment__item
 //
 // [data-*] -> aria / modifier class
 //   .settings-gate-body[data-disabled='true']       -> .settings__gate-body--disabled
@@ -140,57 +139,6 @@
   justify-content: flex-end;
   gap: var(--space-8);
   margin-top: var(--space-20);
-}
-
-.settings__save {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-8);
-  min-height: var(--size-40);
-  padding: 0 var(--space-20);
-  border: none;
-  border-radius: var(--radius-10);
-  background: var(--vr-accent);
-  color: var(--vr-accent-ink);
-  font-family: var(--font-ui);
-  font-size: 0.875rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.15s ease;
-}
-
-.settings__save:hover {
-  background: var(--vr-accent-hover);
-}
-
-// Nothing to save yet: the button waits, grey, until something changes.
-.settings__save:disabled {
-  background: var(--vr-surface-3);
-  color: var(--vr-text-muted);
-  cursor: default;
-}
-
-.settings__cancel {
-  min-height: var(--size-40);
-  padding: 0 var(--space-16);
-  border: none;
-  border-radius: var(--radius-10);
-  background: transparent;
-  color: var(--vr-text);
-  font-family: var(--font-ui);
-  font-size: 0.875rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background 0.15s ease;
-}
-
-.settings__cancel:hover {
-  background: var(--vr-hover);
-}
-
-.settings__cancel:disabled {
-  cursor: default;
-  opacity: 0.6;
 }
 
 // ---- sound section ----
@@ -334,27 +282,6 @@
   text-align: center;
 }
 
-.settings__unblock-button {
-  flex: none;
-  min-height: var(--size-32);
-  padding: 0 var(--space-12);
-  border: 1px solid var(--vr-line-strong);
-  border-radius: var(--radius-10);
-  background: transparent;
-  color: var(--vr-text);
-  font: 500 0.8125rem var(--font-ui);
-  cursor: pointer;
-}
-
-.settings__unblock-button:hover:not(:disabled) {
-  background: var(--vr-hover);
-}
-
-.settings__unblock-button:disabled {
-  cursor: default;
-  opacity: 0.6;
-}
-
 // Desktop overlay: the last window before VoiceRoom, offered as a game.
 .settings__overlay-games {
   transition: opacity 0.16s ease;
@@ -408,11 +335,6 @@
     flex-direction: row;
   }
 
-  .settings__nav .ui-nav__item {
-    flex: 1;
-    justify-content: center;
-  }
-
   .settings__nav .settings__nav-logout {
     flex: none;
     margin-top: 0;
@@ -426,10 +348,6 @@
   flex: none;
   width: var(--size-56);
   height: var(--size-56);
-}
-
-.settings__avatar-input {
-  display: none;
 }
 
 .settings__avatar-edit {
@@ -577,30 +495,6 @@
   margin-top: var(--space-8);
 }
 
-.settings__sound-preview {
-  border: 1px solid var(--vr-line-strong);
-  border-radius: var(--radius-10);
-  padding: var(--space-8) var(--space-12);
-  background: transparent;
-  color: var(--vr-text);
-  font-family: var(--font-ui);
-  font-size: 0.8125rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition:
-    background 150ms ease,
-    border-color 150ms ease;
-}
-
-:where(.settings__sound-preview):hover {
-  background: var(--vr-hover);
-}
-
-:where(.settings__sound-preview):disabled {
-  cursor: wait;
-  opacity: 0.65;
-}
-
 .settings__gate-value {
   text-align: right;
   color: var(--vr-text);
@@ -613,10 +507,6 @@
 .settings__segment {
   display: flex;
   width: 100%;
-}
-
-.settings__segment .ui-segment__item {
-  flex: 1;
 }
 
 .settings__hotkey-list {
@@ -705,24 +595,6 @@
 
 .settings__overlay-add {
   flex: none;
-  min-height: var(--size-36);
-  padding: 0 var(--space-12);
-  border: none;
-  border-radius: var(--radius-10);
-  background: var(--vr-online);
-  color: var(--vr-accent-ink);
-  font: 700 13px var(--font-ui);
-  cursor: pointer;
-  transition: filter 0.15s ease;
-}
-
-:where(.settings__overlay-add):hover:not(:disabled) {
-  filter: brightness(1.08);
-}
-
-:where(.settings__overlay-add):disabled {
-  cursor: default;
-  opacity: 0.6;
 }
 
 .settings__overlay-allowed {

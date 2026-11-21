@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { EmptyState } from '@voice-room/ui/components';
+import { badgeOf } from '@/shared/badges';
+import { EmptyState, AccountBadge, Avatar, Button, Pressable } from '@voice-room/ui/components';
 // One open thread: its messages and its compose field. The DM view mounts it
 // per peer, so opening another thread starts from a clean slate — no editing,
 // reply or menu carried over, the thread's own draft and reactions loaded.
@@ -24,7 +25,6 @@ import { copyMessageImage, copyMessageText, useChatScroll } from '@/shared/chat/
 import StructuredMessageContent from '@/shared/chat/StructuredMessageContent.vue';
 import type { ProfileCardPerson } from '@/shared/components/profile-card';
 import type { PresenceStatus } from '@/shared/presence';
-import { AccountBadge, Avatar } from '@/shared/ui';
 import { formatChatDayLabel, isSameDay } from '@/shared/utils/chat-date';
 import { clockTime } from '@/shared/utils/date-format';
 import { displayNameOf } from '@/shared/utils/display-name';
@@ -292,23 +292,24 @@ function onMenuImage(action: (image: NonNullable<typeof menuImage.value>) => voi
     />
     <div v-else ref="threadElement" class="dm-conversation__thread">
       <div v-if="lobby.thread.historyError" class="dm-conversation__empty">{{ lobby.thread.historyError }}</div>
-      <button
+      <Button
         v-if="lobby.thread.loadingOlder || lobby.thread.hasMoreBefore"
-        type="button"
+        variant="plain"
+        size="sm"
         class="dm-conversation__empty"
         :disabled="lobby.thread.loadingOlder"
         @click="void lobby.loadOlderThread(scroll.element)"
       >
         {{ lobby.thread.loadingOlder ? t('Загружаем…') : t('Показать предыдущие') }}
-      </button>
+      </Button>
       <template v-for="group in groups" :key="group.key">
         <div v-if="group.dayLabel" class="dm-conversation__day-divider">
           <span class="dm-conversation__day-label">{{ group.dayLabel }}</span>
         </div>
         <div class="dm-group">
-          <button
+          <Pressable
+            display="inline-flex"
             class="dm-group__avatar-button dm-group__trigger"
-            type="button"
             aria-haspopup="dialog"
             :aria-label="group.fromMe ? t('Ваш профиль') : t('Профиль {p0}', { p0: peerName })"
             @pointerenter="previewProfile($event, group.fromMe)"
@@ -325,12 +326,12 @@ function onMenuImage(action: (image: NonNullable<typeof menuImage.value>) => voi
               :background="(group.fromMe ? self.avatarAccent : peer?.avatarAccent) || undefined"
               :size="32"
             />
-          </button>
+          </Pressable>
           <div class="dm-group__main">
             <div class="dm-group__meta">
-              <button
+              <Pressable
+                display="inline-flex"
                 class="dm-group__author dm-group__trigger"
-                type="button"
                 aria-haspopup="dialog"
                 :aria-label="group.fromMe ? t('Ваш профиль') : t('Профиль {p0}', { p0: peerName })"
                 @pointerenter="previewProfile($event, group.fromMe)"
@@ -340,9 +341,9 @@ function onMenuImage(action: (image: NonNullable<typeof menuImage.value>) => voi
                 @click="openProfile($event, group.fromMe)"
               >
                 <EmojiText :text="group.fromMe ? selfName : peerName" /><AccountBadge
-                  :user-id="group.fromMe ? selfId : peerId"
+                  :badge="badgeOf(group.fromMe ? selfId : peerId)"
                 />
-              </button>
+              </Pressable>
               <time class="dm-group__time" :datetime="new Date(group.bubbles[0].createdAt).toISOString()">{{
                 clockTime(group.bubbles[0].createdAt)
               }}</time>

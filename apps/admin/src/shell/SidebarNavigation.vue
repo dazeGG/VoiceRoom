@@ -55,6 +55,7 @@ const countLabel = (tab: AdminTab) => 'открытых: ' + String(count(tab));
       <NavListItem
         v-for="tab in group.tabs"
         :key="tab"
+        :icon-only="compact"
         class="admin-sidebar__item"
         :label="TAB_LABELS[tab]"
         :href="pathOf({ tab, accountId: null })"

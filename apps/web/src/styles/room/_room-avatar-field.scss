@@ -15,10 +15,6 @@
   height: var(--room-avatar-size);
 }
 
-.room-avatar-field__input {
-  display: none;
-}
-
 .room-avatar-field__edit {
   position: relative;
   display: flex;
@@ -50,11 +46,6 @@
   pointer-events: none;
 }
 
-.room-avatar-field__edit:focus-visible {
-  outline: var(--space-2) solid var(--vr-accent);
-  outline-offset: var(--space-2);
-}
-
 .room-avatar-field .room-avatar-field__remove {
   position: absolute;
   z-index: 1;
@@ -67,9 +58,4 @@
 .room-avatar-field:hover .room-avatar-field__remove,
 .room-avatar-field:focus-within .room-avatar-field__remove {
   opacity: 1;
-}
-
-.room-avatar-field__edit:disabled {
-  cursor: default;
-  opacity: 0.6;
 }

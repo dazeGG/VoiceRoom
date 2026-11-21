@@ -12,7 +12,6 @@
 //   .attachment-tile                              -> .attachment-mosaic__tile
 //   .attachment-tile img                          -> .attachment-mosaic__image
 //   .attachment-unavailable                       -> .attachment-mosaic__unavailable
-//   .attachment-lightbox-backdrop                 -> .attachment-lightbox__backdrop
 //   .attachment-lightbox                          -> .attachment-lightbox
 //   .attachment-lightbox header                   -> .attachment-lightbox__header
 // A pending image is a button so it can be opened for a closer look; it keeps
@@ -103,29 +102,6 @@
   color: color-mix(in srgb, currentColor 70%, transparent);
 }
 
-.attachment-lightbox__backdrop[open] {
-  position: fixed;
-  inset: 0;
-  margin: 0;
-  border: 0;
-  width: 100%;
-  height: 100%;
-  max-width: none;
-  max-height: none;
-  display: grid;
-  place-items: center;
-  overscroll-behavior: contain;
-  box-sizing: border-box;
-  padding: var(--space-20);
-  background: transparent;
-}
-
-.attachment-lightbox__backdrop::backdrop {
-  overflow: hidden;
-  overscroll-behavior: contain;
-  background: color-mix(in oklch, var(--vr-bg), transparent 6%);
-}
-
 // Header, then the stage taking whatever is left. Without the explicit rows the
 // stage was sized by its own content, so a screenshot larger than the dialog
 // pushed itself out of view and left the rest of the frame empty.
@@ -133,8 +109,8 @@
   position: relative;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
-  width: min(96vw, 1200px);
-  height: min(92vh, 900px);
+  width: 100%;
+  height: 100%;
   color: var(--vr-text);
 }
 
@@ -147,10 +123,6 @@
 }
 
 @media (max-width: 520px) {
-  .attachment-lightbox__backdrop[open] {
-    padding: var(--space-8);
-  }
-
   .attachment-mosaic {
     grid-auto-rows: minmax(96px, 160px);
   }

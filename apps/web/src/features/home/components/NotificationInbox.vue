@@ -10,7 +10,7 @@ import { onBeforeUnmount, onMounted } from 'vue';
 import type { InboxItem, NotificationReason } from '@voice-room/shared/contracts/notifications';
 import EmojiText from '@/shared/chat/EmojiText.vue';
 import type { createNotificationInbox } from '@/shared/notifications/inbox';
-import { iconSm } from '@/shared/ui/icons';
+import { iconSm } from '@voice-room/ui/icon-defaults';
 import { timeAgo } from '@/shared/utils/date-format';
 
 type Inbox = ReturnType<typeof createNotificationInbox>;
@@ -93,7 +93,9 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onWindowKeydown));
           ><CircleAlert :size="20" aria-hidden="true"
         /></span>
         <p role="alert">{{ inbox.error }}</p>
-        <button class="notification-inbox__retry" type="button" @click="void inbox.load()">{{ t('Повторить') }}</button>
+        <Button variant="ghost" size="sm" class="notification-inbox__retry" @click="void inbox.load()">{{
+          t('Повторить')
+        }}</Button>
       </div>
       <div v-else-if="inbox.loading && inbox.items.length === 0" class="notification-inbox__skeleton">
         <div
@@ -135,15 +137,16 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onWindowKeydown));
             </ListItem>
           </li>
         </ul>
-        <button
+        <Button
           v-if="inbox.hasMore"
+          variant="ghost"
+          size="sm"
           class="notification-inbox__more"
-          type="button"
           :disabled="inbox.loading"
           @click="void inbox.load(true)"
         >
           {{ inbox.loading ? t('Загружаем…') : t('Показать ещё') }}
-        </button>
+        </Button>
       </template>
     </div>
   </section>

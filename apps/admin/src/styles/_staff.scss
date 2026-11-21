@@ -38,7 +38,7 @@
   &__member {
     padding-block: var(--space-4);
 
-    > .ui-list-item {
+    > .admin-staff__member-details {
       min-width: min(100%, calc(var(--space-64) * 2));
       flex: 1;
     }

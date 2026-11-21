@@ -1,9 +1,8 @@
 <script setup lang="ts">
-import { SuggestionList, type ComboboxOption } from '@voice-room/ui/components';
+import { SuggestionList, type ComboboxOption, Avatar } from '@voice-room/ui/components';
 import type { MembershipMember } from '@voice-room/shared/contracts/membership';
 import { computed, useId } from 'vue';
 import { t } from '@/shared/i18n';
-import { Avatar } from '@/shared/ui';
 import { displayNameOf } from '@/shared/utils/display-name';
 import EmojiText from './EmojiText.vue';
 

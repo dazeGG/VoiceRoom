@@ -37,6 +37,125 @@
   --dialog-width: 720px;
 }
 
+.ui-overlay--raised {
+  z-index: 60;
+}
+.ui-overlay--nested {
+  z-index: 100;
+}
+.ui-overlay--security {
+  z-index: 110;
+}
+.ui-overlay--auth {
+  z-index: 120;
+}
+
+.ui-overlay--full {
+  padding: 0;
+}
+
+.ui-overlay--media {
+  z-index: 1000;
+  overflow: hidden;
+  padding: var(--space-20);
+  overscroll-behavior: contain;
+  background: color-mix(in oklch, var(--vr-bg), transparent 6%);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.ui-overlay--panel {
+  align-items: end;
+  overflow: hidden;
+  padding: 0;
+  overscroll-behavior: contain;
+}
+
+.ui-overlay--inline {
+  position: static;
+  z-index: auto;
+  display: flex;
+  align-items: stretch;
+  padding: 0;
+  overflow: visible;
+  background: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  pointer-events: inherit;
+}
+
+.ui-dialog--full {
+  width: 100%;
+  height: 100%;
+  max-height: none;
+  border: 0;
+  border-radius: 0;
+}
+
+.ui-dialog--bare {
+  background: transparent;
+  box-shadow: none;
+
+  .ui-dialog__body {
+    flex: 1;
+    display: block;
+    padding: 0;
+  }
+}
+
+.ui-dialog--media {
+  width: min(100%, calc(var(--size-48) * 25));
+  height: min(92dvh, 100%, calc(var(--size-36) * 25));
+  max-height: none;
+  border: 0;
+  border-radius: 0;
+
+  .ui-dialog__body {
+    overflow: hidden;
+  }
+}
+
+.ui-dialog--panel {
+  width: 100%;
+  height: min(80dvh, calc(var(--size-48) * 12));
+  max-height: 100%;
+  padding-bottom: env(safe-area-inset-bottom);
+  border-radius: var(--radius-20) var(--radius-20) 0 0;
+
+  .ui-dialog__head {
+    align-items: center;
+    padding: var(--space-12) var(--space-16);
+  }
+
+  .ui-dialog__titles {
+    padding-top: 0;
+  }
+
+  .ui-dialog__body {
+    flex: 1;
+    display: grid;
+    padding: 0;
+    overflow: hidden;
+  }
+}
+
+.ui-overlay--inline .ui-dialog--panel {
+  width: clamp(calc(var(--size-44) * 6 + var(--space-8)), 28vw, calc(var(--size-48) * 8));
+  height: auto;
+  margin: var(--space-20) clamp(var(--space-16), 4vw, var(--space-48)) var(--space-20) 0;
+  padding-bottom: 0;
+  border-radius: var(--radius-20);
+  box-shadow: none;
+}
+
+.ui-dialog__head--hidden {
+  @include visually-hidden;
+}
+
+.ui-dialog--overflow-visible {
+  overflow: visible;
+}
+
 .ui-dialog__head {
   display: flex;
   flex: none;
@@ -104,11 +223,15 @@
 }
 
 @include below($bp-phone) {
-  .ui-overlay:not(.ui-overlay--alert) {
+  .ui-overlay:not(.ui-overlay--alert, .ui-overlay--media) {
     padding: 0;
   }
 
-  .ui-dialog:not(.ui-dialog--alert) {
+  .ui-overlay--media {
+    padding: var(--space-8);
+  }
+
+  .ui-dialog:not(.ui-dialog--alert, .ui-dialog--media, .ui-dialog--panel) {
     width: 100%;
     height: 100%;
     max-height: none;
@@ -116,7 +239,7 @@
     border-radius: 0;
   }
 
-  .ui-dialog:not(.ui-dialog--alert) .ui-dialog__body {
+  .ui-dialog:not(.ui-dialog--alert, .ui-dialog--media, .ui-dialog--panel) .ui-dialog__body {
     flex: 1;
   }
 }

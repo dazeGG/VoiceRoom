@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Separator } from '@voice-room/ui/components';
+import { Separator, Button, TabsPanel } from '@voice-room/ui/components';
 // The one room chat. The in-room rail and the lobby preview differ only in how
 // the viewer is identified and in who owns the surrounding panel chrome, so
 // both render this component instead of keeping parallel implementations.
@@ -171,7 +171,8 @@ watch(
 
 // The scrolling body and each day section tell the scroll helper when their
 // height changes, so a reader at the newest message stays on it.
-const bodyElement = ref<HTMLElement | null>(null);
+const bodyPanel = ref<{ panel: HTMLElement | null } | null>(null);
+const bodyElement = computed(() => bodyPanel.value?.panel ?? null);
 const daySections = ref<HTMLElement[]>([]);
 const sectionWatchers = new Map<HTMLElement, () => void>();
 
@@ -330,25 +331,25 @@ const canReport = computed(() =>
         @jump="chat.jumpTo"
         @unpin="(messageId: string) => void chat.togglePinned(messageId)"
       />
-      <div
+      <TabsPanel
         :id="chatPanelId"
-        ref="bodyElement"
+        ref="bodyPanel"
         class="room-chat-panel__body"
-        role="tabpanel"
         :aria-labelledby="chatTabId"
         @scroll="scroll.onScroll(chat.loadOlder)"
       >
         <p v-if="timeline.loading" class="room-chat-panel__note">{{ t('Загружаем сообщения…') }}</p>
         <template v-else-if="days.length">
-          <button
+          <Button
             v-if="timeline.paged && (timeline.loadingOlder || timeline.hasMoreBefore)"
+            variant="plain"
+            size="sm"
             class="room-chat-panel__note"
-            type="button"
             :disabled="timeline.loadingOlder"
             @click="chat.loadOlder(scroll.element)"
           >
             {{ timeline.loadingOlder ? t('Загружаем…') : t('Показать предыдущие') }}
-          </button>
+          </Button>
           <section
             v-for="day in days"
             :key="day.key"
@@ -387,7 +388,7 @@ const canReport = computed(() =>
           @retry="(localId: string) => outbox.retry(localId)"
           @discard="(localId: string) => outbox.discard(localId)"
         />
-      </div>
+      </TabsPanel>
 
       <p v-if="timeline.error" class="room-chat-panel__error">{{ timeline.error }}</p>
 
@@ -404,15 +405,14 @@ const canReport = computed(() =>
         @toast="toast"
       />
     </template>
-    <div
+    <TabsPanel
       v-else-if="$slots.participants"
       :id="participantsPanelId"
       class="room-chat-panel__members"
-      role="tabpanel"
       :aria-labelledby="participantsTabId"
     >
       <slot name="participants" />
-    </div>
+    </TabsPanel>
   </aside>
 
   <MessageContextMenu

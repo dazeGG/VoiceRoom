@@ -1,5 +1,14 @@
 <script setup lang="ts">
-import { DropdownMenu, Field, IconButton, MenuRadioGroup, MenuRadioItem, TextField } from '@voice-room/ui/components';
+import {
+  DropdownMenu,
+  Field,
+  IconButton,
+  MenuRadioGroup,
+  MenuRadioItem,
+  TextField,
+  Pressable,
+  Toolbar
+} from '@voice-room/ui/components';
 import { t } from '@/shared/i18n';
 import { SKIN_TONES } from '@voice-room/shared/emoji-skin-tones';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
@@ -357,7 +366,7 @@ function onSearchInput(): void {
   <div ref="picker" class="emoji-picker" role="presentation" @pointerdown="dismissToneStrip">
     <div class="emoji-picker__head">
       <div class="emoji-picker__search-row">
-        <Field class="emoji-picker__search" :label="searchLabel">
+        <Field visually-hidden-label class="emoji-picker__search" :label="searchLabel">
           <TextField
             ref="searchInput"
             v-model="search"
@@ -391,11 +400,11 @@ function onSearchInput(): void {
 
       <!-- Anchors, not tabs: they scroll the one list rather than swapping
            its contents. -->
-      <div
+      <Toolbar
+        variant="bare"
         class="emoji-picker__anchors"
-        role="toolbar"
         tabindex="-1"
-        :aria-label="sectionsLabel"
+        :label="sectionsLabel"
         @keydown="categoryKeydown"
       >
         <IconButton
@@ -423,7 +432,7 @@ function onSearchInput(): void {
         >
           <Emoji :emoji="group.icon" :size="20" decorative />
         </IconButton>
-      </div>
+      </Toolbar>
     </div>
 
     <div
@@ -441,11 +450,10 @@ function onSearchInput(): void {
             row.label
           }}</span>
           <div v-else class="emoji-picker__row" :style="{ top: `${row.top}px` }" role="row">
-            <button
+            <Pressable
               v-for="(emoji, column) in row.emojis"
               :key="emoji"
               class="emoji-picker__cell"
-              type="button"
               role="gridcell"
               :data-option-index="row.firstIndex + column"
               :tabindex="row.firstIndex + column === activeIndex ? 0 : -1"
@@ -459,7 +467,7 @@ function onSearchInput(): void {
             >
               <Emoji :emoji="toned(emoji)" decorative />
               <span v-if="hasSkinToneChoices(emoji)" class="emoji-picker__tone-hint" aria-hidden="true"></span>
-            </button>
+            </Pressable>
           </div>
         </template>
       </div>
@@ -480,16 +488,15 @@ function onSearchInput(): void {
       @pointerenter="cancelToneClose"
       @pointerleave="scheduleToneClose"
     >
-      <button
+      <Pressable
         v-for="option in toneStripOptions"
         :key="option"
         class="emoji-picker__tone-strip-option"
-        type="button"
         :aria-label="optionLabel(option)"
         @click="chooseFromStrip(option)"
       >
         <Emoji :emoji="option" decorative />
-      </button>
+      </Pressable>
     </div>
   </div>
 </template>

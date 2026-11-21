@@ -52,3 +52,6 @@ export const Tabs: Story = {
     ]
   }
 };
+
+export const Equal: Story = { args: { ...meta.args, layout: 'equal' } };
+export const Responsive: Story = { args: { ...meta.args, layout: 'responsive' } };

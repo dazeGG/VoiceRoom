@@ -2,7 +2,7 @@ import type { InputHTMLAttributes } from 'vue';
 
 export interface TextFieldProps {
   size?: 'sm' | 'md' | 'lg' | undefined;
-  variant?: 'default' | 'mono' | undefined;
+  variant?: 'default' | 'mono' | 'code' | undefined;
   type?: InputHTMLAttributes['type'];
   placeholder?: string | undefined;
   autocomplete?: string | undefined;

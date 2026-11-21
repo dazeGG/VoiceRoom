@@ -24,3 +24,5 @@ type Story = StoryObj<typeof meta>;
 export const Horizontal: Story = {};
 export const Vertical: Story = { args: { orientation: 'vertical' } };
 export const Decorative: Story = { args: { decorative: true } };
+
+export const ResizeHandle: Story = { args: { variant: 'resize', orientation: 'vertical' } };

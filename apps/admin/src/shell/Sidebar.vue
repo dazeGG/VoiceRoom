@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ExternalLink, LogOut, PanelLeftClose, PanelLeftOpen } from '@lucide/vue';
-import { Avatar, IconButton, ListItem, Tooltip, type AvatarProps } from '@voice-room/ui/components';
+import { Avatar, IconButton, ListItem, Separator, type AvatarProps } from '@voice-room/ui/components';
 import { computed, useId, useTemplateRef } from 'vue';
 import type { StaffRole } from '@voice-room/shared/contracts/staff';
 import type { Staff } from '../staff.store.ts';
@@ -93,7 +93,11 @@ function resizeFromKey(event: KeyboardEvent): void {
       </a>
       <SidebarNavigation :tabs="tabs" :current="current" :open-reports="openReports" @select="select" />
       <div class="admin-sidebar__profile">
-        <ListItem :text="user.displayName" :caption="'@' + user.login + ' · ' + roles[staff.role]">
+        <ListItem
+          class="admin-sidebar__profile-details"
+          :text="user.displayName"
+          :caption="'@' + user.login + ' · ' + roles[staff.role]"
+        >
           <template #leading>
             <span class="admin-sidebar__presence" role="img" aria-label="в сети"
               ><Avatar v-bind="avatar" show-dot online
@@ -101,27 +105,19 @@ function resizeFromKey(event: KeyboardEvent): void {
           </template>
         </ListItem>
         <div class="admin-sidebar__actions">
-          <Tooltip text="Открыть VoiceRoom">
-            <a
-              class="ui-icon-button ui-icon-button--default ui-icon-button--size-32"
-              :href="staff.siteUrl"
-              aria-label="Открыть VoiceRoom"
-              target="_blank"
-              rel="noopener"
-            >
-              <ExternalLink aria-hidden="true" />
-            </a>
-          </Tooltip>
+          <IconButton :href="staff.siteUrl" label="Открыть VoiceRoom" target="_blank" rel="noopener">
+            <ExternalLink aria-hidden="true" />
+          </IconButton>
           <IconButton label="Выйти из админки" @click="emit('signOut')"><LogOut aria-hidden="true" /></IconButton>
         </div>
       </div>
     </aside>
-    <div
+    <Separator
       v-if="!layoutCollapsed || resizing"
+      variant="resize"
+      orientation="vertical"
       class="admin-sidebar__resizer"
-      role="separator"
       tabindex="0"
-      aria-orientation="vertical"
       :aria-controls="sidebarId"
       aria-label="Ширина боковой панели"
       :aria-valuemin="0"

@@ -1,11 +1,10 @@
 <script setup lang="ts">
-import { Tooltip, IconButton } from '@voice-room/ui/components';
+import { Tooltip, IconButton, Avatar, Pressable } from '@voice-room/ui/components';
 import { t } from '@/shared/i18n';
 import { HeadphoneOff, Headphones, Mic, MicOff, PhoneOff } from '@lucide/vue';
 import { computed } from 'vue';
 import RoomCallTimer from '@/features/room/components/RoomCallTimer.vue';
 import EmojiText from '@/shared/chat/EmojiText.vue';
-import { Avatar } from '@/shared/ui';
 import type { ActiveVoice } from '../../model/active-voice';
 
 const props = defineProps<{ voice: ActiveVoice }>();
@@ -16,23 +15,21 @@ const openLabel = computed(() => t('Открыть комнату {p0}', { p0: p
 <template>
   <div class="voice-call-widget" :aria-label="t('Активный голос')">
     <Tooltip :text="openLabel"
-      ><button class="voice-call-widget__head" type="button" :aria-label="openLabel" @click="voice.open">
+      ><Pressable class="voice-call-widget__head" :aria-label="openLabel" @click="voice.open">
         <Avatar
           :name="voice.roomName"
           :src="voice.avatarUrl"
           shape="squircle"
           background="var(--vr-surface-3)"
           foreground="var(--vr-text)"
-          :size="40"
-        />
+          :size="40" />
         <div class="voice-call-widget__head-body">
           <div class="voice-call-widget__room-name" :title="voice.roomName"><EmojiText :text="voice.roomName" /></div>
           <div class="voice-call-widget__status">
             <span class="voice-call-widget__live-dot"></span>
             <span class="voice-call-widget__live-label">{{ t('Подключено') }}</span>
             <RoomCallTimer variant="sidebar" separator />
-          </div>
-        </div></button
+          </div></div></Pressable
     ></Tooltip>
 
     <div class="voice-call-widget__actions">

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Select } from '@voice-room/ui/components';
 import { AudioLines } from '@lucide/vue';
 import { t } from '@voice-room/ui/i18n';
 import { APP_LOCALES, isAppLocale } from '@voice-room/shared/localization';
@@ -6,10 +7,10 @@ import { locale, setMeetLocale } from '@/i18n';
 
 const languageNames = { ru: 'Русский', en: 'English', fr: 'Français' };
 
-function changeLanguage(event: Event): void {
-  if (event.target instanceof HTMLSelectElement && isAppLocale(event.target.value)) {
-    setMeetLocale(event.target.value);
-  }
+const languages = APP_LOCALES.map((value) => ({ value, label: languageNames[value], lang: value }));
+
+function changeLanguage(value: string): void {
+  if (isAppLocale(value)) setMeetLocale(value);
 }
 </script>
 
@@ -20,11 +21,16 @@ function changeLanguage(event: Event): void {
         <span class="meet-shell__mark"><AudioLines aria-hidden="true" /></span>
         <span>VoiceRoom <strong>Meet</strong></span>
       </RouterLink>
-      <select class="meet-shell__language" :value="locale" :aria-label="t('meet.language')" @change="changeLanguage">
-        <option v-for="language in APP_LOCALES" :key="language" :value="language" :lang="language">
-          {{ languageNames[language] }}
-        </option>
-      </select>
+      <Select
+        native
+        variant="ghost"
+        size="sm"
+        class="meet-shell__language"
+        :model-value="locale"
+        :options="languages"
+        :label="t('meet.language')"
+        @value-change="changeLanguage"
+      />
     </header>
     <RouterView v-slot="{ Component, route }">
       <component :is="Component" :key="route.path" />

@@ -144,6 +144,7 @@ function deviceIcon(client: string) {
           </div>
           <Callout
             v-if="detail.deletion"
+            class="admin-account-card__notice"
             tone="warning"
             role="status"
             :title="`Удалится ${formatDateTime(detail.deletion.scheduledFor)} — ${detail.deletion.byAdmin ? 'по решению администратора' : 'по просьбе владельца'}.`"

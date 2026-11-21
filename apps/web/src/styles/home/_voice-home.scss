@@ -86,11 +86,6 @@
 
 .voice-home__join-field {
   width: 190px;
-
-  .ui-field__label,
-  .ui-field__hint {
-    @include mixins.visually-hidden;
-  }
 }
 
 .voice-home__callout {

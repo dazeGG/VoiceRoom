@@ -32,10 +32,6 @@
 //   (tabs, options, toggle buttons, gear and presets already select on aria-pressed)
 @use 'pkg:@voice-room/ui/styles/mixins' as *;
 
-.ui-dialog:has(.screen-source-dialog__footer) {
-  overflow: visible;
-}
-
 // ---- tabs ----
 
 .screen-source-dialog__tabs {
@@ -47,34 +43,6 @@
   flex: none;
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
   gap: var(--space-16);
-}
-
-.screen-source-dialog__option {
-  display: grid;
-  min-width: 0;
-  grid-template-rows: auto minmax(42px, auto);
-  gap: 0;
-  border: 1.5px solid var(--vr-line);
-  border-radius: var(--radius-16);
-  padding: var(--space-8);
-  background: var(--vr-surface);
-  color: inherit;
-  text-align: left;
-  transition:
-    border-color 140ms var(--ease-out),
-    background 140ms var(--ease-out);
-}
-
-.screen-source-dialog__option[aria-pressed='true'] {
-  border-color: color-mix(in oklch, var(--vr-text) 70%, transparent);
-  background: var(--vr-surface-3);
-}
-
-.screen-source-dialog__option:not([aria-pressed='true']):hover,
-.screen-source-dialog__option:focus-visible {
-  outline: var(--space-2) solid var(--vr-accent);
-  outline-offset: calc(-1 * var(--space-2));
-  background: var(--vr-surface-3);
 }
 
 .screen-source-dialog__preview {
@@ -162,7 +130,7 @@
   transition: color 140ms var(--ease-out);
 }
 
-.screen-source-dialog__option[aria-pressed='true'] .screen-source-dialog__label {
+.screen-source-dialog__options [aria-checked='true'] .screen-source-dialog__label {
   color: var(--vr-text);
 }
 
@@ -178,7 +146,7 @@
   transition: color 140ms var(--ease-out);
 }
 
-.screen-source-dialog__option[aria-pressed='true'] .screen-source-dialog__label svg {
+.screen-source-dialog__options [aria-checked='true'] .screen-source-dialog__label svg {
   color: var(--vr-text);
 }
 
@@ -249,27 +217,6 @@
 }
 
 // SD / HD and 30 / 60 toggles.
-.screen-source-dialog__toggle-group {
-  display: inline-flex;
-  gap: var(--space-2);
-  padding: var(--space-2);
-  background: var(--vr-bg);
-  border: 1px solid var(--vr-line);
-  border-radius: var(--radius-10);
-}
-
-.screen-source-dialog__toggle-button {
-  border: none;
-  border-radius: var(--radius-8);
-  padding: var(--space-8) var(--space-16);
-  background: transparent;
-  color: var(--vr-text-2);
-  font-size: 13px;
-  font-weight: 600;
-  transition:
-    background 140ms var(--ease-out),
-    color 140ms var(--ease-out);
-}
 
 .screen-source-dialog__toggle-button[aria-pressed='true'] {
   background: var(--vr-accent);
@@ -285,23 +232,6 @@
 
 .screen-source-dialog__gear-wrap {
   position: relative;
-}
-
-.screen-source-dialog__popover {
-  position: absolute;
-  right: 0;
-  bottom: calc(100% + var(--space-8));
-  width: min(320px, calc(100vw - var(--space-48)));
-  z-index: 30;
-  display: grid;
-  gap: var(--space-12);
-  padding: var(--space-16);
-  background: var(--vr-surface-2);
-  border: 1px solid var(--vr-line-strong);
-  border-radius: var(--radius-16);
-  box-shadow: var(--vr-shadow-popover);
-  animation: screen-source-dialog-pop 160ms var(--ease-out);
-  transform-origin: bottom right;
 }
 
 @keyframes screen-source-dialog-pop {
@@ -342,33 +272,6 @@
 }
 
 // ---- launch ----
-
-.screen-source-dialog__launch {
-  display: flex;
-  align-items: center;
-  gap: var(--space-8);
-  height: var(--size-40);
-  padding: 0 var(--space-20);
-  border: none;
-  border-radius: var(--radius-12);
-  background: var(--vr-accent);
-  color: var(--vr-accent-ink);
-  font-size: 15px;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-  transition:
-    transform 120ms var(--ease-out),
-    opacity 120ms var(--ease-out);
-}
-
-.screen-source-dialog__launch:not(:disabled):hover {
-  transform: translateY(-1px);
-}
-
-.screen-source-dialog__launch:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
 
 // ---- small screens ----
 

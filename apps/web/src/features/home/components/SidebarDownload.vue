@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { IconButton, Spinner } from '@voice-room/ui/components';
+import { IconButton, Spinner, DropdownMenu, MenuItem, MenuLabel, BrandIcon } from '@voice-room/ui/components';
 import { t } from '@/shared/i18n';
 import { faApple, faWindows } from '@fortawesome/free-brands-svg-icons';
 import { Download } from '@lucide/vue';
@@ -7,8 +7,6 @@ import { ref } from 'vue';
 import { fetchDesktopRelease, type DesktopRelease } from '@/api/desktop';
 import { DESKTOP_BUILDS, type DesktopBuildId } from '@/platform/desktop-builds';
 import { startDesktopBuildDownload } from '@/platform/desktop-download';
-import { DropdownMenu, MenuItem, MenuLabel } from '@/shared/ui';
-import { Icon } from '@/shared/ui/icons';
 
 const release = ref<DesktopRelease | null>(null);
 const releaseLoading = ref(false);
@@ -62,7 +60,7 @@ async function download(buildId: DesktopBuildId, close: () => void): Promise<voi
       >
         <template #icon>
           <Spinner v-if="downloadingId === build.id" aria-hidden="true" />
-          <Icon v-else :icon="build.mac ? faApple : faWindows" size="lg" />
+          <BrandIcon v-else :icon="build.mac ? faApple : faWindows" size="lg" />
         </template>
       </MenuItem>
       <div v-if="releaseError" class="sidebar-download__note">

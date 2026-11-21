@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Pressable } from '@voice-room/ui/components';
 import { t } from '@/shared/i18n';
 import { computed } from 'vue';
 import EmojiText from './EmojiText.vue';
@@ -24,16 +25,15 @@ function jump(): void {
 </script>
 
 <template>
-  <button
+  <Pressable
     v-if="interactive && !preview.deleted"
     class="reply-preview reply-preview--interactive"
-    type="button"
     :aria-label="t('Перейти к сообщению{p0}', { p0: author ? t(' от {p0}', { p0: String(author) }) : '' })"
     @click="jump"
   >
     <strong v-if="author"><EmojiText :text="author" /></strong>
     <span><EmojiText :text="text" /></span>
-  </button>
+  </Pressable>
   <div
     v-else
     class="reply-preview"

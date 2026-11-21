@@ -3,11 +3,10 @@ import { useLocalizedText, currentErrorMessage } from '@/shared/i18n/localized-t
 
 import { t } from '@/shared/i18n';
 import { computed, ref, useId, watchEffect } from 'vue';
-import { AlertDialog, Checkbox, Field, TextField } from '@voice-room/ui/components';
+import { AlertDialog, Checkbox, Field, TextField, Button, Dialog } from '@voice-room/ui/components';
 import { fetchAccountDeletionPreview, requestAccountDeletion, type AccountDeletionPreview } from '@/api/auth';
 import { useSessionStore } from '@/features/auth/session.store';
 import EmojiText from '@/shared/chat/EmojiText.vue';
-import { Button, Dialog } from '@/shared/ui';
 import { dayMonth } from '@/shared/utils/date-format';
 import { displayNameOf } from '@/shared/utils/display-name';
 import type { ToastOptions } from '../model/toasts.store';
@@ -93,6 +92,7 @@ async function confirmDeletion(): Promise<void> {
 
 <template>
   <Dialog
+    layer="nested"
     :open="open"
     :title="t('Удалить аккаунт')"
     :on-close="() => emit('close')"

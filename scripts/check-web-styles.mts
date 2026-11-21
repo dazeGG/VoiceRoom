@@ -7,7 +7,7 @@
 //   - a `<style` block in a .vue file, unless the file is in STYLE_ALLOWLIST
 //     and the line above the block is a one-line comment saying why;
 //   - an import of `reka-ui` (any subpath, static or dynamic) in a .ts/.vue
-//     file outside the primitive directories.
+//     file outside the kit's components (packages/ui/src/components).
 //   - a Sass module in a portable package that loads styles from an app.
 
 import { readFileSync } from 'node:fs';
@@ -33,7 +33,7 @@ const ONE_LINE_COMMENT = /^\s*(?:<!--.*-->|\/\/.*|\/\*.*\*\/)\s*$/;
 const CALL_ROOT = 'packages/call/src';
 const UI_ROOT = 'packages/ui/src';
 const SOURCE_ROOTS = ['apps/web/src', 'apps/admin/src', 'apps/meet/src', 'apps/widget/src', UI_ROOT, CALL_ROOT];
-const REKA_WRAPPERS = ['apps/web/src/shared/ui/', 'packages/ui/src/components/'];
+const REKA_WRAPPERS = ['packages/ui/src/components/'];
 const SASS_MODULE = /@(?:use|forward|import)\s*(['"])(?<module>[^'"]+)\1/g;
 const APP_STYLE_MODULE =
   /^(?:pkg:)?@(?:\/|$)|^(?:pkg:)?@voice-room\/(?:admin|api|docs|meet|site|web|widget)(?:\/|$)|(?:^|\/)apps(?:\/|$)/;
@@ -105,7 +105,7 @@ export function checkWebStyles(repoRoot: string, allowlist: readonly StyleAllowa
     const code = blankComments(isVue ? blocksOnly(source, SCRIPT_BLOCK) : source);
     for (const match of code.matchAll(REKA_IMPORT)) {
       problems.push(
-        `${path}:${lineAt(source, match.index)} reka-ui import outside the primitive directories; use a UI wrapper`
+        `${path}:${lineAt(source, match.index)} reka-ui import outside the kit; use or extend a packages/ui component`
       );
     }
   }

@@ -1,9 +1,5 @@
 @use 'pkg:@voice-room/ui/styles/mixins' as *;
 
-.ui-overlay:has(.avatar-crop__body) {
-  z-index: 100;
-}
-
 .avatar-crop__body {
   display: grid;
   grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);

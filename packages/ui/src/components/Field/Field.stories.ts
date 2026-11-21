@@ -23,3 +23,5 @@ export const Default: Story = {};
 export const Hint: Story = { args: { hint: 'Как вас будут видеть в комнате' } };
 export const Optional: Story = { args: { label: 'Город', optional: true } };
 export const Error: Story = { args: { error: 'Укажите имя', hint: 'Как вас будут видеть в комнате' } };
+
+export const HiddenLabel: Story = { args: { visuallyHiddenLabel: true, visuallyHiddenHint: true } };

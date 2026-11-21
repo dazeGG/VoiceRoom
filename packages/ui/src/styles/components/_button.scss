@@ -10,7 +10,7 @@
   padding: 0 var(--space-16);
   border: 1px solid transparent;
   border-radius: var(--radius-10);
-  font: 600 14px/1 var(--font-ui);
+  font: 600 0.875rem/1 var(--font-ui);
   letter-spacing: -0.005em;
   white-space: nowrap;
   cursor: pointer;
@@ -37,7 +37,7 @@
   padding-inline: var(--space-12);
   gap: var(--space-6);
   border-radius: var(--radius-8);
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 
 .ui-button--size-sm svg,
@@ -65,7 +65,7 @@
   min-height: var(--size-48);
   padding-inline: var(--space-20);
   border-radius: var(--radius-12);
-  font-size: 15px;
+  font-size: 0.9375rem;
 }
 
 .ui-button--primary {
@@ -159,4 +159,50 @@
     content: '';
     transform: translate(-50%, -50%);
   }
+}
+
+.ui-button--size-inline {
+  display: inline;
+  height: auto;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--vr-accent);
+  font: inherit;
+  white-space: normal;
+
+  &:hover:not(:disabled) {
+    background: transparent;
+    color: var(--vr-accent-hover);
+    text-decoration: underline;
+  }
+}
+
+.ui-button--fill {
+  flex: 1;
+}
+.ui-button--pill {
+  border-radius: var(--radius-pill);
+}
+
+.ui-button--scrim {
+  background: var(--vr-scrim);
+  backdrop-filter: blur(var(--space-12));
+}
+
+.ui-button--wrap {
+  height: auto;
+  white-space: normal;
+  text-align: start;
+}
+.ui-button--start {
+  justify-content: flex-start;
+}
+.ui-button--spaced {
+  justify-content: space-between;
+}
+
+.ui-button[hidden] {
+  display: none;
 }

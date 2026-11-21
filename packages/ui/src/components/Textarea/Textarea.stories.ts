@@ -37,3 +37,6 @@ export const ReadOnly: Story = { args: { readonly: true, modelValue: 'Жалоб
 export const OverLimit: Story = {
   args: { modelValue: 'Это произошло после звонка.', maxlength: 16, error: 'Сократите комментарий' }
 };
+
+export const Monospace: Story = { args: { variant: 'mono' } };
+export const Compact: Story = { args: { variant: 'compact' } };

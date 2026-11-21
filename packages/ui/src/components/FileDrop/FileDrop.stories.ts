@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/vue3-vite';
 import { fireEvent } from 'storybook/test';
+import Button from '../Button/Button.vue';
 import FileDrop from './FileDrop.vue';
 
 const meta = {
@@ -31,4 +32,14 @@ export const Avatar: Story = {
     caption: 'PNG или JPG, минимум 256×256',
     avatar: { name: 'Лобби', shape: 'squircle' }
   }
+};
+
+export const Trigger: Story = {
+  args: { variant: 'trigger', inputLabel: 'Изображение' },
+  render: (args) => ({
+    components: { FileDrop, Button },
+    setup: () => ({ args }),
+    template:
+      '<FileDrop v-slot="{ choose }" v-bind="args"><Button @click="choose">Выбрать изображение</Button></FileDrop>'
+  })
 };

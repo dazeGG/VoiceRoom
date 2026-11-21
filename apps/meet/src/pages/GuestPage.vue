@@ -58,17 +58,17 @@ function join(): void {
         <h1 ref="heading" tabindex="-1">{{ t('meet.left') }}</h1>
         <p>{{ t('meet.leftDescription') }}</p>
         <Button size="lg" variant="primary" @click="controller.check()">{{ t('meet.rejoin') }}</Button>
-        <RouterLink class="ui-button ui-button--outline ui-button--size-lg meet-card__link" to="/">
+        <Button class="meet-card__link" variant="plain" size="lg" to="/">
           {{ t('meet.home') }}
-        </RouterLink>
+        </Button>
       </template>
       <template v-else-if="phase === 'not-found' || phase === 'closed'">
         <div class="meet-card__icon"><Link2Off aria-hidden="true" /></div>
         <h1 ref="heading" tabindex="-1">{{ t('meet.missing') }}</h1>
         <p>{{ t('meet.missingDescription') }}</p>
-        <RouterLink class="ui-button ui-button--outline ui-button--size-lg meet-card__link" to="/">
+        <Button class="meet-card__link" variant="plain" size="lg" to="/">
           {{ t('meet.home') }}
-        </RouterLink>
+        </Button>
       </template>
       <template v-else>
         <div class="meet-card__icon"><UsersRound aria-hidden="true" /></div>

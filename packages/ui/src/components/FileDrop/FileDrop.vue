@@ -6,7 +6,7 @@ import Avatar from '../Avatar/Avatar.vue';
 import Button from '../Button/Button.vue';
 import type { FileDropProps } from './types';
 
-const props = withDefaults(defineProps<FileDropProps>(), { variant: 'dropzone' });
+const props = withDefaults(defineProps<FileDropProps>(), { variant: 'dropzone', validateAccept: true });
 
 const emit = defineEmits<{ files: [files: File[]]; remove: [] }>();
 const input = useTemplateRef<HTMLInputElement>('input');
@@ -21,23 +21,18 @@ const acceptRules = computed(() =>
 );
 
 function choose(): void {
-  input.value?.click();
+  if (!props.disabled) input.value?.click();
 }
 
 function report(files: FileList): void {
   if (props.disabled) return;
-  const accepted = Array.from(files).filter(matchesAccept);
+  const accepted = Array.from(files).filter((file) => !props.validateAccept || matchesAccept(file));
   const selected = props.multiple ? accepted : accepted.slice(0, 1);
   if (selected.length) emit('files', selected);
 }
 
 function matchesAccept(file: File): boolean {
-  const rules = props.accept
-    ?.toLowerCase()
-    .split(',')
-    .map((rule) => rule.trim())
-    .filter(Boolean);
-  if (!rules?.length) return true;
+  if (!acceptRules.value.length) return true;
   const name = file.name.toLowerCase();
   const mime = file.type.toLowerCase();
   return acceptRules.value.some((rule) => {
@@ -75,15 +70,30 @@ function drop(event: DragEvent): void {
 
 <template>
   <div
-    class="ui-dropzone"
-    :class="{ 'ui-dropzone--avatar': variant === 'avatar', 'ui-dropzone--over': dragDepth > 0 && !disabled }"
+    :class="[
+      variant === 'trigger' ? 'ui-dropzone-trigger' : 'ui-dropzone',
+      {
+        'ui-dropzone--avatar': variant === 'avatar',
+        'ui-dropzone--over': variant !== 'trigger' && dragDepth > 0 && !disabled
+      }
+    ]"
     @dragenter.prevent="enter"
     @dragleave="leave"
     @dragover.prevent="dragOver"
     @drop.prevent="drop"
   >
-    <input ref="input" type="file" hidden :accept="accept" :multiple="multiple" :disabled="disabled" @change="pick" />
-    <template v-if="variant === 'avatar'">
+    <input
+      ref="input"
+      type="file"
+      hidden
+      :aria-label="inputLabel"
+      :accept="accept"
+      :multiple="multiple"
+      :disabled="disabled"
+      @change="pick"
+    />
+    <slot v-if="variant === 'trigger'" :choose="choose" />
+    <template v-else-if="variant === 'avatar'">
       <div class="ui-dropzone__actions">
         <Avatar v-bind="avatar" :name="avatar?.name ?? t('Аватар')" :size="56" />
         <Button

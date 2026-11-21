@@ -16,3 +16,8 @@ export interface TabsProps<T extends string> {
   variant?: 'line' | 'segmented';
   stretch?: boolean;
 }
+
+export interface TabPanelProps {
+  /** Omit for a panel mounted outside its Tabs, and supply aria-labelledby. */
+  value?: string;
+}

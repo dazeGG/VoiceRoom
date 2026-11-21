@@ -45,7 +45,7 @@ function move(event: KeyboardEvent, index: number): void {
   <ToggleGroupRoot as-child type="single" :model-value="value" :roving-focus="false" @update:model-value="choose">
     <div
       class="ui-segment"
-      :class="`ui-segment--${size}`"
+      :class="[`ui-segment--${size}`, layout && `ui-segment--${layout}`]"
       :role="kind === 'tabs' ? 'tablist' : 'radiogroup'"
       :aria-label="ariaLabel"
     >
@@ -54,6 +54,8 @@ function move(event: KeyboardEvent, index: number): void {
         :key="option.value"
         class="ui-segment__item"
         :value="option.value"
+        :title="option.description"
+        :aria-description="option.description"
         :role="kind === 'tabs' ? 'tab' : 'radio'"
         :aria-selected="kind === 'tabs' ? option.value === value : undefined"
         :aria-checked="kind === 'radio' ? option.value === value : undefined"

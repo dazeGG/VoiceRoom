@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Pressable } from '@voice-room/ui/components';
 import { computed } from 'vue';
 import type { LiveRoom, RoomCall } from '@voice-room/shared/contracts/admin';
 import { formatClock, formatDuration, formatPeople } from '../../format.ts';
@@ -108,10 +109,9 @@ const hourLeft = (hour: number) => `${(hour / 24) * 100}%`;
                 :style="{ left: hourLeft(hour) }"
                 aria-hidden="true"
               />
-              <button
+              <Pressable
                 v-for="{ call, people, when, length } in row.calls"
                 :key="call.id"
-                type="button"
                 class="admin-timeline__bar"
                 :aria-pressed="call.id === selectedId"
                 :title="`${when} · ${formatDuration(length)} · ${formatPeople(people)}`"
@@ -120,10 +120,9 @@ const hourLeft = (hour: number) => `${(hour / 24) * 100}%`;
                 @click="emit('select', call)"
               >
                 {{ length > 30 * 60_000 ? people : '' }}
-              </button>
-              <button
+              </Pressable>
+              <Pressable
                 v-if="row.live?.since"
-                type="button"
                 class="admin-timeline__bar admin-timeline__bar--live"
                 :title="`${formatClock(row.live.since)} — сейчас · ${formatPeople(row.live.peers.length)}`"
                 :aria-label="`Идёт с ${formatClock(row.live.since)}, ${formatPeople(row.live.peers.length)}`"
@@ -131,7 +130,7 @@ const hourLeft = (hour: number) => `${(hour / 24) * 100}%`;
                 @click="row.live && emit('openLive', row.live)"
               >
                 {{ now - row.live.since > 30 * 60_000 ? row.live.peers.length : '' }}
-              </button>
+              </Pressable>
             </span>
           </li>
         </ul>

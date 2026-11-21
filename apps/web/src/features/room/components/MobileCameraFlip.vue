@@ -34,6 +34,8 @@ function keepControls(event: PointerEvent): void {
 <template>
   <IconButton
     v-if="variant === 'round'"
+    scrim
+    pill
     class="mobile-call-flip--round"
     :label="t('{p0} камеру', { p0: label })"
     :size="44"
@@ -48,6 +50,7 @@ function keepControls(event: PointerEvent): void {
   </IconButton>
   <Button
     v-else
+    scrim
     class="mobile-call-flip"
     variant="outline"
     size="lg"

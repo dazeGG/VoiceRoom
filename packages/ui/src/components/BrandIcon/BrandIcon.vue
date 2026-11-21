@@ -1,10 +1,10 @@
 <script setup lang="ts">
 // A Font Awesome brand icon (data from @fortawesome/free-brands-svg-icons) as an
 // inline SVG; replaces svelte-fa. `size` matches Fa's "sm" and "lg".
-import type { IconDefinition } from '@fortawesome/free-brands-svg-icons';
+import type { BrandIconProps } from './types';
 import { computed } from 'vue';
 
-const props = withDefaults(defineProps<{ icon: IconDefinition; size?: '1x' | 'sm' | 'lg' }>(), { size: '1x' });
+const props = withDefaults(defineProps<BrandIconProps>(), { size: '1x' });
 
 const width = computed(() => props.icon.icon[0]);
 const height = computed(() => props.icon.icon[1]);
@@ -13,7 +13,7 @@ const paths = computed(() => [props.icon.icon[4]].flat());
 
 <template>
   <svg
-    :class="['icon', `icon--${size}`]"
+    :class="['ui-brand-icon', `ui-brand-icon--${size}`]"
     xmlns="http://www.w3.org/2000/svg"
     :viewBox="`0 0 ${width} ${height}`"
     aria-hidden="true"

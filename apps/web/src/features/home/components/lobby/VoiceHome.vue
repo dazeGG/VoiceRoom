@@ -1,5 +1,18 @@
 <script setup lang="ts">
-import { Badge, Field, IconButton, TextField, Tooltip } from '@voice-room/ui/components';
+import EmojiText from '@/shared/chat/EmojiText.vue';
+import {
+  Badge,
+  Field,
+  IconButton,
+  TextField,
+  Tooltip,
+  Avatar,
+  AvatarStack,
+  Button,
+  ContextMenu,
+  Ellipsis,
+  Pressable
+} from '@voice-room/ui/components';
 import { t } from '@/shared/i18n';
 import { BellOff, Plus, ShieldCheck, UserPlus, X } from '@lucide/vue';
 import { computed, ref, shallowRef } from 'vue';
@@ -7,8 +20,7 @@ import type { OwnedRoom } from '@/api/auth';
 import { useRoomPresenceStore } from '@/entities/room/room-presence.store';
 import { RoomMenuContent } from '@/shared/components/room-menu';
 import { useNotificationPreferencesStore } from '@/shared/notifications/preferences.store';
-import { Avatar, AvatarStack, Button, ContextMenu, Ellipsis } from '@/shared/ui';
-import { iconMd, iconSm } from '@/shared/ui/icons';
+import { iconMd, iconSm } from '@voice-room/ui/icon-defaults';
 import { roomPeerAvatarItems } from '../../model/room-avatars';
 import { roomDisplayName } from '../../model/rooms';
 import { useLobby } from '../../model/lobby-context';
@@ -133,6 +145,8 @@ function closeRoomContextMenu(): void {
            attributes do the same for 1Password, LastPass and Bitwarden. -->
           <form class="voice-home__join" @submit.prevent="submitJoinCode">
             <Field
+              visually-hidden-label
+              visually-hidden-hint
               class="voice-home__join-field"
               :label="t('Код или ссылка на комнату')"
               :hint="t('Постоянные комнаты сохраняются автоматически')"
@@ -162,7 +176,7 @@ function closeRoomContextMenu(): void {
       </div>
 
       <div v-if="recoveryCodesReminder" class="voice-home__callout">
-        <button class="voice-home__callout-main" type="button" @click="emit('openRecoveryCodes')">
+        <Pressable class="voice-home__callout-main" @click="emit('openRecoveryCodes')">
           <span class="voice-home__callout-icon voice-home__callout-icon--warning">
             <ShieldCheck v-bind="iconMd" aria-hidden="true" />
           </span>
@@ -172,7 +186,7 @@ function closeRoomContextMenu(): void {
               t('Создайте коды восстановления — без них забытый пароль не вернуть')
             }}</span>
           </span>
-        </button>
+        </Pressable>
         <Button variant="outline" size="sm" @click="emit('openRecoveryCodes')">{{ t('Создать коды') }}</Button>
         <IconButton :size="28" :label="t('Напомнить через 3 дня')" @click="emit('snoozeRecoveryCodes')"
           ><X aria-hidden="true"
@@ -202,11 +216,11 @@ function closeRoomContextMenu(): void {
       <section v-if="liveRooms.length > 0" class="voice-home__section" :aria-label="t('Сейчас в эфире')">
         <h2 class="voice-home__section-title"><span class="voice-home__live-dot"></span>{{ t('Сейчас в эфире') }}</h2>
         <div class="voice-home__cards">
-          <button
+          <Pressable
             v-for="room in liveRooms"
             :key="room.roomId"
+            inset
             :class="['voice-home__card', { 'voice-home__card--context': contextRoomId === room.roomId }]"
-            type="button"
             aria-haspopup="menu"
             @click="emit('openRoom', room.roomId)"
             @contextmenu="openRoomContextMenu($event, room.roomId)"
@@ -221,7 +235,9 @@ function closeRoomContextMenu(): void {
                 foreground="var(--vr-text)"
                 :size="40"
               />
-              <Ellipsis :text="roomDisplayName(room)" class="voice-home__room-name" tag="span" />
+              <Ellipsis :text="roomDisplayName(room)" class="voice-home__room-name" tag="span"
+                ><EmojiText :text="roomDisplayName(room)"
+              /></Ellipsis>
               <span
                 v-if="roomNotificationsMuted(room)"
                 class="voice-home__muted"
@@ -242,7 +258,7 @@ function closeRoomContextMenu(): void {
               <span class="voice-home__live-dot"></span>
               <AvatarStack :items="roomAvatars(room.roomId)" :max-avatars="5" :size="24" :aria-label="t('В комнате')" />
             </span>
-          </button>
+          </Pressable>
         </div>
       </section>
 
@@ -253,15 +269,15 @@ function closeRoomContextMenu(): void {
       >
         <h2 class="voice-home__section-title">{{ t('Остальные') }}</h2>
         <div class="voice-home__quiet-list">
-          <button
+          <Pressable
             v-for="room in quietRooms"
             :key="room.roomId"
+            inset
             :class="[
               'voice-home__card',
               'voice-home__card--quiet',
               { 'voice-home__card--context': contextRoomId === room.roomId }
             ]"
-            type="button"
             aria-haspopup="menu"
             @click="emit('openRoom', room.roomId)"
             @contextmenu="openRoomContextMenu($event, room.roomId)"
@@ -275,7 +291,9 @@ function closeRoomContextMenu(): void {
               foreground="var(--vr-text-2)"
               :size="32"
             />
-            <Ellipsis :text="roomDisplayName(room)" class="voice-home__room-name" tag="span" />
+            <Ellipsis :text="roomDisplayName(room)" class="voice-home__room-name" tag="span"
+              ><EmojiText :text="roomDisplayName(room)"
+            /></Ellipsis>
             <span
               v-if="roomNotificationsMuted(room)"
               class="voice-home__muted"
@@ -292,7 +310,7 @@ function closeRoomContextMenu(): void {
               :count="roomUnreadCount(room)"
             />
             <span class="voice-home__room-sub">{{ t('тихо') }}</span>
-          </button>
+          </Pressable>
         </div>
       </section>
     </div>

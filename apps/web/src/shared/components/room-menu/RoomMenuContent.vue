@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import EmojiText from '@/shared/chat/EmojiText.vue';
 import { t } from '@/shared/i18n';
 import { Bell, BellOff, Copy, Link, Settings, Trash2, UserRoundPlus } from '@lucide/vue';
 import type { RoomRelationship } from '@voice-room/shared/contracts/rooms';
@@ -6,8 +7,8 @@ import { computed, ref } from 'vue';
 import type { Friend } from '@/api/friends';
 import { removeRoomFromList } from '@/api/auth';
 import { useNotificationPreferencesStore } from '@/shared/notifications/preferences.store';
-import { Avatar, Ellipsis, MenuSeparator, MenuItem, MenuLabel, MenuSub } from '@/shared/ui';
-import { iconMd } from '@/shared/ui/icons';
+import { Avatar, Ellipsis, MenuSeparator, MenuItem, MenuLabel, MenuSub } from '@voice-room/ui/components';
+import { iconMd } from '@voice-room/ui/icon-defaults';
 import { copyText } from '@/shared/utils/clipboard';
 import RoomInviteFriendList from './RoomInviteFriendList.vue';
 
@@ -121,7 +122,7 @@ async function removeBookmark(): Promise<void> {
     <div class="room-menu-content__head">
       <Avatar :name="name" :src="avatarUrl" shape="squircle" background="var(--vr-surface-3)" :size="40" />
       <div class="room-menu-content__info">
-        <Ellipsis class="room-menu-content__name" :text="name" />
+        <Ellipsis class="room-menu-content__name" :text="name"><EmojiText :text="name" /></Ellipsis>
         <Ellipsis class="room-menu-content__code" :text="roomId" />
       </div>
     </div>

@@ -1,6 +1,4 @@
-// Full-screen image viewer (shared/chat/AttachmentLightbox.vue). The backdrop,
-// the dialog frame and the header (.attachment-lightbox__backdrop, .attachment-lightbox,
-// .attachment-lightbox__header) are in _attachment.scss.
+// Image viewer contents (shared/chat/AttachmentLightbox.vue).
 //
 // Svelte class -> BEM class
 //   .attachment-lightbox-counter          -> .attachment-lightbox__counter
@@ -94,9 +92,9 @@
 }
 
 .attachment-lightbox__previous {
-  left: 8px;
+  left: var(--space-8);
 }
 
 .attachment-lightbox__next {
-  right: 8px;
+  right: var(--space-8);
 }

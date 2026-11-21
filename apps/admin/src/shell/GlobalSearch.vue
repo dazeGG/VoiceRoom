@@ -121,6 +121,8 @@ function choose(option: ComboboxOption): void {
       v-model="selected"
       v-model:query="typed"
       v-model:open="open"
+      overlay
+      visually-hidden-label
       external-filter
       :options="options"
       :loading="loading"

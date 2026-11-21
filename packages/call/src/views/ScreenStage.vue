@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { t } from '@voice-room/ui/i18n';
-import { AvatarStack, Slider } from '@voice-room/ui/components';
+import { AvatarStack, Slider, IconButton } from '@voice-room/ui/components';
 import { Maximize, Minimize, Volume2, VolumeX } from '@lucide/vue';
 import { ref, watch, watchEffect } from 'vue';
 import type { FullscreenView, ScreenMetaView, StreamVolumeView } from '../engine/core/screen-ui.store';
@@ -109,17 +109,20 @@ watch(
 
     <div id="screenViewControls" class="screen-view-controls" :hidden="!showControls">
       <div id="streamVolumeControl" class="stream-volume" :hidden="volume.hidden">
-        <button
+        <IconButton
           id="streamVolumeButton"
+          :size="40"
+          variant="outline"
+          scrim
+          :tooltip="false"
           class="screen-view-controls__button stream-volume__button"
-          type="button"
-          :aria-label="volume.ariaLabel"
+          :label="volume.ariaLabel"
           :aria-pressed="volume.muted"
           @click="emit('toggleMute')"
         >
           <span class="stream-volume__icon stream-volume__icon--on" aria-hidden="true"><Volume2 /></span>
           <span class="stream-volume__icon stream-volume__icon--off" aria-hidden="true"><VolumeX /></span>
-        </button>
+        </IconButton>
         <div id="streamVolumePopover" class="stream-volume__popover">
           <output class="stream-volume__value" :class="{ 'stream-volume__value--muted': volume.muted }">
             {{ volume.valuePercent }}%
@@ -136,11 +139,14 @@ watch(
         </div>
       </div>
 
-      <button
+      <IconButton
         id="screenFullscreenButton"
+        :size="40"
+        variant="outline"
+        scrim
+        :tooltip="false"
         class="screen-view-controls__button screen-view-controls__fullscreen"
-        type="button"
-        :aria-label="fullscreen.ariaLabel"
+        :label="fullscreen.ariaLabel"
         :aria-pressed="fullscreen.fullscreen"
         @click="emit('toggleFullscreen')"
       >
@@ -154,7 +160,7 @@ watch(
           aria-hidden="true"
           ><Minimize
         /></span>
-      </button>
+      </IconButton>
     </div>
   </div>
 </template>

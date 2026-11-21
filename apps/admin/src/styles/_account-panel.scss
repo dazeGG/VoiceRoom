@@ -3,7 +3,7 @@
   min-width: 0;
   gap: var(--space-12);
 
-  > .ui-card {
+  &__card {
     display: grid;
     gap: var(--space-12);
   }
@@ -49,14 +49,6 @@
       margin: 0;
       font-size: 0.9375rem;
     }
-  }
-
-  &__live.ui-button {
-    height: auto;
-    min-height: var(--size-40);
-    justify-content: space-between;
-    white-space: normal;
-    text-align: start;
   }
 
   &__facts,

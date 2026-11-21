@@ -1,0 +1,35 @@
+.ui-color-field {
+  width: var(--size-40);
+  height: var(--size-40);
+  appearance: none;
+  forced-color-adjust: none;
+  overflow: hidden;
+  padding: 0;
+  border: 1px solid var(--vr-line-strong);
+  border-radius: var(--radius-10);
+  background: var(--vr-surface-2);
+  cursor: pointer;
+
+  &::-webkit-color-swatch-wrapper {
+    padding: 0;
+  }
+  &::-webkit-color-swatch {
+    border: 0;
+    border-radius: inherit;
+  }
+  &::-moz-color-swatch {
+    border: 0;
+    border-radius: inherit;
+  }
+
+  &:focus-visible {
+    border-color: var(--vr-accent-line);
+    box-shadow: 0 0 0 3px var(--vr-accent-soft);
+    outline: none;
+  }
+
+  &:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+}

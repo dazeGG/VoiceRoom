@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { IconButton, Progress } from '@voice-room/ui/components';
+import { IconButton, Progress, Pressable } from '@voice-room/ui/components';
 import { t } from '@/shared/i18n';
 import { Image as ImageIcon, RotateCcw, X } from '@lucide/vue';
 import { computed, ref } from 'vue';
-import { iconSm } from '@/shared/ui/icons';
+import { iconSm } from '@voice-room/ui/icon-defaults';
 import { attachmentVariantUrl } from '@/api/attachments';
 import AttachmentLightbox from './AttachmentLightbox.vue';
 import type { AttachmentComposeStore } from './attachment-compose';
@@ -44,15 +44,14 @@ function view(draft: Draft): void {
         class="attachment-composer__draft"
         :class="`attachment-composer__draft--${draft.error ? 'failed' : draft.state}`"
       >
-        <button
+        <Pressable
           v-if="draft.previewUrl || draft.state === 'ready'"
           class="attachment-composer__open"
-          type="button"
           :aria-label="t('Открыть изображение {p0}', { p0: index + 1 })"
           @click="view(draft)"
         >
           <img :src="draftSource(draft)" :alt="draft.file?.name || t('Изображение {p0}', { p0: index + 1 })" />
-        </button>
+        </Pressable>
         <span v-else class="attachment-composer__placeholder"><ImageIcon v-bind="iconSm" aria-hidden="true" /></span>
 
         <Progress

@@ -1,4 +1,8 @@
 export interface IconButtonProps {
+  pill?: boolean;
+  scrim?: boolean;
+  dot?: boolean;
+  href?: string;
   label: string;
   size?: 24 | 28 | 32 | 40 | 44 | undefined;
   variant?: 'default' | 'filled' | 'outline' | 'soft' | 'primary' | 'danger' | undefined;

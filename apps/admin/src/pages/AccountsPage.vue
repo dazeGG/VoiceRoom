@@ -188,6 +188,9 @@ function closeCard(): void {
                   <td>
                     <Button
                       class="admin-accounts__person"
+                      size="xl"
+                      layout="start"
+                      wrap
                       variant="plain"
                       :aria-pressed="picked === account.id"
                       @click.stop="picked = account.id"

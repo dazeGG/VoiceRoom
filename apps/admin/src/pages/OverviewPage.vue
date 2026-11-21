@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Pressable } from '@voice-room/ui/components';
 import { ThumbsDown } from '@lucide/vue';
 import { computed, ref } from 'vue';
 import type { AdminOverview, ProductStats, SystemStats } from '@voice-room/shared/contracts/admin';
@@ -232,7 +233,7 @@ const hoursChart = computed(() => {
         <Card v-else-if="!liveRows.length"><EmptyState title="Сейчас никто не в звонке" compact /></Card>
         <ul v-else class="admin-overview-list" aria-label="Сейчас в звонках">
           <li v-for="{ room, trouble, avatars } in liveRows" :key="room.roomId">
-            <button type="button" class="admin-overview-list__row" @click="emit('openLiveRoom', room.roomId)">
+            <Pressable inset class="admin-overview-list__row" @click="emit('openLiveRoom', room.roomId)">
               <span class="admin-overview-list__room">
                 <RoomAvatar :room-id="room.roomId" :name="room.name" :src="room.avatarUrl" />
                 <span class="admin-overview-list__room-text">
@@ -249,7 +250,7 @@ const hoursChart = computed(() => {
               </span>
               <Pill v-if="trouble" :tone="trouble.tone" dot compact>{{ trouble.count }} со связью</Pill>
               <span v-else class="admin-metric-note">связь в порядке</span>
-            </button>
+            </Pressable>
           </li>
         </ul>
       </Section>
@@ -298,8 +299,8 @@ const hoursChart = computed(() => {
         <Card v-else-if="!calls.length"><EmptyState title="Завершённых звонков пока нет" compact /></Card>
         <ul v-else class="admin-overview-list" aria-label="Последние звонки">
           <li v-for="call in calls" :key="call.id">
-            <button
-              type="button"
+            <Pressable
+              inset
               class="admin-overview-list__row admin-overview-list__row--finished"
               @click="emit('openCall', { kind: 'finished', callId: call.id })"
             >
@@ -318,7 +319,7 @@ const hoursChart = computed(() => {
               <span v-if="call.badFeedback" class="admin-overview-list__bad" title="Плохие отзывы об этом звонке">
                 <ThumbsDown aria-label="Плохих отзывов" />{{ formatCount(call.badFeedback) }}
               </span>
-            </button>
+            </Pressable>
           </li>
         </ul>
       </Section>

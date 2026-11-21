@@ -133,10 +133,6 @@
 
     &--compact {
       padding: var(--space-4) var(--space-6);
-
-      .ui-nav__text {
-        display: none;
-      }
     }
   }
 
@@ -163,7 +159,7 @@
     padding: var(--space-8);
   }
 
-  &__profile .ui-list-item {
+  &__profile-details {
     min-width: 0;
     flex: 1;
   }

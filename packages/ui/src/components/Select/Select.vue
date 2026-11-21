@@ -49,10 +49,30 @@ function choose(next: string | undefined): void {
   value.value = next;
   if (changed) emit('valueChange', next);
 }
+
+function onNativeChange(event: Event): void {
+  if (event.currentTarget instanceof HTMLSelectElement) choose(event.currentTarget.value);
+}
 </script>
 
 <template>
+  <select
+    v-if="native"
+    v-bind="controlAttrs({ ...$attrs, 'aria-label': label || $attrs['aria-label'] })"
+    class="ui-select"
+    :class="[`ui-select--${size}`, { 'ui-select--ghost': variant === 'ghost', 'ui-select--icon-only': iconOnly }]"
+    :value="value"
+    :name="name"
+    :disabled="disabled || options.length === 0"
+    @change="onNativeChange"
+  >
+    <option v-for="option in options" :key="option.value" :value="option.value" :lang="option.lang">
+      {{ option.label }}
+    </option>
+  </select>
   <SelectRoot
+    v-else
+    v-bind="name ? { name } : {}"
     :model-value="toItem(value)"
     :disabled="disabled || options.length === 0"
     @update:model-value="(next) => choose(typeof next === 'string' ? fromItem(next) : undefined)"
@@ -70,7 +90,7 @@ function choose(next: string | undefined): void {
       </span>
     </SelectTrigger>
 
-    <SelectPortal>
+    <SelectPortal v-bind="portalTarget ? { to: portalTarget } : {}">
       <SelectContent
         class="ui-menu ui-select__panel"
         position="popper"
@@ -83,7 +103,13 @@ function choose(next: string | undefined): void {
         :aria-label="label || undefined"
       >
         <SelectViewport class="ui-select__viewport">
-          <SelectItem v-for="option in options" :key="option.value" class="ui-menu__item" :value="toItem(option.value)">
+          <SelectItem
+            v-for="option in options"
+            :key="option.value"
+            class="ui-menu__item"
+            :lang="option.lang"
+            :value="toItem(option.value)"
+          >
             <SelectItemText class="ui-menu__text">
               <span class="ellipsis" :title="option.label || undefined"
                 ><slot name="option-label" :text="option.label">{{ option.label }}</slot></span

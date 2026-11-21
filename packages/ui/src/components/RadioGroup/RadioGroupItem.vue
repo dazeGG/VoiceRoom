@@ -11,26 +11,29 @@ const descriptionId = `${id}-description`;
 
 <template>
   <RadioGroupItem
-    class="ui-choice"
-    :class="{ 'ui-choice--card': variant === 'card' }"
+    :class="variant === 'tile' ? 'ui-choice--tile' : ['ui-choice', { 'ui-choice--card': variant === 'card' }]"
     :value="option.value"
     :disabled="option.disabled ?? false"
-    :aria-labelledby="labelId"
+    :aria-labelledby="variant === 'tile' ? undefined : labelId"
+    :aria-label="variant === 'tile' ? option.label : undefined"
     :aria-describedby="option.description ? descriptionId : undefined"
   >
-    <span v-if="variant === 'card' && $slots.preview" class="ui-choice__preview">
-      <slot name="preview" />
-    </span>
-    <span class="ui-choice__row">
-      <span class="ui-radio" aria-hidden="true"></span>
-      <span class="ui-choice__text">
-        <span :id="labelId"
-          ><slot>{{ option.label }}</slot></span
-        >
-        <small v-if="option.description" :id="descriptionId" class="ui-choice__description">{{
-          option.description
-        }}</small>
+    <slot v-if="variant === 'tile'" />
+    <template v-else>
+      <span v-if="variant === 'card' && $slots.preview" class="ui-choice__preview">
+        <slot name="preview" />
       </span>
-    </span>
+      <span class="ui-choice__row">
+        <span class="ui-radio" aria-hidden="true"></span>
+        <span class="ui-choice__text">
+          <span :id="labelId"
+            ><slot>{{ option.label }}</slot></span
+          >
+          <small v-if="option.description" :id="descriptionId" class="ui-choice__description">{{
+            option.description
+          }}</small>
+        </span>
+      </span>
+    </template>
   </RadioGroupItem>
 </template>

@@ -3,7 +3,7 @@ import { Separator, Toolbar, ToolbarButton } from '@voice-room/ui/components';
 import { t } from '@/shared/i18n';
 import { computed, ref } from 'vue';
 import { Copy, Ellipsis, Reply, SmilePlus } from '@lucide/vue';
-import { iconSm } from '@/shared/ui/icons';
+import { iconSm } from '@voice-room/ui/icon-defaults';
 import ReactionPicker from './ReactionPicker.vue';
 import type { ReactionStore } from './reaction-store';
 

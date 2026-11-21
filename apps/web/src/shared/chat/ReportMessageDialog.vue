@@ -6,9 +6,8 @@ import { useLocalizedText, currentErrorMessage } from '@/shared/i18n/localized-t
 import { t } from '@/shared/i18n';
 import { computed, ref, useId } from 'vue';
 import { REPORT_COMMENT_MAX_LENGTH } from '@voice-room/shared/contracts/reports';
-import { Field, Textarea, RadioGroup } from '@voice-room/ui/components';
+import { Field, Textarea, RadioGroup, Button, Dialog } from '@voice-room/ui/components';
 import { fileReport, type ReportReason, type ReportTarget } from '@/api/reports';
-import { Button, Dialog } from '@/shared/ui';
 
 const { target } = defineProps<{ target: ReportTarget }>();
 

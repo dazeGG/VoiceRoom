@@ -271,17 +271,10 @@
   margin-block-end: var(--space-8);
 }
 
-.widget-call__settings,
-.widget-call__settings label {
+.widget-call__settings {
   display: grid;
   gap: var(--space-6);
   font-size: 0.8125rem;
-}
-
-.widget-call__select {
-  width: 100%;
-  font: inherit;
-  outline: none;
 }
 
 .widget-call__volume-head {

@@ -178,8 +178,8 @@ body:not(.screen--room) .topbar {
 
   // In the room the toasts sit above the dock.
   // Svelte: body[data-screen='room'] / body[data-screen='checking']
-  body.screen--room .ui-toaststack,
-  body.screen--checking .ui-toaststack {
+  body.screen--room .app-toast-viewport,
+  body.screen--checking .app-toast-viewport {
     bottom: calc(max(var(--space-24), env(safe-area-inset-bottom)) + var(--size-48) + var(--space-24));
   }
 }

@@ -9,14 +9,14 @@ import { getParticipantAudioPreference, getParticipantAudioPreferenceKey } from 
 import { createInitialRoomState } from '@voice-room/call/engine/model/room-state';
 import { installCallPorts } from '@voice-room/call/engine/ports';
 import { createParticipant } from '@voice-room/call/engine/room/participants';
-import { refreshDevices } from '@voice-room/call/engine/ui/devices';
+import { refreshDevices, switchNoiseMode } from '@voice-room/call/engine/ui/devices';
 import type * as deviceControls from '@voice-room/call/engine/ui/devices';
 import WidgetShell from '../src/WidgetShell.vue';
 import { createWidgetSession, widgetSessionKey } from '../src/session';
 
 vi.mock('@voice-room/call/engine/ui/devices', async (importOriginal) => {
   const original = await importOriginal<typeof deviceControls>();
-  return { ...original, refreshDevices: vi.fn(async () => []) };
+  return { ...original, refreshDevices: vi.fn(async () => []), switchNoiseMode: vi.fn(async () => undefined) };
 });
 
 const parentOrigin = 'https://game.test';
@@ -141,12 +141,17 @@ test('the in-call dock keeps per-participant controls available from their video
 test('the dock opens a separate device menu from each group and toggles headphones', async () => {
   renderShell();
   await fireEvent.click(await screen.findByRole('button', { name: 'Выбрать микрофон' }));
-  expect(screen.getByLabelText('Шумоподавление')).toBeTruthy();
+  expect(screen.getByRole('combobox', { name: 'Микрофон' })).toBeTruthy();
+  const noise = screen.getByRole('combobox', { name: 'Шумоподавление' });
+  noise.focus();
+  await userEvent.keyboard('{ArrowDown}{Home}{ArrowDown}{Enter}');
+  expect(noise.textContent).toContain('Браузерное');
+  expect(switchNoiseMode).toHaveBeenCalledOnce();
   await fireEvent.click(screen.getByRole('button', { name: 'Выбрать динамик' }));
-  expect(screen.getByLabelText('Вывод звука')).toBeTruthy();
-  expect(screen.queryByLabelText('Шумоподавление')).toBeNull();
+  expect(screen.getByRole('combobox', { name: 'Вывод звука' })).toBeTruthy();
+  expect(screen.queryByRole('combobox', { name: 'Шумоподавление' })).toBeNull();
   await fireEvent.click(screen.getByRole('button', { name: 'Выбрать камеру' }));
-  expect(screen.getByLabelText('Камера', { exact: true })).toBeTruthy();
+  expect(screen.getByRole('combobox', { name: 'Камера' })).toBeTruthy();
   expect(refreshDevices).toHaveBeenCalledTimes(3);
   await fireEvent.click(screen.getByRole('button', { name: 'Выключить звук' }));
   expect(state.localAppAudioSuppressed).toBe(true);

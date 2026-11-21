@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Button, Callout } from '@voice-room/ui/components';
+import { Button, Callout, Dialog } from '@voice-room/ui/components';
 import { t } from '@/shared/i18n';
 import { MonitorSmartphone } from '@lucide/vue';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
@@ -12,8 +12,7 @@ import {
   type RecoveryCodesStatus
 } from '@/api/auth';
 import { getAppRealtime } from '@/api/realtime';
-import { Dialog } from '@/shared/ui';
-import { iconMd } from '@/shared/ui/icons';
+import { iconMd } from '@voice-room/ui/icon-defaults';
 import {
   loginAlertDevice,
   loginAlertHeadline,
@@ -119,7 +118,13 @@ function close(): void {
 
 <template>
   <!-- A security question outranks every other dialog in the lobby (_login-alert.scss lifts it). -->
-  <Dialog :open="open" :title="secured ? t('Защитите аккаунт') : t('Новый вход в аккаунт')" :on-close="close" size="sm">
+  <Dialog
+    layer="security"
+    :open="open"
+    :title="secured ? t('Защитите аккаунт') : t('Новый вход в аккаунт')"
+    :on-close="close"
+    size="sm"
+  >
     <div class="login-alert">
       <Callout
         v-if="secured"

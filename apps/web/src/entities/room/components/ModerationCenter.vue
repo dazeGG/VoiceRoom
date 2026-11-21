@@ -9,8 +9,8 @@ import type { Ban as RoomBan } from '@voice-room/shared/contracts/moderation';
 import { onMounted, ref } from 'vue';
 import { fetchActiveBans } from '@/api/moderation';
 import EmojiText from '@/shared/chat/EmojiText.vue';
-import { Avatar } from '@/shared/ui';
-import { iconMd, iconSm } from '@/shared/ui/icons';
+import { Avatar, Button } from '@voice-room/ui/components';
+import { iconMd, iconSm } from '@voice-room/ui/icon-defaults';
 import { banExpiryLabel, banSubjectName, liftRoomBan, type ModerationNotice } from '../room-moderation';
 
 const props = withDefaults(defineProps<{ roomId: string; onNotify?: ModerationNotice }>(), { onNotify: () => {} });
@@ -74,7 +74,7 @@ onMounted(() => {
 
     <div v-if="error" class="room-bans__error" role="alert">
       <span>{{ error }}</span>
-      <button type="button" @click="load(true)">{{ t('Повторить') }}</button>
+      <Button variant="ghost" size="sm" @click="load(true)">{{ t('Повторить') }}</Button>
     </div>
 
     <p v-if="loading" class="room-bans__loading" aria-live="polite">{{ t('Загружаем…') }}</p>
@@ -102,20 +102,28 @@ onMounted(() => {
             </span>
             <p v-if="ban.reason" class="room-ban__reason">{{ ban.reason }}</p>
           </div>
-          <button
+          <Button
+            variant="ghost"
+            size="sm"
             class="settings__unblock-button room-ban__unblock"
-            type="button"
             :aria-label="t('Снять блокировку {p0}', { p0: banSubjectName(ban) })"
             :disabled="liftingId === ban.id"
             @click="lift(ban)"
           >
             {{ liftingId === ban.id ? t('Снимаем…') : t('Разблокировать') }}
-          </button>
+          </Button>
         </li>
       </ul>
-      <button v-if="nextCursor" class="room-bans__more" type="button" :disabled="loadingMore" @click="load(false)">
+      <Button
+        v-if="nextCursor"
+        variant="outline"
+        size="md"
+        class="room-bans__more"
+        :disabled="loadingMore"
+        @click="load(false)"
+      >
         {{ loadingMore ? t('Загружаем…') : t('Показать ещё') }}
-      </button>
+      </Button>
     </template>
   </section>
 </template>

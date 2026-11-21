@@ -1,8 +1,7 @@
 <script setup lang="ts">
-import { Tag } from '@voice-room/ui/components';
+import { Tag, Popover, TagCount } from '@voice-room/ui/components';
 import { t } from '@/shared/i18n';
 import { computed } from 'vue';
-import { Popover } from '@/shared/ui';
 import ReactorList from './ReactorList.vue';
 import Emoji from './Emoji.vue';
 import type { ReactionStore } from './reaction-store';
@@ -45,17 +44,14 @@ const summaries = computed(() => props.store.forMessage(props.messageId));
           :aria-label="t('Пользователи с реакцией {p0}', { p0: summary.emoji })"
         >
           <template #trigger="{ open, toggle, panelId }">
-            <button
-              class="reaction-summary__count"
-              type="button"
-              :aria-label="t('Показать пользователей: {p0}', { p0: summary.count })"
+            <TagCount
+              :count="summary.count"
+              :label="t('Показать пользователей: {p0}', { p0: summary.count })"
               aria-haspopup="dialog"
               :aria-expanded="open"
               :aria-controls="panelId"
               @click="toggle"
-            >
-              {{ summary.count }}
-            </button>
+            />
           </template>
           <template #content="{ close }">
             <ReactorList :store="store" :message-id="messageId" :emoji="summary.emoji" @close="close()" />

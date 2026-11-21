@@ -2,7 +2,6 @@
 // Svelte: DeleteAccountDialog.svelte <style>.
 //
 // Svelte class -> BEM class (block "delete-account")
-//   .delete-account-layer .ui-dialog-overlay -> .ui-overlay:has(.delete-account)
 //     (the Dialog portals its overlay to <body>, so a wrapper cannot style it;
 //     the settings overlay sits at z-index 60)
 //   .delete-account-text, -error     -> .delete-account__text, __error
@@ -12,10 +11,6 @@
 //   .delete-account-room strong      -> .delete-account__room-name
 //   .delete-account-room small       -> .delete-account__room-fate
 //   .settings-field-label, .settings-input -> settings__field-label, settings__input
-
-.ui-overlay:has(.delete-account) {
-  z-index: 100;
-}
 
 .delete-account {
   display: grid;

@@ -8,3 +8,8 @@ export interface TagProps {
   removable?: boolean;
   disabled?: boolean;
 }
+
+export interface TagCountProps {
+  count: number;
+  label: string;
+}

@@ -63,7 +63,7 @@ async function renderBubble(options: BubbleOptions = {}) {
 /** The class names of the parts in the message body, in order. */
 function partOrder(row: HTMLElement): string[] {
   const body = row.firstElementChild;
-  return [...(body?.children ?? [])].map((part) => part.classList[0] ?? '');
+  return [...(body?.children ?? [])].map((part) => [...part.classList].find((name) => !name.startsWith('ui-')) ?? '');
 }
 
 test('a room message shows its quote, text, then pictures, and marks the menu and a mention', async () => {

@@ -78,3 +78,15 @@
     }
   }
 }
+
+.ui-textarea--mono :is(.ui-textarea__control, .ui-textarea__mirror) {
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.ui-textarea--compact :is(.ui-textarea__control, .ui-textarea__mirror) {
+  min-height: var(--size-44);
+  max-height: calc(var(--size-44) * 2);
+  padding: var(--space-12);
+  line-height: var(--size-16);
+}

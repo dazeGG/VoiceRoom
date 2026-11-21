@@ -1,7 +1,6 @@
 <script setup lang="ts">
-import { Button, Callout } from '@voice-room/ui/components';
+import { Button, Callout, Dialog } from '@voice-room/ui/components';
 import { t } from '@/shared/i18n';
-import { Dialog } from '@/shared/ui';
 
 defineProps<{ open: boolean }>();
 

@@ -1,29 +1,17 @@
-// MascotIcon (shared/ui/MascotIcon).
-//
-// Svelte class -> BEM class
-//   .mascot-icon, --blink/--look/--scare -> unchanged
-//   .mascot-head       -> .mascot-icon__head
-//   .mascot-eye        -> .mascot-icon__eye
-//   .mascot-eyes       -> .mascot-icon__eyes
-//   .mascot-scare      -> .mascot-icon__scare
-//   .mascot-eyes-fade  -> .mascot-icon__eyes-fade
-//   .mascot-x-fade     -> .mascot-icon__x-fade
-// The keyframes keep their names (Svelte scoped them; here they are global and unique).
-
-.mascot-icon__head {
+.ui-mascot-icon__head {
   fill: var(--vr-accent);
 }
 
-.mascot-icon__eye {
+.ui-mascot-icon__eye {
   fill: var(--vr-accent);
 }
 
-.mascot-icon--blink .mascot-icon__eyes {
+.ui-mascot-icon--blink .ui-mascot-icon__eyes {
   transform-origin: 50px 55px;
   animation: mascot-blink 4.2s ease-in-out infinite;
 }
 
-.mascot-icon--look .mascot-icon__eyes {
+.ui-mascot-icon--look .ui-mascot-icon__eyes {
   animation: mascot-look 5.5s ease-in-out infinite;
 }
 
@@ -58,20 +46,20 @@
   }
 }
 
-.mascot-icon--scare {
+.ui-mascot-icon--scare {
   cursor: pointer;
 }
 
-.mascot-icon__scare {
+.ui-mascot-icon__scare {
   transform-origin: 50px 60px;
   animation: mascot-scare 1.8s ease-out forwards;
 }
 
-.mascot-icon__eyes-fade {
+.ui-mascot-icon__eyes-fade {
   animation: mascot-eyes-out 1.8s linear forwards;
 }
 
-.mascot-icon__x-fade {
+.ui-mascot-icon__x-fade {
   opacity: 0;
   fill: none;
   stroke: var(--vr-accent);
@@ -82,13 +70,13 @@
 
 // Hovering replays the scare: swap to identically-defined "-replay" keyframes,
 // since re-triggering the same forwards animation name is a no-op in CSS.
-.mascot-icon--scare:hover .mascot-icon__scare {
+.ui-mascot-icon--scare:hover .ui-mascot-icon__scare {
   animation-name: mascot-scare-replay;
 }
-.mascot-icon--scare:hover .mascot-icon__eyes-fade {
+.ui-mascot-icon--scare:hover .ui-mascot-icon__eyes-fade {
   animation-name: mascot-eyes-out-replay;
 }
-.mascot-icon--scare:hover .mascot-icon__x-fade {
+.ui-mascot-icon--scare:hover .ui-mascot-icon__x-fade {
   animation-name: mascot-x-in-replay;
 }
 
@@ -186,15 +174,15 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .mascot-icon__eyes,
-  .mascot-icon__scare,
-  .mascot-icon__eyes-fade {
+  .ui-mascot-icon__eyes,
+  .ui-mascot-icon__scare,
+  .ui-mascot-icon__eyes-fade {
     animation: none !important;
   }
-  .mascot-icon__eyes-fade {
+  .ui-mascot-icon__eyes-fade {
     opacity: 0 !important;
   }
-  .mascot-icon__x-fade {
+  .ui-mascot-icon__x-fade {
     animation: none !important;
     opacity: 1 !important;
   }

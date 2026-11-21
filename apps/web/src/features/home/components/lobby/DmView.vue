@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { badgeOf } from '@/shared/badges';
 import { t } from '@/shared/i18n';
 import { User } from '@lucide/vue';
 import { computed, onMounted, ref } from 'vue';
@@ -9,8 +10,8 @@ import { AttachmentDrop } from '@/shared/chat/attachment-drop';
 import EmojiText from '@/shared/chat/EmojiText.vue';
 import { DEFAULT_FREQUENT_REACTIONS, loadFrequentReactions } from '@/shared/chat/frequent-reactions';
 import { effectivePresenceStatus, presenceStatusLabel } from '@/shared/presence';
-import { AccountBadge, Avatar } from '@/shared/ui';
-import { iconMd } from '@/shared/ui/icons';
+import { AccountBadge, Avatar, Pressable } from '@voice-room/ui/components';
+import { iconMd } from '@voice-room/ui/icon-defaults';
 import { displayNameOf } from '@/shared/utils/display-name';
 import { useLobby } from '../../model/lobby-context';
 import { useToastsStore } from '../../model/toasts.store';
@@ -58,7 +59,7 @@ const drop = new AttachmentDrop({
   >
     <AttachmentDropOverlay v-if="drop.active" />
     <div class="dm-view__col">
-      <button v-if="peer" class="dm-view__head" type="button" @click="lobby.toggleProfile">
+      <Pressable v-if="peer" class="dm-view__head" @click="lobby.toggleProfile">
         <Avatar
           :name="displayNameOf(peer)"
           :src="peer.avatarUrl"
@@ -73,7 +74,7 @@ const drop = new AttachmentDrop({
         />
         <div class="dm-view__head-text">
           <div class="dm-view__head-name">
-            <EmojiText :text="displayNameOf(peer)" /><AccountBadge :user-id="peer.id" />
+            <EmojiText :text="displayNameOf(peer)" /><AccountBadge :badge="badgeOf(peer.id)" />
           </div>
           <div :class="['dm-view__head-status', `dm-view__head-status--${presence}`]">
             {{ presenceStatusLabel(presence).toLowerCase() }}
@@ -82,7 +83,7 @@ const drop = new AttachmentDrop({
         <span class="dm-view__head-icon">
           <User v-bind="iconMd" aria-hidden="true" />
         </span>
-      </button>
+      </Pressable>
 
       <DmConversation
         v-if="peerId"

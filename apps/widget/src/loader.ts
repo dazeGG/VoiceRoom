@@ -6,6 +6,7 @@ import {
   parseWidgetMessage,
   widgetOrigin
 } from '@voice-room/shared/contracts/widget';
+import { createWidgetLauncher } from '@voice-room/ui/components/widget-launcher';
 import { createWidgetFrameExpansion } from '@voice-room/ui/widget-frame-expansion';
 
 export function mountWidget(container: HTMLElement, serviceOrigin: string): () => void {
@@ -46,12 +47,12 @@ export function mountWidget(container: HTMLElement, serviceOrigin: string): () =
     frame.style.position = 'absolute';
     frame.style.inset = '0';
   }
-  const launcher = document.createElement('button');
-  launcher.type = 'button';
-  launcher.textContent = 'VoiceRoom';
-  launcher.setAttribute('aria-expanded', 'true');
-  launcher.hidden = config.mode !== 'floating';
-  launcher.style.cssText = `--vr-bg:${config.background};--vr-text:${config.text};--vr-accent:${config.accent};display:${config.mode === 'floating' ? 'inline-flex' : 'none'};box-sizing:border-box;align-items:center;justify-content:center;min-height:48px;max-width:100%;padding:0 16px;border:1px solid color-mix(in srgb,var(--vr-text) 12%,transparent);border-radius:999px;background:var(--vr-bg);color:var(--vr-text);font:600 13px/1.2 Onest,system-ui,sans-serif;overflow-wrap:anywhere;cursor:pointer;touch-action:manipulation;pointer-events:auto;outline-color:var(--vr-accent);outline-offset:3px;`;
+  const launcher = createWidgetLauncher({
+    floating,
+    background: config.background,
+    text: config.text,
+    accent: config.accent
+  });
   const sendExpandState = (active: boolean) =>
     frame.contentWindow?.postMessage({ version: 1, type: 'expandState', nonce, active }, origin);
   const expansion = createWidgetFrameExpansion(frame, container, sendExpandState);
@@ -64,11 +65,11 @@ export function mountWidget(container: HTMLElement, serviceOrigin: string): () =
     frame.style.position = next ? 'absolute' : 'relative';
     frame.style.pointerEvents = next ? 'none' : 'auto';
     if (floating) container.style.width = next ? 'max-content' : floatingWidth;
-    launcher.setAttribute('aria-expanded', String(!next));
-    if (next) launcher.focus();
+    launcher.setExpanded(!next);
+    if (next) launcher.element.focus();
     else frame.focus();
   };
-  launcher.addEventListener('click', () => collapse(!collapsed));
+  launcher.element.addEventListener('click', () => collapse(!collapsed));
   if (floating) {
     const [vertical, horizontal] = config.corner.split('-');
     container.style.cssText += `;position:fixed;${vertical}:${config.offset}px;${horizontal}:${config.offset}px;display:flex;flex-direction:column;align-items:${horizontal === 'right' ? 'flex-end' : 'flex-start'};gap:12px;width:${floatingWidth};max-width:calc(100vw - ${2 * config.offset}px);box-sizing:border-box;pointer-events:none;z-index:2147483000;`;
@@ -87,11 +88,11 @@ export function mountWidget(container: HTMLElement, serviceOrigin: string): () =
     }
     if (message.type === 'callState') {
       if (message.active === false) expansion.closeImmediately();
-      launcher.textContent = message.active ? 'VoiceRoom • В звонке' : 'VoiceRoom';
+      launcher.setInCall(message.active === true);
     }
   };
   window.addEventListener('message', receive);
-  container.append(frame, launcher);
+  container.append(frame, launcher.element);
   let disposed = false;
   const observer = new MutationObserver(() => {
     if (!container.isConnected) dispose();
@@ -103,7 +104,7 @@ export function mountWidget(container: HTMLElement, serviceOrigin: string): () =
     window.removeEventListener('message', receive);
     expansion.dispose();
     frame.remove();
-    launcher.remove();
+    launcher.element.remove();
     if (fillHeight) {
       container.style.setProperty('contain', previousContain);
       container.style.setProperty('contain-intrinsic-height', previousIntrinsicHeight);

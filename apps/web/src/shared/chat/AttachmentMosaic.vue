@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Pressable } from '@voice-room/ui/components';
 import { t } from '@/shared/i18n';
 import { computed, ref } from 'vue';
 import type { Attachment } from '@voice-room/shared/contracts/messages';
@@ -29,9 +30,9 @@ const items = computed(() =>
     }"
   >
     <template v-for="(attachment, index) in attachments.slice(0, 4)" :key="attachment.id">
-      <button
+      <Pressable
         v-if="attachment.state === 'ready'"
-        type="button"
+        inset
         class="attachment-mosaic__tile"
         :data-attachment-id="attachment.id"
         :aria-label="t('Открыть изображение {p0} из {p1}', { p0: index + 1, p1: attachments.length })"
@@ -47,7 +48,7 @@ const items = computed(() =>
           :height="attachment.height ?? undefined"
           decoding="async"
         />
-      </button>
+      </Pressable>
       <div
         v-else
         class="attachment-mosaic__tile attachment-mosaic__unavailable"

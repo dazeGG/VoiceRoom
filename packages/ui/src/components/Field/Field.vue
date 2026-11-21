@@ -23,7 +23,7 @@ provide(fieldControlKey, control);
 
 <template>
   <div class="ui-field">
-    <Label class="ui-field__label" :for="controlId">
+    <Label class="ui-field__label" :class="{ 'ui-field__label--hidden': visuallyHiddenLabel }" :for="controlId">
       {{ label + (optional ? ' ' : '')
       }}<span v-if="optional" class="ui-field__optional">{{ t('· необязательно') }}</span>
     </Label>
@@ -32,6 +32,8 @@ provide(fieldControlKey, control);
       <CircleAlert aria-hidden="true" />
       {{ error }}
     </p>
-    <p v-else-if="hint" :id="hintId" class="ui-field__hint">{{ hint }}</p>
+    <p v-else-if="hint" :id="hintId" class="ui-field__hint" :class="{ 'ui-field__hint--hidden': visuallyHiddenHint }">
+      {{ hint }}
+    </p>
   </div>
 </template>

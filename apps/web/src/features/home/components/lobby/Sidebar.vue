@@ -1,5 +1,18 @@
 <script setup lang="ts">
-import { Tooltip, IconButton, Badge } from '@voice-room/ui/components';
+import { badgeOf } from '@/shared/badges';
+import {
+  Tooltip,
+  IconButton,
+  Badge,
+  AccountBadge,
+  Avatar,
+  Button,
+  DropdownMenu,
+  MenuLabel,
+  MenuRadioGroup,
+  MenuRadioItem,
+  Pressable
+} from '@voice-room/ui/components';
 import { t } from '@/shared/i18n';
 import { Bell, BellOff, LayoutDashboard, Settings, UserPlus, Users } from '@lucide/vue';
 import { computed, ref } from 'vue';
@@ -9,8 +22,7 @@ import EmojiText from '@/shared/chat/EmojiText.vue';
 import BetaMark from '@/shared/components/BetaMark.vue';
 import { useNotificationPreferencesStore } from '@/shared/notifications/preferences.store';
 import { effectivePresenceStatus, normalizePresenceStatus, type PresenceStatus } from '@/shared/presence';
-import { AccountBadge, Avatar, Button, DropdownMenu, MenuLabel, MenuRadioGroup, MenuRadioItem } from '@/shared/ui';
-import { iconSm } from '@/shared/ui/icons';
+import { iconSm } from '@voice-room/ui/icon-defaults';
 import { displayNameOf } from '@/shared/utils/display-name';
 import type { ActiveVoice } from '../../model/active-voice';
 import type { FriendMenuTarget } from '../../model/friend-menu';
@@ -128,10 +140,10 @@ async function selectStatus(value: string | undefined, close: () => void): Promi
   <aside class="sidebar">
     <div class="sidebar__top">
       <Tooltip :text="t('Главная')"
-        ><button class="sidebar__head" type="button" @click="emit('goHome')">
+        ><Pressable class="sidebar__head" @click="emit('goHome')">
           <span class="sidebar__brand-mark" role="img" aria-label="VoiceRoom"></span>
           <span class="sidebar__brand-name">VoiceRoom</span>
-          <BetaMark /></button
+          <BetaMark /></Pressable
       ></Tooltip>
       <IconButton v-if="adminUrl" :label="t('Открыть админку')" :size="32" @click="openAdmin">
         <LayoutDashboard aria-hidden="true" />
@@ -166,11 +178,11 @@ async function selectStatus(value: string | undefined, close: () => void): Promi
         </Button>
       </div>
       <template v-else>
-        <button
+        <Pressable
           v-for="entry in sortedFriends"
           :key="entry.user.id"
+          inset
           class="sidebar__row"
-          type="button"
           aria-haspopup="menu"
           :aria-current="lobby.selectedFriendId === entry.user.id && lobby.view === 'dm' ? 'true' : undefined"
           @click="lobby.openDm(entry.user.id)"
@@ -192,7 +204,7 @@ async function selectStatus(value: string | undefined, close: () => void): Promi
           <div class="sidebar__row-body">
             <div class="sidebar__row-title">
               <div class="sidebar__row-name">
-                <EmojiText :text="displayNameOf(entry.user)" /><AccountBadge :user-id="entry.user.id" />
+                <EmojiText :text="displayNameOf(entry.user)" /><AccountBadge :badge="badgeOf(entry.user.id)" />
               </div>
               <span
                 v-if="notificationPreferences.mutedPeerIds.includes(entry.user.id)"
@@ -210,7 +222,7 @@ async function selectStatus(value: string | undefined, close: () => void): Promi
             :tone="notificationPreferences.mutedPeerIds.includes(entry.user.id) ? 'muted' : 'accent'"
             :count="entry.unreadCount"
           />
-        </button>
+        </Pressable>
       </template>
     </div>
 
@@ -219,7 +231,7 @@ async function selectStatus(value: string | undefined, close: () => void): Promi
     <div class="sidebar__profile">
       <DropdownMenu side="top" align="start" :aria-label="t('Статус пользователя')" focus-checked>
         <template #trigger>
-          <button type="button" class="sidebar__profile-user">
+          <Pressable class="sidebar__profile-user">
             <Avatar
               :name="selfName"
               :src="user.avatarUrl"
@@ -236,7 +248,7 @@ async function selectStatus(value: string | undefined, close: () => void): Promi
               <span class="sidebar__profile-name"><EmojiText :text="selfName" /></span>
               <span class="sidebar__profile-handle">@{{ user.login }}</span>
             </span>
-          </button>
+          </Pressable>
         </template>
         <template #content="{ close }">
           <MenuLabel :text="t('Статус')" />

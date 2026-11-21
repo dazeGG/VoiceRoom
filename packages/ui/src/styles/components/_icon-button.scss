@@ -139,3 +139,23 @@
     transform: translate(-50%, -50%);
   }
 }
+
+.ui-icon-button--pill {
+  border-radius: var(--radius-pill);
+}
+
+.ui-icon-button--scrim {
+  background: var(--vr-scrim);
+  backdrop-filter: blur(var(--space-12));
+}
+
+.ui-icon-button__dot {
+  position: absolute;
+  inset-block-start: var(--space-6);
+  inset-inline-end: var(--space-8);
+  width: var(--space-6);
+  height: var(--space-6);
+  border-radius: var(--radius-pill);
+  background: var(--vr-accent);
+  pointer-events: none;
+}

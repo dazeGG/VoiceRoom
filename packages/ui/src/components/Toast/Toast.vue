@@ -87,7 +87,7 @@ function dismissFocusedToast(event: KeyboardEvent, id: string): void {
     <Teleport to="body">
       <ToastViewport
         :id="id"
-        class="ui-toaststack"
+        :class="['ui-toaststack', viewportClass]"
         role="list"
         :hotkey="['F8']"
         :label="(key) => `${t('Уведомления')} (${key})`"

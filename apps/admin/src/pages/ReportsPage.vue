@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Pressable } from '@voice-room/ui/components';
 import { Flag, UserRound } from '@lucide/vue';
 import { computed, ref, useId, watch } from 'vue';
 import type { AdminReport } from '@voice-room/shared/contracts/reports';
@@ -105,7 +106,7 @@ async function decide(action: 'remove_message' | 'dismiss'): Promise<void> {
       <Card v-if="messages.length === 0"><EmptyState title="Открытых жалоб нет" compact /></Card>
       <ul v-else class="admin-reports__cards" aria-label="Открытые жалобы">
         <li v-for="{ key, reports: group, latest: report } in messages" :key="key">
-          <button type="button" class="admin-report-card" :aria-pressed="key === current?.key" @click="selected = key">
+          <Pressable class="admin-report-card" :aria-pressed="key === current?.key" @click="selected = key">
             <span class="admin-report-card__top">
               <Pill tone="danger" compact>{{ REPORT_REASON_LABELS[report.reason] }}</Pill>
               <span v-if="group.length > 1" class="admin-report-card__many" :aria-label="reportsWord(group.length)"
@@ -121,7 +122,7 @@ async function decide(action: 'remove_message' | 'dismiss'): Promise<void> {
             <span class="admin-report-card__place"
               >{{ placeOf(report) }} · {{ report.target.authorName || 'Без имени' }}</span
             >
-          </button>
+          </Pressable>
         </li>
       </ul>
     </section>

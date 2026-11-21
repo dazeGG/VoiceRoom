@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // Friend picker behind "Пригласить". Inviting no longer requires being in the
 // room, so this works the same from the lobby and from inside the room.
-import { Combobox, type ComboboxOption } from '@voice-room/ui/components';
+import { Combobox, type ComboboxOption, Avatar, MenuItem } from '@voice-room/ui/components';
 import { Search } from '@lucide/vue';
 import { t } from '@/shared/i18n';
 import { computed, ref } from 'vue';
@@ -9,7 +9,6 @@ import type { Friend } from '@/api/friends';
 import { ringRoomFriend } from '@/api/rooms';
 import EmojiText from '@/shared/chat/EmojiText.vue';
 import { effectivePresenceStatus } from '@/shared/presence';
-import { Avatar, MenuItem } from '@/shared/ui';
 
 const props = withDefaults(
   defineProps<{

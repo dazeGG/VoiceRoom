@@ -47,24 +47,6 @@
   border-radius: var(--radius-8);
   background: var(--vr-surface-2);
 
-  button {
-    display: block;
-    margin-inline-start: auto;
-    border: 0;
-    border-radius: var(--radius-6);
-    padding: var(--space-4) var(--space-8);
-    background: transparent;
-    color: var(--vr-text-muted);
-    font: inherit;
-    font-size: 0.75em;
-    cursor: pointer;
-
-    &:hover {
-      background: var(--vr-hover);
-      color: var(--vr-text);
-    }
-  }
-
   pre {
     overflow-x: auto;
     margin: 0;
@@ -72,6 +54,11 @@
     white-space: pre;
     overflow-wrap: normal;
   }
+}
+
+.structured-message__copy {
+  display: flex;
+  margin-inline-start: auto;
 }
 
 .structured-message__mention {

@@ -5,8 +5,8 @@ import { computed, ref, watch } from 'vue';
 import { banRoomPeer, kickRoomPeer, setRoomPeerServerMute, undoRoomBan } from '@/api/rooms';
 import { useSessionStore } from '@/features/auth/session.store';
 import { useProfileCardUiStore } from '@/entities/profile-card/profile-card-ui.store';
-import { ContextMenu, MenuSeparator, MenuItem, MenuLabel, Slider } from '@/shared/ui';
-import { iconMd, iconSm } from '@/shared/ui/icons';
+import { ContextMenu, MenuSeparator, MenuItem, MenuLabel, Slider } from '@voice-room/ui/components';
+import { iconMd, iconSm } from '@voice-room/ui/icon-defaults';
 import {
   getParticipantAudioPreference,
   getParticipantAudioPreferenceKey,

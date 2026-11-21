@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Button } from '@voice-room/ui/components';
 // A page whose code did not download after the retries (lazy-page.ts). A full
 // load is the way out: it fetches the current build, as the router does for a
 // route that fails to load.
@@ -15,7 +16,7 @@ function reload(): void {
         <p class="auth-session-error__kicker">{{ t('Страница не загрузилась') }}</p>
         <h1 class="auth-session-error__title">{{ t('Не удалось загрузить VoiceRoom') }}</h1>
         <p class="auth-session-error__text">{{ t('Проверьте подключение к интернету и обновите страницу.') }}</p>
-        <button type="button" @click="reload">{{ t('Обновить страницу') }}</button>
+        <Button variant="primary" size="sm" @click="reload">{{ t('Обновить страницу') }}</Button>
       </div>
     </main>
   </div>

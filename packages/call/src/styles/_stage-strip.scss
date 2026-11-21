@@ -69,30 +69,13 @@ body.stage-summary--hidden {
 }
 
 .stage-strip__toggle {
-  display: grid;
-  width: var(--size-32);
-  height: var(--size-32);
   flex: 0 0 auto;
-  place-items: center;
-  border: 1px solid var(--vr-line-strong);
-  border-radius: var(--radius-8);
-  padding: 0;
-  background: var(--vr-bg);
-  color: var(--vr-text-2);
-  transition:
-    background 140ms var(--ease-out),
-    border-color 140ms var(--ease-out),
-    color 140ms var(--ease-out);
 
-  &:hover {
-    border-color: color-mix(in oklch, var(--vr-line-strong), var(--vr-text) 18%);
-    background: var(--vr-surface-3);
-    color: var(--vr-text);
+  &[hidden] {
+    display: none;
   }
 
   svg {
-    width: var(--icon-18);
-    height: var(--icon-18);
     transition: transform 160ms var(--ease-out);
   }
 }

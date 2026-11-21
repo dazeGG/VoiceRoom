@@ -94,6 +94,7 @@ async function grant(): Promise<void> {
       <ul v-else class="admin-staff__list" aria-label="Сотрудники">
         <li v-for="member in staff" :key="member.user.id" class="admin-staff__member">
           <ListItem
+            class="admin-staff__member-details"
             :avatar="{
               name: member.user.displayName,
               src: member.user.avatarUrl,
