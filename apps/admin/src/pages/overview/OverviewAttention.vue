@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { Flag } from '@lucide/vue';
 import { computed } from 'vue';
-import type { AdminOverview, LiveRoom, RoomCall } from '@voice-room/shared/contracts/admin';
-import { REPORT_REASON_LABELS } from '@voice-room/shared/report-labels';
+import type { AdminOverview, LiveRoom, RoomCall } from '@voiceroom/shared/contracts/admin';
+import { REPORT_REASON_LABELS } from '@voiceroom/shared/report-labels';
 import { formatCount, formatPeople, formatSince, plural } from '../../format.ts';
 import type { AdminTab, CallRef } from '../../tabs.ts';
 import { Button, Card, Pill, Section } from '../../ui';

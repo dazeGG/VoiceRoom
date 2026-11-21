@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { Button } from '@voice-room/ui/components';
+import { Button } from '@voiceroom/ui-kit/components';
 import { t } from '@/shared/i18n';
 import { DoorOpen } from '@lucide/vue';
 import type { DirectMessageInvite } from '@/api/dm';
 import EmojiText from '@/shared/chat/EmojiText.vue';
-import { iconMd } from '@voice-room/ui/icon-defaults';
+import { iconMd } from '@voiceroom/ui-kit/icon-defaults';
 import { inviteAnswerable, inviteTitle } from '../../../model/dm-invite-view';
 
 defineProps<{

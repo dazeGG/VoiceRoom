@@ -1,5 +1,5 @@
 import { t } from '@/shared/i18n';
-import { PowChallenge } from '@voice-room/shared/contracts/ops';
+import { PowChallenge } from '@voiceroom/shared/contracts/ops';
 import { api } from './client';
 
 const ROOM_PROOF_BATCH_SIZE = 250;

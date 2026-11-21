@@ -1,11 +1,11 @@
 import { reactive } from 'vue';
-import type { MembershipMember } from '@voice-room/shared/contracts/membership';
-import { MAX_MENTION_CANDIDATES, MAX_MENTIONS_PER_MESSAGE } from '@voice-room/shared/mentions';
+import type { MembershipMember } from '@voiceroom/shared/contracts/membership';
+import { MAX_MENTION_CANDIDATES, MAX_MENTIONS_PER_MESSAGE } from '@voiceroom/shared/mentions';
 import {
   MAX_ROOM_MESSAGE_LENGTH,
   type RoomMessageContentV1,
   type RoomMessageSegmentV1
-} from '@voice-room/shared/room-message-content';
+} from '@voiceroom/shared/room-message-content';
 import { keysOf } from '@/shared/utils/collections';
 
 export type SelectedMention = Pick<MembershipMember, 'userId' | 'displayName' | 'login'>;

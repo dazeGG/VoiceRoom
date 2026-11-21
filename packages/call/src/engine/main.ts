@@ -1,5 +1,5 @@
 import { getCallPorts } from './ports';
-import { t } from '@voice-room/ui/i18n';
+import { t } from '@voiceroom/ui-kit/i18n';
 import { GATE_THRESHOLD_MIN_DB } from './core/config';
 import { useRoomDeviceUiStore } from './core/room-device-ui.store';
 import { useStartUiStore } from './core/start-ui.store';

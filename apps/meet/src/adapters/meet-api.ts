@@ -1,15 +1,15 @@
-import { wait } from '@voice-room/call/engine/core/utils';
-import { LiveKitAdmission, type LiveKitTokenBody } from '@voice-room/shared/contracts/admission';
-import { isErrorCode, type ErrorCode } from '@voice-room/shared/contracts/errors';
+import { wait } from '@voiceroom/call/engine/core/utils';
+import { LiveKitAdmission, type LiveKitTokenBody } from '@voiceroom/shared/contracts/admission';
+import { isErrorCode, type ErrorCode } from '@voiceroom/shared/contracts/errors';
 import {
   MeetOwnerAuthorization,
   type MeetOwnerExchangeBody,
   MeetRoomCreated,
   MeetRoomStatus
-} from '@voice-room/shared/contracts/rooms';
-import { isRecord } from '@voice-room/shared/guards';
-import { parseRuntimeConfig, resolveLiveKitConnectUrls, type RuntimeConfigV1 } from '@voice-room/shared/runtime-config';
-import { t } from '@voice-room/ui/i18n';
+} from '@voiceroom/shared/contracts/rooms';
+import { isRecord } from '@voiceroom/shared/guards';
+import { parseRuntimeConfig, resolveLiveKitConnectUrls, type RuntimeConfigV1 } from '@voiceroom/shared/runtime-config';
+import { t } from '@voiceroom/ui-kit/i18n';
 import type { Static, TSchema } from 'typebox';
 import { Value } from 'typebox/value';
 

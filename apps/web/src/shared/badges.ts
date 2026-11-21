@@ -3,7 +3,7 @@
 // them once and every surface looks a name up by its account id.
 
 import { reactive } from 'vue';
-import type { AccountBadge } from '@voice-room/shared/contracts/users';
+import type { AccountBadge } from '@voiceroom/shared/contracts/users';
 
 export type { AccountBadge };
 

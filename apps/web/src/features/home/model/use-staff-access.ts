@@ -3,8 +3,8 @@
 
 import { t } from '@/shared/i18n';
 import { ref } from 'vue';
-import type { AdminReportsEvent } from '@voice-room/shared/contracts/admin';
-import { describeFiledReport } from '@voice-room/shared/report-labels';
+import type { AdminReportsEvent } from '@voiceroom/shared/contracts/admin';
+import { describeFiledReport } from '@voiceroom/shared/report-labels';
 import { fetchStaffAccess } from '@/api/staff';
 import { getAppRealtime } from '@/api/realtime';
 import { useToastsStore, type ToastOptions } from './toasts.store';

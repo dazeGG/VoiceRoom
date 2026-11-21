@@ -26,14 +26,18 @@ const ROOM_LOBBY_IMPORTS = {
   message: 'A room does not import the lobby: use @/entities or the room social context.'
 };
 const PORTABLE_IMPORT_MESSAGE = 'Portable packages cannot import applications or app aliases.';
-const PORTABLE_APP_IMPORTS = '^@(?:/|$)|^@voice-room/(?:admin|api|docs|meet|site|web|widget)(?:/|$)|(?:^|/)apps(?:/|$)';
+const PORTABLE_APP_IMPORTS = '^@(?:/|$)|^@voiceroom/(?:admin|api|docs|meet|site|web|widget)(?:/|$)|(?:^|/)apps(?:/|$)';
+// The kit is the bottom UI layer: of our packages it may import only @voiceroom/shared.
+const KIT_IMPORTS = `${PORTABLE_APP_IMPORTS}|^@voiceroom/(?:ui|call)(?:/|$)`;
+const KIT_IMPORT_MESSAGE =
+  'The UI kit imports only @voiceroom/shared of our packages; move what it needs into the kit.';
 
 export default tseslint.config(
   {
     ignores: [
       '**/node_modules/**',
       '**/dist/**',
-      'packages/ui/storybook-static/**',
+      'packages/ui-kit/storybook-static/**',
       'coverage/**',
       '.omc/**',
       '.omx/**',
@@ -54,7 +58,7 @@ export default tseslint.config(
   // Vue rules apply to the Vue apps and the portable packages.
   ...vue.configs['flat/recommended-error'].map((config) => ({
     ...config,
-    files: config.files ?? ['apps/{admin,meet,web,widget}/**/*.{ts,vue}', 'packages/{call,ui}/**/*.{ts,vue}']
+    files: config.files ?? ['apps/{admin,meet,web,widget}/**/*.{ts,vue}', 'packages/{call,ui,ui-kit}/**/*.{ts,vue}']
   })),
   {
     languageOptions: {
@@ -71,6 +75,7 @@ export default tseslint.config(
           './apps/widget/tsconfig.test.json',
           './packages/shared/tsconfig.test.json',
           './packages/ui/tsconfig.json',
+          './packages/ui-kit/tsconfig.json',
           './packages/call/tsconfig.json',
           './scripts/tsconfig.json'
         ],
@@ -167,7 +172,7 @@ export default tseslint.config(
     rules: { 'no-console': 'error' }
   },
   {
-    files: ['packages/{call,ui}/**/*.{ts,tsx,mts,js,jsx,mjs,vue}'],
+    files: ['packages/{call,ui,ui-kit}/**/*.{ts,tsx,mts,js,jsx,mjs,vue}'],
     rules: {
       'no-restricted-imports': [
         'error',
@@ -183,6 +188,27 @@ export default tseslint.config(
         ].map((selector) => ({
           selector: `${selector}=/${PORTABLE_APP_IMPORTS.replaceAll('/', '\\/')}/]`,
           message: PORTABLE_IMPORT_MESSAGE
+        }))
+      ]
+    }
+  },
+  {
+    // The kit is the bottom UI layer (DESIGN.md, "Kit only"): everything else
+    // depends on it, so it may not depend on @voiceroom/ui or @voiceroom/call.
+    files: ['packages/ui-kit/**/*.{ts,tsx,mts,js,jsx,mjs,vue}'],
+    ignores: ['packages/ui-kit/.storybook/**'],
+    rules: {
+      'no-restricted-imports': ['error', { patterns: [{ regex: KIT_IMPORTS, message: KIT_IMPORT_MESSAGE }] }],
+      'no-restricted-syntax': [
+        'error',
+        ...OVERLOAD_CAST,
+        ...[
+          'ImportExpression[source.value',
+          'ImportExpression[source.quasis.0.value.cooked',
+          'TSImportType[source.value'
+        ].map((selector) => ({
+          selector: `${selector}=/${KIT_IMPORTS.replaceAll('/', '\\/')}/]`,
+          message: KIT_IMPORT_MESSAGE
         }))
       ]
     }
@@ -234,8 +260,8 @@ export default tseslint.config(
         {
           patterns: [
             {
-              group: ['@voice-room/call/engine/**', '**/call/src/engine/**'],
-              message: 'Import the call engine from @voice-room/call/engine, its public index.'
+              group: ['@voiceroom/call/engine/**', '**/call/src/engine/**'],
+              message: 'Import the call engine from @voiceroom/call/engine, its public index.'
             }
           ]
         }

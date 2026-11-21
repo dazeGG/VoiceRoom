@@ -6,8 +6,8 @@ import test, { type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
 import fastify from 'fastify';
 
-import type { Failure } from '@voice-room/shared/contracts/http';
-import type { AttachmentAnswer, AttachmentDraft } from '@voice-room/shared/contracts/media';
+import type { Failure } from '@voiceroom/shared/contracts/http';
+import type { AttachmentAnswer, AttachmentDraft } from '@voiceroom/shared/contracts/media';
 import type { ApiContext } from '../src/app/context.ts';
 import { registerMediaRoutes } from '../src/domains/media/media.routes.ts';
 import type { MediaService } from '../src/domains/media/media.service.ts';

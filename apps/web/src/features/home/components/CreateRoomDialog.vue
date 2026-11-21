@@ -1,11 +1,20 @@
 <script setup lang="ts">
-import { Field, Spinner, TextField, Tabs, TabsPanel, type TabOption, Button, Dialog } from '@voice-room/ui/components';
+import {
+  Field,
+  Spinner,
+  TextField,
+  Tabs,
+  TabsPanel,
+  type TabOption,
+  Button,
+  Dialog
+} from '@voiceroom/ui-kit/components';
 import { useLocalizedText } from '@/shared/i18n/localized-text';
 
 import { t } from '@/shared/i18n';
 import { Check, Clock } from '@lucide/vue';
 import { computed, ref, useId, watch } from 'vue';
-import { iconSm } from '@voice-room/ui/icon-defaults';
+import { iconSm } from '@voiceroom/ui-kit/icon-defaults';
 
 const props = defineProps<{ open: boolean; creating: boolean }>();
 

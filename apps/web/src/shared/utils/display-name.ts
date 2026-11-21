@@ -1,4 +1,4 @@
-import { isDeletedAccountLogin } from '@voice-room/shared/account-security';
+import { isDeletedAccountLogin } from '@voiceroom/shared/account-security';
 import { t } from '@/shared/i18n';
 
 /** What a person is called on screen: their display name, or their login when none is set. */

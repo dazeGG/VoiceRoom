@@ -1,4 +1,4 @@
-import { t } from '@voice-room/ui/i18n';
+import { t } from '@voiceroom/ui-kit/i18n';
 import { UserFacingError } from '../core/utils.ts';
 
 export class LiveKitTransportError extends Error {

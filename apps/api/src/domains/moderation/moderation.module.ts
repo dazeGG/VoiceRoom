@@ -2,7 +2,7 @@
 // they revoke in the same transaction) and owner message deletion.
 
 import type pg from 'pg';
-import type { ServerEnvelope } from '@voice-room/shared/realtime';
+import type { ServerEnvelope } from '@voiceroom/shared/realtime';
 import { buildServerEnvelope } from '../../realtime/envelope.ts';
 import type { CursorCodec } from '../../platform/cursor-codec.ts';
 import { createAttachmentRepository } from '../media/attachment.repository.ts';

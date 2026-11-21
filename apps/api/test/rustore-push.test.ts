@@ -4,7 +4,7 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { parseNativePushData } from '@voice-room/shared/native-push';
+import { parseNativePushData } from '@voiceroom/shared/native-push';
 import {
   RUSTORE_MESSAGE_MAX_BYTES,
   buildRuStoreMessage,

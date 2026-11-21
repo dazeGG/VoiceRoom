@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia';
 import { computed, shallowRef } from 'vue';
-import type { StaffMe, StaffPermission } from '@voice-room/shared/contracts/staff';
+import type { StaffMe, StaffPermission } from '@voiceroom/shared/contracts/staff';
 import { ApiError } from './api/client.ts';
 import { fetchMe, signOut } from './api/staff.ts';
 

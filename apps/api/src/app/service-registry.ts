@@ -7,7 +7,7 @@
 // socket fan-out) comes in through `deps`.
 
 import { roomAllowsSurface } from '../domains/rooms/room-surface.policy.ts';
-import { type ServerEnvelope } from '@voice-room/shared/realtime';
+import { type ServerEnvelope } from '@voiceroom/shared/realtime';
 import pg from 'pg';
 import { createDbPool } from '../platform/db/pool.ts';
 import { kyselyOn } from '../platform/db/kysely.ts';

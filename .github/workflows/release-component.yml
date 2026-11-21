@@ -85,9 +85,9 @@ jobs:
           paths=("apps/$COMPONENT")
           case "$COMPONENT" in
             api) paths+=(packages/shared docker-compose.yml) ;;
-            web) paths+=(packages/call packages/shared packages/ui Caddyfile config/caddy) ;;
+            web) paths+=(packages/call packages/shared packages/ui packages/ui-kit Caddyfile config/caddy) ;;
             admin) paths+=(packages/shared config/caddy/admin-csp.caddy) ;;
-            widget) paths+=(packages/call packages/shared packages/ui) ;;
+            widget) paths+=(packages/call packages/shared packages/ui packages/ui-kit) ;;
           esac
           previous="$(git tag --list "$COMPONENT/v*" --merged "$GITHUB_SHA" --sort=-version:refname |
             awk -v current="$GITHUB_REF_NAME" '$0 != current && !seen { print; seen=1 }')"

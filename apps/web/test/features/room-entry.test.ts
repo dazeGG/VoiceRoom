@@ -9,11 +9,11 @@ import { stubFetch, type Reply } from '../fixtures/fetch';
 import { lobbyRoom, roomStatus } from '../fixtures/answers';
 import { authUser } from '../fixtures/users';
 
-vi.mock('@voice-room/call/engine/ui/devices', async (importOriginal) => ({
+vi.mock('@voiceroom/call/engine/ui/devices', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   refreshDevices: vi.fn(async () => {})
 }));
-vi.mock('@voice-room/call/engine/ui/toast', () => ({ showToast: vi.fn() }));
+vi.mock('@voiceroom/call/engine/ui/toast', () => ({ showToast: vi.fn() }));
 
 async function load(routes: Record<string, Reply>) {
   vi.resetModules();
@@ -21,16 +21,16 @@ async function load(routes: Record<string, Reply>) {
   await installWebCallPortsForTest();
   const fetchStub = stubFetch(routes);
   const shell = { roomLeft: vi.fn<(roomId: string) => void>(), roomsChanged: vi.fn<(roomId: string) => void>() };
-  const { setRoomShell } = await import('@voice-room/call/engine/core/embed');
+  const { setRoomShell } = await import('@voiceroom/call/engine/core/embed');
   setRoomShell(shell);
-  const room = await import('@voice-room/call/engine/room/room');
-  const { state } = await import('@voice-room/call/engine/core/room-runtime.store');
-  const names = await import('@voice-room/call/engine/ui/names');
-  const { useGuestNameUiStore } = await import('@voice-room/call/engine/core/guest-name-ui.store');
+  const room = await import('@voiceroom/call/engine/room/room');
+  const { state } = await import('@voiceroom/call/engine/core/room-runtime.store');
+  const names = await import('@voiceroom/call/engine/ui/names');
+  const { useGuestNameUiStore } = await import('@voiceroom/call/engine/core/guest-name-ui.store');
   const { usePageStore } = await import('@/stores/page.store');
   const guestNameUi = useGuestNameUiStore();
   const page = usePageStore();
-  const { showToast } = await import('@voice-room/call/engine/ui/toast');
+  const { showToast } = await import('@voiceroom/call/engine/ui/toast');
   state.roomId = 'abc123';
   return { ...room, ...names, state, guestNameUi, page, fetchStub, shell, showToast: vi.mocked(showToast) };
 }

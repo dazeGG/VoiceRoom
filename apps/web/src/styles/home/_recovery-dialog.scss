@@ -11,7 +11,7 @@
 //   .recovery-confirm                -> .recovery-dialog__confirm
 //   [data-recovery-codes]            -> .recovery-dialog__codes (focus target)
 //   .settings-field-label, .settings-input -> settings__field-label, settings__input
-@use 'pkg:@voice-room/ui/styles/mixins' as *;
+@use 'pkg:@voiceroom/ui-kit/styles/mixins' as *;
 
 .recovery-dialog__form {
   display: grid;

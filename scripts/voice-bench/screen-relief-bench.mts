@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium, type Browser, type CDPSession, type Page } from '@playwright/test';
 import { createServer } from 'vite';
-import { isArray, isRecord } from '@voice-room/shared/guards';
+import { isArray, isRecord } from '@voiceroom/shared/guards';
 import {
   cpuMillisecondsPerSecond,
   evaluateRelief,
@@ -22,9 +22,9 @@ const webRoot = fileURLToPath(new URL('../../apps/web', import.meta.url));
 const browserModule = String.raw`
 import { createPinia, setActivePinia } from 'pinia';
 setActivePinia(createPinia());
-const { state } = await import('@voice-room/call/engine/core/room-runtime.store');
-const { applyVideoReliefToScreen } = await import('@voice-room/call/engine/services/video-relief');
-const { getScreenProfile, getScreenPublishVideoOptions } = await import('@voice-room/call/engine/media/profiles');
+const { state } = await import('@voiceroom/call/engine/core/room-runtime.store');
+const { applyVideoReliefToScreen } = await import('@voiceroom/call/engine/services/video-relief');
+const { getScreenProfile, getScreenPublishVideoOptions } = await import('@voiceroom/call/engine/media/profiles');
 const send = new RTCPeerConnection({iceServers:[]}), receive = new RTCPeerConnection({iceServers:[]});
 const video = document.createElement('video');
 video.autoplay=true; video.muted=true; video.playsInline=true; video.width=1280; video.height=720;

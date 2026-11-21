@@ -1,6 +1,6 @@
 import type * as WebLog from '@/shared/log';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
-import { startScreenSustainedDiagnostics } from '@voice-room/call/engine/media/screen-sustained-diagnostics';
+import { startScreenSustainedDiagnostics } from '@voiceroom/call/engine/media/screen-sustained-diagnostics';
 import type { LogContext } from '@/shared/log';
 import { installWebCallPortsForTest } from '../helpers/call-ports';
 

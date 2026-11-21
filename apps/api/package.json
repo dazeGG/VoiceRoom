@@ -1,5 +1,5 @@
 {
-  "name": "@voice-room/api",
+  "name": "@voiceroom/api",
   "version": "1.0.1",
   "private": true,
   "type": "module",
@@ -19,7 +19,7 @@
     "@fastify/multipart": "^10.1.0",
     "@fastify/type-provider-typebox": "^6.1.0",
     "@fastify/websocket": "^11.2.0",
-    "@voice-room/shared": "file:../../packages/shared",
+    "@voiceroom/shared": "file:../../packages/shared",
     "fastify": "^5.12.5",
     "kysely": "^0.29.6",
     "livekit-server-sdk": "^2.15.4",

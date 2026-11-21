@@ -4,13 +4,13 @@
 // microphone stops processing audio without breaking push-to-talk.
 
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
-import { state } from '@voice-room/call/engine/core/room-runtime.store';
-import { createInitialRoomState } from '@voice-room/call/engine/model/room-state';
+import { state } from '@voiceroom/call/engine/core/room-runtime.store';
+import { createInitialRoomState } from '@voiceroom/call/engine/model/room-state';
 import {
   startCpuPressureWatch,
   stopCpuPressureWatch,
   type PressureObserverConstructor
-} from '@voice-room/call/engine/services/cpu-pressure';
+} from '@voiceroom/call/engine/services/cpu-pressure';
 import {
   finishCallQuality,
   QUALITY_MIN_CALL_MS,
@@ -21,20 +21,20 @@ import {
   recordReconnect,
   startCallQuality,
   type PollCounts
-} from '@voice-room/call/engine/room/call-quality';
+} from '@voiceroom/call/engine/room/call-quality';
 import {
   PROCESSING_RESUME_CHECK_MS,
   PROCESSING_SUSPEND_DELAY_MS,
   syncMicrophoneProcessing
-} from '@voice-room/call/engine/services/microphone-service';
+} from '@voiceroom/call/engine/services/microphone-service';
 import { clearLogBuffer, readLogBuffer } from '@/shared/log';
-import type { MicProcessor } from '@voice-room/call/engine/core/types';
+import type { MicProcessor } from '@voiceroom/call/engine/core/types';
 import { defined, instanceOf } from '../helpers/assert';
 import { installWebCallPortsForTest } from '../helpers/call-ports';
 import { FakeMediaStream } from '../helpers/fake-media';
 
 const reopenMicrophone = vi.hoisted(() => vi.fn(async () => true));
-vi.mock('@voice-room/call/engine/ui/devices', () => ({ reopenMicrophoneAfterOwnedResumeFailure: reopenMicrophone }));
+vi.mock('@voiceroom/call/engine/ui/devices', () => ({ reopenMicrophoneAfterOwnedResumeFailure: reopenMicrophone }));
 
 beforeEach(installWebCallPortsForTest);
 beforeEach(() => {

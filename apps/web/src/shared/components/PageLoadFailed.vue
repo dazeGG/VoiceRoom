@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Button } from '@voice-room/ui/components';
+import { Button } from '@voiceroom/ui-kit/components';
 // A page whose code did not download after the retries (lazy-page.ts). A full
 // load is the way out: it fetches the current build, as the router does for a
 // route that fails to load.

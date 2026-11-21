@@ -1,4 +1,4 @@
-import { PowChallenge } from '@voice-room/shared/contracts/ops';
+import { PowChallenge } from '@voiceroom/shared/contracts/ops';
 import { widgetRequest } from './http';
 export async function widgetProof(signal?: AbortSignal): Promise<{ challenge: string; nonce: number } | null> {
   const challenge = await widgetRequest('/api/pow-challenge', PowChallenge, undefined, signal);

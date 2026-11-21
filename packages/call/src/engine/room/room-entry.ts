@@ -1,7 +1,7 @@
 // Who is entering a room: a room link checks the account directly (and saves
 // the room to it), and otherwise asks a guest for a name.
 
-import { t } from '@voice-room/ui/i18n';
+import { t } from '@voiceroom/ui-kit/i18n';
 import { createLogger, errorContext } from '../diagnostics';
 import { getRoomShell, isRoomEmbedded } from '../core/embed';
 import { getCallPorts } from '../ports';

@@ -1,4 +1,4 @@
-import type { Relationship } from '@voice-room/shared/contracts/social';
+import type { Relationship } from '@voiceroom/shared/contracts/social';
 import type { PresenceStatus } from '@/shared/presence';
 
 /**

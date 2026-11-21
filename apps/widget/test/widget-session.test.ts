@@ -2,17 +2,17 @@ import { webcrypto } from 'node:crypto';
 import { createPinia, setActivePinia } from 'pinia';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { nextTick } from 'vue';
-import { callPageState } from '@voice-room/call/engine/core/call-page.store';
-import { state } from '@voice-room/call/engine/core/room-runtime.store';
-import { mountGuestRoomClient } from '@voice-room/call/engine/main';
-import { joinRoom } from '@voice-room/call/engine/room/room';
-import type { RoomCapabilities } from '@voice-room/shared/contracts/rooms';
-import type { ServerFrame } from '@voice-room/shared/contracts/realtime';
-import { buildServerEnvelope, parseClientEnvelope } from '@voice-room/shared/realtime';
+import { callPageState } from '@voiceroom/call/engine/core/call-page.store';
+import { state } from '@voiceroom/call/engine/core/room-runtime.store';
+import { mountGuestRoomClient } from '@voiceroom/call/engine/main';
+import { joinRoom } from '@voiceroom/call/engine/room/room';
+import type { RoomCapabilities } from '@voiceroom/shared/contracts/rooms';
+import type { ServerFrame } from '@voiceroom/shared/contracts/realtime';
+import { buildServerEnvelope, parseClientEnvelope } from '@voiceroom/shared/realtime';
 import { createWidgetSession } from '../src/session';
 
-vi.mock('@voice-room/call/engine/main', () => ({ mountGuestRoomClient: vi.fn() }));
-vi.mock('@voice-room/call/engine/room/room', () => ({ joinRoom: vi.fn() }));
+vi.mock('@voiceroom/call/engine/main', () => ({ mountGuestRoomClient: vi.fn() }));
+vi.mock('@voiceroom/call/engine/room/room', () => ({ joinRoom: vi.fn() }));
 
 const roomId = 'roomCode';
 const roomPath = `/api/widget/rooms/${roomId}`;

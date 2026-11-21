@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/vue';
 import { expect, test } from 'vitest';
-import { Spinner } from '@voice-room/ui/components';
+import { Spinner } from '@voiceroom/ui-kit/components';
 
 test('a spinner exposes a status with the default localized loading label', () => {
   render(Spinner);

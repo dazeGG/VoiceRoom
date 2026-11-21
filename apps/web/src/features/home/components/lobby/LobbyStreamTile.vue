@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { Pressable } from '@voice-room/ui/components';
+import { Pressable } from '@voiceroom/ui-kit/components';
 import { t } from '@/shared/i18n';
 import { computed } from 'vue';
 import type { RoomPeer } from '@/api/rooms';
-import { getAvatarPresentation } from '@voice-room/ui/avatar-presentation';
+import { getAvatarPresentation } from '@voiceroom/ui/avatar-presentation';
 
 const props = defineProps<{ peer: RoomPeer }>();
 

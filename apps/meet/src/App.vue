@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { Select } from '@voice-room/ui/components';
+import { Select } from '@voiceroom/ui-kit/components';
 import { AudioLines } from '@lucide/vue';
-import { t } from '@voice-room/ui/i18n';
-import { APP_LOCALES, isAppLocale } from '@voice-room/shared/localization';
+import { t } from '@voiceroom/ui-kit/i18n';
+import { APP_LOCALES, isAppLocale } from '@voiceroom/shared/localization';
 import { locale, setMeetLocale } from '@/i18n';
 
 const languageNames = { ru: 'Русский', en: 'English', fr: 'Français' };

@@ -1,10 +1,10 @@
-import { isArray, isRecord } from '@voice-room/shared/guards';
+import { isArray, isRecord } from '@voiceroom/shared/guards';
 import {
   DEFAULT_RUNTIME_CONFIG,
   parseRuntimeConfig,
   resolveLiveKitConnectUrls,
   type RuntimeConfigV1
-} from '@voice-room/shared/runtime-config';
+} from '@voiceroom/shared/runtime-config';
 
 const CONFIG_PATH = '/runtime-config.json';
 const LOAD_TIMEOUT_MS = 2_000;

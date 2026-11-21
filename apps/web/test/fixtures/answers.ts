@@ -2,11 +2,11 @@
 // API client checks every success body against its schema, so a stub that
 // leaves a field out is refused the way a broken server would be.
 
-import type { MembershipMember } from '@voice-room/shared/contracts/membership';
-import type { DirectHistoryMessage, DirectMessage } from '@voice-room/shared/contracts/messages';
-import type { LobbyRoom, RoomCreated, RoomStatus } from '@voice-room/shared/contracts/rooms';
-import type { Friend, IncomingRequest, OutgoingRequest } from '@voice-room/shared/contracts/social';
-import type { PublicUser } from '@voice-room/shared/contracts/users';
+import type { MembershipMember } from '@voiceroom/shared/contracts/membership';
+import type { DirectHistoryMessage, DirectMessage } from '@voiceroom/shared/contracts/messages';
+import type { LobbyRoom, RoomCreated, RoomStatus } from '@voiceroom/shared/contracts/rooms';
+import type { Friend, IncomingRequest, OutgoingRequest } from '@voiceroom/shared/contracts/social';
+import type { PublicUser } from '@voiceroom/shared/contracts/users';
 
 export function roomStatus(overrides: Partial<RoomStatus> = {}): RoomStatus {
   return {

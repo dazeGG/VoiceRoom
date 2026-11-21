@@ -3,18 +3,18 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { createPinia, setActivePinia } from 'pinia';
 import { markRaw, reactive } from 'vue';
-import { defaultWidgetConfig, type WidgetConfig } from '@voice-room/shared/contracts/widget';
-import { state } from '@voice-room/call/engine/core/room-runtime.store';
-import { getParticipantAudioPreference, getParticipantAudioPreferenceKey } from '@voice-room/call/engine/core/settings';
-import { createInitialRoomState } from '@voice-room/call/engine/model/room-state';
-import { installCallPorts } from '@voice-room/call/engine/ports';
-import { createParticipant } from '@voice-room/call/engine/room/participants';
-import { refreshDevices, switchNoiseMode } from '@voice-room/call/engine/ui/devices';
-import type * as deviceControls from '@voice-room/call/engine/ui/devices';
+import { defaultWidgetConfig, type WidgetConfig } from '@voiceroom/shared/contracts/widget';
+import { state } from '@voiceroom/call/engine/core/room-runtime.store';
+import { getParticipantAudioPreference, getParticipantAudioPreferenceKey } from '@voiceroom/call/engine/core/settings';
+import { createInitialRoomState } from '@voiceroom/call/engine/model/room-state';
+import { installCallPorts } from '@voiceroom/call/engine/ports';
+import { createParticipant } from '@voiceroom/call/engine/room/participants';
+import { refreshDevices, switchNoiseMode } from '@voiceroom/call/engine/ui/devices';
+import type * as deviceControls from '@voiceroom/call/engine/ui/devices';
 import WidgetShell from '../src/WidgetShell.vue';
 import { createWidgetSession, widgetSessionKey } from '../src/session';
 
-vi.mock('@voice-room/call/engine/ui/devices', async (importOriginal) => {
+vi.mock('@voiceroom/call/engine/ui/devices', async (importOriginal) => {
   const original = await importOriginal<typeof deviceControls>();
   return { ...original, refreshDevices: vi.fn(async () => []), switchNoiseMode: vi.fn(async () => undefined) };
 });

@@ -2,7 +2,7 @@
 // texts and codes are the ones the web client already handles.
 
 import type { TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
-import { RoomIdParams } from '@voice-room/shared/contracts/http';
+import { RoomIdParams } from '@voiceroom/shared/contracts/http';
 import {
   DeleteRoomMessageBody,
   EditRoomMessageBody,
@@ -14,9 +14,9 @@ import {
   RoomChat,
   RoomMessageAnswer,
   RoomRead
-} from '@voice-room/shared/contracts/messages';
+} from '@voiceroom/shared/contracts/messages';
 import type { FastifyInstance, FastifyReply } from 'fastify';
-import { cleanGuestName, normalizePeerId, normalizeRoomId, normalizeSessionToken } from '@voice-room/shared/validation';
+import { cleanGuestName, normalizePeerId, normalizeRoomId, normalizeSessionToken } from '@voiceroom/shared/validation';
 import type { ApiContext } from '../../app/context.ts';
 import { failure, optionalJsonBody } from '../../platform/http/http-kit.ts';
 import { roomBanned } from '../rooms/room-views.ts';

@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/vue';
 import userEvent from '@testing-library/user-event';
 import { expect, test, vi } from 'vitest';
 import { defineComponent, h } from 'vue';
-import { Dialog, HotkeyField } from '@voice-room/ui/components';
+import { Dialog, HotkeyField } from '@voiceroom/ui-kit/components';
 
 const binding = { altKey: false, code: 'KeyK', ctrlKey: true, metaKey: false, shiftKey: false };
 

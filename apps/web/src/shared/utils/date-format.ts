@@ -1,7 +1,7 @@
 // How dates and relative times are written in the interface. One locale, one wording.
 
 import { getLocale, t } from '@/shared/i18n';
-import { localeTag } from '@voice-room/shared/localization';
+import { localeTag } from '@voiceroom/shared/localization';
 
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;

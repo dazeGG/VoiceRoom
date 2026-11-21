@@ -1,4 +1,4 @@
-import { t } from '@voice-room/ui/i18n';
+import { t } from '@voiceroom/ui-kit/i18n';
 import { state } from '../core/room-runtime.store';
 import type { DesktopCaptureSource, ScreenSourceSelection } from '../core/types';
 import { createAbortError } from '../core/utils';

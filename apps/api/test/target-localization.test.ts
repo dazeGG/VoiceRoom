@@ -4,10 +4,10 @@ import { createTestDatabase } from './db-harness.ts';
 import { createDeviceTokenRepository } from '../src/domains/notifications/device-token.repository.ts';
 import { createPushSubscriptionRepository } from '../src/domains/notifications/push-subscription.repository.ts';
 import { createPushService } from '../src/lib/push-service.ts';
-import { parsePushPayload } from '@voice-room/shared/notifications';
-import type { PushLocaleIntent } from '@voice-room/shared/contracts/push-registration';
+import { parsePushPayload } from '@voiceroom/shared/notifications';
+import type { PushLocaleIntent } from '@voiceroom/shared/contracts/push-registration';
 import { createNotificationDispatch } from '../src/domains/notifications/notification-dispatch.ts';
-import { localizeNotificationPayload } from '@voice-room/shared/notification-text';
+import { localizeNotificationPayload } from '@voiceroom/shared/notification-text';
 import type { AccountMessage } from '../src/realtime/account-events.ts';
 import { storedUser } from './fakes/index.ts';
 

@@ -3,7 +3,7 @@
 // out everywhere, and the mark next to its name.
 
 import type pg from 'pg';
-import type { AccountBadge } from '@voice-room/shared/contracts/users';
+import type { AccountBadge } from '@voiceroom/shared/contracts/users';
 import { kyselyOn } from '../../platform/db/kysely.ts';
 import { toDate } from '../../platform/epoch-millis.ts';
 import { lockUser } from './user.repository.ts';

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { RefreshCw } from '@lucide/vue';
-import { Badge, IconButton } from '@voice-room/ui/components';
+import { Badge, IconButton } from '@voiceroom/ui-kit/components';
 import { onBeforeUnmount, onMounted, ref } from 'vue';
 import type { RefreshStatus } from '../frame.ts';
 

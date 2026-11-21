@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { VoiceQuality } from '@voice-room/shared/contracts/admin';
+import type { VoiceQuality } from '@voiceroom/shared/contracts/admin';
 import { qualityAlarming, qualityLong, qualityShort } from './quality.ts';
 import QualityBar from './QualityBar.vue';
 

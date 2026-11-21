@@ -1,7 +1,7 @@
 import type { TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
 import type { FastifyInstance } from 'fastify';
-import { Health } from '@voice-room/shared/contracts/ops';
-import { Failure } from '@voice-room/shared/contracts/http';
+import { Health } from '@voiceroom/shared/contracts/ops';
+import { Failure } from '@voiceroom/shared/contracts/http';
 import { failure } from '../../platform/http/http-kit.ts';
 
 export function registerHealthRoutes(

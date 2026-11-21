@@ -6,7 +6,7 @@
 import { cleanup, screen, waitFor, within } from '@testing-library/vue';
 import userEvent from '@testing-library/user-event';
 import { afterEach, expect, test, vi } from 'vitest';
-import type { AdminReport } from '@voice-room/shared/contracts/reports';
+import type { AdminReport } from '@voiceroom/shared/contracts/reports';
 import ReportsPage from '../src/pages/ReportsPage.vue';
 import { stubApi as stubRoutes } from './helpers/api.ts';
 import { renderAsStaff } from './helpers/render.ts';

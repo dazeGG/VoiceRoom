@@ -2,7 +2,7 @@ import { render, screen } from '@testing-library/vue';
 import userEvent from '@testing-library/user-event';
 import { expect, test, vi } from 'vitest';
 import { defineComponent, h, ref } from 'vue';
-import { Toggle } from '@voice-room/ui/components';
+import { Toggle } from '@voiceroom/ui-kit/components';
 
 test('click and Space flip aria-pressed and emit update:pressed', async () => {
   const view = render(Toggle, { slots: { default: 'Жирный' } });

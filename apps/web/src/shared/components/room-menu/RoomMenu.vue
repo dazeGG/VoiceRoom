@@ -2,13 +2,13 @@
 import EmojiText from '@/shared/chat/EmojiText.vue';
 import { t } from '@/shared/i18n';
 import { BellOff, ChevronDown } from '@lucide/vue';
-import type { RoomRelationship } from '@voice-room/shared/contracts/rooms';
+import type { RoomRelationship } from '@voiceroom/shared/contracts/rooms';
 import { computed } from 'vue';
 import type { Friend } from '@/api/friends';
 import { useNotificationPreferencesStore } from '@/shared/notifications/preferences.store';
-import { Avatar, DropdownMenu, Ellipsis, Pressable } from '@voice-room/ui/components';
-import { iconSm } from '@voice-room/ui/icon-defaults';
-import type { PopoverPlacement } from '@voice-room/ui/components';
+import { Avatar, DropdownMenu, Ellipsis, Pressable } from '@voiceroom/ui-kit/components';
+import { iconSm } from '@voiceroom/ui-kit/icon-defaults';
+import type { PopoverPlacement } from '@voiceroom/ui-kit/components';
 import RoomMenuContent from './RoomMenuContent.vue';
 
 const props = withDefaults(

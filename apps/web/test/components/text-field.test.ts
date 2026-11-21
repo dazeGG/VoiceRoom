@@ -2,7 +2,7 @@ import { render, screen } from '@testing-library/vue';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, expect, test } from 'vitest';
 import { h } from 'vue';
-import { Field, Select, TextField } from '@voice-room/ui/components';
+import { Field, Select, TextField } from '@voiceroom/ui-kit/components';
 import { stubOverlayDom } from '../helpers/overlay-dom';
 
 beforeEach(stubOverlayDom);

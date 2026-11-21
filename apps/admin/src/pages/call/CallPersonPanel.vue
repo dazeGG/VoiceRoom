@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-import type { CallEvent } from '@voice-room/shared/contracts/admin';
-import { CONCEALMENT_THRESHOLDS } from '@voice-room/shared/network-quality';
+import type { CallEvent } from '@voiceroom/shared/contracts/admin';
+import { CONCEALMENT_THRESHOLDS } from '@voiceroom/shared/network-quality';
 import { formatClock, formatCount, formatDuration, formatMs, formatPercent } from '../../format.ts';
 import { Avatar, Button, Panel } from '../../ui';
 import type { CallPerson } from '../rooms/room-bits.ts';

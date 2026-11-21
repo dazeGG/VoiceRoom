@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Tooltip, IconButton, Avatar, Pressable, FileDrop } from '@voice-room/ui/components';
+import { Tooltip, IconButton, Avatar, Pressable, FileDrop } from '@voiceroom/ui-kit/components';
 // The room avatar in room settings: the avatar opens a file picker and a crop
 // dialog, a corner button removes it, and nothing reaches the server until the
 // settings are saved. Mount it per opening (and per room) to start from what
@@ -8,7 +8,7 @@ import { t } from '@/shared/i18n';
 import { Camera, X } from '@lucide/vue';
 import { computed, onBeforeUnmount, ref, shallowRef } from 'vue';
 import { AvatarCropDialog } from '@/shared/components/AvatarCropDialog';
-import { iconSm } from '@voice-room/ui/icon-defaults';
+import { iconSm } from '@voiceroom/ui-kit/icon-defaults';
 import type { RoomAvatarChange } from '../room-avatar-change';
 
 // Two roots (the field and the crop dialog): attributes go to the field.

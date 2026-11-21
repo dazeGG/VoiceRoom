@@ -1,4 +1,4 @@
-import { t } from '@voice-room/ui/i18n';
+import { t } from '@voiceroom/ui-kit/i18n';
 import { useRoomDeviceUiStore } from '../core/room-device-ui.store';
 import { state } from '../core/room-runtime.store';
 import { postState } from '../room/presence';

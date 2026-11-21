@@ -6,7 +6,7 @@ import { createPinia, setActivePinia } from 'pinia';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import RoomChatPanel from '@/features/room/components/RoomChatPanel.vue';
 import { clockTime } from '@/shared/utils/date-format.ts';
-import type { RoomMessage } from '@voice-room/shared/contracts/messages';
+import type { RoomMessage } from '@voiceroom/shared/contracts/messages';
 import { stubFetch } from '../fixtures/fetch.ts';
 import { installFakeWebSocket } from '../fixtures/fake-websocket.ts';
 

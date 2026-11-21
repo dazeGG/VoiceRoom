@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-import type { RoomCall } from '@voice-room/shared/contracts/admin';
+import type { RoomCall } from '@voiceroom/shared/contracts/admin';
 import { formatClock, formatDuration } from '../../format.ts';
 import { Avatar, Button, Pill } from '../../ui';
 import type { OriginPick } from './call-filters.ts';

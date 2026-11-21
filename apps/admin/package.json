@@ -1,5 +1,5 @@
 {
-  "name": "@voice-room/admin",
+  "name": "@voiceroom/admin",
   "version": "1.0.0",
   "private": true,
   "type": "module",
@@ -11,8 +11,9 @@
   },
   "dependencies": {
     "@lucide/vue": "^1.61.0",
-    "@voice-room/shared": "file:../../packages/shared",
-    "@voice-room/ui": "file:../../packages/ui",
+    "@voiceroom/shared": "file:../../packages/shared",
+    "@voiceroom/ui": "file:../../packages/ui",
+    "@voiceroom/ui-kit": "file:../../packages/ui-kit",
     "pinia": "^4.1.0",
     "vue": "^3.5.44"
   },

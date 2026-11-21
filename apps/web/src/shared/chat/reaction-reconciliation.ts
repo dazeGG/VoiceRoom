@@ -1,4 +1,4 @@
-import type { ReactionSummary } from '@voice-room/shared/contracts/messages';
+import type { ReactionSummary } from '@voiceroom/shared/contracts/messages';
 
 export type ReactionSnapshotView = ReactionSummary & { pending: boolean; error: string };
 

@@ -3,18 +3,18 @@
 
 import { createPinia, setActivePinia } from 'pinia';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
-import { state } from '@voice-room/call/engine/core/room-runtime.store';
-import { createInitialRoomState } from '@voice-room/call/engine/model/room-state';
+import { state } from '@voiceroom/call/engine/core/room-runtime.store';
+import { createInitialRoomState } from '@voiceroom/call/engine/model/room-state';
 import {
   clearAllSpeaking,
   createParticipant,
   detachLiveKitParticipant,
   syncPeers,
   updatePeerStatus
-} from '@voice-room/call/engine/room/participants';
-import { METER_INTERVAL_MS, startMeters, stopMeters } from '@voice-room/call/engine/media/meters';
-import type { Participant } from '@voice-room/call/engine/core/types';
-import type { MeterAnalyser } from '@voice-room/call/engine/model/participants';
+} from '@voiceroom/call/engine/room/participants';
+import { METER_INTERVAL_MS, startMeters, stopMeters } from '@voiceroom/call/engine/media/meters';
+import type { Participant } from '@voiceroom/call/engine/core/types';
+import type { MeterAnalyser } from '@voiceroom/call/engine/model/participants';
 import { defined } from '../helpers/assert';
 import { FakeMediaStream, FakeMediaStreamTrack } from '../helpers/fake-media';
 

@@ -1,4 +1,4 @@
-import { classifyPlatformPolicy, type PlatformPolicy, type PlatformSignals } from '@voice-room/shared/platform-class';
+import { classifyPlatformPolicy, type PlatformPolicy, type PlatformSignals } from '@voiceroom/shared/platform-class';
 
 // Vite has no `$app/environment`: the runtime says whether this is a browser, as in shared/log.ts.
 const browser = typeof window !== 'undefined' && typeof document !== 'undefined';

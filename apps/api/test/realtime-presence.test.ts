@@ -1,9 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { Preferences } from '@voice-room/shared/contracts/notifications';
-import { FriendList } from '@voice-room/shared/contracts/social';
-import type { PresenceStatus } from '@voice-room/shared/contracts/users';
+import { Preferences } from '@voiceroom/shared/contracts/notifications';
+import { FriendList } from '@voiceroom/shared/contracts/social';
+import type { PresenceStatus } from '@voiceroom/shared/contracts/users';
 import {
   acceptFirstFriendRequest,
   registerAccount,

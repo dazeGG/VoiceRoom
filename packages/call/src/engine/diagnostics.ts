@@ -1,7 +1,7 @@
-import { createLogger as createUiLogger, type LogLevel } from '@voice-room/ui/log';
+import { createLogger as createUiLogger, type LogLevel } from '@voiceroom/ui/log';
 import { getInstalledCallPorts } from './ports';
 
-export { errorContext, type LogContext } from '@voice-room/ui/log';
+export { errorContext, type LogContext } from '@voiceroom/ui/log';
 
 // Loggers can be created during import, before the host installs its sink.
 export function createLogger(namespace: string): ReturnType<typeof createUiLogger> {

@@ -3,7 +3,7 @@
 
 import { expect, test } from 'vitest';
 import { fetchThreadPage, respondRoomInvite } from '../../src/api/dm.ts';
-import type { DirectHistoryMessage } from '@voice-room/shared/contracts/messages';
+import type { DirectHistoryMessage } from '@voiceroom/shared/contracts/messages';
 import { directHistoryMessage, directMessage } from '../fixtures/answers.ts';
 import { stubFetch } from '../fixtures/fetch.ts';
 

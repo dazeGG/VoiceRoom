@@ -1,6 +1,11 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/vue';
 import userEvent from '@testing-library/user-event';
-import { Popover, SegmentControl, type PopoverContentState, type PopoverTriggerState } from '@voice-room/ui/components';
+import {
+  Popover,
+  SegmentControl,
+  type PopoverContentState,
+  type PopoverTriggerState
+} from '@voiceroom/ui-kit/components';
 import { expect, test, vi } from 'vitest';
 import { h, ref } from 'vue';
 import GlobalSearch from '../src/shell/GlobalSearch.vue';

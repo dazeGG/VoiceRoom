@@ -1,4 +1,4 @@
-import type { MemberPresenceStatus } from '@voice-room/shared/contracts/membership';
+import type { MemberPresenceStatus } from '@voiceroom/shared/contracts/membership';
 import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, expect, test, vi } from 'vitest';
 import { useRoomMembershipStore } from '@/entities/room/room-membership.store';

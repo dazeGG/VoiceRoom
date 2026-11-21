@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { IconButton } from '@voice-room/ui/components';
-import { t } from '@voice-room/ui/i18n';
-import { fitTiles } from '@voice-room/ui/tile-grid';
+import { IconButton } from '@voiceroom/ui-kit/components';
+import { t } from '@voiceroom/ui-kit/i18n';
+import { fitTiles } from '@voiceroom/ui/tile-grid';
 import { ChevronDown, ChevronLeft, ChevronRight } from '@lucide/vue';
 import { computed, ref, watch } from 'vue';
 import type { Participant } from '../engine/core/types';

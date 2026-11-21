@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { Toolbar, ToolbarToggle } from '@voice-room/ui/components';
-import { isApplePlatform } from '@voice-room/ui/hotkey';
+import { Toolbar, ToolbarToggle } from '@voiceroom/ui-kit/components';
+import { isApplePlatform } from '@voiceroom/ui-kit/hotkey';
 import { t } from '@/shared/i18n';
 import { Bold, CodeXml, Italic, Strikethrough } from '@lucide/vue';
 import { computed, ref, watch } from 'vue';

@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { test } from 'vitest';
 
 import { ApiError } from '@/api/client.ts';
-import { isRetryableLiveKitApiFailure, safeLiveKitCode } from '@voice-room/call/engine/services/livekit/transport';
+import { isRetryableLiveKitApiFailure, safeLiveKitCode } from '@voiceroom/call/engine/services/livekit/transport';
 
 test('a token request that got no answer is retried and logged as unavailable', () => {
   const unanswered = new ApiError('Сервер недоступен', 0, { code: 'unavailable' });

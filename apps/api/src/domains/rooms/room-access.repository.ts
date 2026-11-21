@@ -3,8 +3,8 @@
 
 import { sql } from 'kysely';
 import type pg from 'pg';
-import { RoomRelationship } from '@voice-room/shared/contracts/rooms';
-import { isOneOf } from '@voice-room/shared/guards';
+import { RoomRelationship } from '@voiceroom/shared/contracts/rooms';
+import { isOneOf } from '@voiceroom/shared/guards';
 import { transaction } from '../../platform/db/pool.ts';
 import { kyselyOn, type Database } from '../../platform/db/kysely.ts';
 import { toDate, toMillis } from '../../platform/epoch-millis.ts';

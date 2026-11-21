@@ -7,7 +7,7 @@
 import { cleanup, screen, waitFor, within } from '@testing-library/vue';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
-import type { AccountDetail, AccountRow, AccountsPage } from '@voice-room/shared/contracts/admin';
+import type { AccountDetail, AccountRow, AccountsPage } from '@voiceroom/shared/contracts/admin';
 import { forgetBadges, loadBadges } from '../src/badges.ts';
 import AccountsSection from '../src/pages/AccountsPage.vue';
 import { locationFromPath, pathOf } from '../src/tabs.ts';

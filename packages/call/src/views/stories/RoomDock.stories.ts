@@ -10,6 +10,21 @@ const meta = {
   title: 'Components/Call/RoomDock',
   component: RoomDock,
   tags: ['autodocs'],
+  parameters: {
+    docs: {
+      description: {
+        component: [
+          'Own call dock in `packages/call` for mute, devices and the other call controls.',
+          '',
+          '- Build it in `packages/call`, with a Tooltip and a device Popover.',
+          '- Use buttons of 44 (radius 12), a chevron of 24 and a shell radius of 20.',
+          '- Treat the pair of toggle plus chevron as one block of 44 in the state colour: `--vr-danger-off` when off, `--vr-accent-soft` when on.',
+          '- Label the buttons with a Tooltip that includes the shortcut, and change the label together with the state.',
+          '- Choose a device in a Popover that contains a Select sm, a Slider and a Switch sm.'
+        ].join('\n')
+      }
+    }
+  },
   args: {
     connection: { stateName: 'connected', label: 'Голос подключен · 24 мс', title: '' },
     callControls: microphone,

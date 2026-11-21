@@ -3,7 +3,7 @@
 // guest key so upgrading does not change the profile's identity. This is a
 // client-controlled correlation hint, never a credential or hardware id.
 
-import { normalizeGuestId } from '@voice-room/shared/validation';
+import { normalizeGuestId } from '@voiceroom/shared/validation';
 
 const STORAGE_KEY = 'voice-room:guest-id';
 

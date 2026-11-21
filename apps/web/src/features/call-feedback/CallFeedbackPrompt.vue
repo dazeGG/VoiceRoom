@@ -6,7 +6,7 @@
 // short thanks.
 import { t } from '@/shared/i18n';
 import { computed, ref, watch } from 'vue';
-import { Dialog } from '@voice-room/ui/components';
+import { Dialog } from '@voiceroom/ui-kit/components';
 import CallFeedbackCard from './CallFeedbackCard.vue';
 import { useCallFeedbackStore } from './call-feedback.store';
 

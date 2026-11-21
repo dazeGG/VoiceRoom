@@ -11,7 +11,7 @@ import { createAttachmentRepository } from '../src/domains/media/attachment.repo
 import { createTestDatabase } from './db-harness.ts';
 import { rollbackCountThrough } from './migration-steps.ts';
 import { Type } from 'typebox';
-import { Nullable } from '@voice-room/shared/contracts/http';
+import { Nullable } from '@voiceroom/shared/contracts/http';
 import { defined } from './helpers/assert-defined.ts';
 import { AnyRow, CountRow, queryRow, queryRows } from './helpers/checked.ts';
 const SILENT = { log() {}, info() {}, warn() {}, error() {} };

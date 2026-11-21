@@ -8,8 +8,8 @@ import { createAvatarKey, processAvatar } from '../../lib/avatar-processing.ts';
 import { validateAvatarKey } from '../../lib/avatar-storage.ts';
 import { codeOf } from '../../platform/error-code.ts';
 import { selfUser, type StoredUser } from '../account/user-records.ts';
-import type { SelfUser } from '@voice-room/shared/contracts/account';
-import type { LobbyRoom } from '@voice-room/shared/contracts/rooms';
+import type { SelfUser } from '@voiceroom/shared/contracts/account';
+import type { LobbyRoom } from '@voiceroom/shared/contracts/rooms';
 import type { StoredRoom } from '../rooms/room-views.ts';
 
 type Log = Pick<Logger, 'error'> | undefined;

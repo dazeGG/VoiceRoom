@@ -1,9 +1,9 @@
 import test, { type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { SignedIn } from '@voice-room/shared/contracts/account';
-import { FriendRequests } from '@voice-room/shared/contracts/social';
-import { RoomCreated } from '@voice-room/shared/contracts/rooms';
+import { SignedIn } from '@voiceroom/shared/contracts/account';
+import { FriendRequests } from '@voiceroom/shared/contracts/social';
+import { RoomCreated } from '@voiceroom/shared/contracts/rooms';
 import { createTestDatabase } from './db-harness.ts';
 import {
   cookieFrom,

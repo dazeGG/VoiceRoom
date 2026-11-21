@@ -1,5 +1,5 @@
 {
-  "name": "@voice-room/site",
+  "name": "@voiceroom/site",
   "version": "1.0.0",
   "private": true,
   "type": "module",
@@ -11,8 +11,9 @@
     "test": "node --test test/*.test.ts"
   },
   "dependencies": {
-    "@voice-room/shared": "file:../../packages/shared",
-    "@voice-room/ui": "file:../../packages/ui"
+    "@voiceroom/shared": "file:../../packages/shared",
+    "@voiceroom/ui": "file:../../packages/ui",
+    "@voiceroom/ui-kit": "file:../../packages/ui-kit"
   },
   "devDependencies": {
     "@astrojs/check": "0.9.12",

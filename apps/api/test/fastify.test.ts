@@ -5,17 +5,17 @@ import assert from 'node:assert/strict';
 
 const { createApiApp, createApiServer } = await import('../src/server.ts');
 const { withRosterPeer } = await import('./roster-harness.ts');
-import { PUBLIC_CAPABILITY_KEYS } from '@voice-room/shared/contracts/ops';
+import { PUBLIC_CAPABILITY_KEYS } from '@voiceroom/shared/contracts/ops';
 import type { WsConnection } from '../src/realtime/registry.ts';
 import { fake, notificationPreferences } from './fakes/index.ts';
 import { checked } from './helpers/checked.ts';
-import { Failure } from '@voice-room/shared/contracts/http';
-import { Health } from '@voice-room/shared/contracts/ops';
-import { RoomCreated } from '@voice-room/shared/contracts/rooms';
-import { DirectMessageAnswer, RoomMessageAnswer } from '@voice-room/shared/contracts/messages';
-import { FriendRequestSent } from '@voice-room/shared/contracts/social';
-import type { PresenceStatus } from '@voice-room/shared/contracts/users';
-import { Muted, Preferences } from '@voice-room/shared/contracts/notifications';
+import { Failure } from '@voiceroom/shared/contracts/http';
+import { Health } from '@voiceroom/shared/contracts/ops';
+import { RoomCreated } from '@voiceroom/shared/contracts/rooms';
+import { DirectMessageAnswer, RoomMessageAnswer } from '@voiceroom/shared/contracts/messages';
+import { FriendRequestSent } from '@voiceroom/shared/contracts/social';
+import type { PresenceStatus } from '@voiceroom/shared/contracts/users';
+import { Muted, Preferences } from '@voiceroom/shared/contracts/notifications';
 import type { StoreOverrides } from '../src/app/service-registry.ts';
 import type { createPushSubscriptionRepository } from '../src/domains/notifications/push-subscription.repository.ts';
 

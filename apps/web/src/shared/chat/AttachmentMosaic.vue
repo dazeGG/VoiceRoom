@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { Pressable } from '@voice-room/ui/components';
+import { Pressable } from '@voiceroom/ui-kit/components';
 import { t } from '@/shared/i18n';
 import { computed, ref } from 'vue';
-import type { Attachment } from '@voice-room/shared/contracts/messages';
+import type { Attachment } from '@voiceroom/shared/contracts/messages';
 import { attachmentVariantUrl } from '@/api/attachments';
 import AttachmentLightbox from './AttachmentLightbox.vue';
 

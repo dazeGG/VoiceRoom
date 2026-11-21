@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { IconButton } from '@voice-room/ui/components';
+import { IconButton } from '@voiceroom/ui-kit/components';
 import { t } from '@/shared/i18n';
 import { ChevronLeft } from '@lucide/vue';
 import { computed } from 'vue';

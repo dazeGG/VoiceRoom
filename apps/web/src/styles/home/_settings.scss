@@ -60,7 +60,7 @@
 //   .settings-hotkey-row[data-disabled='true']      -> .settings__hotkey-row--disabled
 //   .settings-notification-dependent[data-disabled='true'] -> .settings__notification-dependent--disabled
 //     (these wrappers are plain divs/sections with no aria state of their own)
-@use 'pkg:@voice-room/ui/styles/mixins' as *;
+@use 'pkg:@voiceroom/ui-kit/styles/mixins' as *;
 
 // The Dialog body pads and spaces its content; the settings body and its sidebar
 // run edge to edge under the title, as in the Svelte modal.

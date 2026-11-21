@@ -2,7 +2,7 @@
 // reactive proxy kept inside a message makes `structuredClone` throw a DataCloneError.
 
 import { toRaw } from 'vue';
-import { isArray, isRecord } from '@voice-room/shared/guards';
+import { isArray, isRecord } from '@voiceroom/shared/guards';
 
 // Only plain objects are rebuilt; a Date, Map or other instance goes to `structuredClone` as it is.
 const PLAIN_PROTOTYPES: ReadonlySet<object | null> = new Set([null, Reflect.getPrototypeOf({})]);

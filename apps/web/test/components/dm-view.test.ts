@@ -9,7 +9,7 @@ import { useLobbyStore, type LobbyStore } from '@/features/home/model/lobby.stor
 import { useToastsStore } from '@/features/home/model/toasts.store';
 import type { DirectMessage } from '@/api/dm';
 import { loadChatDraft } from '@/shared/chat/chat-drafts';
-import { SendDirectMessageBody } from '@voice-room/shared/contracts/messages';
+import { SendDirectMessageBody } from '@voiceroom/shared/contracts/messages';
 import { stubFetch } from '../fixtures/fetch.ts';
 import { FakeWebSocket, installFakeWebSocket } from '../fixtures/fake-websocket.ts';
 import { authUser } from '../fixtures/users.ts';

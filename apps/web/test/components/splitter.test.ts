@@ -2,7 +2,7 @@ import { render, screen } from '@testing-library/vue';
 import userEvent from '@testing-library/user-event';
 import { expect, test, vi } from 'vitest';
 import { defineComponent, ref } from 'vue';
-import { Splitter, type SplitterWidth } from '@voice-room/ui/components';
+import { Splitter, type SplitterWidth } from '@voiceroom/ui-kit/components';
 import { stubOverlayDom } from '../helpers/overlay-dom';
 import { stubSplitterLayout } from '../helpers/splitter-layout';
 

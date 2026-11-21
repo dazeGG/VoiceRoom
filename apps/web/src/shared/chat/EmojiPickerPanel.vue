@@ -8,9 +8,9 @@ import {
   TextField,
   Pressable,
   Toolbar
-} from '@voice-room/ui/components';
+} from '@voiceroom/ui-kit/components';
 import { t } from '@/shared/i18n';
-import { SKIN_TONES } from '@voice-room/shared/emoji-skin-tones';
+import { SKIN_TONES } from '@voiceroom/shared/emoji-skin-tones';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
 import Emoji from './Emoji.vue';
 import { NEUTRAL_TONE, loadSkinTone, saveSkinTone } from './skin-tone-preference';

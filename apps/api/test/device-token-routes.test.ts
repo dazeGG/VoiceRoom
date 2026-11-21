@@ -5,8 +5,8 @@
 import test, { type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
 import fastify from 'fastify';
-import { Done, Failure } from '@voice-room/shared/contracts/http';
-import { PushRegistrationSuccess, PushRegistrationConflict } from '@voice-room/shared/contracts/push-registration';
+import { Done, Failure } from '@voiceroom/shared/contracts/http';
+import { PushRegistrationSuccess, PushRegistrationConflict } from '@voiceroom/shared/contracts/push-registration';
 
 import type { ApiContext, ResolvedSession } from '../src/app/context.ts';
 import type { DeviceTokenRepository } from '../src/domains/notifications/device-token.repository.ts';

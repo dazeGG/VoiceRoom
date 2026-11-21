@@ -1,13 +1,13 @@
 import { expect, test, type Page } from '@playwright/test';
-import type { MemberPage } from '@voice-room/shared/contracts/membership';
+import type { MemberPage } from '@voiceroom/shared/contracts/membership';
 import {
   MessageContent,
   PostRoomMessageBody,
   type ReactionSet,
   type ReactionBatch,
   type RoomMessageAnswer
-} from '@voice-room/shared/contracts/messages';
-import type { InboxPage } from '@voice-room/shared/contracts/notifications';
+} from '@voiceroom/shared/contracts/messages';
+import type { InboxPage } from '@voiceroom/shared/contracts/notifications';
 import { parse } from '../test/helpers/assert';
 import {
   boxOf,

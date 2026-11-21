@@ -4,7 +4,7 @@ import TypingIndicator from '../../src/shared/chat/TypingIndicator.vue';
 import StructuredMessageContent from '../../src/shared/chat/StructuredMessageContent.vue';
 import WhatsNew from '../../src/features/home/components/WhatsNewDialog.vue';
 import Appearance from '../../src/features/home/components/settings/AppearanceSettings.vue';
-import { Dialog } from '@voice-room/ui/components';
+import { Dialog } from '@voiceroom/ui-kit/components';
 const appearance = ref(false);
 const urgent = ref(false);
 </script>

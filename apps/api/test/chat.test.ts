@@ -1,8 +1,8 @@
 import test from 'node:test';
-import { SignedIn } from '@voice-room/shared/contracts/account';
-import { Failure } from '@voice-room/shared/contracts/http';
-import { RoomChat, RoomMessageAnswer } from '@voice-room/shared/contracts/messages';
-import { RoomCreated, RoomStatus } from '@voice-room/shared/contracts/rooms';
+import { SignedIn } from '@voiceroom/shared/contracts/account';
+import { Failure } from '@voiceroom/shared/contracts/http';
+import { RoomChat, RoomMessageAnswer } from '@voiceroom/shared/contracts/messages';
+import { RoomCreated, RoomStatus } from '@voiceroom/shared/contracts/rooms';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import type { TSchema } from 'typebox';

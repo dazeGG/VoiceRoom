@@ -3,7 +3,7 @@
 // what storage holds is not an id.
 
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
-import { normalizeGuestId } from '@voice-room/shared/validation';
+import { normalizeGuestId } from '@voiceroom/shared/validation';
 
 const sent: Array<{ type: string; payload: unknown }> = [];
 

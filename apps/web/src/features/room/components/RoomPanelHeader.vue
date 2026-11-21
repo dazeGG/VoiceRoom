@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-import { IconButton, Tabs, type TabOption } from '@voice-room/ui/components';
+import { IconButton, Tabs, type TabOption } from '@voiceroom/ui-kit/components';
 import { t } from '@/shared/i18n';
 import { PanelRightClose, X } from '@lucide/vue';
 

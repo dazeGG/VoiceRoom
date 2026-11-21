@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref } from 'vue';
 import { ArrowDown, ArrowUp, Globe, Monitor, Search, Smartphone } from '@lucide/vue';
-import type { AccountRow, AccountsFilter, AccountsSort, VoiceQuality } from '@voice-room/shared/contracts/admin';
+import type { AccountRow, AccountsFilter, AccountsSort, VoiceQuality } from '@voiceroom/shared/contracts/admin';
 import { ACCOUNT_FILTERS, SORT_COLUMNS } from '../accounts.ts';
 import { fetchAccounts, fetchLiveRooms } from '../api/admin.ts';
 import { formatAgo, formatCount, formatMinutes, formatNumericDate } from '../format.ts';

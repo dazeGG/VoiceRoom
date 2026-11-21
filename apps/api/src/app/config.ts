@@ -3,9 +3,9 @@
 // what it is.
 
 import crypto from 'node:crypto';
-import { normalizeReleaseVersion } from '@voice-room/shared/account-security';
-import { SESSION_ENDED_CLOSE_CODE } from '@voice-room/shared/realtime';
-import { cleanLiveKitUrl } from '@voice-room/shared/validation';
+import { normalizeReleaseVersion } from '@voiceroom/shared/account-security';
+import { SESSION_ENDED_CLOSE_CODE } from '@voiceroom/shared/realtime';
+import { cleanLiveKitUrl } from '@voiceroom/shared/validation';
 import { normalizeLiveKitRoomPrefix } from '../domains/admission/livekit-token-binding.mts';
 import { readEnvBool, readEnvInt, readMessageDeliveryMode, readUploadsDir } from '../lib/config.ts';
 

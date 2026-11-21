@@ -1,7 +1,7 @@
 import { getActivePinia, type Pinia } from 'pinia';
-import type { CallFeedbackCall } from '@voice-room/shared/contracts/feedback';
-import type { PlatformClass } from '@voice-room/shared/platform-class';
-import type { Logger, LogLevel } from '@voice-room/ui/log';
+import type { CallFeedbackCall } from '@voiceroom/shared/contracts/feedback';
+import type { PlatformClass } from '@voiceroom/shared/platform-class';
+import type { Logger, LogLevel } from '@voiceroom/ui/log';
 import type { VoiceAssetUrls } from '../voice-assets';
 import type { DesktopCapabilities } from './desktop-capabilities';
 import type { PeerSession } from './core/types';

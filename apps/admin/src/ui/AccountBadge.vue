@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { BadgeCheck } from '@lucide/vue';
-import { Badge, Tooltip } from '@voice-room/ui/components';
+import { Badge, Tooltip } from '@voiceroom/ui-kit/components';
 import { computed, onMounted, shallowRef } from 'vue';
-import type { AccountBadge } from '@voice-room/shared/contracts/users';
+import type { AccountBadge } from '@voiceroom/shared/contracts/users';
 import { loadBadges } from '../badges.ts';
 
 const props = defineProps<{ userId: string }>();

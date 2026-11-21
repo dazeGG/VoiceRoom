@@ -4,8 +4,8 @@
 
 import type { TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { Failure, RoomIdParams } from '@voice-room/shared/contracts/http';
-import { MessageParams, PinList } from '@voice-room/shared/contracts/messages';
+import { Failure, RoomIdParams } from '@voiceroom/shared/contracts/http';
+import { MessageParams, PinList } from '@voiceroom/shared/contracts/messages';
 import type { ApiContext, SessionUser } from '../../app/context.ts';
 import { failure } from '../../platform/http/http-kit.ts';
 import type { PinService } from './pin.service.ts';

@@ -3,8 +3,8 @@
 
 import type pg from 'pg';
 import { kyselyOn } from '../../platform/db/kysely.ts';
-import { REPORT_REASONS, type AdminReport, type ReportReason } from '@voice-room/shared/contracts/reports';
-import { isOneOf } from '@voice-room/shared/guards';
+import { REPORT_REASONS, type AdminReport, type ReportReason } from '@voiceroom/shared/contracts/reports';
+import { isOneOf } from '@voiceroom/shared/guards';
 import { epochMillis } from '../../platform/epoch-millis.ts';
 import { createUserReportRepository } from './user-report.repository.ts';
 

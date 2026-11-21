@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { devices, expect, test, type Page } from '@playwright/test';
-import { parseServerFrame } from '@voice-room/shared/realtime';
+import { parseServerFrame } from '@voiceroom/shared/realtime';
 
 declare global {
   interface Window {

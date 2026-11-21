@@ -1,5 +1,5 @@
 import type pg from 'pg';
-import { isArray, isRecord } from '@voice-room/shared/guards';
+import { isArray, isRecord } from '@voiceroom/shared/guards';
 import { readNotificationDeliveryWorkerConfig } from '../app/config.ts';
 import { epochMillis } from '../platform/epoch-millis.ts';
 import { createPushSubscriptionRepository } from '../domains/notifications/push-subscription.repository.ts';

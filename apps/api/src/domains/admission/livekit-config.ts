@@ -3,7 +3,7 @@
 // only "enabled" when both exist, credentials are set, and browsers do not
 // talk to the SFU directly (that would bypass the auth gate).
 
-import { cleanLiveKitUrl } from '@voice-room/shared/validation';
+import { cleanLiveKitUrl } from '@voiceroom/shared/validation';
 
 export interface LiveKitConfig {
   adminUrl: string;

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Button, Callout, MascotIcon } from '@voice-room/ui/components';
+import { Button, Callout, MascotIcon } from '@voiceroom/ui-kit/components';
 import { t } from '@/shared/i18n';
 import LanguageControl from '@/shared/i18n/LanguageControl.vue';
 import { ArrowRight } from '@lucide/vue';

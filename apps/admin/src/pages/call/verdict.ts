@@ -7,9 +7,9 @@
 // otherwise the voice was fine, or nothing more can be said. The lines it reads
 // against are the ones the room is judged by (voice-quality.ts, network-quality.ts).
 
-import type { VoiceMinute, VoiceMinuteHeard } from '@voice-room/shared/contracts/admin';
-import { CONCEALMENT_THRESHOLDS, NETWORK_THRESHOLDS } from '@voice-room/shared/network-quality';
-import { VOICE_CODEC_DELAY_MS, VOICE_THRESHOLDS } from '@voice-room/shared/voice-quality';
+import type { VoiceMinute, VoiceMinuteHeard } from '@voiceroom/shared/contracts/admin';
+import { CONCEALMENT_THRESHOLDS, NETWORK_THRESHOLDS } from '@voiceroom/shared/network-quality';
+import { VOICE_CODEC_DELAY_MS, VOICE_THRESHOLDS } from '@voiceroom/shared/voice-quality';
 
 export const RTT_LIMIT_MS = NETWORK_THRESHOLDS.unstable.rttMs;
 export const LOSS_LIMIT_PCT = NETWORK_THRESHOLDS.unstable.lossPct;

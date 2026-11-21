@@ -8,10 +8,10 @@
 import { t } from '@/shared/i18n';
 import { ThumbsDown, ThumbsUp } from '@lucide/vue';
 import { computed, ref, watchEffect } from 'vue';
-import { CALL_FEEDBACK_COMMENT_MAX_LENGTH, CALL_FEEDBACK_TAGS_BY_RATING } from '@voice-room/shared/contracts/feedback';
+import { CALL_FEEDBACK_COMMENT_MAX_LENGTH, CALL_FEEDBACK_TAGS_BY_RATING } from '@voiceroom/shared/contracts/feedback';
 import { CALL_FEEDBACK_TAG_LABELS } from '@/shared/i18n/feedback-labels';
 import type { CallFeedbackCall, CallFeedbackRating, CallFeedbackTag } from '@/api/feedback';
-import { Field, Textarea, Toggle, Button, Tag } from '@voice-room/ui/components';
+import { Field, Textarea, Toggle, Button, Tag } from '@voiceroom/ui-kit/components';
 import { useCallFeedbackStore } from './call-feedback.store';
 
 const props = withDefaults(defineProps<{ call: CallFeedbackCall; hosted?: boolean }>(), { hosted: false });

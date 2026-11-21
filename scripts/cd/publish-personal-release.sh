@@ -33,7 +33,7 @@ if ! release=$(gh release view "$version" --json isDraft,isPrerelease,assets 2>/
   range="${previous:+$previous..}$version"
   notes="Personal server installer and deployment bundle for VoiceRoom Meet ${version#meet/v}."
   changes=$(git log -20 --format='- %s' --no-merges "$range" -- \
-    apps/meet apps/get apps/api packages/call packages/shared packages/ui Dockerfile docker-compose.personal.yml)
+    apps/meet apps/get apps/api packages/call packages/shared packages/ui packages/ui-kit Dockerfile docker-compose.personal.yml)
   if [[ -n "$changes" ]]; then notes+=$'\n\n'"$changes"; fi
   if [[ "$previous" == v2.15.0 ]]; then
     notes+=$'\n\n'"Upgrade an installation of v2.15.0 with \`curl -fsSL https://get.voiceroom.ru | sudo sh -s -- upgrade\`."

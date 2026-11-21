@@ -1,6 +1,6 @@
-import type { LiveRoom } from '@voice-room/shared/contracts/admin';
-import { CALL_FEEDBACK_BAD_TAGS } from '@voice-room/shared/contracts/feedback';
-import { CALL_FEEDBACK_TAG_LABELS } from '@voice-room/shared/feedback-labels';
+import type { LiveRoom } from '@voiceroom/shared/contracts/admin';
+import { CALL_FEEDBACK_BAD_TAGS } from '@voiceroom/shared/contracts/feedback';
+import { CALL_FEEDBACK_TAG_LABELS } from '@voiceroom/shared/feedback-labels';
 
 const badTags: ReadonlySet<string> = new Set(CALL_FEEDBACK_BAD_TAGS);
 

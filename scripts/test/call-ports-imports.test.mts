@@ -52,7 +52,7 @@ for (const [filePath, relativePath] of [
   ['packages/call/src/views/fixtures/Fixture.vue', '../../../../../apps/site/src/site.ts']
 ] as const) {
   test(`${filePath} rejects app paths in every import form`, async () => {
-    const targets = [...webAliases, relativePath, '/repo/apps/admin/src/main.ts', '@voice-room/web/src/main'];
+    const targets = [...webAliases, relativePath, '/repo/apps/admin/src/main.ts', '@voiceroom/web/src/main'];
     for (const target of targets) {
       for (const form of forms) {
         const source = form.source(target);
@@ -68,8 +68,8 @@ for (const [filePath, relativePath] of [
       '../adapters/local',
       'vue',
       'pinia',
-      '@voice-room/shared/contracts/rooms',
-      '@voice-room/ui/components'
+      '@voiceroom/shared/contracts/rooms',
+      '@voiceroom/ui-kit/components'
     ];
     for (const target of targets) {
       for (const form of forms) {
@@ -82,7 +82,7 @@ for (const [filePath, relativePath] of [
 
 test('web call adapters may import host dependencies and call ports', async () => {
   const filePath = 'apps/web/src/features/room/adapters/web-call-ports.ts';
-  for (const target of [...webAliases, '@voice-room/call/engine/ports']) {
+  for (const target of [...webAliases, '@voiceroom/call/engine/ports']) {
     for (const form of forms) {
       const source = form.source(target);
       assert.deepEqual(await boundaryRuleIds(filePath, source), [], source);
@@ -92,8 +92,8 @@ test('web call adapters may import host dependencies and call ports', async () =
 
 test('web lobby uses the public call engine index', async () => {
   const filePath = 'apps/web/src/features/home/Fixture.ts';
-  assert.deepEqual(await boundaryRuleIds(filePath, "import '@voice-room/call/engine';"), []);
-  assert.deepEqual(await boundaryRuleIds(filePath, "import '@voice-room/call/engine/core/state';"), [
+  assert.deepEqual(await boundaryRuleIds(filePath, "import '@voiceroom/call/engine';"), []);
+  assert.deepEqual(await boundaryRuleIds(filePath, "import '@voiceroom/call/engine/core/state';"), [
     'no-restricted-imports'
   ]);
 });

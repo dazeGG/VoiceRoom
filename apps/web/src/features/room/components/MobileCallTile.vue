@@ -1,17 +1,17 @@
 <script setup lang="ts">
-import { Pressable, Button } from '@voice-room/ui/components';
+import { Pressable, Button } from '@voiceroom/ui-kit/components';
 // One person on the phone layout. The picture is never cropped: it is fitted
 // whole, and a blurred copy of the same frame fills the rest of the tile.
 import { t } from '@/shared/i18n';
 import { HeadphoneOff, MicOff, MonitorPlay } from '@lucide/vue';
 import { computed, ref, type Directive } from 'vue';
-import type { Participant } from '@voice-room/call/engine/core/types';
-import { state as roomState } from '@voice-room/call/engine/core/room-runtime.store';
-import { enterScreenView } from '@voice-room/call/engine/ui/screen-view';
-import { keepVideoFitted } from '@voice-room/call/engine/ui/video-fit';
+import type { Participant } from '@voiceroom/call/engine/core/types';
+import { state as roomState } from '@voiceroom/call/engine/core/room-runtime.store';
+import { enterScreenView } from '@voiceroom/call/engine/ui/screen-view';
+import { keepVideoFitted } from '@voiceroom/call/engine/ui/video-fit';
 import EmojiText from '@/shared/chat/EmojiText.vue';
 import { createLogger, errorContext } from '@/shared/log';
-import { getAvatarPresentation } from '@voice-room/ui/avatar-presentation';
+import { getAvatarPresentation } from '@voiceroom/ui/avatar-presentation';
 
 const log = createLogger('room:mobile-tile');
 

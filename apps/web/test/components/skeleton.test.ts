@@ -1,6 +1,6 @@
 import { render } from '@testing-library/vue';
 import { expect, test } from 'vitest';
-import { Skeleton } from '@voice-room/ui/components';
+import { Skeleton } from '@voiceroom/ui-kit/components';
 
 test('a skeleton uses the supplied content dimensions and stays decorative', () => {
   const { container } = render(Skeleton, {

@@ -1,8 +1,8 @@
 import test, { type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
-import type { PushPayload } from '@voice-room/shared/notifications';
-import { isRecord } from '@voice-room/shared/guards';
+import type { PushPayload } from '@voiceroom/shared/notifications';
+import { isRecord } from '@voiceroom/shared/guards';
 import type { PushContext } from '../src/lib/push-service.ts';
 import type { AccountMessage } from '../src/realtime/account-events.ts';
 import { createRingRepository } from '../src/domains/rings/ring.repository.ts';

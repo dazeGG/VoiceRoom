@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Dialog as UiDialog, type DialogProps } from '@voice-room/ui/components';
+import { Dialog as UiDialog, type DialogProps } from '@voiceroom/ui-kit/components';
 
 withDefaults(defineProps<Omit<DialogProps, 'onClose'>>(), {
   initialFocus: '.ui-dialog__body :is(input, textarea, select, button):not(:disabled)',

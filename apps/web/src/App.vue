@@ -5,8 +5,8 @@
 import { t } from '@/shared/i18n';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { RouterView, useRoute, useRouter } from 'vue-router';
-import { Toast } from '@voice-room/ui/components';
-import { useToastUiStore } from '@voice-room/call/engine/core/toast-ui.store';
+import { Toast } from '@voiceroom/ui-kit/components';
+import { useToastUiStore } from '@voiceroom/call/engine/core/toast-ui.store';
 import { loadAccountBadges } from '@/api/badges';
 import { onContractViolation } from '@/api/contract-violations';
 import { useAppUpdateStore } from '@/features/app-update/app-update.store';
@@ -99,7 +99,7 @@ onMounted(() => {
         void import('@/api/realtime').then((realtime) => realtime.getAppRealtime().probeLiveness());
         if (callActivity.active) {
           // Optional diagnostics must not interfere with the existing wake recovery.
-          void import('@voice-room/call/engine/room/capture-diagnostics')
+          void import('@voiceroom/call/engine/room/capture-diagnostics')
             .then((diagnostics) => diagnostics.noteWakeUnlock(reason))
             .catch(() => undefined);
         }

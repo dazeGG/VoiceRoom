@@ -3,13 +3,9 @@
 
 import { sql } from 'kysely';
 import type pg from 'pg';
-import { isUuid } from '@voice-room/shared/validation';
+import { isUuid } from '@voiceroom/shared/validation';
 import { kyselyOn } from '../../platform/db/kysely.ts';
-import {
-  LOGIN_ALERT_TTL_MS,
-  LOGIN_FAMILIARITY_WINDOW_MS,
-  describeUserAgent
-} from '@voice-room/shared/account-security';
+import { LOGIN_ALERT_TTL_MS, LOGIN_FAMILIARITY_WINDOW_MS, describeUserAgent } from '@voiceroom/shared/account-security';
 import { toDate } from '../../platform/epoch-millis.ts';
 import { LOGIN_EVENT_RETENTION_MS, cleanLocationLabel, mapLoginAlert } from './user-records.ts';
 

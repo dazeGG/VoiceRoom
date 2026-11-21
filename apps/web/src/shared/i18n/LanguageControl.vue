@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { Select } from '@voice-room/ui/components';
-import { APP_LOCALES, normalizeLocale } from '@voice-room/shared/localization';
+import { Select } from '@voiceroom/ui-kit/components';
+import { APP_LOCALES, normalizeLocale } from '@voiceroom/shared/localization';
 import { Languages } from '@lucide/vue';
-import { iconMd } from '@voice-room/ui/icon-defaults';
+import { iconMd } from '@voiceroom/ui-kit/icon-defaults';
 import { t, useLocaleStore } from './index';
 
 withDefaults(defineProps<{ compact?: boolean }>(), { compact: false });

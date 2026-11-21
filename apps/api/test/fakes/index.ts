@@ -3,12 +3,12 @@
 // take their parameter types from the real interface and a signature that
 // drifts from production fails to compile.
 
-import type { NotificationPreferences } from '@voice-room/shared/contracts/notifications';
-import type { LoginAlert } from '@voice-room/shared/contracts/account';
-import type { RoomMessage } from '@voice-room/shared/contracts/messages';
+import type { NotificationPreferences } from '@voiceroom/shared/contracts/notifications';
+import type { LoginAlert } from '@voiceroom/shared/contracts/account';
+import type { RoomMessage } from '@voiceroom/shared/contracts/messages';
 import type { DirectMessage as StoredDirectMessage } from '../../src/domains/social/social-records.ts';
-import type { LobbyRoom } from '@voice-room/shared/contracts/rooms';
-import type { PublicUser } from '@voice-room/shared/contracts/users';
+import type { LobbyRoom } from '@voiceroom/shared/contracts/rooms';
+import type { PublicUser } from '@voiceroom/shared/contracts/users';
 import type { DirectMessage } from '../../src/domains/messaging/direct-messages.service.ts';
 import type { StoredRoom } from '../../src/domains/rooms/room-views.ts';
 import type { StoredUser } from '../../src/domains/account/user-records.ts';

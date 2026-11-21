@@ -6,7 +6,7 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import test from 'node:test';
-import { MAX_REACTION_BATCH } from '@voice-room/shared/contracts/messages';
+import { MAX_REACTION_BATCH } from '@voiceroom/shared/contracts/messages';
 import { createReactionRepository } from '../src/domains/messaging/reaction.repository.ts';
 import { createReactionService, type ReactionRepository } from '../src/domains/messaging/reaction.service.ts';
 import { createCursorCodec } from '../src/platform/cursor-codec.ts';

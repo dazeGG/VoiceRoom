@@ -2,7 +2,7 @@
 // who may open each. An account's card has its own address under the accounts
 // section, and a call's page under the rooms section.
 
-import type { StaffPermission } from '@voice-room/shared/contracts/staff';
+import type { StaffPermission } from '@voiceroom/shared/contracts/staff';
 
 export const ADMIN_TABS = [
   'overview',

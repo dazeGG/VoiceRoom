@@ -2,7 +2,7 @@ import { render, screen } from '@testing-library/vue';
 import userEvent from '@testing-library/user-event';
 import { expect, test, vi } from 'vitest';
 import { h } from 'vue';
-import { Button, EmptyState } from '@voice-room/ui/components';
+import { Button, EmptyState } from '@voiceroom/ui-kit/components';
 
 test('shows the empty state copy and offers its action outside compact panels', async () => {
   const onClick = vi.fn();

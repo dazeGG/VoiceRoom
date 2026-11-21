@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { listReactionEmojis } from '@voice-room/shared/emoji';
+import { listReactionEmojis } from '@voiceroom/shared/emoji';
 import { Type, type TSchema } from 'typebox';
 import { parse } from './helpers/assert.ts';
 import { assetName, buildEmojiAssets, planEmojiAssets } from '../scripts/build-emoji-assets.ts';

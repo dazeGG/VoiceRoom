@@ -6,8 +6,8 @@
 import { t } from '@/shared/i18n';
 import { computed, onBeforeUnmount, onMounted } from 'vue';
 import { Copy, Download, Flag, Image as ImageIcon, Pencil, Pin, PinOff, Reply, SmilePlus, Trash2 } from '@lucide/vue';
-import { ContextMenu, ContextMenuHeaderButton, MenuSeparator, MenuItem } from '@voice-room/ui/components';
-import { iconMd } from '@voice-room/ui/icon-defaults';
+import { ContextMenu, ContextMenuHeaderButton, MenuSeparator, MenuItem } from '@voiceroom/ui-kit/components';
+import { iconMd } from '@voiceroom/ui-kit/icon-defaults';
 import Emoji from './Emoji.vue';
 
 const props = withDefaults(

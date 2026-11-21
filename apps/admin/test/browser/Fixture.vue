@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue';
-import { Button, Popover, SegmentControl, TextField } from '@voice-room/ui/components';
+import { Button, Popover, SegmentControl, TextField } from '@voiceroom/ui-kit/components';
 import GlobalSearch from '../../src/shell/GlobalSearch.vue';
 import Sidebar from '../../src/shell/Sidebar.vue';
 import type { Staff } from '../../src/staff.store.ts';

@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { ArrowRight, Link2Off, LogOut, UsersRound } from '@lucide/vue';
-import { createGuestJoinController } from '@voice-room/call/guest';
-import { Button, Callout, Field, TextField } from '@voice-room/ui/components';
-import { t } from '@voice-room/ui/i18n';
-import { cleanDisplayName, normalizeRoomId } from '@voice-room/shared/validation';
+import { createGuestJoinController } from '@voiceroom/call/guest';
+import { Button, Callout, Field, TextField } from '@voiceroom/ui-kit/components';
+import { t } from '@voiceroom/ui-kit/i18n';
+import { cleanDisplayName, normalizeRoomId } from '@voiceroom/shared/validation';
 import { computed, onBeforeUnmount, onMounted, ref, useTemplateRef, watch } from 'vue';
 import MeetCall from '@/components/MeetCall.vue';
 import { useMeetStore } from '@/meet.store';

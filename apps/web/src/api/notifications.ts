@@ -12,7 +12,7 @@ import {
   RoomLevelBody,
   type NotificationLevel,
   type NotificationPreferences
-} from '@voice-room/shared/contracts/notifications';
+} from '@voiceroom/shared/contracts/notifications';
 import type { PresenceStatus } from '@/shared/presence';
 import { api } from './client';
 

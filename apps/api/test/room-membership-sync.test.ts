@@ -1,4 +1,4 @@
-import { isRecord } from '@voice-room/shared/guards';
+import { isRecord } from '@voiceroom/shared/guards';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 

@@ -6,8 +6,8 @@
 // decided, and the minute's sample (system-snapshot.service.ts) takes them and
 // starts the next minute from what is running then.
 
-import { screenProfileFallbacks } from '@voice-room/shared/media-budget';
-import type { MediaGrant, MediaKind } from '@voice-room/shared/contracts/realtime';
+import { screenProfileFallbacks } from '@voiceroom/shared/media-budget';
+import type { MediaGrant, MediaKind } from '@voiceroom/shared/contracts/realtime';
 import { serverMediaBps, videoBudgetBps, type MediaLimits } from './media-budget.ts';
 import type { PresenceRoom } from './runtime-types.ts';
 

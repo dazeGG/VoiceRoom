@@ -1,7 +1,7 @@
 import type pg from 'pg';
 import { createMentionRepository } from './mention.repository.ts';
-import type { ErrorCode } from '@voice-room/shared/contracts/errors';
-import { normalizeMentionUserIds } from '@voice-room/shared/mentions';
+import type { ErrorCode } from '@voiceroom/shared/contracts/errors';
+import { normalizeMentionUserIds } from '@voiceroom/shared/mentions';
 import { DomainError } from '../../platform/http/domain-error.ts';
 
 type QueryClient = Pick<pg.PoolClient, 'query'>;

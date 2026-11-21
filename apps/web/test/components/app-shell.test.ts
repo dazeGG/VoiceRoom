@@ -6,7 +6,7 @@ import { render, screen } from '@testing-library/vue';
 import { createPinia, setActivePinia } from 'pinia';
 import { createMemoryHistory } from 'vue-router';
 import { beforeEach, expect, test, vi } from 'vitest';
-import type { PlatformPolicy } from '@voice-room/shared/platform-class';
+import type { PlatformPolicy } from '@voiceroom/shared/platform-class';
 import App from '../../src/App.vue';
 import { useAppUpdateStore } from '../../src/features/app-update/app-update.store.ts';
 import { useCallActivityStore } from '../../src/shared/call-activity.store.ts';
@@ -17,7 +17,7 @@ import { stubFetch } from '../fixtures/fetch.ts';
 const platform = vi.hoisted(() => ({ desktop: true }));
 const captureTelemetry = vi.hoisted(() => ({ noteWakeUnlock: vi.fn() }));
 
-vi.mock('@voice-room/call/engine/room/capture-diagnostics', () => captureTelemetry);
+vi.mock('@voiceroom/call/engine/room/capture-diagnostics', () => captureTelemetry);
 
 vi.mock('../../src/platform/desktop-boundary.ts', async (importOriginal) => {
   const original = await importOriginal<typeof DesktopBoundary>();

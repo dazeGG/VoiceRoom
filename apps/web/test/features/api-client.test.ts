@@ -1,8 +1,8 @@
 import { test, vi } from 'vitest';
 import assert from 'node:assert/strict';
 
-import { AccountFailure } from '@voice-room/shared/contracts/account';
-import { Done, Ok } from '@voice-room/shared/contracts/http';
+import { AccountFailure } from '@voiceroom/shared/contracts/account';
+import { Done, Ok } from '@voiceroom/shared/contracts/http';
 import { Type } from 'typebox';
 import { ApiError, api, failureBody, orNull, request } from '../../src/api/client.ts';
 import { clearLogBuffer, readLogBuffer } from '../../src/shared/log.ts';

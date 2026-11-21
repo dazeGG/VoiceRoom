@@ -12,7 +12,7 @@ import {
   type ProductStats,
   type SystemQuery,
   type SystemStats
-} from '@voice-room/shared/contracts/admin';
+} from '@voiceroom/shared/contracts/admin';
 import type { CallFeedbackRepository } from '../feedback/call-feedback.repository.ts';
 import type { AdminStatsRepository } from './admin-stats.repository.ts';
 import type { SystemSnapshotRepository } from '../ops/system-snapshot.repository.ts';

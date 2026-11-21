@@ -2,7 +2,7 @@ import { createPinia, setActivePinia } from 'pinia';
 import { createApp } from 'vue';
 
 import App from './App.vue';
-import { installCallPorts } from '@voice-room/call/engine/ports';
+import { installCallPorts } from '@voiceroom/call/engine/ports';
 import { createWebCallPorts } from './features/room/adapters/web-call-ports';
 import { createAppRouter, loadFailedPagesInFull } from './router';
 import { startWebVitals } from './platform/web-vitals';

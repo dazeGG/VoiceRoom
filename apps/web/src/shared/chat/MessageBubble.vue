@@ -7,8 +7,8 @@
 // `content` slot renders the text, and `card` replaces every part for a
 // message that is a card of its own (a direct-message invitation).
 import { computed } from 'vue';
-import type { Attachment } from '@voice-room/shared/contracts/messages';
-import type { LinkPreview } from '@voice-room/shared/link-preview';
+import type { Attachment } from '@voiceroom/shared/contracts/messages';
+import type { LinkPreview } from '@voiceroom/shared/link-preview';
 import AttachmentMosaic from './AttachmentMosaic.vue';
 import LinkPreviewCard from './LinkPreviewCard.vue';
 import MessageEditor from './MessageEditor.vue';

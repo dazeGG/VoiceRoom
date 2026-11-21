@@ -1,13 +1,13 @@
 import { sql, type Selectable } from 'kysely';
 import type pg from 'pg';
-import { isOneOf, isRecord } from '@voice-room/shared/guards';
+import { isOneOf, isRecord } from '@voiceroom/shared/guards';
 import { kyselyOn } from '../../platform/db/kysely.ts';
 import { createRowId } from '../../platform/db/ids.ts';
 import type { PushSubscriptions } from '../../platform/db/schema.ts';
-import { classifyPlatform, PLATFORM_CLASSES } from '@voice-room/shared/platform-class';
-import type { PlatformClass } from '@voice-room/shared/platform-class';
-import type { PushLocaleIntent, PushRegistrationState } from '@voice-room/shared/contracts/push-registration';
-import { resolveLocale } from '@voice-room/shared/localization';
+import { classifyPlatform, PLATFORM_CLASSES } from '@voiceroom/shared/platform-class';
+import type { PlatformClass } from '@voiceroom/shared/platform-class';
+import type { PushLocaleIntent, PushRegistrationState } from '@voiceroom/shared/contracts/push-registration';
+import { resolveLocale } from '@voiceroom/shared/localization';
 import { lockKeys, lockXact } from '../../platform/db/locks.ts';
 
 type Metadata = Record<string, unknown>;

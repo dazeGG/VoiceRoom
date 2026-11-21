@@ -3,7 +3,7 @@ import { callPageState } from '../core/call-page.store';
 // app WebSocket (room.updated/room.deleted, handleServerMessage in room.ts), and
 // may reach a client on more than one logical channel, so the reaction lives
 // here once instead of being duplicated in each handler.
-import { t } from '@voice-room/ui/i18n';
+import { t } from '@voiceroom/ui-kit/i18n';
 import type { RoomLifecycleSummary } from '../core/types';
 import { getCallPorts } from '../ports';
 import { state } from '../core/room-runtime.store';

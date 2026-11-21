@@ -1,7 +1,7 @@
 // Short-lived invitation state. This is not a voice-session or missed-call history.
 import crypto from 'node:crypto';
 import type pg from 'pg';
-import type { RingSnapshot, RingState } from '@voice-room/shared/contracts/rings';
+import type { RingSnapshot, RingState } from '@voiceroom/shared/contracts/rings';
 import { createDmThreadRepository } from '../messaging/dm-thread.repository.ts';
 import type { DirectMessage } from '../social/social-records.ts';
 import { isStoredDirectMessage, lockUserPair } from '../social/social-records.ts';

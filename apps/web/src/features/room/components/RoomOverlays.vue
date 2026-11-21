@@ -11,22 +11,22 @@ import {
   TextField,
   RadioGroupItem,
   Popover
-} from '@voice-room/ui/components';
+} from '@voiceroom/ui-kit/components';
 import { t } from '@/shared/i18n';
 import { AppWindow, Check, Monitor, Play, Settings } from '@lucide/vue';
 import { computed } from 'vue';
 import { createLogger, errorContext } from '@/shared/log';
-import { iconSm, iconXs } from '@voice-room/ui/icon-defaults';
+import { iconSm, iconXs } from '@voiceroom/ui-kit/icon-defaults';
 import {
   cancelScreenSourcePicker,
   confirmScreenSourcePicker,
   switchScreenTab
-} from '@voice-room/call/engine/ui/screen-source-picker';
-import { unlockAudio } from '@voice-room/call/engine/services/media-playback-service';
-import { clearGuestNameError, handleGuestNameSubmit } from '@voice-room/call/engine/ui/names';
-import { useGuestNameUiStore } from '@voice-room/call/engine/core/guest-name-ui.store';
-import { useScreenSourceUiStore } from '@voice-room/call/engine/core/screen-source-ui.store';
-import { useStartUiStore } from '@voice-room/call/engine/core/start-ui.store';
+} from '@voiceroom/call/engine/ui/screen-source-picker';
+import { unlockAudio } from '@voiceroom/call/engine/services/media-playback-service';
+import { clearGuestNameError, handleGuestNameSubmit } from '@voiceroom/call/engine/ui/names';
+import { useGuestNameUiStore } from '@voiceroom/call/engine/core/guest-name-ui.store';
+import { useScreenSourceUiStore } from '@voiceroom/call/engine/core/screen-source-ui.store';
+import { useStartUiStore } from '@voiceroom/call/engine/core/start-ui.store';
 
 const fpsOptions = computed(() => [
   { value: '30', label: '30' },

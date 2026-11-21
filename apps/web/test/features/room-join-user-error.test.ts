@@ -7,16 +7,16 @@ import { createPinia, setActivePinia } from 'pinia';
 import { expect, test, vi } from 'vitest';
 import { stubFetch } from '../fixtures/fetch';
 import { FakeWebSocket } from '../fixtures/fake-websocket';
-import type * as Devices from '@voice-room/call/engine/ui/devices';
-import type * as LiveKitService from '@voice-room/call/engine/services/livekit-service';
+import type * as Devices from '@voiceroom/call/engine/ui/devices';
+import type * as LiveKitService from '@voiceroom/call/engine/services/livekit-service';
 
-vi.mock('@voice-room/call/engine/ui/devices', async (importOriginal) => ({
+vi.mock('@voiceroom/call/engine/ui/devices', async (importOriginal) => ({
   ...(await importOriginal<typeof Devices>()),
   refreshDevices: vi.fn(async () => {})
 }));
-vi.mock('@voice-room/call/engine/ui/toast', () => ({ showToast: vi.fn() }));
-vi.mock('@voice-room/call/engine/services/livekit-service', async (importOriginal) => {
-  const { UserFacingError } = await import('@voice-room/call/engine/core/utils');
+vi.mock('@voiceroom/call/engine/ui/toast', () => ({ showToast: vi.fn() }));
+vi.mock('@voiceroom/call/engine/services/livekit-service', async (importOriginal) => {
+  const { UserFacingError } = await import('@voiceroom/call/engine/core/utils');
   return {
     ...(await importOriginal<typeof LiveKitService>()),
     connectLiveKitRoom: vi.fn(async () => {
@@ -45,10 +45,10 @@ test('a join failure meant for the user shows its own message', async () => {
       }
     }
   });
-  const room = await import('@voice-room/call/engine/room/room');
-  const { state } = await import('@voice-room/call/engine/core/room-runtime.store');
-  const { getConnectionStatusView } = await import('@voice-room/call/engine/ui/status');
-  const { showToast } = await import('@voice-room/call/engine/ui/toast');
+  const room = await import('@voiceroom/call/engine/room/room');
+  const { state } = await import('@voiceroom/call/engine/core/room-runtime.store');
+  const { getConnectionStatusView } = await import('@voiceroom/call/engine/ui/status');
+  const { showToast } = await import('@voiceroom/call/engine/ui/toast');
   Object.assign(state, { roomId: 'abc123', peerId: 'peer-1', sessionToken: 'session-1' });
 
   await room.joinRoom();

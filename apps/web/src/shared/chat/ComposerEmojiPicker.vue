@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { IconButton, Popover } from '@voice-room/ui/components';
+import { IconButton, Popover } from '@voiceroom/ui-kit/components';
 import { t } from '@/shared/i18n';
 import { Smile } from '@lucide/vue';
 import { onBeforeUnmount, ref, watch } from 'vue';
-import type { PopoverContentState, PopoverTriggerState } from '@voice-room/ui/components';
+import type { PopoverContentState, PopoverTriggerState } from '@voiceroom/ui-kit/components';
 import EmojiPickerPanel from './EmojiPickerPanel.vue';
 import { DEFAULT_FREQUENT_REACTIONS, loadFrequentReactions, recordFrequentReaction } from './frequent-reactions';
 import { TYPING_NOTICE_INTERVAL_MS } from './typing';

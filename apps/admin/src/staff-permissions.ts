@@ -9,7 +9,7 @@ import {
   STAFF_ROLES,
   type StaffPermission,
   type StaffRole
-} from '@voice-room/shared/contracts/staff';
+} from '@voiceroom/shared/contracts/staff';
 import { ADMIN_TABS, TAB_LABELS, TAB_PERMISSIONS, allowedTabs } from './tabs.ts';
 
 type PermissionGroup = 'Модерация' | 'Аккаунты' | 'Аналитика' | 'Команда';

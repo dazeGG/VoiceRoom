@@ -5,8 +5,8 @@
 // diagnostic journal retention); change them here when the code changes.
 
 import { t } from '@/shared/i18n';
-import { ACCOUNT_DELETION_GRACE_MS } from '@voice-room/shared/account-security';
-import { VOICE_HISTORY_KEEP_DAYS } from '@voice-room/shared/contracts/admin';
+import { ACCOUNT_DELETION_GRACE_MS } from '@voiceroom/shared/account-security';
+import { VOICE_HISTORY_KEEP_DAYS } from '@voiceroom/shared/contracts/admin';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 

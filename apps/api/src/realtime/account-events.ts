@@ -2,8 +2,8 @@
 // spelling, and its WebSocket event. Services send AccountMessage; only this
 // module knows the wire names.
 
-import type { ServerEvents } from '@voice-room/shared/contracts/realtime';
-import type { ServerEnvelope } from '@voice-room/shared/realtime';
+import type { ServerEvents } from '@voiceroom/shared/contracts/realtime';
+import type { ServerEnvelope } from '@voiceroom/shared/realtime';
 import { buildServerEnvelope } from './envelope.ts';
 
 type Tagged<Type extends string, Fields> = { type: Type } & Fields;

@@ -1,5 +1,5 @@
 import { t } from '@/shared/i18n';
-import { Done } from '@voice-room/shared/contracts/http';
+import { Done } from '@voiceroom/shared/contracts/http';
 import type { Static } from 'typebox';
 import {
   DeleteRoomMessageBody,
@@ -18,7 +18,7 @@ import {
   type ReplyPointer,
   type RoomHistoryMessage,
   type RoomMessage
-} from '@voice-room/shared/contracts/messages';
+} from '@voiceroom/shared/contracts/messages';
 import {
   CreateRoomBody,
   PeerBanned,
@@ -31,13 +31,13 @@ import {
   ServerMuted,
   type LobbyRoom,
   type PublicPeer
-} from '@voice-room/shared/contracts/rooms';
-import { RingBody } from '@voice-room/shared/contracts/social';
+} from '@voiceroom/shared/contracts/rooms';
+import { RingBody } from '@voiceroom/shared/contracts/social';
 import { api, orNull } from './client';
 import { createRoomProof } from './pow';
 import type { ReplyTarget } from '@/shared/chat/reply-store';
-import type { RoomMessageContentV1 } from '@voice-room/shared/room-message-content';
-import { projectRoomMessageContent } from '@voice-room/shared/room-message-content';
+import type { RoomMessageContentV1 } from '@voiceroom/shared/room-message-content';
+import { projectRoomMessageContent } from '@voiceroom/shared/room-message-content';
 
 /** The lobby card: the rename answer, the room list and the room.updated event. */
 export type RoomSummary = LobbyRoom;

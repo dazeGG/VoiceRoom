@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
-import type { ToastItem } from '@voice-room/ui/toast';
+import type { ToastItem } from '@voiceroom/ui-kit/toast';
 
 export type ToastOptions = Omit<ToastItem, 'id' | 'message'>;
 

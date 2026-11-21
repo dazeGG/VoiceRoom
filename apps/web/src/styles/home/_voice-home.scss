@@ -42,7 +42,7 @@
 //   none: the 1Password/LastPass/Bitwarden skip attributes on the code field are hooks for those
 //   tools, not styling.
 
-@use 'pkg:@voice-room/ui/styles/mixins';
+@use 'pkg:@voiceroom/ui-kit/styles/mixins';
 
 .voice-home {
   flex: 1;

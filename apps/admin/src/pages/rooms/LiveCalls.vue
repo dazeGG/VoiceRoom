@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { computed, useId } from 'vue';
 import { ArrowUpRight, ChevronDown, ChevronRight, History } from '@lucide/vue';
-import type { LiveRoom } from '@voice-room/shared/contracts/admin';
+import type { LiveRoom } from '@voiceroom/shared/contracts/admin';
 import { formatPeople, formatSince } from '../../format.ts';
-import { getAvatarPresentation } from '@voice-room/ui/avatar-presentation';
+import { getAvatarPresentation } from '@voiceroom/ui/avatar-presentation';
 import { AvatarStack, IconButton } from '../../ui';
 import type { OriginPick } from './call-filters.ts';
 import AccountName from './AccountName.vue';

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, shallowRef } from 'vue';
-import type { ProductDay } from '@voice-room/shared/contracts/admin';
+import type { ProductDay } from '@voiceroom/shared/contracts/admin';
 import { fetchProductStats } from '../api/admin.ts';
 import { formatDay, formatHours } from '../format.ts';
 import { PRODUCT_PRESETS, productQuery, type TimeRange } from '../time-range.ts';

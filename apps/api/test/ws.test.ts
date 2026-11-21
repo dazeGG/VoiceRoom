@@ -4,12 +4,12 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import sharp from 'sharp';
-import { Failure } from '@voice-room/shared/contracts/http';
-import { Me, SignedIn } from '@voice-room/shared/contracts/account';
-import { DirectMessageAnswer, DirectThread, RoomMessageAnswer } from '@voice-room/shared/contracts/messages';
-import { Preferences } from '@voice-room/shared/contracts/notifications';
-import { RoomCreated, RoomPeers } from '@voice-room/shared/contracts/rooms';
-import { FriendList } from '@voice-room/shared/contracts/social';
+import { Failure } from '@voiceroom/shared/contracts/http';
+import { Me, SignedIn } from '@voiceroom/shared/contracts/account';
+import { DirectMessageAnswer, DirectThread, RoomMessageAnswer } from '@voiceroom/shared/contracts/messages';
+import { Preferences } from '@voiceroom/shared/contracts/notifications';
+import { RoomCreated, RoomPeers } from '@voiceroom/shared/contracts/rooms';
+import { FriendList } from '@voiceroom/shared/contracts/social';
 import { joinVoiceRoom, openWs as openHarnessWs, subscribeRoomPreview, waitForWsType } from './ws-harness.ts';
 import {
   acceptFirstFriendRequest as acceptFirstRequest,

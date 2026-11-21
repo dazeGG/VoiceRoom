@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Switch, SettingRow, SettingsGroup, Avatar, Button } from '@voice-room/ui/components';
+import { Switch, SettingRow, SettingsGroup, Avatar, Button } from '@voiceroom/ui-kit/components';
 import { t } from '@/shared/i18n';
 import { BellOff } from '@lucide/vue';
 import { computed, onMounted, ref } from 'vue';
@@ -8,7 +8,7 @@ import { fetchBlockedUsers, unblockUser, type PublicUser } from '@/api/friends';
 import { useNotificationPreferencesStore } from '@/shared/notifications/preferences.store';
 import { showBrowserNotification } from '@/shared/notifications/router';
 import EmojiText from '@/shared/chat/EmojiText.vue';
-import { iconSm } from '@voice-room/ui/icon-defaults';
+import { iconSm } from '@voiceroom/ui-kit/icon-defaults';
 import { displayNameOf } from '@/shared/utils/display-name';
 import { usePushNotificationsStore } from '../../model/push-notifications.store';
 import type { SettingsSupport } from '../../model/settings-support';

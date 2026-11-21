@@ -1,6 +1,6 @@
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/vue';
 import { beforeEach, expect, test, vi } from 'vitest';
-import { decodeWidgetEmbedConfig } from '@voice-room/shared/contracts/widget';
+import { decodeWidgetEmbedConfig } from '@voiceroom/shared/contracts/widget';
 import WidgetsPage from '../src/pages/WidgetsPage.vue';
 
 beforeEach(() => {

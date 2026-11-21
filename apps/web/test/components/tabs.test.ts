@@ -2,7 +2,7 @@ import { render, screen, waitFor } from '@testing-library/vue';
 import userEvent from '@testing-library/user-event';
 import { expect, test } from 'vitest';
 import { defineComponent, ref } from 'vue';
-import { Tabs, TabsPanel } from '@voice-room/ui/components';
+import { Tabs, TabsPanel } from '@voiceroom/ui-kit/components';
 
 test('tabs move focus, skip disabled tabs, and expose the selected panel', async () => {
   const user = userEvent.setup();

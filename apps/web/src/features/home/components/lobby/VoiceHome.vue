@@ -12,7 +12,7 @@ import {
   ContextMenu,
   Ellipsis,
   Pressable
-} from '@voice-room/ui/components';
+} from '@voiceroom/ui-kit/components';
 import { t } from '@/shared/i18n';
 import { BellOff, Plus, ShieldCheck, UserPlus, X } from '@lucide/vue';
 import { computed, ref, shallowRef } from 'vue';
@@ -20,7 +20,7 @@ import type { OwnedRoom } from '@/api/auth';
 import { useRoomPresenceStore } from '@/entities/room/room-presence.store';
 import { RoomMenuContent } from '@/shared/components/room-menu';
 import { useNotificationPreferencesStore } from '@/shared/notifications/preferences.store';
-import { iconMd, iconSm } from '@voice-room/ui/icon-defaults';
+import { iconMd, iconSm } from '@voiceroom/ui-kit/icon-defaults';
 import { roomPeerAvatarItems } from '../../model/room-avatars';
 import { roomDisplayName } from '../../model/rooms';
 import { useLobby } from '../../model/lobby-context';

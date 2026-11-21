@@ -2,7 +2,7 @@ import { screen } from '@testing-library/vue';
 import userEvent from '@testing-library/user-event';
 import { expect, test, vi } from 'vitest';
 import { defineComponent, ref } from 'vue';
-import { NavList, NavListGroup, NavListItem } from '@voice-room/ui/components';
+import { NavList, NavListGroup, NavListItem } from '@voiceroom/ui-kit/components';
 import { renderWithApp } from '../helpers/render';
 
 const Navigation = defineComponent({

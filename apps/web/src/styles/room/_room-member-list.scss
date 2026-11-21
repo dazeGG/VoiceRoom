@@ -1,6 +1,6 @@
 // RoomMemberList (entities/room/components/RoomMemberList.vue): the roster of a room.
 //
-@use 'pkg:@voice-room/ui/styles/mixins' as *;
+@use 'pkg:@voiceroom/ui-kit/styles/mixins' as *;
 
 .room-member-list {
   display: grid;

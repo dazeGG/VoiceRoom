@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { Button } from '@voice-room/ui/components';
+import { Button } from '@voiceroom/ui-kit/components';
 // One person big and everyone else in a strip below, me first on its left.
 import { t } from '@/shared/i18n';
 import { PinOff } from '@lucide/vue';
 import { computed } from 'vue';
-import type { Participant } from '@voice-room/call/engine/core/types';
+import type { Participant } from '@voiceroom/call/engine/core/types';
 import { STRIP_FITTING_TILES } from '@/features/room/mobile-call-layout';
 import { useMobileCallUiStore } from '@/features/room/mobile-call-ui.store';
 import MobileCallTile from './MobileCallTile.vue';

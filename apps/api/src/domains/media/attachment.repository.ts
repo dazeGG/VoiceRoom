@@ -4,7 +4,7 @@ import type pg from 'pg';
 import type { Connectable } from '../../platform/db/connectable.ts';
 import { kyselyOn, type Database } from '../../platform/db/kysely.ts';
 import type { MessageAttachments } from '../../platform/db/schema.ts';
-import { isArray, isRecord } from '@voice-room/shared/guards';
+import { isArray, isRecord } from '@voiceroom/shared/guards';
 
 type QueryClient = Pick<pg.PoolClient, 'query'>;
 type AttachmentPool = QueryClient & Connectable;

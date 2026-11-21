@@ -4,8 +4,8 @@
 // failure is rethrown marked `ownershipFinalized` so the reconnect lease does
 // not hand the seat back.
 
-import type { PeerLeaveReason } from '@voice-room/shared/contracts/realtime';
-import { buildServerEnvelope, type ServerEnvelope } from '@voice-room/shared/realtime';
+import type { PeerLeaveReason } from '@voiceroom/shared/contracts/realtime';
+import { buildServerEnvelope, type ServerEnvelope } from '@voiceroom/shared/realtime';
 import type { AccountMessage } from '../../realtime/account-events.ts';
 import type { LiveRoom, PresencePeer } from './room-views.ts';
 

@@ -1,15 +1,15 @@
 import { t } from '@/shared/i18n';
-import { BanBody, BanLifted, BanPage, BanSaved, type Ban } from '@voice-room/shared/contracts/moderation';
+import { BanBody, BanLifted, BanPage, BanSaved, type Ban } from '@voiceroom/shared/contracts/moderation';
 import {
   MODERATION_DEFAULT_LIMIT,
   MODERATION_MAX_LIMIT,
   normalizeBanMutation,
   type BanMutation
-} from '@voice-room/shared/moderation';
+} from '@voiceroom/shared/moderation';
 import { api } from './client';
 
-export type { Ban, BanPage } from '@voice-room/shared/contracts/moderation';
-export type { BanMutation, ModerationDuration } from '@voice-room/shared/moderation';
+export type { Ban, BanPage } from '@voiceroom/shared/contracts/moderation';
+export type { BanMutation, ModerationDuration } from '@voiceroom/shared/moderation';
 
 function roomModerationUrl(roomId: string): string {
   return `/api/rooms/${encodeURIComponent(roomId)}/moderation`;

@@ -158,7 +158,7 @@ test('a report the throttle held back goes out once when the window ends', async
 test('a successful recovery requests its own held upload after session metadata already flushed', async () => {
   const { calls } = stubFetch({ 'POST /api/client-logs': { body: { ok: true } } });
   const [log, diagnostics] = await freshImport(() =>
-    Promise.all([import('../../src/shared/log.ts'), import('@voice-room/call/engine/room/capture-diagnostics')])
+    Promise.all([import('../../src/shared/log.ts'), import('@voiceroom/call/engine/room/capture-diagnostics')])
   );
   diagnostics.startCaptureDiagnostics();
   await vi.advanceTimersByTimeAsync(0);
@@ -204,7 +204,7 @@ test('a failed API response is logged with the request id the server gave it', a
   const log = await load();
   log.clearLogBuffer();
   const { api } = await import('../../src/api/client.ts');
-  const { Done } = await import('@voice-room/shared/contracts/http');
+  const { Done } = await import('@voiceroom/shared/contracts/http');
   await expect(api.get('/api/friends', Done)).rejects.toThrow('Нет доступа');
   const records = (await import('../../src/shared/log.ts')).readLogBuffer();
   expect(records.at(-1)).toMatchObject({

@@ -7,7 +7,7 @@ import {
   sanitizeRecoveryCode,
   type RealtimeRecoveryOptions,
   type ReplacementOutcome
-} from '@voice-room/call/engine/recovery/realtime-recovery';
+} from '@voiceroom/call/engine/recovery/realtime-recovery';
 
 function deferred() {
   let resolve = (_outcome: ReplacementOutcome) => {};
@@ -192,7 +192,7 @@ test('recovery timers invoke injected schedulers without rebinding their receive
 });
 
 test('a later transport regression invalidates an in-place reconcile completion', async () => {
-  const { LiveKitReconcileGeneration } = await import('@voice-room/call/engine/recovery/livekit-reconcile-generation');
+  const { LiveKitReconcileGeneration } = await import('@voiceroom/call/engine/recovery/livekit-reconcile-generation');
   const generation = new LiveKitReconcileGeneration();
   const reconnected = generation.capture();
   generation.invalidate();

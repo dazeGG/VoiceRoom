@@ -1,6 +1,6 @@
 import { render } from '@testing-library/vue';
 import { expect, test } from 'vitest';
-import { Ellipsis } from '@voice-room/ui/components';
+import { Ellipsis } from '@voiceroom/ui-kit/components';
 
 test('the text is shown in a truncating span whose title is the full text', () => {
   const { container } = render(Ellipsis, { props: { text: 'Длинное имя' } });

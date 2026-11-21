@@ -14,15 +14,15 @@ import {
   type AccountsQuery,
   type AdminActionKind,
   type BlockDuration
-} from '@voice-room/shared/contracts/admin';
-import type { AccountBadge } from '@voice-room/shared/contracts/users';
+} from '@voiceroom/shared/contracts/admin';
+import type { AccountBadge } from '@voiceroom/shared/contracts/users';
 import type { Logger } from 'pino';
 import { LOG_EVENTS } from '../../lib/log-events.ts';
 import type { AccountStandingRepository } from '../account/account-standing.repository.ts';
 import type { AccountDeletionRepository } from '../account/account-deletion.repository.ts';
 import type { AdminAccountsRepository, StoredAccountRow } from './admin-accounts.repository.ts';
 import type { AdminActionInput, AdminActionRepository } from './admin-action.repository.ts';
-import type { StaffPermission } from '@voice-room/shared/contracts/staff';
+import type { StaffPermission } from '@voiceroom/shared/contracts/staff';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 export const BLOCK_SPANS: Record<BlockDuration, number | null> = {

@@ -1,14 +1,14 @@
 import type pg from 'pg';
-import type { InboxPage, NotificationLevel } from '@voice-room/shared/contracts/notifications';
+import type { InboxPage, NotificationLevel } from '@voiceroom/shared/contracts/notifications';
 import { transaction } from '../../platform/db/pool.ts';
-import { isOneOf } from '@voice-room/shared/guards';
+import { isOneOf } from '@voiceroom/shared/guards';
 import {
   buildNotificationEnvelope,
   buildProviderPayload,
   NOTIFICATION_LEVELS,
   normalizeNotificationItem,
   normalizeNotificationLimit
-} from '@voice-room/shared/notifications';
+} from '@voiceroom/shared/notifications';
 import type { CursorTuple } from '../../platform/cursor-codec.ts';
 import type { InboxNotification, InboxRepository } from './inbox.repository.ts';
 import type { MentionEligibilityService } from './mention-eligibility.service.ts';

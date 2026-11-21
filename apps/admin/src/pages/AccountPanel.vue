@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { ArrowUpRight, PhoneCall } from '@lucide/vue';
-import type { AccountDetail, BlockDuration, LiveRoom, RoomCall } from '@voice-room/shared/contracts/admin';
+import type { AccountDetail, BlockDuration, LiveRoom, RoomCall } from '@voiceroom/shared/contracts/admin';
 import { blockAccount, fetchAccount, fetchRoomCalls, signOutAccount, unblockAccount } from '../api/admin.ts';
 import {
   formatAgo,

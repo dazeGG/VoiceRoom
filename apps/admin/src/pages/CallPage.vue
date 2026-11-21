@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 import { ArrowLeft, History } from '@lucide/vue';
-import type { RoomCall, VoiceMinute } from '@voice-room/shared/contracts/admin';
+import type { RoomCall, VoiceMinute } from '@voiceroom/shared/contracts/admin';
 import { fetchLiveCall, fetchRoomCall } from '../api/admin.ts';
 import { ApiError } from '../api/client.ts';
 import {

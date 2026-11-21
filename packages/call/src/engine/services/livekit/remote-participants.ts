@@ -3,7 +3,7 @@ import { getCallPorts, getInstalledCallPorts } from '../../ports';
 // which of their tracks to subscribe to, and what to do as tracks come and go.
 // Screens get a grace period through reconnects before they count as gone.
 
-import { t } from '@voice-room/ui/i18n';
+import { t } from '@voiceroom/ui-kit/i18n';
 import { markRaw } from 'vue';
 import type { Room, RemoteParticipant, RemoteTrack, RemoteTrackPublication, TrackPublication } from 'livekit-client';
 import { state } from '../../core/room-runtime.store';

@@ -1,6 +1,6 @@
-import { t } from '@voice-room/ui/i18n';
-import { NETWORK_THRESHOLDS } from '@voice-room/shared/network-quality';
-import type { VoiceCause } from '@voice-room/shared/contracts/rooms';
+import { t } from '@voiceroom/ui-kit/i18n';
+import { NETWORK_THRESHOLDS } from '@voiceroom/shared/network-quality';
+import type { VoiceCause } from '@voiceroom/shared/contracts/rooms';
 import { PEER_LATENCY_GOOD_MS } from '../core/config';
 import { state } from '../core/room-runtime.store';
 import type { LocalConnectionQuality, ServerConnection, VoiceConnection } from '../core/types';

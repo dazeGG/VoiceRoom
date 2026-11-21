@@ -4,12 +4,12 @@
 import { screen, waitFor } from '@testing-library/vue';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
-import { restoreOutputDevice, setOutputDevice } from '@voice-room/call/engine';
+import { restoreOutputDevice, setOutputDevice } from '@voiceroom/call/engine';
 import SoundSettings from '@/features/home/components/settings/SoundSettings.vue';
 import { stubOverlayDom } from '../helpers/overlay-dom';
 import { renderWithApp } from '../helpers/render';
 
-vi.mock('@voice-room/call/engine', async (importOriginal) => ({
+vi.mock('@voiceroom/call/engine', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   restoreOutputDevice: vi.fn(async () => true),
   setOutputDevice: vi.fn(async () => true)

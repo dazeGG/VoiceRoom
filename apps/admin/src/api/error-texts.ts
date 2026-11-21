@@ -1,7 +1,7 @@
 // What the admin app says for the refusals its endpoints give. A code it does
 // not know falls back to the text of the call that failed.
 
-import type { ErrorCode } from '@voice-room/shared/contracts/errors';
+import type { ErrorCode } from '@voiceroom/shared/contracts/errors';
 
 export const ERROR_TEXTS = {
   authentication_required: 'Войдите в аккаунт VoiceRoom',

@@ -5,7 +5,7 @@ import {
   parseWidgetBootstrap,
   widgetEmbedMarkup as widgetSnippet,
   type WidgetConfig
-} from '@voice-room/shared/contracts/widget';
+} from '@voiceroom/shared/contracts/widget';
 import { mountWidget } from '../src/loader';
 const disposals: (() => void)[] = [];
 afterEach(() => {

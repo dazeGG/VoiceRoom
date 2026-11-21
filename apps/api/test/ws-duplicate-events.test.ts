@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { openWs, sendWs, joinVoiceRoom, waitForWsType } from './ws-harness.ts';
 import { createTestDatabase } from './db-harness.ts';
-import { RoomCreated } from '@voice-room/shared/contracts/rooms';
+import { RoomCreated } from '@voiceroom/shared/contracts/rooms';
 import { request, socketDir, startServer, waitForHealthz, type ServerLogs } from './fakes/server-process.ts';
 
 const PEER_A = 'peer-dup-a1';

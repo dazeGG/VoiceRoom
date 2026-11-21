@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { Send } from '@lucide/vue';
-import { MEET_CHAT_MAX_BYTES } from '@voice-room/shared/contracts/realtime';
-import { Dialog, EmptyState, Field, IconButton, Textarea } from '@voice-room/ui/components';
-import { t } from '@voice-room/ui/i18n';
+import { MEET_CHAT_MAX_BYTES } from '@voiceroom/shared/contracts/realtime';
+import { Dialog, EmptyState, Field, IconButton, Textarea } from '@voiceroom/ui-kit/components';
+import { t } from '@voiceroom/ui-kit/i18n';
 import { computed, onBeforeUnmount, onMounted, ref, useTemplateRef, watch } from 'vue';
 import type { MeetTransport } from '@/adapters/meet-transport';
 

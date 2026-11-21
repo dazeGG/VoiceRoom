@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { IconButton, Popover } from '@voice-room/ui/components';
+import { IconButton, Popover } from '@voiceroom/ui-kit/components';
 import { t } from '@/shared/i18n';
 import { ref, watch } from 'vue';
 import { SmilePlus } from '@lucide/vue';

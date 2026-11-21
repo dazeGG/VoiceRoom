@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import { isRecord } from '@voice-room/shared/guards';
+import { isRecord } from '@voiceroom/shared/guards';
 import { DomainError } from './http/domain-error.ts';
 
 const CURSOR_CODEC_VERSION = 1;

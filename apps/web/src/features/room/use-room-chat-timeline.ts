@@ -9,7 +9,7 @@ import { ref } from 'vue';
 import { plainSnapshot } from '@/shared/utils/plain-snapshot';
 import { ApiError } from '@/api/client';
 import { fetchRoomChat, fetchRoomChatPage, type ChatMessage } from '@/api/rooms';
-import type { PublicPeer } from '@voice-room/shared/contracts/rooms';
+import type { PublicPeer } from '@voiceroom/shared/contracts/rooms';
 import { createHistoryCache } from '@/shared/chat/history-cache';
 import { createAnchoredHistory } from '@/shared/chat/anchored-history';
 import { createHistorySnapshots } from '@/shared/chat/history-snapshots';

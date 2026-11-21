@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { t } from '@voice-room/ui/i18n';
-import { Button, ParticipantTileFace } from '@voice-room/ui/components';
+import { t } from '@voiceroom/ui-kit/i18n';
+import { Button, ParticipantTileFace } from '@voiceroom/ui-kit/components';
 import { MonitorPlay } from '@lucide/vue';
 import { computed, ref, watch } from 'vue';
 import type { Participant } from '../engine/core/types';

@@ -10,14 +10,14 @@ import {
   Field,
   TextField,
   Select
-} from '@voice-room/ui/components';
+} from '@voiceroom/ui-kit/components';
 import { useLocalizedText, currentErrorMessage } from '@/shared/i18n/localized-text';
 
 import { t } from '@/shared/i18n';
 import { Ban, SlidersHorizontal, Users } from '@lucide/vue';
 import { Value } from 'typebox/value';
 import { computed, ref, watch } from 'vue';
-import { NotificationLevel } from '@voice-room/shared/contracts/notifications';
+import { NotificationLevel } from '@voiceroom/shared/contracts/notifications';
 import { fetchRoomNotificationLevel, setRoomNotificationLevel, type RoomNotificationLevel } from '@/api/notifications';
 import { deleteRoom, updateRoom } from '@/api/rooms';
 import ModerationCenter from '@/entities/room/components/ModerationCenter.vue';
@@ -26,9 +26,9 @@ import RoomMemberList from '@/entities/room/components/RoomMemberList.vue';
 import { saveRoomAvatarChange, type RoomAvatarChange } from '@/entities/room/room-avatar-change';
 import { APP_HOME } from '@/shared/app-home';
 import { BAN_UNDO_DURATION_MS, type ModerationNoticeOptions } from '@/entities/room/room-moderation';
-import { state as roomClientState } from '@voice-room/call/engine/core/room-runtime.store';
-import { applyRoomUpdated } from '@voice-room/call/engine/room/lifecycle';
-import { showToast } from '@voice-room/call/engine/ui/toast';
+import { state as roomClientState } from '@voiceroom/call/engine/core/room-runtime.store';
+import { applyRoomUpdated } from '@voiceroom/call/engine/room/lifecycle';
+import { showToast } from '@voiceroom/call/engine/ui/toast';
 import { useRoomSettingsStore } from '../room-settings.store';
 import { useRoomShell } from '../shell';
 

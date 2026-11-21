@@ -13,7 +13,7 @@
 // The first strained window relieves the call once (room.ts); the reason and
 // its figure go to the client log.
 
-import { CONCEALMENT_THRESHOLDS, NETWORK_THRESHOLDS } from '@voice-room/shared/network-quality';
+import { CONCEALMENT_THRESHOLDS, NETWORK_THRESHOLDS } from '@voiceroom/shared/network-quality';
 import { createLogger } from '../diagnostics';
 import type { CpuPressureState } from '../services/cpu-pressure';
 import type { PollCounts } from './call-quality';

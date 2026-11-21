@@ -9,7 +9,7 @@ import { escapeLike } from '../../platform/db/like.ts';
 import { friendOf, mapInvite, mapPublicUser, now, orderedPair } from './social-records.ts';
 import { epochMillis } from '../../platform/epoch-millis.ts';
 import { unreadCountsFor } from '../messaging/dm-thread.repository.ts';
-import { isRecord } from '@voice-room/shared/guards';
+import { isRecord } from '@voiceroom/shared/guards';
 
 export async function friendsOn(q: Database, a: string, b: string): Promise<boolean> {
   const [low, high] = orderedPair(a, b);

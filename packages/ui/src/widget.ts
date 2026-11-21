@@ -1,2 +1,2 @@
-export { default as WidgetCallLayout } from './components/Widget/WidgetCallLayout.vue';
-export { default as WidgetJoinControls } from './components/Widget/WidgetJoinControls.vue';
+export { default as WidgetCallLayout } from './views/widget/WidgetCallLayout.vue';
+export { default as WidgetJoinControls } from './views/widget/WidgetJoinControls.vue';

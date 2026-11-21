@@ -17,8 +17,8 @@ import {
   type RoomStay,
   type StaticRooms,
   type StaticRoomsQuery
-} from '@voice-room/shared/contracts/admin';
-import type { AdminCallFeedbackEntry, RoomCallDetail } from '@voice-room/shared/contracts/feedback';
+} from '@voiceroom/shared/contracts/admin';
+import type { AdminCallFeedbackEntry, RoomCallDetail } from '@voiceroom/shared/contracts/feedback';
 import type { PresencePeer } from '../rooms/room-views.ts';
 import type { DescribeAddress } from '../rooms/voice-session.repository.ts';
 import { avatarColorForPeerId } from '../rooms/avatar-color.ts';

@@ -1,7 +1,7 @@
 // Every failure code the API can send has a text on the web.
 
 import { expect, test } from 'vitest';
-import { ERROR_CODES } from '@voice-room/shared/contracts/errors';
+import { ERROR_CODES } from '@voiceroom/shared/contracts/errors';
 import { ERROR_TEXTS, errorText } from '../../src/api/error-texts.ts';
 
 test('the catalogue and the texts cover exactly the same codes', () => {

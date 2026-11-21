@@ -1,10 +1,10 @@
 import crypto from 'node:crypto';
-import { cleanPresenceStatus } from '@voice-room/shared/validation';
-import type { PresenceStatus } from '@voice-room/shared/contracts/users';
-import type { ClientKind } from '@voice-room/shared/contracts/admin';
-import { SESSION_ENDED_CLOSE_CODE, type ServerEnvelope, type TypingActivity } from '@voice-room/shared/realtime';
+import { cleanPresenceStatus } from '@voiceroom/shared/validation';
+import type { PresenceStatus } from '@voiceroom/shared/contracts/users';
+import type { ClientKind } from '@voiceroom/shared/contracts/admin';
+import { SESSION_ENDED_CLOSE_CODE, type ServerEnvelope, type TypingActivity } from '@voiceroom/shared/realtime';
 import type { createTypingThrottle } from './typing-throttle.ts';
-import type { ServerEvents } from '@voice-room/shared/contracts/realtime';
+import type { ServerEvents } from '@voiceroom/shared/contracts/realtime';
 import { buildServerEnvelope, sendWsEnvelope } from './envelope.ts';
 import { toWsAccountEvent } from './account-events.ts';
 import type { BoundedMap } from '../lib/bounded-map.ts';

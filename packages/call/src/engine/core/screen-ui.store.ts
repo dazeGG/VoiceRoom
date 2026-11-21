@@ -1,10 +1,10 @@
-import { t } from '@voice-room/ui/i18n';
+import { t } from '@voiceroom/ui-kit/i18n';
 import { defineStore } from 'pinia';
 import { computed, ref, shallowRef } from 'vue';
 import { state } from './room-runtime.store';
 import { MAX_STREAM_VOLUME } from './config';
-import { getAvatarPresentation } from '@voice-room/ui/avatar-presentation';
-import type { AvatarStackItem } from '@voice-room/ui/components';
+import { getAvatarPresentation } from '@voiceroom/ui/avatar-presentation';
+import type { AvatarStackItem } from '@voiceroom/ui-kit/components';
 import { getScreenProfileLabels } from '../media/profiles';
 import { getAllParticipants, getParticipantById } from '../room/participants';
 import type { Participant } from './types';

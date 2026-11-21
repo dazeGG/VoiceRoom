@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Button, Dialog, Field, TextField } from '@voice-room/ui/components';
+import { Button, Dialog, Field, TextField } from '@voiceroom/ui-kit/components';
 import { useLocalizedText, currentErrorMessage } from '@/shared/i18n/localized-text';
 
 import { t } from '@/shared/i18n';
@@ -7,13 +7,13 @@ import LanguageControl from '@/shared/i18n/LanguageControl.vue';
 import { CircleAlert } from '@lucide/vue';
 import { computed, ref } from 'vue';
 import { useRouter } from 'vue-router';
-import { normalizeRecoveryCode } from '@voice-room/shared/account-security';
-import { AccountFailure } from '@voice-room/shared/contracts/account';
+import { normalizeRecoveryCode } from '@voiceroom/shared/account-security';
+import { AccountFailure } from '@voiceroom/shared/contracts/account';
 import { login, recoverAccount, register, restoreAccount, type AuthUser } from '@/api/auth';
 import { ApiError, failureBody } from '@/api/client';
 import { APP_HOME } from '@/shared/app-home';
 import { dayMonth } from '@/shared/utils/date-format';
-import { iconMd } from '@voice-room/ui/icon-defaults';
+import { iconMd } from '@voiceroom/ui-kit/icon-defaults';
 import { LOGIN_HINT, PASSWORD_MIN_LENGTH, blockedMessage, isValidPassword, normalizeLogin } from './account';
 import type { AuthMode } from './auth-mode';
 import { useSessionStore } from './session.store';

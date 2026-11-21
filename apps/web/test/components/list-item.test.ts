@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/vue';
 import userEvent from '@testing-library/user-event';
 import { expect, test, vi } from 'vitest';
-import { ListItem } from '@voice-room/ui/components';
+import { ListItem } from '@voiceroom/ui-kit/components';
 
 test('an interactive row activates by click, Enter and Space and keeps its actions separate', async () => {
   const user = userEvent.setup();

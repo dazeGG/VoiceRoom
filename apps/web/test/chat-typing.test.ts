@@ -1,6 +1,6 @@
 import { test, onTestFinished, vi } from 'vitest';
 import assert from 'node:assert/strict';
-import * as shared from '@voice-room/shared/realtime';
+import * as shared from '@voiceroom/shared/realtime';
 
 async function loadTyping() {
   vi.resetModules();

@@ -1,0 +1,46 @@
+{
+  "name": "@voiceroom/ui-kit",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./components": "./src/components.ts",
+    "./components/widget-launcher": "./src/components/WidgetLauncher/index.ts",
+    "./icon-defaults": "./src/icon-defaults.ts",
+    "./i18n": "./src/i18n.ts",
+    "./fonts/*": "./src/assets/fonts/*",
+    "./styles/components/*": "./src/styles/components/_*.scss",
+    "./styles/room/*": "./src/styles/room/_*.scss",
+    "./styles/widget/*": "./src/styles/widget/_*.scss",
+    "./styles/*": "./src/styles/_*.scss",
+    "./toast": "./src/toast.ts",
+    "./hotkey": "./src/hotkey.ts",
+    "./avatar-colors": "./src/avatar-colors.ts",
+    "./avatar-initial": "./src/avatar-initial.ts"
+  },
+  "scripts": {
+    "storybook": "storybook dev -p 6006 --no-open",
+    "build-storybook": "storybook build -o storybook-static",
+    "check": "vue-tsc --noEmit"
+  },
+  "dependencies": {
+    "@lucide/vue": "^1.61.0",
+    "@voiceroom/shared": "file:../shared",
+    "reka-ui": "^2.11.0"
+  },
+  "peerDependencies": {
+    "pinia": "^4.1.0",
+    "vue": "^3.5.44"
+  },
+  "devDependencies": {
+    "@storybook/addon-a11y": "10.6.6",
+    "@storybook/addon-docs": "10.6.6",
+    "@storybook/vue3-vite": "10.6.6",
+    "@vitejs/plugin-vue": "^6.0.10",
+    "sass": "^1.106.1",
+    "storybook": "10.6.6",
+    "typescript": "^5.6.0",
+    "vite": "^8.0.0",
+    "vue-tsc": "^3.3.13"
+  }
+}

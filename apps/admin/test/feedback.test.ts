@@ -4,7 +4,7 @@
 import { cleanup, screen, waitFor, within } from '@testing-library/vue';
 import userEvent from '@testing-library/user-event';
 import { afterEach, expect, test, vi } from 'vitest';
-import type { AdminCallFeedbackPage } from '@voice-room/shared/contracts/feedback';
+import type { AdminCallFeedbackPage } from '@voiceroom/shared/contracts/feedback';
 import FeedbackPage from '../src/pages/FeedbackPage.vue';
 import { stubApi } from './helpers/api.ts';
 import { renderAsStaff } from './helpers/render.ts';

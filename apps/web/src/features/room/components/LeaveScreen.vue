@@ -10,7 +10,7 @@ import { useLeaveScreenStore } from '@/features/room/leave-screen.store';
 import { getDesktopBoundaryPolicy } from '@/platform/desktop-boundary';
 import { APP_HOME } from '@/shared/app-home';
 import { createLogger, errorContext } from '@/shared/log';
-import { Button, Separator, Dialog } from '@voice-room/ui/components';
+import { Button, Separator, Dialog } from '@voiceroom/ui-kit/components';
 
 const log = createLogger('room:leave');
 

@@ -6,9 +6,9 @@ import type {
   ReactionSummary,
   ReplyPointer,
   ReplyPreview
-} from '@voice-room/shared/contracts/messages';
-import { normalizeHistoryRequest } from '@voice-room/shared/messaging-history';
-import { normalizeLinkPreview } from '@voice-room/shared/link-preview';
+} from '@voiceroom/shared/contracts/messages';
+import { normalizeHistoryRequest } from '@voiceroom/shared/messaging-history';
+import { normalizeLinkPreview } from '@voiceroom/shared/link-preview';
 import type { CursorCodec, CursorTuple } from '../../platform/cursor-codec.ts';
 import type { JsonObject } from '../../platform/db/schema.ts';
 import { epochMillis } from '../../platform/epoch-millis.ts';

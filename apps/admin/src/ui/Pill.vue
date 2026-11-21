@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Tag } from '@voice-room/ui/components';
+import { Tag } from '@voiceroom/ui-kit/components';
 import type { Tone } from './types.ts';
 
 withDefaults(defineProps<{ tone?: Tone; dot?: boolean; compact?: boolean }>(), { tone: 'neutral' });

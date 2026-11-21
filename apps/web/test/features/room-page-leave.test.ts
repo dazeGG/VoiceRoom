@@ -8,7 +8,7 @@ import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 
 const leaveRoom = vi.fn();
 
-vi.mock('@voice-room/call/engine/room/room', () => ({
+vi.mock('@voiceroom/call/engine/room/room', () => ({
   joinRoom: vi.fn(async () => {}),
   leaveRoom,
   showRoomEntryFailure: vi.fn(),
@@ -18,7 +18,7 @@ vi.mock('@voice-room/call/engine/room/room', () => ({
 }));
 
 setActivePinia(createPinia());
-const { mountRoomClient } = await import('@voice-room/call/engine/main');
+const { mountRoomClient } = await import('@voiceroom/call/engine/main');
 
 let unmount: (() => void) | null = null;
 

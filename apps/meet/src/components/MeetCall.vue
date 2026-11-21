@@ -1,17 +1,17 @@
 <script setup lang="ts">
 import { MessageSquareText } from '@lucide/vue';
 import { computed, onBeforeUnmount, onMounted, ref, useId, useTemplateRef, watchEffect } from 'vue';
-import { RoomStage, ParticipantTile, StageTiles } from '@voice-room/call/views';
-import { useParticipantsUiStore } from '@voice-room/call/engine/core/participants-ui.store';
-import { useScreenUiStore } from '@voice-room/call/engine/core/screen-ui.store';
-import { useToastUiStore } from '@voice-room/call/engine/core/toast-ui.store';
-import { state } from '@voice-room/call/engine/core/room-runtime.store';
-import { enterScreenView, leaveScreenView } from '@voice-room/call/engine/ui/screen-view';
-import { syncRemoteCameraDemand } from '@voice-room/call/engine/services/livekit/remote-participants';
-import type { RoomCapabilities } from '@voice-room/shared/contracts/rooms';
-import { getAvatarPresentation } from '@voice-room/ui/avatar-presentation';
-import { Button, Toast } from '@voice-room/ui/components';
-import { t } from '@voice-room/ui/i18n';
+import { RoomStage, ParticipantTile, StageTiles } from '@voiceroom/call/views';
+import { useParticipantsUiStore } from '@voiceroom/call/engine/core/participants-ui.store';
+import { useScreenUiStore } from '@voiceroom/call/engine/core/screen-ui.store';
+import { useToastUiStore } from '@voiceroom/call/engine/core/toast-ui.store';
+import { state } from '@voiceroom/call/engine/core/room-runtime.store';
+import { enterScreenView, leaveScreenView } from '@voiceroom/call/engine/ui/screen-view';
+import { syncRemoteCameraDemand } from '@voiceroom/call/engine/services/livekit/remote-participants';
+import type { RoomCapabilities } from '@voiceroom/shared/contracts/rooms';
+import { getAvatarPresentation } from '@voiceroom/ui/avatar-presentation';
+import { Button, Toast } from '@voiceroom/ui-kit/components';
+import { t } from '@voiceroom/ui-kit/i18n';
 import MeetChat from '@/components/MeetChat.vue';
 import MeetDock from '@/components/MeetDock.vue';
 import MeetScreen from '@/components/MeetScreen.vue';

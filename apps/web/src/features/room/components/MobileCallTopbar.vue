@@ -1,15 +1,15 @@
 <script setup lang="ts">
-import { IconButton, Badge, Avatar, Pressable, ControlGroup } from '@voice-room/ui/components';
+import { IconButton, Badge, Avatar, Pressable, ControlGroup } from '@voiceroom/ui-kit/components';
 import { t } from '@/shared/i18n';
 import { LayoutGrid, MessageSquare, Users } from '@lucide/vue';
 import { computed } from 'vue';
-import { isRecord } from '@voice-room/shared/guards';
-import { state as roomClientState } from '@voice-room/call/engine/core/room-runtime.store';
-import { showToast } from '@voice-room/call/engine/ui/toast';
+import { isRecord } from '@voiceroom/shared/guards';
+import { state as roomClientState } from '@voiceroom/call/engine/core/room-runtime.store';
+import { showToast } from '@voiceroom/call/engine/ui/toast';
 import { useMobileCallUiStore } from '@/features/room/mobile-call-ui.store';
-import { useParticipantsUiStore } from '@voice-room/call/engine/core/participants-ui.store';
+import { useParticipantsUiStore } from '@voiceroom/call/engine/core/participants-ui.store';
 import { useRoomPanelToggleStore } from '@/features/room/room-panel-toggle.store';
-import { useVoiceSessionStore } from '@voice-room/call/engine/core/voice-session.store';
+import { useVoiceSessionStore } from '@voiceroom/call/engine/core/voice-session.store';
 import { copyText } from '@/shared/utils/clipboard';
 import RoomCallTimer from './RoomCallTimer.vue';
 

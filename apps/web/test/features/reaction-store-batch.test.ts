@@ -4,7 +4,7 @@
 // requests, and a voice token took two seconds instead of fifty milliseconds.
 
 import { expect, test, vi } from 'vitest';
-import { MAX_REACTION_BATCH } from '@voice-room/shared/contracts/messages';
+import { MAX_REACTION_BATCH } from '@voiceroom/shared/contracts/messages';
 import { createReactionStore } from '@/shared/chat/reaction-store';
 
 const URL_START = '/api/reactions/room/kitchen?ids=';

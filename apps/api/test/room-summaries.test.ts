@@ -3,7 +3,7 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { SUMMARY_COALESCE_MS } from '@voice-room/shared/realtime';
+import { SUMMARY_COALESCE_MS } from '@voiceroom/shared/realtime';
 
 import { createRoomSummaries, type RoomSummaryDeps } from '../src/realtime/room-summaries.ts';
 import { fake, recordingLogger } from './fakes/index.ts';

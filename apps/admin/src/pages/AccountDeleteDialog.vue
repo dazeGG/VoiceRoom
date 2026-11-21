@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
-import { ADMIN_REASON_MAX_LENGTH } from '@voice-room/shared/contracts/admin';
-import { Button, Callout, Field, Textarea, TextField } from '@voice-room/ui/components';
+import { ADMIN_REASON_MAX_LENGTH } from '@voiceroom/shared/contracts/admin';
+import { Button, Callout, Field, Textarea, TextField } from '@voiceroom/ui-kit/components';
 import Dialog from '../ui/Dialog.vue';
 
 const props = defineProps<{

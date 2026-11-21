@@ -1,4 +1,4 @@
-import type { MemberPresenceStatus } from '@voice-room/shared/contracts/membership';
+import type { MemberPresenceStatus } from '@voiceroom/shared/contracts/membership';
 import { screen, waitFor } from '@testing-library/vue';
 import userEvent from '@testing-library/user-event';
 import { expect, test } from 'vitest';

@@ -7,7 +7,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, expect, test } from 'vitest';
 import { nextTick } from 'vue';
 import RoomTopbar from '@/features/room/components/RoomTopbar.vue';
-import { state as roomClientState } from '@voice-room/call/engine/core/room-runtime.store';
+import { state as roomClientState } from '@voiceroom/call/engine/core/room-runtime.store';
 import { useRoomUiStore } from '@/features/room/room-ui.store';
 import { usePageStore } from '@/stores/page.store';
 import { stubFetch } from '../fixtures/fetch.ts';

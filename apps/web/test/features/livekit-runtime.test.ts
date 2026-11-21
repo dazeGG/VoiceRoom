@@ -7,12 +7,12 @@ import { freshImport } from '../helpers/fresh-module';
 
 test('a failed LiveKit load is tried again by the next caller', async () => {
   let loads = 0;
-  vi.doMock('@voice-room/call/engine/media/livekit-client', () => {
+  vi.doMock('@voiceroom/call/engine/media/livekit-client', () => {
     loads += 1;
     if (loads === 1) throw new Error('Failed to fetch dynamically imported module');
     return { Room: class {} };
   });
-  const { loadLiveKitClient } = await freshImport(() => import('@voice-room/call/engine/media/livekit-runtime'));
+  const { loadLiveKitClient } = await freshImport(() => import('@voiceroom/call/engine/media/livekit-runtime'));
 
   await expect(loadLiveKitClient()).rejects.toThrow();
   await expect(loadLiveKitClient()).resolves.toHaveProperty('Room');
@@ -21,11 +21,11 @@ test('a failed LiveKit load is tried again by the next caller', async () => {
 
 test('callers share one load while it succeeds', async () => {
   let loads = 0;
-  vi.doMock('@voice-room/call/engine/media/livekit-client', () => {
+  vi.doMock('@voiceroom/call/engine/media/livekit-client', () => {
     loads += 1;
     return { Room: class {} };
   });
-  const { loadLiveKitClient } = await freshImport(() => import('@voice-room/call/engine/media/livekit-runtime'));
+  const { loadLiveKitClient } = await freshImport(() => import('@voiceroom/call/engine/media/livekit-runtime'));
 
   const [first, second] = await Promise.all([loadLiveKitClient(), loadLiveKitClient()]);
   expect(first).toBe(second);

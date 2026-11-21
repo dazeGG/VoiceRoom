@@ -3,7 +3,7 @@ import type pg from 'pg';
 import { kyselyOn, type Database } from '../../platform/db/kysely.ts';
 import { transaction as runInTransaction } from '../../platform/db/pool.ts';
 import { epochMillis } from '../../platform/epoch-millis.ts';
-import { normalizeRoomMessageContent, type RoomMessageContentV1 } from '@voice-room/shared/room-message-content';
+import { normalizeRoomMessageContent, type RoomMessageContentV1 } from '@voiceroom/shared/room-message-content';
 
 type QueryClient = Pick<pg.PoolClient, 'query'>;
 

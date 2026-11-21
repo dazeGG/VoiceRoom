@@ -1,4 +1,4 @@
-import type { SystemSample } from '@voice-room/shared/contracts/admin';
+import type { SystemSample } from '@voiceroom/shared/contracts/admin';
 
 export function percent(used: number | null, total: number | null): number | null {
   return used !== null && total ? (used / total) * 100 : null;

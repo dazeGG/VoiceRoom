@@ -16,7 +16,7 @@
 //   .desktop-build-icon/-copy/-name/-meta -> .desktop-card__build-icon/-copy/-name/-meta
 //   .desktop-card-note           -> .desktop-card__note
 //   .desktop-card-cmd            -> .desktop-card__cmd
-@use 'pkg:@voice-room/ui/styles/mixins' as *;
+@use 'pkg:@voiceroom/ui-kit/styles/mixins' as *;
 
 .desktop-card {
   display: flex;

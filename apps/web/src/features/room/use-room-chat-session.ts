@@ -26,9 +26,9 @@ import { createReactionStore } from '@/shared/chat/reaction-store';
 import { createReadReconciliation } from '@/shared/chat/read-reconciliation';
 import { createTypingTracker, formatTypingLabel, typingActivityOf } from '@/shared/chat/typing';
 import { createLogger, errorContext } from '@/shared/log';
-import type { RoomMessageContentV1 } from '@voice-room/shared/room-message-content';
-import { playRoomChatMessageCue } from '@voice-room/call/engine/media/cues';
-import type { applyRoomDeleted, applyRoomNotFound, applyRoomUpdated } from '@voice-room/call/engine/room/lifecycle';
+import type { RoomMessageContentV1 } from '@voiceroom/shared/room-message-content';
+import { playRoomChatMessageCue } from '@voiceroom/call/engine/media/cues';
+import type { applyRoomDeleted, applyRoomNotFound, applyRoomUpdated } from '@voiceroom/call/engine/room/lifecycle';
 import { useRoomPinsStore } from './pins.store';
 import { useRoomChatTimeline } from './use-room-chat-timeline';
 

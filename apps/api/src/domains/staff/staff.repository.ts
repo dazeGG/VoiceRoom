@@ -4,7 +4,7 @@
 // still has a role or is named in the settings.
 
 import type pg from 'pg';
-import { isStaffRole, type StaffRole } from '@voice-room/shared/contracts/staff';
+import { isStaffRole, type StaffRole } from '@voiceroom/shared/contracts/staff';
 import { kyselyOn } from '../../platform/db/kysely.ts';
 
 const avatarUrl = (key: string | null) => (key ? `/api/avatars/${encodeURIComponent(key)}` : null);

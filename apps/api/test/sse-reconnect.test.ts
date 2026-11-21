@@ -13,7 +13,7 @@ import {
   type ServerLogs
 } from './fakes/server-process.ts';
 import { openWs, joinVoiceRoom, sendRawWs, sendWs, waitForWsType } from './ws-harness.ts';
-import { PeerState, RoomCreated } from '@voice-room/shared/contracts/rooms';
+import { PeerState, RoomCreated } from '@voiceroom/shared/contracts/rooms';
 
 const PEER_A = 'peer-alice1';
 const PEER_B = 'peer-bobbb1';

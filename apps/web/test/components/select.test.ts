@@ -1,7 +1,7 @@
 import { render, screen, within } from '@testing-library/vue';
 import userEvent from '@testing-library/user-event';
 import { expect, test, vi } from 'vitest';
-import { Field, Select, type SelectSize } from '@voice-room/ui/components';
+import { Field, Select, type SelectSize } from '@voiceroom/ui-kit/components';
 import { defineComponent, h, shallowRef } from 'vue';
 import EmojiText from '@/shared/chat/EmojiText.vue';
 import { stubOverlayDom } from '../helpers/overlay-dom';

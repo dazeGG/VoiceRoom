@@ -6,8 +6,8 @@
 import net from 'node:net';
 import type { FastifyInstance } from 'fastify';
 import WebSocket from 'ws';
-import type { ClientCommands, ClientCommandType, ServerFrame } from '@voice-room/shared/contracts/realtime';
-import { parseServerFrame } from '@voice-room/shared/realtime';
+import type { ClientCommands, ClientCommandType, ServerFrame } from '@voiceroom/shared/contracts/realtime';
+import { parseServerFrame } from '@voiceroom/shared/realtime';
 
 export type FrameType = ServerFrame['type'];
 

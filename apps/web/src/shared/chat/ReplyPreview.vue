@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Pressable } from '@voice-room/ui/components';
+import { Pressable } from '@voiceroom/ui-kit/components';
 import { t } from '@/shared/i18n';
 import { computed } from 'vue';
 import EmojiText from './EmojiText.vue';

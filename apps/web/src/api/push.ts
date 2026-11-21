@@ -1,6 +1,6 @@
-import { Done } from '@voice-room/shared/contracts/http';
-import { PushConfig, SubscribeBody, UnsubscribeBody } from '@voice-room/shared/contracts/notifications';
-import { PushRegistrationConflict, PushRegistrationSuccess } from '@voice-room/shared/contracts/push-registration';
+import { Done } from '@voiceroom/shared/contracts/http';
+import { PushConfig, SubscribeBody, UnsubscribeBody } from '@voiceroom/shared/contracts/notifications';
+import { PushRegistrationConflict, PushRegistrationSuccess } from '@voiceroom/shared/contracts/push-registration';
 import { Value } from 'typebox/value';
 import { getLocale } from '@/shared/i18n';
 import { api, ApiError, failureBody, isJsonObject } from './client';

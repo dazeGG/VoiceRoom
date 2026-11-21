@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Button, Callout } from '@voice-room/ui/components';
+import { Button, Callout } from '@voiceroom/ui-kit/components';
 import type { LoadFailure } from './load-failure.ts';
 
 defineProps<{ failure: LoadFailure }>();

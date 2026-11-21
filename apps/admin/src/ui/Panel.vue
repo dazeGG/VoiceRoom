@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Card } from '@voice-room/ui/components';
+import { Card } from '@voiceroom/ui-kit/components';
 import { useId } from 'vue';
 
 defineProps<{ title?: string; flush?: boolean }>();

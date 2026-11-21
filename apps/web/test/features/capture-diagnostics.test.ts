@@ -19,7 +19,7 @@ async function load() {
     }),
     reportClientLogs: report
   }));
-  return freshImport(() => import('@voice-room/call/engine/room/capture-diagnostics'));
+  return freshImport(() => import('@voiceroom/call/engine/room/capture-diagnostics'));
 }
 
 afterEach(() => {
@@ -358,7 +358,7 @@ test('owned suspend and resume do not masquerade as external transitions or spen
 
 test('an old capture owned transition cannot hide a new capture external suspension', async () => {
   const diagnostics = await load();
-  const { state } = await import('@voice-room/call/engine/core/room-runtime.store');
+  const { state } = await import('@voiceroom/call/engine/core/room-runtime.store');
   diagnostics.startCaptureDiagnostics();
   const snapshot = (contextState: string) => ({
     generation: 1,

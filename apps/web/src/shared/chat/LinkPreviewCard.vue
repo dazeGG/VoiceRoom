@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-import { linkPreviewImageUrl, type LinkPreview } from '@voice-room/shared/link-preview';
+import { linkPreviewImageUrl, type LinkPreview } from '@voiceroom/shared/link-preview';
 import EmojiText from './EmojiText.vue';
 
 const { preview } = defineProps<{ preview: LinkPreview }>();

@@ -1,6 +1,6 @@
 import { callPageState } from '../core/call-page.store';
 import { getCallPorts, getInstalledCallPorts } from '../ports';
-import { t } from '@voice-room/ui/i18n';
+import { t } from '@voiceroom/ui-kit/i18n';
 import { useStartUiStore } from '../core/start-ui.store';
 import { useVoiceSessionStore } from '../core/voice-session.store';
 import { state } from '../core/room-runtime.store';
@@ -10,7 +10,7 @@ import { finishJoinTiming, lastJoinStage, markJoinStage, startJoinTiming } from 
 import { postState } from './presence';
 import { wait } from '../core/utils';
 import { getRoomShell, isRoomEmbedded } from '../core/embed';
-import { CALL_FEEDBACK_MAX_DURATION_S } from '@voice-room/shared/contracts/feedback';
+import { CALL_FEEDBACK_MAX_DURATION_S } from '@voiceroom/shared/contracts/feedback';
 import { getDisplayName, updateNameStatuses } from '../ui/names';
 import { resetConnectionStatus, setServerConnectionStatus, setVoiceConnectionStatus } from '../ui/status';
 import { resetPushToTalkState } from '../ui/controls';

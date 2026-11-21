@@ -5,7 +5,7 @@ import {
   TYPING_NOTICE_INTERVAL_MS,
   TYPING_NOTICE_TTL_MS,
   type TypingActivity
-} from '@voice-room/shared/realtime';
+} from '@voiceroom/shared/realtime';
 
 export { TYPING_ACTIVITIES, TYPING_NOTICE_INTERVAL_MS, TYPING_NOTICE_TTL_MS, type TypingActivity };
 

@@ -1,5 +1,5 @@
 import type pg from 'pg';
-import type { Ban, BanPage } from '@voice-room/shared/contracts/moderation';
+import type { Ban, BanPage } from '@voiceroom/shared/contracts/moderation';
 import {
   buildModerationPage,
   durationToExpiresAt,
@@ -7,7 +7,7 @@ import {
   normalizeIdempotencyKey,
   normalizeModerationPageRequest,
   type BanMutation
-} from '@voice-room/shared/moderation';
+} from '@voiceroom/shared/moderation';
 import { kyselyOn } from '../../platform/db/kysely.ts';
 import { lockKeys, lockXact } from '../../platform/db/locks.ts';
 import { transaction } from '../../platform/db/pool.ts';

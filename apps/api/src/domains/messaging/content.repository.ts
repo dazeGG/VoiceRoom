@@ -5,7 +5,7 @@ import {
   normalizeRoomMessageContent,
   projectRoomMessageContent,
   type RoomMessageContentV1
-} from '@voice-room/shared/room-message-content';
+} from '@voiceroom/shared/room-message-content';
 
 export type ContentRepository = Readonly<{
   prepareWrite(input: { content?: unknown; text?: unknown }): { content: RoomMessageContentV1; text: string };

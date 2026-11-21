@@ -8,7 +8,7 @@
 - Configuration is read only in `src/app/config.ts`; do not read `process.env` elsewhere.
 - PostgreSQL is the durable source of truth. Preserve transaction boundaries and test rollback/failure paths.
 - Add or update tests under `test/` for every behaviour change; see the root `AGENTS.md` testing rules.
-- Verify with `npm --workspace @voice-room/api run check` and `npm --workspace @voice-room/api run test` with `TEST_DATABASE_URL` configured.
+- Verify with `npm --workspace @voiceroom/api run check` and `npm --workspace @voiceroom/api run test` with `TEST_DATABASE_URL` configured.
 - Schema changes require forward migration, rollback coverage, and release-plan notes when compatibility is affected.
-- After a schema change, regenerate the Kysely types with `DATABASE_URL=<migrated db> npm --workspace @voice-room/api run db:types`; `test/db-schema-types.test.ts` fails while `src/platform/db/schema.ts` is stale.
+- After a schema change, regenerate the Kysely types with `DATABASE_URL=<migrated db> npm --workspace @voiceroom/api run db:types`; `test/db-schema-types.test.ts` fails while `src/platform/db/schema.ts` is stale.
 - Follow `../../docs/GIT_FLOW.md` for all commits, branches, pull requests, hotfixes, and releases.

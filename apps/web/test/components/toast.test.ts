@@ -2,8 +2,8 @@ import { render, screen, within } from '@testing-library/vue';
 import userEvent from '@testing-library/user-event';
 import { expect, test, vi } from 'vitest';
 import { defineComponent, h, nextTick, ref } from 'vue';
-import { Dialog, Toast } from '@voice-room/ui/components';
-import type { ToastItem } from '@voice-room/ui/toast';
+import { Dialog, Toast } from '@voiceroom/ui-kit/components';
+import type { ToastItem } from '@voiceroom/ui-kit/toast';
 
 const message = 'Настройки сохранены';
 

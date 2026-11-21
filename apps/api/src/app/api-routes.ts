@@ -4,7 +4,7 @@
 import { roomAllowsSurface } from '../domains/rooms/room-surface.policy.ts';
 import { registerWidgetRoomRoutes } from '../domains/rooms/widget.routes.ts';
 import type { FastifyInstance } from 'fastify';
-import { outdatedAndroidVersion } from '@voice-room/shared/client-version';
+import { outdatedAndroidVersion } from '@voiceroom/shared/client-version';
 import type { ApiContext } from './context.ts';
 import type { RateLimits } from './rate-limits.ts';
 import type { createServiceRegistry } from './service-registry.ts';

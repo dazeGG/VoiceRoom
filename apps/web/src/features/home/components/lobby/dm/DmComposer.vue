@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { IconButton } from '@voice-room/ui/components';
+import { IconButton } from '@voiceroom/ui-kit/components';
 // The compose field of one thread. It is mounted per thread, so the unsent
 // text it brings back and stores belongs to that thread alone.
 import { t } from '@/shared/i18n';

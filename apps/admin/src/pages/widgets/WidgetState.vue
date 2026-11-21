@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-import type { AdminWidgets, WidgetRuntimeOwnerState } from '@voice-room/shared/contracts/admin';
+import type { AdminWidgets, WidgetRuntimeOwnerState } from '@voiceroom/shared/contracts/admin';
 import { formatCount } from '../../format.ts';
 import { Panel, Pill } from '../../ui';
 

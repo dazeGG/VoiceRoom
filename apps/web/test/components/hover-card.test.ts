@@ -2,7 +2,7 @@ import { render, screen, waitFor } from '@testing-library/vue';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, expect, test } from 'vitest';
 import { h } from 'vue';
-import { HoverCard } from '@voice-room/ui/components';
+import { HoverCard } from '@voiceroom/ui-kit/components';
 import { stubMatchMedia } from '../helpers/match-media';
 import { stubOverlayDom } from '../helpers/overlay-dom';
 

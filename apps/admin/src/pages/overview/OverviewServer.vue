@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-import type { AdminOverview, SystemStats } from '@voice-room/shared/contracts/admin';
+import type { AdminOverview, SystemStats } from '@voiceroom/shared/contracts/admin';
 import { formatBytes, formatCount, formatMs, formatPercent, formatSince } from '../../format.ts';
 import { Card, EmptyState } from '../../ui';
 import { lossIn, lossOut, percent } from '../system-metrics.ts';

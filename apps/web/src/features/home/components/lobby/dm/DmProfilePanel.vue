@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { IconButton, Avatar, Button } from '@voice-room/ui/components';
+import { IconButton, Avatar, Button } from '@voiceroom/ui-kit/components';
 import { t } from '@/shared/i18n';
 import { Bell, BellOff, UserMinus, X } from '@lucide/vue';
 import { computed, ref } from 'vue';
@@ -7,7 +7,7 @@ import type { PublicUser } from '@/api/friends';
 import EmojiText from '@/shared/chat/EmojiText.vue';
 import { useNotificationPreferencesStore } from '@/shared/notifications/preferences.store';
 import type { PresenceStatus } from '@/shared/presence';
-import { iconMd } from '@voice-room/ui/icon-defaults';
+import { iconMd } from '@voiceroom/ui-kit/icon-defaults';
 import { displayNameOf } from '@/shared/utils/display-name';
 import { useLobby } from '../../../model/lobby-context';
 

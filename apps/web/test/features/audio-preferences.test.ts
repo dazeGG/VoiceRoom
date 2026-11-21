@@ -8,7 +8,7 @@ import {
   getParticipantAudioPreference,
   getParticipantAudioPreferenceKey,
   storeParticipantAudioPreference
-} from '@voice-room/call/engine/core/settings';
+} from '@voiceroom/call/engine/core/settings';
 
 beforeEach(async () => {
   localStorage.clear();
@@ -51,7 +51,7 @@ test('the interface sound volume is a stored percentage', () => {
 });
 
 test('the master volume is stored as a whole percent between 0 and 200', async () => {
-  const { getStoredMasterVolume, persistMasterVolume } = await import('@voice-room/call/engine/core/settings');
+  const { getStoredMasterVolume, persistMasterVolume } = await import('@voiceroom/call/engine/core/settings');
   expect(getStoredMasterVolume()).toBe(100);
   expect(persistMasterVolume(250)).toBe(200);
   expect(persistMasterVolume(-1)).toBe(0);

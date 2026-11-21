@@ -4,8 +4,8 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import type { RoomStay } from '@voice-room/shared/contracts/admin';
-import type { StaffPermission } from '@voice-room/shared/contracts/staff';
+import type { RoomStay } from '@voiceroom/shared/contracts/admin';
+import type { StaffPermission } from '@voiceroom/shared/contracts/staff';
 import { createCallFeedbackService } from '../src/domains/feedback/call-feedback.service.ts';
 import type { StoredCallFeedback } from '../src/domains/feedback/call-feedback.repository.ts';
 import type { StayAsk } from '../src/domains/admin/admin-rooms.repository.ts';

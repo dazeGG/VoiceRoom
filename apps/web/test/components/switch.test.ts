@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/vue';
 import userEvent from '@testing-library/user-event';
 import { expect, test, vi } from 'vitest';
-import { Switch } from '@voice-room/ui/components';
+import { Switch } from '@voiceroom/ui-kit/components';
 import { defineComponent, h, ref } from 'vue';
 
 test('click and Space toggle the switch through v-model', async () => {

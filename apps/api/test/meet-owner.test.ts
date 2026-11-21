@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { MeetOwnerAuthorization, MeetRoomCreated, MeetRoomStatus } from '@voice-room/shared/contracts/rooms';
+import { MeetOwnerAuthorization, MeetRoomCreated, MeetRoomStatus } from '@voiceroom/shared/contracts/rooms';
 import fastify from 'fastify';
 import { createOwnerCapability } from '../src/domains/rooms/meet-owner.service.ts';
 import { registerMeetRoomRoutes } from '../src/domains/rooms/meet.routes.ts';

@@ -1,7 +1,7 @@
 import { render, screen, within } from '@testing-library/vue';
 import userEvent from '@testing-library/user-event';
 import { expect, test, vi } from 'vitest';
-import { Card, SettingRow, SettingsGroup } from '@voice-room/ui/components';
+import { Card, SettingRow, SettingsGroup } from '@voiceroom/ui-kit/components';
 import { defineComponent } from 'vue';
 
 test('a card renders its content as the requested semantic element', () => {

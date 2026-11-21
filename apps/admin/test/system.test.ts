@@ -8,7 +8,7 @@ import SystemPage from '../src/pages/SystemPage.vue';
 import { stubApi } from './helpers/api.ts';
 import { renderAsStaff } from './helpers/render.ts';
 import { stubChartBox } from './helpers/chart-box.ts';
-import type { SystemSample } from '@voice-room/shared/contracts/admin';
+import type { SystemSample } from '@voiceroom/shared/contracts/admin';
 import { at, DAY, denied, HOUR, must, sample, system } from './helpers/stats-fixtures.ts';
 
 let restoreChartBox = () => {};

@@ -127,12 +127,23 @@ test('portable components may wrap Reka and follow the shared style conventions'
       'utils/popover.ts': "export { PopoverRoot } from 'reka-ui';\n",
       'styles/room/_tile.scss': '.tile[data-ready] { color: var(--vr-text); }\n'
     },
-    'packages/ui/src'
+    'packages/ui-kit/src'
   );
   const problems = checkWebStyles(repo).sort();
   assert.equal(problems.length, 2);
-  assert.match(problems[0] ?? '', /^packages\/ui\/src\/styles\/room\/_tile\.scss:1 \[data-\*\] selector/);
-  assert.match(problems[1] ?? '', /^packages\/ui\/src\/utils\/popover\.ts:1 reka-ui import/);
+  assert.match(problems[0] ?? '', /^packages\/ui-kit\/src\/styles\/room\/_tile\.scss:1 \[data-\*\] selector/);
+  assert.match(problems[1] ?? '', /^packages\/ui-kit\/src\/utils\/popover\.ts:1 reka-ui import/);
+});
+
+test('the UI helper package cannot wrap Reka', (t) => {
+  const { repo } = tree(
+    t,
+    { 'components/Popover.vue': '<script setup lang="ts">import { PopoverRoot } from \'reka-ui\';</script>' },
+    'packages/ui/src'
+  );
+  assert.deepEqual(checkWebStyles(repo), [
+    'packages/ui/src/components/Popover.vue:1 reka-ui import outside the kit; use or extend a packages/ui-kit component'
+  ]);
 });
 
 test('portable styles cannot depend on app modules', (t) => {
@@ -140,14 +151,14 @@ test('portable styles cannot depend on app modules', (t) => {
     t,
     {
       'styles/_a.scss': "@use '../../../../apps/web/src/styles/mixins';\n@forward './local';\n",
-      'styles/_b.scss': "// @use '@/styles/mixins';\n@forward 'pkg:@voice-room/site/styles/site';\n",
+      'styles/_b.scss': "// @use '@/styles/mixins';\n@forward 'pkg:@voiceroom/site/styles/site';\n",
       'styles/_local.scss': ''
     },
-    'packages/ui/src'
+    'packages/ui-kit/src'
   );
   assert.deepEqual(checkWebStyles(repo).sort(), [
-    'packages/ui/src/styles/_a.scss:1 portable UI cannot load styles from applications',
-    'packages/ui/src/styles/_b.scss:2 portable UI cannot load styles from applications'
+    'packages/ui-kit/src/styles/_a.scss:1 portable UI cannot load styles from applications',
+    'packages/ui-kit/src/styles/_b.scss:2 portable UI cannot load styles from applications'
   ]);
 });
 
@@ -156,13 +167,13 @@ test('call styles use portable Sass modules and call views use portable UI wrapp
     t,
     {
       'styles/_call.scss':
-        "@use 'pkg:@voice-room/ui/styles/mixins';\n@forward '../../../../apps/web/src/styles/mixins';\n",
+        "@use 'pkg:@voiceroom/ui-kit/styles/mixins';\n@forward '../../../../apps/web/src/styles/mixins';\n",
       'views/CallDock.vue': '<script setup lang="ts">import { DialogRoot } from \'reka-ui\';</script>\n'
     },
     'packages/call/src'
   );
   assert.deepEqual(checkWebStyles(repo).sort(), [
     'packages/call/src/styles/_call.scss:2 portable call cannot load styles from applications',
-    'packages/call/src/views/CallDock.vue:1 reka-ui import outside the kit; use or extend a packages/ui component'
+    'packages/call/src/views/CallDock.vue:1 reka-ui import outside the kit; use or extend a packages/ui-kit component'
   ]);
 });

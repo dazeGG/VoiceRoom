@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import { EmptyState, Field, IconButton, ListItem, TextField, Button } from '@voice-room/ui/components';
+import { EmptyState, Field, IconButton, ListItem, TextField, Button } from '@voiceroom/ui-kit/components';
 import { getLocale, t } from '@/shared/i18n';
 import { Check, ChevronLeft, Copy, X } from '@lucide/vue';
 import { computed, ref } from 'vue';
 import type { AuthUser } from '@/api/auth';
 import EmojiText from '@/shared/chat/EmojiText.vue';
-import { iconSm, iconXs } from '@voice-room/ui/icon-defaults';
+import { iconSm, iconXs } from '@voiceroom/ui-kit/icon-defaults';
 import { copyText } from '@/shared/utils/clipboard';
 import { displayNameOf } from '@/shared/utils/display-name';
 import { useLobby } from '../../model/lobby-context';

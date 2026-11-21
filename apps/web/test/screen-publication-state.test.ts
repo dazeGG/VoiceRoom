@@ -2,7 +2,7 @@ import { test } from 'vitest';
 import assert from 'node:assert/strict';
 
 async function loadPublicationState() {
-  return import('@voice-room/call/engine/media/screen-publication-state');
+  return import('@voiceroom/call/engine/media/screen-publication-state');
 }
 
 test('screen activity survives video republish while screen audio remains published', async () => {

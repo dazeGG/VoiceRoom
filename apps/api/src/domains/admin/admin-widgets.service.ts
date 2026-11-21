@@ -4,7 +4,7 @@
 // (scripts/cd/activate-widget.sh), never over HTTP. A staff member without
 // rooms.view gets null, which the route answers with 403.
 
-import type { AdminWidgets } from '@voice-room/shared/contracts/admin';
+import type { AdminWidgets } from '@voiceroom/shared/contracts/admin';
 import type { StaffCheck } from '../staff/staff-check.ts';
 import type { AdminRoomsRepository } from './admin-rooms.repository.ts';
 import type { AdminStatsRepository, LiveCall } from './admin-stats.repository.ts';

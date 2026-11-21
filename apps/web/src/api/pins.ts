@@ -2,7 +2,7 @@
 // 50 pins and returns the whole list on every mutation so callers never have to
 // reconcile a partial update.
 
-import { PinList, type PinnedMessage } from '@voice-room/shared/contracts/messages';
+import { PinList, type PinnedMessage } from '@voiceroom/shared/contracts/messages';
 import { api } from './client';
 
 export type { PinnedMessage };

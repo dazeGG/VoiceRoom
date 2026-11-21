@@ -6,7 +6,7 @@
 
 import { type Selectable } from 'kysely';
 import type pg from 'pg';
-import { isOneOf } from '@voice-room/shared/guards';
+import { isOneOf } from '@voiceroom/shared/guards';
 import { lockKeys, lockXact } from '../../platform/db/locks.ts';
 import { transaction } from '../../platform/db/pool.ts';
 import { kyselyOn, type Database } from '../../platform/db/kysely.ts';

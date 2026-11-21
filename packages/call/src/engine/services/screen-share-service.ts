@@ -1,5 +1,5 @@
 import { getInstalledCallPorts } from '../ports';
-import { t } from '@voice-room/ui/i18n';
+import { t } from '@voiceroom/ui-kit/i18n';
 import type { LocalTrackPublication } from 'livekit-client';
 import { DEFAULT_SCREEN_STREAM_MODE, SCREEN_STATS_INTERVAL_MS } from '../core/config';
 import { state } from '../core/room-runtime.store';
@@ -20,7 +20,7 @@ import { getDisplayName } from '../ui/names';
 import { publishLocalScreenTracks, unpublishLocalScreenTracks } from './livekit-service';
 import { applyScreenCaptureProfile, openScreenShare } from './screen-capture-service';
 import { askForMedia, describeMediaRefusal } from './media-grant';
-import { screenProfileBitrate } from '@voice-room/shared/media-budget';
+import { screenProfileBitrate } from '@voiceroom/shared/media-budget';
 import { onDesktopScreenAudioLost, stopLocalScreenAudioCapture } from './desktop-screen-audio';
 import { isActiveCandidatePair, readRtcStats, type RtcStat } from '../media/rtc-stats';
 import { startScreenStartupDiagnostics, type CaptureCounters } from '../media/screen-startup-diagnostics';

@@ -1,4 +1,4 @@
-import { useLocalizedText } from '@voice-room/ui/localized-text';
+import { useLocalizedText } from '@voiceroom/ui/localized-text';
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
 

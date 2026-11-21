@@ -15,8 +15,8 @@ import {
   type DesktopBuildId
 } from '@/platform/desktop-builds';
 import { startDesktopBuildDownload } from '@/platform/desktop-download';
-import { MascotIcon, BrandIcon, Pressable, Button } from '@voice-room/ui/components';
-import { iconSm, iconXs } from '@voice-room/ui/icon-defaults';
+import { MascotIcon, BrandIcon, Pressable, Button } from '@voiceroom/ui-kit/components';
+import { iconSm, iconXs } from '@voiceroom/ui-kit/icon-defaults';
 import { copyText } from '@/shared/utils/clipboard';
 
 // Embedded, it is a settings tab: no card of its own around it, the perks

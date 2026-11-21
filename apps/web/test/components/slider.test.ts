@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/vue';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, expect, test, vi } from 'vitest';
-import { Slider } from '@voice-room/ui/components';
+import { Slider } from '@voiceroom/ui-kit/components';
 
 beforeEach(() => {
   vi.stubGlobal(

@@ -1,4 +1,4 @@
-import type { AccountDetail } from '@voice-room/shared/contracts/admin';
+import type { AccountDetail } from '@voiceroom/shared/contracts/admin';
 import { formatCount } from '../format.ts';
 
 /** A wide gap suggests that something besides VoiceRoom was using the CPU. */

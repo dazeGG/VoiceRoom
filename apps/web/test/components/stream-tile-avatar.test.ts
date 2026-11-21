@@ -5,10 +5,10 @@ import { createPinia, setActivePinia } from 'pinia';
 import { render } from '@testing-library/vue';
 import { beforeEach, expect, test } from 'vitest';
 import StreamTile from '@/features/room/components/StreamTile.vue';
-import { state } from '@voice-room/call/engine/core/room-runtime.store';
-import { createInitialRoomState } from '@voice-room/call/engine/model/room-state';
-import { createParticipant } from '@voice-room/call/engine/room/participants';
-import type { Participant } from '@voice-room/call/engine/core/types';
+import { state } from '@voiceroom/call/engine/core/room-runtime.store';
+import { createInitialRoomState } from '@voiceroom/call/engine/model/room-state';
+import { createParticipant } from '@voiceroom/call/engine/room/participants';
+import type { Participant } from '@voiceroom/call/engine/core/types';
 
 beforeEach(() => {
   setActivePinia(createPinia());

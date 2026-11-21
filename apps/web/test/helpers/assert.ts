@@ -3,7 +3,7 @@
 
 import type { Static, TSchema } from 'typebox';
 import { Value } from 'typebox/value';
-import { firstMismatch } from '@voice-room/shared/contracts/http';
+import { firstMismatch } from '@voiceroom/shared/contracts/http';
 
 /** `value`, or a thrown error naming `what` when it is null or undefined. */
 export function defined<T>(value: T | null | undefined, what: string): T {

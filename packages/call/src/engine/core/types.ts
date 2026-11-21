@@ -1,8 +1,8 @@
 import type { ConnectionQuality, LocalTrackPublication, Room } from 'livekit-client';
 import type { MicrophoneMode, NoiseMode } from './config';
 import type { Participant } from '../model/participants';
-import type { LobbyRoom } from '@voice-room/shared/contracts/rooms';
-import type { VoiceVerdict } from '@voice-room/shared/voice-quality';
+import type { LobbyRoom } from '@voiceroom/shared/contracts/rooms';
+import type { VoiceVerdict } from '@voiceroom/shared/voice-quality';
 export type { Participant, PeerInfo } from '../model/participants';
 
 export type ScreenStreamMode = 'games' | 'text';

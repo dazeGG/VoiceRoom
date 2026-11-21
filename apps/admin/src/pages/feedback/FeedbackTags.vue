@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-import type { AdminCallFeedbackPage, CallFeedbackTag } from '@voice-room/shared/contracts/feedback';
-import { CALL_FEEDBACK_TAG_LABELS } from '@voice-room/shared/feedback-labels';
+import type { AdminCallFeedbackPage, CallFeedbackTag } from '@voiceroom/shared/contracts/feedback';
+import { CALL_FEEDBACK_TAG_LABELS } from '@voiceroom/shared/feedback-labels';
 import { formatCount, formatPercent } from '../../format.ts';
 import { Panel } from '../../ui';
 

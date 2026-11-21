@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ChevronDown } from '@lucide/vue';
-import { Button } from '@voice-room/ui/components';
+import { Button } from '@voiceroom/ui-kit/components';
 import { useId, useTemplateRef } from 'vue';
 import { useSectionState } from './use-section-state.ts';
 

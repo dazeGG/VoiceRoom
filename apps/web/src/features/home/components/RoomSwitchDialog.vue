@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { t } from '@/shared/i18n';
 import { ref, watch } from 'vue';
-import { AlertDialog, Checkbox } from '@voice-room/ui/components';
+import { AlertDialog, Checkbox } from '@voiceroom/ui-kit/components';
 
 const props = defineProps<{ open: boolean; fromName: string; toName: string }>();
 

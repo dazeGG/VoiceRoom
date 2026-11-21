@@ -49,7 +49,7 @@ test('every native control kind is caught, in every app and in the call views', 
 
 test('the kit itself may use native elements', (t) => {
   const root = repo(t, {
-    'packages/ui/src/components/Button/Button.vue': vue('<button class="ui-button"><slot /></button>')
+    'packages/ui-kit/src/components/Button/Button.vue': vue('<button class="ui-button"><slot /></button>')
   });
   assert.deepEqual(checkKitUsage(root, []), []);
 });
@@ -91,7 +91,7 @@ test('an HTML comment in the template is ignored', (t) => {
 test('a .ui-* selector in an app stylesheet fails, a comment naming one does not', (t) => {
   const root = repo(t, {
     'apps/web/src/styles/_x.scss': '// .ui-button was restyled here\n.x .ui-button {\n  color: var(--vr-text);\n}\n',
-    'packages/ui/src/styles/components/_button.scss': '.ui-button {\n  border-radius: var(--radius-10);\n}\n'
+    'packages/ui-kit/src/styles/components/_button.scss': '.ui-button {\n  border-radius: var(--radius-10);\n}\n'
   });
   assert.deepEqual(checkKitUsage(root, []), [
     'apps/web/src/styles/_x.scss:2 a .ui-* selector restyles a kit component; add a variant or prop to it'
@@ -100,13 +100,13 @@ test('a .ui-* selector in an app stylesheet fails, a comment naming one does not
 
 test('a literal radius and a grid-step size fail everywhere, the kit included', (t) => {
   const root = repo(t, {
-    'packages/ui/src/styles/components/_x.scss': '.x {\n  border-radius: 12px;\n  height: 40px;\n}\n',
+    'packages/ui-kit/src/styles/components/_x.scss': '.x {\n  border-radius: 12px;\n  height: 40px;\n}\n',
     'apps/web/src/styles/_y.scss':
       '.y {\n  border-radius: 50%;\n  width: 420px;\n  min-height: var(--size-44);\n  border-radius: calc(var(--radius-12) - 4px);\n}\n'
   });
   assert.deepEqual(checkKitUsage(root, []).sort(), [
-    'packages/ui/src/styles/components/_x.scss:2 literal border-radius "12px"; use --radius-*',
-    'packages/ui/src/styles/components/_x.scss:3 height: 40px is a grid step; use --size-40'
+    'packages/ui-kit/src/styles/components/_x.scss:2 literal border-radius "12px"; use --radius-*',
+    'packages/ui-kit/src/styles/components/_x.scss:3 height: 40px is a grid step; use --size-40'
   ]);
 });
 

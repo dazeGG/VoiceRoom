@@ -1,13 +1,13 @@
-import { MAX_REACTION_BATCH, type ReactionSummary, type ReactorList } from '@voice-room/shared/contracts/messages';
+import { MAX_REACTION_BATCH, type ReactionSummary, type ReactorList } from '@voiceroom/shared/contracts/messages';
 import type pg from 'pg';
 import {
   normalizeReactionMutation,
   normalizeReactionSummary,
   normalizeReactorPage,
   normalizeReactorQuery
-} from '@voice-room/shared/reactions';
-import { isRecord, textOf } from '@voice-room/shared/guards';
-import { isUuid } from '@voice-room/shared/validation';
+} from '@voiceroom/shared/reactions';
+import { isRecord, textOf } from '@voiceroom/shared/guards';
+import { isUuid } from '@voiceroom/shared/validation';
 import type { CursorCodec } from '../../platform/cursor-codec.ts';
 import { DomainError } from '../../platform/http/domain-error.ts';
 import type { createReactionRepository } from './reaction.repository.ts';

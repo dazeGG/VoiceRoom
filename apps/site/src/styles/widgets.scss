@@ -1,6 +1,6 @@
-@use 'pkg:@voice-room/ui/styles/room/participant';
-@use 'pkg:@voice-room/ui/styles/room/room-dock';
-@use 'pkg:@voice-room/ui/styles/room/tile-grid';
+@use 'pkg:@voiceroom/ui-kit/styles/room/participant';
+@use 'pkg:@voiceroom/ui-kit/styles/room/room-dock';
+@use 'pkg:@voiceroom/ui-kit/styles/room/tile-grid';
 
 .widget-intro {
   margin-block: var(--space-32);

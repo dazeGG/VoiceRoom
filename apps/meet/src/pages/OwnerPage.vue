@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ArrowRight, Check, Copy, Link2, Video } from '@lucide/vue';
-import { Button, Callout, Field, TextField } from '@voice-room/ui/components';
-import { t } from '@voice-room/ui/i18n';
+import { Button, Callout, Field, TextField } from '@voiceroom/ui-kit/components';
+import { t } from '@voiceroom/ui-kit/i18n';
 import { ref, useTemplateRef } from 'vue';
 import { MeetApiError } from '@/adapters/meet-api';
 import { useMeetStore } from '@/meet.store';

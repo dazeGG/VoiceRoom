@@ -1,4 +1,4 @@
-import { isOneOf, isRecord } from '@voice-room/shared/guards';
+import { isOneOf, isRecord } from '@voiceroom/shared/guards';
 import { createLogger, errorContext } from '@/shared/log';
 
 const log = createLogger('desktop:update');

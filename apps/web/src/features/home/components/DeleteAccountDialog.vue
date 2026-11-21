@@ -3,7 +3,7 @@ import { useLocalizedText, currentErrorMessage } from '@/shared/i18n/localized-t
 
 import { t } from '@/shared/i18n';
 import { computed, ref, useId, watchEffect } from 'vue';
-import { AlertDialog, Checkbox, Field, TextField, Button, Dialog } from '@voice-room/ui/components';
+import { AlertDialog, Checkbox, Field, TextField, Button, Dialog } from '@voiceroom/ui-kit/components';
 import { fetchAccountDeletionPreview, requestAccountDeletion, type AccountDeletionPreview } from '@/api/auth';
 import { useSessionStore } from '@/features/auth/session.store';
 import EmojiText from '@/shared/chat/EmojiText.vue';

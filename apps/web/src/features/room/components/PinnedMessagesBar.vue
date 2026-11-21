@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import { IconButton, Pressable } from '@voice-room/ui/components';
+import { IconButton, Pressable } from '@voiceroom/ui-kit/components';
 // Collapsed strip above the chat body. Collapsed it is just a count; expanded
 // it lists the pinned messages newest-first, each jumping to the message.
 import { t } from '@/shared/i18n';
 import { computed } from 'vue';
 import { ChevronDown, Pin, X } from '@lucide/vue';
 import EmojiText from '@/shared/chat/EmojiText.vue';
-import { iconSm } from '@voice-room/ui/icon-defaults';
+import { iconSm } from '@voiceroom/ui-kit/icon-defaults';
 import { useRoomPinsStore } from '../pins.store';
 
 const props = withDefaults(defineProps<{ canUnpin?: boolean }>(), { canUnpin: false });

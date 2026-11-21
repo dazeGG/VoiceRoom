@@ -9,7 +9,7 @@ import { currentErrorMessage, useLocalizedText } from '../src/shared/i18n/locali
 import { ApiError } from '../src/api/client';
 import { errorText } from '../src/api/error-texts';
 import { t as runtimeTranslation } from '../src/shared/i18n/runtime.ts';
-import { NOISE_MODES } from '@voice-room/call/engine/core/config';
+import { NOISE_MODES } from '@voiceroom/call/engine/core/config';
 import { dayMonth, timeAgo } from '../src/shared/utils/date-format';
 import { formatTypingLabel } from '../src/shared/chat/typing';
 import { displayNameOf } from '../src/shared/utils/display-name';

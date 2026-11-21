@@ -12,21 +12,21 @@ const spies = vi.hoisted(() => ({
   requestLiveKitReplacement: vi.fn(async () => true)
 }));
 
-vi.mock('@voice-room/call/engine/ui/devices', async (importOriginal) => ({
+vi.mock('@voiceroom/call/engine/ui/devices', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   refreshDevices: vi.fn(async () => {}),
   reopenMicrophone: spies.reopenMicrophone
 }));
-vi.mock('@voice-room/call/engine/ui/toast', () => ({ showToast: vi.fn() }));
-vi.mock('@voice-room/call/engine/services/livekit-service', async (importOriginal) => ({
+vi.mock('@voiceroom/call/engine/ui/toast', () => ({ showToast: vi.fn() }));
+vi.mock('@voiceroom/call/engine/services/livekit-service', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   connectLiveKitRoom: vi.fn(async () => true)
 }));
-vi.mock('@voice-room/call/engine/recovery/room-recovery', async (importOriginal) => ({
+vi.mock('@voiceroom/call/engine/recovery/room-recovery', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   requestLiveKitReplacement: spies.requestLiveKitReplacement
 }));
-vi.mock('@voice-room/call/engine/room/stats', async (importOriginal) => ({
+vi.mock('@voiceroom/call/engine/room/stats', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   // The test reads the microphone itself, without a poll of its own in between.
   startPeerLatencyStats: vi.fn()
@@ -57,9 +57,9 @@ test('a joined call rebuilds a stalled microphone, then replaces the connection,
       }
     }
   });
-  const room = await import('@voice-room/call/engine/room/room');
-  const { noteMicSend } = await import('@voice-room/call/engine/room/mic-send');
-  const { state } = await import('@voice-room/call/engine/core/room-runtime.store');
+  const room = await import('@voiceroom/call/engine/room/room');
+  const { noteMicSend } = await import('@voiceroom/call/engine/room/mic-send');
+  const { state } = await import('@voiceroom/call/engine/core/room-runtime.store');
   Object.assign(state, { roomId: 'abc123', peerId: 'peer-1', sessionToken: 'session-1' });
 
   await room.joinRoom();

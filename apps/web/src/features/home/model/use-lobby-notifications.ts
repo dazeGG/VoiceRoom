@@ -3,7 +3,7 @@
 import { ref } from 'vue';
 import { fetchNotificationInbox, markAllNotificationsRead, markNotificationRead } from '@/api/notifications';
 import { getAppRealtime } from '@/api/realtime';
-import { playRoomChatMessageCue } from '@voice-room/call/engine';
+import { playRoomChatMessageCue } from '@voiceroom/call/engine';
 import { createNotificationInbox } from '@/shared/notifications/inbox';
 import { useNotificationPreferencesStore } from '@/shared/notifications/preferences.store';
 

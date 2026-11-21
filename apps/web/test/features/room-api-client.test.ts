@@ -5,8 +5,8 @@ import { installWebCallPortsForTest } from '../helpers/call-ports';
 
 import { beforeEach, expect, test, vi } from 'vitest';
 import { ApiError } from '@/api/client';
-import { state } from '@voice-room/call/engine/core/room-runtime.store';
-import { checkRoomExists, requestLiveKitToken } from '@voice-room/call/engine/net/api';
+import { state } from '@voiceroom/call/engine/core/room-runtime.store';
+import { checkRoomExists, requestLiveKitToken } from '@voiceroom/call/engine/net/api';
 import { resetRuntimeConfig } from '@/platform/runtime-config';
 import { stubFetch } from '../fixtures/fetch';
 import { instanceOf } from '../helpers/assert';

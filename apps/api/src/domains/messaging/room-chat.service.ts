@@ -5,12 +5,12 @@
 // how it is spelled over HTTP. Checks run in the order the legacy handler ran
 // them, so a request that fails two checks still gets the same answer.
 
-import type { MentionNormalization, MentionRefusal } from '@voice-room/shared/mentions';
+import type { MentionNormalization, MentionRefusal } from '@voiceroom/shared/mentions';
 import crypto from 'node:crypto';
 import type { Logger } from 'pino';
-import { isReservedPeerId } from '@voice-room/shared/validation';
-import type { ServerEnvelope } from '@voice-room/shared/realtime';
-import type { buildServerEnvelope } from '@voice-room/shared/realtime';
+import { isReservedPeerId } from '@voiceroom/shared/validation';
+import type { ServerEnvelope } from '@voiceroom/shared/realtime';
+import type { buildServerEnvelope } from '@voiceroom/shared/realtime';
 import { LOG_EVENTS } from '../../lib/log-events.ts';
 import { avatarColorForPeerId } from '../rooms/avatar-color.ts';
 import { tokensMatch } from '../../platform/crypto/tokens-match.ts';

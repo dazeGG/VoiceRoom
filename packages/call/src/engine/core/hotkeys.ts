@@ -1,7 +1,7 @@
 import { readStorage, writeStorage } from './storage';
-import { hotkeyMatchesEvent } from '@voice-room/ui/hotkey';
-import type { HotkeyBinding } from '@voice-room/ui/hotkey';
-import { isRecord } from '@voice-room/shared/guards';
+import { hotkeyMatchesEvent } from '@voiceroom/ui-kit/hotkey';
+import type { HotkeyBinding } from '@voiceroom/ui-kit/hotkey';
+import { isRecord } from '@voiceroom/shared/guards';
 
 export type HotkeyAction = 'mic-mute' | 'output-mute' | 'push-to-talk';
 

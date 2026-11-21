@@ -1,5 +1,5 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue';
-import type { SplitterWidth } from '@voice-room/ui/components';
+import type { SplitterWidth } from '@voiceroom/ui-kit/components';
 import { readStorage, writeStorage } from '@/shared/storage';
 
 const WIDTH_KEY = 'voice-room:lobby-sidebar-width';

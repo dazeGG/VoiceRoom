@@ -2,7 +2,7 @@ import test from 'node:test';
 import type { StoredRoom } from '../src/domains/rooms/room-views.ts';
 import { dbRoom, fake, lobbyRoom } from './fakes/index.ts';
 import assert from 'node:assert/strict';
-import { buildRoomRealtimeSummary } from '@voice-room/shared/realtime';
+import { buildRoomRealtimeSummary } from '@voiceroom/shared/realtime';
 import { buildServerEnvelope } from '../src/realtime/envelope.ts';
 import type { WsConnection } from '../src/realtime/registry.ts';
 import { createFullTestRuntime, runtimeDeps } from './fakes/room-runtime.ts';

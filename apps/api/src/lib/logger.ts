@@ -4,7 +4,7 @@ import type { DestinationStream, Logger, LoggerOptions } from 'pino';
 
 import packageJson from '../../package.json' with { type: 'json' };
 import { readLogConfig } from '../app/config.ts';
-import { isArray } from '@voice-room/shared/guards';
+import { isArray } from '@voiceroom/shared/guards';
 const SERVICE_VERSION: string = packageJson.version;
 
 type Env = NodeJS.ProcessEnv;

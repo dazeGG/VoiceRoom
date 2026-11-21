@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-import type { AdminOverview } from '@voice-room/shared/contracts/admin';
+import type { AdminOverview } from '@voiceroom/shared/contracts/admin';
 import { formatCount } from '../../format.ts';
 import { Card, EmptyState } from '../../ui';
 import { badFeedbackTags, tagLabel } from './overview-details.ts';

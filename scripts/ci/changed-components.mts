@@ -14,7 +14,8 @@ const APP_VERSION_PACKAGES = [
   'apps/widget',
   SHARED,
   CALL,
-  'packages/ui'
+  'packages/ui',
+  'packages/ui-kit'
 ];
 const APP_VERSION_MANIFESTS = APP_VERSION_PACKAGES.map((path) => `${path ? `${path}/` : ''}package.json`);
 type Workspace = 'app' | 'site';
@@ -101,7 +102,7 @@ export function changedComponents(paths: string[], versionChanges: VersionChange
     } else if (path.startsWith(`${CALL}/`)) {
       lanes.app = true;
     } else if (
-      // Shared packages, including UI and its Sass assets, feed both build lanes.
+      // Shared packages, including the UI kit and its Sass assets, feed both build lanes.
       path.startsWith('packages/') ||
       /^(?:package(?:-lock)?\.json|\.nvmrc|\.npmrc|\.prettier.*|eslint\..*|eslint-suppressions\.json)$/.test(path) ||
       /^scripts\/(?:check-(?:type-coverage|test-source-reads)|test\/web-text-contrast\.test)\.mts$/.test(path) ||

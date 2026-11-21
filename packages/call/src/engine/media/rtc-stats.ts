@@ -2,7 +2,7 @@
 // as `any`, so the fields the room uses are checked here once: each field is
 // set only when the browser gave it the expected type, and undefined otherwise.
 
-import { isRecord } from '@voice-room/shared/guards';
+import { isRecord } from '@voiceroom/shared/guards';
 
 export interface RtcStat {
   readonly id: string;

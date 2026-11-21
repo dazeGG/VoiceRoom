@@ -6,15 +6,11 @@ import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, expect, onTestFinished, test } from 'vitest';
 import { useRoomMembershipStore } from '@/entities/room/room-membership.store';
 import { useSessionStore } from '@/features/auth/session.store';
-import { persistMasterVolume } from '@voice-room/call/engine/core/settings';
-import { state } from '@voice-room/call/engine/core/room-runtime.store';
-import { createInitialRoomState } from '@voice-room/call/engine/model/room-state';
-import {
-  switchMicrophone,
-  switchOutputDevice,
-  updateGateThresholdFromSlider
-} from '@voice-room/call/engine/ui/devices';
-import { useRoomDeviceUiStore } from '@voice-room/call/engine/core/room-device-ui.store';
+import { persistMasterVolume } from '@voiceroom/call/engine/core/settings';
+import { state } from '@voiceroom/call/engine/core/room-runtime.store';
+import { createInitialRoomState } from '@voiceroom/call/engine/model/room-state';
+import { switchMicrophone, switchOutputDevice, updateGateThresholdFromSlider } from '@voiceroom/call/engine/ui/devices';
+import { useRoomDeviceUiStore } from '@voiceroom/call/engine/core/room-device-ui.store';
 import { clearAttachmentComposeStores } from '@/shared/chat/attachment-compose-stores';
 import { AttachmentComposeStore } from '@/shared/chat/attachment-compose';
 import { stubFetch } from '../fixtures/fetch';

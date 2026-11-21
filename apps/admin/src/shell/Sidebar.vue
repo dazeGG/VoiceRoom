@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { ExternalLink, LogOut, PanelLeftClose, PanelLeftOpen } from '@lucide/vue';
-import { Avatar, IconButton, ListItem, Separator, type AvatarProps } from '@voice-room/ui/components';
+import { Avatar, IconButton, ListItem, Separator, type AvatarProps } from '@voiceroom/ui-kit/components';
 import { computed, useId, useTemplateRef } from 'vue';
-import type { StaffRole } from '@voice-room/shared/contracts/staff';
+import type { StaffRole } from '@voiceroom/shared/contracts/staff';
 import type { Staff } from '../staff.store.ts';
 import { TAB_LABELS, pathOf, type AdminTab } from '../tabs.ts';
 import BrandMark from './BrandMark.vue';

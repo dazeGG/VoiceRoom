@@ -6,8 +6,8 @@ import { useProfileCardUiStore } from '@/entities/profile-card/profile-card-ui.s
 import { t } from '@/shared/i18n';
 import { useNotificationPreferencesStore } from '@/shared/notifications/preferences.store';
 import { effectivePresenceStatus } from '@/shared/presence';
-import { Button, ContextMenu, Dialog, MenuSeparator, MenuItem, MenuLabel } from '@voice-room/ui/components';
-import { iconSm } from '@voice-room/ui/icon-defaults';
+import { Button, ContextMenu, Dialog, MenuSeparator, MenuItem, MenuLabel } from '@voiceroom/ui-kit/components';
+import { iconSm } from '@voiceroom/ui-kit/icon-defaults';
 import { displayNameOf } from '@/shared/utils/display-name';
 import type { FriendMenuTarget } from '../../model/friend-menu';
 import { useLobby } from '../../model/lobby-context';

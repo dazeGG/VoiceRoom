@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { MonitorUp, Video } from '@lucide/vue';
-import type { LiveRoomPeer } from '@voice-room/shared/contracts/admin';
+import type { LiveRoomPeer } from '@voiceroom/shared/contracts/admin';
 import { Pill } from '../../ui';
 import ClientIcon from './ClientIcon.vue';
 import { troubleOf } from './live-quality.ts';

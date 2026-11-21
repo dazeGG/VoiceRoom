@@ -2,7 +2,7 @@
 // so the server keeps what real people on real lines wait: a test bench has
 // neither their microphone nor their route.
 
-import type { JoinTiming } from '@voice-room/shared/contracts/realtime';
+import type { JoinTiming } from '@voiceroom/shared/contracts/realtime';
 
 type JoinStage = keyof JoinTiming;
 

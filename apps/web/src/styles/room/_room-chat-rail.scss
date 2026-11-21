@@ -10,7 +10,7 @@
 //   body[data-screen='room'] .room-chat-rail -> body.screen--room .room-chat-rail
 //   :root --room-panel-width                 -> unchanged
 
-@use 'pkg:@voice-room/ui/styles/mixins' as *;
+@use 'pkg:@voiceroom/ui-kit/styles/mixins' as *;
 
 :root {
   --room-panel-width: 360px;

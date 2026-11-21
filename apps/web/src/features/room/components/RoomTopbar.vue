@@ -9,21 +9,21 @@ import {
   MenuLabel,
   Button,
   ControlGroup
-} from '@voice-room/ui/components';
+} from '@voiceroom/ui-kit/components';
 import { t } from '@/shared/i18n';
 import { Link, MessageSquare, UserPlus, Users } from '@lucide/vue';
 import { computed } from 'vue';
 import { useSessionStore } from '@/features/auth/session.store';
 import Topbar from '@/shared/components/Topbar.vue';
 import { RoomInviteFriendList, RoomMenu } from '@/shared/components/room-menu';
-import { iconMd, iconSm } from '@voice-room/ui/icon-defaults';
+import { iconMd, iconSm } from '@voiceroom/ui-kit/icon-defaults';
 import { copyText } from '@/shared/utils/clipboard';
-import { state as roomClientState } from '@voice-room/call/engine/core/room-runtime.store';
-import { getConnectionStatusView } from '@voice-room/call/engine/ui/status';
-import { showToast } from '@voice-room/call/engine/ui/toast';
-import { useParticipantsUiStore } from '@voice-room/call/engine/core/participants-ui.store';
+import { state as roomClientState } from '@voiceroom/call/engine/core/room-runtime.store';
+import { getConnectionStatusView } from '@voiceroom/call/engine/ui/status';
+import { showToast } from '@voiceroom/call/engine/ui/toast';
+import { useParticipantsUiStore } from '@voiceroom/call/engine/core/participants-ui.store';
 import { useRoomPanelToggleStore } from '../room-panel-toggle.store';
-import { useCallPageStore } from '@voice-room/call/engine/core/call-page.store';
+import { useCallPageStore } from '@voiceroom/call/engine/core/call-page.store';
 import { useRoomSettingsStore } from '../room-settings.store';
 import { useRoomUiStore } from '../room-ui.store';
 import { useRoomShell } from '../shell';

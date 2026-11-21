@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { IconButton, Progress, Pressable } from '@voice-room/ui/components';
+import { IconButton, Progress, Pressable } from '@voiceroom/ui-kit/components';
 import { t } from '@/shared/i18n';
 import { Image as ImageIcon, RotateCcw, X } from '@lucide/vue';
 import { computed, ref } from 'vue';
-import { iconSm } from '@voice-room/ui/icon-defaults';
+import { iconSm } from '@voiceroom/ui-kit/icon-defaults';
 import { attachmentVariantUrl } from '@/api/attachments';
 import AttachmentLightbox from './AttachmentLightbox.vue';
 import type { AttachmentComposeStore } from './attachment-compose';

@@ -9,19 +9,19 @@ import { lobbyRoom } from '../fixtures/answers';
 
 const showRoomNotFound = vi.fn();
 const refreshRoomHeading = vi.fn();
-vi.mock('@voice-room/call/engine/room/room', () => ({ showRoomNotFound, refreshRoomHeading }));
-vi.mock('@voice-room/call/engine/ui/toast', () => ({ showToast: vi.fn() }));
+vi.mock('@voiceroom/call/engine/room/room', () => ({ showRoomNotFound, refreshRoomHeading }));
+vi.mock('@voiceroom/call/engine/ui/toast', () => ({ showToast: vi.fn() }));
 
 async function load() {
   vi.resetModules();
   setActivePinia(createPinia());
   await installWebCallPortsForTest();
-  const lifecycle = await import('@voice-room/call/engine/room/lifecycle');
-  const { state } = await import('@voice-room/call/engine/core/room-runtime.store');
+  const lifecycle = await import('@voiceroom/call/engine/room/lifecycle');
+  const { state } = await import('@voiceroom/call/engine/core/room-runtime.store');
   const { useRoomSettingsStore } = await import('@/features/room/room-settings.store');
   const { usePageStore } = await import('@/stores/page.store');
   const roomSettingsUi = useRoomSettingsStore();
-  const { showToast } = await import('@voice-room/call/engine/ui/toast');
+  const { showToast } = await import('@voiceroom/call/engine/ui/toast');
   state.roomId = 'room-a';
   usePageStore().screen = 'room';
   return { ...lifecycle, state, roomSettingsUi, page: usePageStore(), showToast: vi.mocked(showToast) };

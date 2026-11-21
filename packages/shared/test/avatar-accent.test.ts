@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { deriveAvatarAccent, dominantAvatarColor } from '@voice-room/shared/avatar-accent';
+import { deriveAvatarAccent, dominantAvatarColor } from '@voiceroom/shared/avatar-accent';
 
 const HEX_COLOR = /^#[0-9a-f]{6}$/;
 const BOX_SHADOW = /^0 10px 24px #[0-9a-f]{8}$/;
@@ -113,7 +113,7 @@ test('deriveAvatarAccent accepts a null dominant color and falls back to the neu
 });
 
 test('the package export resolves to the same deterministic accent rules', async () => {
-  const module = await import('@voice-room/shared/avatar-accent');
+  const module = await import('@voiceroom/shared/avatar-accent');
   assert.equal(typeof module.deriveAvatarAccent, 'function');
   assert.equal(typeof module.dominantAvatarColor, 'function');
 

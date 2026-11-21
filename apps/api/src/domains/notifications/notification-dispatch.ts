@@ -4,11 +4,11 @@
 
 import type { AccountMessage } from '../../realtime/account-events.ts';
 import type { Logger } from 'pino';
-import type { PushPayload as WebPushPayload } from '@voice-room/shared/notifications';
+import type { PushPayload as WebPushPayload } from '@voiceroom/shared/notifications';
 import { LOG_EVENTS } from '../../lib/log-events.ts';
 import { resolvePushTtl, shouldDeliverPush } from '../../lib/push-service.ts';
 import { notificationActor, type SocialUser } from '../social/social-views.ts';
-import { DirectMessageInvite } from '@voice-room/shared/contracts/messages';
+import { DirectMessageInvite } from '@voiceroom/shared/contracts/messages';
 import { Value } from 'typebox/value';
 
 interface Preferences {

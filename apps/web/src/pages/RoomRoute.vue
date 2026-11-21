@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Button, Callout, MascotIcon } from '@voice-room/ui/components';
+import { Button, Callout, MascotIcon } from '@voiceroom/ui-kit/components';
 // What /r/:roomId shows on a load or a real navigation: the lobby for a
 // signed-in desktop visit, the room itself for a guest or a phone.
 import { t } from '@/shared/i18n';

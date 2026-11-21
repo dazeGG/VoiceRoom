@@ -10,7 +10,7 @@ import { useLobbyRouting } from '../../src/features/home/model/use-lobby-routing
 import type { LobbyMode } from '../../src/features/home/model/lobby.store.ts';
 import { useRoomNavigationStore } from '../../src/features/home/model/room-navigation.store.ts';
 import { ROOM_SWITCH_CONFIRM_STORAGE_KEY } from '../../src/features/home/model/room-switch-confirmation.ts';
-import { useVoiceSessionStore } from '@voice-room/call/engine/core/voice-session.store';
+import { useVoiceSessionStore } from '@voiceroom/call/engine/core/voice-session.store';
 import { usePageStore } from '../../src/stores/page.store.ts';
 import { spyOnPush, spyOnReplace } from '../helpers/router-spies.ts';
 

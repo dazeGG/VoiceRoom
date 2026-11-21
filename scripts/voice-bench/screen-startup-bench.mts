@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { chromium, type Browser, type Page } from '@playwright/test';
 import { createServer } from 'vite';
 import { AccessToken, RoomServiceClient } from 'livekit-server-sdk';
-import { isArray, isRecord } from '@voice-room/shared/guards';
+import { isArray, isRecord } from '@voiceroom/shared/guards';
 import {
   loopbackLiveKitUrl,
   loopbackRtcConfig,
@@ -36,8 +36,8 @@ const webRoot = fileURLToPath(new URL('../../apps/web', import.meta.url));
 // builder and its installed SDK, rather than a copied benchmark encoding profile.
 const browserModule = String.raw`
 import { Room, RoomEvent, Track, VideoQuality } from 'livekit-client';
-import { getScreenProfileForMode, getScreenPublishVideoOptions } from '@voice-room/call/engine/media/profiles';
-import { prepareScreenStartBitrate } from '@voice-room/call/engine/media/screen-start-bitrate';
+import { getScreenProfileForMode, getScreenPublishVideoOptions } from '@voiceroom/call/engine/media/profiles';
+import { prepareScreenStartBitrate } from '@voiceroom/call/engine/media/screen-start-bitrate';
 import { rgbPixelError } from ${JSON.stringify(`/@fs/${fileURLToPath(new URL('./screen-startup-metrics.mts', import.meta.url)).replaceAll('\\', '/')}`)};
 
 import { screenEncodingOptions } from '/@fs/${fileURLToPath(new URL('./screen-encoding-experiment.mts', import.meta.url)).replaceAll('\\', '/')}';

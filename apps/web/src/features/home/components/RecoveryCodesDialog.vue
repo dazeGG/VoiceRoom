@@ -4,9 +4,9 @@ import { useLocalizedText, currentErrorMessage } from '@/shared/i18n/localized-t
 import { t } from '@/shared/i18n';
 import { Copy, Download } from '@lucide/vue';
 import { ref, useId, watch } from 'vue';
-import { Checkbox, Field, TextField, Button, Dialog } from '@voice-room/ui/components';
+import { Checkbox, Field, TextField, Button, Dialog } from '@voiceroom/ui-kit/components';
 import { generateRecoveryCodes, type RecoveryCodesStatus } from '@/api/auth';
-import { iconSm } from '@voice-room/ui/icon-defaults';
+import { iconSm } from '@voiceroom/ui-kit/icon-defaults';
 import { recoveryCodesFileText } from '../model/account-security';
 import type { ToastOptions } from '../model/toasts.store';
 

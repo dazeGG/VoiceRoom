@@ -1,4 +1,4 @@
-import { isArray, isRecord } from '@voice-room/shared/guards';
+import { isArray, isRecord } from '@voiceroom/shared/guards';
 
 export interface FrequentReaction {
   emoji: string;

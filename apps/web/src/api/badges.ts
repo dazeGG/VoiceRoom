@@ -1,7 +1,7 @@
 // The accounts that carry a mark, for the name everywhere they appear.
 
 import { t } from '@/shared/i18n';
-import { BadgeList } from '@voice-room/shared/contracts/users';
+import { BadgeList } from '@voiceroom/shared/contracts/users';
 import { setAccountBadges } from '@/shared/badges';
 import { api } from './client';
 

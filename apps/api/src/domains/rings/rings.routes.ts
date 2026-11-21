@@ -1,8 +1,8 @@
 import type { FastifyInstance } from 'fastify';
 import type { TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
-import { RingAnswer, RingCreateBody, RingIdParams, RingRespondBody } from '@voice-room/shared/contracts/rings';
-import { Failure } from '@voice-room/shared/contracts/http';
-import { normalizeRoomId } from '@voice-room/shared/validation';
+import { RingAnswer, RingCreateBody, RingIdParams, RingRespondBody } from '@voiceroom/shared/contracts/rings';
+import { Failure } from '@voiceroom/shared/contracts/http';
+import { normalizeRoomId } from '@voiceroom/shared/validation';
 import { cleanUuid } from '../messaging/message-input.ts';
 import type { ApiContext } from '../../app/context.ts';
 import type { RingService } from './ring.service.ts';

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Callout } from '@voice-room/ui/components';
+import { Callout } from '@voiceroom/ui-kit/components';
 // What /app shows, and every route the lobby keeps in the address (the admin
 // panel's tabs): the lobby or the landing on a desktop, a room start on a phone.
 import { t } from '@/shared/i18n';

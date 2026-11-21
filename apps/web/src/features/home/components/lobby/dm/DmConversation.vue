@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { badgeOf } from '@/shared/badges';
-import { EmptyState, AccountBadge, Avatar, Button, Pressable } from '@voice-room/ui/components';
+import { EmptyState, AccountBadge, Avatar, Button, Pressable } from '@voiceroom/ui-kit/components';
 // One open thread: its messages and its compose field. The DM view mounts it
 // per peer, so opening another thread starts from a clean slate — no editing,
 // reply or menu carried over, the thread's own draft and reactions loaded.

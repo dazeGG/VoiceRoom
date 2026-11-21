@@ -1,4 +1,4 @@
-import { isRecord } from '@voice-room/shared/guards';
+import { isRecord } from '@voiceroom/shared/guards';
 
 export type DesktopLink =
   | { kind: 'room'; roomId: string }

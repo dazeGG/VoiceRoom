@@ -1,6 +1,6 @@
 import { URL } from 'node:url';
 import { AccessToken } from 'livekit-server-sdk';
-import { normalizeLiveKitServerUrl } from '@voice-room/shared/runtime-config';
+import { normalizeLiveKitServerUrl } from '@voiceroom/shared/runtime-config';
 import type { RoomSurface } from '../rooms/room-surface.policy.ts';
 import type { CredentialIssue } from './credential-boundary.service.ts';
 import type { GatePrincipal } from './gate-principal.ts';

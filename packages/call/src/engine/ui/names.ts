@@ -1,4 +1,4 @@
-import { t } from '@voice-room/ui/i18n';
+import { t } from '@voiceroom/ui-kit/i18n';
 import { useGuestNameUiStore } from '../core/guest-name-ui.store';
 import { getNameStatusView, useStartUiStore } from '../core/start-ui.store';
 import { state } from '../core/room-runtime.store';

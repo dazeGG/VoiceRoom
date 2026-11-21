@@ -31,9 +31,9 @@ import { publicLobbyRoom, publicPeer } from '../../apps/api/src/domains/rooms/ro
 import { createRoomRealtimeRuntime, type RuntimeRoomStore } from '../../apps/api/src/realtime/room-runtime.ts';
 import { createConnectionRegistry } from '../../apps/api/src/realtime/registry.ts';
 import type { PresenceRoom } from '../../apps/api/src/realtime/runtime-types.ts';
-import { UserFacingError } from '@voice-room/call/engine/core/utils';
-import { formatJoinError, LiveKitTransportError } from '@voice-room/call/engine/room/join-error';
-import { isRecord } from '@voice-room/shared/guards';
+import { UserFacingError } from '@voiceroom/call/engine/core/utils';
+import { formatJoinError, LiveKitTransportError } from '@voiceroom/call/engine/room/join-error';
+import { isRecord } from '@voiceroom/shared/guards';
 import type {
   AccountSession,
   AppPromptSeen,
@@ -54,9 +54,9 @@ import type {
   SessionsRevoked,
   SignedIn,
   WhatsNewAnswer
-} from '@voice-room/shared/contracts/account';
-import type { Done } from '@voice-room/shared/contracts/http';
-import type { LobbyRoom, RoomCard, RoomList, RoomUnbookmarked } from '@voice-room/shared/contracts/rooms';
+} from '@voiceroom/shared/contracts/account';
+import type { Done } from '@voiceroom/shared/contracts/http';
+import type { LobbyRoom, RoomCard, RoomList, RoomUnbookmarked } from '@voiceroom/shared/contracts/rooms';
 
 const require = createRequire(import.meta.url);
 const SILENT_LOGGER = { log() {}, info() {}, warn() {}, error() {} };
@@ -666,7 +666,7 @@ test('G08 web TypeScript producer measures actual auth and media decision files'
     globalThis.fetch = originalFetch;
   });
   const auth = await import('../../apps/web/src/api/auth.ts');
-  const media = await import('@voice-room/call/engine/media/screen-receiver-demand');
+  const media = await import('@voiceroom/call/engine/media/screen-receiver-demand');
   const user = {
     avatarAccent: null,
     avatarColorKey: 'blurple',

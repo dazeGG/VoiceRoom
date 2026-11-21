@@ -1,7 +1,7 @@
 // Which accounts carry a mark, loaded once for the names the panel shows.
 
-import { BadgeList } from '@voice-room/shared/contracts/users';
-import type { AccountBadge } from '@voice-room/shared/contracts/users';
+import { BadgeList } from '@voiceroom/shared/contracts/users';
+import type { AccountBadge } from '@voiceroom/shared/contracts/users';
 import { api } from './api/client.ts';
 
 let loaded: Promise<Map<string, AccountBadge>> | null = null;

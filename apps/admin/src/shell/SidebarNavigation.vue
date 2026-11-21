@@ -10,7 +10,7 @@ import {
   TrendingUp,
   Users
 } from '@lucide/vue';
-import { Badge, NavList, NavListGroup, NavListItem } from '@voice-room/ui/components';
+import { Badge, NavList, NavListGroup, NavListItem } from '@voiceroom/ui-kit/components';
 import { computed } from 'vue';
 import { TAB_GROUPS, TAB_LABELS, pathOf, type AdminTab } from '../tabs.ts';
 

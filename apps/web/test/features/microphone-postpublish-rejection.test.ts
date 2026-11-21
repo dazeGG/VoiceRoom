@@ -1,13 +1,13 @@
 import { createPinia, setActivePinia } from 'pinia';
 import { expect, test, vi } from 'vitest';
 import { FakeMediaStream, FakeMediaStreamTrack } from '../helpers/fake-media';
-import { state } from '@voice-room/call/engine/core/room-runtime.store';
-import { createInitialRoomState } from '@voice-room/call/engine/model/room-state';
-import { acquireMicrophoneForJoin, ensureCurrentMicrophonePublication } from '@voice-room/call/engine/ui/devices';
+import { state } from '@voiceroom/call/engine/core/room-runtime.store';
+import { createInitialRoomState } from '@voiceroom/call/engine/model/room-state';
+import { acquireMicrophoneForJoin, ensureCurrentMicrophonePublication } from '@voiceroom/call/engine/ui/devices';
 import { clearLogBuffer, readLogBuffer } from '@/shared/log';
 import { installWebCallPortsForTest } from '../helpers/call-ports';
 
-vi.mock('@voice-room/call/engine/media/livekit-runtime', () => ({
+vi.mock('@voiceroom/call/engine/media/livekit-runtime', () => ({
   loadLiveKitClient: async () => ({ Track: { Source: { Microphone: 'microphone' } } })
 }));
 

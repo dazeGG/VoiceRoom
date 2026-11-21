@@ -15,7 +15,7 @@ import { createTestDatabase } from './db-harness.ts';
 import { rollBackThrough } from './migration-steps.ts';
 import { AnyRow, queryRows } from './helpers/checked.ts';
 import { defined } from './helpers/assert-defined.ts';
-import { Me } from '@voice-room/shared/contracts/account';
+import { Me } from '@voiceroom/shared/contracts/account';
 import { registerAccount, request, startApiServer } from './fakes/server-process.ts';
 
 const SILENT = { log() {}, info() {}, warn() {}, error() {} };

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fastify from 'fastify';
-import { FriendList } from '@voice-room/shared/contracts/social';
+import { FriendList } from '@voiceroom/shared/contracts/social';
 import { createFriendshipRepository } from '../src/domains/social/friendship.repository.ts';
 import { registerFriendsRoutes } from '../src/domains/social/friends.routes.ts';
 import type { FriendsService } from '../src/domains/social/friends.service.ts';

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue';
-import { Button } from '@voice-room/ui/components';
+import { Button } from '@voiceroom/ui-kit/components';
 import AccountBlockDialog from '../../src/pages/AccountBlockDialog.vue';
 import AccountDeleteDialog from '../../src/pages/AccountDeleteDialog.vue';
 import { useStaffStore, type Staff } from '../../src/staff.store.ts';

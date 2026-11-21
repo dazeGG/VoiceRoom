@@ -2,7 +2,7 @@
 // history take the same additions, edits and removals.
 
 import { expect, test } from 'vitest';
-import type { RoomMessage } from '@voice-room/shared/contracts/messages';
+import type { RoomMessage } from '@voiceroom/shared/contracts/messages';
 import { chatMessageFromRoomMessage } from '../../src/api/rooms';
 import { useRoomChatTimeline, type RoomChatTimeline } from '../../src/features/room/use-room-chat-timeline.ts';
 import { stubFetch } from '../fixtures/fetch.ts';

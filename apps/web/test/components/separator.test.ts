@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/vue';
 import { expect, test } from 'vitest';
-import { Separator } from '@voice-room/ui/components';
+import { Separator } from '@voiceroom/ui-kit/components';
 
 test('a semantic separator exposes its orientation and label', () => {
   render(Separator, { props: { orientation: 'vertical' }, attrs: { 'aria-label': 'Раздел действий' } });

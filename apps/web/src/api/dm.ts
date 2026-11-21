@@ -15,8 +15,8 @@ import {
   type DirectMessageInvite,
   type ReactionSummary,
   type ReplyPointer
-} from '@voice-room/shared/contracts/messages';
-import { normalizeLinkPreview } from '@voice-room/shared/link-preview';
+} from '@voiceroom/shared/contracts/messages';
+import { normalizeLinkPreview } from '@voiceroom/shared/link-preview';
 import type { ReplyTarget } from '@/shared/chat/reply-store';
 import type { HistoryPageRequest } from './rooms';
 import { api } from './client';

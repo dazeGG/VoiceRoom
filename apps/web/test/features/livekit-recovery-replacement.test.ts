@@ -2,7 +2,7 @@
 // connection is built on the side and only committed once complete.
 
 import { afterEach, expect, test, vi } from 'vitest';
-import { RealtimeRecoveryController } from '@voice-room/call/engine/recovery/realtime-recovery';
+import { RealtimeRecoveryController } from '@voiceroom/call/engine/recovery/realtime-recovery';
 import { fakeParticipant, fakePublication, loadLiveKitHarness } from '../helpers/livekit-harness.ts';
 import { FakeMediaStream, FakeMediaStreamTrack } from '../helpers/fake-media.ts';
 
@@ -101,9 +101,9 @@ test('a newer manual microphone intent prevents a stale full-room handover commi
     rawStream: FakeMediaStream;
     stream: FakeMediaStream;
   }>();
-  const microphone = await import('@voice-room/call/engine/services/microphone-service');
+  const microphone = await import('@voiceroom/call/engine/services/microphone-service');
   vi.spyOn(microphone, 'openLocalMicrophone').mockImplementationOnce(() => nextCaptureGate.promise);
-  const devices = await import('@voice-room/call/engine/ui/devices');
+  const devices = await import('@voiceroom/call/engine/ui/devices');
   const switching = devices.switchMicrophone({ refreshDeviceList: false });
   expect(devices.getMicrophoneIntentRevision()).toBeGreaterThan(0);
   screenGate.resolve();
@@ -157,11 +157,11 @@ test('a raw source ending during deferred screen handover leaves the old room to
   const oldPublication = lk.state.localMicPublication;
   emitOldUnpublish = () => standing.emit('LocalTrackUnpublished', oldPublication);
   lk.state.localScreenStream = new FakeMediaStream([screenTrack]);
-  const devices = await import('@voice-room/call/engine/ui/devices');
+  const devices = await import('@voiceroom/call/engine/ui/devices');
   devices.watchLocalMicrophone();
   const boundary = await import('@/platform/desktop-boundary');
   const realtimeBlocked = vi.spyOn(boundary, 'isRealtimeBlocked').mockReturnValue(false);
-  const presence = await import('@voice-room/call/engine/room/presence');
+  const presence = await import('@voiceroom/call/engine/room/presence');
   const postState = vi.spyOn(presence, 'postState');
   const realtimeSockets = vi.fn();
   vi.stubGlobal('WebSocket', function UnexpectedRealtimeSocket() {
@@ -183,7 +183,7 @@ test('a raw source ending during deferred screen handover leaves the old room to
   cleanupGate.resolve();
   await vi.waitFor(() => expect(lk.state.localStream).toBeNull());
   expect(lk.state.localMicPublication).toBeNull();
-  const microphone = await import('@voice-room/call/engine/services/microphone-service');
+  const microphone = await import('@voiceroom/call/engine/services/microphone-service');
   const nextRaw = new FakeMediaStreamTrack('attach-raw', 'audio');
   const nextOutput = new FakeMediaStreamTrack('attach-output', 'audio');
   const nextCapture = {
@@ -228,9 +228,9 @@ test('a prepared raw microphone ending during the token wait joins listen-only w
     rawStream: new FakeMediaStream([raw]),
     stream: new FakeMediaStream([output])
   };
-  const microphone = await import('@voice-room/call/engine/services/microphone-service');
+  const microphone = await import('@voiceroom/call/engine/services/microphone-service');
   vi.spyOn(microphone, 'openLocalMicrophone').mockResolvedValueOnce(capture);
-  const devices = await import('@voice-room/call/engine/ui/devices');
+  const devices = await import('@voiceroom/call/engine/ui/devices');
   expect(await devices.acquireMicrophoneForJoin(() => true)).toBe(capture);
   const joining = lk.service.connectLiveKitRoom('Анна', () => true, capture);
   raw.stop();
@@ -268,9 +268,9 @@ test('a prepared raw microphone ending during deferred publish is unpublished an
     rawStream: new FakeMediaStream([raw]),
     stream: new FakeMediaStream([output])
   };
-  const microphone = await import('@voice-room/call/engine/services/microphone-service');
+  const microphone = await import('@voiceroom/call/engine/services/microphone-service');
   vi.spyOn(microphone, 'openLocalMicrophone').mockResolvedValueOnce(capture);
-  const devices = await import('@voice-room/call/engine/ui/devices');
+  const devices = await import('@voiceroom/call/engine/ui/devices');
   expect(await devices.acquireMicrophoneForJoin(() => true)).toBe(capture);
   const joining = lk.service.connectLiveKitRoom('Анна', () => true, capture);
   await publishStarted.promise;
@@ -308,9 +308,9 @@ test.each([
     rawStream: new FakeMediaStream([raw]),
     stream: new FakeMediaStream([output])
   };
-  const microphone = await import('@voice-room/call/engine/services/microphone-service');
+  const microphone = await import('@voiceroom/call/engine/services/microphone-service');
   vi.spyOn(microphone, 'openLocalMicrophone').mockResolvedValueOnce(capture);
-  const devices = await import('@voice-room/call/engine/ui/devices');
+  const devices = await import('@voiceroom/call/engine/ui/devices');
   expect(await devices.acquireMicrophoneForJoin(() => true)).toBe(capture);
   const publish = devices.publishMicrophoneForJoin;
   vi.spyOn(devices, 'publishMicrophoneForJoin').mockImplementationOnce(async (...args) => {
@@ -394,7 +394,7 @@ test('a fresh replacement takes the live microphone over from a timed-out in-pla
   expect(lk.rooms[1]?.published).toHaveLength(0);
   expect(lk.state.livekitRoom).toBe(standing);
   await vi.advanceTimersByTimeAsync(10_000);
-  const { acquireMicrophoneForJoin } = await import('@voice-room/call/engine/ui/devices');
+  const { acquireMicrophoneForJoin } = await import('@voiceroom/call/engine/ui/devices');
   expect(await acquireMicrophoneForJoin(() => true)).toBeNull();
   // The slow publish timed out without dropping the microphone.
   expect(lk.state.localStream).not.toBeNull();
@@ -450,7 +450,7 @@ test('in-place reconnect keeps reconciling when microphone mute sync rejects', a
   if (!standing) throw new Error('standing room missing');
   const screenTrack = { id: 'screen-2', kind: 'audio', readyState: 'live' };
   lk.state.localScreenStream = { id: 'screen-stream-2', getTracks: () => [screenTrack] };
-  const devices = await import('@voice-room/call/engine/ui/devices');
+  const devices = await import('@voiceroom/call/engine/ui/devices');
   const failure = vi
     .spyOn(devices, 'ensureCurrentMicrophonePublication')
     .mockRejectedValueOnce(new Error('mute failed'));
@@ -553,7 +553,7 @@ test('controller abandonment does not release a pending replacement SDK publish 
   expect(controller.requestLiveKitReplacement()).toBe(true);
   snapshot();
   await vi.waitFor(() => expect(connected).toHaveBeenCalledOnce());
-  const devices = await import('@voice-room/call/engine/ui/devices');
+  const devices = await import('@voiceroom/call/engine/ui/devices');
   expect(devices.canAdmitAutomaticMicrophoneAction()).toBe(false);
   controller.livekitReconciled(); // The optional controller answer is now abandoned.
   expect(controller.getSnapshot().phase).toBe('healthy');
@@ -848,9 +848,9 @@ test('a join whose microphone publication LiveKit refuses names the refusal, not
     rawStream: new FakeMediaStream([new FakeMediaStreamTrack('raw-refused', 'audio')]),
     stream: new FakeMediaStream([new FakeMediaStreamTrack('output-refused', 'audio')])
   };
-  const microphone = await import('@voice-room/call/engine/services/microphone-service');
+  const microphone = await import('@voiceroom/call/engine/services/microphone-service');
   vi.spyOn(microphone, 'openLocalMicrophone').mockResolvedValueOnce(capture);
-  const devices = await import('@voice-room/call/engine/ui/devices');
+  const devices = await import('@voiceroom/call/engine/ui/devices');
   expect(await devices.acquireMicrophoneForJoin(() => true)).toBe(capture);
   await expect(lk.service.connectLiveKitRoom('Анна', () => true, capture)).resolves.toBe(true);
   expect(lk.state.microphoneMissing).toBe(true);

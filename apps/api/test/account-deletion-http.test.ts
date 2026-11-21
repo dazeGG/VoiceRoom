@@ -2,8 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Pool } from 'pg';
 import { createAccountDeletionRepository } from '../src/domains/account/account-deletion.repository.ts';
-import { ACCOUNT_DELETION_GRACE_MS } from '@voice-room/shared/account-security';
-import { AccountFailure, DeletionPreview, DeletionScheduled, Me, SignedIn } from '@voice-room/shared/contracts/account';
+import { ACCOUNT_DELETION_GRACE_MS } from '@voiceroom/shared/account-security';
+import { AccountFailure, DeletionPreview, DeletionScheduled, Me, SignedIn } from '@voiceroom/shared/contracts/account';
 import { cookieFrom, registerAccount, request, startApiServer } from './fakes/server-process.ts';
 
 test('an account can be deleted, restored within the grace period and never re-registered afterwards', async (t) => {

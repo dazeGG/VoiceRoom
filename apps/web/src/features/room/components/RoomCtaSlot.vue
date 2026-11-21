@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { IconButton, Button } from '@voice-room/ui/components';
+import { IconButton, Button } from '@voiceroom/ui-kit/components';
 import { t } from '@/shared/i18n';
 import { MonitorDown, UserPlus, X } from '@lucide/vue';
 import { computed, onMounted, ref } from 'vue';
@@ -9,10 +9,10 @@ import { useSessionStore } from '@/features/auth/session.store';
 import { getDesktopBoundaryPolicy } from '@/platform/desktop-boundary';
 import { readOpenInAppSignals, shouldOfferOpenInApp } from '@/platform/open-in-app';
 import AppBenefitsModal from '@/shared/components/AppBenefitsModal.vue';
-import { iconMd } from '@voice-room/ui/icon-defaults';
-import { isRoomEmbedded } from '@voice-room/call/engine/core/embed';
-import { state as roomClientState } from '@voice-room/call/engine/core/room-runtime.store';
-import { rejoinRoomSignedIn } from '@voice-room/call/engine/room/room';
+import { iconMd } from '@voiceroom/ui-kit/icon-defaults';
+import { isRoomEmbedded } from '@voiceroom/call/engine/core/embed';
+import { state as roomClientState } from '@voiceroom/call/engine/core/room-runtime.store';
+import { rejoinRoomSignedIn } from '@voiceroom/call/engine/room/room';
 import { resolveRoomCta } from '../room-cta';
 
 const session = useSessionStore();

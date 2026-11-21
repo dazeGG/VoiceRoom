@@ -3,7 +3,7 @@
 
 import type { TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { Failure, RoomIdParams } from '@voice-room/shared/contracts/http';
+import { Failure, RoomIdParams } from '@voiceroom/shared/contracts/http';
 import {
   InboxItemRead,
   InboxPage,
@@ -15,7 +15,7 @@ import {
   RoomLevel,
   RoomLevelBody,
   UnreadCount
-} from '@voice-room/shared/contracts/notifications';
+} from '@voiceroom/shared/contracts/notifications';
 import type { ApiContext } from '../../app/context.ts';
 import { failure, optionalJsonBody } from '../../platform/http/http-kit.ts';
 import type { NotificationService } from './notification.service.ts';

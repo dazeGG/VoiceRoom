@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Tag, Popover, TagCount } from '@voice-room/ui/components';
+import { Tag, Popover, TagCount } from '@voiceroom/ui-kit/components';
 import { t } from '@/shared/i18n';
 import { computed } from 'vue';
 import ReactorList from './ReactorList.vue';

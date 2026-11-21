@@ -23,7 +23,7 @@
 //   data-preview-chat-open, data-members-open -> dropped (no rule read them)
 //   .participant[data-muted|data-screen]      -> .participant--muted / --screen (room/_participant.scss)
 
-@use 'pkg:@voice-room/ui/styles/mixins' as *;
+@use 'pkg:@voiceroom/ui-kit/styles/mixins' as *;
 
 // One grid, like the room: the top bar and the stage in the first column, the
 // chat or members panel beside them over the full height.

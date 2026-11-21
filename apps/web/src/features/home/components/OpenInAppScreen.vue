@@ -2,7 +2,7 @@
 import { t } from '@/shared/i18n';
 import { onMounted, ref } from 'vue';
 import { createDesktopDownload } from '@/platform/desktop-download';
-import { Button, Dialog } from '@voice-room/ui/components';
+import { Button, Dialog } from '@voiceroom/ui-kit/components';
 
 const emit = defineEmits<{ retry: []; continue: [] }>();
 

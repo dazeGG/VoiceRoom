@@ -5,11 +5,11 @@
 
 import crypto from 'node:crypto';
 import { roomAllowsSurface } from '../domains/rooms/room-surface.policy.ts';
-import type { PublicPeer } from '@voice-room/shared/contracts/rooms';
-import type { ErrorCode } from '@voice-room/shared/contracts/errors';
-import type { ClientCommands, PeerLeaveReason, RoomSnapshot } from '@voice-room/shared/contracts/realtime';
-import type { ServerEnvelope } from '@voice-room/shared/realtime';
-import { cleanGuestName, cleanName, isReservedPeerId, normalizeGuestId } from '@voice-room/shared/validation';
+import type { PublicPeer } from '@voiceroom/shared/contracts/rooms';
+import type { ErrorCode } from '@voiceroom/shared/contracts/errors';
+import type { ClientCommands, PeerLeaveReason, RoomSnapshot } from '@voiceroom/shared/contracts/realtime';
+import type { ServerEnvelope } from '@voiceroom/shared/realtime';
+import { cleanGuestName, cleanName, isReservedPeerId, normalizeGuestId } from '@voiceroom/shared/validation';
 import { avatarUrl } from '../lib/avatar-url.ts';
 import { LOG_EVENTS } from '../lib/log-events.ts';
 import type { SessionUser } from '../app/context.ts';

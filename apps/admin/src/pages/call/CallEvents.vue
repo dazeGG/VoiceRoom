@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-import type { CallEvent, RoomStay } from '@voice-room/shared/contracts/admin';
+import type { CallEvent, RoomStay } from '@voiceroom/shared/contracts/admin';
 import { formatClock } from '../../format.ts';
 import { EmptyState, Panel } from '../../ui';
 import { personName } from './call-people.ts';

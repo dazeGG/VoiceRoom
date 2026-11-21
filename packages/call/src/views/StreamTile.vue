@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { Pressable } from '@voice-room/ui/components';
-import { t } from '@voice-room/ui/i18n';
-import { iconLg } from '@voice-room/ui/icon-defaults';
+import { Pressable } from '@voiceroom/ui-kit/components';
+import { t } from '@voiceroom/ui-kit/i18n';
+import { iconLg } from '@voiceroom/ui-kit/icon-defaults';
 import { Monitor } from '@lucide/vue';
 import { computed, ref, watch } from 'vue';
 import type { Participant } from '../engine/core/types';

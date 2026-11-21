@@ -1,4 +1,4 @@
-import type { VoiceMinute } from '@voice-room/shared/contracts/admin';
+import type { VoiceMinute } from '@voiceroom/shared/contracts/admin';
 import type { CallPerson } from '../rooms/room-bits.ts';
 
 export const personName = (person: Pick<CallPerson, 'account' | 'guestName'>) =>

@@ -91,7 +91,7 @@ test('desktop hotkey sync buffers early events, prefers the latest status, and d
   console.warn = () => {};
 
   await installWebCallPortsForTest();
-  const service = await import('@voice-room/call/engine/services/desktop-hotkey-service');
+  const service = await import('@voiceroom/call/engine/services/desktop-hotkey-service');
   const actions: unknown[] = [];
   const statuses: unknown[] = [];
   unbind = service.bindDesktopGlobalHotkeys(

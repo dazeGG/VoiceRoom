@@ -5,7 +5,7 @@ import type pg from 'pg';
 import { kyselyOn } from '../../platform/db/kysely.ts';
 import { epochMillis, toDate } from '../../platform/epoch-millis.ts';
 import { verifyPassword } from '../../lib/password.ts';
-import { RECOVERY_CODE_COUNT, normalizeRecoveryCode } from '@voice-room/shared/account-security';
+import { RECOVERY_CODE_COUNT, normalizeRecoveryCode } from '@voiceroom/shared/account-security';
 import { createRecoveryCode, hashRecoveryCode, mapUser } from './user-records.ts';
 import { lockUser, replacePassword } from './user.repository.ts';
 
