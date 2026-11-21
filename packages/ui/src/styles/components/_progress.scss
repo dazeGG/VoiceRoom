@@ -1,0 +1,74 @@
+@use '../mixins' as *;
+
+.ui-progress {
+  position: relative;
+  height: var(--space-4);
+  overflow: clip;
+  border-radius: var(--radius-pill);
+  background: var(--vr-surface-3);
+
+  &--lg {
+    height: var(--space-8);
+  }
+  &__fill {
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: var(--progress-value);
+    border-radius: inherit;
+    background: var(--vr-accent);
+    transition: width 200ms ease;
+  }
+
+  &--error {
+    background: var(--vr-danger-soft);
+  }
+  &--error &__fill {
+    background: var(--vr-danger);
+  }
+  &--indeterminate &__fill {
+    width: 40%;
+    animation: ui-progress-slide 1.2s var(--ease-out) infinite;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    &--indeterminate &__fill {
+      animation: none;
+    }
+  }
+}
+
+@keyframes ui-progress-slide {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(250%);
+  }
+}
+
+.ui-progress-row {
+  display: grid;
+  gap: var(--space-6);
+
+  &__head {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--space-12);
+    font-size: 13px;
+    color: var(--vr-text-2);
+  }
+  &__head--compact {
+    justify-content: end;
+  }
+  &__head--compact:not(:has(.ui-progress-row__percent)) {
+    position: absolute;
+  }
+  &__label--hidden {
+    @include visually-hidden;
+  }
+  &__percent {
+    font: 500 12px/1.4 var(--font-mono);
+    color: var(--vr-text-muted);
+    font-variant-numeric: tabular-nums;
+  }
+}

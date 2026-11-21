@@ -1,0 +1,94 @@
+.ui-tag {
+  --tag-inset: var(--space-12);
+  display: inline-flex;
+  align-items: center;
+  height: var(--size-28);
+  border: 1px solid var(--vr-line-strong);
+  border-radius: var(--radius-pill);
+  background: var(--vr-surface-2);
+  color: var(--vr-text-2);
+  font: 500 13px/1 var(--font-ui);
+  white-space: nowrap;
+
+  &--sm {
+    --tag-inset: var(--space-8);
+    height: var(--size-24);
+    font-size: 12px;
+  }
+
+  &__content,
+  &__remove {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-6);
+    border: 0;
+    border-radius: var(--radius-pill);
+    background: transparent;
+    color: inherit;
+    font: inherit;
+  }
+
+  &__content {
+    height: 100%;
+    padding-inline: var(--tag-inset);
+    > svg {
+      width: var(--icon-16);
+      height: var(--icon-16);
+    }
+  }
+
+  &--sm &__content > svg {
+    width: var(--icon-12);
+    height: var(--icon-12);
+  }
+
+  &:has(button:hover:not(:disabled)) {
+    background: var(--vr-hover);
+  }
+  &--selected,
+  &:has(> [aria-pressed='true']) {
+    border-color: var(--vr-accent-line);
+    background: var(--vr-accent-soft);
+    color: var(--vr-accent);
+  }
+
+  &__content:is(button),
+  &__remove {
+    cursor: pointer;
+  }
+  &__content:disabled,
+  &__remove:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+  }
+  &__content:focus-visible,
+  &__remove:focus-visible {
+    outline: var(--space-2) solid var(--vr-accent);
+    outline-offset: var(--space-2);
+  }
+
+  &__count {
+    font: 500 12px/1 var(--font-mono);
+  }
+  &__emoji {
+    display: inline-flex;
+    font-size: 15px;
+    line-height: 1;
+  }
+  &__remove {
+    width: var(--size-16);
+    height: var(--size-16);
+    margin-inline: calc(-1 * var(--space-4)) var(--space-6);
+    padding: 0;
+    color: var(--vr-text-muted);
+    &:hover:not(:disabled) {
+      background: var(--vr-hover);
+      color: var(--vr-text);
+    }
+    svg {
+      width: var(--icon-12);
+      height: var(--icon-12);
+    }
+  }
+}

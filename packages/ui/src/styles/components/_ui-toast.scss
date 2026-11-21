@@ -1,0 +1,109 @@
+.ui-toaststack {
+  position: fixed;
+  right: var(--space-16);
+  bottom: var(--space-24);
+  z-index: 600;
+  display: grid;
+  gap: var(--space-8);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+
+  &:empty {
+    visibility: hidden;
+  }
+}
+
+.ui-toast {
+  --toast-accent: var(--vr-info);
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-12);
+  width: min(360px, calc(100vw - var(--space-32)));
+  padding: var(--space-12) var(--size-44) var(--space-12) var(--space-12);
+  overflow: hidden;
+  border: 1px solid var(--vr-line-strong);
+  border-radius: var(--radius-16);
+  background: var(--vr-surface-3);
+  box-shadow: var(--vr-shadow-toast);
+  color: var(--vr-text);
+  font: 600 14px/1.35 var(--font-ui);
+  pointer-events: auto;
+  animation: ui-toast-in 180ms var(--ease-out);
+
+  &--success {
+    --toast-accent: var(--vr-success);
+  }
+  &--danger {
+    --toast-accent: var(--vr-danger);
+  }
+  &--warning {
+    --toast-accent: var(--vr-warning);
+  }
+
+  &__icon {
+    display: grid;
+    place-items: center;
+    flex: none;
+    width: var(--size-28);
+    height: var(--size-28);
+    border-radius: var(--radius-pill);
+    background: color-mix(in oklch, var(--toast-accent), transparent 86%);
+    color: var(--toast-accent);
+
+    svg {
+      width: var(--icon-16);
+      height: var(--icon-16);
+    }
+  }
+
+  &__copy {
+    display: grid;
+    flex: 1;
+    gap: var(--space-2);
+    min-width: 0;
+    padding-top: var(--space-4);
+    overflow-wrap: anywhere;
+  }
+
+  &__desc {
+    color: var(--vr-text-2);
+    font-size: 13px;
+    font-weight: 400;
+  }
+
+  &__action {
+    align-self: center;
+  }
+  &__close {
+    position: absolute;
+    top: var(--space-8);
+    right: var(--space-8);
+  }
+
+  &__progress {
+    position: absolute;
+    inset: auto var(--space-12) 0;
+    height: var(--space-2);
+    border-radius: var(--radius-pill);
+    background: var(--toast-accent);
+    transform-origin: left;
+  }
+
+  &:focus-visible {
+    outline: var(--space-2) solid var(--vr-accent);
+    outline-offset: var(--space-2);
+  }
+}
+
+@keyframes ui-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(var(--space-8));
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}

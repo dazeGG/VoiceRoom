@@ -2,8 +2,8 @@ import { render, screen } from '@testing-library/vue';
 import userEvent from '@testing-library/user-event';
 import { expect, test, vi } from 'vitest';
 import { defineComponent, h, ref } from 'vue';
-import { Dialog as UiDialog } from '@voice-room/ui/components';
-import { ToastStack, type ToastItem } from '@/shared/ui/ToastStack';
+import { Dialog as UiDialog, Toast } from '@voice-room/ui/components';
+import type { ToastItem } from '@voice-room/ui/toast';
 
 function hostWith(onClosed: () => void, toasts: ToastItem[] = []) {
   return defineComponent({
@@ -19,7 +19,7 @@ function hostWith(onClosed: () => void, toasts: ToastItem[] = []) {
           h('input', { 'aria-label': 'first' }),
           h('button', { type: 'button' }, 'last')
         ]),
-        ...(toasts.length > 0 ? [h(ToastStack, { toasts, onDismiss: () => {} })] : [])
+        ...(toasts.length > 0 ? [h(Toast, { toasts, onDismiss: () => {} })] : [])
       ];
     }
   });
@@ -104,7 +104,9 @@ test('a press on a toast raised over the dialog does not close it', async () => 
   ]);
 
   // Same jsdom limit as above: the press itself is what is under test.
-  await userEvent.setup({ pointerEventsCheck: 0 }).click(screen.getByRole('button', { name: 'Отменить' }));
+  await userEvent
+    .setup({ pointerEventsCheck: 0 })
+    .click(screen.getByRole('button', { name: 'Отменить', hidden: true }));
 
   expect(onAction).toHaveBeenCalledWith('t1');
   expect(onClosed).not.toHaveBeenCalled();
