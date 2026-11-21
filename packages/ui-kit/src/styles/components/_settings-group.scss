@@ -67,6 +67,19 @@
     max-width: 100%;
   }
 
+  &:has(> &__leading):not(&--stacked) {
+    flex-wrap: nowrap;
+
+    .ui-setting__text {
+      flex-basis: 0;
+    }
+
+    .ui-setting__leading,
+    .ui-setting__control {
+      flex: none;
+    }
+  }
+
   &--stacked &__control {
     flex: 0 0 100%;
   }

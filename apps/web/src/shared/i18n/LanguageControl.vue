@@ -31,8 +31,9 @@ function select(value: string): void {
     <span class="language-control__picker">
       <Select
         class="language-control__select"
-        native
+        :native="compact"
         :icon-only="compact"
+        :size="compact ? 'md' : 'lg'"
         :model-value="locale.current"
         :options="options"
         :label="t('Язык')"

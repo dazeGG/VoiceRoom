@@ -11,12 +11,6 @@ defineProps<{ creatingTemp: boolean; joining: boolean }>();
 const roomCode = defineModel<string>('roomCode', { required: true });
 
 const emit = defineEmits<{ createTemp: []; join: [] }>();
-
-function onRoomCodeKeydown(event: KeyboardEvent): void {
-  if (event.key !== 'Enter') return;
-  event.preventDefault();
-  emit('join');
-}
 </script>
 
 <template>
@@ -43,6 +37,7 @@ function onRoomCodeKeydown(event: KeyboardEvent): void {
           <TextField
             v-model="roomCode"
             type="search"
+            size="lg"
             variant="mono"
             name="room-search"
             :placeholder="t('Код комнаты')"
@@ -53,10 +48,12 @@ function onRoomCodeKeydown(event: KeyboardEvent): void {
             data-1p-ignore
             data-lpignore="true"
             data-bwignore
-            @keydown="onRoomCodeKeydown"
-          />
+          >
+            <template #action>
+              <Button variant="outline" size="lg" type="submit" :disabled="joining">{{ t('Войти в комнату') }}</Button>
+            </template>
+          </TextField>
         </Field>
-        <Button variant="outline" type="submit" :disabled="joining">{{ t('Войти в комнату') }}</Button>
       </form>
     </div>
 

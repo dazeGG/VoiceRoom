@@ -79,6 +79,7 @@ async function choose(emoji: string, close: () => void): Promise<void> {
       placement="top-start"
       flip
       floating
+      inset="flush"
       role="dialog"
       :aria-label="t('Выбор реакции')"
       panel-class="reaction-picker-panel"

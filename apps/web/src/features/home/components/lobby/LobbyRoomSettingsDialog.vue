@@ -141,7 +141,7 @@ function onClose(): void {
 </script>
 
 <template>
-  <Dialog :open="Boolean(room)" :title="t('Настройки комнаты')" size="lg" :on-close="onClose">
+  <Dialog :open="Boolean(room)" :title="t('Настройки комнаты')" size="xl" :on-close="onClose">
     <div v-if="room" class="room-settings">
       <div class="settings__body settings__body--room">
         <NavList class="settings__nav" :label="t('Разделы настроек комнаты')">

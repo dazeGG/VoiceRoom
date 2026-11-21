@@ -62,13 +62,6 @@ async function copyLogin(): Promise<void> {
   window.setTimeout(() => (copied.value = false), 2000);
 }
 
-function onKeydown(event: KeyboardEvent): void {
-  if (event.key === 'Enter') {
-    event.preventDefault();
-    void sendByLogin();
-  }
-}
-
 async function run(id: string, action: () => Promise<void>, ok: string): Promise<void> {
   if (busy.value[id]) return;
   busy.value = { ...busy.value, [id]: true };
@@ -100,24 +93,26 @@ function mutualLabel(count: number): string {
     <div class="people-view__title">{{ t('Друзья и заявки') }}</div>
 
     <div class="people-view__label people-view__label--add">{{ t('Добавить друга') }}</div>
-    <div class="people-view__add-bar">
-      <Field class="people-view__add-field" :label="t('Логин друга')">
+    <form class="people-view__add-bar" @submit.prevent="sendByLogin">
+      <Field :label="t('Логин друга')">
         <TextField
           v-model="query"
+          size="lg"
           variant="mono"
           :placeholder="t('логин друга')"
           autocapitalize="off"
           autocomplete="off"
           spellcheck="false"
-          @keydown="onKeydown"
         >
           <template #leading>@</template>
+          <template #action>
+            <Button variant="outline" size="lg" type="submit" :disabled="sending || !query.trim()">
+              {{ t('Отправить заявку') }}
+            </Button>
+          </template>
         </TextField>
       </Field>
-      <Button :variant="query.trim() ? 'primary' : 'ghost'" :disabled="sending || !query.trim()" @click="sendByLogin">{{
-        t('Отправить заявку')
-      }}</Button>
-    </div>
+    </form>
     <div class="people-view__hint">
       {{ t('Ваш логин') }} <code>@{{ user.login }}</code>
       <Button variant="plain" size="inline" class="people-view__copy" @click="copyLogin">

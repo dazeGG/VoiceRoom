@@ -106,13 +106,13 @@
 }
 
 .ui-icon-button[aria-pressed='true'],
-.ui-icon-button[aria-expanded='true'] {
+.ui-icon-button[aria-expanded='true']:where(:not(.ui-icon-button--neutral-expanded)) {
   background: var(--vr-surface-3);
   color: var(--vr-text);
 }
 
 .ui-icon-button--soft[aria-pressed='true'],
-.ui-icon-button--soft[aria-expanded='true'] {
+.ui-icon-button--soft[aria-expanded='true']:where(:not(.ui-icon-button--neutral-expanded)) {
   background: var(--vr-accent-soft-hover);
   color: var(--vr-accent);
 }
@@ -151,11 +151,12 @@
 
 .ui-icon-button__dot {
   position: absolute;
-  inset-block-start: var(--space-6);
-  inset-inline-end: var(--space-8);
+  inset-block-start: var(--space-2);
+  inset-inline-end: var(--space-2);
   width: var(--space-6);
   height: var(--space-6);
   border-radius: var(--radius-pill);
   background: var(--vr-accent);
+  box-shadow: 0 0 0 var(--space-2) var(--vr-surface-2);
   pointer-events: none;
 }

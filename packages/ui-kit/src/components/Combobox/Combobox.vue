@@ -31,7 +31,7 @@ defineSlots<{
 
 const root = useTemplateRef<{ highlightFirstItem?: () => void }>('root');
 const expanded = computed({
-  get: () => open.value && (!props.externalFilter || query.value.trim() !== ''),
+  get: () => props.inline || (open.value && (!props.externalFilter || query.value.trim() !== '')),
   set: (next: boolean) => {
     open.value = next;
   }
@@ -69,6 +69,12 @@ function select(next: unknown): void {
   emit('select', option);
 }
 
+function selectInline(event: Event, option: ComboboxOption): void {
+  if (!props.inline) return;
+  event.preventDefault();
+  emit('select', option);
+}
+
 function displayValue(next: unknown): string {
   return props.options.find((option) => option.value === next)?.label ?? '';
 }
@@ -84,6 +90,7 @@ function updateQuery(next: string): void {
       ref="root"
       v-model:open="expanded"
       class="ui-combobox"
+      :class="{ 'ui-combobox--inline': inline }"
       :model-value="value"
       :ignore-filter="externalFilter"
       :reset-search-term-on-blur="!externalFilter"
@@ -98,7 +105,11 @@ function updateQuery(next: string): void {
       <ComboboxAnchor class="ui-input" :class="`ui-input--${size}`">
         <span class="ui-input__icon" aria-hidden="true"><Search /></span>
         <ComboboxInput
-          v-bind="{ ...control, ...(externalFilter ? { modelValue: query } : {}) }"
+          v-bind="{
+            ...control,
+            ...(label ? { 'aria-label': label } : {}),
+            ...(externalFilter ? { modelValue: query } : {})
+          }"
           class="ui-input__control"
           :auto-focus="autoFocus"
           :display-value="displayValue"
@@ -108,8 +119,8 @@ function updateQuery(next: string): void {
         <slot name="trailing" />
       </ComboboxAnchor>
       <ComboboxContent
-        class="ui-combobox__panel ui-menu"
-        :class="{ 'ui-combobox__panel--overlay': overlay }"
+        class="ui-combobox__panel"
+        :class="{ 'ui-menu': !inline, 'ui-combobox__panel--overlay': overlay && !inline }"
         :aria-label="resultsLabel"
         :aria-busy="loading || undefined"
       >
@@ -129,6 +140,7 @@ function updateQuery(next: string): void {
               :disabled="option.disabled ?? false"
               :aria-disabled="option.disabled || undefined"
               @mousedown.prevent
+              @select="selectInline($event, option)"
             >
               <SuggestionRow :label="option.label" :description="option.description">
                 <template v-if="$slots.avatar" #avatar><slot name="avatar" :option="option" /></template>

@@ -39,7 +39,6 @@
 //   .settings-avatar-overlay        -> .settings__avatar-overlay
 //   .settings-avatar-remove         -> .settings__avatar-remove
 //   .settings-appearance            -> .settings__appearance
-//   .settings-themes                -> .settings__themes
 //   .settings-theme-line(.is-short/.is-wide) -> .settings__theme-line(--short/--wide)
 //   .settings-gate                  -> .settings__gate
 //   .settings-sound-value           -> .settings__sound-value
@@ -410,19 +409,10 @@
   gap: var(--space-12);
 }
 
-.settings__themes {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  gap: var(--space-12);
-}
-
 .settings__theme-preview {
   display: flex;
-  height: 112px;
-  overflow: hidden;
-  border-radius: var(--radius-10);
+  height: calc(var(--space-64) + var(--space-48));
   background: var(--vr-bg);
-  box-shadow: inset 0 0 0 1px var(--vr-line);
 }
 
 .settings__theme-side {

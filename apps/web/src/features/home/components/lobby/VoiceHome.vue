@@ -5,7 +5,6 @@ import {
   Field,
   IconButton,
   TextField,
-  Tooltip,
   Avatar,
   AvatarStack,
   Button,
@@ -154,6 +153,7 @@ function closeRoomContextMenu(): void {
               <TextField
                 v-model="joinCode"
                 type="search"
+                size="lg"
                 variant="mono"
                 name="room-search"
                 :placeholder="t('Код или ссылка')"
@@ -163,13 +163,14 @@ function closeRoomContextMenu(): void {
                 data-1p-ignore
                 data-lpignore="true"
                 data-bwignore
-              />
+              >
+                <template #action>
+                  <Button variant="outline" size="lg" type="submit">{{ t('Войти в комнату') }}</Button>
+                </template>
+              </TextField>
             </Field>
-            <Tooltip :text="t('Постоянные комнаты сохраняются автоматически')">
-              <Button variant="outline" type="submit">{{ t('Войти в комнату') }}</Button>
-            </Tooltip>
           </form>
-          <Button variant="primary" @click="emit('createRoom')">
+          <Button variant="primary" size="lg" @click="emit('createRoom')">
             <template #icon><Plus v-bind="iconSm" aria-hidden="true" /></template> {{ t('Создать комнату') }}
           </Button>
         </div>

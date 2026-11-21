@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { cleanup } from '@testing-library/vue';
 import { expect, test, vi } from 'vitest';
 import { defineComponent, h } from 'vue';
-import { ContextMenu } from '@voiceroom/ui-kit/components';
+import { Button, DropdownMenu, MenuSub } from '@voiceroom/ui-kit/components';
 import LinkPreviewCard from '@/shared/chat/LinkPreviewCard.vue';
 import RoomInviteFriendList from '@/shared/components/room-menu/RoomInviteFriendList.vue';
 import { friend as friendAnswer, publicUser } from '../fixtures/answers.ts';
@@ -18,13 +18,20 @@ async function renderInviteList(props: InstanceType<typeof RoomInviteFriendList>
     defineComponent(
       () => () =>
         h(
-          ContextMenu,
-          { open: true, x: 20, y: 20, ariaLabel: 'Позвать друга' },
-          { default: () => h(RoomInviteFriendList, props) }
+          DropdownMenu,
+          { ariaLabel: 'Комната' },
+          {
+            trigger: () => h(Button, {}, () => 'Комната'),
+            content: () =>
+              h(MenuSub, { label: 'Пригласить', ariaLabel: 'Позвать друга' }, () => h(RoomInviteFriendList, props))
+          }
         )
     )
   );
-  await screen.findByRole('menu', { name: 'Позвать друга' });
+  await userEvent.click(screen.getByRole('button', { name: 'Комната' }));
+  const trigger = await screen.findByRole('menuitem', { name: 'Пригласить' });
+  trigger.focus();
+  await userEvent.keyboard('{ArrowRight}');
 }
 
 const KEY = `lp_${'a'.repeat(32)}.webp`;
@@ -78,8 +85,7 @@ test('the invite list puts online friends first, alphabetically, and disables th
     presentUserIds: new Set(['u-a']),
     onClose: vi.fn()
   });
-  await userEvent.click(screen.getByRole('menuitem', { name: 'Найти друга' }));
-  await screen.findByRole('combobox', { name: 'Найти друга' });
+  expect(await screen.findByRole('combobox', { name: 'Найти друга', expanded: true })).toBeTruthy();
   const items = await screen.findAllByRole('option');
   expect(items.map((item) => item.textContent?.trim().replace(/\s+/g, ' '))).toEqual([
     expect.stringContaining('Анна'),
@@ -95,7 +101,6 @@ test('inviting rings the friend into the room and closes the menu; a failure is 
   const close = vi.fn();
   const onToast = vi.fn();
   await renderInviteList({ friends: [friend('u-v', 'Вера', true)], roomId: 'room-a', onClose: close, onToast });
-  await userEvent.click(screen.getByRole('menuitem', { name: 'Найти друга' }));
   await userEvent.click(await screen.findByRole('option', { name: /Вера/ }));
   expect(calls[0]).toMatchObject({ method: 'POST', url: '/api/rooms/room-a/ring', body: { userId: 'u-v' } });
   expect(onToast).toHaveBeenCalledWith('Вера приглашён в комнату');
@@ -104,25 +109,28 @@ test('inviting rings the friend into the room and closes the menu; a failure is 
   cleanup();
   stubFetch({ 'POST /api/rooms/room-a/ring': { status: 429, body: { ok: false, error: 'Слишком часто' } } });
   await renderInviteList({ friends: [friend('u-v', 'Вера', true)], roomId: 'room-a', onClose: vi.fn(), onToast });
-  await userEvent.click(screen.getByRole('menuitem', { name: 'Найти друга' }));
   await userEvent.click(await screen.findByRole('option', { name: /Вера/ }));
   expect(onToast).toHaveBeenLastCalledWith('Слишком часто');
 });
 
-test('keyboard search closes the results before it dismisses the invite menu', async () => {
+test('keyboard search filters the visible friends and Escape returns focus to the submenu trigger', async () => {
   const user = userEvent.setup();
-  await renderInviteList({ friends: [friend('u-v', 'Вера', true)], roomId: 'room-a', onClose: vi.fn() });
-  screen.getByRole('menuitem', { name: 'Найти друга' }).focus();
-  await user.keyboard('{Enter}');
+  await renderInviteList({
+    friends: [friend('u-v', 'Вера', true), friend('u-b', 'Борис', false)],
+    roomId: 'room-a',
+    onClose: vi.fn()
+  });
   const input = await screen.findByRole('combobox', { name: 'Найти друга' });
-  await screen.findByRole('option', { name: /Вера/ });
+  expect(await screen.findAllByRole('option')).toHaveLength(2);
   expect(document.activeElement).toBe(input);
 
   await user.type(input, 'u-v');
+  expect(screen.getAllByRole('option')).toEqual([screen.getByRole('option', { name: /Вера/ })]);
+  await user.clear(input);
+  expect(screen.getAllByRole('option')).toHaveLength(2);
   await user.keyboard('{Escape}');
   expect(screen.queryByRole('listbox')).toBeNull();
-  expect(screen.getByRole('menu', { name: 'Позвать друга' })).toBeTruthy();
-  expect(document.activeElement).toBe(input);
+  expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: 'Пригласить' }));
 });
 
 test('with no friends the list says how to get some', async () => {

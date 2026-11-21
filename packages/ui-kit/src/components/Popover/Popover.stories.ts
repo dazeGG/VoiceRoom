@@ -53,3 +53,4 @@ export const TopStart: Story = { args: { placement: 'top-start' } };
 export const TopEnd: Story = { args: { placement: 'top-end' } };
 export const Floating: Story = { args: { floating: true } };
 export const KeptMounted: Story = { args: { keepContentMounted: true } };
+export const Flush: Story = { args: { inset: 'flush' } };

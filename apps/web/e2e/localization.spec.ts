@@ -1,5 +1,11 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 import { registerViaUi, uniqueLogin } from './helpers';
+
+/** The labelled language row is the kit list, not a native select. */
+async function chooseLanguage(page: Page, scope: Locator, name: string): Promise<void> {
+  await scope.getByRole('combobox').click();
+  await page.getByRole('option', { name, exact: true }).click();
+}
 
 test.describe('French first launch and saved browser choice', () => {
   test.use({ locale: 'fr-CA' });
@@ -16,19 +22,19 @@ test.describe('French first launch and saved browser choice', () => {
     await expect(page.locator('html')).toHaveAttribute('lang', 'fr');
     const dialog = page.getByRole('dialog');
     const language = dialog.getByRole('combobox');
-    await expect(language).toHaveValue('fr');
-    await language.selectOption('en');
+    await expect(language).toContainText('Français');
+    await chooseLanguage(page, dialog, 'English');
     await expect(page.locator('html')).toHaveAttribute('lang', 'en');
     await page.locator('#authLoginInput').fill('localization-user');
     await page.locator('#authPasswordInput').fill('wrong-password');
     await dialog.getByRole('button', { name: 'Sign in', exact: true }).click();
     await expect(dialog.getByRole('alert')).toContainText('Invalid username or password');
-    await language.selectOption('fr');
+    await chooseLanguage(page, dialog, 'Français');
     await expect(dialog.getByRole('alert')).not.toContainText('Invalid username or password');
     await expect(dialog.getByRole('alert')).not.toContainText('legacy server text');
     await page.reload();
     await expect(page.locator('html')).toHaveAttribute('lang', 'fr');
-    await expect(page.getByRole('dialog').getByRole('combobox')).toHaveValue('fr');
+    await expect(page.getByRole('dialog').getByRole('combobox')).toContainText('Français');
   });
 });
 
@@ -39,8 +45,8 @@ test.describe('unsupported browser language', () => {
     await page.goto('/login');
     await expect(page.locator('html')).toHaveAttribute('lang', 'ru');
     const language = page.getByRole('dialog').getByRole('combobox');
-    await expect(language).toHaveValue('ru');
-    await language.selectOption('en');
+    await expect(language).toContainText('Русский');
+    await chooseLanguage(page, page.getByRole('dialog'), 'English');
     await expect(page.getByRole('dialog').getByRole('button', { name: 'Sign in', exact: true })).toBeVisible();
     await page.reload();
     await expect(page.locator('html')).toHaveAttribute('lang', 'en');
@@ -52,10 +58,10 @@ test('authenticated settings labels update without closing and persist on reload
   await page.getByRole('button', { name: 'Открыть настройки', exact: true }).click();
   await page.getByRole('dialog').getByRole('button', { name: 'Внешний вид', exact: true }).click();
   const settings = page.getByRole('dialog');
-  await settings.getByRole('combobox').selectOption('en');
+  await chooseLanguage(page, settings, 'English');
   await expect(settings).toHaveAccessibleName('Settings');
   await expect(settings.getByRole('button', { name: 'Profile', exact: true })).toBeVisible();
-  await settings.getByRole('combobox').selectOption('fr');
+  await chooseLanguage(page, settings, 'Français');
   await expect(settings).toHaveAccessibleName('Paramètres');
   await page.reload();
   await expect(page.locator('html')).toHaveAttribute('lang', 'fr');
@@ -69,7 +75,7 @@ test.describe('French narrow layouts', () => {
       await page.setViewportSize({ width, height: 844 });
       await page.goto('/login');
       await expect(page.locator('html')).toHaveAttribute('lang', 'fr');
-      await expect(page.getByRole('dialog').getByRole('combobox')).toHaveValue('fr');
+      await expect(page.getByRole('dialog').getByRole('combobox')).toContainText('Français');
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
       await expect(page.getByRole('dialog').getByRole('button', { name: 'Se connecter', exact: true })).toBeVisible();
     }
@@ -104,9 +110,9 @@ test('guest sign-in stays at the header edge and language remains available belo
     const choice = await dialog.getByRole('combobox').boundingBox();
     if (!form || !choice) throw new Error('Sign-in form language control is not rendered');
     expect(choice.y).toBeGreaterThanOrEqual(form.y + form.height);
-    await dialog.getByRole('combobox').selectOption('en');
+    await chooseLanguage(page, dialog, 'English');
     await expect(page.locator('html')).toHaveAttribute('lang', 'en');
     await expect(dialog.getByRole('button', { name: 'Sign in', exact: true })).toBeVisible();
-    await expect(dialog.getByRole('combobox')).toHaveCSS('min-height', '44px');
+    await expect(dialog.getByRole('combobox')).toHaveCSS('height', '44px');
   }
 });

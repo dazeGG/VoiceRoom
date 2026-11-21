@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Button, Field, TextField } from '@voiceroom/ui-kit/components';
 import { t } from '@/shared/i18n';
-import { createRoomFromStart, handleRoomCodeKeydown, joinRoomByCode } from '@voiceroom/call/engine/room/room-start';
+import { createRoomFromStart, joinRoomByCode } from '@voiceroom/call/engine/room/room-start';
 import { saveStartName, updateNameStatuses } from '@voiceroom/call/engine/ui/names';
 import { useStartUiStore } from '@voiceroom/call/engine/core/start-ui.store';
 import FeatureList from '@/shared/components/FeatureList.vue';
@@ -72,22 +72,26 @@ function handleCreateClick(): void {
           {{ startUi.createRoomLoading ? t('Создаём...') : t('Создать комнату') }}
         </Button>
 
-        <Field id="roomCodeInput" :label="t('Код комнаты')">
-          <TextField
-            v-model="startUi.roomCode"
-            size="lg"
-            maxlength="120"
-            autocapitalize="off"
-            autocomplete="off"
-            spellcheck="false"
-            placeholder="x7m2kq9p"
-            @keydown="handleRoomCodeKeydown"
-          />
-        </Field>
-
-        <Button id="joinByCodeButton" variant="outline" size="lg" type="button" @click="joinRoomByCode">
-          {{ t('Войти по коду') }}
-        </Button>
+        <form @submit.prevent="joinRoomByCode">
+          <Field id="roomCodeInput" :label="t('Код комнаты')">
+            <TextField
+              v-model="startUi.roomCode"
+              size="lg"
+              variant="mono"
+              maxlength="120"
+              autocapitalize="off"
+              autocomplete="off"
+              spellcheck="false"
+              placeholder="x7m2kq9p"
+            >
+              <template #action>
+                <Button id="joinByCodeButton" variant="outline" size="lg" type="submit">
+                  {{ t('Войти по коду') }}
+                </Button>
+              </template>
+            </TextField>
+          </Field>
+        </form>
       </div>
     </section>
   </main>

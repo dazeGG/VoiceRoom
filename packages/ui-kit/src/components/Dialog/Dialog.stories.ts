@@ -68,6 +68,7 @@ type Story = StoryObj<typeof meta>;
 export const Small: Story = { args: { size: 'sm' } };
 export const Medium: Story = { args: { description: 'Пригласите друзей в голосовую комнату.' } };
 export const Large: Story = { args: { size: 'lg' } };
+export const ExtraWide: Story = { args: { size: 'xl', title: 'Настройки комнаты' } };
 export const WithoutCloseButton: Story = { args: { closable: false } };
 
 export const FullScreen: Story = { args: { size: 'full', layer: 'raised' } };

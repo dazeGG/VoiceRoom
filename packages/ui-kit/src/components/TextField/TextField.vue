@@ -26,7 +26,11 @@ function clear(): void {
     class="ui-input"
     :class="[
       `ui-input--${size}`,
-      { 'ui-input--mono': variant === 'mono' || variant === 'code', 'ui-input--code': variant === 'code' },
+      {
+        'ui-input--mono': variant === 'mono' || variant === 'code',
+        'ui-input--code': variant === 'code',
+        'ui-input--attached': $slots.action
+      },
       $attrs.class
     ]"
   >
@@ -67,5 +71,6 @@ function clear(): void {
       </IconButton>
       <slot name="trailing" />
     </div>
+    <div v-if="$slots.action" class="ui-input__attached"><slot name="action" /></div>
   </div>
 </template>

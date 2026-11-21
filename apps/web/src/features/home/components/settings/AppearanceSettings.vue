@@ -17,7 +17,6 @@ function setTheme(value: string | null): void {
     <Card><LanguageControl /></Card>
     <SettingsGroup :heading="t('Тема')">
       <RadioGroup
-        class="settings__themes"
         variant="card"
         :aria-label="t('Цветовая тема')"
         :model-value="theme.themeState.current"
@@ -29,10 +28,9 @@ function setTheme(value: string | null): void {
             :key="option.id"
             :option="{ value: option.id, label: option.label }"
             variant="card"
-            :class="`theme--${option.id}`"
           >
             <template #preview>
-              <span class="settings__theme-preview" aria-hidden="true">
+              <span :class="['settings__theme-preview', `theme--${option.id}`]" aria-hidden="true">
                 <span class="settings__theme-side">
                   <span class="settings__theme-mark"></span>
                   <span class="settings__theme-line"></span>

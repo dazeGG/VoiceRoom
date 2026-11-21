@@ -72,5 +72,9 @@ export const Expanded: Story = {
 };
 
 export const Unread: Story = { args: { dot: true } };
+export const NeutralExpanded: Story = {
+  ...Expanded,
+  args: { neutralExpanded: true }
+};
 export const Scrim: Story = { args: { scrim: true, pill: true } };
 export const Link: Story = { args: { href: '#rooms' } };

@@ -37,6 +37,11 @@
   --dialog-width: 720px;
 }
 
+.ui-dialog--xl {
+  --dialog-width: 940px;
+  max-height: min(90dvh, calc(100dvh - var(--space-48)));
+}
+
 .ui-overlay--raised {
   z-index: 60;
 }

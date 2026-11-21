@@ -187,7 +187,11 @@ const closedAndKept = computed(() => props.keepContentMounted && !open.value);
               :class="[
                 'ui-popover popover__panel',
                 panelClass,
-                { 'popover__panel--closed': closedAndKept, 'popover__panel--floating': floating }
+                {
+                  'popover__panel--closed': closedAndKept,
+                  'popover__panel--floating': floating,
+                  'popover__panel--flush': inset === 'flush'
+                }
               ]"
               :data-overlay-id="panelId"
               :role="role"

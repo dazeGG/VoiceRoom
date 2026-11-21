@@ -10,9 +10,10 @@ import {
   SelectTrigger,
   SelectViewport
 } from 'reka-ui';
-import { computed } from 'vue';
+import { computed, useTemplateRef } from 'vue';
 import { useFieldControl } from '../Field/context';
 import { parsePlacement } from '../Popover/popover-placement';
+import { overlayPortalTarget } from '../overlay-portal-target';
 import type { SelectProps } from './types';
 
 defineOptions({ inheritAttrs: false });
@@ -42,6 +43,8 @@ const selectedLabel = computed(
   () => props.options.find((option) => option.value === value.value)?.label ?? props.options[0]?.label ?? '—'
 );
 const axis = computed(() => parsePlacement(props.placement));
+const trigger = useTemplateRef<InstanceType<typeof SelectTrigger>>('trigger');
+const target = computed(() => props.portalTarget ?? overlayPortalTarget(trigger.value?.$el));
 
 function choose(next: string | undefined): void {
   if (props.disabled || next === undefined) return;
@@ -78,6 +81,7 @@ function onNativeChange(event: Event): void {
     @update:model-value="(next) => choose(typeof next === 'string' ? fromItem(next) : undefined)"
   >
     <SelectTrigger
+      ref="trigger"
       v-bind="controlAttrs({ ...$attrs, 'aria-label': label || $attrs['aria-label'] })"
       class="ui-select"
       :class="[`ui-select--${size}`, { 'ui-select--ghost': variant === 'ghost' }]"
@@ -90,7 +94,7 @@ function onNativeChange(event: Event): void {
       </span>
     </SelectTrigger>
 
-    <SelectPortal v-bind="portalTarget ? { to: portalTarget } : {}">
+    <SelectPortal :to="target">
       <SelectContent
         class="ui-menu ui-select__panel"
         position="popper"

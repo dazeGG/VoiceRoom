@@ -82,6 +82,7 @@ function choose(emoji: string, close: (restoreFocus?: boolean) => void): void {
     placement="top-end"
     flip
     floating
+    inset="flush"
     role="dialog"
     :aria-label="t('Выбор эмодзи')"
     root-class="composer-emoji-picker"

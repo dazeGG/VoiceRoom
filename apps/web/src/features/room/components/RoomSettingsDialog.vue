@@ -160,7 +160,7 @@ function onCancel(): void {
 </script>
 
 <template>
-  <Dialog :open="roomSettingsUi.open" :title="t('Настройки комнаты')" size="lg" :on-close="onClose">
+  <Dialog :open="roomSettingsUi.open" :title="t('Настройки комнаты')" size="xl" :on-close="onClose">
     <div class="room-settings">
       <div class="settings__body settings__body--room">
         <NavList class="settings__nav" :label="t('Разделы настроек комнаты')">

@@ -120,7 +120,7 @@ onBeforeUnmount(profile.dispose);
 
 <template>
   <!-- Escape, the click beside the card, focus and the stack of dialogs opened from here belong to Dialog. -->
-  <Dialog open size="lg" :title="t('Настройки')" :on-close="() => emit('close')">
+  <Dialog open size="xl" :title="t('Настройки')" :on-close="() => emit('close')">
     <div class="settings__frame">
       <div class="settings__body">
         <NavList responsive class="settings__nav" :label="t('Разделы настроек')">

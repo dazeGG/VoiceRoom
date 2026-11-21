@@ -1,4 +1,4 @@
-export type DialogSize = 'sm' | 'md' | 'lg' | 'full';
+export type DialogSize = 'sm' | 'md' | 'lg' | 'xl' | 'full';
 
 export interface DialogProps {
   open: boolean;

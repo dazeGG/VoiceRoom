@@ -72,13 +72,12 @@
 }
 
 .landing-hero__join {
-  display: flex;
-  align-items: center;
-  gap: var(--space-8);
+  min-width: 0;
+  max-width: 100%;
 }
 
 .landing-hero__join-field {
-  width: 170px;
+  width: min(100%, calc(var(--space-64) * 4));
 }
 
 .landing-hero__disclaimer {

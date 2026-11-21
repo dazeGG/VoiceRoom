@@ -7,7 +7,7 @@ import { stubOverlayDom } from '../helpers/overlay-dom';
 
 stubOverlayDom();
 
-function renderMenu() {
+function renderMenu(checkable = true) {
   const onSelect = vi.fn();
   render(
     defineComponent(() => {
@@ -21,12 +21,14 @@ function renderMenu() {
             content: () => [
               h(MenuItem, { label: 'Копировать' }),
               h(MenuItem, { label: 'Пригласить', onSelect }),
-              h(MenuCheckboxItem, {
-                label: 'Отключить звук',
-                modelValue: checked.value,
-                'onUpdate:modelValue': (value: boolean | 'indeterminate') => (checked.value = value),
-                onSelect: (event: Event) => event.preventDefault()
-              }),
+              checkable
+                ? h(MenuCheckboxItem, {
+                    label: 'Отключить звук',
+                    modelValue: checked.value,
+                    'onUpdate:modelValue': (value: boolean | 'indeterminate') => (checked.value = value),
+                    onSelect: (event: Event) => event.preventDefault()
+                  })
+                : null,
               h(
                 MenuSub,
                 { label: 'Уведомления' },
@@ -54,8 +56,8 @@ test('the trigger opens a labelled menu and Escape gives focus back to it', asyn
   expect(trigger.getAttribute('aria-expanded')).toBe('false');
 });
 
-test('arrows move focus and Enter selects and closes the menu', async () => {
-  const { onSelect } = renderMenu();
+test.each([true, false])('arrows and Enter select an action and close the menu (checkable: %s)', async (checkable) => {
+  const { onSelect } = renderMenu(checkable);
   await userEvent.tab();
   await userEvent.keyboard('{ArrowDown}');
   const first = await screen.findByRole('menuitem', { name: 'Копировать' });

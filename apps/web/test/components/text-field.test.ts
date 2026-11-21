@@ -1,11 +1,42 @@
 import { render, screen } from '@testing-library/vue';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, expect, test } from 'vitest';
+import { beforeEach, expect, test, vi } from 'vitest';
 import { h } from 'vue';
-import { Field, Select, TextField } from '@voiceroom/ui-kit/components';
+import { Button, Field, Select, TextField } from '@voiceroom/ui-kit/components';
 import { stubOverlayDom } from '../helpers/overlay-dom';
 
 beforeEach(stubOverlayDom);
+
+test('an attached action submits from both Enter and click and preserves the input description', async () => {
+  const onSubmit = vi.fn((event: Event) => event.preventDefault());
+  const user = userEvent.setup();
+  render({
+    setup: () => () =>
+      h('form', { onSubmit }, [
+        h(
+          Field,
+          { label: 'Код комнаты', hint: 'Поддерживаются ссылки', visuallyHiddenHint: true },
+          {
+            default: () =>
+              h(
+                TextField,
+                { name: 'room', size: 'lg', variant: 'mono', autocomplete: 'off', 'data-1p-ignore': '' },
+                { action: () => h(Button, { type: 'submit' }, () => 'Войти') }
+              )
+          }
+        )
+      ])
+  });
+
+  const input = screen.getByRole('textbox', { name: 'Код комнаты', description: 'Поддерживаются ссылки' });
+  expect(input.getAttribute('autocomplete')).toBe('off');
+  expect(input.hasAttribute('data-1p-ignore')).toBe(true);
+  await user.type(input, 'Код-aBc{Enter}');
+  expect(input).toHaveProperty('value', 'Код-aBc');
+  expect(onSubmit).toHaveBeenCalledTimes(1);
+  await user.click(screen.getByRole('button', { name: 'Войти' }));
+  expect(onSubmit).toHaveBeenCalledTimes(2);
+});
 
 test('the optional field label focuses the input and describes it with the hint', async () => {
   render(Field, {

@@ -529,9 +529,11 @@ img {
 }
 
 .section__lead {
-  max-width: 420px;
+  max-width: 480px;
   margin: 0;
   color: var(--vr-text-2);
+  // A lead that does wrap splits into even lines instead of leaving one word behind.
+  text-wrap: balance;
 }
 
 // Numbered steps under a rule.
@@ -628,9 +630,11 @@ img {
   }
 }
 
-.cards__link {
+// A card's link sits on its own line at the bottom, never inside the text.
+.cards__link,
+.mini__item > .mini__link {
   margin-top: auto;
-  padding-top: 6px;
+  padding-top: var(--space-6);
   font-size: 0.90625rem;
 }
 

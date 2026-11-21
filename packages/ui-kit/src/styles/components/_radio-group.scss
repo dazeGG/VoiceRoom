@@ -78,6 +78,7 @@
   &--card {
     flex-direction: column;
     align-items: stretch;
+    min-width: 0;
     padding: var(--space-8) var(--space-8) var(--space-12);
 
     .ui-choice__row {
@@ -87,11 +88,10 @@
   }
 
   &__preview {
-    display: flex;
-    align-items: end;
-    gap: var(--space-6);
-    height: calc(var(--space-64) + var(--space-8));
-    padding: var(--radius-10);
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    min-height: calc(var(--space-64) + var(--space-8));
+    overflow: hidden;
     border: calc(var(--space-2) / 2) solid var(--vr-line);
     border-radius: var(--radius-8);
     background: var(--vr-bg);

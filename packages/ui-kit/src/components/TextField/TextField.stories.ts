@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/vue3-vite';
 import { ref } from 'vue';
 import StoryIcon from '../../../.storybook/StoryIcon.vue';
+import Button from '../Button/Button.vue';
 import Field from '../Field/Field.vue';
 import IconButton from '../IconButton/IconButton.vue';
 import TextField from './TextField.vue';
@@ -27,7 +28,8 @@ const meta = {
           '- Use `sm` for search in panels and pickers.',
           '- Show an error under the field as a caption in `--vr-danger` with an icon, and set `aria-invalid="true"` and `aria-describedby` on the field.',
           '- Do not show a hint and an error at the same time.',
-          '- An icon may stand on the left, and an IconButton 24 or 28 may stand on the right.'
+          '- An icon may stand on the left, and an IconButton 24 or 28 may stand on the right.',
+          '- Put a form submit button in the action slot to share the field frame.'
         ].join('\n')
       }
     }
@@ -82,6 +84,21 @@ export const Code: Story = {
         </template>
       </TextField>
     </Field>`
+  })
+};
+
+export const AttachedAction: Story = {
+  args: { variant: 'mono', size: 'lg', type: 'search', placeholder: 'Код или ссылка' },
+  render: (args: Args) => ({
+    components: { Button, Field, TextField },
+    setup: () => ({ args, value: ref('') }),
+    template: `<form @submit.prevent>
+      <Field label="Код или ссылка на комнату" visually-hidden-label>
+        <TextField v-bind="args" v-model="value">
+          <template #action><Button variant="outline" size="lg" type="submit">Войти</Button></template>
+        </TextField>
+      </Field>
+    </form>`
   })
 };
 
