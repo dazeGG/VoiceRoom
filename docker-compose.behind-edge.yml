@@ -11,10 +11,16 @@
 # Caddy terminates TLS and proxies this stack's names here (config/caddy/sites.d).
 #
 # The limits keep a runaway dev from starving production, and the raised OOM
-# score makes the kernel kill this stack first when memory runs out.
+# score makes the kernel kill this stack first when memory runs out. The caps
+# add up to more CPU than the host has, so the low CPU weight is what yields to
+# production when both want the CPU; an idle host still lets dev use it.
+# Every guest stack on the host shares one systemd slice, whose unit file there
+# caps them together; without that file systemd creates the slice uncapped.
 
 x-guest: &guest
   oom_score_adj: 500
+  cpu_shares: 256
+  cgroup_parent: guests.slice
 
 x-worker: &worker
   <<: *guest
