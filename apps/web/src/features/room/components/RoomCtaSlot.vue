@@ -88,7 +88,7 @@ function accept(): void {
         <strong class="room-cta-slot__title">{{ copy.title }}</strong>
         <span class="room-cta-slot__text">{{ copy.text }}</span>
       </div>
-      <Button class="ui-button--compact room-cta-slot__action" variant="primary" type="button" @click="accept">{{
+      <Button size="sm" class="room-cta-slot__action" variant="primary" type="button" @click="accept">{{
         copy.action
       }}</Button>
       <button

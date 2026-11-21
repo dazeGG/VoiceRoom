@@ -275,7 +275,7 @@ async function selectStatus(status: PresenceStatus, close: () => void): Promise<
       <div v-if="lobby.friends.length === 0" class="sidebar__empty">
         <Users v-bind="iconSm" aria-hidden="true" />
         <p>{{ t('Пока нет друзей. Откройте «Заявки», чтобы добавить по логину.') }}</p>
-        <Button variant="soft" class="ui-button--compact" @click="emit('openPeople')">
+        <Button variant="soft" size="sm" @click="emit('openPeople')">
           <template #icon><UserPlus v-bind="iconSm" aria-hidden="true" /></template> {{ t('Добавить друга') }}
         </Button>
       </div>

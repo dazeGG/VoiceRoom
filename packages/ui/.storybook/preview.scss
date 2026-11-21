@@ -4,6 +4,12 @@
 @use 'pkg:@voice-room/ui/styles/components/avatar';
 @use 'pkg:@voice-room/ui/styles/components/avatar-stack';
 @use 'pkg:@voice-room/ui/styles/components/button';
+@use 'pkg:@voice-room/ui/styles/components/icon-button';
+@use 'pkg:@voice-room/ui/styles/components/toggle';
+@use 'pkg:@voice-room/ui/styles/components/tooltip';
+@use 'pkg:@voice-room/ui/styles/components/kbd';
+@use 'pkg:@voice-room/ui/styles/components/spinner';
+@use 'pkg:@voice-room/ui/styles/components/skeleton';
 @use 'pkg:@voice-room/ui/styles/components/context-menu';
 @use 'pkg:@voice-room/ui/styles/components/ellipsis';
 @use 'pkg:@voice-room/ui/styles/components/popover';

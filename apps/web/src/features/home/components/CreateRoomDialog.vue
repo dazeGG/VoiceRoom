@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Spinner } from '@voice-room/ui/components';
 import { useLocalizedText } from '@/shared/i18n/localized-text';
 
 import { t } from '@/shared/i18n';
@@ -144,7 +145,7 @@ function onTabsKeydown(event: KeyboardEvent): void {
       <div class="home-dialog__actions">
         <Button variant="ghost" type="button" @click="emit('close')">{{ t('Отмена') }}</Button>
         <Button variant="primary" type="submit" :disabled="creating">
-          <span v-if="creating" class="home-spinner" aria-hidden="true"></span>
+          <Spinner v-if="creating" aria-hidden="true" />
           {{ tab === 'permanent' ? t('Создать комнату') : t('Создать на время') }}
         </Button>
       </div>
