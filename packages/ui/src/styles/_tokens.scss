@@ -92,8 +92,7 @@
 // picks the rest: 20–24 -> radius-6, icon 12–16; 28–32 -> radius-8, icon-16;
 // 36–40 -> radius-10, icon-18; 44–48 -> radius-12, icon-20. A nested element
 // takes its parent's radius minus the gap between them. New code uses only
-// these; the named tokens below are the old scale, kept until every block
-// has moved to the grid (docs/DESIGN_SYSTEM.md, "Переход со старых значений").
+// these grid values. See docs/DESIGN_SYSTEM.md for the sizing rules.
 :root {
   --size-16: 16px;
   --size-20: 20px;
@@ -133,31 +132,6 @@
   --icon-18: 18px;
   --icon-20: 20px;
   --icon-24: 24px;
-}
-
-// Old focus, radius, spacing and motion tokens (app.css :root). Do not use
-// them in new code: --radius-sm/md/lg/xl, --space-2xs…2xl and --interactive-*
-// map onto the grid above as the blocks migrate.
-:root {
-  --focus-border: color-mix(in oklch, var(--vr-text), transparent 28%);
-  --focus-ring: color-mix(in oklch, var(--vr-text), transparent 68%);
-  --radius-sm: 8px;
-  --radius-md: 14px;
-  --radius-lg: 20px;
-  --radius-xl: 26px;
   --radius-pill: 999px;
-  --interactive-sm: 36px;
-  --interactive-md: 40px;
-  --interactive-lg: 52px;
-  --interactive-radius: var(--radius-md);
-  --interactive-gap: 10px;
-  --interactive-pad-x: 22px;
-  --space-2xs: 4px;
-  --space-xs: 8px;
-  --space-sm: 12px;
-  --space-md: 16px;
-  --space-lg: 24px;
-  --space-xl: 32px;
-  --space-2xl: 48px;
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
 }

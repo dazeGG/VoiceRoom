@@ -42,7 +42,7 @@
 
     &:focus-visible {
       outline: var(--space-2) solid var(--vr-accent);
-      outline-offset: calc(var(--space-2) / 2);
+      outline-offset: calc(-1 * var(--space-2));
     }
 
     &:disabled {

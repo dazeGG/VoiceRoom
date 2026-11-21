@@ -1,21 +1,21 @@
 @use 'pkg:@voice-room/ui/styles/mixins' as *;
 
 .widget-entry__title {
-  margin: 0 0 16px;
+  margin: 0 0 var(--space-16);
   font-size: 1.125rem;
   font-weight: 650;
   line-height: 1.25;
 }
 
 .widget-shell__status ~ .widget-entry .widget-entry__title {
-  margin-block-start: 12px;
+  margin-block-start: var(--space-12);
 }
 
 .widget-entry__field {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  margin-block-end: 16px;
+  gap: var(--space-8);
+  margin-block-end: var(--space-16);
   font-size: 0.8125rem;
 
   input {
@@ -26,7 +26,7 @@
 .widget-entry__form {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--space-16);
 }
 
 .widget-entry .widget-entry__create {
@@ -34,7 +34,7 @@
   width: 100%;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: var(--space-8);
   background: var(--vr-accent);
   color: var(--vr-bg);
   font-weight: 650;
@@ -43,7 +43,7 @@
 .widget-entry__divider {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--space-12);
   color: color-mix(in srgb, var(--vr-text) 55%, transparent);
   font-size: 0.6875rem;
 
@@ -60,7 +60,7 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-8);
 }
 
 .widget-entry__code {
@@ -78,7 +78,7 @@
   input {
     width: 100%;
     min-width: 0;
-    padding-inline-start: 38px;
+    padding-inline-start: var(--space-40);
   }
 }
 

@@ -12,6 +12,7 @@ withDefaults(defineProps<TextFieldProps>(), { size: 'md', type: 'text' });
 const value = defineModel<string>({ default: '' });
 const revealed = ref(false);
 const input = useTemplateRef<HTMLInputElement>('input');
+defineExpose({ input });
 const controlAttrs = useFieldControl();
 
 function clear(): void {

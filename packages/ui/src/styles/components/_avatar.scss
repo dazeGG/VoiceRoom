@@ -9,7 +9,7 @@
 //                                  -> .ui-avatar__dot--dnd / --afk / --online / --offline
 
 .ui-avatar {
-  --avatar-size: var(--avatar-dimension, 80px);
+  --avatar-size: var(--avatar-dimension, calc(var(--size-56) + var(--space-24)));
 
   position: relative;
   flex: none;
@@ -52,8 +52,8 @@
 .ui-avatar__dot--large {
   right: 0;
   bottom: 0;
-  width: 14px;
-  height: 14px;
+  width: var(--space-12);
+  height: var(--space-12);
   border-width: 3px;
 }
 

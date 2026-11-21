@@ -1,7 +1,7 @@
 @use 'entry';
 
 .widget-shell {
-  --widget-radius: 16px;
+  --widget-radius: var(--radius-16);
   --widget-control-radius: calc(var(--widget-radius) * 0.75);
   --widget-small-radius: calc(var(--widget-radius) * 0.5);
   container-type: inline-size;
@@ -9,7 +9,7 @@
   flex-direction: column;
   box-sizing: border-box;
   min-height: 100dvh;
-  padding: 24px 24px 6px;
+  padding: var(--space-24) var(--space-24) var(--space-6);
   overflow-wrap: anywhere;
   background: var(--vr-bg);
   color: var(--vr-text);
@@ -25,10 +25,10 @@
 
   :where(button, input, select):not(:where(.room-dock__button, .room-dock__menu-button)) {
     max-width: 100%;
-    min-height: 48px;
+    min-height: var(--size-48);
     border: 1px solid color-mix(in srgb, var(--vr-text) 15%, transparent);
     border-radius: var(--widget-control-radius);
-    padding: 10px 12px;
+    padding: var(--space-8) var(--space-12);
     background: color-mix(in srgb, var(--vr-text) 5%, var(--vr-bg));
     color: inherit;
     font: inherit;
@@ -48,7 +48,7 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 6px;
+    gap: var(--space-6);
     cursor: pointer;
   }
 
@@ -56,13 +56,19 @@
     filter: brightness(1.08);
   }
 
-  :where(button, input, select, summary):focus-visible {
-    outline: 2px solid var(--vr-accent);
-    outline-offset: 3px;
+  :where(button, summary):focus-visible {
+    outline: var(--space-2) solid var(--vr-accent);
+    outline-offset: var(--space-2);
+  }
+
+  :where(input, select):focus-visible {
+    border-color: var(--vr-accent-line);
+    box-shadow: 0 0 0 calc(var(--space-6) / 2) var(--vr-accent-soft);
+    outline: none;
   }
 
   [role='alert'] {
-    padding: 10px 12px;
+    padding: var(--space-8) var(--space-12);
     border: 1px solid var(--vr-accent);
     border-radius: var(--widget-control-radius);
     font-size: 0.8125rem;
@@ -83,15 +89,15 @@
   justify-content: flex-end;
 
   button {
-    min-height: 32px;
-    padding: 4px 8px;
+    min-height: var(--size-32);
+    padding: var(--space-4) var(--space-8);
     font-size: 0.75rem;
   }
 }
 
 .widget-shell__credit {
   margin-block-start: auto;
-  padding-block-start: 16px;
+  padding-block-start: var(--space-16);
   color: color-mix(in srgb, var(--vr-text) 73%, var(--vr-bg));
   font-size: 0.75rem;
   text-align: center;
@@ -110,14 +116,14 @@
 .widget-shell__status {
   display: flex;
   align-items: center;
-  gap: 6px;
-  margin: 12px 0 0;
+  gap: var(--space-6);
+  margin: var(--space-12) 0 0;
   color: color-mix(in srgb, var(--vr-text) 65%, transparent);
   font-size: 0.6875rem;
 
   &::before {
-    width: 5px;
-    height: 5px;
+    width: var(--space-4);
+    height: var(--space-4);
     flex: none;
     border-radius: 50%;
     background: var(--vr-accent);

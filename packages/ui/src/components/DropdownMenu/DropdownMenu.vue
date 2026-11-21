@@ -46,7 +46,7 @@ function onCloseAutoFocus(event: Event): void {
 <template>
   <DropdownMenuRoot v-model:open="open" :modal="false">
     <DropdownMenuTrigger ref="trigger" as-child :disabled="disabled"><slot name="trigger" /></DropdownMenuTrigger>
-    <DropdownMenuPortal :to="portalTarget">
+    <DropdownMenuPortal :to="portalTarget" :disabled="inline">
       <DropdownMenuContent
         as-child
         :side="side"

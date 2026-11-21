@@ -61,6 +61,8 @@ function onDismissAttempt(reason: PopoverCloseReason, event: Event, target: Even
 // which is not always this popover.
 function onWindowKeydown(event: KeyboardEvent): void {
   if (!open.value || event.key !== 'Escape') return;
+  const menu = event.target instanceof Element ? event.target.closest('[role="menu"]') : null;
+  if (menu && menu !== panel.value && panel.value?.contains(menu)) return;
   if (props.onBeforeClose?.('escape') === false) return;
   close(true);
 }

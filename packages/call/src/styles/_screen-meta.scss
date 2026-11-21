@@ -12,17 +12,17 @@
 
 .screen-meta {
   position: absolute;
-  top: var(--space-sm);
-  left: var(--space-sm);
+  top: var(--space-12);
+  left: var(--space-12);
   z-index: 2;
   display: flex;
   max-width: calc(100% - 24px);
   align-items: center;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: var(--space-6);
   border: 1px solid var(--vr-line-strong);
-  border-radius: var(--radius-sm);
-  padding: 7px 9px;
+  border-radius: var(--radius-8);
+  padding: var(--space-6) var(--space-8);
   background: color-mix(in srgb, var(--vr-bg) 78%, transparent);
   color: var(--vr-text);
   box-shadow: 0 14px 34px oklch(5% 0.012 92 / 0.32);
@@ -36,8 +36,8 @@
 }
 
 .screen-meta__live {
-  width: 8px;
-  height: 8px;
+  width: var(--space-8);
+  height: var(--space-8);
   flex: 0 0 auto;
   border-radius: 50%;
   background: var(--vr-online);
@@ -48,7 +48,7 @@
 .screen-meta__detail {
   min-width: 0;
   overflow: hidden;
-  font-size: 0.78rem;
+  font-size: 12px;
   line-height: 1.1;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -69,7 +69,7 @@
   display: inline-flex;
   max-width: none;
   align-items: center;
-  gap: 5px;
+  gap: var(--space-4);
   overflow: visible;
   color: var(--vr-text);
 }
@@ -82,7 +82,7 @@
   flex: 0 0 auto;
   align-self: center;
   color: color-mix(in oklch, var(--vr-text) 72%, transparent);
-  font-size: 0.92rem;
+  font-size: 15px;
   font-weight: 800;
   line-height: 1;
   user-select: none;

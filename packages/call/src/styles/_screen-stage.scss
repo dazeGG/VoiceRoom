@@ -24,7 +24,7 @@
   margin-inline: auto;
   overflow: hidden;
   border: 1px solid var(--vr-line);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-8);
   background:
     radial-gradient(circle at 18% 18%, color-mix(in oklch, var(--vr-surface-3) 16%, transparent), transparent 34%),
     var(--vr-bg);
@@ -47,7 +47,7 @@
   display: grid;
   place-items: center;
   color: var(--vr-text-2);
-  font-size: 0.92rem;
+  font-size: 15px;
   font-weight: 800;
 }
 
