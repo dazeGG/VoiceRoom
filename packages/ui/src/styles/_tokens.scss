@@ -87,7 +87,57 @@
   --vr-danger-hover: oklch(58% 0.2 15 / 0.1);
 }
 
-// Focus, radius, spacing and motion tokens (app.css :root).
+// Size grid. Every control height, radius, gap and icon is a step of one 4px
+// scale, and the token name is its value in pixels. The height of a control
+// picks the rest: 20–24 -> radius-6, icon 12–16; 28–32 -> radius-8, icon-16;
+// 36–40 -> radius-10, icon-18; 44–48 -> radius-12, icon-20. A nested element
+// takes its parent's radius minus the gap between them. New code uses only
+// these; the named tokens below are the old scale, kept until every block
+// has moved to the grid (docs/DESIGN_SYSTEM.md, "Переход со старых значений").
+:root {
+  --size-16: 16px;
+  --size-20: 20px;
+  --size-24: 24px;
+  --size-28: 28px;
+  --size-32: 32px;
+  --size-36: 36px;
+  --size-40: 40px;
+  --size-44: 44px;
+  --size-48: 48px;
+  --size-56: 56px;
+
+  --space-2: 2px;
+  --space-4: 4px;
+  --space-6: 6px;
+  --space-8: 8px;
+  --space-12: 12px;
+  --space-16: 16px;
+  --space-20: 20px;
+  --space-24: 24px;
+  --space-32: 32px;
+  --space-40: 40px;
+  --space-48: 48px;
+  --space-64: 64px;
+
+  --radius-4: 4px;
+  --radius-6: 6px;
+  --radius-8: 8px;
+  --radius-10: 10px;
+  --radius-12: 12px;
+  --radius-16: 16px;
+  --radius-20: 20px;
+  --radius-24: 24px;
+
+  --icon-12: 12px;
+  --icon-16: 16px;
+  --icon-18: 18px;
+  --icon-20: 20px;
+  --icon-24: 24px;
+}
+
+// Old focus, radius, spacing and motion tokens (app.css :root). Do not use
+// them in new code: --radius-sm/md/lg/xl, --space-2xs…2xl and --interactive-*
+// map onto the grid above as the blocks migrate.
 :root {
   --focus-border: color-mix(in oklch, var(--vr-text), transparent 28%);
   --focus-ring: color-mix(in oklch, var(--vr-text), transparent 68%);
