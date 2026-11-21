@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Style conventions for web and portable packages (apps/web/CLAUDE.md, rules 6-8), run by
+// Style conventions for web and portable packages (apps/web/AGENTS.md, rules 6-8), run by
 // `npm run check`. Exits 1 and lists every violation as `file:line reason`:
 //   - a .css or .sass file (styles are .scss partials only);
 //   - `[data-` in a .scss file or a .vue <style> block, in any case (comments
