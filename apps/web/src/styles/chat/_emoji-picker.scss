@@ -11,7 +11,6 @@
 //   .reaction-tone-strip                -> .emoji-picker__tone-strip
 //   .reaction-tone-strip button         -> .emoji-picker__tone-strip-option
 //   .reaction-picker-anchors            -> .emoji-picker__anchors
-//   .reaction-picker-anchor             -> .emoji-picker__anchor
 //   .reaction-picker-body               -> .emoji-picker__body
 //   .reaction-picker-spacer             -> .emoji-picker__spacer
 //   .reaction-picker-section            -> .emoji-picker__section
@@ -24,15 +23,16 @@
 @use 'pkg:@voiceroom/ui-kit/styles/mixins' as *;
 
 .reaction-picker-panel {
-  padding: 0;
+  grid-template-columns: minmax(0, 1fr);
+  width: min(calc(var(--space-64) * 6 + var(--space-48)), calc(100vw - var(--space-16)));
   overflow: hidden;
 }
 
 .emoji-picker {
   position: relative;
   display: flex;
-  width: min(430px, calc(100vw - 28px));
-  max-height: var(--popover-available-height, calc(100dvh - 16px));
+  min-width: 0;
+  max-height: var(--popover-available-height, calc(100dvh - var(--space-16)));
   flex-direction: column;
 }
 
@@ -41,7 +41,7 @@
   flex: none;
   flex-direction: column;
   gap: var(--space-12);
-  padding: var(--space-12) var(--space-12) var(--space-8);
+  padding: var(--space-12);
 }
 
 .emoji-picker__search-row {
@@ -71,29 +71,18 @@
   }
 }
 
-// One line, always: wrapping to a second row cost the grid a whole row of
-// emoji for something the reader only glances at.
 .emoji-picker__anchors {
   display: flex;
   flex-wrap: nowrap;
   gap: var(--space-4);
-}
-
-.emoji-picker__anchors .emoji-picker__anchor {
-  flex: 1 1 0;
   min-width: 0;
-  font-size: 18px;
-  line-height: 1;
-
-  &[aria-current='true'] {
-    background: var(--vr-accent-soft);
-    color: var(--vr-accent);
-  }
+  max-width: 100%;
+  overflow-x: auto;
 }
 
 .emoji-picker__body {
   position: relative;
-  max-height: min(368px, 58vh);
+  max-height: min(calc(var(--space-64) * 5 + var(--space-48)), 58vh);
   min-height: 0;
   flex: 1 1 auto;
   padding: var(--space-2) var(--space-12) var(--space-12);
@@ -116,18 +105,16 @@
   display: flex;
   height: var(--size-28);
   align-items: center;
-  color: var(--vr-text-muted);
-  font-family: var(--font-mono);
-  font-size: 11px;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
+  padding: 0;
+  overflow: hidden;
+  white-space: nowrap;
 }
 
 .emoji-picker__row {
   position: absolute;
   inset-inline: 0;
   display: grid;
-  grid-template-columns: repeat(8, 1fr);
+  grid-template-columns: repeat(8, minmax(0, 1fr));
   gap: var(--space-4);
 }
 

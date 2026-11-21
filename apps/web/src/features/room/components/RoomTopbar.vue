@@ -2,7 +2,6 @@
 import {
   IconButton,
   Tooltip,
-  Badge,
   DropdownMenu,
   MenuSeparator,
   MenuItem,
@@ -146,17 +145,11 @@ function notifyRoomsChanged(): void {
             class="room-panel-switches__button"
             :label="t('Чат')"
             :aria-pressed="chatActive"
+            :dot="roomUnreadCount > 0"
             :size="32"
             @click="panelToggle.toggleRoomPanel('chat')"
           >
             <MessageSquare aria-hidden="true" />
-            <Badge
-              v-if="roomUnreadCount > 0"
-              class="room-panel-switches__unread"
-              aria-hidden="true"
-              variant="dot"
-              ring
-            />
           </IconButton>
           <IconButton
             class="room-panel-switches__button"

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { IconButton, Badge, Avatar, Pressable, ControlGroup } from '@voiceroom/ui-kit/components';
+import { IconButton, Avatar, Pressable, ControlGroup } from '@voiceroom/ui-kit/components';
 import { t } from '@/shared/i18n';
 import { LayoutGrid, MessageSquare, Users } from '@lucide/vue';
 import { computed } from 'vue';
@@ -101,11 +101,11 @@ function handleInviteClick(): void {
         class="room-panel-switches__button"
         :label="t('Чат')"
         :aria-pressed="panels.isRoomPanelOpen('chat')"
+        :dot="unread > 0"
         :size="44"
         @click="panels.toggleRoomPanel('chat')"
       >
         <MessageSquare aria-hidden="true" />
-        <Badge v-if="unread > 0" class="room-panel-switches__unread" aria-hidden="true" variant="dot" ring />
       </IconButton>
       <IconButton
         class="room-panel-switches__button"

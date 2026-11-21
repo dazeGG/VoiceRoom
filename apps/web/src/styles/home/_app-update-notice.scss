@@ -1,6 +1,5 @@
 // Keep the notice clear of the desktop titlebar and of the call controls.
 .app-update {
-  --callout-surface: var(--vr-surface);
   position: fixed;
   top: calc(var(--voice-room-shell-topbar, 0px) + var(--space-16));
   left: 50%;
@@ -8,5 +7,4 @@
   z-index: 900;
   width: max-content;
   max-width: calc(100% - var(--space-32));
-  box-shadow: var(--vr-shadow-toast);
 }

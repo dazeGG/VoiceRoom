@@ -3,12 +3,14 @@ import {
   DropdownMenu,
   Field,
   IconButton,
+  MenuLabel,
   MenuRadioGroup,
   MenuRadioItem,
-  TextField,
   Pressable,
+  TextField,
   Toolbar
 } from '@voiceroom/ui-kit/components';
+import { Search } from '@lucide/vue';
 import { t } from '@/shared/i18n';
 import { SKIN_TONES } from '@voiceroom/shared/emoji-skin-tones';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
@@ -374,7 +376,9 @@ function onSearchInput(): void {
             type="search"
             :placeholder="searchLabel"
             @update:model-value="onSearchInput"
-          />
+          >
+            <template #leading><Search /></template>
+          </TextField>
         </Field>
 
         <DropdownMenu :aria-label="t('Цвет кожи')" focus-checked inline>
@@ -409,12 +413,11 @@ function onSearchInput(): void {
       >
         <IconButton
           v-if="frequentEmoji.length"
-          class="emoji-picker__anchor"
           data-category="frequent"
           :label="t('Часто используемые')"
           :aria-current="!searching && activeSectionKey === 'frequent' ? 'true' : undefined"
           :size="32"
-          variant="filled"
+          :variant="!searching && activeSectionKey === 'frequent' ? 'soft' : 'default'"
           @click="goToSection('frequent')"
         >
           🕘
@@ -422,12 +425,11 @@ function onSearchInput(): void {
         <IconButton
           v-for="group in CATEGORIES"
           :key="group.key"
-          class="emoji-picker__anchor"
           :data-category="group.key"
           :label="group.label"
           :aria-current="!searching && activeSectionKey === group.key ? 'true' : undefined"
           :size="32"
-          variant="filled"
+          :variant="!searching && activeSectionKey === group.key ? 'soft' : 'default'"
           @click="goToSection(group.key)"
         >
           <Emoji :emoji="group.icon" :size="20" decorative />
@@ -446,9 +448,12 @@ function onSearchInput(): void {
     >
       <div class="emoji-picker__spacer" :style="{ height: `${layout.totalHeight}px` }">
         <template v-for="row in visibleRows" :key="row.key">
-          <span v-if="row.kind === 'header'" class="emoji-picker__section" :style="{ top: `${row.top}px` }">{{
-            row.label
-          }}</span>
+          <MenuLabel
+            v-if="row.kind === 'header'"
+            class="emoji-picker__section"
+            :style="{ top: `${row.top}px` }"
+            :text="row.label"
+          />
           <div v-else class="emoji-picker__row" :style="{ top: `${row.top}px` }" role="row">
             <Pressable
               v-for="(emoji, column) in row.emojis"

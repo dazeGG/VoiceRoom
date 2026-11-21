@@ -8,7 +8,6 @@
 //   .lr-title.people-title                -> .people-view__title
 //   .lr-eyebrow.people-section-label      -> .people-view__label (+ --add / --requests)
 //   .lr-add-bar                           -> .people-view__add-bar
-//   .lr-add-field                         -> .people-view__add-field
 //   .lr-add-hint                          -> .people-view__hint
 //   .lr-add-copy                          -> .people-view__copy
 //   .lr-grid-2                            -> .people-view__columns
@@ -78,15 +77,7 @@
 }
 
 .people-view__add-bar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: end;
-  gap: var(--space-8);
-  max-width: 520px;
-}
-
-.people-view__add-field {
-  flex: 1;
+  max-width: calc(var(--space-64) * 8 + var(--space-8));
 }
 
 .people-view__hint {

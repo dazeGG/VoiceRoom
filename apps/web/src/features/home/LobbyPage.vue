@@ -323,7 +323,9 @@ function roomDeleted(): void {
     <template #side>
       <div class="lobby-shell__sidebar" @pointerenter="sidebar.showPreview" @pointerleave="sidebar.hidePreview">
         <div v-if="sidebarLayoutCollapsed" class="lobby-shell__sidebar-rail" aria-hidden="true">
-          <span class="sidebar__brand-mark"></span>
+          <div class="lobby-shell__sidebar-brand">
+            <span class="sidebar__brand-mark"></span>
+          </div>
           <div class="lobby-shell__sidebar-avatars">
             <div v-for="friend in sidebarFriends" :key="friend.user.id" class="lobby-shell__sidebar-avatar">
               <Avatar
@@ -363,6 +365,7 @@ function roomDeleted(): void {
           class="lobby-shell__sidebar-toggle"
           aria-controls="lobby-sidebar"
           :aria-expanded="sidebarVisible"
+          neutral-expanded
           :label="sidebarToggleLabel"
           :size="32"
           @click="sidebar.toggle"

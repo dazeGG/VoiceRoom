@@ -16,13 +16,14 @@ const action = computed(() => (update.pending === 'app' ? t('Перезапус�
   <Callout
     v-if="update.pending !== 'none'"
     class="app-update"
+    layout="pill"
     tone="accent"
     :title="title"
     :text="inCall ? t('после звонка') : undefined"
     role="status"
   >
     <template v-if="!inCall" #actions>
-      <Button variant="primary" size="sm" :disabled="update.applying" @click="update.apply()">{{ action }}</Button>
+      <Button variant="primary" size="xs" pill :disabled="update.applying" @click="update.apply()">{{ action }}</Button>
     </template>
   </Callout>
 </template>

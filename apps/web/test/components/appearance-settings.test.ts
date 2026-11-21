@@ -1,10 +1,13 @@
-import { fireEvent, screen, within } from '@testing-library/vue';
+import { screen, within } from '@testing-library/vue';
 import { defineComponent, h } from 'vue';
 import userEvent from '@testing-library/user-event';
 import { afterEach, expect, test } from 'vitest';
 import AppearanceSettings from '@/features/home/components/settings/AppearanceSettings.vue';
 import { THEMES, THEME_STORAGE_KEY } from '@/shared/theme/theme.store';
 import { renderWithApp } from '../helpers/render.ts';
+import { stubOverlayDom } from '../helpers/overlay-dom';
+
+stubOverlayDom();
 
 afterEach(() => {
   localStorage.clear();
@@ -26,12 +29,14 @@ test('language remains recognizable and changing it preserves the chosen theme',
   const view = await renderWithApp(AppearanceSettings);
   await userEvent.click(screen.getByRole('radio', { name: /Coral/ }));
   expect(view.container.querySelector('.language-control__icon')).toBeTruthy();
-  await fireEvent.update(screen.getByRole('combobox', { name: 'Язык' }), 'en');
+  await userEvent.click(screen.getByRole('combobox', { name: 'Язык' }));
+  await userEvent.click(await screen.findByRole('option', { name: 'English' }));
   expect(screen.getByText('Theme')).toBeTruthy();
-  await fireEvent.update(screen.getByRole('combobox', { name: 'Language' }), 'fr');
+  await userEvent.click(screen.getByRole('combobox', { name: 'Language' }));
+  expect(screen.getAllByRole('option').map((option) => option.textContent)).toEqual(['Русский', 'English', 'Français']);
+  await userEvent.click(screen.getByRole('option', { name: 'Français' }));
   expect(screen.getByText('Thème')).toBeTruthy();
   expect(screen.getByRole('combobox', { name: 'Langue' })).toBeTruthy();
-  expect(screen.getAllByRole('option').map((option) => option.textContent)).toEqual(['Русский', 'English', 'Français']);
   expect(screen.getByRole('radio', { name: /Coral/, checked: true })).toBeTruthy();
 });
 

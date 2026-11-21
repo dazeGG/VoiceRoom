@@ -1,8 +1,7 @@
 <script setup lang="ts">
 // Friend picker behind "Пригласить". Inviting no longer requires being in the
 // room, so this works the same from the lobby and from inside the room.
-import { Combobox, type ComboboxOption, Avatar, MenuItem } from '@voiceroom/ui-kit/components';
-import { Search } from '@lucide/vue';
+import { Combobox, type ComboboxOption, Avatar } from '@voiceroom/ui-kit/components';
 import { t } from '@/shared/i18n';
 import { computed, ref } from 'vue';
 import type { Friend } from '@/api/friends';
@@ -23,7 +22,6 @@ const props = withDefaults(
 const emit = defineEmits<{ close: []; toast: [message: string] }>();
 
 const ringingUserId = ref('');
-const searching = ref(false);
 
 // Online first — you are trying to pull someone into a live room, so people
 // who can answer right now belong at the top; then alphabetical.
@@ -81,15 +79,14 @@ async function invite(userId: string, name: string): Promise<void> {
 <template>
   <div class="room-invite-list">
     <p v-if="friends.length === 0" class="room-invite-list__empty">{{ t('Добавьте друзей, чтобы позвать их') }}</p>
-    <MenuItem v-else-if="!searching" :label="t('Найти друга')" @select.prevent="searching = true">
-      <template #icon><Search /></template>
-    </MenuItem>
     <div v-else class="room-invite-list__search" @keydown="onSearchKeydown">
       <Combobox
         :options="options"
         :label="t('Найти друга')"
         :placeholder="t('Имя или логин')"
         size="sm"
+        inline
+        visually-hidden-label
         auto-focus
         @select="select"
       >
