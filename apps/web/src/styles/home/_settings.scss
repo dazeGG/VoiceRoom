@@ -90,7 +90,6 @@
 //   .settings-overlay-remove        -> .settings__overlay-remove
 //
 // Other components' classes this file reaches (names the owning component takes):
-//   .home-spinner -> .home-spinner (block, home/_home-spinner.scss)
 //   .select-root -> .select    .select-trigger -> .select__trigger    .vr-slider (unchanged)
 //   .ui-segment-item -> .ui-segment__item
 //
@@ -306,11 +305,6 @@
   background: var(--vr-surface-3);
   color: var(--vr-text-muted);
   cursor: default;
-}
-
-.settings__save .home-spinner {
-  border-color: color-mix(in oklch, var(--vr-accent-ink), transparent 75%);
-  border-top-color: var(--vr-accent-ink);
 }
 
 .settings__cancel {

@@ -203,7 +203,7 @@ function mutualLabel(count: number): string {
             </div>
             <Button
               variant="outline"
-              class="ui-button--compact"
+              size="sm"
               :disabled="busy[request.id]"
               @click="run(request.id, () => lobby.cancelRequest(request.id), t('Заявка отменена'))"
               >{{ t('Отменить') }}</Button

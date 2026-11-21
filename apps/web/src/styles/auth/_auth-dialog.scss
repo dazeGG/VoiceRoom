@@ -23,7 +23,6 @@
 //   .auth-forgot          -> .auth-dialog__forgot
 //   .auth-consent         -> .auth-dialog__consent
 //   .auth-submit          -> .auth-dialog__submit
-//   .auth-spinner         -> .auth-dialog__spinner
 //   .auth-foot            -> .auth-dialog__foot
 //   .auth-link            -> .auth-dialog__link
 //   @keyframes auth-spin  -> @keyframes auth-dialog-spin
@@ -310,23 +309,7 @@
   font-weight: 600;
 }
 
-.auth-dialog__spinner {
-  width: 15px;
-  height: 15px;
-  border-radius: 50%;
-  border: 2px solid color-mix(in oklch, var(--vr-accent-ink), transparent 72%);
-  border-top-color: var(--vr-accent-ink);
-  animation: auth-dialog-spin 0.7s linear infinite;
-}
-
-@keyframes auth-dialog-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .auth-dialog__spinner,
   .auth-dialog__close {
     animation: none;
     transition: none;

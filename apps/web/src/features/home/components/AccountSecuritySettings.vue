@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Spinner } from '@voice-room/ui/components';
 import { t } from '@/shared/i18n';
 import { KeyRound, Laptop, MonitorSmartphone } from '@lucide/vue';
 import { computed, onMounted, ref, watch } from 'vue';
@@ -190,7 +191,7 @@ async function endOtherSessions(): Promise<void> {
             type="submit"
             :disabled="changingPassword || !currentPassword || !newPassword"
           >
-            <span v-if="changingPassword" class="home-spinner" aria-hidden="true"></span> {{ t('Сменить пароль') }}
+            <Spinner v-if="changingPassword" aria-hidden="true" /> {{ t('Сменить пароль') }}
           </button>
         </div>
       </form>

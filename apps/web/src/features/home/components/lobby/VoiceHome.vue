@@ -179,9 +179,7 @@ function closeRoomContextMenu(): void {
             }}</span>
           </span>
         </button>
-        <Button variant="outline" class="ui-button--compact" @click="emit('openRecoveryCodes')">{{
-          t('Создать коды')
-        }}</Button>
+        <Button variant="outline" size="sm" @click="emit('openRecoveryCodes')">{{ t('Создать коды') }}</Button>
         <button
           class="voice-home__callout-dismiss"
           type="button"
@@ -204,7 +202,7 @@ function closeRoomContextMenu(): void {
           </span>
           <span class="voice-home__callout-sub">{{ t('Откройте, чтобы принять или отклонить') }}</span>
         </span>
-        <Button variant="primary" class="ui-button--compact" @click="lobby.showPeople">{{ t('Открыть') }}</Button>
+        <Button variant="primary" size="sm" @click="lobby.showPeople">{{ t('Открыть') }}</Button>
         <button
           class="voice-home__callout-dismiss"
           type="button"

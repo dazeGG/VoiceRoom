@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Spinner } from '@voice-room/ui/components';
 import { t } from '@/shared/i18n';
 import { Pencil, X } from '@lucide/vue';
 import { computed, ref, type UnwrapNestedRefs } from 'vue';
@@ -108,7 +109,7 @@ async function save(): Promise<void> {
       {{ t('Отмена') }}
     </button>
     <button class="settings__save" type="button" :disabled="draft.saving" @click="save">
-      <span v-if="draft.saving" class="home-spinner" aria-hidden="true"></span> {{ t('Сохранить') }}
+      <Spinner v-if="draft.saving" aria-hidden="true" /> {{ t('Сохранить') }}
     </button>
   </div>
 

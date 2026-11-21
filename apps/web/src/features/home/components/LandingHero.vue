@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Spinner } from '@voice-room/ui/components';
 import { t } from '@/shared/i18n';
 import { ArrowRight } from '@lucide/vue';
 import { START_FEATURES } from '@/shared/start-features';
@@ -33,7 +34,7 @@ function onRoomCodeKeydown(event: KeyboardEvent): void {
 
     <div class="landing-hero__cta-row">
       <Button variant="primary" size="xl" :disabled="creatingTemp" @click="emit('createTemp')">
-        <span v-if="creatingTemp" class="home-spinner" aria-hidden="true"></span> {{ t('Создать комнату') }}
+        <Spinner v-if="creatingTemp" aria-hidden="true" /> {{ t('Создать комнату') }}
         <ArrowRight v-bind="iconMd" aria-hidden="true" />
       </Button>
 

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Spinner } from '@voice-room/ui/components';
 import { useLocalizedText, currentErrorMessage } from '@/shared/i18n/localized-text';
 
 import { t } from '@/shared/i18n';
@@ -215,7 +216,7 @@ function onCancel(): void {
           <div class="settings__actions">
             <button class="settings__cancel" type="button" @click="onCancel">{{ t('Отмена') }}</button>
             <button class="settings__save" type="submit" :disabled="saving || !dirty">
-              <span v-if="saving" class="home-spinner" aria-hidden="true"></span> {{ t('Сохранить') }}
+              <Spinner v-if="saving" aria-hidden="true" /> {{ t('Сохранить') }}
             </button>
           </div>
 
@@ -229,7 +230,7 @@ function onCancel(): void {
                   {{ t('Отмена') }}
                 </button>
                 <button class="dialog__danger-confirm" type="button" :disabled="deleting" @click="confirmDelete">
-                  <span v-if="deleting" class="home-spinner" aria-hidden="true"></span> {{ t('Удалить навсегда') }}
+                  <Spinner v-if="deleting" aria-hidden="true" /> {{ t('Удалить навсегда') }}
                 </button>
               </div>
             </template>

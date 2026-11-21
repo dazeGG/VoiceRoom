@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Spinner } from '@voice-room/ui/components';
 import { useLocalizedText, currentErrorMessage } from '@/shared/i18n/localized-text';
 
 import { t } from '@/shared/i18n';
@@ -308,7 +309,7 @@ async function restorePendingAccount(): Promise<void> {
 
         <button class="auth-dialog__submit" type="submit" :disabled="submitting || !session.loaded">
           <template v-if="submitting">
-            <span class="auth-dialog__spinner" aria-hidden="true"></span>
+            <Spinner aria-hidden="true" />
             {{ copy.submitting }}
           </template>
           <template v-else>{{ copy.submit }}</template>

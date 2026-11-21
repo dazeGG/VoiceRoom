@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Spinner } from '@voice-room/ui/components';
 import { t } from '@/shared/i18n';
 import { faApple, faWindows } from '@fortawesome/free-brands-svg-icons';
 import { Download } from '@lucide/vue';
@@ -79,7 +80,7 @@ async function download(buildId: DesktopBuildId, close: () => void): Promise<voi
         @click="download(build.id, close)"
       >
         <template #icon>
-          <span v-if="downloadingId === build.id" class="home-spinner" aria-hidden="true"></span>
+          <Spinner v-if="downloadingId === build.id" aria-hidden="true" />
           <Icon v-else :icon="build.mac ? faApple : faWindows" size="lg" />
         </template>
       </PopoverMenuItem>
