@@ -16,7 +16,7 @@
 //   .lobby-preview-chat                       -> .room-preview__chat (rootClass of RoomChatPanel)
 //   .lobby-room-members                       -> .room-preview__members
 //   .lobby-room-members-body                  -> .room-preview__members-body
-//   .room-panel-tab-unread, [data-active]     -> .room-panel-tabs__unread, [aria-pressed] (room/_room-panel-tabs.scss)
+//   .room-panel-tab-unread, [data-active]     -> .room-panel-switches__unread, [aria-pressed] (room/_room-panel-switches.scss)
 //
 // [data-*] -> class
 //   .tile-grid[data-count='0']                -> .tile-grid--empty (as in the room's tile grid)

@@ -1,65 +1,52 @@
 <script setup lang="ts">
-// Picking who to mention is picking a person, so the row carries the face
-// alongside both names: two people can share a display name, and the login is
-// what actually goes into the message.
-import { t } from '@/shared/i18n';
-import { ref, watchPostEffect } from 'vue';
+import { SuggestionList, type ComboboxOption } from '@voice-room/ui/components';
 import type { MembershipMember } from '@voice-room/shared/contracts/membership';
+import { computed, useId } from 'vue';
+import { t } from '@/shared/i18n';
 import { Avatar } from '@/shared/ui';
 import { displayNameOf } from '@/shared/utils/display-name';
 import EmojiText from './EmojiText.vue';
 
-const { candidates, activeIndex = 0 } = defineProps<{ candidates: MembershipMember[]; activeIndex?: number }>();
-
-const emit = defineEmits<{ select: [member: MembershipMember] }>();
-const menu = ref<HTMLDivElement | null>(null);
-
-watchPostEffect(() => {
-  const index = activeIndex;
-  const list = menu.value;
-  if (!list || !candidates[index]) return;
-  const option = list.children[index];
-  if (!(option instanceof HTMLElement)) return;
-
-  const top = option.offsetTop;
-  const bottom = top + option.offsetHeight;
-  if (top < list.scrollTop) list.scrollTop = top;
-  else if (bottom > list.scrollTop + list.clientHeight) list.scrollTop = bottom - list.clientHeight;
+const props = withDefaults(defineProps<{ id?: string; candidates: MembershipMember[]; activeIndex?: number }>(), {
+  id: '',
+  activeIndex: 0
 });
+const fallbackId = useId();
+const emit = defineEmits<{ select: [member: MembershipMember] }>();
 
-function label(member: MembershipMember): string {
-  return displayNameOf(member);
+const people = computed(() => new Map(props.candidates.map((member) => [member.userId, member])));
+const options = computed<ComboboxOption[]>(() =>
+  props.candidates.map((member) => ({
+    value: member.userId,
+    label: displayNameOf(member),
+    description: '@' + member.login + (member.role === 'owner' ? t(' · Создатель') : '')
+  }))
+);
+
+function select(option: ComboboxOption): void {
+  const member = people.value.get(option.value);
+  if (member) emit('select', member);
 }
 </script>
 
 <template>
-  <div ref="menu" class="mention-menu" role="listbox" :aria-label="t('Упомянуть участника')">
-    <button
-      v-for="(member, index) in candidates"
-      :key="member.userId"
-      class="mention-menu__option"
-      type="button"
-      role="option"
-      :aria-selected="index === activeIndex"
-      @mousedown.prevent
-      @click="emit('select', member)"
-    >
+  <SuggestionList
+    :id="props.id || fallbackId"
+    class="mention-menu"
+    :label="t('Упомянуть участника')"
+    :active="candidates[activeIndex]?.userId"
+    :options="options"
+    @select="select"
+  >
+    <template #avatar="{ option }">
       <Avatar
-        :name="label(member)"
-        :src="member.avatarUrl"
-        :color-key="member.avatarColorKey"
-        :background="member.avatarAccent"
+        :name="option.label"
+        :src="people.get(option.value)?.avatarUrl"
+        :color-key="people.get(option.value)?.avatarColorKey"
+        :background="people.get(option.value)?.avatarAccent"
         :size="28"
       />
-      <!-- The spaces keep the option's text as "initial name @login", as in the Svelte markup. -->
-      {{ ' ' }}
-      <span class="mention-menu__names">
-        <span class="mention-menu__name"><EmojiText :text="label(member)" /></span>
-        {{ ' ' }}
-        <small class="mention-menu__login"
-          >@{{ member.login }}{{ member.role === 'owner' ? t(' · Создатель') : '' }}</small
-        >
-      </span>
-    </button>
-  </div>
+    </template>
+    <template #option="{ option }"><EmojiText :text="option.label" /></template>
+  </SuggestionList>
 </template>

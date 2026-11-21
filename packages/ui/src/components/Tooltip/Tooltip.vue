@@ -12,7 +12,7 @@ withDefaults(defineProps<TooltipProps>(), { side: 'top' });
   <TooltipProvider :delay-duration="400">
     <TooltipRoot>
       <TooltipTrigger as-child v-bind="$attrs"><slot /></TooltipTrigger>
-      <TooltipPortal>
+      <TooltipPortal :to="portalTarget ?? 'body'">
         <TooltipContent class="ui-tooltip" :side="side" :side-offset="6" :aria-label="text">
           <span class="ui-tooltip__text">{{ text }}</span>
           <Kbd v-if="shortcut?.length" :keys="shortcut" />

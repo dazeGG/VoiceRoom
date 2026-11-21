@@ -3,7 +3,7 @@
 // stage on wide windows (the room layout gives it its own grid column), floating
 // over the stage below 1200px. The lobby preview uses the same panel with its own
 // root class; the panel's inner blocks are room-chat-panel, room-panel-header,
-// room-panel-tabs, room-chat-group, room-chat-composer and pinned-bar.
+// room-panel-header, room-chat-group, room-chat-composer and pinned-bar.
 //
 // Svelte class -> BEM class
 //   .room-chat-rail                          -> .room-chat-rail (block, unchanged: _desktop-shell.scss and the room layout name it)

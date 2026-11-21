@@ -1,0 +1,21 @@
+.room-panel-switches {
+  height: auto;
+
+  &__button {
+    position: relative;
+    width: var(--size-36);
+    padding: 0;
+
+    &[aria-pressed='true'] {
+      background: var(--vr-surface-3);
+      color: var(--vr-text);
+    }
+  }
+
+  &__unread {
+    --badge-ring: var(--vr-surface-2);
+    position: absolute;
+    top: var(--space-6);
+    right: var(--space-8);
+  }
+}

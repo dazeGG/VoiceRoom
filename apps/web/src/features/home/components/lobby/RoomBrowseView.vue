@@ -169,12 +169,12 @@ function selectPanel(panel: Panel): void {
       />
       <div class="room-preview__actions">
         <div
-          class="room-panel-tabs room-panel-tabs--topbar"
+          class="ui-segment room-panel-switches room-panel-switches--topbar"
           role="group"
           :aria-label="t('Открыть раздел панели комнаты')"
         >
           <button
-            class="room-panel-tabs__tab"
+            class="ui-segment__item room-panel-switches__button"
             type="button"
             :aria-label="t('Чат')"
             :aria-pressed="activePanel === 'chat'"
@@ -182,10 +182,14 @@ function selectPanel(panel: Panel): void {
             @click="selectPanel('chat')"
           >
             <MessageSquare v-bind="iconSm" aria-hidden="true" />
-            <span v-if="roomUnreadCount > 0" class="room-panel-tabs__unread" aria-hidden="true"></span>
+            <span
+              v-if="roomUnreadCount > 0"
+              class="ui-segment__dot room-panel-switches__unread"
+              aria-hidden="true"
+            ></span>
           </button>
           <button
-            class="room-panel-tabs__tab"
+            class="ui-segment__item room-panel-switches__button"
             type="button"
             :aria-label="t('Участники')"
             :aria-pressed="activePanel === 'participants'"

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { NavList, NavListGroup, NavListItem } from '@voice-room/ui/components';
 // The open settings. Mounted fresh on every opening, so each tab starts from
 // what is saved; only the profile edits live here, so they survive a look at
 // another tab before saving.
@@ -10,7 +11,6 @@ import type { PublicUser } from '@/api/friends';
 import LegalLinks from '@/shared/components/LegalLinks.vue';
 import { useNotificationPreferencesStore } from '@/shared/notifications/preferences.store';
 import { Dialog } from '@/shared/ui';
-import { iconMd } from '@/shared/ui/icons';
 import { usePushNotificationsStore } from '../../model/push-notifications.store';
 import { readSettingsSupport } from '../../model/settings-support';
 import type { ToastOptions } from '../../model/toasts.store';
@@ -124,31 +124,29 @@ onBeforeUnmount(profile.dispose);
   <Dialog open size="lg" :title="t('Настройки')" :on-close="() => emit('close')">
     <div class="settings__frame">
       <div class="settings__body">
-        <nav class="settings__nav" :aria-label="t('Разделы настроек')">
-          <div class="settings__nav-main">
-            <button
+        <NavList class="settings__nav" :label="t('Разделы настроек')">
+          <NavListGroup class="settings__nav-main">
+            <NavListItem
               v-for="item in navItems"
               :key="item.id"
-              class="settings__nav-item"
-              type="button"
-              :aria-current="tab === item.id ? 'page' : undefined"
+              :label="item.label"
+              :current="tab === item.id"
               @click="tab = item.id"
             >
-              <component :is="item.icon" v-bind="iconMd" aria-hidden="true" />
-              {{ item.label }}
-            </button>
-          </div>
+              <template #icon><component :is="item.icon" /></template>
+            </NavListItem>
+          </NavListGroup>
           <LegalLinks compact new-tab />
-          <button
-            class="settings__nav-item settings__nav-item--danger"
-            type="button"
+          <NavListItem
+            class="settings__nav-logout"
+            tone="danger"
+            :label="loggingOut ? t('Выходим…') : t('Выйти из аккаунта')"
             :disabled="loggingOut"
             @click="emit('logout')"
           >
-            <LogOut v-bind="iconMd" aria-hidden="true" />
-            {{ loggingOut ? t('Выходим…') : t('Выйти из аккаунта') }}
-          </button>
-        </nav>
+            <template #icon><LogOut /></template>
+          </NavListItem>
+        </NavList>
 
         <div class="settings__content">
           <ProfileSettings

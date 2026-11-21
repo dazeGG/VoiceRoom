@@ -1,7 +1,7 @@
 // RoomTopbar (features/room/components/RoomTopbar.vue): the room heading, the
 // invite menu and the connection pill in the top bar. The Svelte rules lived in
 // room/layout.css and responsive.css. The chat/participants tabs are the shared
-// .room-panel-tabs block (_room-panel-tabs.scss).
+// .room-panel-switches block (_room-panel-switches.scss).
 //
 // Svelte class -> BEM class
 //   .room-heading.topbar-room-heading    -> .room-topbar__heading
@@ -13,8 +13,8 @@
 //   .room-heading-actions                -> .room-topbar__heading-actions
 //   .room-invite-button                  -> .room-topbar__invite-button
 //   .room-invite-label                   -> .room-topbar__invite-label
-//   .room-panel-tabs button              -> .room-panel-tabs__tab
-//   .room-panel-tab-unread               -> .room-panel-tabs__unread
+//   .room-panel-switches button              -> .room-panel-switches__button
+//   .room-panel-tab-unread               -> .room-panel-switches__unread
 //   .status-pill                         -> .room-topbar__status
 //   .status-dot                          -> .room-topbar__status-dot
 //
@@ -139,7 +139,7 @@ body.screen--room .room-topbar__heading {
 
 // The heading tabs are the only way into chat on a phone, so they get the same
 // 44px target as the dock.
-html.platform--mobile .room-panel-tabs--topbar .room-panel-tabs__tab {
+html.platform--mobile .room-panel-switches--topbar .room-panel-switches__button {
   width: 40px;
   height: 40px;
 }

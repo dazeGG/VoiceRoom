@@ -7,8 +7,6 @@
 //   .room-settings-body             -> .settings__body--room    (room settings dialogs add it)
 //   .settings-nav                   -> .settings__nav
 //   .settings-nav-main              -> .settings__nav-main
-//   .settings-nav-item              -> .settings__nav-item
-//   .settings-nav-item--danger      -> .settings__nav-item--danger
 //   .settings-content               -> .settings__content
 //   .settings-password-fields       -> .settings__password-fields
 //   .settings-field-label           -> .settings__field-label
@@ -75,8 +73,6 @@
 //   .ui-segment-item -> .ui-segment__item
 //
 // [data-*] -> aria / modifier class
-//   .settings-nav-item[data-active='true']          -> .settings__nav-item[aria-current]:not([aria-current='false'])
-//     (the nav button also carries aria-current; Svelte omits it when inactive, Vue renders "false")
 //   .settings-gate-body[data-disabled='true']       -> .settings__gate-body--disabled
 //   .settings-gate-fill[data-state='closed']        -> .settings__gate-fill--closed
 //   .settings-hotkey-row[data-disabled='true']      -> .settings__hotkey-row--disabled
@@ -127,49 +123,8 @@
   gap: 4px;
 }
 
-.settings__nav-item {
-  display: flex;
-  align-items: center;
-  gap: 11px;
-  width: 100%;
-  padding: 9px 12px;
-  border: none;
-  border-radius: 9px;
-  background: transparent;
-  color: var(--vr-text-2);
-  font-family: var(--font-ui);
-  font-size: 0.875rem;
-  font-weight: 500;
-  text-align: left;
-  cursor: pointer;
-  transition:
-    background 0.14s ease,
-    color 0.14s ease;
-}
-
-.settings__nav-item:hover {
-  color: var(--vr-text);
-}
-
-// Svelte: [data-active='true']
-.settings__nav-item[aria-current]:not([aria-current='false']) {
-  background: var(--vr-surface-3);
-  color: var(--vr-text);
-}
-
-.settings__nav-item--danger {
+.settings__nav-logout {
   margin-top: auto;
-  color: var(--vr-danger);
-}
-
-.settings__nav-item--danger:hover {
-  background: var(--vr-danger-hover);
-  color: var(--vr-danger);
-}
-
-.settings__nav-item--danger:disabled {
-  cursor: default;
-  opacity: 0.6;
 }
 
 .settings__content {
@@ -564,12 +519,12 @@
     flex-direction: row;
   }
 
-  .settings__nav-item {
+  .settings__nav .ui-nav__item {
     flex: 1;
     justify-content: center;
   }
 
-  .settings__nav-item--danger {
+  .settings__nav .settings__nav-logout {
     flex: none;
     margin-top: 0;
   }

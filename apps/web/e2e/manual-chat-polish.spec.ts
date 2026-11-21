@@ -411,7 +411,9 @@ test('room members panel releases navigation, switches to chat, collapses, and k
     await enterRoom(page, roomId);
 
     const panel = page.locator('.room-chat-rail');
-    const topbarTabs = page.locator('.room-topbar__heading-actions .room-panel-tabs');
+    const topbarTabs = page
+      .locator('.room-topbar__heading-actions')
+      .getByRole('group', { name: 'Открыть раздел панели комнаты' });
     await topbarTabs.getByRole('button', { name: 'Участники' }).click();
     await expect(panel).toBeVisible();
     await expect(panel.locator('#room-panel-participants')).toBeVisible();

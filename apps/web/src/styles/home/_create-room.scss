@@ -2,8 +2,6 @@
 // Svelte: CreateRoomDialog.svelte <style> and the .lr-dialog-* rules of lobby-v2.css.
 //
 // Svelte class -> BEM class (block "create-room")
-//   .lr-dialog-tabs                 -> .create-room__tabs
-//   .lr-dialog-tab                  -> .create-room__tab
 //   .lr-dialog-form                 -> .create-room__form
 //   .lr-field                       -> .create-room__field
 //   .lr-field-label                 -> .create-room__label
@@ -13,12 +11,12 @@
 //   .lr-dialog-error                -> .create-room__error
 //
 // [data-*] -> aria
-//   .lr-dialog-tab[data-active='true'] -> .create-room__tab[aria-selected='true']
 
 .create-room__form {
   display: flex;
   flex-direction: column;
   gap: 18px;
+  padding-block-start: var(--space-16);
 }
 
 .create-room__field {
@@ -56,42 +54,6 @@
 
   &:focus {
     border-color: var(--vr-accent);
-  }
-}
-
-.create-room__tabs {
-  display: flex;
-  gap: 4px;
-  padding: 4px;
-  border: 1px solid var(--vr-line);
-  border-radius: var(--radius-md);
-  background: var(--vr-bg);
-}
-
-.create-room__tab {
-  flex: 1;
-  border: none;
-  border-radius: 12px;
-  padding: 9px 0;
-  background: transparent;
-  color: var(--vr-text-2);
-  font-family: var(--font-ui);
-  font-size: 0.84375rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition:
-    background 0.15s ease,
-    color 0.15s ease;
-
-  &:focus-visible {
-    outline: 2px solid var(--focus-border);
-    outline-offset: 2px;
-  }
-
-  &[aria-selected='true'] {
-    background: var(--vr-accent);
-    color: var(--vr-accent-ink);
-    font-weight: 700;
   }
 }
 

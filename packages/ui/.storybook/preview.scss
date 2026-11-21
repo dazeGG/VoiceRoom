@@ -22,9 +22,15 @@
 @use 'pkg:@voice-room/ui/styles/components/popover';
 @use 'pkg:@voice-room/ui/styles/components/switch';
 @use 'pkg:@voice-room/ui/styles/components/segment';
+@use 'pkg:@voice-room/ui/styles/components/tabs';
+@use 'pkg:@voice-room/ui/styles/components/nav';
+@use 'pkg:@voice-room/ui/styles/components/toolbar';
+@use 'pkg:@voice-room/ui/styles/components/separator';
+@use 'pkg:@voice-room/ui/styles/components/splitter';
 @use 'pkg:@voice-room/ui/styles/components/hotkey';
 @use 'pkg:@voice-room/ui/styles/components/dropzone';
 @use 'pkg:@voice-room/ui/styles/components/select';
+@use 'pkg:@voice-room/ui/styles/components/combobox';
 @use 'pkg:@voice-room/ui/styles/components/slider';
 @use 'pkg:@voice-room/ui/styles/components/ui-dialog';
 @use 'pkg:@voice-room/ui/styles/components/ui-alert-dialog';

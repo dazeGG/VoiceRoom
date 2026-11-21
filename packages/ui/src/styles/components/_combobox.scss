@@ -1,0 +1,29 @@
+@use 'menu';
+
+.ui-combobox {
+  &__panel {
+    min-width: 0;
+  }
+
+  &__viewport {
+    max-height: calc(var(--space-64) * 5);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  &__option--highlighted:not([aria-disabled='true']):not([aria-selected='true']) {
+    background: var(--vr-hover);
+  }
+
+  &__avatar {
+    display: inline-flex;
+    flex: none;
+  }
+
+  &__empty {
+    margin: 0;
+    padding: var(--space-8) var(--space-12);
+    color: var(--vr-text-muted);
+    font-size: 0.8125rem;
+  }
+}

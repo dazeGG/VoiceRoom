@@ -16,6 +16,7 @@ const portalTarget = useMenuPortalTarget();
 
 function escape(event: KeyboardEvent): void {
   if (event.key !== 'Escape' || !(event.currentTarget instanceof HTMLElement)) return;
+  if (event.target instanceof Element && event.target.closest('[role="combobox"][aria-expanded="true"]')) return;
   const submenu = event.currentTarget;
   const trigger = document.querySelector<HTMLElement>(`[aria-controls="${CSS.escape(submenu.id)}"]`);
   if (!trigger) return;
