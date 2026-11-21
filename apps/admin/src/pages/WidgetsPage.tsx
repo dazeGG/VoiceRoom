@@ -6,7 +6,7 @@
 
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useCallback, useRef, useState } from 'react';
-import type { AdminWidgets, RoomCall, WidgetRuntimeOwnerState } from '@voice-room/shared/contracts/admin';
+import type { AdminWidgets, LiveRoom, RoomCall, WidgetRuntimeOwnerState } from '@voice-room/shared/contracts/admin';
 import { fetchLiveRooms, fetchRoomCalls, fetchWidgets } from '../api/admin.ts';
 import { formatCount, formatHours, formatPeople, plural } from '../format.ts';
 import { useRefreshStatus } from '../frame.tsx';
@@ -16,10 +16,8 @@ import { useCan } from '../staff.tsx';
 import type { CallRef } from '../tabs.ts';
 import { Button, Empty, Panel, Pill, Stat, Stats } from '../ui/index.tsx';
 import { Section, useSectionState } from '../ui/Section.tsx';
-import { CallList } from './rooms/CallList.tsx';
-import { FilterChips, type CallOriginFilters, type OriginPick } from './rooms/CallFilters.tsx';
-import { LiveCalls } from './rooms/LiveCalls.tsx';
-import './RoomsPage.css';
+import { CallList, FilterChips, LiveCalls } from '../legacy-components.tsx';
+import type { CallOriginFilters, OriginPick } from './rooms/call-filters.ts';
 import './WidgetsPage.css';
 
 const REFRESH_MS = 5000;
@@ -310,8 +308,8 @@ export function WidgetsPage({
                 rooms={rooms}
                 now={now}
                 open={openLive}
-                onToggle={(roomId) => setOpenLive((open) => toggled(open, roomId))}
-                onOpenCall={(room) => onOpenCall({ kind: 'live', roomId: room.roomId })}
+                onToggle={(roomId: string) => setOpenLive((open) => toggled(open, roomId))}
+                onOpenCall={(room: LiveRoom) => onOpenCall({ kind: 'live', roomId: room.roomId })}
                 onOpenAccount={onOpenAccount}
                 pick={livePick}
                 showOwner={false}
@@ -330,7 +328,7 @@ export function WidgetsPage({
         sectionRef={historySection}
         summary={
           canOrigin && shown ? (
-            <FilterChips filters={shown.filters} onChange={(filters) => showFilters(filters)} />
+            <FilterChips filters={shown.filters} onChange={(filters: CallOriginFilters) => showFilters(filters)} />
           ) : null
         }
       >
@@ -358,14 +356,14 @@ export function WidgetsPage({
                 calls={shown.calls}
                 now={now}
                 open={openCalls}
-                onToggle={(callId) => setOpenCalls((open) => toggled(open, callId))}
-                onOpen={(call) => onOpenCall({ kind: 'finished', callId: call.id })}
+                onToggle={(callId: string) => setOpenCalls((open) => toggled(open, callId))}
+                onOpenCall={(call: RoomCall) => onOpenCall({ kind: 'finished', callId: call.id })}
                 onOpenAccount={onOpenAccount}
                 pick={historyPick}
               />
             )}
             {pageIndex > 0 || hasNextPage ? (
-              <nav className="rooms-pager" aria-label="Страницы истории">
+              <nav className="admin-history__pager" aria-label="Страницы истории">
                 <Button
                   variant="outline"
                   disabled={history.busy || pageIndex === 0}
@@ -376,7 +374,7 @@ export function WidgetsPage({
                   <ChevronLeft size={14} aria-hidden="true" />
                   Назад
                 </Button>
-                <span className="rooms-quiet" aria-current="page">
+                <span className="admin-rooms-quiet" aria-current="page">
                   Страница {pageIndex + 1}
                 </span>
                 <Button

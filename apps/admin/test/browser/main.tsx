@@ -2,7 +2,7 @@ import { createApp } from 'vue';
 import { createPinia } from 'pinia';
 import type { Staff } from '../../src/staff.store.ts';
 import AccountDialogsFixture from './AccountDialogsFixture.vue';
-import { TimeRangePicker } from '../../src/TimeRangePicker';
+import { TimeRangePicker } from '../../src/legacy-components.tsx';
 import { PRODUCT_PRESETS, type TimeRange } from '../../src/time-range';
 import { StrictMode, useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';

@@ -9,12 +9,11 @@ import { useState } from 'react';
 import type { SystemSample } from '@voice-room/shared/contracts/admin';
 import { networkLevelOfValue } from '@voice-room/shared/network-quality';
 import { fetchSystemStats } from '../api/admin.ts';
-import { TimeChart } from '../charts/TimeChart.tsx';
+import { TimeChart, TimeRangePicker } from '../legacy-components.tsx';
 import { formatBytes, formatMs, formatPercent, formatSampleTime } from '../format.ts';
 import { useAdminResource } from '../load-state.ts';
 import { Notice } from '../Notice.tsx';
 import { SYSTEM_PRESETS, systemQuery, type TimeRange } from '../time-range.ts';
-import { TimeRangePicker } from '../TimeRangePicker.tsx';
 import { Stat, Stats, type Tone } from '../ui/index.tsx';
 import './SystemPage.css';
 

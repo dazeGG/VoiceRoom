@@ -109,10 +109,8 @@ test('the media server shows its traffic, its losses each way with too little tr
 test('a span of more than a day names the date with the time', async () => {
   stubApi({ 'GET /api/admin/system': { body: { ...system, from: at - 3 * DAY } } });
   renderAs(<SystemPage />);
-  await screen.findByRole('img', { name: 'Процессор' });
-  expect(document.querySelector('text.chart-axis[text-anchor="middle"]')?.textContent).toMatch(
-    /\d{2}\.\d{2}, \d{2}:\d{2}/
-  );
+  const chart = await screen.findByRole('img', { name: 'Процессор' });
+  expect(chart.querySelector('text[text-anchor="middle"]')?.textContent).toMatch(/\d{2}\.\d{2}, \d{2}:\d{2}/);
 });
 
 test('an hour-sized point is named in hours', async () => {

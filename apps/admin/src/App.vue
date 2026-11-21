@@ -3,8 +3,11 @@ import { computed, onMounted, onBeforeUnmount, ref, shallowRef, useTemplateRef, 
 import { Spinner } from '@voice-room/ui/components';
 import { fetchOpenReports, fetchOpenUserReports } from './api/admin.ts';
 import { provideFrame, type RefreshStatus } from './frame.ts';
-import { mountLegacyPages, type HistoryRoom } from './legacy-pages.tsx';
+import { mountLegacyPages } from './legacy-pages.tsx';
+import type { HistoryRoom } from './pages/rooms/history-room.ts';
 import AccountsPage from './pages/AccountsPage.vue';
+import CallPage from './pages/CallPage.vue';
+import RoomsPage from './pages/RoomsPage.vue';
 import StaffPage from './pages/StaffPage.vue';
 import GlobalSearch from './shell/GlobalSearch.vue';
 import Sidebar from './shell/Sidebar.vue';
@@ -34,7 +37,7 @@ const pageHost = useTemplateRef<HTMLElement>('pageHost');
 const tabs = computed(() => (session.staff ? allowedTabs(session.staff.permissions) : []));
 const tab = computed(() => (tabs.value.includes(location.value.tab) ? location.value.tab : tabs.value[0]));
 const topbarRefresh = computed(() =>
-  tab.value === 'accounts' || tab.value === 'staff' ? refresh.value : legacyRefresh.value
+  tab.value === 'accounts' || tab.value === 'staff' || tab.value === 'rooms' ? refresh.value : legacyRefresh.value
 );
 const onCard = computed(() => tab.value === 'accounts' && location.value.accountId !== null);
 const call = computed(() => (tab.value === 'rooms' ? location.value.call : undefined));
@@ -130,14 +133,10 @@ watchEffect(
       staff,
       frame,
       location: { ...location.value, tab: current },
-      roomFocus: roomFocus.value,
-      liveFocus: liveFocus.value,
       selectTab,
       openAccount,
       openCall,
-      openRoomHistory,
       openLiveRoom,
-      clearLiveFocus,
       setOpenReports
     });
   },
@@ -179,6 +178,24 @@ onBeforeUnmount(() => pages?.unmount());
         </div>
         <div v-else-if="tab === 'staff'" class="admin-frame__content">
           <StaffPage />
+        </div>
+        <div v-else-if="tab === 'rooms'" class="admin-frame__content">
+          <CallPage
+            v-if="call"
+            :key="call.kind === 'live' ? `live:${call.roomId}` : `finished:${call.callId}`"
+            :call="call"
+            @back="showCalls"
+            @open-account="openAccount"
+            @open-room-history="openRoomHistory"
+          />
+          <RoomsPage
+            v-else
+            :focus-room="roomFocus"
+            :focus-live="liveFocus"
+            @open-account="openAccount"
+            @open-call="openCall"
+            @live-focused="clearLiveFocus"
+          />
         </div>
         <div v-else ref="pageHost" class="admin-frame__content" :class="{ 'admin-legacy': tab !== 'reports' }" />
       </main>

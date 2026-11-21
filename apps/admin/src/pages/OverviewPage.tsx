@@ -10,7 +10,7 @@ import { CALL_FEEDBACK_BAD_TAGS } from '@voice-room/shared/contracts/feedback';
 import { CALL_FEEDBACK_TAG_LABELS } from '@voice-room/shared/feedback-labels';
 import { REPORT_REASON_LABELS } from '@voice-room/shared/report-labels';
 import { fetchLiveRooms, fetchOverview, fetchProductStats, fetchRoomCalls, fetchSystemStats } from '../api/admin.ts';
-import { TimeChart } from '../charts/TimeChart.tsx';
+import { QualityCell, TimeChart } from '../legacy-components.tsx';
 import {
   formatBytes,
   formatClock,
@@ -34,9 +34,9 @@ import type { AdminTab, CallRef } from '../tabs.ts';
 import { PRODUCT_PRESETS, productQuery } from '../time-range.ts';
 import { AvatarStack, Button, Empty, Pill, RoomAvatar, Segment, Stat, Stats } from '../ui/index.tsx';
 import { Section, TextLink } from '../ui/Section.tsx';
-import { troubleOf } from './rooms/LiveCalls.tsx';
-import { QualityCell, qualityOfCall } from './rooms/QualityBar.tsx';
-import { peopleOf } from './rooms/room-bits.tsx';
+import { troubleOf } from './rooms/live-quality.ts';
+import { qualityOfCall } from './rooms/quality.ts';
+import { peopleOf } from './rooms/room-bits.ts';
 import { lossIn, lossOut } from './SystemPage.tsx';
 import './OverviewPage.css';
 
@@ -508,8 +508,8 @@ function FeedbackWeek({ overview }: { overview: AdminOverview }) {
         role="img"
         aria-label={`${formatCount(week.good)} хороших и ${formatCount(week.bad)} плохих отзывов`}
       >
-        {week.good ? <span data-net="good" style={{ flexGrow: week.good }} /> : null}
-        {week.bad ? <span data-net="bad" style={{ flexGrow: week.bad }} /> : null}
+        {week.good ? <span className="admin-network--good" style={{ flexGrow: week.good }} /> : null}
+        {week.bad ? <span className="admin-network--bad" style={{ flexGrow: week.bad }} /> : null}
       </span>
       {tags.length ? (
         <div className="week-answers-tags">
@@ -518,7 +518,10 @@ function FeedbackWeek({ overview }: { overview: AdminOverview }) {
             <div key={tag} className="week-answers-tag">
               <span className="week-answers-tag-name">{tagLabel(tag)}</span>
               <span className="gauge-bar">
-                <span data-net="bad" style={{ width: `${(count / most) * 100}%`, background: 'var(--net-tone)' }} />
+                <span
+                  className="admin-network--bad"
+                  style={{ width: `${(count / most) * 100}%`, background: 'var(--net-tone)' }}
+                />
               </span>
               <span className="week-answers-tag-count ui-num">{formatCount(count)}</span>
             </div>

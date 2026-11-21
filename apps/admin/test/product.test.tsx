@@ -1,7 +1,7 @@
 // The product section: the last 30 days on arrival, a ready-made span or one's
 // own reloads it, the cohorts below the charts, and the notice on a failure.
 
-import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, test } from 'vitest';
 import { ProductPage } from '../src/pages/ProductPage.tsx';
@@ -38,13 +38,17 @@ test('the product section loads the last 30 days, a ready-made span reloads it, 
   await userEvent.click(screen.getByRole('button', { name: 'Свой период' }));
   const dialog = await screen.findByRole('dialog', { name: 'Период' });
   const [from, to] = within(dialog).getAllByDisplayValue(/\d{4}-\d{2}-\d{2}/);
-  fireEvent.change(must(from, 'the from field'), { target: { value: '2026-10-20' } });
-  fireEvent.change(must(to, 'the to field'), { target: { value: '2026-10-01' } });
+  await userEvent.clear(must(from, 'the from field'));
+  await userEvent.type(must(from, 'the from field'), '2026-10-20');
+  await userEvent.clear(must(to, 'the to field'));
+  await userEvent.type(must(to, 'the to field'), '2026-10-01');
   await userEvent.click(within(dialog).getByRole('button', { name: 'Показать' }));
   expect(within(dialog).getByRole('alert').textContent).toContain('раньше конца');
 
-  fireEvent.change(must(from, 'the from field'), { target: { value: '2026-10-01' } });
-  fireEvent.change(must(to, 'the to field'), { target: { value: '2026-10-10' } });
+  await userEvent.clear(must(from, 'the from field'));
+  await userEvent.type(must(from, 'the from field'), '2026-10-01');
+  await userEvent.clear(must(to, 'the to field'));
+  await userEvent.type(must(to, 'the to field'), '2026-10-10');
   expect(within(dialog).queryByRole('alert')).toBeNull();
   await userEvent.click(within(dialog).getByRole('button', { name: 'Показать' }));
   await waitFor(() => expect(last().get('to')).toBe('2026-10-10'));

@@ -9,6 +9,10 @@
 @use 'account-card';
 @use 'staff';
 @use 'user-reports';
+@use 'rooms';
+@use 'network';
+@use 'call';
+@use 'charts';
 @use 'legacy';
 
 // The legacy pages still use some of the same class names. Their unlayered

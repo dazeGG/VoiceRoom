@@ -21,7 +21,7 @@ import type { CallRef } from '../tabs.ts';
 import { Avatar, Button, Callout, Card, EmptyState, ListItem, Pill, Progress, type Tone } from '../ui';
 import { useAdminResource } from '../use-admin-resource.ts';
 import AccountBlockDialog from './AccountBlockDialog.vue';
-import AccountQualityBar from './AccountQualityBar.vue';
+import QualityBar from './rooms/QualityBar.vue';
 import AccountSignOutDialog from './AccountSignOutDialog.vue';
 import { cpuConclusion } from './account-cpu.ts';
 import { qualityOfMinutes, qualityShares } from './rooms/quality.ts';
@@ -207,7 +207,7 @@ function describeCall(call: RoomCall) {
           <span v-if="voice">{{ formatMinutes(voice.minutes) }}</span>
         </header>
         <template v-if="voice && shares">
-          <AccountQualityBar :quality="voice.quality" large />
+          <QualityBar :quality="voice.quality" large />
           <div class="admin-account-panel__legend">
             <span><i class="admin-account-panel__dot--good" aria-hidden="true" />в порядке {{ shares.good }}%</span>
             <span

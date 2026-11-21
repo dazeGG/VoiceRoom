@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { Tone } from './types.ts';
 
-defineProps<{ label: string; note?: string; tone?: Tone; dot?: Tone }>();
+defineProps<{ label: string; note?: string | undefined; tone?: Tone | undefined; dot?: Tone | undefined }>();
 </script>
 
 <template>

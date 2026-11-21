@@ -4,12 +4,11 @@
 import { useState } from 'react';
 import type { ProductDay } from '@voice-room/shared/contracts/admin';
 import { fetchProductStats } from '../api/admin.ts';
-import { TimeChart } from '../charts/TimeChart.tsx';
+import { TimeChart, TimeRangePicker } from '../legacy-components.tsx';
 import { formatDay, formatHours } from '../format.ts';
 import { useAdminResource } from '../load-state.ts';
 import { Notice } from '../Notice.tsx';
 import { PRODUCT_PRESETS, productQuery, type TimeRange } from '../time-range.ts';
-import { TimeRangePicker } from '../TimeRangePicker.tsx';
 import { Empty, Panel } from '../ui/index.tsx';
 import './ProductPage.css';
 

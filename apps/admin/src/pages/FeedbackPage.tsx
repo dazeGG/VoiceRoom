@@ -23,8 +23,8 @@ import { formatCount, formatDateTime, formatMinutes, formatMs, formatPercent } f
 import { useAdminResource } from '../load-state.ts';
 import { Notice } from '../Notice.tsx';
 import { Empty, Panel, Pill, Segment } from '../ui/index.tsx';
-import { NetworkSpan, describeNetwork } from './rooms/network-bar.tsx';
-import { Origin } from './rooms/room-bits.tsx';
+import { NetworkSpan, Origin } from '../legacy-components.tsx';
+import { describeNetwork } from './rooms/network-bar.ts';
 import './FeedbackPage.css';
 
 type Period = (typeof ADMIN_CALL_FEEDBACK_PERIODS)[number];

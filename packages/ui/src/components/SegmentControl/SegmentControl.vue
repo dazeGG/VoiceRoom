@@ -1,6 +1,6 @@
 <script setup lang="ts" generic="T extends string">
 import { ToggleGroupItem, ToggleGroupRoot } from 'reka-ui';
-import { useId } from 'vue';
+import { computed, useId } from 'vue';
 import { formatNumber } from '../../i18n';
 import type { SegmentControlProps, SegmentOption } from './types';
 
@@ -8,6 +8,11 @@ const props = withDefaults(defineProps<SegmentControlProps<T>>(), { kind: 'radio
 
 const countId = useId();
 const emit = defineEmits<{ change: [value: T] }>();
+const tabStop = computed(() => {
+  const { options, value } = props;
+  const selected = options.findIndex((option) => option.value === value && !option.disabled);
+  return selected < 0 ? options.findIndex((option) => !option.disabled) : selected;
+});
 
 defineSlots<{ suffix?: (props: { option: SegmentOption }) => unknown }>();
 
@@ -54,7 +59,7 @@ function move(event: KeyboardEvent, index: number): void {
         :aria-checked="kind === 'radio' ? option.value === value : undefined"
         :aria-pressed="undefined"
         :aria-describedby="option.count === undefined ? undefined : countId + '-' + index"
-        :tabindex="option.value === value ? 0 : -1"
+        :tabindex="index === tabStop ? 0 : -1"
         :disabled="option.disabled ?? false"
         @keydown="move($event, index)"
       >

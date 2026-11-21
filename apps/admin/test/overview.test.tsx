@@ -2,7 +2,7 @@
 // glance, the link to the open reports for those who review them, a refresh
 // every half minute, and the notice when a load fails.
 
-import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import type { LiveRoom, LiveRoomPeer } from '@voice-room/shared/contracts/admin';
@@ -257,8 +257,11 @@ test('the dashboard waits for a slow answer before asking again', async () => {
     vi.advanceTimersByTime(90_000);
     expect(overviewCalls()).toBe(1);
 
-    release({ body: overview });
-    await screen.findByRole('list', { name: 'Главное сейчас' });
+    await act(async () => {
+      release({ body: overview });
+      await slow;
+    });
+    expect(await screen.findByRole('list', { name: 'Главное сейчас' })).toBeTruthy();
     vi.advanceTimersByTime(30_000);
     await waitFor(() => expect(overviewCalls()).toBe(2));
   } finally {

@@ -169,28 +169,6 @@
   }
 }
 
-.admin-account-quality {
-  display: flex;
-  height: var(--space-6);
-  overflow: hidden;
-  border-radius: var(--radius-pill);
-  background: var(--vr-surface-3);
-
-  &--large {
-    height: var(--space-8);
-  }
-
-  &__part--good {
-    background: var(--vr-success);
-  }
-  &__part--unstable {
-    background: var(--vr-warning);
-  }
-  &__part--bad {
-    background: var(--vr-danger);
-  }
-}
-
 .admin-account-dialog {
   display: grid;
   gap: var(--space-16);

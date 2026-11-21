@@ -13,7 +13,7 @@ import { useAdminResource } from '../use-admin-resource.ts';
 import { AccountBadge, Avatar, Button, Callout, Card, EmptyState, Pill, Select, Stat, Stats, TextField } from '../ui';
 import AccountCard from './AccountCard.vue';
 import AccountPanel from './AccountPanel.vue';
-import AccountQualityBar from './AccountQualityBar.vue';
+import QualityBar from './rooms/QualityBar.vue';
 import { qualityShares } from './rooms/quality.ts';
 
 const props = defineProps<{ accountId: string | null }>();
@@ -235,7 +235,7 @@ function closeCard(): void {
                   <td class="admin-accounts__number">{{ formatMinutes(account.voiceMinutes) }}</td>
                   <td>
                     <span v-if="account.voiceQuality30d" class="admin-accounts__quality">
-                      <AccountQualityBar :quality="account.voiceQuality30d" />
+                      <QualityBar :quality="account.voiceQuality30d" />
                       <span :class="qualityTone(account.voiceQuality30d)">{{
                         qualityText(account.voiceQuality30d)
                       }}</span>

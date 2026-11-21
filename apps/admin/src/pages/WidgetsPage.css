@@ -1,5 +1,4 @@
-/* The widgets section: the state and limits beside each other; the live calls
-   and the history share the rooms section's styles (RoomsPage.css). */
+/* Widget intake settings and limits. */
 
 .widgets-state {
   display: grid;
