@@ -22,6 +22,7 @@ const friendsSinceLabel = computed(() => {
 
 <template>
   <div class="profile-card" data-profile-card :style="{ '--profile-accent': accent }">
+    <div class="profile-card__banner"></div>
     <div class="profile-card__body">
       <span class="profile-card__avatar">
         <Avatar
@@ -29,7 +30,7 @@ const friendsSinceLabel = computed(() => {
           :src="person.avatarUrl"
           :color-key="person.avatarColorKey"
           :background="person.avatarAccent || undefined"
-          :size="72"
+          :size="56"
           :online="person.presence === 'online'"
           :afk="person.presence === 'away'"
           :dnd="person.presence === 'dnd'"
@@ -61,17 +62,23 @@ const friendsSinceLabel = computed(() => {
       </p>
       <div v-else class="profile-card__actions">
         <template v-if="relationship === 'friend'">
-          <Button variant="primary" :disabled="busy" @click="onMessage?.()">
+          <Button size="sm" variant="primary" :disabled="busy" @click="onMessage?.()">
             <template #icon><MessageSquare v-bind="iconSm" aria-hidden="true" /></template> {{ t('Написать') }}
           </Button>
-          <Button variant="danger-ghost" :disabled="busy" @click="onRemoveFriend?.()">
+          <Button size="sm" variant="danger-ghost" :disabled="busy" @click="onRemoveFriend?.()">
             <template #icon><UserMinus v-bind="iconSm" aria-hidden="true" /></template> {{ t('Удалить из друзей') }}
           </Button>
         </template>
-        <Button v-else-if="relationship === 'incoming'" variant="primary" :disabled="busy" @click="onAcceptRequest?.()">
+        <Button
+          v-else-if="relationship === 'incoming'"
+          size="sm"
+          variant="primary"
+          :disabled="busy"
+          @click="onAcceptRequest?.()"
+        >
           <template #icon><Check v-bind="iconSm" aria-hidden="true" /></template> {{ t('Принять заявку') }}
         </Button>
-        <Button v-else variant="soft" :disabled="busy" @click="onAddFriend?.()">
+        <Button v-else size="sm" variant="soft" :disabled="busy" @click="onAddFriend?.()">
           <template #icon><UserPlus v-bind="iconSm" aria-hidden="true" /></template> {{ t('Добавить в друзья') }}
         </Button>
       </div>

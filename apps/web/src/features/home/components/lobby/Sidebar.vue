@@ -1,14 +1,23 @@
 <script setup lang="ts">
 import { t } from '@/shared/i18n';
-import { Bell, BellOff, Check, LayoutDashboard, Settings, UserPlus, Users } from '@lucide/vue';
-import { computed, nextTick, onBeforeUnmount, ref, type ComponentPublicInstance } from 'vue';
+import { Bell, BellOff, LayoutDashboard, Settings, UserPlus, Users } from '@lucide/vue';
+import { computed, ref } from 'vue';
 import type { AuthUser } from '@/api/auth';
 import type { Friend } from '@/api/friends';
 import EmojiText from '@/shared/chat/EmojiText.vue';
 import BetaMark from '@/shared/components/BetaMark.vue';
 import { useNotificationPreferencesStore } from '@/shared/notifications/preferences.store';
 import { effectivePresenceStatus, normalizePresenceStatus, type PresenceStatus } from '@/shared/presence';
-import { AccountBadge, Avatar, Badge, Button, Popover, PopoverMenuLabel } from '@/shared/ui';
+import {
+  AccountBadge,
+  Avatar,
+  Badge,
+  Button,
+  DropdownMenu,
+  MenuLabel,
+  MenuRadioGroup,
+  MenuRadioItem
+} from '@/shared/ui';
 import { iconSm } from '@/shared/ui/icons';
 import { displayNameOf } from '@/shared/utils/display-name';
 import type { ActiveVoice } from '../../model/active-voice';
@@ -74,21 +83,6 @@ const statusOptions = computed<ReadonlyArray<{ value: PresenceStatus; label: str
   ]
 );
 const statusSaving = ref<PresenceStatus | null>(null);
-const statusPopoverOpen = ref(false);
-const activeStatusIndex = ref(0);
-const statusOptionRefs: (HTMLButtonElement | undefined)[] = [];
-let statusTypeahead = '';
-let statusTypeaheadTimer: ReturnType<typeof setTimeout> | null = null;
-const selectedStatusIndex = computed(() =>
-  Math.max(
-    0,
-    statusOptions.value.findIndex((option) => option.value === selfPresence.value)
-  )
-);
-
-onBeforeUnmount(() => {
-  if (statusTypeaheadTimer) clearTimeout(statusTypeaheadTimer);
-});
 
 function friendPresence(entry: Friend): PresenceStatus {
   return effectivePresenceStatus(entry.online, entry.user.presenceStatus, entry.user.doNotDisturb);
@@ -119,98 +113,9 @@ function openAdmin(): void {
   window.open(props.adminUrl ?? '', '_blank', 'noopener');
 }
 
-async function focusStatusOption(index = selectedStatusIndex.value): Promise<void> {
-  await nextTick();
-  if (!statusPopoverOpen.value) return;
-  const nextIndex = Math.min(Math.max(index, 0), statusOptions.value.length - 1);
-  activeStatusIndex.value = nextIndex;
-  statusOptionRefs[nextIndex]?.focus();
-}
-
-async function openStatusPopoverAndFocus(index = selectedStatusIndex.value): Promise<void> {
-  activeStatusIndex.value = Math.min(Math.max(index, 0), statusOptions.value.length - 1);
-  statusPopoverOpen.value = true;
-  await focusStatusOption(activeStatusIndex.value);
-}
-
-function registerStatusOption(node: Element | ComponentPublicInstance | null, index: number): void {
-  statusOptionRefs[index] = node instanceof HTMLButtonElement ? node : undefined;
-}
-
-function handleStatusTriggerClick(): void {
-  if (statusPopoverOpen.value) {
-    statusPopoverOpen.value = false;
-    return;
-  }
-  void openStatusPopoverAndFocus(selectedStatusIndex.value);
-}
-
-function handleStatusTriggerKeydown(event: KeyboardEvent): void {
-  if (event.key === 'ArrowDown') {
-    event.preventDefault();
-    void openStatusPopoverAndFocus(selectedStatusIndex.value);
-  } else if (event.key === 'ArrowUp') {
-    event.preventDefault();
-    void openStatusPopoverAndFocus(
-      selectedStatusIndex.value > 0 ? selectedStatusIndex.value : statusOptions.value.length - 1
-    );
-  } else if (event.key === 'Enter' || event.key === ' ') {
-    event.preventDefault();
-    void openStatusPopoverAndFocus(selectedStatusIndex.value);
-  }
-}
-
-function moveStatusFocus(delta: number): void {
-  const count = statusOptions.value.length;
-  const nextIndex = (activeStatusIndex.value + delta + count) % count;
-  void focusStatusOption(nextIndex);
-}
-
-function matchStatusTypeahead(char: string): void {
-  if (statusTypeaheadTimer) clearTimeout(statusTypeaheadTimer);
-  statusTypeahead += char.toLocaleLowerCase();
-  statusTypeaheadTimer = setTimeout(() => {
-    statusTypeahead = '';
-    statusTypeaheadTimer = null;
-  }, 700);
-
-  const options = statusOptions.value;
-  const start = (activeStatusIndex.value + 1) % options.length;
-  const ordered = [...options.slice(start), ...options.slice(0, start)];
-  const matched = ordered.find((option) => option.label.toLocaleLowerCase().startsWith(statusTypeahead));
-  if (!matched) return;
-  void focusStatusOption(options.findIndex((option) => option.value === matched.value));
-}
-
-function handleStatusOptionKeydown(
-  event: KeyboardEvent,
-  status: PresenceStatus,
-  close: (restoreFocus?: boolean) => void
-): void {
-  if (event.key === 'ArrowDown') {
-    event.preventDefault();
-    moveStatusFocus(1);
-  } else if (event.key === 'ArrowUp') {
-    event.preventDefault();
-    moveStatusFocus(-1);
-  } else if (event.key === 'Home') {
-    event.preventDefault();
-    void focusStatusOption(0);
-  } else if (event.key === 'End') {
-    event.preventDefault();
-    void focusStatusOption(statusOptions.value.length - 1);
-  } else if (event.key === 'Enter' || event.key === ' ') {
-    event.preventDefault();
-    void selectStatus(status, close);
-  } else if (event.key === 'Tab') {
-    close(false);
-  } else if (event.key.length === 1 && !event.metaKey && !event.ctrlKey && !event.altKey) {
-    matchStatusTypeahead(event.key);
-  }
-}
-
-async function selectStatus(status: PresenceStatus, close: () => void): Promise<void> {
-  if (statusSaving.value) return;
+async function selectStatus(value: string | undefined, close: () => void): Promise<void> {
+  const status = statusOptions.value.find((option) => option.value === value)?.value;
+  if (!status || statusSaving.value) return;
   if (status === selfPresence.value && !notificationPreferences.presenceStatusAutomatic) {
     close();
     return;
@@ -331,25 +236,9 @@ async function selectStatus(status: PresenceStatus, close: () => void): Promise<
     <VoiceCallWidget v-if="activeVoice" :voice="activeVoice" />
 
     <div class="sidebar__profile">
-      <Popover
-        v-model:open="statusPopoverOpen"
-        placement="top-start"
-        flip
-        floating
-        role="listbox"
-        :aria-label="t('Статус пользователя')"
-        panel-class="sidebar__status-popover"
-      >
-        <template #trigger="{ open, panelId }">
-          <button
-            type="button"
-            class="sidebar__profile-user"
-            aria-haspopup="listbox"
-            :aria-expanded="open"
-            :aria-controls="panelId"
-            @click="handleStatusTriggerClick"
-            @keydown="handleStatusTriggerKeydown"
-          >
+      <DropdownMenu side="top" align="start" :aria-label="t('Статус пользователя')" focus-checked>
+        <template #trigger>
+          <button type="button" class="sidebar__profile-user">
             <Avatar
               :name="selfName"
               :src="user.avatarUrl"
@@ -369,37 +258,28 @@ async function selectStatus(status: PresenceStatus, close: () => void): Promise<
           </button>
         </template>
         <template #content="{ close }">
-          <PopoverMenuLabel :text="t('Статус')" />
-          <div class="sidebar__status-list">
-            <button
-              v-for="(option, index) in statusOptions"
+          <MenuLabel :text="t('Статус')" />
+          <MenuRadioGroup
+            :model-value="selfPresence"
+            :aria-label="t('Статус')"
+            @update:model-value="(value) => selectStatus(value, close)"
+          >
+            <MenuRadioItem
+              v-for="option in statusOptions"
               :key="option.value"
-              :ref="(node) => registerStatusOption(node, index)"
-              class="sidebar__status-option"
-              type="button"
-              role="option"
-              :aria-selected="selfPresence === option.value"
-              :tabindex="index === activeStatusIndex ? 0 : -1"
+              :value="option.value"
+              :label="option.label"
+              :description="option.note"
               :disabled="Boolean(statusSaving)"
-              @click="selectStatus(option.value, close)"
-              @keydown="handleStatusOptionKeydown($event, option.value, close)"
-              @focus="activeStatusIndex = index"
+              @select.prevent
             >
-              <span :class="['sidebar__status-dot', `sidebar__status-dot--${option.value}`]" aria-hidden="true"></span>
-              <span class="sidebar__status-copy">
-                <span class="sidebar__status-label">{{ option.label }}</span>
-                <span v-if="option.note" class="sidebar__status-note">{{ option.note }}</span>
-              </span>
-              <Check
-                v-if="selfPresence === option.value"
-                v-bind="iconSm"
-                class="sidebar__status-check"
-                aria-hidden="true"
-              />
-            </button>
-          </div>
+              <template #icon>
+                <span :class="['sidebar__status-dot', `sidebar__status-dot--${option.value}`]"></span>
+              </template>
+            </MenuRadioItem>
+          </MenuRadioGroup>
         </template>
-      </Popover>
+      </DropdownMenu>
       <div class="sidebar__profile-actions">
         <SidebarDownload />
         <button

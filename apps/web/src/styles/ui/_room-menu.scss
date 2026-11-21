@@ -5,7 +5,6 @@
 //   .room-menu-title                -> .room-menu__title (on Ellipsis)
 //   .room-menu-chevron              -> .room-menu__chevron
 //   .room-menu-notifications-muted  -> .room-menu__notifications-muted
-//   .room-menu-popover              -> .room-menu__popover (no rules)
 //   .room-menu-content              -> .room-menu-content (block)
 //   .room-menu-head                 -> .room-menu-content__head
 //   .room-menu-info                 -> .room-menu-content__info
@@ -13,9 +12,6 @@
 //   .room-menu-code                 -> .room-menu-content__code (on Ellipsis)
 //   .room-invite-list               -> .room-invite-list (block)
 //   .room-invite-empty              -> .room-invite-list__empty
-//   .room-invite-friend             -> .room-invite-list__friend
-//   .room-invite-friend-name        -> .room-invite-list__friend-name
-//   .room-invite-friend-note        -> .room-invite-list__friend-note
 //
 // [data-room-menu-content] stays on the content root as a hook; nothing styles it.
 // The trigger's open state is aria-expanded, as in Svelte.
@@ -52,14 +48,13 @@
   width: min(286px, calc(100vw - 28px));
   max-width: 100%;
   flex-direction: column;
-  gap: 2px;
 }
 
 .room-menu-content__head {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 10px 10px 12px;
+  gap: var(--space-12);
+  padding: var(--space-8) var(--space-8) var(--space-12);
 }
 
 .room-menu-content__info {
@@ -67,7 +62,7 @@
   flex: 1;
   min-width: 0;
   flex-direction: column;
-  gap: 3px;
+  gap: var(--space-2);
 }
 
 .room-menu-content__name {
@@ -86,10 +81,7 @@
 }
 
 .room-invite-list {
-  display: flex;
-  max-height: min(280px, 50vh);
-  flex-direction: column;
-  gap: 2px;
+  max-height: min(calc(var(--size-56) * 5), 50vh);
   overflow-y: auto;
 }
 
@@ -99,51 +91,4 @@
   color: var(--vr-text-muted);
   font-size: 0.8125rem;
   line-height: 1.45;
-}
-
-.room-invite-list__friend {
-  display: flex;
-  align-items: center;
-  gap: 11px;
-  width: 100%;
-  height: 40px;
-  padding: 0 12px;
-  border: none;
-  border-radius: 12px;
-  background: transparent;
-  color: var(--vr-text);
-  font-family: var(--font-ui);
-  font-size: 0.90625rem;
-  font-weight: 600;
-  text-align: left;
-  cursor: pointer;
-  transition:
-    background 0.14s ease,
-    color 0.14s ease;
-}
-
-.room-invite-list__friend:hover:not(:disabled),
-.room-invite-list__friend:focus-visible:not(:disabled) {
-  background: color-mix(in oklch, var(--vr-accent), transparent 88%);
-  color: var(--vr-text);
-}
-
-.room-invite-list__friend:disabled {
-  cursor: default;
-  opacity: 0.55;
-}
-
-.room-invite-list__friend-name {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.room-invite-list__friend-note {
-  flex: none;
-  color: var(--vr-text-muted);
-  font-family: var(--font-mono);
-  font-size: 0.6875rem;
 }

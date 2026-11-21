@@ -2,7 +2,7 @@
 // opened from anywhere an avatar or display name is clickable.
 
 import { defineStore } from 'pinia';
-import { markRaw, reactive } from 'vue';
+import { markRaw, onScopeDispose, reactive } from 'vue';
 import type { ProfileCardPerson } from '@/shared/components/profile-card/types';
 
 export type ProfileCardAnchor = {
@@ -22,21 +22,43 @@ export const useProfileCardUiStore = defineStore('profile-card-ui', () => {
     x: number;
     y: number;
     person: ProfileCardPerson | null;
+    preview: boolean;
     restoreFocus: HTMLElement | null;
   }>({
     open: false,
     x: 0,
     y: 0,
     person: null,
+    preview: false,
     restoreFocus: null
   });
 
+  let previewTimer: ReturnType<typeof setTimeout> | undefined;
+  let closeTimer: ReturnType<typeof setTimeout> | undefined;
+  let previewTarget: HTMLElement | null = null;
+  let pointerOverTrigger = false;
+  let triggerFocused = false;
+  let restoringFocus = false;
+  const clearPreviewTimers = (): void => {
+    clearTimeout(previewTimer);
+    clearTimeout(closeTimer);
+  };
+  onScopeDispose(clearPreviewTimers);
+
   function closeProfileCard(restoreFocus = true): void {
+    clearPreviewTimers();
+    previewTarget = null;
     const target = restoreFocus ? profileCardUi.restoreFocus : null;
     profileCardUi.open = false;
+    profileCardUi.preview = false;
     profileCardUi.person = null;
     profileCardUi.restoreFocus = null;
-    if (target) queueMicrotask(() => target.focus());
+    if (target)
+      queueMicrotask(() => {
+        restoringFocus = true;
+        target.focus();
+        restoringFocus = false;
+      });
   }
 
   /**
@@ -45,6 +67,9 @@ export const useProfileCardUiStore = defineStore('profile-card-ui', () => {
    * its left when there is no room.
    */
   function openProfileCardFor(person: ProfileCardPerson, anchor: EventTarget | ProfileCardAnchor | null): void {
+    clearPreviewTimers();
+    previewTarget = null;
+    profileCardUi.preview = false;
     const element = anchor instanceof HTMLElement ? anchor : null;
     const explicit = !element && anchor && 'rect' in anchor ? anchor : null;
     const rect = explicit?.rect ?? element?.getBoundingClientRect() ?? null;
@@ -62,5 +87,57 @@ export const useProfileCardUiStore = defineStore('profile-card-ui', () => {
     profileCardUi.open = true;
   }
 
-  return { profileCardUi, closeProfileCard, openProfileCardFor };
+  function previewProfileCardFor(person: ProfileCardPerson, event: PointerEvent | FocusEvent): void {
+    const target = event.currentTarget;
+    if (!(target instanceof HTMLElement) || restoringFocus || (profileCardUi.open && !profileCardUi.preview)) return;
+    if (window.matchMedia?.('(pointer: coarse)').matches || ('pointerType' in event && event.pointerType === 'touch'))
+      return;
+    clearPreviewTimers();
+    if (previewTarget !== target) {
+      previewTarget = target;
+      pointerOverTrigger = false;
+      triggerFocused = false;
+    }
+    if (event.type === 'focus') triggerFocused = true;
+    else pointerOverTrigger = true;
+
+    const show = (): void => {
+      if (!target.isConnected) return;
+      profileCardUi.person = person;
+      profileCardUi.restoreFocus = markRaw(target);
+      profileCardUi.preview = true;
+      profileCardUi.open = true;
+    };
+    if (triggerFocused) show();
+    else previewTimer = setTimeout(show, 400);
+  }
+
+  function keepProfilePreview(): void {
+    clearTimeout(closeTimer);
+  }
+
+  function schedulePreviewClose(): void {
+    if (!profileCardUi.preview || triggerFocused || pointerOverTrigger) return;
+    clearTimeout(closeTimer);
+    closeTimer = setTimeout(() => closeProfileCard(false), 250);
+  }
+
+  function leaveProfileCardPreview(event: PointerEvent | FocusEvent): void {
+    if (event.currentTarget !== previewTarget) return;
+    if (event.type === 'blur') triggerFocused = false;
+    else pointerOverTrigger = false;
+    if (triggerFocused || pointerOverTrigger) return;
+    clearTimeout(previewTimer);
+    schedulePreviewClose();
+  }
+
+  return {
+    profileCardUi,
+    closeProfileCard,
+    openProfileCardFor,
+    previewProfileCardFor,
+    leaveProfileCardPreview,
+    keepProfilePreview,
+    schedulePreviewClose
+  };
 });

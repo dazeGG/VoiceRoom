@@ -9,7 +9,6 @@
 //   .room-member-list__member > span          -> .room-member-list__text
 //   strong                                    -> .room-member-list__name
 //   small                                     -> .room-member-list__login
-//   .room-member-list__menu-root (global)     -> .room-member-list__menu-root (rootClass of the Popover)
 //   .sr-only                                  -> .room-member-list__sr-only
 //
 // [data-*] -> aria
@@ -123,10 +122,6 @@
   font-size: 0.71875rem;
 }
 
-.room-member-list__row .room-member-list__menu-root {
-  margin-right: 6px;
-}
-
 .room-member-list__menu-trigger {
   display: grid;
   width: 32px;
@@ -157,13 +152,6 @@
 .room-member-list__menu-trigger:disabled {
   cursor: default;
   opacity: 0.55;
-}
-
-.room-member-list__menu {
-  display: flex;
-  width: min(232px, calc(100vw - 28px));
-  flex-direction: column;
-  gap: 2px;
 }
 
 .room-member-list__notice,

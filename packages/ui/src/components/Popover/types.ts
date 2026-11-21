@@ -23,6 +23,7 @@ export type PopoverContentState = {
 /** The `open` flag is the component's `v-model:open`; the trigger and content are the `trigger` and `content` slots. */
 export type PopoverProps = {
   placement?: PopoverPlacement;
+  title?: string;
   role?: PopoverRole;
   ariaLabel?: string;
   rootClass?: string;
@@ -34,45 +35,6 @@ export type PopoverProps = {
   /** Kept for callers; the panel is always portaled to the body by Reka. */
   floating?: boolean;
   onBeforeClose?: (reason: PopoverCloseReason) => boolean | void;
-};
-
-/**
- * `danger` is destructive (coral), `friendly` is a relationship-building action
- * (green), `accent` marks the item the menu is primarily about.
- */
-export type PopoverMenuItemVariant = 'default' | 'accent' | 'friendly' | 'danger';
-
-/** The icon is the `icon` slot; `click`, `pointerenter` and `focus` are emitted. */
-export type PopoverMenuItemProps = {
-  label: string;
-  disabled?: boolean | undefined;
-  variant?: PopoverMenuItemVariant | undefined;
-  /** Renders as the current choice: tinted row plus a check mark. */
-  selected?: boolean | undefined;
-  showChevron?: boolean | undefined;
-  /** Chevron turns accent-coloured while the submenu it opens is showing. */
-  chevronActive?: boolean | undefined;
-  /** Keyboard shortcut shown right-aligned, e.g. "E" or "⌫". */
-  hint?: string | undefined;
-  role?: 'menuitem' | 'option' | 'button' | undefined;
-  ariaHaspopup?: 'menu' | undefined;
-  ariaExpanded?: boolean | undefined;
-  ariaControls?: string | undefined;
-};
-
-export type PopoverMenuLabelProps = {
-  text: string;
-};
-
-export type PopoverDividerProps = {
-  tight?: boolean;
-};
-
-/** The icon is the `icon` slot and the panel body is the default slot, scoped with `{ close }`. */
-export type PopoverSubmenuProps = {
-  label: string;
-  ariaLabel?: string;
-  disabled?: boolean;
 };
 
 // --- internal (not re-exported from index.ts) ---

@@ -1,5 +1,5 @@
 // Popover: floating panel chrome. Popover owns open/close + placement;
-// consumers fill the slots. Also holds the popover divider and menu label.
+// consumers fill the slots.
 //
 // Svelte class -> BEM class
 //   .popover-root                          -> .popover
@@ -18,17 +18,25 @@
   flex: none;
 }
 
-// Matches the context-menu panel so a popover menu and a right-click menu are
-// visually the same surface.
 .popover__panel {
   z-index: 50;
   --popover-available-height: var(--reka-popover-content-available-height);
-  min-width: 0;
-  padding: 8px;
-  border: 1px solid var(--vr-line-strong);
-  border-radius: 12px;
+  box-sizing: border-box;
+  display: grid;
+  gap: var(--space-16);
+  width: 300px;
+  max-width: calc(100vw - var(--space-16));
+  padding: var(--space-16);
+  border: calc(var(--space-2) / 2) solid var(--vr-line-strong);
+  border-radius: var(--radius-12);
   background: var(--vr-surface-2);
   box-shadow: var(--vr-shadow-popover);
+}
+
+.ui-popover__title {
+  margin: 0;
+  color: var(--vr-text);
+  font: 600 0.875rem/1.3 var(--font-ui);
 }
 
 @media (prefers-reduced-motion: no-preference) {
@@ -40,7 +48,7 @@
 @keyframes popover-panel-enter {
   from {
     opacity: 0;
-    transform: translateY(4px);
+    transform: translateY(var(--space-4));
   }
 
   to {
@@ -56,22 +64,4 @@
 .popover__panel--closed {
   display: none !important;
   pointer-events: none;
-}
-
-.popover-divider {
-  height: 1px;
-  margin: 6px 8px;
-  background: var(--vr-line);
-}
-
-.popover-divider--tight {
-  margin: 3px 8px;
-}
-
-.popover-menu-label {
-  display: block;
-  padding: 11px 12px 6px;
-  color: var(--vr-text-muted);
-  font-size: 0.75rem;
-  font-weight: 500;
 }

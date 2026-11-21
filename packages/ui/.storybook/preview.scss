@@ -16,11 +16,10 @@
 @use 'pkg:@voice-room/ui/styles/components/kbd';
 @use 'pkg:@voice-room/ui/styles/components/spinner';
 @use 'pkg:@voice-room/ui/styles/components/skeleton';
-@use 'pkg:@voice-room/ui/styles/components/context-menu';
+@use 'pkg:@voice-room/ui/styles/components/menu';
+@use 'pkg:@voice-room/ui/styles/components/hovercard';
 @use 'pkg:@voice-room/ui/styles/components/ellipsis';
 @use 'pkg:@voice-room/ui/styles/components/popover';
-@use 'pkg:@voice-room/ui/styles/components/popover-menu-item';
-@use 'pkg:@voice-room/ui/styles/components/popover-submenu';
 @use 'pkg:@voice-room/ui/styles/components/switch';
 @use 'pkg:@voice-room/ui/styles/components/segment';
 @use 'pkg:@voice-room/ui/styles/components/hotkey';
@@ -65,4 +64,24 @@ select {
     transition-duration: 0.001ms !important;
     scroll-behavior: auto !important;
   }
+}
+
+.story-popover-setting {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-12);
+}
+
+.story-hovercard__banner {
+  height: var(--space-64);
+  background: color-mix(in oklch, var(--avatar-blurple-bg) 70%, var(--vr-bg));
+}
+
+.story-hovercard__body {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-12);
+  padding: 0 var(--space-16) var(--space-16);
+  margin-top: calc(-1 * var(--size-28));
 }

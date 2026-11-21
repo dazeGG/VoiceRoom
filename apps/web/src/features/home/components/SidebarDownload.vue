@@ -7,10 +7,9 @@ import { ref } from 'vue';
 import { fetchDesktopRelease, type DesktopRelease } from '@/api/desktop';
 import { DESKTOP_BUILDS, type DesktopBuildId } from '@/platform/desktop-builds';
 import { startDesktopBuildDownload } from '@/platform/desktop-download';
-import { Popover, PopoverMenuItem } from '@/shared/ui';
+import { DropdownMenu, MenuItem, MenuLabel } from '@/shared/ui';
 import { Icon, iconSm } from '@/shared/ui/icons';
 
-const open = ref(false);
 const release = ref<DesktopRelease | null>(null);
 const releaseLoading = ref(false);
 const releaseError = ref(false);
@@ -45,48 +44,35 @@ async function download(buildId: DesktopBuildId, close: () => void): Promise<voi
 </script>
 
 <template>
-  <Popover
-    v-model:open="open"
-    placement="top-end"
-    flip
-    floating
-    role="menu"
-    :aria-label="t('Скачать приложение')"
-    root-class="sidebar-download"
-    panel-class="sidebar-download__popover"
-  >
-    <template #trigger="{ open: isOpen, toggle, panelId }">
+  <DropdownMenu side="top" :aria-label="t('Скачать приложение')">
+    <template #trigger>
       <button
-        class="sidebar-download__trigger"
+        class="sidebar-download sidebar-download__trigger"
         type="button"
         :title="t('Скачать приложение')"
         :aria-label="t('Скачать приложение')"
-        aria-haspopup="menu"
-        :aria-expanded="isOpen"
-        :aria-controls="panelId"
-        @click="toggle"
       >
         <Download v-bind="iconSm" />
       </button>
     </template>
 
     <template #content="{ close }">
-      <div class="sidebar-download__head">{{ t('Скачать приложение') }}</div>
-      <PopoverMenuItem
+      <MenuLabel :text="t('Скачать приложение')" />
+      <MenuItem
         v-for="build in DESKTOP_BUILDS"
         :key="build.id"
         :label="build.label"
         :disabled="Boolean(downloadingId) && downloadingId !== build.id"
-        @click="download(build.id, close)"
+        @select.prevent="download(build.id, close)"
       >
         <template #icon>
           <Spinner v-if="downloadingId === build.id" aria-hidden="true" />
           <Icon v-else :icon="build.mac ? faApple : faWindows" size="lg" />
         </template>
-      </PopoverMenuItem>
+      </MenuItem>
       <div v-if="releaseError" class="sidebar-download__note">
         {{ t('Не удалось получить релиз — откроем страницу загрузок.') }}
       </div>
     </template>
-  </Popover>
+  </DropdownMenu>
 </template>

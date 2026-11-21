@@ -7,7 +7,7 @@ import type { ModerationDuration } from '@/api/moderation';
 import { useProfileCardUiStore } from '@/entities/profile-card/profile-card-ui.store';
 import { useSessionStore } from '@/features/auth/session.store';
 import type { ProfileCardPerson } from '@/shared/components/profile-card';
-import { AccountBadge, Popover, PopoverDivider, PopoverMenuItem, PopoverSubmenu } from '@/shared/ui';
+import { AccountBadge, DropdownMenu, MenuSeparator, MenuItem, MenuSub } from '@/shared/ui';
 import { Avatar } from '@voice-room/ui/components';
 import { iconMd } from '@/shared/ui/icons';
 import { displayNameOf } from '@/shared/utils/display-name';
@@ -28,7 +28,7 @@ const props = withDefaults(
 const membership = useRoomMembershipStore();
 const presence = useRoomPresenceStore();
 const session = useSessionStore();
-const { openProfileCardFor } = useProfileCardUiStore();
+const { openProfileCardFor, previewProfileCardFor, leaveProfileCardPreview } = useProfileCardUiStore();
 
 const roster = computed(() => membership.byRoomId[props.roomId] ?? null);
 const onlineMembers = computed(() =>
@@ -80,9 +80,8 @@ function profilePerson(member: MembershipMember): ProfileCardPerson {
   };
 }
 
-function toggleMenu(event: MouseEvent, toggle: () => void): void {
+function rememberMenuAnchor(event: MouseEvent | KeyboardEvent): void {
   menuAnchor = event.currentTarget instanceof HTMLElement ? event.currentTarget : null;
-  toggle();
 }
 
 function openMemberProfile(member: MembershipMember, event: MouseEvent): void {
@@ -152,6 +151,10 @@ async function ban(member: MembershipMember, duration: ModerationDuration): Prom
                 type="button"
                 aria-haspopup="dialog"
                 :aria-label="t('Профиль {p0}', { p0: nameFor(member) })"
+                @pointerenter="previewProfileCardFor(profilePerson(member), $event)"
+                @pointerleave="leaveProfileCardPreview"
+                @focus="previewProfileCardFor(profilePerson(member), $event)"
+                @blur="leaveProfileCardPreview"
                 @click="openMemberProfile(member, $event)"
               >
                 <Avatar
@@ -175,70 +178,62 @@ async function ban(member: MembershipMember, duration: ModerationDuration): Prom
                 >
               </button>
 
-              <Popover
+              <DropdownMenu
                 v-if="canModerateMember(member)"
-                placement="bottom-end"
-                flip
-                floating
-                role="menu"
                 :aria-label="t('Действия с {p0}', { p0: nameFor(member) })"
-                root-class="room-member-list__menu-root"
+                :disabled="banningUserId === member.userId"
               >
-                <template #trigger="{ open, toggle, panelId }">
+                <template #trigger>
                   <button
                     class="room-member-list__menu-trigger"
                     type="button"
                     :aria-label="t('Действия с {p0}', { p0: nameFor(member) })"
                     :title="t('Действия')"
-                    aria-haspopup="menu"
-                    :aria-expanded="open"
-                    :aria-controls="panelId"
-                    :disabled="banningUserId === member.userId"
-                    @click="toggleMenu($event, toggle)"
+                    @click="rememberMenuAnchor"
+                    @keydown="rememberMenuAnchor"
                   >
                     <Ellipsis v-bind="iconMd" aria-hidden="true" />
                   </button>
                 </template>
 
                 <template #content="{ close }">
-                  <div class="room-member-list__menu">
-                    <PopoverMenuItem :label="t('Профиль')" @click="showProfileFromMenu(member, close)">
-                      <template #icon><User v-bind="iconMd" aria-hidden="true" /></template>
-                    </PopoverMenuItem>
-                    <PopoverDivider />
-                    <PopoverMenuItem
-                      :label="t('Выгнать')"
-                      variant="danger"
-                      :disabled="!livePeerId(member)"
-                      @click="
-                        close();
-                        void kick(member);
-                      "
-                    >
-                      <template #icon><UserX v-bind="iconMd" aria-hidden="true" /></template>
-                    </PopoverMenuItem>
-                    <PopoverSubmenu
-                      :label="t('Заблокировать')"
-                      :aria-label="t('Срок блокировки {p0}', { p0: nameFor(member) })"
-                    >
-                      <template #icon><Ban v-bind="iconMd" aria-hidden="true" /></template>
-                      <template #default="{ close: closeSubmenu }">
-                        <PopoverMenuItem
-                          v-for="option in BAN_DURATIONS"
-                          :key="option.value"
-                          :label="option.label"
-                          variant="danger"
-                          @click="
-                            closeSubmenu();
-                            close();
-                            void ban(member, option.value);
-                          "
-                        />
-                      </template>
-                    </PopoverSubmenu>
-                  </div>
+                  <MenuItem :label="t('Профиль')" @select.prevent="showProfileFromMenu(member, close)">
+                    <template #icon><User v-bind="iconMd" aria-hidden="true" /></template>
+                  </MenuItem>
+                  <MenuSeparator />
+                  <MenuItem
+                    :label="t('Выгнать')"
+                    tone="danger"
+                    :disabled="!livePeerId(member)"
+                    @select.prevent="
+                      close();
+                      void kick(member);
+                    "
+                  >
+                    <template #icon><UserX v-bind="iconMd" aria-hidden="true" /></template>
+                  </MenuItem>
+                  <MenuSub
+                    :label="t('Заблокировать')"
+                    tone="danger"
+                    :aria-label="t('Срок блокировки {p0}', { p0: nameFor(member) })"
+                  >
+                    <template #icon><Ban v-bind="iconMd" aria-hidden="true" /></template>
+                    <template #default="{ close: closeSubmenu }">
+                      <MenuItem
+                        v-for="option in BAN_DURATIONS"
+                        :key="option.value"
+                        :label="option.label"
+                        tone="danger"
+                        @select.prevent="
+                          closeSubmenu();
+                          close();
+                          void ban(member, option.value);
+                        "
+                      />
+                    </template>
+                  </MenuSub>
                 </template>
-              </Popover>
+              </DropdownMenu>
             </div>
           </li>
         </ul>

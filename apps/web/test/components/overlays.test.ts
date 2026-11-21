@@ -2,8 +2,7 @@ import { render, screen, waitFor } from '@testing-library/vue';
 import userEvent from '@testing-library/user-event';
 import { afterEach, expect, test, vi } from 'vitest';
 import { defineComponent, h, ref } from 'vue';
-import { ContextMenu } from '@voice-room/ui/components';
-import { Popover, PopoverMenuItem, type PopoverCloseReason } from '@voice-room/ui/components';
+import { ContextMenu, MenuItem, Popover, type PopoverCloseReason } from '@voice-room/ui/components';
 import { settle, stubOverlayDom } from '../helpers/overlay-dom';
 
 stubOverlayDom();
@@ -31,9 +30,9 @@ function contextMenuHarness(props: { onClose: () => void; restoreFocus?: HTMLEle
         },
         {
           default: () => [
-            h(PopoverMenuItem, { label: 'Открыть' }),
-            h(PopoverMenuItem, { label: 'Недоступно', disabled: true }),
-            h(PopoverMenuItem, { label: 'Удалить из списка' })
+            h(MenuItem, { label: 'Открыть' }),
+            h(MenuItem, { label: 'Недоступно', disabled: true }),
+            h(MenuItem, { label: 'Удалить из списка' })
           ]
         }
       )
@@ -51,8 +50,8 @@ function popoverWithOutside(onBeforeClose?: (reason: PopoverCloseReason) => bool
         {
           open: open.value,
           'onUpdate:open': (value: boolean) => (open.value = value),
-          ariaLabel: 'Меню',
-          role: 'menu',
+          title: 'Настройки',
+          role: 'dialog',
           ...(onBeforeClose ? { onBeforeClose } : {})
         },
         {
@@ -62,7 +61,7 @@ function popoverWithOutside(onBeforeClose?: (reason: PopoverCloseReason) => bool
               { type: 'button', 'aria-expanded': open.value, 'aria-controls': panelId, onClick: toggle },
               'Открыть'
             ),
-          content: () => [h(PopoverMenuItem, { label: 'Пункт' })]
+          content: () => h('label', ['Звук', h('input', { type: 'checkbox' })])
         }
       ),
       h('button', { type: 'button' }, 'Снаружи')
@@ -74,13 +73,14 @@ test('a popover opens from its trigger and Escape closes it and returns focus to
   render(popoverWithOutside());
   const trigger = screen.getByRole('button', { name: 'Открыть' });
   await userEvent.click(trigger);
-  expect(await screen.findByRole('menu', { name: 'Меню' })).toBeTruthy();
+  expect(await screen.findByRole('dialog', { name: 'Настройки' })).toBeTruthy();
   expect(trigger.getAttribute('aria-expanded')).toBe('true');
+  expect(screen.getByRole('heading', { name: 'Настройки' })).toBeTruthy();
 
   await settle();
   await userEvent.keyboard('{Escape}');
   await settle();
-  expect(screen.queryByRole('menu')).toBeNull();
+  expect(screen.queryByRole('dialog')).toBeNull();
   expect(trigger.getAttribute('aria-expanded')).toBe('false');
   await waitFor(() => expect(document.activeElement).toBe(trigger));
 });
@@ -88,11 +88,11 @@ test('a popover opens from its trigger and Escape closes it and returns focus to
 test('a click outside closes a popover without stealing focus back', async () => {
   render(popoverWithOutside());
   await userEvent.click(screen.getByRole('button', { name: 'Открыть' }));
-  await screen.findByRole('menu');
+  await screen.findByRole('dialog');
   const outside = screen.getByRole('button', { name: 'Снаружи' });
   await userEvent.click(outside);
   await settle();
-  expect(screen.queryByRole('menu')).toBeNull();
+  expect(screen.queryByRole('dialog')).toBeNull();
   expect(document.activeElement).toBe(outside);
 });
 
@@ -100,11 +100,11 @@ test('a popover can veto closing', async () => {
   const onBeforeClose = vi.fn(() => false);
   render(popoverWithOutside(onBeforeClose));
   await userEvent.click(screen.getByRole('button', { name: 'Открыть' }));
-  await screen.findByRole('menu');
+  await screen.findByRole('dialog');
   await settle();
   await userEvent.keyboard('{Escape}');
   expect(onBeforeClose).toHaveBeenCalledWith('escape');
-  expect(screen.getByRole('menu')).toBeTruthy();
+  expect(screen.getByRole('dialog')).toBeTruthy();
 });
 
 test('a context menu focuses its first item, skips disabled ones and wraps with the arrow keys', async () => {

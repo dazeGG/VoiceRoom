@@ -2,11 +2,30 @@ import { screen } from '@testing-library/vue';
 import userEvent from '@testing-library/user-event';
 import { cleanup } from '@testing-library/vue';
 import { expect, test, vi } from 'vitest';
+import { defineComponent, h } from 'vue';
+import { ContextMenu } from '@voice-room/ui/components';
 import LinkPreviewCard from '@/shared/chat/LinkPreviewCard.vue';
 import RoomInviteFriendList from '@/shared/components/room-menu/RoomInviteFriendList.vue';
 import { friend as friendAnswer, publicUser } from '../fixtures/answers.ts';
 import { stubFetch } from '../fixtures/fetch.ts';
+import { stubOverlayDom } from '../helpers/overlay-dom';
 import { renderWithApp } from '../helpers/render.ts';
+
+stubOverlayDom();
+
+async function renderInviteList(props: InstanceType<typeof RoomInviteFriendList>['$props']) {
+  await renderWithApp(
+    defineComponent(
+      () => () =>
+        h(
+          ContextMenu,
+          { open: true, x: 20, y: 20, ariaLabel: 'Позвать друга' },
+          { default: () => h(RoomInviteFriendList, props) }
+        )
+    )
+  );
+  await screen.findByRole('menu', { name: 'Позвать друга' });
+}
 
 const KEY = `lp_${'a'.repeat(32)}.webp`;
 
@@ -53,13 +72,11 @@ function friend(id: string, name: string, online: boolean) {
 }
 
 test('the invite list puts online friends first, alphabetically, and disables those already in the room', async () => {
-  await renderWithApp(RoomInviteFriendList, {
-    props: {
-      friends: [friend('u-b', 'Борис', false), friend('u-v', 'Вера', true), friend('u-a', 'Анна', true)],
-      roomId: 'room-a',
-      presentUserIds: new Set(['u-a']),
-      onClose: vi.fn()
-    }
+  await renderInviteList({
+    friends: [friend('u-b', 'Борис', false), friend('u-v', 'Вера', true), friend('u-a', 'Анна', true)],
+    roomId: 'room-a',
+    presentUserIds: new Set(['u-a']),
+    onClose: vi.fn()
   });
   const items = screen.getAllByRole('menuitem');
   expect(items.map((item) => item.textContent?.trim().replace(/\s+/g, ' '))).toEqual([
@@ -67,17 +84,15 @@ test('the invite list puts online friends first, alphabetically, and disables th
     expect.stringContaining('Вера'),
     expect.stringContaining('Борис')
   ]);
-  expect(items[0]).toHaveProperty('disabled', true);
-  expect(items[1]).toHaveProperty('disabled', false);
+  expect(items[0]?.getAttribute('aria-disabled')).toBe('true');
+  expect(items[1]?.getAttribute('aria-disabled')).not.toBe('true');
 });
 
 test('inviting rings the friend into the room and closes the menu; a failure is reported', async () => {
   const { calls } = stubFetch({ 'POST /api/rooms/room-a/ring': { body: { ok: true } } });
   const close = vi.fn();
   const onToast = vi.fn();
-  await renderWithApp(RoomInviteFriendList, {
-    props: { friends: [friend('u-v', 'Вера', true)], roomId: 'room-a', onClose: close, onToast }
-  });
+  await renderInviteList({ friends: [friend('u-v', 'Вера', true)], roomId: 'room-a', onClose: close, onToast });
   await userEvent.click(screen.getByRole('menuitem'));
   expect(calls[0]).toMatchObject({ method: 'POST', url: '/api/rooms/room-a/ring', body: { userId: 'u-v' } });
   expect(onToast).toHaveBeenCalledWith('Вера приглашён в комнату');
@@ -85,14 +100,12 @@ test('inviting rings the friend into the room and closes the menu; a failure is 
 
   cleanup();
   stubFetch({ 'POST /api/rooms/room-a/ring': { status: 429, body: { ok: false, error: 'Слишком часто' } } });
-  await renderWithApp(RoomInviteFriendList, {
-    props: { friends: [friend('u-v', 'Вера', true)], roomId: 'room-a', onClose: vi.fn(), onToast }
-  });
+  await renderInviteList({ friends: [friend('u-v', 'Вера', true)], roomId: 'room-a', onClose: vi.fn(), onToast });
   await userEvent.click(screen.getByRole('menuitem'));
   expect(onToast).toHaveBeenLastCalledWith('Слишком часто');
 });
 
 test('with no friends the list says how to get some', async () => {
-  await renderWithApp(RoomInviteFriendList, { props: { friends: [], roomId: 'room-a', onClose: vi.fn() } });
+  await renderInviteList({ friends: [], roomId: 'room-a', onClose: vi.fn() });
   expect(screen.getByText('Добавьте друзей, чтобы позвать их')).toBeTruthy();
 });

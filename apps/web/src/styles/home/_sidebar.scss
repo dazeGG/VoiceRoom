@@ -30,19 +30,11 @@
 //   .lv-profile-name            -> .sidebar__profile-name
 //   .lv-profile-handle          -> .sidebar__profile-handle
 //   .lv-profile-actions         -> .sidebar__profile-actions
-//   .lv-status-popover          -> .sidebar__status-popover (the Popover's panelClass)
-//   .lv-status-list             -> .sidebar__status-list
-//   .lv-status-option           -> .sidebar__status-option
 //   .lv-status-dot              -> .sidebar__status-dot
-//   .lv-status-copy             -> .sidebar__status-copy
-//   .lv-status-label            -> .sidebar__status-label
-//   .lv-status-note             -> .sidebar__status-note
-//   .lv-status-check            -> .sidebar__status-check
 //
 // [data-*] and state classes -> aria or modifier
 //   .lv-row.is-active                    -> .sidebar__row[aria-current='true']
 //   .lv-notification-button.is-open      -> .sidebar__icon-button[aria-expanded='true']
-//   .lv-status-option.is-selected        -> .sidebar__status-option[aria-selected='true']
 //   .lv-status-dot[data-status='online'] -> .sidebar__status-dot--online (--away, --dnd)
 // Not here: .lobby-gear on the download trigger (SidebarDownload) is that component's.
 
@@ -344,50 +336,10 @@
   margin-left: auto;
 }
 
-.sidebar__status-popover {
-  width: min(286px, calc(100vw - 28px));
-}
-
-.sidebar__status-list {
-  display: grid;
-  gap: 2px;
-}
-
-.sidebar__status-option {
-  display: grid;
-  grid-template-columns: 11px minmax(0, 1fr) 18px;
-  align-items: center;
-  gap: 11px;
-  width: 100%;
-  min-height: 40px;
-  padding: 8px 10px;
-  border: 0;
-  border-radius: 8px;
-  background: transparent;
-  color: var(--vr-text);
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-  transition:
-    background 140ms ease,
-    color 140ms ease;
-
-  &:hover,
-  &:focus-visible,
-  &[aria-selected='true'] {
-    background: var(--vr-hover);
-  }
-
-  &:disabled {
-    cursor: wait;
-    opacity: 0.64;
-  }
-}
-
 .sidebar__status-dot {
-  width: 11px;
-  height: 11px;
-  border-radius: 50%;
+  width: var(--icon-12);
+  height: var(--icon-12);
+  border-radius: var(--radius-pill);
   background: var(--vr-offline);
 }
 
@@ -401,27 +353,4 @@
 
 .sidebar__status-dot--dnd {
   background: var(--vr-dnd);
-}
-
-.sidebar__status-copy {
-  display: grid;
-  gap: 3px;
-  min-width: 0;
-}
-
-.sidebar__status-label {
-  color: currentColor;
-  font-size: 0.875rem;
-  line-height: 1.25;
-}
-
-.sidebar__status-note {
-  max-width: 29ch;
-  color: var(--vr-text-muted);
-  font-size: 0.71875rem;
-  line-height: 1.4;
-}
-
-.sidebar__status-check {
-  color: var(--vr-accent);
 }

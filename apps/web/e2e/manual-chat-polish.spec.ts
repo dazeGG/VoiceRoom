@@ -171,12 +171,16 @@ test('the lobby preview runs the same room chat as the rail, with jumpable quote
   await expect(row.getByRole('toolbar')).toHaveCSS('opacity', '1');
   await row.getByRole('button', { name: 'Больше действий' }).click();
   const menu = page.getByRole('menu', { name: 'Действия с сообщением' });
-  await expect(menu.getByRole('menuitem', { name: /Реакция/ })).toHaveCount(3);
-  await expect(menu.getByRole('menuitem', { name: 'Поставить реакцию' })).toBeVisible();
+  // Quick reactions are a toolbar row at the top of the menu, above the menu items.
+  const quickReactions = menu.getByRole('toolbar', { name: 'Быстрые реакции' });
+  await expect(quickReactions.getByRole('button', { name: /Реакция/ })).toHaveCount(3);
+  await expect(quickReactions.getByRole('button', { name: 'Поставить реакцию' })).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(menu).toHaveCount(0);
   await row.click({ button: 'right' });
-  await expect(menu.getByRole('menuitem', { name: 'Поставить реакцию' })).toBeVisible();
+  await expect(
+    menu.getByRole('toolbar', { name: 'Быстрые реакции' }).getByRole('button', { name: 'Поставить реакцию' })
+  ).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(menu).toHaveCount(0);
 

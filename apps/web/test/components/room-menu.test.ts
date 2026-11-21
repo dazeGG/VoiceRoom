@@ -1,15 +1,37 @@
 import { screen, waitFor } from '@testing-library/vue';
 import userEvent from '@testing-library/user-event';
 import { expect, test, vi } from 'vitest';
+import { defineComponent, h } from 'vue';
+import { ContextMenu } from '@voice-room/ui/components';
 import RoomMenuContent from '@/shared/components/room-menu/RoomMenuContent.vue';
 import { stubFetch } from '../fixtures/fetch.ts';
+import { stubOverlayDom } from '../helpers/overlay-dom';
 import { renderWithApp } from '../helpers/render.ts';
+
+stubOverlayDom();
 
 async function renderMenu(props: Record<string, unknown> = {}) {
   const handlers = { onClose: vi.fn(), onToast: vi.fn(), onOpenSettings: vi.fn(), onRoomsChanged: vi.fn() };
-  await renderWithApp(RoomMenuContent, {
-    props: { roomId: 'abc123', name: 'Планёрка', showNotificationControls: false, ...handlers, ...props }
-  });
+  await renderWithApp(
+    defineComponent(
+      () => () =>
+        h(
+          ContextMenu,
+          { open: true, x: 20, y: 20, ariaLabel: 'Меню комнаты' },
+          {
+            default: () =>
+              h(RoomMenuContent, {
+                roomId: 'abc123',
+                name: 'Планёрка',
+                showNotificationControls: false,
+                ...handlers,
+                ...props
+              })
+          }
+        )
+    )
+  );
+  await screen.findByRole('menu', { name: 'Меню комнаты' });
   return handlers;
 }
 
