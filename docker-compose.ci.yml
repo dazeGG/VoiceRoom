@@ -80,7 +80,7 @@ services:
       - web_node_modules:/app/apps/web/node_modules
       - shared_node_modules:/app/packages/shared/node_modules
     healthcheck:
-      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3080/readyz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3080/readyz || exit 1"]
       interval: 2s
       timeout: 3s
       retries: 45
@@ -195,7 +195,7 @@ services:
       - uploads:/data/uploads
       - media:/data/media
     healthcheck:
-      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3000/api/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3000/api/healthz || exit 1"]
       interval: 2s
       timeout: 3s
       retries: 45
@@ -223,7 +223,7 @@ services:
       - web_node_modules:/app/apps/web/node_modules
       - shared_node_modules:/app/packages/shared/node_modules
     healthcheck:
-      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:5180').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:5180 || exit 1"]
       interval: 2s
       timeout: 3s
       retries: 45

@@ -503,7 +503,9 @@ MAX_VOICE_PEERS=12
 
 Set the API and Web image references to compatible builds. Dev CI builds both
 from the tested commit.
-The overlay caps each service's memory and CPU and raises its OOM score. It
+The overlay caps each service's memory and CPU, gives it a lower CPU
+weight than production (`cpu_shares: 256`, about a third of the default under
+cgroup v2) and raises its OOM score. It
 uses the Caddyfile from the Web image and mounts `behind-edge.headers` for the
 outer proxy's forwarded address contract.
 The dev media ports must be allowed by the host/provider firewall. TURN/TLS on
