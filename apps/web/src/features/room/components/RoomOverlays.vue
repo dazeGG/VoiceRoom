@@ -4,7 +4,6 @@ import { t } from '@/shared/i18n';
 import { AppWindow, Check, Monitor, Play, Settings, Type } from '@lucide/vue';
 import { computed } from 'vue';
 import { createLogger, errorContext } from '@/shared/log';
-import { ToastStack } from '@/shared/ui';
 import { iconMd, iconSm, iconXs } from '@/shared/ui/icons';
 import {
   cancelScreenSourcePicker,
@@ -16,14 +15,12 @@ import { clearGuestNameError, handleGuestNameSubmit } from '@voice-room/call/eng
 import { useGuestNameUiStore } from '@voice-room/call/engine/core/guest-name-ui.store';
 import { useScreenSourceUiStore } from '@voice-room/call/engine/core/screen-source-ui.store';
 import { useStartUiStore } from '@voice-room/call/engine/core/start-ui.store';
-import { useToastUiStore } from '@voice-room/call/engine/core/toast-ui.store';
 
 const log = createLogger('room:overlays');
 
 const guestNameUi = useGuestNameUiStore();
 const screenSourceUi = useScreenSourceUiStore();
 const startUi = useStartUiStore();
-const toastUi = useToastUiStore();
 
 const hasScreenSources = computed(() => screenSourceUi.sources.some((s) => s.type === 'screen'));
 const hasWindowSources = computed(() => screenSourceUi.sources.some((s) => s.type !== 'screen'));
@@ -50,8 +47,6 @@ function keepGuestNameOpen(): void {
 </script>
 
 <template>
-  <ToastStack id="toast" :toasts="toastUi.items" :on-dismiss="toastUi.dismissToastUi" />
-
   <Dialog
     :open="guestNameUi.open"
     size="sm"

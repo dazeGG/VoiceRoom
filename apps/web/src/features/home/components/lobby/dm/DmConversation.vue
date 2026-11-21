@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { EmptyState } from '@voice-room/ui/components';
 // One open thread: its messages and its compose field. The DM view mounts it
 // per peer, so opening another thread starts from a clean slate — no editing,
 // reply or menu carried over, the thread's own draft and reactions loaded.
@@ -284,12 +285,11 @@ function onMenuImage(action: (image: NonNullable<typeof menuImage.value>) => voi
     <div v-if="lobby.thread.historyError && groups.length === 0" class="dm-conversation__empty">
       {{ lobby.thread.historyError }}
     </div>
-    <div
+    <EmptyState
       v-else-if="groups.length === 0 && !lobby.thread.loading && !outbox.items.length"
-      class="dm-conversation__empty"
-    >
-      {{ t('Здесь пока пусто. Напишите первым!') }}
-    </div>
+      :title="t('Здесь пока пусто. Напишите первым!')"
+      compact
+    />
     <div v-else ref="threadElement" class="dm-conversation__thread">
       <div v-if="lobby.thread.historyError" class="dm-conversation__empty">{{ lobby.thread.historyError }}</div>
       <button

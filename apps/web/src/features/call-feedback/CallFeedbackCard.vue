@@ -11,7 +11,7 @@ import { computed, ref, watchEffect } from 'vue';
 import { CALL_FEEDBACK_COMMENT_MAX_LENGTH, CALL_FEEDBACK_TAGS_BY_RATING } from '@voice-room/shared/contracts/feedback';
 import { CALL_FEEDBACK_TAG_LABELS } from '@/shared/i18n/feedback-labels';
 import type { CallFeedbackCall, CallFeedbackRating, CallFeedbackTag } from '@/api/feedback';
-import { Button } from '@voice-room/ui/components';
+import { Button, Tag } from '@voice-room/ui/components';
 import { iconMd } from '@/shared/ui/icons';
 import { useCallFeedbackStore } from './call-feedback.store';
 
@@ -104,16 +104,15 @@ defineExpose({ close });
     <form v-if="rating" class="call-feedback__details" @submit.prevent="send">
       <fieldset class="call-feedback__tags">
         <legend>{{ rating === 'good' ? t('Что понравилось?') : t('Что пошло не так?') }}</legend>
-        <button
+        <Tag
           v-for="tag in CALL_FEEDBACK_TAGS_BY_RATING[rating]"
           :key="tag"
-          class="call-feedback__tag"
-          type="button"
-          :aria-pressed="tags.includes(tag)"
-          @click="toggle(tag)"
+          selectable
+          :pressed="tags.includes(tag)"
+          @update:pressed="toggle(tag)"
         >
           {{ CALL_FEEDBACK_TAG_LABELS[tag] }}
-        </button>
+        </Tag>
       </fieldset>
       <textarea
         v-model="comment"

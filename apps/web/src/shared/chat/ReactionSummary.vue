@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Tag } from '@voice-room/ui/components';
 import { t } from '@/shared/i18n';
 import { computed } from 'vue';
 import { Popover } from '@/shared/ui';
@@ -24,58 +25,44 @@ const summaries = computed(() => props.store.forMessage(props.messageId));
     class="reaction-summary"
     :aria-label="t('Реакции на сообщение')"
   >
-    <div
+    <Tag
       v-for="summary in summaries"
       :key="summary.emoji"
-      class="reaction-summary__chip"
-      :class="{
-        'reaction-summary__chip--reacted': summary.reactedByMe,
-        'reaction-summary__chip--pending': summary.pending
-      }"
+      variant="reaction"
+      size="sm"
+      :selectable="canMutate"
+      :disabled="summary.pending"
+      :pressed="summary.reactedByMe"
+      :label="t('{p0} реакцию {p1}', { p0: summary.reactedByMe ? t('Убрать') : t('Добавить'), p1: summary.emoji })"
+      @update:pressed="void store.toggle(messageId, summary.emoji)"
     >
-      <button
-        v-if="canMutate"
-        class="reaction-summary__toggle"
-        type="button"
-        :disabled="summary.pending"
-        :aria-pressed="summary.reactedByMe"
-        :aria-label="
-          t('{p0} реакцию {p1}', {
-            p0: summary.reactedByMe ? t('Убрать') : t('Добавить'),
-            p1: summary.emoji
-          })
-        "
-        @click="void store.toggle(messageId, summary.emoji)"
-      >
-        <Emoji :emoji="summary.emoji" :size="18" decorative />
-      </button>
-      <span v-else class="reaction-summary__toggle" aria-hidden="true">
-        <Emoji :emoji="summary.emoji" :size="18" decorative />
-      </span>
-      <Popover
-        placement="top-start"
-        flip
-        role="dialog"
-        :aria-label="t('Пользователи с реакцией {p0}', { p0: summary.emoji })"
-      >
-        <template #trigger="{ open, toggle, panelId }">
-          <button
-            class="reaction-summary__count"
-            type="button"
-            :aria-label="t('Показать пользователей: {p0}', { p0: summary.count })"
-            aria-haspopup="dialog"
-            :aria-expanded="open"
-            :aria-controls="panelId"
-            @click="toggle"
-          >
-            {{ summary.count }}
-          </button>
-        </template>
-        <template #content="{ close }">
-          <ReactorList :store="store" :message-id="messageId" :emoji="summary.emoji" @close="close()" />
-        </template>
-      </Popover>
-      <span v-if="summary.error" class="reaction-summary__error" role="alert">{{ summary.error }}</span>
-    </div>
+      <template #emoji><Emoji :emoji="summary.emoji" :size="18" decorative /></template>
+      <template #count>
+        <Popover
+          placement="top-start"
+          flip
+          role="dialog"
+          :aria-label="t('Пользователи с реакцией {p0}', { p0: summary.emoji })"
+        >
+          <template #trigger="{ open, toggle, panelId }">
+            <button
+              class="reaction-summary__count"
+              type="button"
+              :aria-label="t('Показать пользователей: {p0}', { p0: summary.count })"
+              aria-haspopup="dialog"
+              :aria-expanded="open"
+              :aria-controls="panelId"
+              @click="toggle"
+            >
+              {{ summary.count }}
+            </button>
+          </template>
+          <template #content="{ close }">
+            <ReactorList :store="store" :message-id="messageId" :emoji="summary.emoji" @close="close()" />
+          </template>
+        </Popover>
+        <span v-if="summary.error" class="reaction-summary__error" role="alert">{{ summary.error }}</span>
+      </template>
+    </Tag>
   </div>
 </template>

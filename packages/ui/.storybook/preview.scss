@@ -28,6 +28,12 @@
 @use 'pkg:@voice-room/ui/styles/components/slider';
 @use 'pkg:@voice-room/ui/styles/components/ui-dialog';
 @use 'pkg:@voice-room/ui/styles/components/ui-alert-dialog';
+@use 'pkg:@voice-room/ui/styles/components/ui-toast';
+@use 'pkg:@voice-room/ui/styles/components/callout';
+@use 'pkg:@voice-room/ui/styles/components/badge';
+@use 'pkg:@voice-room/ui/styles/components/tag';
+@use 'pkg:@voice-room/ui/styles/components/progress';
+@use 'pkg:@voice-room/ui/styles/components/empty';
 @use 'pkg:@voice-room/ui/styles/room/participant';
 @use 'pkg:@voice-room/ui/styles/room/room-dock';
 @use 'pkg:@voice-room/ui/styles/room/tile-grid';

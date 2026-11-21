@@ -1,6 +1,7 @@
 <script setup lang="ts">
+import { Progress } from '@voice-room/ui/components';
 import { t } from '@/shared/i18n';
-import { Image as ImageIcon, LoaderCircle, RotateCcw, X } from '@lucide/vue';
+import { Image as ImageIcon, RotateCcw, X } from '@lucide/vue';
 import { computed, ref } from 'vue';
 import { iconSm } from '@/shared/ui/icons';
 import { attachmentVariantUrl } from '@/api/attachments';
@@ -54,19 +55,14 @@ function view(draft: Draft): void {
         </button>
         <span v-else class="attachment-composer__placeholder"><ImageIcon v-bind="iconSm" aria-hidden="true" /></span>
 
-        <span
-          v-if="draft.state !== 'ready' && !draft.error"
+        <Progress
+          v-if="draft.state !== 'ready'"
           class="attachment-composer__loading"
-          :style="{ '--attachment-progress': `${Math.round(draft.progress * 100)}%` }"
-          role="status"
-          :aria-label="
-            draft.state === 'processing'
-              ? t('Обработка изображения')
-              : t('Загрузка изображения {p0}%', { p0: Math.round(draft.progress * 100) })
-          "
-        >
-          <LoaderCircle v-bind="iconSm" aria-hidden="true" />
-        </span>
+          hide-label
+          :label="draft.state === 'processing' ? t('Обработка изображения') : t('Загрузка изображения')"
+          :value="draft.state === 'processing' ? null : Math.round(draft.progress * 100)"
+          :error="Boolean(draft.error) || draft.state === 'failed'"
+        />
 
         <button
           v-if="draft.error || draft.state === 'failed'"

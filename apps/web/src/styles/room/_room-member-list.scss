@@ -5,7 +5,7 @@
 //   h3                                        -> .room-member-list__heading
 //   ul                                        -> .room-member-list__list
 //   li                                        -> .room-member-list__item
-//   .room-member-list__count / __row / __member / __you / __menu-trigger / __menu / __notice / __empty / __more -> same
+//   .room-member-list__count / __row / __member / __you / __menu-trigger / __menu / __notice / __more -> same
 //   .room-member-list__member > span          -> .room-member-list__text
 //   strong                                    -> .room-member-list__name
 //   small                                     -> .room-member-list__login
@@ -155,12 +155,6 @@
 }
 
 .room-member-list__notice,
-.room-member-list__empty {
-  margin: 0;
-  color: var(--vr-text-2);
-  font-size: 0.8125rem;
-}
-
 .room-member-list__notice p {
   margin: 0;
 }

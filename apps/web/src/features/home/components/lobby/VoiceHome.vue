@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Badge } from '@voice-room/ui/components';
 import { t } from '@/shared/i18n';
 import { BellOff, Plus, ShieldCheck, UserPlus, X } from '@lucide/vue';
 import { computed, ref, shallowRef } from 'vue';
@@ -6,7 +7,7 @@ import type { OwnedRoom } from '@/api/auth';
 import { useRoomPresenceStore } from '@/entities/room/room-presence.store';
 import { RoomMenuContent } from '@/shared/components/room-menu';
 import { useNotificationPreferencesStore } from '@/shared/notifications/preferences.store';
-import { Avatar, AvatarStack, Badge, Button, ContextMenu, Ellipsis } from '@/shared/ui';
+import { Avatar, AvatarStack, Button, ContextMenu, Ellipsis } from '@/shared/ui';
 import { iconMd, iconSm } from '@/shared/ui/icons';
 import { roomPeerAvatarItems } from '../../model/room-avatars';
 import { roomDisplayName } from '../../model/rooms';
@@ -76,10 +77,6 @@ function roomUnreadCount(room: OwnedRoom): number {
 
 function roomNotificationsMuted(room: OwnedRoom): boolean {
   return notificationPreferences.mutedRoomIds.includes(room.roomId);
-}
-
-function countLabel(count: number): string | number {
-  return count > 99 ? '99+' : count;
 }
 
 // Only the owner gets the settings item, so only the owner gets a handler.
@@ -252,9 +249,11 @@ function closeRoomContextMenu(): void {
                 <BellOff v-bind="iconSm" aria-hidden="true" />
               </span>
               <span class="voice-home__spacer"></span>
-              <Badge v-if="roomUnreadCount(room) > 0" :tone="roomNotificationsMuted(room) ? 'muted' : 'default'">
-                {{ countLabel(roomUnreadCount(room)) }}
-              </Badge>
+              <Badge
+                v-if="roomUnreadCount(room) > 0"
+                :tone="roomNotificationsMuted(room) ? 'muted' : 'accent'"
+                :count="roomUnreadCount(room)"
+              />
             </span>
             <span class="voice-home__card-foot">
               <span class="voice-home__live-dot"></span>
@@ -304,9 +303,11 @@ function closeRoomContextMenu(): void {
               <BellOff v-bind="iconSm" aria-hidden="true" />
             </span>
             <span class="voice-home__spacer"></span>
-            <Badge v-if="roomUnreadCount(room) > 0" :tone="roomNotificationsMuted(room) ? 'muted' : 'default'">
-              {{ countLabel(roomUnreadCount(room)) }}
-            </Badge>
+            <Badge
+              v-if="roomUnreadCount(room) > 0"
+              :tone="roomNotificationsMuted(room) ? 'muted' : 'accent'"
+              :count="roomUnreadCount(room)"
+            />
             <span class="voice-home__room-sub">{{ t('тихо') }}</span>
           </button>
         </div>

@@ -6,7 +6,6 @@
 //   .attachment-compose-field                     -> .attachment-compose
 //   .attachment-compose-controls                  -> .attachment-compose__controls
 //   .attachment-upload-root                       -> .attachment-upload
-//   @keyframes attachment-spin                    -> unchanged
 //   .attachment-mosaic                            -> .attachment-mosaic
 //   .attachment-mosaic.single                     -> .attachment-mosaic--single
 //   .attachment-mosaic[data-count='3']            -> .attachment-mosaic--three (first tile spans two rows)
@@ -51,12 +50,6 @@
 .attachment-upload {
   align-self: flex-start;
   margin: 8px 0 0 8px;
-}
-
-@keyframes attachment-spin {
-  to {
-    transform: rotate(360deg);
-  }
 }
 
 .attachment-mosaic {

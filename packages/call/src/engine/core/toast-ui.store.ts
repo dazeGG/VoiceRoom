@@ -2,11 +2,15 @@ import { defineStore } from 'pinia';
 import { ref } from 'vue';
 import type { ToastItem } from '@voice-room/ui/toast';
 
-// The in-room toasts, shown by the same ToastStack as the lobby's: several can
-// be up at once, each closing on its own timer.
+// The web viewport manages timers while meet and widget use their own notice views.
 export const useToastUiStore = defineStore('toast-ui', () => {
   const items = ref<ToastItem[]>([]);
   let counter = 0;
+  let viewportManagesDuration = false;
+
+  function useViewportTimers(): void {
+    viewportManagesDuration = true;
+  }
 
   function dismissToastUi(id: string): void {
     items.value = items.value.filter((item) => item.id !== id);
@@ -22,7 +26,7 @@ export const useToastUiStore = defineStore('toast-ui', () => {
       variant?: 'info' | 'error' | undefined;
     } = {}
   ): void {
-    const { action = null, actionLabel = '', description, duration = 3200, variant = 'info' } = options;
+    const { action = null, actionLabel = '', description, duration, variant = 'info' } = options;
     const id = `room-toast-${Date.now()}-${counter++}`;
     items.value = [
       ...items.value,
@@ -47,8 +51,9 @@ export const useToastUiStore = defineStore('toast-ui', () => {
             : undefined
       }
     ];
-    if (duration > 0) window.setTimeout(() => dismissToastUi(id), duration);
+    const timeout = duration ?? 3200;
+    if (!viewportManagesDuration && timeout > 0) window.setTimeout(() => dismissToastUi(id), timeout);
   }
 
-  return { items, dismissToastUi, showToastUi };
+  return { items, dismissToastUi, showToastUi, useViewportTimers };
 });

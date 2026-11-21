@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Badge } from '@voice-room/ui/components';
 import { t } from '@/shared/i18n';
 import { LayoutGrid, MessageSquare, Users } from '@lucide/vue';
 import { computed } from 'vue';
@@ -107,7 +108,7 @@ function handleInviteClick(): void {
         @click="panels.toggleRoomPanel('chat')"
       >
         <MessageSquare :size="18" aria-hidden="true" />
-        <span v-if="unread > 0" class="room-panel-tabs__unread" aria-hidden="true"></span>
+        <Badge v-if="unread > 0" class="room-panel-tabs__unread" aria-hidden="true" variant="dot" ring />
       </button>
       <button
         type="button"

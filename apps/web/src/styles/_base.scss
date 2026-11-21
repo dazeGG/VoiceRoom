@@ -6,7 +6,6 @@
 //   .topbar                                 -> .topbar (block)
 //   .start-layout                           -> .start-layout (block)
 //   .start-copy                             -> .start-layout__copy
-//   .ui-toaststack                          -> .ui-toast-stack (block)
 //   .lucide                                 -> .lucide (set by @lucide/vue, not ours)
 //   body[data-screen='room']                -> body.screen--room
 //   body[data-screen='checking']            -> body.screen--checking
@@ -174,9 +173,8 @@ body:not(.screen--room) .topbar {
 
   // In the room the toasts sit above the dock.
   // Svelte: body[data-screen='room'] / body[data-screen='checking']
-  body.screen--room .ui-toast-stack,
-  body.screen--checking .ui-toast-stack {
-    right: var(--space-md);
-    bottom: calc(max(var(--space-lg), env(safe-area-inset-bottom)) + 72px);
+  body.screen--room .ui-toaststack,
+  body.screen--checking .ui-toaststack {
+    bottom: calc(max(var(--space-24), env(safe-area-inset-bottom)) + var(--size-48) + var(--space-24));
   }
 }

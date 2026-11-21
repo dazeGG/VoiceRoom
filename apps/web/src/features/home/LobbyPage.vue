@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Badge } from '@voice-room/ui/components';
 import { PanelLeftClose, PanelLeftOpen } from '@lucide/vue';
 import { t } from '@/shared/i18n';
 import type { InboxItem } from '@voice-room/shared/contracts/notifications';
@@ -18,7 +19,7 @@ import { useSessionStore } from '@/features/auth/session.store';
 import { usePageStore } from '@/stores/page.store';
 import { useNotificationPreferencesStore } from '@/shared/notifications/preferences.store';
 import { effectivePresenceStatus } from '@/shared/presence';
-import { Avatar, Badge } from '@/shared/ui';
+import { Avatar } from '@/shared/ui';
 import { displayNameOf } from '@/shared/utils/display-name';
 import { extractRoomId } from '@/shared/utils/room';
 import CreateRoomDialog from './components/CreateRoomDialog.vue';
@@ -325,9 +326,11 @@ function roomDeleted(): void {
             <Badge
               v-if="friend.unreadCount > 0"
               class="lobby-shell__sidebar-unread"
-              :tone="friend.muted ? 'muted' : 'default'"
-              >{{ friend.unreadCount > 99 ? '99+' : friend.unreadCount }}</Badge
-            >
+              :tone="friend.muted ? 'muted' : 'accent'"
+              :count="friend.unreadCount"
+              size="sm"
+              ring
+            />
           </div>
         </div>
         <div class="lobby-shell__sidebar-account">
