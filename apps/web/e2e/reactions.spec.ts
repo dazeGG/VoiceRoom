@@ -4,7 +4,7 @@ import {
   type ReactionSet,
   type ReactionBatch,
   type ReactorPage
-} from '@voice-room/shared/contracts/messages';
+} from '@voiceroom/shared/contracts/messages';
 import { parse } from '../test/helpers/assert';
 import { createPermanentRoom, enableCapabilities, enterRoom, registerViaUi, uniqueLogin } from './helpers';
 

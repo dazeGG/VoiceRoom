@@ -2,13 +2,13 @@
 import EmojiText from '@/shared/chat/EmojiText.vue';
 import { t } from '@/shared/i18n';
 import { Bell, BellOff, Copy, Link, Settings, Trash2, UserRoundPlus } from '@lucide/vue';
-import type { RoomRelationship } from '@voice-room/shared/contracts/rooms';
+import type { RoomRelationship } from '@voiceroom/shared/contracts/rooms';
 import { computed, ref } from 'vue';
 import type { Friend } from '@/api/friends';
 import { removeRoomFromList } from '@/api/auth';
 import { useNotificationPreferencesStore } from '@/shared/notifications/preferences.store';
-import { Avatar, Ellipsis, MenuSeparator, MenuItem, MenuLabel, MenuSub } from '@voice-room/ui/components';
-import { iconMd } from '@voice-room/ui/icon-defaults';
+import { Avatar, Ellipsis, MenuSeparator, MenuItem, MenuLabel, MenuSub } from '@voiceroom/ui-kit/components';
+import { iconMd } from '@voiceroom/ui-kit/icon-defaults';
 import { copyText } from '@/shared/utils/clipboard';
 import RoomInviteFriendList from './RoomInviteFriendList.vue';
 

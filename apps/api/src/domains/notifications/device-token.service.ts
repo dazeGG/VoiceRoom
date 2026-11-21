@@ -2,12 +2,12 @@
 // every launch and after every sign-in) and remove it (when the user turns
 // pushes off). Registering is refused while the server has no RuStore project.
 
-import { parseAndroidAppVersion } from '@voice-room/shared/client-version';
-import { DEVICE_TOKEN_PATTERN, type DevicePushProvider } from '@voice-room/shared/contracts/devices';
+import { parseAndroidAppVersion } from '@voiceroom/shared/client-version';
+import { DEVICE_TOKEN_PATTERN, type DevicePushProvider } from '@voiceroom/shared/contracts/devices';
 import type { RateCheck } from '../../lib/rate-limit.ts';
 import { DomainError } from '../../platform/http/domain-error.ts';
 import type { DeviceTokenRepository } from './device-token.repository.ts';
-import type { PushLocaleIntent, PushRegistrationState } from '@voice-room/shared/contracts/push-registration';
+import type { PushLocaleIntent, PushRegistrationState } from '@voiceroom/shared/contracts/push-registration';
 
 export interface DeviceTokenServiceDeps {
   tokens(): Pick<DeviceTokenRepository, 'register' | 'remove'>;

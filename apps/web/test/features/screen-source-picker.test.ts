@@ -2,16 +2,16 @@
 
 import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, expect, test } from 'vitest';
-import { state } from '@voice-room/call/engine/core/room-runtime.store';
-import { createInitialRoomState } from '@voice-room/call/engine/model/room-state';
+import { state } from '@voiceroom/call/engine/core/room-runtime.store';
+import { createInitialRoomState } from '@voiceroom/call/engine/model/room-state';
 import {
   cancelScreenSourcePicker,
   confirmScreenSourcePicker,
   showScreenSourcePicker,
   switchScreenTab
-} from '@voice-room/call/engine/ui/screen-source-picker';
-import { useScreenSourceUiStore } from '@voice-room/call/engine/core/screen-source-ui.store';
-import type { DesktopCaptureSource } from '@voice-room/call/engine/core/types';
+} from '@voiceroom/call/engine/ui/screen-source-picker';
+import { useScreenSourceUiStore } from '@voiceroom/call/engine/core/screen-source-ui.store';
+import type { DesktopCaptureSource } from '@voiceroom/call/engine/core/types';
 
 const sources: DesktopCaptureSource[] = [
   { id: 'screen:1', name: 'Экран 1', type: 'screen' },

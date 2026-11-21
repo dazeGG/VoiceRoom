@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { AppWindow, ArrowLeft, BadgeCheck, Ban, Globe, Lock, LogOut, Smartphone, Trash2 } from '@lucide/vue';
-import type { AdminActionEntry, BlockDuration } from '@voice-room/shared/contracts/admin';
-import { SettingRow } from '@voice-room/ui/components';
+import type { AdminActionEntry, BlockDuration } from '@voiceroom/shared/contracts/admin';
+import { SettingRow } from '@voiceroom/ui-kit/components';
 import { blockTerm, describeAction } from '../accounts.ts';
 import {
   blockAccount,

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { NavList, NavListGroup, NavListItem, Dialog } from '@voice-room/ui/components';
+import { NavList, NavListGroup, NavListItem, Dialog } from '@voiceroom/ui-kit/components';
 // The open settings. Mounted fresh on every opening, so each tab starts from
 // what is saved; only the profile edits live here, so they survive a look at
 // another tab before saving.

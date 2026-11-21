@@ -1,19 +1,19 @@
 <script setup lang="ts">
-import { IconButton, Badge, Splitter, type SplitterWidth, Avatar } from '@voice-room/ui/components';
+import { IconButton, Badge, Splitter, type SplitterWidth, Avatar } from '@voiceroom/ui-kit/components';
 import { PanelLeftClose, PanelLeftOpen } from '@lucide/vue';
 import { t } from '@/shared/i18n';
-import type { InboxItem } from '@voice-room/shared/contracts/notifications';
+import type { InboxItem } from '@voiceroom/shared/contracts/notifications';
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, useTemplateRef, watchEffect } from 'vue';
 import type { AuthUser, OwnedRoom } from '@/api/auth';
 import { getAppRealtime } from '@/api/realtime';
 import { createRoom } from '@/api/rooms';
 import { useProfileCardUiStore } from '@/entities/profile-card/profile-card-ui.store';
-import { clientRoomName } from '@voice-room/call/engine';
+import { clientRoomName } from '@voiceroom/call/engine';
 import { provideRoomShell } from '@/features/room/shell';
 import { provideRoomSocial } from '@/features/room/social';
 import { useRoomUiStore } from '@/features/room/room-ui.store';
-import { useScreenUiStore } from '@voice-room/call/engine';
-import { useVoiceSessionStore } from '@voice-room/call/engine';
+import { useScreenUiStore } from '@voiceroom/call/engine';
+import { useVoiceSessionStore } from '@voiceroom/call/engine';
 import RoomPage from '@/features/room/RoomPage.vue';
 import { useSessionStore } from '@/features/auth/session.store';
 import { usePageStore } from '@/stores/page.store';

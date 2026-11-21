@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/vue';
 import userEvent from '@testing-library/user-event';
-import { FileDrop } from '@voice-room/ui/components';
+import { FileDrop } from '@voiceroom/ui-kit/components';
 import { expect, test, vi } from 'vitest';
 
 test('opens the file chooser by keyboard and reports each selection', async () => {

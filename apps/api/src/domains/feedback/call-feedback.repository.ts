@@ -18,7 +18,7 @@ import {
   type CallFeedbackPlatform,
   type CallFeedbackRating,
   type CallFeedbackTag
-} from '@voice-room/shared/contracts/feedback';
+} from '@voiceroom/shared/contracts/feedback';
 
 export type NewCallFeedback = {
   userId: string | null;

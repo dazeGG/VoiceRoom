@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Card, RadioGroup, RadioGroupItem, SettingsGroup } from '@voice-room/ui/components';
+import { Card, RadioGroup, RadioGroupItem, SettingsGroup } from '@voiceroom/ui-kit/components';
 // The colour theme: a card per theme with a small preview painted in that
 // theme's own colours; picking one applies it to the whole app at once.
 import { t } from '@/shared/i18n';

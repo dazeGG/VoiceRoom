@@ -4,7 +4,7 @@
 import { expect, test } from 'vitest';
 import { createRoom } from '@/api/rooms';
 import { stubFetch } from '../fixtures/fetch';
-import { CreateRoomBody } from '@voice-room/shared/contracts/rooms';
+import { CreateRoomBody } from '@voiceroom/shared/contracts/rooms';
 import { defined, parse } from '../helpers/assert';
 
 test('a temporary room is created without a proof when the server does not require one', async () => {

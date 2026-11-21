@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/vue';
 import { expect, test } from 'vitest';
-import { Progress } from '@voice-room/ui/components';
+import { Progress } from '@voiceroom/ui-kit/components';
 
 test('determinate progress exposes its value and name', () => {
   render(Progress, { props: { label: 'Загрузка изображения', value: 64 } });

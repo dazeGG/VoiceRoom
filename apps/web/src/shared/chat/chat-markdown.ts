@@ -1,4 +1,4 @@
-import type { RoomMessageContentV1, RoomMessageSegmentV1 } from '@voice-room/shared/room-message-content';
+import type { RoomMessageContentV1, RoomMessageSegmentV1 } from '@voiceroom/shared/room-message-content';
 import { parseChatLinks } from '@/shared/utils/linkify';
 
 type Atom = Exclude<RoomMessageSegmentV1, { type: 'text' }>;

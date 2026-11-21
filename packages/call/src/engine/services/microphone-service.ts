@@ -1,6 +1,6 @@
 import { createRnnoiseNode } from '../../rnnoise-node';
 import { getCallPorts } from '../ports';
-import { t } from '@voice-room/ui/i18n';
+import { t } from '@voiceroom/ui-kit/i18n';
 import {
   GATE_ATTACK_MS,
   GATE_CLOSE_RATIO,
@@ -20,7 +20,7 @@ import { state } from '../core/room-runtime.store';
 import { dbToAmplitude, getNoiseMode, persistMicrophoneVolume } from '../core/settings';
 import { showToast } from '../ui/toast';
 import { disconnectAudioNode, stopStream } from '../core/utils';
-import { isRecord } from '@voice-room/shared/guards';
+import { isRecord } from '@voiceroom/shared/guards';
 import { isMicrophoneShownMuted } from '../core/microphone-mute';
 import { cancelCaptureProgressObservation } from '../room/mic-send';
 import { noteOwnedProcessingTransition } from '../room/capture-diagnostics';

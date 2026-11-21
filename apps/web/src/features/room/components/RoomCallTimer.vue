@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { t } from '@/shared/i18n';
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
-import { useVoiceSessionStore } from '@voice-room/call/engine/core/voice-session.store';
+import { useVoiceSessionStore } from '@voiceroom/call/engine/core/voice-session.store';
 
 const props = withDefaults(defineProps<{ variant?: 'sidebar' | 'topbar' | 'bubble'; separator?: boolean }>(), {
   variant: 'topbar',

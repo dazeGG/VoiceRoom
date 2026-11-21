@@ -4,8 +4,8 @@ import { LOG_EVENTS } from '../src/lib/log-events.ts';
 import assert from 'node:assert/strict';
 import { Pool } from 'pg';
 import { createRoomStore } from '../src/app/room-store.ts';
-import { WidgetRoomCreated, WidgetRoomInfo } from '@voice-room/shared/contracts/widget';
-import { RoomCreated } from '@voice-room/shared/contracts/rooms';
+import { WidgetRoomCreated, WidgetRoomInfo } from '@voiceroom/shared/contracts/widget';
+import { RoomCreated } from '@voiceroom/shared/contracts/rooms';
 import { startApiServer, request, registerAccount } from './fakes/server-process.ts';
 import { openWs, joinVoiceRoom, waitForWsType, waitForClose, sendWs } from './ws-harness.ts';
 

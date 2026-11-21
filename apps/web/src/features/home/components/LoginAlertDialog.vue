@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Button, Callout, Dialog } from '@voice-room/ui/components';
+import { Button, Callout, Dialog } from '@voiceroom/ui-kit/components';
 import { t } from '@/shared/i18n';
 import { MonitorSmartphone } from '@lucide/vue';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
@@ -12,7 +12,7 @@ import {
   type RecoveryCodesStatus
 } from '@/api/auth';
 import { getAppRealtime } from '@/api/realtime';
-import { iconMd } from '@voice-room/ui/icon-defaults';
+import { iconMd } from '@voiceroom/ui-kit/icon-defaults';
 import {
   loginAlertDevice,
   loginAlertHeadline,

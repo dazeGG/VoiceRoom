@@ -1,4 +1,4 @@
-import type { StaticRoomsFilter, StaticRoomsSort } from '@voice-room/shared/contracts/admin';
+import type { StaticRoomsFilter, StaticRoomsSort } from '@voiceroom/shared/contracts/admin';
 
 export interface StaticRoomsView {
   q: string;

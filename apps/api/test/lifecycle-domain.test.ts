@@ -2,7 +2,7 @@
 // maintenance timers (domains/rooms/room-lifecycle.ts,
 // domains/account/account-lifecycle.ts, platform/maintenance.ts).
 
-import { isRecord } from '@voice-room/shared/guards';
+import { isRecord } from '@voiceroom/shared/guards';
 import type { AccountMessage } from '../src/realtime/account-events.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -13,7 +13,7 @@ import { createAccountLifecycle } from '../src/domains/account/account-lifecycle
 import type { StoredRoom } from '../src/domains/rooms/room-views.ts';
 import { createRoomPresence, type RosterPeer } from '../src/realtime/room-presence.ts';
 import { createConnectionRegistry, type WsConnection } from '../src/realtime/registry.ts';
-import { parseServerFrame } from '@voice-room/shared/realtime';
+import { parseServerFrame } from '@voiceroom/shared/realtime';
 import { startMaintenanceTimers } from '../src/platform/maintenance.ts';
 import { fake, recordingLogger, storedUser, storedDirectMessage } from './fakes/index.ts';
 

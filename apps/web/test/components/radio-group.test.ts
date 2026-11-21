@@ -2,7 +2,7 @@ import { render, screen, waitFor } from '@testing-library/vue';
 import userEvent from '@testing-library/user-event';
 import { expect, test } from 'vitest';
 import { defineComponent, h } from 'vue';
-import { RadioGroup, RadioGroupItem } from '@voice-room/ui/components';
+import { RadioGroup, RadioGroupItem } from '@voiceroom/ui-kit/components';
 
 test('an arrow selects the next enabled option and Tab leaves the group', async () => {
   const view = render(RadioGroup, {

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Tooltip, Button, IconButton, Badge, EmptyState, ListItem } from '@voice-room/ui/components';
+import { Tooltip, Button, IconButton, Badge, EmptyState, ListItem } from '@voiceroom/ui-kit/components';
 // The panel you reach from the bell. It answers two questions — what happened
 // and how long ago — and offers exactly one bulk action. "К первому
 // непрочитанному" is gone: every unread row is already one click away, and
@@ -7,10 +7,10 @@ import { Tooltip, Button, IconButton, Badge, EmptyState, ListItem } from '@voice
 import { t } from '@/shared/i18n';
 import { Bell, Check, CircleAlert, X } from '@lucide/vue';
 import { onBeforeUnmount, onMounted } from 'vue';
-import type { InboxItem, NotificationReason } from '@voice-room/shared/contracts/notifications';
+import type { InboxItem, NotificationReason } from '@voiceroom/shared/contracts/notifications';
 import EmojiText from '@/shared/chat/EmojiText.vue';
 import type { createNotificationInbox } from '@/shared/notifications/inbox';
-import { iconSm } from '@voice-room/ui/icon-defaults';
+import { iconSm } from '@voiceroom/ui-kit/icon-defaults';
 import { timeAgo } from '@/shared/utils/date-format';
 
 type Inbox = ReturnType<typeof createNotificationInbox>;

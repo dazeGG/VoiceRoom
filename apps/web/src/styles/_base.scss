@@ -11,7 +11,7 @@
 //   body[data-screen='checking']            -> body.screen--checking
 //   body[data-screen='start']               -> body.screen--start
 //   body[data-screen-view='true']           -> body.screen-view--open
-@use 'pkg:@voice-room/ui/styles/mixins' as *;
+@use 'pkg:@voiceroom/ui-kit/styles/mixins' as *;
 
 :root {
   font-family: var(--font-ui);

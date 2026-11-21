@@ -2,7 +2,7 @@
 // and room.updated event, peers picking up a new profile, invitations that
 // die with the room, and tearing a deleted room down.
 
-import { buildServerEnvelope } from '@voice-room/shared/realtime';
+import { buildServerEnvelope } from '@voiceroom/shared/realtime';
 import type { DirectMessage as StoredDirectMessage } from '../social/social-records.ts';
 import type { AccountMessage } from '../../realtime/account-events.ts';
 import type { Logger } from 'pino';

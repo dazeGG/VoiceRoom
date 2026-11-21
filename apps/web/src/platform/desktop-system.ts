@@ -1,4 +1,4 @@
-import { isOneOf, isRecord } from '@voice-room/shared/guards';
+import { isOneOf, isRecord } from '@voiceroom/shared/guards';
 import { createLogger, errorContext } from '@/shared/log';
 import { setDesktopWindowVisible } from './app-visibility';
 

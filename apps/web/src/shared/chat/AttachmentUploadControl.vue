@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { IconButton, DropdownMenu, MenuItem, FileDrop } from '@voice-room/ui/components';
+import { IconButton, DropdownMenu, MenuItem, FileDrop } from '@voiceroom/ui-kit/components';
 import { t } from '@/shared/i18n';
 import { Image as ImageIcon, Plus } from '@lucide/vue';
-import { iconSm } from '@voice-room/ui/icon-defaults';
+import { iconSm } from '@voiceroom/ui-kit/icon-defaults';
 import type { AttachmentComposeStore } from './attachment-compose';
 
 const { store, disabled } = defineProps<{

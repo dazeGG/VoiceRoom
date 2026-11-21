@@ -7,8 +7,8 @@
 
 import type pg from 'pg';
 import { sql } from 'kysely';
-import type { ProductDay, RetentionWeek } from '@voice-room/shared/contracts/admin';
-import { REPORT_REASONS, type ReportReason } from '@voice-room/shared/contracts/reports';
+import type { ProductDay, RetentionWeek } from '@voiceroom/shared/contracts/admin';
+import { REPORT_REASONS, type ReportReason } from '@voiceroom/shared/contracts/reports';
 import { kyselyOn } from '../../platform/db/kysely.ts';
 
 const MSK = sql.lit('Europe/Moscow');

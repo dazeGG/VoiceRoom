@@ -3,7 +3,7 @@
 
 import type { Room } from 'livekit-client';
 import { state } from '../../core/room-runtime.store';
-import { isErrorCode, RETRYABLE_JOIN_CODES, TERMINAL_JOIN_CODES } from '@voice-room/shared/contracts/errors';
+import { isErrorCode, RETRYABLE_JOIN_CODES, TERMINAL_JOIN_CODES } from '@voiceroom/shared/contracts/errors';
 import { getCallPorts, getInstalledCallPorts } from '../../ports';
 import type { CallTransportFailure } from '../../transport';
 import { LiveKitTransportError } from '../../room/join-error';

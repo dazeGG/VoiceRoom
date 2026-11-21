@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, shallowRef, useTemplateRef, watch } from 'vue';
-import { Spinner } from '@voice-room/ui/components';
+import { Spinner } from '@voiceroom/ui-kit/components';
 import { fetchOpenReports, fetchOpenUserReports } from './api/admin.ts';
 import { provideFrame } from './frame.ts';
 import type { HistoryRoom } from './pages/rooms/history-room.ts';

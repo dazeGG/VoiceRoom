@@ -14,8 +14,8 @@ import type {
   StaticRoomRow,
   StaticRooms as StaticRoomsPage,
   VoiceMinute
-} from '@voice-room/shared/contracts/admin';
-import type { RoomCallDetail } from '@voice-room/shared/contracts/feedback';
+} from '@voiceroom/shared/contracts/admin';
+import type { RoomCallDetail } from '@voiceroom/shared/contracts/feedback';
 import { delayOf, heardSummary, verdictOf, worstOf } from '../src/pages/call/verdict.ts';
 import CallPage from '../src/pages/CallPage.vue';
 import StaticRooms from '../src/pages/rooms/StaticRooms.vue';

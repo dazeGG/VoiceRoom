@@ -4,7 +4,7 @@ import type { CallRealtimeEvent } from '../transport';
 // snapshot, peers joining, leaving and changing, moderation, and the room
 // itself changing or going away.
 
-import { t } from '@voice-room/ui/i18n';
+import { t } from '@voiceroom/ui-kit/i18n';
 import { reactive } from 'vue';
 import { useVoiceSessionStore } from '../core/voice-session.store';
 import { state } from '../core/room-runtime.store';

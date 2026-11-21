@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/vue';
 import userEvent from '@testing-library/user-event';
 import { expect, test } from 'vitest';
-import { Tag } from '@voice-room/ui/components';
+import { Tag } from '@voiceroom/ui-kit/components';
 
 test('selectable tags toggle their pressed state with pointer and keyboard', async () => {
   const user = userEvent.setup();

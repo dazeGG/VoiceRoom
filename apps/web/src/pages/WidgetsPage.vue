@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import '@/styles/widget/_configurator.scss';
-import '@voice-room/ui/styles/widget/shell';
+import '@voiceroom/ui-kit/styles/widget/shell';
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
 import { ArrowLeft, Check, Copy, PanelTop, ShieldCheck } from '@lucide/vue';
 import {
@@ -15,10 +15,10 @@ import {
   normalizeWidgetColor,
   widgetEmbedMarkup,
   type WidgetConfig
-} from '@voice-room/shared/contracts/widget';
-import { createRoomCode } from '@voice-room/shared/validation';
-import { WidgetCallLayout, WidgetJoinControls } from '@voice-room/ui/widget';
-import { createWidgetFrameExpansion } from '@voice-room/ui/widget-frame-expansion';
+} from '@voiceroom/shared/contracts/widget';
+import { createRoomCode } from '@voiceroom/shared/validation';
+import { WidgetCallLayout, WidgetJoinControls } from '@voiceroom/ui/widget';
+import { createWidgetFrameExpansion } from '@voiceroom/ui/widget-frame-expansion';
 import {
   Button,
   Field,
@@ -32,7 +32,7 @@ import {
   type SegmentOption,
   Select,
   ColorField
-} from '@voice-room/ui/components';
+} from '@voiceroom/ui-kit/components';
 import { copyText } from '@/shared/utils/clipboard';
 
 const config = reactive({ ...defaultWidgetConfig });

@@ -1,6 +1,6 @@
-import type { PeerSession } from '@voice-room/call/engine/core/types';
-import type { CallIdentity, IdentityPort } from '@voice-room/call/engine/ports';
-import { cleanGuestName } from '@voice-room/shared/validation';
+import type { PeerSession } from '@voiceroom/call/engine/core/types';
+import type { CallIdentity, IdentityPort } from '@voiceroom/call/engine/ports';
+import { cleanGuestName } from '@voiceroom/shared/validation';
 
 const NAME_KEY = 'voice-room:meet:display-name';
 

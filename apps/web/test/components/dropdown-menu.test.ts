@@ -2,7 +2,7 @@ import { render, screen, waitFor, within } from '@testing-library/vue';
 import userEvent from '@testing-library/user-event';
 import { expect, test, vi } from 'vitest';
 import { defineComponent, h, ref } from 'vue';
-import { Dialog, DropdownMenu, MenuCheckboxItem, MenuItem, MenuSub } from '@voice-room/ui/components';
+import { Dialog, DropdownMenu, MenuCheckboxItem, MenuItem, MenuSub } from '@voiceroom/ui-kit/components';
 import { stubOverlayDom } from '../helpers/overlay-dom';
 
 stubOverlayDom();

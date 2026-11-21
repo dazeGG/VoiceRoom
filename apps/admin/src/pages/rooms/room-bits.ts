@@ -1,5 +1,5 @@
-import type { RoomAccount, RoomCall, RoomStay, VoiceMinute } from '@voice-room/shared/contracts/admin';
-import type { NetworkPoint } from '@voice-room/shared/contracts/rooms';
+import type { RoomAccount, RoomCall, RoomStay, VoiceMinute } from '@voiceroom/shared/contracts/admin';
+import type { NetworkPoint } from '@voiceroom/shared/contracts/rooms';
 import { seatMatches, type CallOriginFilters } from './call-filters.ts';
 
 export const nameOf = (account: RoomAccount) => account.displayName || account.login;

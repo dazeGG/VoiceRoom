@@ -4,8 +4,8 @@
 // order the legacy handlers ran them.
 
 import type { AccountMessage } from '../../realtime/account-events.ts';
-import type { DirectMessage as DirectMessageView, DirectRead } from '@voice-room/shared/contracts/messages';
-import type { PublicUser } from '@voice-room/shared/contracts/users';
+import type { DirectMessage as DirectMessageView, DirectRead } from '@voiceroom/shared/contracts/messages';
+import type { PublicUser } from '@voiceroom/shared/contracts/users';
 import { publicUser } from '../account/user-records.ts';
 import { isStoredDirectMessage } from '../social/social-records.ts';
 import { isActiveAccount, type SocialUser } from '../social/social-views.ts';

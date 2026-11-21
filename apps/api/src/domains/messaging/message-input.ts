@@ -2,10 +2,10 @@
 // reply target ids and the idempotency key. Shared by room chat and DMs.
 
 import crypto from 'node:crypto';
-import { MAX_ATTACHMENTS } from '@voice-room/shared/contracts/messages';
-import { isArray, textOf } from '@voice-room/shared/guards';
-import { MAX_ROOM_MESSAGE_LENGTH } from '@voice-room/shared/room-message-content';
-import { isUuid } from '@voice-room/shared/validation';
+import { MAX_ATTACHMENTS } from '@voiceroom/shared/contracts/messages';
+import { isArray, textOf } from '@voiceroom/shared/guards';
+import { MAX_ROOM_MESSAGE_LENGTH } from '@voiceroom/shared/room-message-content';
+import { isUuid } from '@voiceroom/shared/validation';
 
 export function cleanUuid(value: unknown): string {
   const id = textOf(value).trim();

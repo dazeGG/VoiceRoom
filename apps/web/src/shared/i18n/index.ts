@@ -7,4 +7,4 @@ setLocaleReader(() => (getActivePinia() ? useLocaleStore().current : 'ru'));
 
 export { getLocale, t, formatNumber } from './runtime.ts';
 export { useLocaleStore, LOCALE_STORAGE_KEY } from './locale.store';
-export type { AppLocale } from '@voice-room/shared/localization';
+export type { AppLocale } from '@voiceroom/shared/localization';

@@ -1,7 +1,7 @@
 import { createApp } from 'vue';
 import { createPinia, setActivePinia } from 'pinia';
-import { installCallPorts } from '@voice-room/call/engine/ports';
-import type { VoiceAssetUrls } from '@voice-room/call/voice-assets';
+import { installCallPorts } from '@voiceroom/call/engine/ports';
+import type { VoiceAssetUrls } from '@voiceroom/call/voice-assets';
 import { createMeetPorts } from '@/adapters/meet-ports';
 import { installMeetI18n } from '@/i18n';
 import { useMeetStore } from '@/meet.store';

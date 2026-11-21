@@ -1,6 +1,6 @@
-import { t } from './i18n';
-import { getAvatarColor } from './avatar-colors';
-import { avatarInitial } from './avatar-initial';
+import { t } from '@voiceroom/ui-kit/i18n';
+import { getAvatarColor } from '@voiceroom/ui-kit/avatar-colors';
+import { avatarInitial } from '@voiceroom/ui-kit/avatar-initial';
 
 export function getAvatarPresentation(participant: {
   avatarColorKey: string;

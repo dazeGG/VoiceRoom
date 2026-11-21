@@ -7,23 +7,23 @@ import { fireEvent, render, screen } from '@testing-library/vue';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import ScreenStage from '@/features/room/components/ScreenStage.vue';
-import { state } from '@voice-room/call/engine/core/room-runtime.store';
-import { createInitialRoomState } from '@voice-room/call/engine/model/room-state';
-import { bindScreenStageIdleUi } from '@voice-room/call/engine/ui/screen-stage-controls';
-import { useScreenUiStore } from '@voice-room/call/engine/core/screen-ui.store';
-import { MAX_STREAM_VOLUME } from '@voice-room/call/engine/core/config';
-import { isTypingTarget } from '@voice-room/call/engine/core/hotkeys';
-import { createParticipant } from '@voice-room/call/engine/room/participants';
-import { applyScreenMediaElementVolume } from '@voice-room/call/engine/services/media-playback-service';
+import { state } from '@voiceroom/call/engine/core/room-runtime.store';
+import { createInitialRoomState } from '@voiceroom/call/engine/model/room-state';
+import { bindScreenStageIdleUi } from '@voiceroom/call/engine/ui/screen-stage-controls';
+import { useScreenUiStore } from '@voiceroom/call/engine/core/screen-ui.store';
+import { MAX_STREAM_VOLUME } from '@voiceroom/call/engine/core/config';
+import { isTypingTarget } from '@voiceroom/call/engine/core/hotkeys';
+import { createParticipant } from '@voiceroom/call/engine/room/participants';
+import { applyScreenMediaElementVolume } from '@voiceroom/call/engine/services/media-playback-service';
 import { instanceOf } from '../helpers/assert.ts';
 import { FakeMediaStream, FakeMediaStreamTrack } from '../helpers/fake-media';
 import { stubOverlayDom } from '../helpers/overlay-dom';
 
-vi.mock(import('@voice-room/call/engine/services/media-playback-service'), async (importOriginal) => ({
+vi.mock(import('@voiceroom/call/engine/services/media-playback-service'), async (importOriginal) => ({
   ...(await importOriginal()),
   applyScreenMediaElementVolume: vi.fn()
 }));
-vi.mock(import('@voice-room/call/engine/media/cues'), async (importOriginal) => ({
+vi.mock(import('@voiceroom/call/engine/media/cues'), async (importOriginal) => ({
   ...(await importOriginal()),
   playStreamCue: vi.fn()
 }));

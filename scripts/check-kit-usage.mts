@@ -3,7 +3,7 @@
 // Run by `npm run check`. Exits 1 and lists every violation as `file:line reason`.
 //
 // In the templates of every app and of the call views (the kit itself,
-// packages/ui/src, is exempt — that is where these elements live):
+// packages/ui-kit/src, is exempt — that is where these elements live):
 //   - a native control: <button>, <input>, <select>, <textarea>, <dialog>,
 //     <details> — use the kit component (Button, IconButton, Pressable,
 //     TextField, Select, Dialog, …);
@@ -40,7 +40,7 @@ export const KIT_EXCEPTIONS: readonly KitException[] = [];
 
 const TEMPLATE_ROOTS = ['apps/web/src', 'apps/admin/src', 'apps/meet/src', 'apps/widget/src', 'packages/call/src'];
 const APP_STYLE_ROOTS = ['apps/web/src', 'apps/admin/src', 'apps/meet/src', 'apps/widget/src', 'packages/call/src'];
-const KIT_STYLE_ROOT = 'packages/ui/src';
+const KIT_STYLE_ROOT = 'packages/ui-kit/src';
 
 const NATIVE_CONTROLS = ['button', 'input', 'select', 'textarea', 'dialog', 'details'];
 const WIDGET_ROLES = [

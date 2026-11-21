@@ -1,17 +1,17 @@
 <script setup lang="ts">
-import { IconButton, DropdownMenu, MenuRadioGroup, MenuRadioItem } from '@voice-room/ui/components';
+import { IconButton, DropdownMenu, MenuRadioGroup, MenuRadioItem } from '@voiceroom/ui-kit/components';
 // The phone dock: four big buttons and nothing to aim at. The phone picks the
 // microphone and its own volume keys stand in for muting the sound.
 import { t } from '@/shared/i18n';
 import { Headphones, Mic, MicOff, PhoneOff, Smartphone, Video, VideoOff, Volume2 } from '@lucide/vue';
 import { computed, watch } from 'vue';
-import { handleLeaveButtonClick } from '@voice-room/call/engine/room/room';
-import { toggleCamera } from '@voice-room/call/engine/services/camera-service';
-import { supportsAudioOutputSelection } from '@voice-room/call/engine/services/media-playback-service';
-import { getCallControlsView, getCameraControlsView, handleMicButtonClick } from '@voice-room/call/engine/ui/controls';
-import { refreshDevices, switchOutputDevice } from '@voice-room/call/engine/ui/devices';
+import { handleLeaveButtonClick } from '@voiceroom/call/engine/room/room';
+import { toggleCamera } from '@voiceroom/call/engine/services/camera-service';
+import { supportsAudioOutputSelection } from '@voiceroom/call/engine/services/media-playback-service';
+import { getCallControlsView, getCameraControlsView, handleMicButtonClick } from '@voiceroom/call/engine/ui/controls';
+import { refreshDevices, switchOutputDevice } from '@voiceroom/call/engine/ui/devices';
 import { useMobileCallUiStore } from '@/features/room/mobile-call-ui.store';
-import { useRoomDeviceUiStore } from '@voice-room/call/engine/core/room-device-ui.store';
+import { useRoomDeviceUiStore } from '@voiceroom/call/engine/core/room-device-ui.store';
 
 type OutputKind = 'headset' | 'earpiece' | 'speaker';
 

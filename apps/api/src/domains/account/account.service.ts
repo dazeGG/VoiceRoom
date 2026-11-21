@@ -3,7 +3,7 @@
 // deletion. Returns what happened; the routes own cookies, rate limits and
 // how each outcome is spelled over HTTP.
 
-import type { LoginAlert } from '@voice-room/shared/contracts/account';
+import type { LoginAlert } from '@voiceroom/shared/contracts/account';
 import type { AccountMessage } from '../../realtime/account-events.ts';
 import type { PushPayload } from '../notifications/notification-dispatch.ts';
 import type {
@@ -12,15 +12,15 @@ import type {
   LoginAlert as LoginAlertView,
   RecoveryCodesStatus,
   SelfUser
-} from '@voice-room/shared/contracts/account';
+} from '@voiceroom/shared/contracts/account';
 import type { Logger } from 'pino';
 import {
   ACCOUNT_DELETION_GRACE_MS,
   WHATS_NEW_VERSION,
   formatRecoveryCode,
   isDeletedAccountLogin
-} from '@voice-room/shared/account-security';
-import { isReservedName, isValidPassword } from '@voice-room/shared/validation';
+} from '@voiceroom/shared/account-security';
+import { isReservedName, isValidPassword } from '@voiceroom/shared/validation';
 import { LOG_EVENTS } from '../../lib/log-events.ts';
 import { activeBlock, hashSessionToken, selfUser, type StoredUser } from './user-records.ts';
 import type { AccountDeletionRepository as DeletionRepository, AccountRestore } from './account-deletion.repository.ts';

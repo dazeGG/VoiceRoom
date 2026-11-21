@@ -6,10 +6,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Pool } from 'pg';
-import { SignedIn } from '@voice-room/shared/contracts/account';
-import { AdminWidgets } from '@voice-room/shared/contracts/admin';
-import { Failure } from '@voice-room/shared/contracts/http';
-import type { StaffPermission } from '@voice-room/shared/contracts/staff';
+import { SignedIn } from '@voiceroom/shared/contracts/account';
+import { AdminWidgets } from '@voiceroom/shared/contracts/admin';
+import { Failure } from '@voiceroom/shared/contracts/http';
+import type { StaffPermission } from '@voiceroom/shared/contracts/staff';
 import { createAdminRoomsRepository } from '../src/domains/admin/admin-rooms.repository.ts';
 import { createAdminStatsRepository } from '../src/domains/admin/admin-stats.repository.ts';
 import { createAdminWidgetsService } from '../src/domains/admin/admin-widgets.service.ts';

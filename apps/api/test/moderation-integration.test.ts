@@ -15,7 +15,7 @@ import type http from 'node:http';
 const { createApiServer } = await import('../src/server.ts');
 const { openWs, joinVoiceRoom, sendWs, waitForWsType } = await import('./ws-harness.ts');
 import type { WsSession } from './ws-harness.ts';
-import { PeerBanned } from '@voice-room/shared/contracts/rooms';
+import { PeerBanned } from '@voiceroom/shared/contracts/rooms';
 import { dbRoom, storedUser, userSession, type Fakes } from './fakes/index.ts';
 import type { Static, TSchema } from 'typebox';
 import { request, socketDir, type JsonResponse } from './fakes/server-process.ts';

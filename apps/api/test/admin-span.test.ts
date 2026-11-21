@@ -4,7 +4,7 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { MAX_PRODUCT_DAYS } from '@voice-room/shared/contracts/admin';
+import { MAX_PRODUCT_DAYS } from '@voiceroom/shared/contracts/admin';
 import { moscowDay, productSpan, systemSpan } from '../src/domains/admin/admin.service.ts';
 
 const HOUR = 3_600_000;

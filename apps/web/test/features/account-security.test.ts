@@ -8,7 +8,7 @@ import {
 } from '../../src/features/home/model/account-security.ts';
 import { loginAlertHeadline, loginAlertWhen, queueLoginAlert } from '../../src/features/home/model/login-alerts.ts';
 import { WHATS_NEW_SLIDES, shouldShowWhatsNew } from '../../src/features/home/model/whats-new.ts';
-import { WHATS_NEW_VERSION } from '@voice-room/shared/account-security';
+import { WHATS_NEW_VERSION } from '@voiceroom/shared/account-security';
 import type { AccountSecurity, LoginAlert } from '../../src/api/auth.ts';
 
 const HOUR = 60 * 60 * 1000;

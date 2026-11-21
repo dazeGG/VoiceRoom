@@ -1,4 +1,4 @@
-import { t } from '@voice-room/ui/i18n';
+import { t } from '@voiceroom/ui-kit/i18n';
 import {
   DEFAULT_GATE_THRESHOLD_DB,
   GATE_CAPTURE_SWITCH_DEBOUNCE_MS,
@@ -9,8 +9,8 @@ import {
   OUTPUT_DEVICE_STORAGE_KEY
 } from '../core/config';
 import type { NoiseMode } from '../core/config';
-import type { SelectOption } from '@voice-room/ui/components';
-import { listPhysicalDevices, withSavedDeviceMissing } from '@voice-room/ui/device-list';
+import type { SelectOption } from '@voiceroom/ui-kit/components';
+import { listPhysicalDevices, withSavedDeviceMissing } from '@voiceroom/ui/device-list';
 import { removeStorage, writeStorage } from '../core/storage';
 import { useRoomDeviceUiStore } from '../core/room-device-ui.store';
 import { state } from '../core/room-runtime.store';

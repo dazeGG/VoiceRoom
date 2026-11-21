@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/vue';
 import userEvent from '@testing-library/user-event';
 import { expect, test } from 'vitest';
-import { Checkbox } from '@voice-room/ui/components';
+import { Checkbox } from '@voiceroom/ui-kit/components';
 
 test('clicking the label toggles the checkbox and emits a boolean', async () => {
   const view = render(Checkbox, {

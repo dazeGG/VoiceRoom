@@ -5,7 +5,7 @@ import { expect, test, vi } from 'vitest';
 
 async function load() {
   vi.resetModules();
-  return import('@voice-room/call/engine/room/join-timing');
+  return import('@voiceroom/call/engine/room/join-timing');
 }
 
 function stubClock(times: number[]) {

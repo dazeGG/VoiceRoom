@@ -6,7 +6,7 @@ import type {
   StaticRooms as StaticRoomsPage,
   StaticRoomsFilter,
   StaticRoomsSort
-} from '@voice-room/shared/contracts/admin';
+} from '@voiceroom/shared/contracts/admin';
 import { formatAgo, formatCount, formatMinutes, formatNumericDate } from '../../format.ts';
 import type { LoadFailure } from '../../load-failure.ts';
 import Notice from '../../Notice.vue';

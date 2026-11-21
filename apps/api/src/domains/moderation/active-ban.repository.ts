@@ -1,6 +1,6 @@
 import { sql, type ExpressionBuilder, type Selectable } from 'kysely';
 import type pg from 'pg';
-import { isArray, isRecord } from '@voice-room/shared/guards';
+import { isArray, isRecord } from '@voiceroom/shared/guards';
 import { kyselyOn, type Database } from '../../platform/db/kysely.ts';
 import type { DB, RoomBans } from '../../platform/db/schema.ts';
 import { createRowId } from '../../platform/db/ids.ts';

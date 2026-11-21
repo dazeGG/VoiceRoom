@@ -6,7 +6,7 @@
 import { cleanup, screen, waitFor, within } from '@testing-library/vue';
 import userEvent from '@testing-library/user-event';
 import { afterEach, expect, test, vi } from 'vitest';
-import type { AdminWidgets, LiveRoom, RoomCall, RoomCalls } from '@voice-room/shared/contracts/admin';
+import type { AdminWidgets, LiveRoom, RoomCall, RoomCalls } from '@voiceroom/shared/contracts/admin';
 import WidgetsPage from '../src/pages/WidgetsPage.vue';
 import { stubApi, type Call, type Reply } from './helpers/api.ts';
 import { renderAsStaff } from './helpers/render.ts';

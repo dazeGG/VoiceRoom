@@ -5,7 +5,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { clientKind } from '@voice-room/shared/account-security';
+import { clientKind } from '@voiceroom/shared/account-security';
 import { activityDay, createActivityTracker } from '../src/domains/account/activity.service.ts';
 import type { ActivityMark } from '../src/domains/account/activity.repository.ts';
 import { createProductSampler, SNAPSHOT_BUCKET_MS } from '../src/domains/ops/product-snapshot.service.ts';

@@ -1,5 +1,5 @@
-import { t } from '@voice-room/ui/i18n';
-import { SCREEN_BITRATE_BY_QUALITY, type ScreenFpsId } from '@voice-room/shared/media-budget';
+import { t } from '@voiceroom/ui-kit/i18n';
+import { SCREEN_BITRATE_BY_QUALITY, type ScreenFpsId } from '@voiceroom/shared/media-budget';
 
 export const DEFAULT_NOISE_MODE = 'rnnoise';
 export const DEFAULT_GATE_THRESHOLD_DB = -100;

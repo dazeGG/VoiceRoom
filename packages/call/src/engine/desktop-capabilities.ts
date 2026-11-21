@@ -1,4 +1,4 @@
-import type { HotkeyBinding } from '@voice-room/ui/hotkey';
+import type { HotkeyBinding } from '@voiceroom/ui-kit/hotkey';
 import type { DesktopCaptureSource, DesktopPickerSelection } from './core/types';
 
 // Events from the desktop app's stream-audio helper. Desktop 1.4.4+ restarts a

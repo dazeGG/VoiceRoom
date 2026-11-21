@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Field, Spinner, SettingRow, SettingsGroup, TextField, Button } from '@voice-room/ui/components';
+import { Field, Spinner, SettingRow, SettingsGroup, TextField, Button } from '@voiceroom/ui-kit/components';
 import { t } from '@/shared/i18n';
 import { KeyRound, Laptop, MonitorSmartphone } from '@lucide/vue';
 import { computed, onMounted, ref, watch } from 'vue';
@@ -14,7 +14,7 @@ import {
 } from '@/api/auth';
 import { isValidPassword, PASSWORD_MIN_LENGTH } from '@/features/auth/account';
 import { useSessionStore } from '@/features/auth/session.store';
-import { iconMd } from '@voice-room/ui/icon-defaults';
+import { iconMd } from '@voiceroom/ui-kit/icon-defaults';
 import { formatLastSeen, recoveryCodesSummary, sessionDeviceLabel } from '../model/account-security';
 import type { ToastOptions } from '../model/toasts.store';
 import RecoveryCodesDialog from './RecoveryCodesDialog.vue';

@@ -64,8 +64,8 @@ For later releases, change only the versions being shipped and commit the matchi
 lockfile. Run the appropriate example from the repository root.
 
 ```bash
-npm version 1.0.1 --workspace @voice-room/web --no-git-tag-version --ignore-scripts
-npm version 1.0.1 --workspace @voice-room/site --no-git-tag-version --ignore-scripts
+npm version 1.0.1 --workspace @voiceroom/web --no-git-tag-version --ignore-scripts
+npm version 1.0.1 --workspace @voiceroom/site --no-git-tag-version --ignore-scripts
 npm --prefix apps/docs version 1.0.1 --no-git-tag-version --ignore-scripts
 ```
 

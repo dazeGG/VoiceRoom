@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import { LINK_PREVIEW_IMAGE_KEY_PATTERN } from '@voice-room/shared/link-preview';
+import { LINK_PREVIEW_IMAGE_KEY_PATTERN } from '@voiceroom/shared/link-preview';
 import { readUploadsDir } from './config.ts';
 import { codeOf } from '../platform/error-code.ts';
 

@@ -11,7 +11,7 @@ import {
   RUNTIME_CONFIG_CONTRACT,
   parseRuntimeConfig,
   resolveLiveKitConnectUrls
-} from '@voice-room/shared/runtime-config';
+} from '@voiceroom/shared/runtime-config';
 import { writePolicyFixtures } from './helpers/caddy-edge.ts';
 
 const repositoryRoot = `${import.meta.dirname}/../../../`;

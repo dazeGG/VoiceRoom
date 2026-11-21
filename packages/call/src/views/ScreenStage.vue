@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { t } from '@voice-room/ui/i18n';
-import { AvatarStack, Slider, IconButton } from '@voice-room/ui/components';
+import { t } from '@voiceroom/ui-kit/i18n';
+import { AvatarStack, Slider, IconButton } from '@voiceroom/ui-kit/components';
 import { Maximize, Minimize, Volume2, VolumeX } from '@lucide/vue';
 import { ref, watch, watchEffect } from 'vue';
 import type { FullscreenView, ScreenMetaView, StreamVolumeView } from '../engine/core/screen-ui.store';

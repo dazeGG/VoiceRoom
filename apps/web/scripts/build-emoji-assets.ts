@@ -26,7 +26,7 @@ import { fileURLToPath } from 'node:url';
 import { Type } from 'typebox';
 import { Value } from 'typebox/value';
 
-import { listReactionEmojis } from '@voice-room/shared/emoji';
+import { listReactionEmojis } from '@voiceroom/shared/emoji';
 
 const require = createRequire(import.meta.url);
 const webRoot = join(dirname(fileURLToPath(import.meta.url)), '..');

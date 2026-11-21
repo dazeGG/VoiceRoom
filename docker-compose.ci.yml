@@ -153,7 +153,7 @@ services:
       context: .
       target: deps
     user: node
-    command: npm --workspace @voice-room/api run dev
+    command: npm --workspace @voiceroom/api run dev
     working_dir: /app
     depends_on:
       deps:
@@ -204,7 +204,7 @@ services:
     build:
       context: .
       target: deps
-    command: sh -c "npm run build && npm --workspace @voice-room/widget run build && cp -R ../widget/dist/. dist/ && npm run preview -- --host 0.0.0.0 --port 5180"
+    command: sh -c "npm run build && npm --workspace @voiceroom/widget run build && cp -R ../widget/dist/. dist/ && npm run preview -- --host 0.0.0.0 --port 5180"
     working_dir: /app/apps/web
     depends_on:
       deps:

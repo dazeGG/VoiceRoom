@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/vue';
 import userEvent from '@testing-library/user-event';
 import { expect, test } from 'vitest';
-import { Callout } from '@voice-room/ui/components';
+import { Callout } from '@voiceroom/ui-kit/components';
 
 test('offers a localized close button and emits dismiss when activated', async () => {
   const view = render(Callout, { props: { title: 'Доступно обновление', dismissible: true } });

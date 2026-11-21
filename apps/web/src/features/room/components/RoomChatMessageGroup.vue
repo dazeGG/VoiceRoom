@@ -4,7 +4,7 @@ import { badgeOf } from '@/shared/badges';
 // open the author's profile), then each message as a MessageBubble.
 import { t } from '@/shared/i18n';
 import { computed } from 'vue';
-import { MAX_ROOM_MESSAGE_LENGTH } from '@voice-room/shared/room-message-content';
+import { MAX_ROOM_MESSAGE_LENGTH } from '@voiceroom/shared/room-message-content';
 import type { ChatMessage } from '@/api/rooms';
 import { useSessionStore } from '@/features/auth/session.store';
 import EmojiText from '@/shared/chat/EmojiText.vue';
@@ -12,7 +12,7 @@ import MessageBubble from '@/shared/chat/MessageBubble.vue';
 import type { MessageMenuState } from '@/shared/chat/message-menu-state';
 import type { ReactionStore } from '@/shared/chat/reaction-store';
 import StructuredMessageContent from '@/shared/chat/StructuredMessageContent.vue';
-import { AccountBadge, Avatar, Pressable } from '@voice-room/ui/components';
+import { AccountBadge, Avatar, Pressable } from '@voiceroom/ui-kit/components';
 import { clockTime } from '@/shared/utils/date-format';
 import { mentionsUser, type ChatGroup } from '../room-chat-view';
 

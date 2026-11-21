@@ -1,6 +1,6 @@
 import type pg from 'pg';
-import { REPORT_REASONS, type AdminUserReport, type ReportReason } from '@voice-room/shared/contracts/reports';
-import { isOneOf } from '@voice-room/shared/guards';
+import { REPORT_REASONS, type AdminUserReport, type ReportReason } from '@voiceroom/shared/contracts/reports';
+import { isOneOf } from '@voiceroom/shared/guards';
 import { kyselyOn } from '../../platform/db/kysely.ts';
 import { epochMillis } from '../../platform/epoch-millis.ts';
 

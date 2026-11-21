@@ -2,7 +2,7 @@ import { render, screen } from '@testing-library/vue';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, expect, test, vi } from 'vitest';
 import { nextTick } from 'vue';
-import { Tooltip } from '@voice-room/ui/components';
+import { Tooltip } from '@voiceroom/ui-kit/components';
 import { stubOverlayDom } from '../helpers/overlay-dom';
 
 beforeEach(stubOverlayDom);

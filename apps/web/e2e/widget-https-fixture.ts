@@ -2,7 +2,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { defaultWidgetConfig, widgetEmbedMarkup } from '@voice-room/shared/contracts/widget';
+import { defaultWidgetConfig, widgetEmbedMarkup } from '@voiceroom/shared/contracts/widget';
 import { expect, type APIRequestContext } from '@playwright/test';
 
 export const widgetOrigin = 'https://localhost:19443';

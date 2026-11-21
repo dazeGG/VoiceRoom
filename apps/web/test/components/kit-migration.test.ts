@@ -13,7 +13,7 @@ import {
   Pressable,
   RadioGroup,
   RadioGroupItem
-} from '@voice-room/ui/components';
+} from '@voiceroom/ui-kit/components';
 import { defineComponent, h } from 'vue';
 import { expect, test, vi } from 'vitest';
 import { instanceOf } from '../helpers/assert';

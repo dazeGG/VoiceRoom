@@ -4,7 +4,7 @@
 
 import type { TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
 import type { FastifyInstance } from 'fastify';
-import { Done, RoomIdParams } from '@voice-room/shared/contracts/http';
+import { Done, RoomIdParams } from '@voiceroom/shared/contracts/http';
 import {
   BookmarkRoomBody,
   CreateRoomBody,
@@ -18,8 +18,8 @@ import {
   RoomPeers,
   RoomStatus,
   RoomUnbookmarked
-} from '@voice-room/shared/contracts/rooms';
-import { cleanRoomName, normalizePeerId, normalizeRoomId, normalizeSessionToken } from '@voice-room/shared/validation';
+} from '@voiceroom/shared/contracts/rooms';
+import { cleanRoomName, normalizePeerId, normalizeRoomId, normalizeSessionToken } from '@voiceroom/shared/validation';
 import { roomCapabilities } from './room-surface.policy.ts';
 import type { ApiContext } from '../../app/context.ts';
 import { failure, optionalJsonBody, type Failure } from '../../platform/http/http-kit.ts';

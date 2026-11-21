@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Dialog, IconButton } from '@voice-room/ui/components';
+import { Dialog, IconButton } from '@voiceroom/ui-kit/components';
 // Full-screen image viewer.
 //
 // It takes plain sources rather than message attachments, so the same viewer
@@ -8,7 +8,7 @@ import { Dialog, IconButton } from '@voice-room/ui/components';
 import { t } from '@/shared/i18n';
 import { ChevronLeft, ChevronRight, Download, Minus, Plus, RotateCcw, X } from '@lucide/vue';
 import { computed, ref } from 'vue';
-import { iconSm } from '@voice-room/ui/icon-defaults';
+import { iconSm } from '@voiceroom/ui-kit/icon-defaults';
 
 export interface LightboxItem {
   src: string;

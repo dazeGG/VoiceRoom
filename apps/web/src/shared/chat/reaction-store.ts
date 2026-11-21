@@ -1,7 +1,7 @@
 import { t } from '@/shared/i18n';
 import { currentErrorMessage } from '@/shared/i18n/localized-text';
 import { markRaw, ref } from 'vue';
-import { MAX_REACTION_BATCH, type ReactionSummary, type Reactor } from '@voice-room/shared/contracts/messages';
+import { MAX_REACTION_BATCH, type ReactionSummary, type Reactor } from '@voiceroom/shared/contracts/messages';
 import { fetchReactionBatch, fetchReactors, setReactionDesired, type ReactionConversation } from '@/api/reactions';
 import { replaceReactionSnapshot } from './reaction-reconciliation';
 import { createLogger, errorContext } from '@/shared/log';

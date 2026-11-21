@@ -2,8 +2,8 @@ import { render, screen } from '@testing-library/vue';
 import userEvent from '@testing-library/user-event';
 import { expect, test, vi } from 'vitest';
 import { defineComponent, h, ref } from 'vue';
-import { Dialog as UiDialog, Toast } from '@voice-room/ui/components';
-import type { ToastItem } from '@voice-room/ui/toast';
+import { Dialog as UiDialog, Toast } from '@voiceroom/ui-kit/components';
+import type { ToastItem } from '@voiceroom/ui-kit/toast';
 
 function hostWith(onClosed: () => void, toasts: ToastItem[] = []) {
   return defineComponent({

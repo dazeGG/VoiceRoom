@@ -22,7 +22,7 @@ export {
   Tag,
   TextField,
   Tooltip
-} from '@voice-room/ui/components';
+} from '@voiceroom/ui-kit/components';
 export { default as AccountBadge } from './AccountBadge.vue';
 export { default as Dialog } from './Dialog.vue';
 export { default as Panel } from './Panel.vue';

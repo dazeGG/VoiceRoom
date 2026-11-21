@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { Field, Spinner, TextField, Button } from '@voice-room/ui/components';
+import { Field, Spinner, TextField, Button } from '@voiceroom/ui-kit/components';
 import { t } from '@/shared/i18n';
 import { ArrowRight } from '@lucide/vue';
 import { START_FEATURES } from '@/shared/start-features';
-import { iconMd } from '@voice-room/ui/icon-defaults';
+import { iconMd } from '@voiceroom/ui-kit/icon-defaults';
 import LandingFeatureGrid from './LandingFeatureGrid.vue';
 
 defineProps<{ creatingTemp: boolean; joining: boolean }>();

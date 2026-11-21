@@ -1,8 +1,8 @@
 import './styles.scss';
 import { createApp } from 'vue';
 import { createPinia, setActivePinia } from 'pinia';
-import { installCallPorts } from '@voice-room/call/engine/ports';
-import { parseWidgetBootstrap, parseWidgetMessage } from '@voice-room/shared/contracts/widget';
+import { installCallPorts } from '@voiceroom/call/engine/ports';
+import { parseWidgetBootstrap, parseWidgetMessage } from '@voiceroom/shared/contracts/widget';
 import WidgetShell from './WidgetShell.vue';
 import { createWidgetSession, widgetSessionKey } from './session';
 const mount = document.getElementById('widget');

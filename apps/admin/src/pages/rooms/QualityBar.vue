@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-import type { VoiceQuality } from '@voice-room/shared/contracts/admin';
+import type { VoiceQuality } from '@voiceroom/shared/contracts/admin';
 import { qualityShares } from './quality.ts';
 
 const props = defineProps<{ quality: VoiceQuality; large?: boolean; separated?: boolean }>();

@@ -5,9 +5,9 @@ import {
   normalizeWidgetColor,
   parseWidgetConfig,
   widgetEmbedMarkup
-} from '@voice-room/shared/contracts/widget';
-import { createRoomCode } from '@voice-room/shared/validation';
-import { fitWidgetTiles } from '@voice-room/ui/tile-grid';
+} from '@voiceroom/shared/contracts/widget';
+import { createRoomCode } from '@voiceroom/shared/validation';
+import { fitWidgetTiles } from '@voiceroom/ui/tile-grid';
 import { widgetCodeParts } from './widget-code-syntax.ts';
 
 const settings = document.querySelector<HTMLFormElement>('[data-widget-settings]');

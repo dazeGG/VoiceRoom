@@ -5,7 +5,7 @@ import path from 'node:path';
 import { Client } from 'pg';
 import { runner } from 'node-pg-migrate';
 import { test } from 'node:test';
-import { classifyPlatform } from '@voice-room/shared/platform-class';
+import { classifyPlatform } from '@voiceroom/shared/platform-class';
 import { createPushSubscriptionRepository } from '../src/domains/notifications/push-subscription.repository.ts';
 import { Type } from 'typebox';
 import { createTestDatabase } from './db-harness.ts';

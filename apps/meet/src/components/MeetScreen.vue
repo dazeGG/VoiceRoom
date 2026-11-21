@@ -1,14 +1,14 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-import { ScreenStage } from '@voice-room/call/views';
-import { useScreenUiStore } from '@voice-room/call/engine/core/screen-ui.store';
+import { ScreenStage } from '@voiceroom/call/views';
+import { useScreenUiStore } from '@voiceroom/call/engine/core/screen-ui.store';
 import {
   syncScreenVideoAudio,
   toggleScreenFullscreen,
   toggleScreenMute,
   setScreenVolume
-} from '@voice-room/call/engine/ui/screen-stage-controls';
-import { handleScreenStageClick } from '@voice-room/call/engine/ui/screen-view';
+} from '@voiceroom/call/engine/ui/screen-stage-controls';
+import { handleScreenStageClick } from '@voiceroom/call/engine/ui/screen-view';
 
 const screen = useScreenUiStore();
 const meta = computed(() => screen.getScreenMetaView());

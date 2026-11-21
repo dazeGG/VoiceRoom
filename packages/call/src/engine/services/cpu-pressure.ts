@@ -3,7 +3,7 @@
 // call's quality account keeps the highest state, and the strain watch
 // (call-strain.ts) weighs it against what the call itself shows.
 
-import type { CpuPressureState } from '@voice-room/shared/contracts/feedback';
+import type { CpuPressureState } from '@voiceroom/shared/contracts/feedback';
 import { createLogger } from '../diagnostics';
 
 export type { CpuPressureState };

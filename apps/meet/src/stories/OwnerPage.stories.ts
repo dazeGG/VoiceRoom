@@ -1,4 +1,4 @@
-import type { Meta, StoryObj } from '../../../../packages/ui/.storybook/types';
+import type { Meta, StoryObj } from '../../../../packages/ui-kit/.storybook/types';
 import OwnerPage from '@/pages/OwnerPage.vue';
 import { installMeetI18n, setMeetLocale } from '@/i18n';
 import { useMeetStore } from '@/meet.store';

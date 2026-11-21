@@ -2,7 +2,7 @@ import { screen, waitFor } from '@testing-library/vue';
 import userEvent from '@testing-library/user-event';
 import { expect, test, vi } from 'vitest';
 import { defineComponent, h } from 'vue';
-import { ContextMenu } from '@voice-room/ui/components';
+import { ContextMenu } from '@voiceroom/ui-kit/components';
 import RoomMenuContent from '@/shared/components/room-menu/RoomMenuContent.vue';
 import { stubFetch } from '../fixtures/fetch.ts';
 import { stubOverlayDom } from '../helpers/overlay-dom';

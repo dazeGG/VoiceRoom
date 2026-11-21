@@ -12,7 +12,7 @@
 //   .settings-select                  -> .room-settings__select
 //   .settings-select-chevron          -> .room-settings__select-chevron
 //   (new)                             -> .room-settings (cancels the Dialog body padding)
-@use 'pkg:@voice-room/ui/styles/mixins' as *;
+@use 'pkg:@voiceroom/ui-kit/styles/mixins' as *;
 
 // The Dialog body pads and spaces its content; the settings body and its sidebar
 // run edge to edge under the title, as in the Svelte modal.

@@ -1,6 +1,6 @@
 import { sql } from 'kysely';
 import type pg from 'pg';
-import type { LinkPreview } from '@voice-room/shared/link-preview';
+import type { LinkPreview } from '@voiceroom/shared/link-preview';
 import { kyselyOn } from '../../platform/db/kysely.ts';
 import type { Json } from '../../platform/db/schema.ts';
 

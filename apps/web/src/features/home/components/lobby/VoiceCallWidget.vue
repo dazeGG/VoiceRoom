@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Tooltip, IconButton, Avatar, Pressable } from '@voice-room/ui/components';
+import { Tooltip, IconButton, Avatar, Pressable } from '@voiceroom/ui-kit/components';
 import { t } from '@/shared/i18n';
 import { HeadphoneOff, Headphones, Mic, MicOff, PhoneOff } from '@lucide/vue';
 import { computed } from 'vue';

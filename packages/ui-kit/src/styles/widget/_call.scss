@@ -1,0 +1,287 @@
+@use 'pkg:@voiceroom/ui-kit/styles/room/participant';
+@use 'pkg:@voiceroom/ui-kit/styles/room/room-dock';
+@use 'pkg:@voiceroom/ui-kit/styles/room/tile-grid';
+@use 'pkg:@voiceroom/ui-kit/styles/mixins' as *;
+
+.widget-shell.widget-shell--call {
+  height: 100dvh;
+  min-height: 0;
+  padding: var(--space-12) var(--space-12) var(--space-6);
+  overflow: hidden;
+
+  .widget-shell__body {
+    display: flex;
+    min-height: 0;
+    flex: 1;
+    flex-direction: column;
+  }
+
+  .widget-shell__credit {
+    margin-block-start: var(--space-4);
+    padding-block-start: 0;
+  }
+
+  .widget-shell__notice {
+    flex: none;
+    max-height: var(--space-64);
+    margin: 0 0 var(--space-8);
+    overflow: auto;
+  }
+}
+
+.widget-call {
+  --vr-scrim: color-mix(in srgb, var(--vr-bg) 86%, transparent);
+  --vr-video-bg: var(--vr-bg);
+  position: relative;
+  display: grid;
+  min-height: 0;
+  flex: 1;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: var(--space-8);
+}
+
+.widget-call__header {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: var(--space-8);
+}
+
+.widget-call__copy-feedback:not(:empty) {
+  position: absolute;
+  z-index: 1;
+  inset-block-start: 100%;
+  inset-inline-start: 0;
+  padding: var(--space-4) var(--space-8);
+  border: 1px solid var(--vr-line-strong);
+  border-radius: var(--radius-8);
+  background: var(--vr-bg);
+  font-size: 0.6875rem;
+  pointer-events: none;
+}
+
+.widget-call__sr-only {
+  @include visually-hidden;
+}
+
+.widget-call .widget-call__code-button {
+  min-width: 0;
+  max-width: 80%;
+  margin-inline-end: auto;
+  padding-inline: var(--space-4);
+  color: var(--vr-text);
+
+  code {
+    overflow: hidden;
+    font: 600 0.75rem/1.4 var(--font-mono);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    user-select: all;
+  }
+
+  svg {
+    flex: none;
+  }
+}
+
+.widget-call .widget-call__expand {
+  position: absolute;
+  z-index: 2;
+  inset: auto 0 calc(-1 * var(--space-24)) auto;
+  background: var(--vr-surface-2);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .widget-call__code-button:not(:hover, :focus-visible) svg {
+    opacity: 0;
+  }
+
+  .widget-shell--call:not(
+      :hover,
+      :has(:focus-visible),
+      :has(.widget-call__panel),
+      :has(.widget-call__header--copy-feedback)
+    )
+    .widget-call__chrome {
+    opacity: 0;
+    pointer-events: none;
+
+    * {
+      pointer-events: none;
+    }
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .widget-call__chrome {
+    transition: opacity 150ms ease;
+  }
+}
+
+.tile-grid.widget-call__tiles {
+  gap: var(--space-8);
+  margin: 0;
+  list-style: none;
+  scrollbar-color: var(--vr-line-strong) transparent;
+  scrollbar-gutter: auto;
+
+  &.widget-call__tiles--fit {
+    overflow: clip;
+  }
+
+  &:focus-visible {
+    outline: var(--space-2) solid var(--vr-accent);
+    outline-offset: calc(-1 * var(--space-2));
+  }
+}
+
+.widget-call__tiles > li {
+  flex: 0 0 var(--tile-width, min(100%, calc(var(--size-48) * 10)));
+  min-width: 0;
+}
+
+@container (max-width: 250px) {
+  .tile-grid.widget-call__tiles {
+    gap: var(--space-4);
+  }
+}
+
+.widget-call .participant {
+  --participant-pastel: color-mix(in srgb, var(--vr-accent) 24%, var(--vr-bg));
+  border-radius: var(--widget-radius);
+}
+
+@container (max-height: 58px) {
+  .widget-call .participant__ring {
+    align-self: start;
+    margin-block-start: var(--space-2);
+  }
+
+  .widget-call .participant__copy {
+    inset: auto var(--space-2) var(--space-2);
+    max-width: calc(100% - var(--space-4));
+  }
+
+  .widget-call .participant__heading {
+    height: var(--space-12);
+    padding-inline: var(--space-2);
+    font-size: 0.625rem;
+  }
+}
+
+.widget-call .participant:not([role]) {
+  cursor: default;
+}
+
+.widget-call .participant__camera video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.widget-call .participant--local .participant__camera video {
+  transform: scaleX(-1);
+}
+
+.widget-call .room-dock--widget {
+  position: static;
+  padding: 0;
+  pointer-events: auto;
+
+  .room-dock__shell {
+    flex-wrap: nowrap;
+    gap: var(--space-6);
+    padding: 0;
+    border: 0;
+    background: transparent;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    box-shadow: none;
+  }
+
+  :is(.room-dock__button, .room-dock__menu-button):focus-visible {
+    outline-offset: calc(-1 * var(--space-2));
+  }
+}
+
+@container (width < 328px) {
+  .widget-call .room-dock--widget {
+    .room-dock__shell {
+      gap: var(--space-4);
+    }
+    .room-dock__split {
+      height: var(--size-32);
+      min-height: 0;
+    }
+    .room-dock__button {
+      width: var(--size-32);
+      min-width: 0;
+      height: var(--size-32);
+      min-height: 0;
+    }
+    .room-dock__button svg {
+      width: var(--icon-16);
+      height: var(--icon-16);
+    }
+    .room-dock__menu-button {
+      width: var(--space-12);
+      height: var(--size-32);
+    }
+    .room-dock__menu-button svg {
+      width: var(--icon-12);
+      height: var(--icon-12);
+    }
+    .room-dock__connection {
+      width: var(--size-32);
+      min-width: 0;
+      height: var(--size-32);
+      min-height: 0;
+      padding-block-end: var(--space-8);
+    }
+    .room-dock__divider {
+      display: none;
+    }
+    .room-dock__button--leave {
+      width: var(--size-32);
+    }
+  }
+}
+
+.widget-call .widget-call__panel {
+  position: absolute;
+  z-index: 1;
+  inset: auto 0 var(--size-56);
+  width: auto;
+  max-height: calc(100% - var(--size-40) * 2);
+  transform: none;
+  padding: var(--space-8);
+  overflow: auto;
+  border: 1px solid var(--vr-line-strong);
+  border-radius: var(--radius-12);
+  background: var(--vr-surface-2);
+}
+
+.widget-call__panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-8);
+  margin-block-end: var(--space-8);
+}
+
+.widget-call__settings {
+  display: grid;
+  gap: var(--space-6);
+  font-size: 0.8125rem;
+}
+
+.widget-call__volume-head {
+  display: flex;
+  justify-content: space-between;
+
+  output {
+    font-family: var(--font-mono);
+  }
+}

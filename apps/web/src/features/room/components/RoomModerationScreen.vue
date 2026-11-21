@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { t } from '@/shared/i18n';
 import { computed } from 'vue';
-import { state } from '@voice-room/call/engine/core/room-runtime.store';
+import { state } from '@voiceroom/call/engine/core/room-runtime.store';
 import { APP_HOME } from '@/shared/app-home';
-import { useCallPageStore } from '@voice-room/call/engine/core/call-page.store';
+import { useCallPageStore } from '@voiceroom/call/engine/core/call-page.store';
 
 const page = useCallPageStore();
 

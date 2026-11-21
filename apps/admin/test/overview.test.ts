@@ -5,7 +5,7 @@
 import { cleanup, screen, waitFor, within } from '@testing-library/vue';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
-import type { LiveRoom, LiveRoomPeer } from '@voice-room/shared/contracts/admin';
+import type { LiveRoom, LiveRoomPeer } from '@voiceroom/shared/contracts/admin';
 import OverviewPage from '../src/pages/OverviewPage.vue';
 import { createPinia } from 'pinia';
 import { useStaffStore } from '../src/staff.store.ts';

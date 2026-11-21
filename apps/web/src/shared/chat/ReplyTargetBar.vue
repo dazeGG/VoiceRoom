@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { IconButton } from '@voice-room/ui/components';
+import { IconButton } from '@voiceroom/ui-kit/components';
 // The composer row that shows which message the draft answers. It renders
 // inside the bordered composer field, directly above the text row and on the
 // same footing as pending image attachments, so the draft reads as one input

@@ -1,4 +1,4 @@
-import type { CallFeedbackTag } from '@voice-room/shared/contracts/feedback';
+import type { CallFeedbackTag } from '@voiceroom/shared/contracts/feedback';
 import { t } from './index';
 
 export const CALL_FEEDBACK_TAG_LABELS: Record<CallFeedbackTag, string> = {

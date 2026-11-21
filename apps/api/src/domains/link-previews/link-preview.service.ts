@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
-import { textOf } from '@voice-room/shared/guards';
-import { firstPreviewableUrl, normalizeLinkPreview, type LinkPreview } from '@voice-room/shared/link-preview';
+import { textOf } from '@voiceroom/shared/guards';
+import { firstPreviewableUrl, normalizeLinkPreview, type LinkPreview } from '@voiceroom/shared/link-preview';
 import { decodeHtmlBody, extractLinkPreviewMetadata } from '../../lib/link-preview-html.ts';
 import { LOG_EVENTS } from '../../lib/log-events.ts';
 import { codeOf } from '../../platform/error-code.ts';

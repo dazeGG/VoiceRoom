@@ -1,9 +1,9 @@
 import { expect, type Locator, type Page } from '@playwright/test';
 import { Value } from 'typebox/value';
-import { Failure } from '@voice-room/shared/contracts/http';
-import { Capabilities } from '@voice-room/shared/contracts/ops';
-import { RoomCreated } from '@voice-room/shared/contracts/rooms';
-import { FriendRequests } from '@voice-room/shared/contracts/social';
+import { Failure } from '@voiceroom/shared/contracts/http';
+import { Capabilities } from '@voiceroom/shared/contracts/ops';
+import { RoomCreated } from '@voiceroom/shared/contracts/rooms';
+import { FriendRequests } from '@voiceroom/shared/contracts/social';
 import { defined, parse } from '../test/helpers/assert';
 
 /** The element's box; fails when the locator's element is not rendered. */

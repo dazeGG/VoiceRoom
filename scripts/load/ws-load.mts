@@ -11,7 +11,7 @@
 
 import { randomBytes } from 'node:crypto';
 // A type-only import: type stripping erases it, so the file still runs alone on the generator.
-import type { ClientCommand } from '@voice-room/shared/contracts/realtime';
+import type { ClientCommand } from '@voiceroom/shared/contracts/realtime';
 import WebSocket from 'ws';
 
 /** A numeric setting; a typo stops the run instead of loading with NaN. */

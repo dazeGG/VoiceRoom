@@ -3,13 +3,13 @@
 // restarts stay silent; a final non-zero exit reports the stream audio as lost.
 
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
-import { state } from '@voice-room/call/engine/core/room-runtime.store';
+import { state } from '@voiceroom/call/engine/core/room-runtime.store';
 import {
   getDesktopPcmSamples,
   onDesktopScreenAudioLost,
   startDesktopSafeScreenAudioCapture,
   stopLocalScreenAudioCapture
-} from '@voice-room/call/engine/services/desktop-screen-audio';
+} from '@voiceroom/call/engine/services/desktop-screen-audio';
 import { installWebCallPortsForTest } from '../helpers/call-ports';
 
 type BridgeEvent = { sessionId: string; event: Record<string, unknown> };

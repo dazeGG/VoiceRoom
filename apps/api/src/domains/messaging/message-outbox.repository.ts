@@ -3,12 +3,12 @@ import { sql, type ExpressionBuilder, type Selectable } from 'kysely';
 import type pg from 'pg';
 import { kyselyOn } from '../../platform/db/kysely.ts';
 import type { DB, MessageDeliveryOutbox } from '../../platform/db/schema.ts';
-import { isOneOf, isRecord } from '@voice-room/shared/guards';
+import { isOneOf, isRecord } from '@voiceroom/shared/guards';
 import {
   DELIVERY_EVENT_TYPES,
   buildMessageDeliveryEvent,
   type MessageDeliveryEvent
-} from '@voice-room/shared/messaging-send';
+} from '@voiceroom/shared/messaging-send';
 
 const DEFAULT_CLAIM_LIMIT = 100;
 const DEFAULT_STALE_CLAIM_MS = 60_000;

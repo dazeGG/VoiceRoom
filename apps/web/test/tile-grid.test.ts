@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test, vi } from 'vitest';
-import { fitTileGrid, fitTiles, fitWidgetTileGrid, MIN_TILE_WIDTH } from '@voice-room/ui/tile-grid';
+import { fitTileGrid, fitTiles, fitWidgetTileGrid, MIN_TILE_WIDTH } from '@voiceroom/ui/tile-grid';
 
 test('crowded widget calls keep one 16:9 size over three columns', () => {
   for (const count of [9, 10, 11, 12]) {

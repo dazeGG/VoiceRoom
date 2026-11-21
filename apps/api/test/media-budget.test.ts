@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import type { MediaGrant } from '@voice-room/shared/contracts/realtime';
+import type { MediaGrant } from '@voiceroom/shared/contracts/realtime';
 import type { RoomRuntimeDeps } from '../src/realtime/room-runtime.ts';
 import type { WsConnection } from '../src/realtime/registry.ts';
 import { fake } from './fakes/index.ts';

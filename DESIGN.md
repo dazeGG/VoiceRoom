@@ -1,17 +1,17 @@
 # Design
 
-The VoiceRoom design system: product principles, foundations and the rules every UI follows. It applies to the web client (`apps/web`), the staff console (`apps/admin`), the personal meeting server (`apps/meet`), the embedded widget (`apps/widget`) and the call views (`packages/call`). All of them take tokens, styles and components from the UI kit in `packages/ui`.
+The VoiceRoom design system: product principles, foundations and the rules every UI follows. It applies to the web client (`apps/web`), the staff console (`apps/admin`), the personal meeting server (`apps/meet`), the embedded widget (`apps/widget`) and the call views (`packages/call`). All of them take tokens, styles and components from the UI kit in `packages/ui-kit`.
 
 - Components, their variants, states and usage rules: Storybook (`npm run storybook`, port 6006). Each component's docs page is its specification.
-- Tokens: `packages/ui/src/styles/_tokens.scss`. Typography and fonts: `packages/ui/src/styles/_typography.scss`, `packages/ui/src/assets/fonts`.
+- Tokens: `packages/ui-kit/src/styles/_tokens.scss`. Typography and fonts: `packages/ui-kit/src/styles/_typography.scss`, `packages/ui-kit/src/assets/fonts`.
 
 ## Kit only
 
-This rule overrides everything else. Every UI in the apps and the call views is built only from `@voice-room/ui/components`. The kit is the single source of truth for how an element looks and behaves.
+This rule overrides everything else. Every UI in the apps and the call views is built only from `@voiceroom/ui-kit/components`. The kit is the single source of truth for how an element looks and behaves.
 
 - No native controls (`<button>`, `<input>`, `<select>`, `<textarea>`, `<dialog>`, `<details>`), no hand-made ARIA widgets (`role="dialog"`, `"menu"`, `"tab"`, `"switch"`, `"tooltip"` and the like on a plain element), no hand-written `ui-*` classes. A clickable surface of its own shape (a tile, a row, a cell) is the kit `Pressable`.
 - A component's look changes only in the kit. App styles lay components out (grid, flex, the gaps between blocks); they never change a component's colour, size, radius, type or states. App stylesheets contain no `.ui-*` selectors.
-- A missing component, variant or prop is added to the kit (`packages/ui`, with its story and a behaviour test) and then used. A local copy, a restyled wrapper or a "temporary" variant in an app is a second source of truth; do not create one.
+- A missing component, variant or prop is added to the kit (`packages/ui-kit`, with its story and a behaviour test) and then used. A local copy, a restyled wrapper or a "temporary" variant in an app is a second source of truth; do not create one.
 - One component per job, in the kit too. When a component does not fit a case, extend it with a variant or a prop; never add a parallel component for the same job (a `NativeSelect` next to `Select`, a second dialog next to `Dialog`).
 - Sizes are grid tokens only (`--size-*`, `--space-*`, `--radius-*`, `--icon-*`); colours are `--vr-*` only. No literal radii or grid-step heights, the kit included.
 - `npm run check` enforces this through `scripts/check-kit-usage.mts`. An exception is an entry in its `KIT_EXCEPTIONS` with the reason; the list stays empty, and a stale entry is an error too.
@@ -63,7 +63,7 @@ This rule overrides everything else. Every UI in the apps and the call views is 
 
 ## Colour
 
-Tokens are in `packages/ui/src/styles/_tokens.scss`; no component carries a raw colour (`scripts/check-web-palette.mts`).
+Tokens are in `packages/ui-kit/src/styles/_tokens.scss`; no component carries a raw colour (`scripts/check-web-palette.mts`).
 
 - The theme is a class on `<html>`: `theme--graphite-volt` (default), `theme--graphite-ice`, `theme--graphite-coral`. All three are dark and differ only in the accent (`--vr-accent*`), `--vr-online` and, in Coral, the `--vr-danger*` hue.
 - Layers from bottom to top: `--vr-bg` → `--vr-surface` (dialogs) → `--vr-surface-2` (panels, fields) → `--vr-surface-3` (buttons, toasts, the dock). A higher layer is lighter. Only floating layers have shadows.
@@ -111,22 +111,6 @@ The height decides the rest:
 - The one exception is `--vr-room-head-h` 69 (44 + 12 padding + 1 border), so the room header and side panel dividers meet.
 - Breakpoints are Sass variables in `_mixins.scss` (max-width): `bp-narrow` 900, `bp-phone` 600, `bp-phone-sm` 560. The room stage also adapts with container queries.
 
-### Component sizes
-
-| Component | xs | sm | md | lg | xl |
-| --- | --- | --- | --- | --- | --- |
-| Button | — | 32 | 40 | 44 | 48 |
-| IconButton | 24 · 28 | 32 | 40 | 44 | — |
-| TextField · Select · Combobox | — | 32 | 40 | 44 | — |
-| SegmentControl (track / segment) | — | 32 / 24 | 40 / 32 | — | — |
-| Tabs | — | — | 40 | — | — |
-| Tag | — | 24 | 28 | — | — |
-| Toggle | — | 32 | — | 44 | — |
-| Badge · Kbd | — | 16 | 20 | — | — |
-| Checkbox · Radio | — | 16 | 20 | — | — |
-| Switch | — | 32×20 | 40×24 | — | — |
-| Menu row, navigation row, ListItem | — | 36 | 48 / 56 | — | — |
-
 ## Depth, motion and states
 
 - Shadows: `--vr-shadow-popover` (popovers, menus, select), `--vr-shadow-modal` (dialogs), `--vr-shadow-dock` (the dock), `--vr-shadow-toast` (toasts, the slider thumb). Everything else is separated by `--vr-line` / `--vr-line-strong` borders and a change of layer.
@@ -160,33 +144,17 @@ The height decides the rest:
 
 ## Components
 
-The kit's components, grouped as in Storybook:
+Run `npm run storybook` (port 6006) to read the Introduction and the component specifications. Each Docs page holds the component’s sizes, variants, states and usage rules.
 
-- **Actions:** Button, IconButton, Toggle, Pressable.
-- **Inputs:** Field, TextField, Textarea, NumberField, Select, Combobox, Checkbox, RadioGroup, Switch, SegmentControl, Slider, HotkeyField, FileDrop.
-- **Navigation:** Tabs, NavList.
-- **Overlays:** Dialog, AlertDialog, DropdownMenu (with the shared menu parts), ContextMenu, Popover, HoverCard, Tooltip.
-- **Feedback:** Toast, Callout, Badge, Tag, Kbd, Spinner, Skeleton, Progress, EmptyState.
-- **People:** Avatar, AvatarStack, ListItem.
-- **Structure:** Card, SettingsGroup and SettingRow, Toolbar, Separator, Splitter.
-- **Call:** ParticipantTile, RoomDock (in `packages/call/src/views`, built from the kit).
+- `Foundations` reads colours, avatars, typography, grid, spacing, radii and icons from the kit tokens.
+- `Components/<Group>/<Name>` contains the kit and call component specifications.
+- `Apps/Meet/*` and `Apps/Widget/*` show the entry and call screens on fake data.
 
-Each component lives in `packages/ui/src/components/<Name>/` (`<Name>.vue`, `types.ts`, `index.ts`, `<Name>.stories.ts`) with its block in `packages/ui/src/styles/components/_<block>.scss` (BEM, `ui-` prefix). Its Storybook docs page holds its sizes, variants, states and usage rules; that page is the only place those rules are written.
-
-- A component is built on a Reka UI primitive when one fits. Only Button, IconButton, Pressable, the fields and what Reka lacks are our own. Only `packages/ui/src/components/**` imports `reka-ui`.
-- Every component has a story covering every size, variant and state, and a behaviour test (render, keyboard, `aria-*`) in `apps/web/test/components`.
-- Default texts inside a component («Закрыть», «Ничего не найдено») come from `@voice-room/ui/i18n`, never a literal string.
-
-### Storybook
-- `npm run storybook` (port 6006); build with `npm --workspace @voice-room/ui run build-storybook` into `packages/ui/storybook-static`. The toolbar theme switch sets `theme--graphite-*` on `<html>`.
-- `Foundations`: colours, avatars, typography, grid, spacing, radii, icons — read from the real tokens.
-- `Components/<Group>/<Name>`: Actions, Inputs, Navigation, Overlays, Feedback, People, Structure, Call.
-- `Apps/Meet/*`, `Apps/Widget/*`: the entry and call screens on fake data.
-- Component stories live next to the component; call stories in `packages/call/src/views/stories`; meet stories in `apps/meet/src/stories` (so the kit does not depend on `call` or the apps).
+Build Storybook with `npm --workspace @voiceroom/ui-kit run build-storybook`. The output is `packages/ui-kit/storybook-static`. The toolbar theme switch sets `theme--graphite-*` on `<html>`.
 
 ## Implementation constraints
 
-- Vue 3 with one SCSS partial per BEM block in the app's `src/styles` or the package's `src/styles`; shared variables come from `pkg:@voice-room/ui/styles/tokens`.
+- Vue 3 with one SCSS partial per BEM block in the app's `src/styles` or the package's `src/styles`; shared variables come from `pkg:@voiceroom/ui-kit/styles/tokens`.
 - The widget runs inside an iframe on third-party sites: its kit styles are scoped to `#widget`, its CSS bundle is self-contained, and its public loader contract does not change with the kit.
 - Microphone mode and configurable hotkeys are desktop-app controls; browser sessions always use the open-microphone mode and do not register voice hotkeys.
 - Marketing screenshots use the real product UI with local demonstration accounts or gameplay supplied for the site, never redrawn controls or private conversations; keep the full frame and intrinsic aspect ratio (`docs/PROMO_SCREENSHOTS.md`).

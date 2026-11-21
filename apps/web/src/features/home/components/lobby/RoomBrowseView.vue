@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { IconButton, ControlGroup } from '@voice-room/ui/components';
+import { IconButton, ControlGroup } from '@voiceroom/ui-kit/components';
 import { useLocalizedText } from '@/shared/i18n/localized-text';
 
 import { t } from '@/shared/i18n';
@@ -15,9 +15,9 @@ import { subscribeRoomPreview } from '@/entities/room/room-realtime';
 import { useSessionStore } from '@/features/auth/session.store';
 import RoomPanelHeader from '@/features/room/components/RoomPanelHeader.vue';
 import EmojiText from '@/shared/chat/EmojiText.vue';
-import { getAvatarPresentation } from '@voice-room/ui/avatar-presentation';
-import { iconSm } from '@voice-room/ui/icon-defaults';
-import { fitTiles } from '@voice-room/ui/tile-grid';
+import { getAvatarPresentation } from '@voiceroom/ui/avatar-presentation';
+import { iconSm } from '@voiceroom/ui-kit/icon-defaults';
+import { fitTiles } from '@voiceroom/ui/tile-grid';
 import { roomDisplayName } from '../../model/rooms';
 import LobbyStreamTile from './LobbyStreamTile.vue';
 import RoomPreviewChat from './RoomPreviewChat.vue';

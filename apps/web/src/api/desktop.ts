@@ -1,4 +1,4 @@
-import { DesktopRelease, type DesktopAsset } from '@voice-room/shared/contracts/ops';
+import { DesktopRelease, type DesktopAsset } from '@voiceroom/shared/contracts/ops';
 import { api } from './client';
 
 export type { DesktopAsset, DesktopRelease };

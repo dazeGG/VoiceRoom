@@ -1,6 +1,6 @@
 import type { DesktopCapabilities } from '../desktop-capabilities';
 import { getInstalledCallPorts } from '../ports';
-import type { HotkeyBinding } from '@voice-room/ui/hotkey';
+import type { HotkeyBinding } from '@voiceroom/ui-kit/hotkey';
 import { HOTKEY_BINDINGS_CHANGED_EVENT, readHotkeyBinding, type HotkeyAction } from '../core/hotkeys';
 
 import { createLogger, errorContext } from '../diagnostics';

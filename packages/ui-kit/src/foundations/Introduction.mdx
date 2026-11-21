@@ -1,0 +1,20 @@
+import { Meta } from '@storybook/addon-docs/blocks';
+
+<Meta title="Introduction" />
+
+# VoiceRoom UI kit
+
+Use the kit to build VoiceRoom interfaces on a shared size grid. See the repository’s `DESIGN.md` for the product principles, tokens, typography, focus and interaction foundations.
+
+- Put each component in `packages/ui-kit/src/components/<Name>/` (`<Name>.vue`, `types.ts`, `index.ts`, `<Name>.stories.ts`).
+- Put styles in `packages/ui-kit/src/styles/components/_<block>.scss`, in BEM, with the block prefix `ui-`.
+- Build the component on a Reka UI primitive when a suitable one exists. Build your own only for Button, IconButton, Pressable, fields, and anything Reka does not have.
+- Import `reka-ui` only from `packages/ui-kit/src/components/**`.
+- Use only `--vr-*` colours, and only size-grid tokens for sizes.
+- Give every component a story with all variants, sizes and states, and a behaviour test (render, keyboard, `aria-*`).
+- Take default texts inside a component («Закрыть» (Close), «Ничего не найдено» (Nothing found)) from `@voiceroom/ui-kit/i18n`, not from a string literal.
+- Use VisuallyHidden, ScrollArea and Collapsible only when needed. The `visually-hidden` mixin and styled scrollbars already exist.
+- Do not add Accordion, PinInput, TagsInput, Editable, Menubar, NavigationMenu, Pagination, Calendar, DateField, DatePicker, TimeField, Stepper, Tree or AspectRatio: the product has no such scenarios.
+- In the admin app, select a period with SegmentControl, Popover and TextField.
+
+Open a component’s Docs page for its usage rules and interactive examples.

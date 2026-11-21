@@ -5,8 +5,8 @@
 
 import type { TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { Failure, UserIdParams } from '@voice-room/shared/contracts/http';
-import { BadgeList } from '@voice-room/shared/contracts/users';
+import { Failure, UserIdParams } from '@voiceroom/shared/contracts/http';
+import { BadgeList } from '@voiceroom/shared/contracts/users';
 import {
   AccountDetail,
   AccountsPage,
@@ -29,8 +29,8 @@ import {
   StaticRoomsQuery,
   SystemQuery,
   SystemStats
-} from '@voice-room/shared/contracts/admin';
-import { RoomCallDetail } from '@voice-room/shared/contracts/feedback';
+} from '@voiceroom/shared/contracts/admin';
+import { RoomCallDetail } from '@voiceroom/shared/contracts/feedback';
 import type { ApiContext } from '../../app/context.ts';
 import { failure, optionalJsonBody } from '../../platform/http/http-kit.ts';
 import type { AccountAction, AdminAccountsService } from './admin-accounts.service.ts';

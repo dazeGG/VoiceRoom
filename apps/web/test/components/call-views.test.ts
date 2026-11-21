@@ -1,8 +1,8 @@
 import { fireEvent, render, screen, within } from '@testing-library/vue';
 import userEvent from '@testing-library/user-event';
 import { createPinia, setActivePinia } from 'pinia';
-import { DeviceSettings, ParticipantTile, RoomDock, RoomStage, type CallDevice } from '@voice-room/call/views';
-import { getHotkeyStorageKey, writeHotkeyBinding } from '@voice-room/call/engine/core/hotkeys';
+import { DeviceSettings, ParticipantTile, RoomDock, RoomStage, type CallDevice } from '@voiceroom/call/views';
+import { getHotkeyStorageKey, writeHotkeyBinding } from '@voiceroom/call/engine/core/hotkeys';
 import { expect, onTestFinished, test, vi } from 'vitest';
 import { defineComponent, h, ref } from 'vue';
 import { installWebCallPortsForTest } from '../helpers/call-ports';

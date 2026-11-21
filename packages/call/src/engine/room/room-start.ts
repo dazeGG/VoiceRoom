@@ -2,10 +2,10 @@ import { getCallPorts } from '../ports';
 // The start screen's actions: create a room or open one by its code. Both
 // navigate to the room's page, which then checks entry and joins.
 
-import { t } from '@voice-room/ui/i18n';
+import { t } from '@voiceroom/ui-kit/i18n';
 import { createLogger, errorContext } from '../diagnostics';
 import { useStartUiStore } from '../core/start-ui.store';
-import { extractRoomId } from '@voice-room/shared/app-home';
+import { extractRoomId } from '@voiceroom/shared/app-home';
 import { errorMessage } from '../core/utils';
 import { requireSavedName } from '../ui/names';
 import { showToast } from '../ui/toast';

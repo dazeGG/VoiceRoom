@@ -1,7 +1,7 @@
-import type { CallTransport } from '@voice-room/call/engine/transport';
-import { createGuestTransport } from '@voice-room/call/guest';
-import { MEET_CHAT_MAX_BYTES, type ServerEvents } from '@voice-room/shared/contracts/realtime';
-import type { RoomCapabilities } from '@voice-room/shared/contracts/rooms';
+import type { CallTransport } from '@voiceroom/call/engine/transport';
+import { createGuestTransport } from '@voiceroom/call/guest';
+import { MEET_CHAT_MAX_BYTES, type ServerEvents } from '@voiceroom/shared/contracts/realtime';
+import type { RoomCapabilities } from '@voiceroom/shared/contracts/rooms';
 import { computed, shallowRef, type Ref, type ShallowRef } from 'vue';
 import { MeetApiError, meetErrorMessage, type MeetApi } from '@/adapters/meet-api';
 

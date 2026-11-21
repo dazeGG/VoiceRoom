@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Button, Callout } from '@voice-room/ui/components';
+import { Button, Callout } from '@voiceroom/ui-kit/components';
 import { t } from '@/shared/i18n';
 import { computed } from 'vue';
 import { useAppUpdateStore } from './app-update.store';

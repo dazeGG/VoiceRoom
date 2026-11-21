@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { Button } from '@voice-room/ui/components';
+import { Button } from '@voiceroom/ui-kit/components';
 import { t } from '@/shared/i18n';
-import { showRoomRoute } from '@voice-room/call/engine/room/room';
+import { showRoomRoute } from '@voiceroom/call/engine/room/room';
 import { APP_HOME } from '@/shared/app-home';
-import { useCallPageStore } from '@voice-room/call/engine/core/call-page.store';
+import { useCallPageStore } from '@voiceroom/call/engine/core/call-page.store';
 
 const page = useCallPageStore();
 

@@ -1,17 +1,17 @@
 // The one way the web talks HTTP to the API. Every route answers with the
-// envelope in @voice-room/shared/contracts/http: a success body that must match
+// envelope in @voiceroom/shared/contracts/http: a success body that must match
 // the route's contract schema, or a Failure that becomes an ApiError. Requests
 // are same-origin, so the HttpOnly session cookie always rides along.
 
 import { t } from '../shared/i18n/runtime.ts';
-import { isErrorCode, type ErrorCode } from '@voice-room/shared/contracts/errors';
+import { isErrorCode, type ErrorCode } from '@voiceroom/shared/contracts/errors';
 import type { Static, TSchema, TUnknown } from 'typebox';
 // Value.Check walks the schema. Never typebox/compile: it builds code with eval, which the CSP forbids.
 import { Value } from 'typebox/value';
 import { createLogger } from '../shared/log.ts';
 import { ERROR_TEXTS, errorText } from './error-texts.ts';
 import { reportContractViolation } from './contract-violations.ts';
-import { firstMismatch } from '@voice-room/shared/contracts/http';
+import { firstMismatch } from '@voiceroom/shared/contracts/http';
 
 const log = createLogger('api');
 
@@ -60,7 +60,7 @@ export function failureBody<Schema extends TSchema>(error: ApiError, schema: Sch
 export type RequestOptions<BodySchema extends TSchema = TSchema> = {
   /** JSON-encoded unless it is FormData. */
   body?: unknown;
-  /** The route's body contract from @voice-room/shared/contracts; on the api.* writes it types `body`. */
+  /** The route's body contract from @voiceroom/shared/contracts; on the api.* writes it types `body`. */
   bodySchema?: BodySchema | undefined;
   signal?: AbortSignal | undefined;
   /** Extra request headers, such as an Idempotency-Key. */
@@ -88,7 +88,7 @@ async function readBody(response: Response, signal?: AbortSignal): Promise<Recor
 
 /**
  * The success body once it matches `schema`, the route's answer from
- * @voice-room/shared/contracts; otherwise an ApiError with the code
+ * @voiceroom/shared/contracts; otherwise an ApiError with the code
  * invalid_response, so a server change shows as a failure here instead of
  * breaking the UI somewhere later.
  */

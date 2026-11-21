@@ -1,6 +1,6 @@
 import { ref } from 'vue';
-import { resolveLocale, type AppLocale } from '@voice-room/shared/localization';
-import { setLocaleReader, setMessageReader } from '@voice-room/ui/i18n';
+import { resolveLocale, type AppLocale } from '@voiceroom/shared/localization';
+import { setLocaleReader, setMessageReader } from '@voiceroom/ui-kit/i18n';
 import { callMessages } from '@/call-messages';
 
 const messages = {

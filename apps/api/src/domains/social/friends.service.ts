@@ -10,8 +10,8 @@ import type {
   OutgoingRequest,
   Relationship,
   SendRequestStatus
-} from '@voice-room/shared/contracts/social';
-import type { PublicUser } from '@voice-room/shared/contracts/users';
+} from '@voiceroom/shared/contracts/social';
+import type { PublicUser } from '@voiceroom/shared/contracts/users';
 import type { PushPayload } from '../notifications/notification-dispatch.ts';
 import { notificationActor, type SocialUser } from './social-views.ts';
 

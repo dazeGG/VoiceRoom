@@ -35,12 +35,7 @@ import {
 import { getAppRealtime, type RealtimeEvent } from '@/api/realtime';
 import { createTypingTracker, typingActivityOf } from '@/shared/chat/typing';
 import type { PresenceStatus } from '@/shared/presence';
-import {
-  playDirectMessageCue,
-  playFriendAcceptedCue,
-  playFriendRequestCue,
-  playRingCue
-} from '@voice-room/call/engine';
+import { playDirectMessageCue, playFriendAcceptedCue, playFriendRequestCue, playRingCue } from '@voiceroom/call/engine';
 import type { NotificationActiveTarget } from '@/shared/notifications/router';
 import { useRoomNavigationStore } from './room-navigation.store';
 import { useNotificationPreferencesStore } from '@/shared/notifications/preferences.store';

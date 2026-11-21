@@ -1,5 +1,5 @@
 import type pg from 'pg';
-import { isArray } from '@voice-room/shared/guards';
+import { isArray } from '@voiceroom/shared/guards';
 import { kyselyOn } from '../../platform/db/kysely.ts';
 import { lockKeys, lockXact } from '../../platform/db/locks.ts';
 import { transaction } from '../../platform/db/pool.ts';

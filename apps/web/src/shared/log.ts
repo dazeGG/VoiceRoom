@@ -5,10 +5,10 @@ import {
   type ClientLogRecord,
   type Logger,
   type LogLevel
-} from '@voice-room/ui/log';
+} from '@voiceroom/ui/log';
 
 export { errorContext, redactForLog };
-export type { ClientLogRecord, LogContext, Logger, LogLevel } from '@voice-room/ui/log';
+export type { ClientLogRecord, LogContext, Logger, LogLevel } from '@voiceroom/ui/log';
 
 const browser = typeof window !== 'undefined' && typeof document !== 'undefined';
 

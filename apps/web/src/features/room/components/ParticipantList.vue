@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-import type { Participant } from '@voice-room/call/engine/core/types';
-import { useParticipantsUiStore } from '@voice-room/call/engine/core/participants-ui.store';
+import type { Participant } from '@voiceroom/call/engine/core/types';
+import { useParticipantsUiStore } from '@voiceroom/call/engine/core/participants-ui.store';
 import ParticipantTile from './ParticipantTile.vue';
 
 const props = withDefaults(defineProps<{ participants?: Participant[] | undefined; variant?: 'grid' | 'strip' }>(), {

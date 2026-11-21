@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/vue';
 import userEvent from '@testing-library/user-event';
 import { expect, test, vi } from 'vitest';
-import { SegmentControl } from '@voice-room/ui/components';
+import { SegmentControl } from '@voiceroom/ui-kit/components';
 import { defineComponent, h, ref } from 'vue';
 
 const options = [

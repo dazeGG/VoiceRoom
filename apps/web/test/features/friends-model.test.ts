@@ -18,7 +18,7 @@ vi.mock('../../src/api/realtime', async (importOriginal) => ({
   })
 }));
 
-vi.mock('@voice-room/call/engine/media/cues', () => ({
+vi.mock('@voiceroom/call/engine/media/cues', () => ({
   playDirectMessageCue: vi.fn(),
   playFriendAcceptedCue: vi.fn(),
   playFriendRequestCue: vi.fn(),
@@ -94,7 +94,7 @@ test('a friend list refreshed after the snapshot keeps live presence for known f
 
 test('a new friend request and an accepted request each play their sound', async () => {
   await startLobby();
-  const cues = await import('@voice-room/call/engine/media/cues');
+  const cues = await import('@voiceroom/call/engine/media/cues');
   emit({ type: 'friend.request', payload: { request: { user: user('dima') } } });
   expect(cues.playFriendRequestCue).toHaveBeenCalledTimes(1);
   emit({ type: 'friend.accepted', payload: { friend: { user: user('dima'), online: true } } });

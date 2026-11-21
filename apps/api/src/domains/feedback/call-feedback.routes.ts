@@ -3,8 +3,8 @@
 
 import type { TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { Done, Failure } from '@voice-room/shared/contracts/http';
-import { AdminCallFeedbackPage, AdminCallFeedbackQuery, CallFeedbackBody } from '@voice-room/shared/contracts/feedback';
+import { Done, Failure } from '@voiceroom/shared/contracts/http';
+import { AdminCallFeedbackPage, AdminCallFeedbackQuery, CallFeedbackBody } from '@voiceroom/shared/contracts/feedback';
 import type { ApiContext } from '../../app/context.ts';
 import { failure } from '../../platform/http/http-kit.ts';
 import type { CallFeedbackService } from './call-feedback.service.ts';

@@ -17,7 +17,7 @@ import type {
   RoomCalls,
   RoomStay,
   VoiceMinute
-} from '@voice-room/shared/contracts/admin';
+} from '@voiceroom/shared/contracts/admin';
 import RoomsPage from '../src/pages/RoomsPage.vue';
 import type { HistoryRoom } from '../src/pages/rooms/history-room.ts';
 import { stubApi as stubRoutes, type Call, type Reply, type Route } from './helpers/api.ts';

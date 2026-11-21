@@ -11,16 +11,17 @@ COPY apps/site/package.json ./apps/site/package.json
 COPY apps/meet/package.json ./apps/meet/package.json
 COPY packages/shared/package.json ./packages/shared/package.json
 COPY packages/ui/package.json ./packages/ui/package.json
+COPY packages/ui-kit/package.json ./packages/ui-kit/package.json
 COPY packages/call/package.json ./packages/call/package.json
-RUN npm ci --workspace @voice-room/api --workspace @voice-room/web --workspace @voice-room/admin --workspace @voice-room/widget \
-  --workspace @voice-room/shared --workspace @voice-room/ui --workspace @voice-room/call --include-workspace-root
+RUN npm ci --workspace @voiceroom/api --workspace @voiceroom/web --workspace @voiceroom/admin --workspace @voiceroom/widget \
+  --workspace @voiceroom/shared --workspace @voiceroom/ui --workspace @voiceroom/ui-kit --workspace @voiceroom/call --include-workspace-root
 
 FROM deps AS web-build
 
 COPY apps/web ./apps/web
 COPY packages ./packages
 COPY scripts/build ./scripts/build
-RUN npm --workspace @voice-room/web run build \
+RUN npm --workspace @voiceroom/web run build \
   && node apps/web/scripts/emit-caddy-csp.ts apps/web/dist/index.html > /app/csp.caddy
 
 FROM deps AS widget-build
@@ -28,7 +29,7 @@ COPY apps/widget ./apps/widget
 COPY packages ./packages
 COPY scripts/build ./scripts/build
 COPY apps/web/scripts/emit-caddy-csp.ts ./emit-caddy-csp.mts
-RUN npm --workspace @voice-room/widget run build \
+RUN npm --workspace @voiceroom/widget run build \
   && node emit-caddy-csp.mts apps/widget/dist/embed/v1/index.html "" https: > apps/widget/dist/csp.caddy
 
 FROM scratch AS widget
@@ -37,7 +38,7 @@ COPY --from=widget-build /app/apps/widget/dist /dist
 FROM deps AS admin-build
 COPY apps/admin ./apps/admin
 COPY packages ./packages
-RUN npm --workspace @voice-room/admin run build
+RUN npm --workspace @voiceroom/admin run build
 
 FROM scratch AS admin
 COPY --from=admin-build /app/apps/admin/dist /dist
@@ -56,8 +57,9 @@ COPY apps/admin/package.json ./apps/admin/package.json
 COPY apps/site/package.json ./apps/site/package.json
 COPY packages/shared/package.json ./packages/shared/package.json
 COPY packages/ui/package.json ./packages/ui/package.json
+COPY packages/ui-kit/package.json ./packages/ui-kit/package.json
 COPY packages/call/package.json ./packages/call/package.json
-RUN npm ci --omit=dev --workspace @voice-room/api --workspace @voice-room/shared
+RUN npm ci --omit=dev --workspace @voiceroom/api --workspace @voiceroom/shared
 
 COPY apps/api ./apps/api
 COPY packages/shared ./packages/shared
@@ -112,14 +114,15 @@ COPY package.json package-lock.json ./
 COPY apps/meet/package.json ./apps/meet/package.json
 COPY packages/shared/package.json ./packages/shared/package.json
 COPY packages/ui/package.json ./packages/ui/package.json
+COPY packages/ui-kit/package.json ./packages/ui-kit/package.json
 COPY packages/call/package.json ./packages/call/package.json
-RUN npm ci --workspace @voice-room/meet --workspace @voice-room/shared --workspace @voice-room/ui --workspace @voice-room/call
+RUN npm ci --workspace @voiceroom/meet --workspace @voiceroom/shared --workspace @voiceroom/ui --workspace @voiceroom/ui-kit --workspace @voiceroom/call
 
 COPY apps/meet ./apps/meet
 COPY packages ./packages
 COPY scripts/build ./scripts/build
 COPY apps/web/scripts/emit-caddy-csp.ts ./emit-caddy-csp.mts
-RUN npm --workspace @voice-room/meet run build \
+RUN npm --workspace @voiceroom/meet run build \
   && node emit-caddy-csp.mts apps/meet/dist/index.html "'self' {\$PERSONAL_SIGNAL_URL} stun: turn: turns:" > /app/csp.caddy
 
 FROM caddy-runtime AS personal-web

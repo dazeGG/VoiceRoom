@@ -6,7 +6,7 @@
 import { screen, waitFor, within } from '@testing-library/vue';
 import userEvent from '@testing-library/user-event';
 import { expect, test } from 'vitest';
-import type { StaffMember, StaffRole } from '@voice-room/shared/contracts/staff';
+import type { StaffMember, StaffRole } from '@voiceroom/shared/contracts/staff';
 import StaffPage from '../src/pages/StaffPage.vue';
 import { stubApi } from './helpers/api.ts';
 import { renderAsStaff } from './helpers/render.ts';

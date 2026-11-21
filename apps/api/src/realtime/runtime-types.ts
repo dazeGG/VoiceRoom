@@ -1,4 +1,4 @@
-import type { PeerLeaveReason } from '@voice-room/shared/contracts/realtime';
+import type { PeerLeaveReason } from '@voiceroom/shared/contracts/realtime';
 import type { GateCredentialRepository } from '../domains/admission/gate-credential.repository.ts';
 import type { RoomChatRepository } from '../domains/messaging/room-chat.repository.ts';
 import type { ServerMuteRepository } from '../domains/moderation/room-ban.repository.ts';

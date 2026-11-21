@@ -2,7 +2,7 @@
 // socket, and the place their address is in, with a short form of the keyed
 // hash that stands for the address (equal keys mean the same address).
 
-import type { ClientKind } from '@voice-room/shared/contracts/admin';
+import type { ClientKind } from '@voiceroom/shared/contracts/admin';
 
 interface Device {
   client: ClientKind | null;

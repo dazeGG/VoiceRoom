@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 import { Calendar } from '@lucide/vue';
-import { Field } from '@voice-room/ui/components';
+import { Field } from '@voiceroom/ui-kit/components';
 import { fromInputValue, rangeLabel, toInputValue, type RangePreset, type TimeRange } from './time-range.ts';
 import { Button, Popover, SegmentControl, TextField } from './ui';
 

@@ -46,8 +46,8 @@ test.each([
     updateVoicePeer: () => {},
     reportVoicePoll: (payload: { rttMs: number | null }) => polls.push(payload)
   }));
-  const stats = await freshImport(() => import('@voice-room/call/engine/room/stats'));
-  const { state } = await import('@voice-room/call/engine/core/room-runtime.store');
+  const stats = await freshImport(() => import('@voiceroom/call/engine/room/stats'));
+  const { state } = await import('@voiceroom/call/engine/core/room-runtime.store');
   // Firefox 159 on Windows: the selected pair had no responses, but RTCP did measure RTT.
   const readings = [
     { roundTripTime: 0.064819, roundTripTimeMeasurements: 2 },
@@ -90,9 +90,9 @@ test.each([
 test('two polls of growing counters add up to the exact loss, concealment and round trip of the call', async () => {
   vi.useFakeTimers();
   vi.doMock('@/entities/room/room-realtime', () => ({ updateVoicePeer: () => {}, reportVoicePoll: () => {} }));
-  const stats = await freshImport(() => import('@voice-room/call/engine/room/stats'));
-  const { state } = await import('@voice-room/call/engine/core/room-runtime.store');
-  const quality = await import('@voice-room/call/engine/room/call-quality');
+  const stats = await freshImport(() => import('@voiceroom/call/engine/room/stats'));
+  const { state } = await import('@voiceroom/call/engine/core/room-runtime.store');
+  const quality = await import('@voiceroom/call/engine/room/call-quality');
 
   let pollNo = 0;
   const readings = [
@@ -178,8 +178,8 @@ test("each poll tells the server what this tab heard of every speaker's micropho
     updateVoicePeer: () => {},
     reportVoicePoll: (payload: unknown) => polls.push(payload)
   }));
-  const stats = await freshImport(() => import('@voice-room/call/engine/room/stats'));
-  const { state } = await import('@voice-room/call/engine/core/room-runtime.store');
+  const stats = await freshImport(() => import('@voiceroom/call/engine/room/stats'));
+  const { state } = await import('@voiceroom/call/engine/core/room-runtime.store');
 
   let pollNo = 0;
   const voiceOf = (packets: number, lost: number, concealed: number, gaps: number, buffered: number) => ({
@@ -254,8 +254,8 @@ test('a poll that could not read a stream does not count its whole history again
     updateVoicePeer: () => {},
     reportVoicePoll: (payload: { heard: unknown }) => polls.push(payload)
   }));
-  const stats = await freshImport(() => import('@voice-room/call/engine/room/stats'));
-  const { state } = await import('@voice-room/call/engine/core/room-runtime.store');
+  const stats = await freshImport(() => import('@voiceroom/call/engine/room/stats'));
+  const { state } = await import('@voiceroom/call/engine/core/room-runtime.store');
 
   // An hour into a call, with its share of gaps; then one read fails, as a track being swapped makes it.
   const reading = (packets: number, gaps: number) => ({
@@ -307,9 +307,9 @@ test('a poll that could not read a stream does not count its whole history again
 test("the desktop app's CPU totals give VoiceRoom's share of the computer apart from the whole computer's", async () => {
   vi.useFakeTimers();
   vi.doMock('@/entities/room/room-realtime', () => ({ updateVoicePeer: () => {}, reportVoicePoll: () => {} }));
-  const stats = await freshImport(() => import('@voice-room/call/engine/room/stats'));
-  const { state } = await import('@voice-room/call/engine/core/room-runtime.store');
-  const quality = await import('@voice-room/call/engine/room/call-quality');
+  const stats = await freshImport(() => import('@voiceroom/call/engine/room/stats'));
+  const { state } = await import('@voiceroom/call/engine/core/room-runtime.store');
+  const quality = await import('@voiceroom/call/engine/room/call-quality');
 
   // Eight cores for 3 s are 24 000 ms of core time a poll; a game keeps 80 % of it busy.
   const readings = [
@@ -351,10 +351,10 @@ test('each poll says how the computer did, for the admin panel, and nothing wher
     updateVoicePeer: () => {},
     reportVoicePoll: (payload: Record<string, unknown>) => polls.push(payload)
   }));
-  const stats = await freshImport(() => import('@voice-room/call/engine/room/stats'));
-  const { state } = await import('@voice-room/call/engine/core/room-runtime.store');
-  const quality = await import('@voice-room/call/engine/room/call-quality');
-  const strain = await import('@voice-room/call/engine/room/call-strain');
+  const stats = await freshImport(() => import('@voiceroom/call/engine/room/stats'));
+  const { state } = await import('@voiceroom/call/engine/core/room-runtime.store');
+  const quality = await import('@voiceroom/call/engine/room/call-quality');
+  const strain = await import('@voiceroom/call/engine/room/call-strain');
   Object.assign(state, { joined: true, localMicPublication: null, peers: new Map<string, never>() });
   quality.startCallQuality(0);
   strain.startCallStrainWatch(() => {});

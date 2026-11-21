@@ -1,5 +1,5 @@
 import { t } from '@/shared/i18n';
-import { WHATS_NEW_VERSION, hasUnseenWhatsNew } from '@voice-room/shared/account-security';
+import { WHATS_NEW_VERSION, hasUnseenWhatsNew } from '@voiceroom/shared/account-security';
 import type { WhatsNew } from '@/api/auth';
 
 export interface WhatsNewSlide {

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, useId, watch } from 'vue';
-import type { AdminUserReport, UserReportResolveBody } from '@voice-room/shared/contracts/reports';
-import { REPORT_REASON_LABELS } from '@voice-room/shared/report-labels';
+import type { AdminUserReport, UserReportResolveBody } from '@voiceroom/shared/contracts/reports';
+import { REPORT_REASON_LABELS } from '@voiceroom/shared/report-labels';
 import { fetchOpenUserReports, resolveUserReport } from '../api/admin.ts';
 import { formatDateTime } from '../format.ts';
 import Notice from '../Notice.vue';

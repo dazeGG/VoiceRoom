@@ -6,15 +6,15 @@ import {
 } from '../domains/rooms/room-surface.policy.ts';
 import type { JoinResult, JoinUser } from './voice-join.ts';
 import type { IncomingMessage } from 'node:http';
-import { clientKind, describeUserAgent } from '@voice-room/shared/account-security';
-import type { ErrorCode } from '@voice-room/shared/contracts/errors';
+import { clientKind, describeUserAgent } from '@voiceroom/shared/account-security';
+import type { ErrorCode } from '@voiceroom/shared/contracts/errors';
 import type {
   ClientCommand,
   ClientCommands,
   MediaGrant,
   TypingActivity,
   VoiceTarget
-} from '@voice-room/shared/contracts/realtime';
+} from '@voiceroom/shared/contracts/realtime';
 import { buildServerEnvelope, buildServerErrorEnvelope, parseInboundMessage } from './envelope.ts';
 import { createTypingThrottle } from './typing-throttle.ts';
 import type { MeetChat } from './meet-chat.ts';

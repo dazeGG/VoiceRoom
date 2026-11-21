@@ -12,7 +12,7 @@
 //   .landing-disclaimer    -> .landing-hero__disclaimer
 // The Svelte home.css also had .lv-join* and .landing-features grid rules; the
 // component styles overrode the latter and .lv-join* belongs to the lobby.
-@use 'pkg:@voice-room/ui/styles/mixins' as *;
+@use 'pkg:@voiceroom/ui-kit/styles/mixins' as *;
 
 .landing-hero {
   display: flex;

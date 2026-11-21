@@ -1,5 +1,5 @@
-import type { PeerSession } from '@voice-room/call/engine/core/types';
-import { isRecord } from '@voice-room/shared/guards';
+import type { PeerSession } from '@voiceroom/call/engine/core/types';
+import { isRecord } from '@voiceroom/shared/guards';
 import { newId } from '@/shared/new-id';
 
 const PEER_SESSION_STORAGE_PREFIX = 'voice-room:peer-session:';

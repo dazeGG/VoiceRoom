@@ -6,7 +6,7 @@ import {
   type LiveRoom,
   type RoomCall,
   type RoomCallsQuery
-} from '@voice-room/shared/contracts/admin';
+} from '@voiceroom/shared/contracts/admin';
 import { fetchLiveRooms, fetchOverview, fetchRoomCalls, fetchStaticRooms } from '../api/admin.ts';
 import { formatClock, formatCount, formatDuration, formatHours, formatPeople, plural } from '../format.ts';
 import { useRefreshStatus } from '../frame.ts';

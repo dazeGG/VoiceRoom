@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { Pressable } from '@voice-room/ui/components';
+import { Pressable } from '@voiceroom/ui-kit/components';
 import { Flag, UserRound } from '@lucide/vue';
 import { computed, ref, useId, watch } from 'vue';
-import type { AdminReport } from '@voice-room/shared/contracts/reports';
-import { REPORT_REASON_LABELS } from '@voice-room/shared/report-labels';
+import type { AdminReport } from '@voiceroom/shared/contracts/reports';
+import { REPORT_REASON_LABELS } from '@voiceroom/shared/report-labels';
 import { fetchOpenReports, resolveReport } from '../api/admin.ts';
 import { formatCount, formatDateTime, plural } from '../format.ts';
 import { useRefreshStatus } from '../frame.ts';

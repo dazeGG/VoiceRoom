@@ -16,9 +16,9 @@ import {
   type AccountsFilter,
   type AccountsSort,
   type VoiceQuality
-} from '@voice-room/shared/contracts/admin';
-import type { AccountBadge } from '@voice-room/shared/contracts/users';
-import { ACCOUNT_DELETION_GRACE_MS, describeUserAgent } from '@voice-room/shared/account-security';
+} from '@voiceroom/shared/contracts/admin';
+import type { AccountBadge } from '@voiceroom/shared/contracts/users';
+import { ACCOUNT_DELETION_GRACE_MS, describeUserAgent } from '@voiceroom/shared/account-security';
 import { kyselyOn } from '../../platform/db/kysely.ts';
 import { epochMillis } from '../../platform/epoch-millis.ts';
 import { avatarUrl } from '../../lib/avatar-url.ts';

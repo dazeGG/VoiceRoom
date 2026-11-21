@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-import type { AdminCallFeedbackEntry } from '@voice-room/shared/contracts/feedback';
-import { CONCEALMENT_THRESHOLDS, networkLevelOfValue, type NetworkMeasure } from '@voice-room/shared/network-quality';
+import type { AdminCallFeedbackEntry } from '@voiceroom/shared/contracts/feedback';
+import { CONCEALMENT_THRESHOLDS, networkLevelOfValue, type NetworkMeasure } from '@voiceroom/shared/network-quality';
 import { formatCount, formatMs, formatPercent } from '../../format.ts';
 
 const props = defineProps<{ quality: NonNullable<AdminCallFeedbackEntry['quality']> }>();

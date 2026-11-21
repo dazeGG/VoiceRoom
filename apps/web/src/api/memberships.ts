@@ -1,4 +1,4 @@
-import { MemberPage, MembershipLeft } from '@voice-room/shared/contracts/membership';
+import { MemberPage, MembershipLeft } from '@voiceroom/shared/contracts/membership';
 import { api } from './client';
 
 export type {
@@ -6,7 +6,7 @@ export type {
   MemberPresenceStatus,
   MembershipMember,
   MembershipRole
-} from '@voice-room/shared/contracts/membership';
+} from '@voiceroom/shared/contracts/membership';
 
 export interface FetchMembershipsOptions {
   cursor?: string | undefined;

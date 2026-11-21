@@ -1,16 +1,16 @@
 <script setup lang="ts">
-import { IconButton } from '@voice-room/ui/components';
+import { IconButton } from '@voiceroom/ui-kit/components';
 // The room chat's compose form: text with @mentions, emoji, attachments and a
 // reply target. Sending itself belongs to the panel, which owns the messages.
 import { t } from '@/shared/i18n';
 import { onBeforeUnmount, onMounted, ref, nextTick, useId } from 'vue';
 import { ArrowUp } from '@lucide/vue';
-import type { MembershipMember } from '@voice-room/shared/contracts/membership';
+import type { MembershipMember } from '@voiceroom/shared/contracts/membership';
 import {
   contentFromPlainText,
   MAX_ROOM_MESSAGE_LENGTH,
   projectRoomMessageContent
-} from '@voice-room/shared/room-message-content';
+} from '@voiceroom/shared/room-message-content';
 import type { ChatMessage } from '@/api/rooms';
 import { getAppRealtime } from '@/api/realtime';
 import { useRoomMembershipStore } from '@/entities/room/room-membership.store';

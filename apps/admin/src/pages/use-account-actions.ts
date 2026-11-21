@@ -1,5 +1,5 @@
 import { ref, shallowRef, type ShallowRef } from 'vue';
-import type { AccountDetail } from '@voice-room/shared/contracts/admin';
+import type { AccountDetail } from '@voiceroom/shared/contracts/admin';
 
 export function useAccountActions<Dialog extends string>(onChanged: (detail: AccountDetail) => void) {
   const dialog: ShallowRef<Dialog | null> = shallowRef(null);

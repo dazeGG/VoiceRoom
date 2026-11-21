@@ -2,7 +2,7 @@ import { fileURLToPath } from 'node:url';
 import { NodePackageImporter } from 'sass';
 import vue from '@vitejs/plugin-vue';
 import { defineConfig } from 'vitest/config';
-import { voiceAssetUrls } from '@voice-room/call/voice-assets';
+import { voiceAssetUrls } from '@voiceroom/call/voice-assets';
 import { cspMetaPlugin } from '../../scripts/build/csp-meta.ts';
 import { voiceAssetsPlugin, voiceAssetVersion } from '../../scripts/build/voice-assets.ts';
 

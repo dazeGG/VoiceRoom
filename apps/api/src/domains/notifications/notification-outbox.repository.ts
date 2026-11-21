@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 import { sql } from 'kysely';
 import type pg from 'pg';
-import { isRecord } from '@voice-room/shared/guards';
+import { isRecord } from '@voiceroom/shared/guards';
 import { kyselyOn, type Database } from '../../platform/db/kysely.ts';
 
 type QueryClient = Pick<pg.PoolClient, 'query'>;

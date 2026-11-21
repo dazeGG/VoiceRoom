@@ -6,7 +6,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { buildServerEnvelope, parseServerFrame } from '@voice-room/shared/realtime';
+import { buildServerEnvelope, parseServerFrame } from '@voiceroom/shared/realtime';
 import { createConnectionRegistry } from '../src/realtime/registry.ts';
 import {
   createRoomPresence,

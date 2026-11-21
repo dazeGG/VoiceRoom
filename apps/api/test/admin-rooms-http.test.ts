@@ -7,9 +7,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Pool } from 'pg';
-import { Me, SignedIn } from '@voice-room/shared/contracts/account';
-import { Failure } from '@voice-room/shared/contracts/http';
-import { ROOM_HISTORY_PAGE_SIZE, LiveRooms, RoomHistory } from '@voice-room/shared/contracts/admin';
+import { Me, SignedIn } from '@voiceroom/shared/contracts/account';
+import { Failure } from '@voiceroom/shared/contracts/http';
+import { ROOM_HISTORY_PAGE_SIZE, LiveRooms, RoomHistory } from '@voiceroom/shared/contracts/admin';
 import { hashPassword } from '../src/lib/password.ts';
 import { runMigrations } from '../src/lib/migrate.ts';
 import { cookieFrom, registerAccount, request, startApiServer } from './fakes/server-process.ts';

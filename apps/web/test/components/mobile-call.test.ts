@@ -5,7 +5,7 @@ import { fireEvent, render, screen, within } from '@testing-library/vue';
 import { createPinia, setActivePinia, type Pinia } from 'pinia';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { nextTick, shallowReactive } from 'vue';
-import type { Participant } from '@voice-room/call/engine/core/types';
+import type { Participant } from '@voiceroom/call/engine/core/types';
 import { defined, instanceOf } from '../helpers/assert';
 import { participant } from '../fixtures/participant';
 
@@ -16,13 +16,13 @@ vi.mock('@/platform/desktop-boundary', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   getDesktopBoundaryPolicy: () => ({ platformClass: platform.platformClass, desktopAllowed: false })
 }));
-vi.mock('@voice-room/call/engine/services/camera-service', async (importOriginal) => ({
+vi.mock('@voiceroom/call/engine/services/camera-service', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   ...camera
 }));
 
 const { default: MobileCallStage } = await import('@/features/room/components/MobileCallStage.vue');
-const { state } = await import('@voice-room/call/engine/core/room-runtime.store');
+const { state } = await import('@voiceroom/call/engine/core/room-runtime.store');
 const { useRoomUiStore } = await import('@/features/room/room-ui.store');
 const { PORTRAIT_PHONE_QUERY } = await import('@/features/room/mobile-call-ui.store');
 const { usePageStore } = await import('@/stores/page.store');

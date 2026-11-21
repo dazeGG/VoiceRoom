@@ -7,8 +7,8 @@ import type {
   ReplyPreview,
   RoomHistoryMessage,
   RoomHistoryPage
-} from '@voice-room/shared/contracts/messages';
-import { normalizeHistoryRequest } from '@voice-room/shared/messaging-history';
+} from '@voiceroom/shared/contracts/messages';
+import { normalizeHistoryRequest } from '@voiceroom/shared/messaging-history';
 import type { CursorCodec, CursorTuple } from '../../platform/cursor-codec.ts';
 import { DomainError } from '../../platform/http/domain-error.ts';
 import { avatarUrl } from '../../lib/avatar-url.ts';

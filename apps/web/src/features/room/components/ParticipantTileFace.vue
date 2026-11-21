@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ParticipantTileFace } from '@voice-room/ui/components';
+import { ParticipantTileFace } from '@voiceroom/ui-kit/components';
 import EmojiText from '@/shared/chat/EmojiText.vue';
 
 defineProps<{

@@ -1,6 +1,6 @@
 import { Room, RoomEvent, Track } from 'livekit-client';
-import { LiveKitAdmission } from '@voice-room/shared/contracts/admission';
-import { WidgetRoomCreated } from '@voice-room/shared/contracts/widget';
+import { LiveKitAdmission } from '@voiceroom/shared/contracts/admission';
+import { WidgetRoomCreated } from '@voiceroom/shared/contracts/widget';
 import { widgetRequest } from '../../widget/src/http';
 import { widgetProof } from '../../widget/src/proof';
 

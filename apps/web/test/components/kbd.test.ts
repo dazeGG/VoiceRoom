@@ -1,6 +1,6 @@
 import { render } from '@testing-library/vue';
 import { expect, test } from 'vitest';
-import { Kbd } from '@voice-room/ui/components';
+import { Kbd } from '@voiceroom/ui-kit/components';
 
 test('each shortcut key gets its own kbd without plus separators', () => {
   const { container } = render(Kbd, { props: { keys: ['Ctrl', 'Shift', 'M'] } });

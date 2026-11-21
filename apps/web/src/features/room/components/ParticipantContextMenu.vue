@@ -5,17 +5,17 @@ import { computed, ref, watch } from 'vue';
 import { banRoomPeer, kickRoomPeer, setRoomPeerServerMute, undoRoomBan } from '@/api/rooms';
 import { useSessionStore } from '@/features/auth/session.store';
 import { useProfileCardUiStore } from '@/entities/profile-card/profile-card-ui.store';
-import { ContextMenu, MenuSeparator, MenuItem, MenuLabel, Slider } from '@voice-room/ui/components';
-import { iconMd, iconSm } from '@voice-room/ui/icon-defaults';
+import { ContextMenu, MenuSeparator, MenuItem, MenuLabel, Slider } from '@voiceroom/ui-kit/components';
+import { iconMd, iconSm } from '@voiceroom/ui-kit/icon-defaults';
 import {
   getParticipantAudioPreference,
   getParticipantAudioPreferenceKey,
   storeParticipantAudioPreference
-} from '@voice-room/call/engine/core/settings';
-import { state as roomState } from '@voice-room/call/engine/core/room-runtime.store';
-import { applyRemoteParticipantAudioPreferences } from '@voice-room/call/engine/services/media-playback-service';
-import { getParticipantById } from '@voice-room/call/engine/room/participants';
-import { showToast } from '@voice-room/call/engine/ui/toast';
+} from '@voiceroom/call/engine/core/settings';
+import { state as roomState } from '@voiceroom/call/engine/core/room-runtime.store';
+import { applyRemoteParticipantAudioPreferences } from '@voiceroom/call/engine/services/media-playback-service';
+import { getParticipantById } from '@voiceroom/call/engine/room/participants';
+import { showToast } from '@voiceroom/call/engine/ui/toast';
 import { useParticipantContextUiStore } from '../participant-context-ui.store';
 import { participantProfilePerson } from '../profile-card-adapter';
 import { useRoomSettingsStore } from '../room-settings.store';

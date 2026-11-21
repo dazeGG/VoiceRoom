@@ -1,5 +1,5 @@
 import { vi } from 'vitest';
-import { ROLE_PERMISSIONS, type StaffRole } from '@voice-room/shared/contracts/staff';
+import { ROLE_PERMISSIONS, type StaffRole } from '@voiceroom/shared/contracts/staff';
 import type { Staff } from '../../src/staff.store.ts';
 
 export type Reply = { status?: number; body: unknown };

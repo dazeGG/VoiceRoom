@@ -6,8 +6,8 @@
 // panel shows live, and every stay sums its polls into minutes, written with
 // the stay when it ends (voice_session_samples).
 
-import type { ClientCommands, CpuPoll, JoinTiming } from '@voice-room/shared/contracts/realtime';
-import { CPU_PRESSURES, type CpuPressure } from '@voice-room/shared/contracts/rooms';
+import type { ClientCommands, CpuPoll, JoinTiming } from '@voiceroom/shared/contracts/realtime';
+import { CPU_PRESSURES, type CpuPressure } from '@voiceroom/shared/contracts/rooms';
 import {
   VOICE_WINDOW_POLLS,
   concealedSpeechPct,
@@ -16,7 +16,7 @@ import {
   type HeardCounts,
   type VoiceReport,
   type VoiceVerdict
-} from '@voice-room/shared/voice-quality';
+} from '@voiceroom/shared/voice-quality';
 import type {
   MinuteCpu,
   StayEvent,

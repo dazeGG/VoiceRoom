@@ -1,4 +1,4 @@
-import type { ConversationRef } from '@voice-room/shared/contracts/realtime';
+import type { ConversationRef } from '@voiceroom/shared/contracts/realtime';
 import {
   ReactionBatch,
   ReactionBody,
@@ -6,7 +6,7 @@ import {
   ReactorPage,
   type ReactionSummary,
   type ReactorList
-} from '@voice-room/shared/contracts/messages';
+} from '@voiceroom/shared/contracts/messages';
 import { api } from './client';
 
 export type ReactionConversation = ConversationRef;

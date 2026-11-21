@@ -12,7 +12,7 @@ import {
   MenuRadioGroup,
   MenuRadioItem,
   Pressable
-} from '@voice-room/ui/components';
+} from '@voiceroom/ui-kit/components';
 import { t } from '@/shared/i18n';
 import { Bell, BellOff, LayoutDashboard, Settings, UserPlus, Users } from '@lucide/vue';
 import { computed, ref } from 'vue';
@@ -22,7 +22,7 @@ import EmojiText from '@/shared/chat/EmojiText.vue';
 import BetaMark from '@/shared/components/BetaMark.vue';
 import { useNotificationPreferencesStore } from '@/shared/notifications/preferences.store';
 import { effectivePresenceStatus, normalizePresenceStatus, type PresenceStatus } from '@/shared/presence';
-import { iconSm } from '@voice-room/ui/icon-defaults';
+import { iconSm } from '@voiceroom/ui-kit/icon-defaults';
 import { displayNameOf } from '@/shared/utils/display-name';
 import type { ActiveVoice } from '../../model/active-voice';
 import type { FriendMenuTarget } from '../../model/friend-menu';

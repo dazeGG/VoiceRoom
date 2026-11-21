@@ -9,7 +9,7 @@ import { buffer } from 'node:stream/consumers';
 import { fileURLToPath } from 'node:url';
 import { brotliDecompressSync } from 'node:zlib';
 import { build, createServer } from 'vite';
-import { voiceAssetUrls } from '@voice-room/call/voice-assets';
+import { voiceAssetUrls } from '@voiceroom/call/voice-assets';
 
 import { metaPolicy, versionFile, voiceAssetDirectory, voiceAssetVersion } from '../scripts/deploy-contract.ts';
 import { buildHeaderPolicy, readMetaPolicy } from '../scripts/emit-caddy-csp.ts';

@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { Avatar, Combobox, Kbd, type AvatarProps, type ComboboxOption } from '@voice-room/ui/components';
+import { Avatar, Combobox, Kbd, type AvatarProps, type ComboboxOption } from '@voiceroom/ui-kit/components';
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, useTemplateRef, watch } from 'vue';
-import type { AccountRow, LiveRoom } from '@voice-room/shared/contracts/admin';
+import type { AccountRow, LiveRoom } from '@voiceroom/shared/contracts/admin';
 import { fetchAccounts, fetchLiveRooms } from '../api/admin.ts';
 import { useCan } from '../staff.store.ts';
 

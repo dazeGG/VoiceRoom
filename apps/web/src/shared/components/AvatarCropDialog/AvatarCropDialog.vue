@@ -3,10 +3,10 @@ import { useLocalizedText, currentErrorMessage } from '@/shared/i18n/localized-t
 
 import { t } from '@/shared/i18n';
 import { Check } from '@lucide/vue';
-import { deriveAvatarAccent, dominantAvatarColor } from '@voice-room/shared/avatar-accent';
+import { deriveAvatarAccent, dominantAvatarColor } from '@voiceroom/shared/avatar-accent';
 import { ref, shallowRef, watch } from 'vue';
 import EmojiText from '@/shared/chat/EmojiText.vue';
-import { Avatar, Button, Dialog, Slider } from '@voice-room/ui/components';
+import { Avatar, Button, Dialog, Slider } from '@voiceroom/ui-kit/components';
 import type { AvatarCropDialogProps } from './types';
 import { context2d, type Canvas2D } from './canvas-2d';
 

@@ -11,14 +11,14 @@ import {
   Pressable,
   Button,
   FileDrop
-} from '@voice-room/ui/components';
+} from '@voiceroom/ui-kit/components';
 import { t } from '@/shared/i18n';
 import { Pencil, X } from '@lucide/vue';
 import { computed, type UnwrapNestedRefs } from 'vue';
 import type { AuthUser } from '@/api/auth';
 import EmojiText from '@/shared/chat/EmojiText.vue';
 import { AvatarCropDialog } from '@/shared/components/AvatarCropDialog';
-import { iconSm } from '@voice-room/ui/icon-defaults';
+import { iconSm } from '@voiceroom/ui-kit/icon-defaults';
 import { displayNameOf } from '@/shared/utils/display-name';
 import type { useProfileDraft } from '../../model/use-profile-draft';
 import type { ToastOptions } from '../../model/toasts.store';

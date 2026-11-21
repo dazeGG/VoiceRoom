@@ -3,8 +3,8 @@ import {
   buildServerEnvelope,
   buildServerErrorEnvelope,
   validateClientCommand
-} from '@voice-room/shared/realtime';
-import type { ServerEnvelope } from '@voice-room/shared/realtime';
+} from '@voiceroom/shared/realtime';
+import type { ServerEnvelope } from '@voiceroom/shared/realtime';
 
 type EnvelopeSocket = { readyState: number; bufferedAmount?: number; send(data: string): void };
 

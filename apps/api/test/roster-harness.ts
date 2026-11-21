@@ -2,7 +2,7 @@
 // realtime join puts them there). Tests that drive the token route through
 // app.inject() have no realtime connection, so they report the peer from the
 // store instead: the API merges store-side peers into its presence roster.
-import { isRecord } from '@voice-room/shared/guards';
+import { isRecord } from '@voiceroom/shared/guards';
 
 function withRosterPeer<Store extends { getRoom?: (roomId: string) => unknown }>(
   store: Store,

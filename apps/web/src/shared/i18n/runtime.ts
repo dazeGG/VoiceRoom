@@ -1,5 +1,5 @@
-import { formatNumber, getLocale, setLocaleReader, setMessageReader, t as translate } from '@voice-room/ui/i18n';
-import type { AppLocale } from '@voice-room/shared/localization';
+import { formatNumber, getLocale, setLocaleReader, setMessageReader, t as translate } from '@voiceroom/ui-kit/i18n';
+import type { AppLocale } from '@voiceroom/shared/localization';
 import { english, french, russian, type MessageKey } from './catalog.ts';
 
 const catalogs: Readonly<Record<AppLocale, Readonly<Record<string, string | undefined>>>> = {

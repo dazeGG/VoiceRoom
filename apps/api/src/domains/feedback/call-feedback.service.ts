@@ -12,9 +12,9 @@ import {
   type CallFeedbackBody,
   type CallFeedbackRating,
   type CallFeedbackTag
-} from '@voice-room/shared/contracts/feedback';
-import type { RoomStay } from '@voice-room/shared/contracts/admin';
-import { normalizeGuestId } from '@voice-room/shared/validation';
+} from '@voiceroom/shared/contracts/feedback';
+import type { RoomStay } from '@voiceroom/shared/contracts/admin';
+import { normalizeGuestId } from '@voiceroom/shared/validation';
 import type { StaffCheck } from '../staff/staff-check.ts';
 import type { StayAsk } from '../admin/admin-rooms.repository.ts';
 import type { CallFeedbackRepository } from './call-feedback.repository.ts';

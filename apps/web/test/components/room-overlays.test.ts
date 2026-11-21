@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { expect, test, vi } from 'vitest';
 import { defineComponent, h } from 'vue';
 import RoomOverlays from '@/features/room/components/RoomOverlays.vue';
-import { useGuestNameUiStore } from '@voice-room/call/engine/core/guest-name-ui.store';
+import { useGuestNameUiStore } from '@voiceroom/call/engine/core/guest-name-ui.store';
 import { renderWithApp } from '../helpers/render.ts';
 
 const Shell = defineComponent(() => {

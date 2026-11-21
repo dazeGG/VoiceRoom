@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { ThumbsDown, ThumbsUp } from '@lucide/vue';
-import type { AdminCallFeedbackEntry } from '@voice-room/shared/contracts/feedback';
-import { CALL_FEEDBACK_TAG_LABELS } from '@voice-room/shared/feedback-labels';
+import type { AdminCallFeedbackEntry } from '@voiceroom/shared/contracts/feedback';
+import { CALL_FEEDBACK_TAG_LABELS } from '@voiceroom/shared/feedback-labels';
 import { formatClock, formatCount, formatMinutes, formatPercent, plural } from '../../format.ts';
 import { EmptyState, Panel, Pill } from '../../ui';
 

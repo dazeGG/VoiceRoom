@@ -2,7 +2,7 @@ import { render, screen, waitFor } from '@testing-library/vue';
 import userEvent from '@testing-library/user-event';
 import { afterEach, expect, test, vi } from 'vitest';
 import { defineComponent, h, ref } from 'vue';
-import { ContextMenu, MenuItem, Popover, type PopoverCloseReason } from '@voice-room/ui/components';
+import { ContextMenu, MenuItem, Popover, type PopoverCloseReason } from '@voiceroom/ui-kit/components';
 import { settle, stubOverlayDom } from '../helpers/overlay-dom';
 
 stubOverlayDom();

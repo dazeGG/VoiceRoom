@@ -8,8 +8,8 @@ import {
   CALL_FEEDBACK_GOOD_TAGS,
   type AdminCallFeedbackEntry,
   type AdminCallFeedbackQuery
-} from '@voice-room/shared/contracts/feedback';
-import { CALL_FEEDBACK_TAG_LABELS } from '@voice-room/shared/feedback-labels';
+} from '@voiceroom/shared/contracts/feedback';
+import { CALL_FEEDBACK_TAG_LABELS } from '@voiceroom/shared/feedback-labels';
 import { fetchCallFeedback } from '../api/admin.ts';
 import { formatCount, formatDateTime, formatMinutes, formatPercent } from '../format.ts';
 import Notice from '../Notice.vue';

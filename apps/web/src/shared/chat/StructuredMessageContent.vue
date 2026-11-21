@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { t } from '@/shared/i18n';
-import { Button, Pressable } from '@voice-room/ui/components';
+import { Button, Pressable } from '@voiceroom/ui-kit/components';
 import { computed, h, shallowRef, type VNode } from 'vue';
-import type { RoomMessageContentV1 } from '@voice-room/shared/room-message-content';
+import type { RoomMessageContentV1 } from '@voiceroom/shared/room-message-content';
 import ChatText from '@/shared/components/ChatText.vue';
 import { copyText } from '@/shared/utils/clipboard';
 import EmojiText from './EmojiText.vue';

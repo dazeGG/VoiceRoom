@@ -1,1 +1,1 @@
-export * from '@voice-room/ui/device-list';
+export * from '@voiceroom/ui/device-list';

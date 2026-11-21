@@ -5,12 +5,12 @@ import { lockUser } from './user.repository.ts';
 import { SessionIssuanceError, type CredentialProof } from './session-proof.ts';
 import { sql } from 'kysely';
 import type pg from 'pg';
-import { isUuid } from '@voice-room/shared/validation';
+import { isUuid } from '@voiceroom/shared/validation';
 import { kyselyOn } from '../../platform/db/kysely.ts';
 import { epochMillis, toDate } from '../../platform/epoch-millis.ts';
 import { LOG_EVENTS } from '../../lib/log-events.ts';
 import { createLogger } from '../../lib/logger.ts';
-import { describeUserAgent, isDesktopAppUserAgent } from '@voice-room/shared/account-security';
+import { describeUserAgent, isDesktopAppUserAgent } from '@voiceroom/shared/account-security';
 import {
   DEFAULT_SESSION_TTL_MS,
   SESSION_TOUCH_INTERVAL_MS,

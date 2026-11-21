@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { RoomAccount } from '@voice-room/shared/contracts/admin';
+import type { RoomAccount } from '@voiceroom/shared/contracts/admin';
 import { AccountBadge, Button } from '../../ui';
 import { nameOf } from './room-bits.ts';
 

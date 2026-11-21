@@ -1,5 +1,5 @@
 import { getCallPorts } from '../ports';
-import { t } from '@voice-room/ui/i18n';
+import { t } from '@voiceroom/ui-kit/i18n';
 import type { LocalTrackPublication, Room } from 'livekit-client';
 import type { MicrophoneCapture } from '../core/types';
 import {

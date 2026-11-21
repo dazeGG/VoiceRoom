@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import type { RingSnapshot } from '@voice-room/shared/contracts/rings';
+import type { RingSnapshot } from '@voiceroom/shared/contracts/rings';
 import type { SocialUser } from '../social/social-views.ts';
 import { notificationActor } from '../social/social-views.ts';
 import type { AccountMessage } from '../../realtime/account-events.ts';

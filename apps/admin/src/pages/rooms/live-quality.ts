@@ -1,4 +1,4 @@
-import type { LiveRoomPeer } from '@voice-room/shared/contracts/admin';
+import type { LiveRoomPeer } from '@voiceroom/shared/contracts/admin';
 import type { Tone } from '../../ui';
 
 /** How many in a room have a voice worse than the norm, in the tone of the worst; null when nobody has. */

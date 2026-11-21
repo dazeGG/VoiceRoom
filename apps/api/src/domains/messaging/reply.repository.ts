@@ -1,10 +1,10 @@
 import crypto from 'node:crypto';
 import { sql, type Selectable } from 'kysely';
 import type pg from 'pg';
-import { isRecord } from '@voice-room/shared/guards';
+import { isRecord } from '@voiceroom/shared/guards';
 import { kyselyOn, type Database } from '../../platform/db/kysely.ts';
 import type { DirectMessages, Json, RoomMessages } from '../../platform/db/schema.ts';
-import type { ReplyPreview } from '@voice-room/shared/contracts/messages';
+import type { ReplyPreview } from '@voiceroom/shared/contracts/messages';
 import { projectReplyPreview, projectReplyTombstone } from './reply-projector.ts';
 
 type QueryClient = Pick<pg.PoolClient, 'query'>;

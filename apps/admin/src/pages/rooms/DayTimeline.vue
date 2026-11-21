@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { Pressable } from '@voice-room/ui/components';
+import { Pressable } from '@voiceroom/ui-kit/components';
 import { computed } from 'vue';
-import type { LiveRoom, RoomCall } from '@voice-room/shared/contracts/admin';
+import type { LiveRoom, RoomCall } from '@voiceroom/shared/contracts/admin';
 import { formatClock, formatDuration, formatPeople } from '../../format.ts';
 import RoomTitle from './RoomTitle.vue';
 import { peopleOf } from './room-bits.ts';

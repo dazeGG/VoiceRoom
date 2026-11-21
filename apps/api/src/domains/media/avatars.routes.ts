@@ -4,11 +4,11 @@
 
 import type { TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { SignedIn } from '@voice-room/shared/contracts/account';
-import { Failure, RoomIdParams } from '@voice-room/shared/contracts/http';
-import { ImageKeyParams } from '@voice-room/shared/contracts/media';
-import { RoomCard, RoomFailure } from '@voice-room/shared/contracts/rooms';
-import { normalizeRoomId } from '@voice-room/shared/validation';
+import { SignedIn } from '@voiceroom/shared/contracts/account';
+import { Failure, RoomIdParams } from '@voiceroom/shared/contracts/http';
+import { ImageKeyParams } from '@voiceroom/shared/contracts/media';
+import { RoomCard, RoomFailure } from '@voiceroom/shared/contracts/rooms';
+import { normalizeRoomId } from '@voiceroom/shared/validation';
 import type { ApiContext } from '../../app/context.ts';
 import { MAX_AVATAR_BYTES } from '../../lib/avatar-processing.ts';
 import { codeOf } from '../../platform/error-code.ts';

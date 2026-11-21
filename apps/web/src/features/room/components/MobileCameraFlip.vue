@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { Button, IconButton } from '@voice-room/ui/components';
+import { Button, IconButton } from '@voiceroom/ui-kit/components';
 import { t } from '@/shared/i18n';
 import { SwitchCamera } from '@lucide/vue';
 import { computed, ref } from 'vue';
-import { state as roomClientState } from '@voice-room/call/engine/core/room-runtime.store';
-import { flipCamera } from '@voice-room/call/engine/services/camera-service';
+import { state as roomClientState } from '@voiceroom/call/engine/core/room-runtime.store';
+import { flipCamera } from '@voiceroom/call/engine/services/camera-service';
 import { useMobileCallUiStore } from '@/features/room/mobile-call-ui.store';
 import { useRoomUiStore } from '@/features/room/room-ui.store';
 

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { AppWindow, Globe, Smartphone } from '@lucide/vue';
-import type { ClientKind } from '@voice-room/shared/contracts/admin';
+import type { ClientKind } from '@voiceroom/shared/contracts/admin';
 
 defineProps<{ client: ClientKind | null }>();
 const clients = {

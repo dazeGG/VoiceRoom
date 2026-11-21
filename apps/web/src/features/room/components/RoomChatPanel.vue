@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Separator, Button, TabsPanel } from '@voice-room/ui/components';
+import { Separator, Button, TabsPanel } from '@voiceroom/ui-kit/components';
 // The one room chat. The in-room rail and the lobby preview differ only in how
 // the viewer is identified and in who owns the surrounding panel chrome, so
 // both render this component instead of keeping parallel implementations.
@@ -22,9 +22,9 @@ import MessageContextMenu from '@/shared/chat/MessageContextMenu.vue';
 import OutgoingMessages from '@/shared/chat/OutgoingMessages.vue';
 import ReportMessageDialog from '@/shared/chat/ReportMessageDialog.vue';
 import { useChatDraft } from '@/shared/chat/use-chat-draft';
-import { applyRoomDeleted, applyRoomNotFound, applyRoomUpdated } from '@voice-room/call/engine/room/lifecycle';
-import { getParticipantById } from '@voice-room/call/engine/room/participants';
-import { state as roomState } from '@voice-room/call/engine/core/room-runtime.store';
+import { applyRoomDeleted, applyRoomNotFound, applyRoomUpdated } from '@voiceroom/call/engine/room/lifecycle';
+import { getParticipantById } from '@voiceroom/call/engine/room/participants';
+import { state as roomState } from '@voiceroom/call/engine/core/room-runtime.store';
 import { mentionProfilePerson, participantProfilePerson, roomMessageProfilePerson } from '../profile-card-adapter';
 import { buildChatDays, type ChatGroup } from '../room-chat-view';
 import { useRoomSocial } from '../social';

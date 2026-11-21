@@ -1,6 +1,6 @@
 import { callPageState } from '../core/call-page.store';
 import { getInstalledCallPorts } from '../ports';
-import { t } from '@voice-room/ui/i18n';
+import { t } from '@voiceroom/ui-kit/i18n';
 import { state } from '../core/room-runtime.store';
 import { showToast } from './toast';
 import { clampStreamVolume, normalizeStoredStreamVolume, storeStreamVolume } from '../core/settings';

@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { cleanup } from '@testing-library/vue';
 import { expect, test, vi } from 'vitest';
 import { defineComponent, h } from 'vue';
-import { ContextMenu } from '@voice-room/ui/components';
+import { ContextMenu } from '@voiceroom/ui-kit/components';
 import LinkPreviewCard from '@/shared/chat/LinkPreviewCard.vue';
 import RoomInviteFriendList from '@/shared/components/room-menu/RoomInviteFriendList.vue';
 import { friend as friendAnswer, publicUser } from '../fixtures/answers.ts';

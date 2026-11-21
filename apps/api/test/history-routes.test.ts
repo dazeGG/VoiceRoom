@@ -22,7 +22,7 @@ import { DomainError } from '../src/platform/http/domain-error.ts';
 import { createCursorCodec } from '../src/platform/cursor-codec.ts';
 import { registerHttpKit } from '../src/platform/http/http-kit.ts';
 import { fake, storedUser } from './fakes/index.ts';
-import { DirectHistoryPage, RoomHistoryPage } from '@voice-room/shared/contracts/messages';
+import { DirectHistoryPage, RoomHistoryPage } from '@voiceroom/shared/contracts/messages';
 import { checked } from './helpers/checked.ts';
 
 const codec = createCursorCodec({ keys: ['h'.repeat(32)] });

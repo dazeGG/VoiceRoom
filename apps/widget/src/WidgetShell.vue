@@ -1,31 +1,31 @@
 <script setup lang="ts">
-import { Button, Callout, Field, IconButton, Select, Slider } from '@voice-room/ui/components';
+import { Button, Callout, Field, IconButton, Select, Slider } from '@voiceroom/ui-kit/components';
 import { onMounted, onBeforeUnmount, ref, computed, useTemplateRef } from 'vue';
 import { X } from '@lucide/vue';
-import { WIDGET_SERVICE_URL, parseWidgetMessage, type WidgetBootstrap } from '@voice-room/shared/contracts/widget';
-import { WidgetCallLayout, WidgetJoinControls } from '@voice-room/ui/widget';
-import { state } from '@voice-room/call/engine/core/room-runtime.store';
-import { isMicrophoneShownMuted } from '@voice-room/call/engine/core/microphone-mute';
-import { useRoomDeviceUiStore } from '@voice-room/call/engine/core/room-device-ui.store';
-import { useToastUiStore } from '@voice-room/call/engine/core/toast-ui.store';
+import { WIDGET_SERVICE_URL, parseWidgetMessage, type WidgetBootstrap } from '@voiceroom/shared/contracts/widget';
+import { WidgetCallLayout, WidgetJoinControls } from '@voiceroom/ui/widget';
+import { state } from '@voiceroom/call/engine/core/room-runtime.store';
+import { isMicrophoneShownMuted } from '@voiceroom/call/engine/core/microphone-mute';
+import { useRoomDeviceUiStore } from '@voiceroom/call/engine/core/room-device-ui.store';
+import { useToastUiStore } from '@voiceroom/call/engine/core/toast-ui.store';
 import {
   getParticipantAudioPreference,
   getParticipantAudioPreferenceKey,
   storeParticipantAudioPreference
-} from '@voice-room/call/engine/core/settings';
-import { switchCamera, toggleCamera } from '@voice-room/call/engine/services/camera-service';
+} from '@voiceroom/call/engine/core/settings';
+import { switchCamera, toggleCamera } from '@voiceroom/call/engine/services/camera-service';
 import {
   applyRemoteParticipantAudioPreferences,
   setLocalAppAudioSuppressed,
   unlockAudio
-} from '@voice-room/call/engine/services/media-playback-service';
-import { toggleMicrophoneMuted } from '@voice-room/call/engine/ui/controls';
+} from '@voiceroom/call/engine/services/media-playback-service';
+import { toggleMicrophoneMuted } from '@voiceroom/call/engine/ui/controls';
 import {
   refreshDevices,
   switchMicrophone,
   switchNoiseMode,
   switchOutputDevice
-} from '@voice-room/call/engine/ui/devices';
+} from '@voiceroom/call/engine/ui/devices';
 import { useWidgetSession } from './session';
 
 const props = defineProps<{ bootstrap: WidgetBootstrap }>();

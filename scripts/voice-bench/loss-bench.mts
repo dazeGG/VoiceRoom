@@ -24,8 +24,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createInterface } from 'node:readline/promises';
 import { chromium, type Browser, type Page } from '@playwright/test';
-import { isRecord } from '@voice-room/shared/guards';
-import { concealedSpeechPct, gapsPerSpeechMin, streamLevel } from '@voice-room/shared/voice-quality';
+import { isRecord } from '@voiceroom/shared/guards';
+import { concealedSpeechPct, gapsPerSpeechMin, streamLevel } from '@voiceroom/shared/voice-quality';
 
 const roomId = process.argv[2];
 if (!roomId) throw new Error('usage: node scripts/voice-bench/loss-bench.mts <roomId>');

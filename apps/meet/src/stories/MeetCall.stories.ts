@@ -1,10 +1,10 @@
-import type { Meta, StoryObj } from '../../../../packages/ui/.storybook/types';
+import type { Meta, StoryObj } from '../../../../packages/ui-kit/.storybook/types';
 import { onUnmounted, ref, shallowReactive, shallowRef } from 'vue';
-import { state } from '@voice-room/call/engine/core/room-runtime.store';
-import type { Participant } from '@voice-room/call/engine/core/types';
-import { installCallPorts } from '@voice-room/call/engine/ports';
-import { createParticipant } from '@voice-room/call/engine/room/participants';
-import { voiceAssetUrls } from '@voice-room/call/voice-assets';
+import { state } from '@voiceroom/call/engine/core/room-runtime.store';
+import type { Participant } from '@voiceroom/call/engine/core/types';
+import { installCallPorts } from '@voiceroom/call/engine/ports';
+import { createParticipant } from '@voiceroom/call/engine/room/participants';
+import { voiceAssetUrls } from '@voiceroom/call/voice-assets';
 import { createMeetPorts } from '@/adapters/meet-ports';
 import type { MeetChatMessage } from '@/adapters/meet-transport';
 import MeetCall from '@/components/MeetCall.vue';

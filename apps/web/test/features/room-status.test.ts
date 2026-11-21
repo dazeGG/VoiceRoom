@@ -2,10 +2,10 @@
 // the connection pill/bars text derived from room state.
 
 import { beforeEach, expect, test } from 'vitest';
-import { state } from '@voice-room/call/engine/core/room-runtime.store';
-import { createInitialRoomState } from '@voice-room/call/engine/model/room-state';
-import { getAvatarPresentation } from '@voice-room/ui/avatar-presentation';
-import { getConnectionStatusView } from '@voice-room/call/engine/ui/status';
+import { state } from '@voiceroom/call/engine/core/room-runtime.store';
+import { createInitialRoomState } from '@voiceroom/call/engine/model/room-state';
+import { getAvatarPresentation } from '@voiceroom/ui/avatar-presentation';
+import { getConnectionStatusView } from '@voiceroom/call/engine/ui/status';
 
 beforeEach(() => {
   Object.assign(state, createInitialRoomState());

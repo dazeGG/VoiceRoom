@@ -20,9 +20,8 @@
     "types": []
   },
   "include": [
-    ".storybook/**/*.ts",
-    ".storybook/**/*.vue",
     "src/**/*.ts",
-    "src/**/*.vue"
+    "src/**/*.vue",
+    "../ui-kit/src/env.d.ts"
   ]
 }

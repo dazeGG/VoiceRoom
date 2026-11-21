@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, shallowRef } from 'vue';
-import type { SystemSample } from '@voice-room/shared/contracts/admin';
-import { networkLevelOfValue } from '@voice-room/shared/network-quality';
+import type { SystemSample } from '@voiceroom/shared/contracts/admin';
+import { networkLevelOfValue } from '@voiceroom/shared/network-quality';
 import { fetchSystemStats } from '../api/admin.ts';
 import { formatBytes, formatMs, formatPercent, formatSampleTime } from '../format.ts';
 import { SYSTEM_PRESETS, systemQuery, type TimeRange } from '../time-range.ts';

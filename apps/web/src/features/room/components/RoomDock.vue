@@ -1,14 +1,14 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, watch } from 'vue';
-import { DeviceSettings, RoomDock, type CallDevice } from '@voice-room/call/views';
-import { useRoomDeviceUiStore } from '@voice-room/call/engine/core/room-device-ui.store';
-import { useScreenUiStore } from '@voice-room/call/engine/core/screen-ui.store';
-import { state } from '@voice-room/call/engine/core/room-runtime.store';
-import { setMicrophoneLevelReporting } from '@voice-room/call/engine/media/meters';
-import { handleLeaveButtonClick } from '@voice-room/call/engine/room/room';
-import { switchCamera, toggleCamera } from '@voice-room/call/engine/services/camera-service';
-import { setMicrophoneVolume } from '@voice-room/call/engine/services/microphone-service';
-import { handleScreenButtonClick } from '@voice-room/call/engine/services/screen-share-service';
+import { DeviceSettings, RoomDock, type CallDevice } from '@voiceroom/call/views';
+import { useRoomDeviceUiStore } from '@voiceroom/call/engine/core/room-device-ui.store';
+import { useScreenUiStore } from '@voiceroom/call/engine/core/screen-ui.store';
+import { state } from '@voiceroom/call/engine/core/room-runtime.store';
+import { setMicrophoneLevelReporting } from '@voiceroom/call/engine/media/meters';
+import { handleLeaveButtonClick } from '@voiceroom/call/engine/room/room';
+import { switchCamera, toggleCamera } from '@voiceroom/call/engine/services/camera-service';
+import { setMicrophoneVolume } from '@voiceroom/call/engine/services/microphone-service';
+import { handleScreenButtonClick } from '@voiceroom/call/engine/services/screen-share-service';
 import {
   getCallControlsView,
   getCameraControlsView,
@@ -16,7 +16,7 @@ import {
   getScreenControlsView,
   handleMicButtonClick,
   toggleOutputMute
-} from '@voice-room/call/engine/ui/controls';
+} from '@voiceroom/call/engine/ui/controls';
 import {
   getGateControlView,
   refreshDevices,
@@ -25,9 +25,9 @@ import {
   switchOutputDevice,
   toggleGate,
   updateGateThresholdFromSlider
-} from '@voice-room/call/engine/ui/devices';
-import { leaveScreenView } from '@voice-room/call/engine/ui/screen-view';
-import { getConnectionStatusView } from '@voice-room/call/engine/ui/status';
+} from '@voiceroom/call/engine/ui/devices';
+import { leaveScreenView } from '@voiceroom/call/engine/ui/screen-view';
+import { getConnectionStatusView } from '@voiceroom/call/engine/ui/status';
 import { createLogger, errorContext } from '@/shared/log';
 
 const log = createLogger('room:dock');

@@ -1,6 +1,6 @@
 import { render, screen, waitFor } from '@testing-library/vue';
 import { expect, test, vi } from 'vitest';
-import { Avatar } from '@voice-room/ui/components';
+import { Avatar } from '@voiceroom/ui-kit/components';
 
 const dot = (container: Element) => container.querySelector('.ui-avatar__dot');
 const statusOf = (element: Element | null) =>

@@ -6,7 +6,7 @@ import type {
   ProductStats,
   SystemSample,
   SystemStats
-} from '@voice-room/shared/contracts/admin';
+} from '@voiceroom/shared/contracts/admin';
 
 export const GB = 1024 ** 3;
 export const HOUR = 3_600_000;

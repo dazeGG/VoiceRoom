@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { IconButton, Spinner, DropdownMenu, MenuItem, MenuLabel, BrandIcon } from '@voice-room/ui/components';
+import { IconButton, Spinner, DropdownMenu, MenuItem, MenuLabel, BrandIcon } from '@voiceroom/ui-kit/components';
 import { t } from '@/shared/i18n';
 import { faApple, faWindows } from '@fortawesome/free-brands-svg-icons';
 import { Download } from '@lucide/vue';

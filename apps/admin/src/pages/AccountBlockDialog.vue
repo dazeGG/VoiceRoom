@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, useId } from 'vue';
-import { ADMIN_REASON_MAX_LENGTH, type BlockDuration } from '@voice-room/shared/contracts/admin';
-import { Button, Callout, Field, Textarea, SegmentControl } from '@voice-room/ui/components';
+import { ADMIN_REASON_MAX_LENGTH, type BlockDuration } from '@voiceroom/shared/contracts/admin';
+import { Button, Callout, Field, Textarea, SegmentControl } from '@voiceroom/ui-kit/components';
 import { BLOCK_DURATIONS } from '../accounts.ts';
 import { useCan } from '../staff.store.ts';
 import Dialog from '../ui/Dialog.vue';

@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { X } from '@lucide/vue';
-import { IconButton, Button } from '@voice-room/ui/components';
+import { IconButton, Button } from '@voiceroom/ui-kit/components';
 import { t } from '@/shared/i18n';
 import { computed, onMounted, ref } from 'vue';
 import EmojiText from './EmojiText.vue';
 import Emoji from './Emoji.vue';
-import { avatarInitial } from '@voice-room/ui/avatar-initial';
+import { avatarInitial } from '@voiceroom/ui-kit/avatar-initial';
 import type { ReactionStore } from './reaction-store';
 
 const { store, messageId, emoji } = defineProps<{

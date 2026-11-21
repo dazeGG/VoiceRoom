@@ -2,9 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import { Pool } from 'pg';
-import { Me } from '@voice-room/shared/contracts/account';
-import { RingAnswer } from '@voice-room/shared/contracts/rings';
-import { Done } from '@voice-room/shared/contracts/http';
+import { Me } from '@voiceroom/shared/contracts/account';
+import { RingAnswer } from '@voiceroom/shared/contracts/rings';
+import { Done } from '@voiceroom/shared/contracts/http';
 import {
   registerAccount,
   request,

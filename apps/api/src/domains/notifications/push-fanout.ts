@@ -2,7 +2,7 @@
 // dispatch and the notification worker send through this, so a recipient gets
 // the push wherever they have a subscription or a token.
 
-import { isArray } from '@voice-room/shared/guards';
+import { isArray } from '@voiceroom/shared/guards';
 import type { PushContext } from '../../lib/push-service.ts';
 import { fieldOf } from '../../platform/record.ts';
 

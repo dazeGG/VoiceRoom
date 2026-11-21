@@ -2,7 +2,7 @@
 // itself is a separate site (apps/admin); the main site only links to it.
 
 import { t } from '@/shared/i18n';
-import { StaffAccess } from '@voice-room/shared/contracts/staff';
+import { StaffAccess } from '@voiceroom/shared/contracts/staff';
 import { api } from './client';
 
 export async function fetchStaffAccess(): Promise<Omit<StaffAccess, 'ok'>> {

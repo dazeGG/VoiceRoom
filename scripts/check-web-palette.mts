@@ -14,10 +14,11 @@ const SOURCE_ROOTS = [
   'apps/admin/src',
   'apps/meet/src',
   'apps/widget/src',
+  'packages/ui-kit/src',
   'packages/ui/src',
   'packages/call/src'
 ];
-const TOKENS_FILE = 'packages/ui/src/styles/_tokens.scss';
+const TOKENS_FILE = 'packages/ui-kit/src/styles/_tokens.scss';
 
 // Surface tokens of the default theme; the tokens file must declare exactly these.
 const SURFACE_TOKEN_VALUES: Record<string, string> = {

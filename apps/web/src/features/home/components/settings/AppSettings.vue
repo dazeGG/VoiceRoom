@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import EmojiText from '@/shared/chat/EmojiText.vue';
-import { IconButton, Switch, SettingRow, SettingsGroup, Select, Button } from '@voice-room/ui/components';
+import { IconButton, Switch, SettingRow, SettingsGroup, Select, Button } from '@voiceroom/ui-kit/components';
 import { t } from '@/shared/i18n';
 import { X } from '@lucide/vue';
 import { computed, onMounted, ref, watch } from 'vue';

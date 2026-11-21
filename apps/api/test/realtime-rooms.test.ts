@@ -9,8 +9,8 @@ import test, { type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { openWs, sendWs, joinVoiceRoom, subscribeRoomPreview, waitForWsType, countWsType } from './ws-harness.ts';
-import { SignedIn } from '@voice-room/shared/contracts/account';
-import { RoomCreated } from '@voice-room/shared/contracts/rooms';
+import { SignedIn } from '@voiceroom/shared/contracts/account';
+import { RoomCreated } from '@voiceroom/shared/contracts/rooms';
 import { createTestDatabase } from './db-harness.ts';
 import {
   cookieFrom,

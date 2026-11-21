@@ -1,14 +1,14 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 import { Check, Lock, Minus, Table2 } from '@lucide/vue';
-import { Field } from '@voice-room/ui/components';
+import { Field } from '@voiceroom/ui-kit/components';
 import {
   ROLE_PERMISSIONS,
   STAFF_PERMISSIONS,
   STAFF_ROLE_LABELS,
   STAFF_ROLES,
   type StaffRole
-} from '@voice-room/shared/contracts/staff';
+} from '@voiceroom/shared/contracts/staff';
 import { fetchStaff, setStaffRole } from '../api/staff.ts';
 import { formatPeople } from '../format.ts';
 import Notice from '../Notice.vue';

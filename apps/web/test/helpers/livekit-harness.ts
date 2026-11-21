@@ -6,9 +6,9 @@ import type { RoomOptions } from 'livekit-client';
 import { createPinia, setActivePinia } from 'pinia';
 import { vi } from 'vitest';
 import { installWebCallPortsForTest } from './call-ports';
-import type { Participant } from '@voice-room/call/engine/core/types';
-import type * as LiveKitServiceModule from '@voice-room/call/engine/services/livekit-service';
-import type * as ScreenProfilesModule from '@voice-room/call/engine/media/profiles';
+import type { Participant } from '@voiceroom/call/engine/core/types';
+import type * as LiveKitServiceModule from '@voiceroom/call/engine/services/livekit-service';
+import type * as ScreenProfilesModule from '@voiceroom/call/engine/media/profiles';
 
 type Peer = Record<string, unknown> & { id: string };
 
@@ -66,7 +66,7 @@ export interface LiveKitHarness {
 const isStoppable = (track: unknown): track is { stop(): void } =>
   typeof track === 'object' && track !== null && 'stop' in track && typeof track.stop === 'function';
 
-const P = '@voice-room/call/engine';
+const P = '@voiceroom/call/engine';
 
 export async function loadLiveKitHarness(
   options: {
@@ -199,7 +199,7 @@ export async function loadLiveKitHarness(
     }
   };
 
-  vi.doMock('@voice-room/call/engine/core/start-ui.store', () => ({ useStartUiStore: () => ({}) }));
+  vi.doMock('@voiceroom/call/engine/core/start-ui.store', () => ({ useStartUiStore: () => ({}) }));
   vi.doMock(`${P}/core/room-runtime.store`, () => ({ state }));
   // Media-only tests can isolate the network presence edge. Camera tests use
   // their own room-realtime mock to verify real presence payloads.
@@ -348,7 +348,7 @@ export async function loadLiveKitHarness(
     }
   }));
 
-  const service = await import('@voice-room/call/engine/services/livekit-service');
+  const service = await import('@voiceroom/call/engine/services/livekit-service');
   return {
     service,
     state,

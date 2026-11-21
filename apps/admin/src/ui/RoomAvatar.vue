@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import visualIdentity from '@voice-room/shared/visual-identity';
-import { Avatar } from '@voice-room/ui/components';
+import visualIdentity from '@voiceroom/shared/visual-identity';
+import { Avatar } from '@voiceroom/ui-kit/components';
 import { computed } from 'vue';
 
 const props = withDefaults(defineProps<{ roomId: string; name: string | null; src?: string | null; size?: number }>(), {

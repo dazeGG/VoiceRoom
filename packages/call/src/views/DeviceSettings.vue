@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { t } from '@voice-room/ui/i18n';
-import { Select, Slider, Switch } from '@voice-room/ui/components';
+import { t } from '@voiceroom/ui-kit/i18n';
+import { Select, Slider, Switch } from '@voiceroom/ui-kit/components';
 import { GATE_THRESHOLD_MAX_DB, GATE_THRESHOLD_MIN_DB } from '../engine/core/config';
 import { NOISE_MODE_SELECT_OPTIONS } from '../engine/core/room-device-ui.store';
 import type { GateControlView } from '../engine/ui/devices';

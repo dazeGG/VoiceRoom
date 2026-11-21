@@ -352,7 +352,7 @@ To add the public landing page to a self-hosted instance, build and publish the 
 
 ```bash
 npm ci
-npm --workspace @voice-room/site run build
+npm --workspace @voiceroom/site run build
 tar -cf - -C apps/site/dist . | bash scripts/cd/publish-static.sh "$PWD" site "$(git rev-parse HEAD)"
 ```
 
@@ -370,8 +370,8 @@ domain.
 ## Migrations
 
 ```bash
-npm --workspace @voice-room/api run db:migrate
-npm --workspace @voice-room/api run db:rollback
+npm --workspace @voiceroom/api run db:migrate
+npm --workspace @voiceroom/api run db:rollback
 ```
 
 `DATABASE_URL` is the main store of rooms, messages and accounts. In production, migrations are applied by a one-shot `migrate` service before `api` starts, and the API only checks that the schema is ready. Outside production the API applies migrations itself on startup (`MIGRATE_ON_START`). For compose you do not have to set `DATABASE_URL` explicitly: it is assembled from `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` and the service name `postgres`.

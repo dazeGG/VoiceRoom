@@ -1,6 +1,6 @@
 import { getLocale, t } from '@/shared/i18n';
-import { localeTag } from '@voice-room/shared/localization';
-import type { AccountFailure } from '@voice-room/shared/contracts/account';
+import { localeTag } from '@voiceroom/shared/localization';
+import type { AccountFailure } from '@voiceroom/shared/contracts/account';
 
 export const PASSWORD_MIN_LENGTH = 8;
 export const LOGIN_HINT = '3–32 символа: латиница, цифры, точка, дефис, подчёркивание';

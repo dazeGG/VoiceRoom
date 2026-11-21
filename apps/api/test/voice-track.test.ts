@@ -5,7 +5,7 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import type { CpuPressure } from '@voice-room/shared/contracts/rooms';
+import type { CpuPressure } from '@voiceroom/shared/contracts/rooms';
 import {
   noteMicChange,
   noteStayEvent,

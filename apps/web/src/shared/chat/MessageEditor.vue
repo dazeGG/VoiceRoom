@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Button } from '@voice-room/ui/components';
+import { Button } from '@voiceroom/ui-kit/components';
 // Edits one sent message in place: Enter saves, Escape or Отмена leaves it
 // as it was. Shared by the room and direct chats; `variant` picks the
 // surrounding chat's look.

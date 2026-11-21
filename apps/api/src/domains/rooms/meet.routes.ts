@@ -1,14 +1,14 @@
 import type { TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
 import type { FastifyInstance } from 'fastify';
-import { RoomIdParams } from '@voice-room/shared/contracts/http';
+import { RoomIdParams } from '@voiceroom/shared/contracts/http';
 import {
   MeetOwnerAuthorization,
   MeetOwnerExchangeBody,
   MeetRoomCreated,
   MeetRoomStatus,
   RoomFailure
-} from '@voice-room/shared/contracts/rooms';
-import { normalizeRoomId } from '@voice-room/shared/validation';
+} from '@voiceroom/shared/contracts/rooms';
+import { normalizeRoomId } from '@voiceroom/shared/validation';
 import type { RateCheck } from '../../lib/rate-limit.ts';
 import { failure } from '../../platform/http/http-kit.ts';
 import type { OwnerCapability } from './meet-owner.service.ts';

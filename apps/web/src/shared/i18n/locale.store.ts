@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
-import { normalizeLocale, resolveLocale, type AppLocale } from '@voice-room/shared/localization';
+import { normalizeLocale, resolveLocale, type AppLocale } from '@voiceroom/shared/localization';
 
 export const LOCALE_STORAGE_KEY = 'voiceroom.locale';
 

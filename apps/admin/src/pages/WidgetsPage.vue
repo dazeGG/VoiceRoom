@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ChevronLeft, ChevronRight } from '@lucide/vue';
 import { computed, nextTick, shallowRef, useTemplateRef } from 'vue';
-import type { RoomCall } from '@voice-room/shared/contracts/admin';
+import type { RoomCall } from '@voiceroom/shared/contracts/admin';
 import { fetchLiveRooms, fetchRoomCalls, fetchWidgets } from '../api/admin.ts';
 import { formatCount, formatHours, formatPeople, plural } from '../format.ts';
 import { useRefreshStatus } from '../frame.ts';

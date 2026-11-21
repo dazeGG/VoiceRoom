@@ -8,10 +8,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Pool } from 'pg';
-import { AccountFailure, Me, SignedIn } from '@voice-room/shared/contracts/account';
-import { AccountDetail, AccountsPage } from '@voice-room/shared/contracts/admin';
-import { Failure } from '@voice-room/shared/contracts/http';
-import { BadgeList } from '@voice-room/shared/contracts/users';
+import { AccountFailure, Me, SignedIn } from '@voiceroom/shared/contracts/account';
+import { AccountDetail, AccountsPage } from '@voiceroom/shared/contracts/admin';
+import { Failure } from '@voiceroom/shared/contracts/http';
+import { BadgeList } from '@voiceroom/shared/contracts/users';
 import { hashPassword } from '../src/lib/password.ts';
 import { hashSessionToken } from '../src/domains/account/user-records.ts';
 import type { TSchema } from 'typebox';

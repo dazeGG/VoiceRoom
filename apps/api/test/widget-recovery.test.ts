@@ -162,8 +162,8 @@ test(
   async (t) => {
     const { startApiServer, request } = await import('./fakes/server-process.ts');
     const { openWs, joinVoiceRoom } = await import('./ws-harness.ts');
-    const { WidgetRoomCreated } = await import('@voice-room/shared/contracts/widget');
-    const { RoomCreated } = await import('@voice-room/shared/contracts/rooms');
+    const { WidgetRoomCreated } = await import('@voiceroom/shared/contracts/widget');
+    const { RoomCreated } = await import('@voiceroom/shared/contracts/rooms');
     const prefix = `recovery-api-${crypto.randomUUID()}-`;
     const url = process.env.WIDGET_RECOVERY_TEST_LIVEKIT_URL ?? '';
     const key = process.env.WIDGET_RECOVERY_TEST_LIVEKIT_KEY ?? '';

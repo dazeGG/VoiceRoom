@@ -2,13 +2,13 @@ import { installWebCallPortsForTest } from '../helpers/call-ports';
 import { createPinia, setActivePinia } from 'pinia';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 
-vi.mock('@voice-room/call/engine/media/cues', () => ({ playPeerCue: vi.fn() }));
+vi.mock('@voiceroom/call/engine/media/cues', () => ({ playPeerCue: vi.fn() }));
 vi.mock('@/entities/room/room-membership.store', () => ({
   useRoomMembershipStore: () => ({ leaveActiveRoomMembership: vi.fn(async () => true) })
 }));
 
-const cues = await import('@voice-room/call/engine/media/cues');
-const { useVoiceSessionStore } = await import('@voice-room/call/engine/core/voice-session.store');
+const cues = await import('@voiceroom/call/engine/media/cues');
+const { useVoiceSessionStore } = await import('@voiceroom/call/engine/core/voice-session.store');
 
 // A new Pinia per test: a store is cached per Pinia, so no test sees a handler or room an earlier one left.
 let voice: ReturnType<typeof useVoiceSessionStore>;

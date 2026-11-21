@@ -3,8 +3,8 @@
 // order, editing, deleting, marking read, and the HTTP answer each outcome
 // becomes. Everything runs on fakes; the integration suites cover the store.
 
-import type { Attachment } from '@voice-room/shared/contracts/messages';
-import { buildServerEnvelope } from '@voice-room/shared/realtime';
+import type { Attachment } from '@voiceroom/shared/contracts/messages';
+import { buildServerEnvelope } from '@voiceroom/shared/realtime';
 import test, { type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
 import fastify, { type FastifyInstance } from 'fastify';

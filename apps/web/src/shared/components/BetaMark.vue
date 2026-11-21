@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Badge } from '@voice-room/ui/components';
+import { Badge } from '@voiceroom/ui-kit/components';
 import { t } from '@/shared/i18n';
 </script>
 <!-- The stage the service is at, next to the logo: a quiet accent pill, not a

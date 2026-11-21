@@ -7,7 +7,7 @@
 // does not match the credential it just admitted.
 
 import type { IncomingHttpHeaders } from 'node:http';
-import { isArray } from '@voice-room/shared/guards';
+import { isArray } from '@voiceroom/shared/guards';
 
 export const DEFAULT_ROOM_PREFIX = 'voice-room-';
 // A JWT minted for this admission is signed moments after the gate credential;

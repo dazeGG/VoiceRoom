@@ -1,12 +1,12 @@
 // Operational routes: health, metrics, the room-creation proof-of-work
 // challenge, the desktop release manifest and browser log intake. Response
-// shapes are the contracts in @voice-room/shared/contracts/ops.
+// shapes are the contracts in @voiceroom/shared/contracts/ops.
 
 import type { TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
 import type { FastifyInstance } from 'fastify';
-import { Failure } from '@voice-room/shared/contracts/http';
+import { Failure } from '@voiceroom/shared/contracts/http';
 import { Type } from 'typebox';
-import { ClientLogsAccepted, ClientVital, DesktopRelease, PowChallenge } from '@voice-room/shared/contracts/ops';
+import { ClientLogsAccepted, ClientVital, DesktopRelease, PowChallenge } from '@voiceroom/shared/contracts/ops';
 import type { ApiContext } from '../../app/context.ts';
 import { failure } from '../../platform/http/http-kit.ts';
 import { LOG_EVENTS } from '../../lib/log-events.ts';

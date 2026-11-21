@@ -3,10 +3,10 @@
 // so the fan-out can sum both. A token is forgotten only when RuStore says it
 // is gone; a refused message or a bad service key keeps every token.
 
-import type { DevicePushProvider } from '@voice-room/shared/contracts/devices';
-import { isVersionBelow } from '@voice-room/shared/client-version';
-import type { PushPayload } from '@voice-room/shared/notifications';
-import { isRecord } from '@voice-room/shared/guards';
+import type { DevicePushProvider } from '@voiceroom/shared/contracts/devices';
+import { isVersionBelow } from '@voiceroom/shared/client-version';
+import type { PushPayload } from '@voiceroom/shared/notifications';
+import { isRecord } from '@voiceroom/shared/guards';
 import { LOG_EVENTS } from '../../lib/log-events.ts';
 import { createLogger } from '../../lib/logger.ts';
 import { resolvePushTtl, type PushContext } from '../../lib/push-service.ts';
@@ -14,7 +14,7 @@ import { buildRuStoreMessage, type RuStorePushClient, type RuStoreSendResult } f
 import type { RuStorePushConfig } from '../../app/config.ts';
 import type { DeviceTokenRepository } from './device-token.repository.ts';
 import { localPushFailure } from './push-fanout.ts';
-import { localizeNotificationPayload } from '@voice-room/shared/notification-text';
+import { localizeNotificationPayload } from '@voiceroom/shared/notification-text';
 
 type SendResult = { enabled: boolean; sent: number; removed: number };
 type NativePushLogger = {

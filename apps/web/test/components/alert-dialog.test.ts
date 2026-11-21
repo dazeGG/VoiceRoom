@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/vue';
 import userEvent from '@testing-library/user-event';
-import { AlertDialog } from '@voice-room/ui/components';
+import { AlertDialog } from '@voiceroom/ui-kit/components';
 import { expect, test, vi } from 'vitest';
 
 function renderConfirmation(busy = false) {

@@ -3,15 +3,15 @@
 // dismisses the reports. Both tell the administrators online that the open
 // reports changed.
 
-import type { AdminReportsEvent } from '@voice-room/shared/contracts/admin';
+import type { AdminReportsEvent } from '@voiceroom/shared/contracts/admin';
 import {
   REPORT_COMMENT_MAX_LENGTH,
   type AdminReport,
   type AdminUserReport,
   type ReportBody,
   type UserReportResolveBody
-} from '@voice-room/shared/contracts/reports';
-import { isUuid } from '@voice-room/shared/validation';
+} from '@voiceroom/shared/contracts/reports';
+import { isUuid } from '@voiceroom/shared/validation';
 import type { StaffCheck } from '../staff/staff-check.ts';
 import { canReportDirectMessage } from './report.policy.ts';
 import type { ReportRepository } from './report.repository.ts';

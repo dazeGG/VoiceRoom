@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { computed, useId } from 'vue';
 import { ArrowUpRight, ChevronDown, ChevronRight } from '@lucide/vue';
-import type { RoomCall } from '@voice-room/shared/contracts/admin';
+import type { RoomCall } from '@voiceroom/shared/contracts/admin';
 import { formatClock, formatCount, formatDayHeading, formatDuration, formatPeople, plural } from '../../format.ts';
-import { getAvatarPresentation } from '@voice-room/ui/avatar-presentation';
+import { getAvatarPresentation } from '@voiceroom/ui/avatar-presentation';
 import { AvatarStack, Button, IconButton } from '../../ui';
 import type { OriginPick } from './call-filters.ts';
 import CallPeople from './CallPeople.vue';

@@ -1,5 +1,5 @@
 {
-  "name": "@voice-room/call",
+  "name": "@voiceroom/call",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -18,8 +18,9 @@
   },
   "dependencies": {
     "@lucide/vue": "^1.61.0",
-    "@voice-room/shared": "file:../shared",
-    "@voice-room/ui": "file:../ui",
+    "@voiceroom/shared": "file:../shared",
+    "@voiceroom/ui": "file:../ui",
+    "@voiceroom/ui-kit": "file:../ui-kit",
     "livekit-client": "^2.22.4"
   },
   "peerDependencies": {

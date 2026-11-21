@@ -1,4 +1,4 @@
-import { isRecord } from '@voice-room/shared/guards';
+import { isRecord } from '@voiceroom/shared/guards';
 import type { VoiceAssetUrls } from './voice-assets';
 
 /** What the RNNoise asset module (a static file without typings) exports. */

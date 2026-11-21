@@ -1,6 +1,6 @@
 import { fireEvent, screen } from '@testing-library/vue';
 import userEvent from '@testing-library/user-event';
-import { Dialog, Pressable } from '@voice-room/ui/components';
+import { Dialog, Pressable } from '@voiceroom/ui-kit/components';
 import { expect, test, vi } from 'vitest';
 import { defineComponent, h, ref } from 'vue';
 import AttachmentLightbox from '@/shared/chat/AttachmentLightbox.vue';

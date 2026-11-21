@@ -14,8 +14,8 @@ import {
   type IncomingRequest,
   type OutgoingRequest,
   type SendRequestStatus
-} from '@voice-room/shared/contracts/social';
-import type { PublicUser } from '@voice-room/shared/contracts/users';
+} from '@voiceroom/shared/contracts/social';
+import type { PublicUser } from '@voiceroom/shared/contracts/users';
 import { api } from './client';
 
 export type {
@@ -26,8 +26,8 @@ export type {
   Relationship,
   SearchResult,
   SendRequestStatus
-} from '@voice-room/shared/contracts/social';
-export type { PublicUser } from '@voice-room/shared/contracts/users';
+} from '@voiceroom/shared/contracts/social';
+export type { PublicUser } from '@voiceroom/shared/contracts/users';
 
 export async function fetchFriends(): Promise<Pick<FriendList, 'friends' | 'incomingRequestCount'>> {
   const { friends, incomingRequestCount } = await api.get('/api/friends', FriendList);

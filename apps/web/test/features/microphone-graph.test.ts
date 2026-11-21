@@ -4,21 +4,21 @@
 
 import { createPinia, setActivePinia } from 'pinia';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
-import { state } from '@voice-room/call/engine/core/room-runtime.store';
-import { createInitialRoomState } from '@voice-room/call/engine/model/room-state';
+import { state } from '@voiceroom/call/engine/core/room-runtime.store';
+import { createInitialRoomState } from '@voiceroom/call/engine/model/room-state';
 import {
   openLocalMicrophone,
   setLocalMicrophoneCapture,
   setMicrophoneCaptureEnabled,
   setMicrophoneVolume,
   stopMicrophoneCapture
-} from '@voice-room/call/engine/services/microphone-service';
-import type { MicrophoneCapture } from '@voice-room/call/engine/core/types';
+} from '@voiceroom/call/engine/services/microphone-service';
+import type { MicrophoneCapture } from '@voiceroom/call/engine/core/types';
 import { defined } from '../helpers/assert.ts';
 import { installWebCallPortsForTest } from '../helpers/call-ports';
 
 const fallback = vi.hoisted(() => vi.fn());
-vi.mock('@voice-room/call/engine/ui/devices', () => ({ fallbackRnnoiseAfterProcessorError: fallback }));
+vi.mock('@voiceroom/call/engine/ui/devices', () => ({ fallbackRnnoiseAfterProcessorError: fallback }));
 
 vi.mock('/rnnoise/rnnoise.mjs', () => ({
   RNNoiseNode: class {
@@ -341,7 +341,7 @@ test('RNNoise failure during preparation or candidate barrier is latched before 
 test('a browser without RNNoise falls back with one toast a page, and the saved choice stays RNNoise', async () => {
   vi.stubGlobal('AudioWorkletNode', undefined);
   state.noiseMode = 'rnnoise';
-  const { useToastUiStore } = await import('@voice-room/call/engine/core/toast-ui.store');
+  const { useToastUiStore } = await import('@voiceroom/call/engine/core/toast-ui.store');
   const first = await openLocalMicrophone();
   const second = await openLocalMicrophone();
   expect([first.mode, second.mode]).toEqual(['browser', 'browser']);

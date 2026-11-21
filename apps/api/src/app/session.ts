@@ -2,7 +2,7 @@
 // the user store, plus the names and colours a session shows in rooms.
 
 import type { IncomingMessage } from 'node:http';
-import { accountPeerIdFor, cleanName } from '@voice-room/shared/validation';
+import { accountPeerIdFor, cleanName } from '@voiceroom/shared/validation';
 import type { SessionRepository } from '../domains/account/session.repository.ts';
 import type { GeoLocator } from '../lib/geoip.ts';
 import type { ActivityTracker } from '../domains/account/activity.service.ts';

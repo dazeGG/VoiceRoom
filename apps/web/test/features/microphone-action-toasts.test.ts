@@ -2,23 +2,23 @@
 // user superseded or left behind says nothing.
 import { afterEach, expect, test, vi } from 'vitest';
 import { createPinia, setActivePinia } from 'pinia';
-import * as devices from '@voice-room/call/engine/ui/devices';
-import type { MicrophoneCapture } from '@voice-room/call/engine/core/types';
-import { state } from '@voice-room/call/engine/core/room-runtime.store';
-import { createInitialRoomState } from '@voice-room/call/engine/model/room-state';
-import { setLocalMicrophoneCapture } from '@voice-room/call/engine/services/microphone-service';
-import { showToast } from '@voice-room/call/engine/ui/toast';
-import { useRoomDeviceUiStore } from '@voice-room/call/engine/core/room-device-ui.store';
+import * as devices from '@voiceroom/call/engine/ui/devices';
+import type { MicrophoneCapture } from '@voiceroom/call/engine/core/types';
+import { state } from '@voiceroom/call/engine/core/room-runtime.store';
+import { createInitialRoomState } from '@voiceroom/call/engine/model/room-state';
+import { setLocalMicrophoneCapture } from '@voiceroom/call/engine/services/microphone-service';
+import { showToast } from '@voiceroom/call/engine/ui/toast';
+import { useRoomDeviceUiStore } from '@voiceroom/call/engine/core/room-device-ui.store';
 import { FakeMediaStream, FakeMediaStreamTrack } from '../helpers/fake-media';
 import { defined } from '../helpers/assert';
 
-vi.mock('@voice-room/call/engine/media/livekit-runtime', () => ({
+vi.mock('@voiceroom/call/engine/media/livekit-runtime', () => ({
   TRACK_SOURCE: { Microphone: 'microphone' },
   loadLiveKitClient: async () => ({ Track: { Source: { Microphone: 'microphone' } } })
 }));
-vi.mock('@voice-room/call/engine/ui/toast', () => ({ showToast: vi.fn() }));
-vi.mock('@voice-room/call/engine/media/meters', () => ({ attachMeter: vi.fn(), syncSpeakingThresholds: vi.fn() }));
-vi.mock('@voice-room/call/engine/ui/controls', () => ({
+vi.mock('@voiceroom/call/engine/ui/toast', () => ({ showToast: vi.fn() }));
+vi.mock('@voiceroom/call/engine/media/meters', () => ({ attachMeter: vi.fn(), syncSpeakingThresholds: vi.fn() }));
+vi.mock('@voiceroom/call/engine/ui/controls', () => ({
   syncMicrophoneControls: vi.fn(),
   syncOutputDeviceUiState: vi.fn()
 }));
@@ -26,7 +26,7 @@ const captureWork = vi.hoisted(() => ({
   open: vi.fn<(isCurrent: () => boolean) => Promise<MicrophoneCapture>>(),
   stop: vi.fn()
 }));
-vi.mock('@voice-room/call/engine/services/microphone-service', async (original) => ({
+vi.mock('@voiceroom/call/engine/services/microphone-service', async (original) => ({
   ...(await original<object>()),
   openLocalMicrophone: captureWork.open,
   stopMicrophoneCapture: captureWork.stop

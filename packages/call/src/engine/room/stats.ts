@@ -5,8 +5,8 @@ import { state } from '../core/room-runtime.store';
 import { findFirstLocalPublication, findLocalMicrophonePublication } from '../services/livekit-service';
 import { isMicrophonePublication } from '../services/livekit/publication-kinds';
 import { isActiveCandidatePair, readRtcStats, type RtcStat, type RtcStatsSource } from '../media/rtc-stats';
-import { isRecord } from '@voice-room/shared/guards';
-import type { CpuPoll, HeardPoll } from '@voice-room/shared/contracts/realtime';
+import { isRecord } from '@voiceroom/shared/guards';
+import type { CpuPoll, HeardPoll } from '@voiceroom/shared/contracts/realtime';
 import { takeJoinTiming } from './join-timing';
 import {
   isCpuRelieved,

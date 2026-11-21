@@ -6,7 +6,7 @@ import { nextTick } from 'vue';
 import userEvent from '@testing-library/user-event';
 import { createPinia, setActivePinia } from 'pinia';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
-import type { CallFeedbackCall } from '@voice-room/shared/contracts/feedback';
+import type { CallFeedbackCall } from '@voiceroom/shared/contracts/feedback';
 import {
   FEEDBACK_ASK_INTERVAL_MS,
   FEEDBACK_MAX_INTERVAL_MS,
@@ -22,7 +22,7 @@ import {
   recordPeerCount,
   recordPollCounts,
   startCallQuality
-} from '@voice-room/call/engine/room/call-quality';
+} from '@voiceroom/call/engine/room/call-quality';
 import { stubFetch } from '../fixtures/fetch';
 import { renderWithApp } from '../helpers/render';
 

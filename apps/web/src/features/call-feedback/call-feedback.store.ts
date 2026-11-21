@@ -13,7 +13,7 @@ import { defineStore } from 'pinia';
 import { ref } from 'vue';
 import { Type } from 'typebox';
 import { Value } from 'typebox/value';
-import { CallFeedbackCall } from '@voice-room/shared/contracts/feedback';
+import { CallFeedbackCall } from '@voiceroom/shared/contracts/feedback';
 import { submitCallFeedback, type CallFeedbackRating, type CallFeedbackTag } from '@/api/feedback';
 import { createLogger, errorContext } from '@/shared/log';
 

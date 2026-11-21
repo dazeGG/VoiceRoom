@@ -73,8 +73,8 @@ async function loadBus(storage = {}) {
   vi.stubGlobal('AudioContext', FakeAudioContext);
   vi.resetModules();
   await installWebCallPortsForTest();
-  const bus = await import('@voice-room/call/engine/services/audio-bus');
-  const { state } = await import('@voice-room/call/engine/core/room-runtime.store');
+  const bus = await import('@voiceroom/call/engine/services/audio-bus');
+  const { state } = await import('@voiceroom/call/engine/core/room-runtime.store');
   return { bus, state };
 }
 

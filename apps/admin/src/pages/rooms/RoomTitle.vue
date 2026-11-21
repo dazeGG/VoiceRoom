@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-import type { RoomKind } from '@voice-room/shared/contracts/admin';
+import type { RoomKind } from '@voiceroom/shared/contracts/admin';
 import { Pill, RoomAvatar } from '../../ui';
 
 const props = withDefaults(

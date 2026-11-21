@@ -1,10 +1,10 @@
 // A room chat message as clients see it (RoomMessage in
-// @voice-room/shared/contracts/messages): the HTTP answers, the realtime
+// @voiceroom/shared/contracts/messages): the HTTP answers, the realtime
 // events and the legacy list all send this shape.
 
 import { Type, type Static, type TSchema } from 'typebox';
 import { Value } from 'typebox/value';
-import { Nullable } from '@voice-room/shared/contracts/http';
+import { Nullable } from '@voiceroom/shared/contracts/http';
 import {
   Attachment,
   LinkPreview,
@@ -12,7 +12,7 @@ import {
   ReplyPointer,
   ReplyPreview,
   RoomMessage
-} from '@voice-room/shared/contracts/messages';
+} from '@voiceroom/shared/contracts/messages';
 import { avatarColorForPeerId } from '../rooms/avatar-color.ts';
 import { avatarUrl } from '../../lib/avatar-url.ts';
 

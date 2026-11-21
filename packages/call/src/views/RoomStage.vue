@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { t } from '@voice-room/ui/i18n';
+import { t } from '@voiceroom/ui-kit/i18n';
 
 defineProps<{ hidden: boolean }>();
 

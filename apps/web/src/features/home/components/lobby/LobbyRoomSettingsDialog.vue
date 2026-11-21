@@ -8,7 +8,7 @@ import {
   Dialog,
   Field,
   TextField
-} from '@voice-room/ui/components';
+} from '@voiceroom/ui-kit/components';
 import { useLocalizedText, currentErrorMessage } from '@/shared/i18n/localized-text';
 
 import { t } from '@/shared/i18n';

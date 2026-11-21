@@ -21,7 +21,7 @@
 //   .reaction-picker-empty              -> .emoji-picker__empty
 
 // The picker draws its own header and footer to the panel edges.
-@use 'pkg:@voice-room/ui/styles/mixins' as *;
+@use 'pkg:@voiceroom/ui-kit/styles/mixins' as *;
 
 .reaction-picker-panel {
   padding: 0;

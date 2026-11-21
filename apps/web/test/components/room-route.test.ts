@@ -25,7 +25,7 @@ import { renderWithApp } from '../helpers/render.ts';
 // the call ports the app's composition root installs, so it is a stand-in here
 // that records each mount.
 const engine = vi.hoisted(() => ({ mountRoomClient: vi.fn(() => () => {}) }));
-vi.mock('@voice-room/call/engine/main', () => engine);
+vi.mock('@voiceroom/call/engine/main', () => engine);
 
 // The lobby is a chunk the route loads on demand; compiling it here keeps that
 // one-off cost out of the wait for the lobby to render.

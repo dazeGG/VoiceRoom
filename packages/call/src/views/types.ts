@@ -1,4 +1,4 @@
-import type { SelectOption } from '@voice-room/ui/components';
+import type { SelectOption } from '@voiceroom/ui-kit/components';
 
 export interface CallAvatar {
   src: string | null;

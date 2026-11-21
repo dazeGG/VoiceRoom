@@ -8,7 +8,7 @@ import {
   RECOVERY_CODES_REMINDER_SNOOZE_MS,
   WHATS_NEW_VERSION,
   normalizeRecoveryCode
-} from '@voice-room/shared/account-security';
+} from '@voiceroom/shared/account-security';
 import { createTestDatabase } from './db-harness.ts';
 
 const SILENT = { log() {}, info() {}, warn() {}, error() {} };

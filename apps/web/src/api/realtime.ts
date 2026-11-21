@@ -1,14 +1,14 @@
 // App-level WebSocket at /api/ws: account events, room summaries, preview/detail, voice.
 
-import { isErrorCode, type ErrorCode } from '@voice-room/shared/contracts/errors';
+import { isErrorCode, type ErrorCode } from '@voiceroom/shared/contracts/errors';
 import type {
   ClientCommands,
   ClientCommandType,
   RoomRealtimeSummary,
   RoomSnapshot,
   ServerEvent
-} from '@voice-room/shared/contracts/realtime';
-import { parseServerFrame, SESSION_ENDED_CLOSE_CODE } from '@voice-room/shared/realtime';
+} from '@voiceroom/shared/contracts/realtime';
+import { parseServerFrame, SESSION_ENDED_CLOSE_CODE } from '@voiceroom/shared/realtime';
 import { isRealtimeBlocked } from '@/platform/desktop-boundary';
 import { createLogger, reportClientLogs } from '@/shared/log';
 import { reportContractViolation } from './contract-violations';

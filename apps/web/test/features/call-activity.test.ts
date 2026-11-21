@@ -5,7 +5,7 @@ import { installWebCallPortsForTest } from '../helpers/call-ports';
 import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, expect, test } from 'vitest';
 import { useCallActivityStore } from '@/shared/call-activity.store';
-import { useVoiceSessionStore } from '@voice-room/call/engine/core/voice-session.store';
+import { useVoiceSessionStore } from '@voiceroom/call/engine/core/voice-session.store';
 
 beforeEach(async () => {
   setActivePinia(createPinia());

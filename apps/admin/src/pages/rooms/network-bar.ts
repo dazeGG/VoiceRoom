@@ -4,13 +4,8 @@
 // the tooltip, and a missing minute is grey. Older stays carry their client's
 // own changes of level (NetworkPoint).
 
-import type { VoiceMinute, VoiceMinuteHeard } from '@voice-room/shared/contracts/admin';
-import {
-  VOICE_CAUSES,
-  type NetworkLevel,
-  type NetworkPoint,
-  type VoiceCause
-} from '@voice-room/shared/contracts/rooms';
+import type { VoiceMinute, VoiceMinuteHeard } from '@voiceroom/shared/contracts/admin';
+import { VOICE_CAUSES, type NetworkLevel, type NetworkPoint, type VoiceCause } from '@voiceroom/shared/contracts/rooms';
 import { formatClock, formatCount, formatMs, formatPercent } from '../../format.ts';
 import { POLL_SECONDS, troubleSeconds } from '../call/verdict.ts';
 

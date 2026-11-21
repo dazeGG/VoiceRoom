@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/vue';
 import userEvent from '@testing-library/user-event';
 import { expect, test } from 'vitest';
-import { Textarea } from '@voice-room/ui/components';
+import { Textarea } from '@voiceroom/ui-kit/components';
 
 test('the accessible counter updates while typing and respects maxlength', async () => {
   const view = render(Textarea, { props: { maxlength: 3 }, attrs: { 'aria-label': 'Комментарий' } });

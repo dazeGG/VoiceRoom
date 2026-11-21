@@ -10,7 +10,7 @@ import {
   DialogContent,
   DialogTitle,
   DialogDescription
-} from '@voice-room/ui/components';
+} from '@voiceroom/ui-kit/components';
 import { WHATS_NEW_SLIDES, WHATS_NEW_SLIDE_MS, shouldShowWhatsNew } from '../model/whats-new';
 
 const props = withDefaults(defineProps<{ paused?: boolean }>(), { paused: false });

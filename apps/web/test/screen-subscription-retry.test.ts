@@ -2,7 +2,7 @@ import { test } from 'vitest';
 import assert from 'node:assert/strict';
 
 async function loadRetryController() {
-  return import('@voice-room/call/engine/media/screen-subscription-retry');
+  return import('@voiceroom/call/engine/media/screen-subscription-retry');
 }
 
 class FakeTimers {

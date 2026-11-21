@@ -1,7 +1,7 @@
 import { render, screen, waitFor } from '@testing-library/vue';
 import userEvent from '@testing-library/user-event';
 import { expect, test, vi } from 'vitest';
-import { Combobox } from '@voice-room/ui/components';
+import { Combobox } from '@voiceroom/ui-kit/components';
 import { stubOverlayDom } from '../helpers/overlay-dom';
 
 stubOverlayDom();

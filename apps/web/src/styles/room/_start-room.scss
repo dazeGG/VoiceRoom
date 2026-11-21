@@ -19,7 +19,7 @@
 //   .name-status[data-state='saved']      -> (no rule; same colour as the base)
 //   .name-status[data-state='dirty']      -> .start-room__status--dirty
 //   @media (max-width: 560px) .start-panel -> the same block under below($bp-phone-sm)
-@use 'pkg:@voice-room/ui/styles/mixins' as *;
+@use 'pkg:@voiceroom/ui-kit/styles/mixins' as *;
 
 .start-room__title {
   margin: var(--space-16) 0 0;

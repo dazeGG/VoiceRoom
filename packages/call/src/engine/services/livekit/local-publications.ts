@@ -1,6 +1,6 @@
 // Our own tracks on the LiveKit room: the microphone, the camera and the shared screen.
 
-import { t } from '@voice-room/ui/i18n';
+import { t } from '@voiceroom/ui-kit/i18n';
 import type { LocalTrackPublication, Room } from 'livekit-client';
 import {
   CAMERA_CAPTURE,

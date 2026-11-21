@@ -7,7 +7,7 @@ import { defineComponent, h, provide } from 'vue';
 import { authUser } from '../fixtures/users.ts';
 import type { Relationship } from '@/api/friends';
 import { ROOM_SOCIAL_KEY, type RoomSocial } from '@/features/room/social';
-import type { PeerInfo } from '@voice-room/call/engine/core/types';
+import type { PeerInfo } from '@voiceroom/call/engine/core/types';
 import { defined } from '../helpers/assert.ts';
 import { installWebCallPortsForTest } from '../helpers/call-ports.ts';
 import { renderWithApp } from '../helpers/render.ts';
@@ -31,23 +31,23 @@ vi.mock('@/api/rooms', async (importOriginal) => ({
   setRoomPeerServerMute: vi.fn(async () => {}),
   undoRoomBan: vi.fn(async () => {})
 }));
-vi.mock('@voice-room/call/engine/ui/toast', () => ({ showToast: vi.fn() }));
-vi.mock('@voice-room/call/engine/services/media-playback-service', () => ({
+vi.mock('@voiceroom/call/engine/ui/toast', () => ({ showToast: vi.fn() }));
+vi.mock('@voiceroom/call/engine/services/media-playback-service', () => ({
   applyRemoteParticipantAudioPreferences: vi.fn()
 }));
 
 const ParticipantContextMenu = (await import('@/features/room/components/ParticipantContextMenu.vue')).default;
 const roomsApi = await import('@/api/rooms');
-const { showToast } = await import('@voice-room/call/engine/ui/toast');
+const { showToast } = await import('@voiceroom/call/engine/ui/toast');
 const { applyRemoteParticipantAudioPreferences } =
-  await import('@voice-room/call/engine/services/media-playback-service');
+  await import('@voiceroom/call/engine/services/media-playback-service');
 const { useSessionStore } = await import('@/features/auth/session.store');
-const { state } = await import('@voice-room/call/engine/core/room-runtime.store');
-const { createInitialRoomState } = await import('@voice-room/call/engine/model/room-state');
-const { createParticipant } = await import('@voice-room/call/engine/room/participants');
+const { state } = await import('@voiceroom/call/engine/core/room-runtime.store');
+const { createInitialRoomState } = await import('@voiceroom/call/engine/model/room-state');
+const { createParticipant } = await import('@voiceroom/call/engine/room/participants');
 const { useParticipantContextUiStore } = await import('@/features/room/participant-context-ui.store');
 const { useRoomSettingsStore } = await import('@/features/room/room-settings.store');
-const { getParticipantAudioPreference } = await import('@voice-room/call/engine/core/settings');
+const { getParticipantAudioPreference } = await import('@voiceroom/call/engine/core/settings');
 
 const ME = authUser({ id: 'me-user' });
 

@@ -4,7 +4,7 @@
 
 import crypto from 'node:crypto';
 import { sql, type Selectable } from 'kysely';
-import { cleanAvatarColorKey } from '@voice-room/shared/validation';
+import { cleanAvatarColorKey } from '@voiceroom/shared/validation';
 import type { Database } from '../../platform/db/kysely.ts';
 import type { RoomPeerIdentities } from '../../platform/db/schema.ts';
 import { avatarColorForPeerId } from './avatar-color.ts';

@@ -1,5 +1,5 @@
 import { test, vi } from 'vitest';
-import { isRecord } from '@voice-room/shared/guards';
+import { isRecord } from '@voiceroom/shared/guards';
 import assert from 'node:assert/strict';
 
 test('G31-A01 multiple render advances coalesce to the newest pending cursor', async () => {

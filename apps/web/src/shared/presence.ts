@@ -1,6 +1,6 @@
 import { t } from '@/shared/i18n';
-import type { PresenceStatus } from '@voice-room/shared/contracts/users';
-import { isPresenceStatus } from '@voice-room/shared/validation';
+import type { PresenceStatus } from '@voiceroom/shared/contracts/users';
+import { isPresenceStatus } from '@voiceroom/shared/validation';
 
 export type { PresenceStatus };
 

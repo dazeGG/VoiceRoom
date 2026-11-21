@@ -3,7 +3,7 @@ import { t } from '../shared/i18n/runtime.ts';
 // `error` text is only a fallback for a code this build does not know yet (a
 // newer server), so every refusal reads the same wherever the web shows it.
 
-import { isErrorCode, type ErrorCode } from '@voice-room/shared/contracts/errors';
+import { isErrorCode, type ErrorCode } from '@voiceroom/shared/contracts/errors';
 
 const TRY_LATER = 'Слишком много попыток, попробуйте позже';
 const UNAVAILABLE = 'Сервис временно недоступен, попробуйте позже';

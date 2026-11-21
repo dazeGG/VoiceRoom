@@ -37,7 +37,7 @@ jobs:
         run: |
           npm ci
           npm run check:site
-          npm --workspace @voice-room/site run build
+          npm --workspace @voiceroom/site run build
           npm run test:site
       - name: Check and build documentation
         if: inputs.component == 'docs'

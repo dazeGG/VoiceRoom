@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/vue';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, test, vi } from 'vitest';
 import { defineComponent, h, ref } from 'vue';
-import { ContextMenu, ContextMenuHeaderButton, MenuItem } from '@voice-room/ui/components';
+import { ContextMenu, ContextMenuHeaderButton, MenuItem } from '@voiceroom/ui-kit/components';
 import { settle, stubOverlayDom } from '../helpers/overlay-dom';
 
 stubOverlayDom();

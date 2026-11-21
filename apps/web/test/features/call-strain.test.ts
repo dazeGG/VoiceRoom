@@ -12,9 +12,9 @@ import {
   startCallStrainWatch,
   stopCallStrainWatch,
   type StrainCounts
-} from '@voice-room/call/engine/room/call-strain';
-import { createInitialRoomState } from '@voice-room/call/engine/model/room-state';
-import type { CpuPressureState } from '@voice-room/call/engine/services/cpu-pressure';
+} from '@voiceroom/call/engine/room/call-strain';
+import { createInitialRoomState } from '@voiceroom/call/engine/model/room-state';
+import type { CpuPressureState } from '@voiceroom/call/engine/services/cpu-pressure';
 import { installWebCallPortsForTest } from '../helpers/call-ports';
 import { freshImport } from '../helpers/fresh-module';
 import { clearLogBuffer, readLogBuffer } from '@/shared/log';
@@ -125,9 +125,9 @@ const report = (entries: Entry[]) => ({
 async function loadStatsPoll() {
   vi.useFakeTimers();
   vi.doMock('@/entities/room/room-realtime', () => ({ updateVoicePeer: () => {}, reportVoicePoll: () => {} }));
-  const stats = await freshImport(() => import('@voice-room/call/engine/room/stats'));
-  const strain = await import('@voice-room/call/engine/room/call-strain');
-  const { state } = await import('@voice-room/call/engine/core/room-runtime.store');
+  const stats = await freshImport(() => import('@voiceroom/call/engine/room/stats'));
+  const strain = await import('@voiceroom/call/engine/room/call-strain');
+  const { state } = await import('@voiceroom/call/engine/core/room-runtime.store');
   Object.assign(state, createInitialRoomState());
   return { stats, strain, state };
 }

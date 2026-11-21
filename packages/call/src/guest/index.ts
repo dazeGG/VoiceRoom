@@ -1,5 +1,5 @@
 import { computed, readonly, ref, shallowRef, type Ref } from 'vue';
-import type { RoomCapabilities } from '@voice-room/shared/contracts/rooms';
+import type { RoomCapabilities } from '@voiceroom/shared/contracts/rooms';
 import { callPageState } from '../engine/core/call-page.store';
 import { state } from '../engine/core/room-runtime.store';
 import { cleanDisplayName } from '../engine/core/utils';

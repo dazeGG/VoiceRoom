@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import { Button, Field, TextField } from '@voice-room/ui/components';
+import { Button, Field, TextField } from '@voiceroom/ui-kit/components';
 import { t } from '@/shared/i18n';
-import { createRoomFromStart, handleRoomCodeKeydown, joinRoomByCode } from '@voice-room/call/engine/room/room-start';
-import { saveStartName, updateNameStatuses } from '@voice-room/call/engine/ui/names';
-import { useStartUiStore } from '@voice-room/call/engine/core/start-ui.store';
+import { createRoomFromStart, handleRoomCodeKeydown, joinRoomByCode } from '@voiceroom/call/engine/room/room-start';
+import { saveStartName, updateNameStatuses } from '@voiceroom/call/engine/ui/names';
+import { useStartUiStore } from '@voiceroom/call/engine/core/start-ui.store';
 import FeatureList from '@/shared/components/FeatureList.vue';
 import { START_FEATURES } from '@/shared/start-features';
-import { useCallPageStore } from '@voice-room/call/engine/core/call-page.store';
+import { useCallPageStore } from '@voiceroom/call/engine/core/call-page.store';
 
 const startUi = useStartUiStore();
 const page = useCallPageStore();

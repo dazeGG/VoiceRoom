@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import { sql } from 'kysely';
 import type pg from 'pg';
 import { Type } from 'typebox';
-import type { NetworkLevel } from '@voice-room/shared/contracts/rooms';
+import type { NetworkLevel } from '@voiceroom/shared/contracts/rooms';
 import { runMigrations } from '../src/lib/migrate.ts';
 import { kyselyOn } from '../src/platform/db/kysely.ts';
 import { createVoiceSessionRepository, type VoiceMinuteSample } from '../src/domains/rooms/voice-session.repository.ts';

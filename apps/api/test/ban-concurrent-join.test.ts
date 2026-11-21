@@ -9,7 +9,7 @@ import type { LiveKitConfig } from '../src/domains/admission/livekit-config.ts';
 import { createPeerModerationService, type PeerModerationStore } from '../src/domains/rooms/peer-moderation.service.ts';
 import { runtimeDeps } from './fakes/room-runtime.ts';
 import { fake, dbRoom, recordingLogger } from './fakes/index.ts';
-import { buildServerEnvelope } from '@voice-room/shared/realtime';
+import { buildServerEnvelope } from '@voiceroom/shared/realtime';
 
 for (const cleanupFails of [false, true]) {
   test(

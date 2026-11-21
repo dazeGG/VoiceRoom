@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { Pressable } from '@voice-room/ui/components';
+import { Pressable } from '@voiceroom/ui-kit/components';
 import { ThumbsDown } from '@lucide/vue';
 import { computed, ref } from 'vue';
-import type { AdminOverview, ProductStats, SystemStats } from '@voice-room/shared/contracts/admin';
-import { getAvatarPresentation } from '@voice-room/ui/avatar-presentation';
+import type { AdminOverview, ProductStats, SystemStats } from '@voiceroom/shared/contracts/admin';
+import { getAvatarPresentation } from '@voiceroom/ui/avatar-presentation';
 import { fetchLiveRooms, fetchOverview, fetchProductStats, fetchRoomCalls, fetchSystemStats } from '../api/admin.ts';
 import type { ChartSeries } from '../charts/chart-series.ts';
 import TimeChart from '../charts/TimeChart.vue';

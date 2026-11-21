@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { Separator, Toolbar, ToolbarButton } from '@voice-room/ui/components';
+import { Separator, Toolbar, ToolbarButton } from '@voiceroom/ui-kit/components';
 import { t } from '@/shared/i18n';
 import { computed, ref } from 'vue';
 import { Copy, Ellipsis, Reply, SmilePlus } from '@lucide/vue';
-import { iconSm } from '@voice-room/ui/icon-defaults';
+import { iconSm } from '@voiceroom/ui-kit/icon-defaults';
 import ReactionPicker from './ReactionPicker.vue';
 import type { ReactionStore } from './reaction-store';
 

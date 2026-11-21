@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { t } from '@voice-room/ui/i18n';
+import { t } from '@voiceroom/ui-kit/i18n';
 import {
   ChevronUp,
   HeadphoneOff,
@@ -13,8 +13,8 @@ import {
   VideoOff
 } from '@lucide/vue';
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
-import { IconButton, Popover, Separator, Tooltip } from '@voice-room/ui/components';
-import { formatHotkeyKeys } from '@voice-room/ui/hotkey';
+import { IconButton, Popover, Separator, Tooltip } from '@voiceroom/ui-kit/components';
+import { formatHotkeyKeys } from '@voiceroom/ui-kit/hotkey';
 import { HOTKEY_BINDINGS_CHANGED_EVENT, readHotkeyBinding } from '../engine/core/hotkeys';
 import type {
   CallControlsView,

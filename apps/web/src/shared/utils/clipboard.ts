@@ -1,1 +1,1 @@
-export { copyText } from '@voice-room/ui/clipboard';
+export { copyText } from '@voiceroom/ui/clipboard';

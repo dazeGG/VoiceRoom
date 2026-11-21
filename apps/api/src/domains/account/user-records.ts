@@ -4,12 +4,12 @@
 import crypto from 'node:crypto';
 import { sql, type Selectable } from 'kysely';
 import type { AccountLoginEvents, Json, Users } from '../../platform/db/schema.ts';
-import type { SelfUser as SelfProfile } from '@voice-room/shared/contracts/account';
-import type { AccountBadge, PublicUser as PublicProfile } from '@voice-room/shared/contracts/users';
-import { AVATAR_COLOR_KEYS, cleanAvatarColorKey, cleanPresenceStatus } from '@voice-room/shared/validation';
+import type { SelfUser as SelfProfile } from '@voiceroom/shared/contracts/account';
+import type { AccountBadge, PublicUser as PublicProfile } from '@voiceroom/shared/contracts/users';
+import { AVATAR_COLOR_KEYS, cleanAvatarColorKey, cleanPresenceStatus } from '@voiceroom/shared/validation';
 import { epochMillis } from '../../platform/epoch-millis.ts';
 import { avatarUrl } from '../../lib/avatar-url.ts';
-import { RECOVERY_CODE_ALPHABET, RECOVERY_CODE_LENGTH } from '@voice-room/shared/account-security';
+import { RECOVERY_CODE_ALPHABET, RECOVERY_CODE_LENGTH } from '@voiceroom/shared/account-security';
 
 export type UserStoreLogger = { warn(...args: unknown[]): void };
 export type StoredUser = ReturnType<typeof storedUser>;

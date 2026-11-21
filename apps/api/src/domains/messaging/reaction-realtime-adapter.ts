@@ -1,5 +1,5 @@
-import type { ServerEvent } from '@voice-room/shared/contracts/realtime';
-import type { ReactionSummary } from '@voice-room/shared/contracts/messages';
+import type { ServerEvent } from '@voiceroom/shared/contracts/realtime';
+import type { ReactionSummary } from '@voiceroom/shared/contracts/messages';
 
 type Conversation = { type?: string; id?: string };
 type ReactionEvent = Extract<ServerEvent, { type: 'reaction.updated' }>;

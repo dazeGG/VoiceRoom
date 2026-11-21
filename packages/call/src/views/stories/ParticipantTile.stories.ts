@@ -18,6 +18,22 @@ const meta = {
   title: 'Components/Call/ParticipantTile',
   component: ParticipantTile,
   tags: ['autodocs'],
+  parameters: {
+    docs: {
+      description: {
+        component: [
+          "Own call tile in `packages/call` for one participant's video.",
+          '',
+          '- Build it in `packages/call`.',
+          '- Use 16:9 and radius 16.',
+          '- When the person is speaking, draw a 2px `--vr-accent` stroke inside the tile, immediately.',
+          '- Use a name plate of 24 with radius 8.',
+          '- Grow the avatar with the tile, from 76 to 160px, and no more than 40% of the tile height.',
+          '- Fit the video entirely on `--vr-video-bg`.'
+        ].join('\n')
+      }
+    }
+  },
   args: {
     participant,
     avatar: {

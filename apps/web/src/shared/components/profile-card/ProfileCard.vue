@@ -4,10 +4,10 @@ import { badgeOf } from '@/shared/badges';
 import { t } from '@/shared/i18n';
 import { Check, MessageSquare, UserMinus, UserPlus } from '@lucide/vue';
 import { computed } from 'vue';
-import { AccountBadge, Avatar, Button, Ellipsis } from '@voice-room/ui/components';
-import { iconSm } from '@voice-room/ui/icon-defaults';
+import { AccountBadge, Avatar, Button, Ellipsis } from '@voiceroom/ui-kit/components';
+import { iconSm } from '@voiceroom/ui-kit/icon-defaults';
 import { dayMonthYear } from '@/shared/utils/date-format';
-import { getAvatarColor } from '@voice-room/ui/avatar-colors';
+import { getAvatarColor } from '@voiceroom/ui-kit/avatar-colors';
 import type { ProfileCardProps } from './types';
 
 const props = withDefaults(defineProps<ProfileCardProps>(), { friendsSince: null, busy: false });

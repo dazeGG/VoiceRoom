@@ -1,4 +1,4 @@
-import { isRecord } from '@voice-room/shared/guards';
+import { isRecord } from '@voiceroom/shared/guards';
 import { createLogger, errorContext } from '@/shared/log';
 
 const log = createLogger('desktop:diagnostics');

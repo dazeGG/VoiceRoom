@@ -1,4 +1,4 @@
-import type { RoomCall, VoiceMinute, VoiceQuality } from '@voice-room/shared/contracts/admin';
+import type { RoomCall, VoiceMinute, VoiceQuality } from '@voiceroom/shared/contracts/admin';
 
 /** From this share of bad minutes a line asks for attention. */
 export const BAD_SHARE_ALARM_PCT = 8;

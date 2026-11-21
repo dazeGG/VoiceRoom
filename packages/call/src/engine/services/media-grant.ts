@@ -2,8 +2,8 @@ import { getCallPorts } from '../ports';
 // The server's media budget as the room sees it: ask before a screen share or
 // a camera starts, and word a refusal for the person.
 
-import { t } from '@voice-room/ui/i18n';
-import type { MediaGrant, MediaKind } from '@voice-room/shared/contracts/realtime';
+import { t } from '@voiceroom/ui-kit/i18n';
+import type { MediaGrant, MediaKind } from '@voiceroom/shared/contracts/realtime';
 import { state } from '../core/room-runtime.store';
 
 export type MediaRefusal = Extract<MediaGrant, { granted: false }>;

@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { LiveKitAdmission } from '@voice-room/shared/contracts/admission';
-import { RoomCreated, RoomStatus } from '@voice-room/shared/contracts/rooms';
-import { WidgetRoomCreated, WidgetRoomInfo } from '@voice-room/shared/contracts/widget';
+import { LiveKitAdmission } from '@voiceroom/shared/contracts/admission';
+import { RoomCreated, RoomStatus } from '@voiceroom/shared/contracts/rooms';
+import { WidgetRoomCreated, WidgetRoomInfo } from '@voiceroom/shared/contracts/widget';
 import { Pool } from 'pg';
 import { Type } from 'typebox';
 import { createRoomStore } from '../src/app/room-store.ts';

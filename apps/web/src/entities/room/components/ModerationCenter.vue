@@ -5,12 +5,12 @@ import { useLocalizedText, currentErrorMessage } from '@/shared/i18n/localized-t
 
 import { t } from '@/shared/i18n';
 import { Ban, Clock } from '@lucide/vue';
-import type { Ban as RoomBan } from '@voice-room/shared/contracts/moderation';
+import type { Ban as RoomBan } from '@voiceroom/shared/contracts/moderation';
 import { onMounted, ref } from 'vue';
 import { fetchActiveBans } from '@/api/moderation';
 import EmojiText from '@/shared/chat/EmojiText.vue';
-import { Avatar, Button } from '@voice-room/ui/components';
-import { iconMd, iconSm } from '@voice-room/ui/icon-defaults';
+import { Avatar, Button } from '@voiceroom/ui-kit/components';
+import { iconMd, iconSm } from '@voiceroom/ui-kit/icon-defaults';
 import { banExpiryLabel, banSubjectName, liftRoomBan, type ModerationNotice } from '../room-moderation';
 
 const props = withDefaults(defineProps<{ roomId: string; onNotify?: ModerationNotice }>(), { onNotify: () => {} });

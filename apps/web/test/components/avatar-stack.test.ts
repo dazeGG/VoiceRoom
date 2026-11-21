@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/vue';
 import { expect, test } from 'vitest';
-import { AvatarStack } from '@voice-room/ui/components';
+import { AvatarStack } from '@voiceroom/ui-kit/components';
 
 const items = ['Аня', 'Олег', 'Мира', 'Катя', 'Тимур', 'Даша', 'Борис'].map((label) => ({
   id: label,

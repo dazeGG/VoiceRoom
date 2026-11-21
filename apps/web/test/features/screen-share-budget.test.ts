@@ -3,12 +3,12 @@
 // to lose the stream.
 
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
-import type { MediaGrant } from '@voice-room/shared/contracts/realtime';
-import type { startScreenStartupDiagnostics } from '@voice-room/call/engine/media/screen-startup-diagnostics';
-import type * as MediaGrantModule from '@voice-room/call/engine/services/media-grant';
+import type { MediaGrant } from '@voiceroom/shared/contracts/realtime';
+import type { startScreenStartupDiagnostics } from '@voiceroom/call/engine/media/screen-startup-diagnostics';
+import type * as MediaGrantModule from '@voiceroom/call/engine/services/media-grant';
 import { installWebCallPortsForTest } from '../helpers/call-ports';
 
-const P = '@voice-room/call/engine';
+const P = '@voiceroom/call/engine';
 beforeEach(() => {
   vi.useFakeTimers();
   vi.stubGlobal('RTCRtpSender', {});
@@ -107,7 +107,7 @@ async function loadScreenShare(
     // The desktop picker settles the profile: here the person picked 1080p 60 FPS.
     openScreenShare: async () => ({
       mode: 'games',
-      profile: (await import('@voice-room/call/engine/media/profiles')).getScreenProfile('high-60'),
+      profile: (await import('@voiceroom/call/engine/media/profiles')).getScreenProfile('high-60'),
       stream
     })
   }));
@@ -132,7 +132,7 @@ async function loadScreenShare(
   }));
 
   await installWebCallPortsForTest();
-  const service = await import('@voice-room/call/engine/services/screen-share-service');
+  const service = await import('@voiceroom/call/engine/services/screen-share-service');
   return {
     service,
     state,

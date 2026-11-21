@@ -3,7 +3,7 @@
 
 import type { TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
 import type { FastifyInstance } from 'fastify';
-import { Failure } from '@voice-room/shared/contracts/http';
+import { Failure } from '@voiceroom/shared/contracts/http';
 import {
   ReactionBatch,
   ReactionBatchParams,
@@ -14,7 +14,7 @@ import {
   ReactionSummaries,
   ReactorPage,
   ReactorsQuery
-} from '@voice-room/shared/contracts/messages';
+} from '@voiceroom/shared/contracts/messages';
 import type { ApiContext, SessionUser } from '../../app/context.ts';
 import { failure } from '../../platform/http/http-kit.ts';
 import type { ReactionService } from './reaction.service.ts';

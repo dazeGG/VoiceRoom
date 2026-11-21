@@ -3,7 +3,7 @@
 // room, both accounts for a DM).
 
 import type pg from 'pg';
-import type { ServerEnvelope } from '@voice-room/shared/realtime';
+import type { ServerEnvelope } from '@voiceroom/shared/realtime';
 import type { CursorCodec } from '../../platform/cursor-codec.ts';
 import { createReactionRealtimeAdapter } from './reaction-realtime-adapter.ts';
 import { createReactionRepository } from './reaction.repository.ts';

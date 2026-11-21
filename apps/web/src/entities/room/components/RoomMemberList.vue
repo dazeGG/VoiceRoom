@@ -2,7 +2,7 @@
 import { badgeOf } from '@/shared/badges';
 import { t } from '@/shared/i18n';
 import { Ban, Ellipsis, User, UserX } from '@lucide/vue';
-import { presenceOfMember, type MembershipMember } from '@voice-room/shared/contracts/membership';
+import { presenceOfMember, type MembershipMember } from '@voiceroom/shared/contracts/membership';
 import { computed, ref, watch } from 'vue';
 import type { ModerationDuration } from '@/api/moderation';
 import { useProfileCardUiStore } from '@/entities/profile-card/profile-card-ui.store';
@@ -18,8 +18,8 @@ import {
   IconButton,
   ListItem,
   Button
-} from '@voice-room/ui/components';
-import { iconMd } from '@voice-room/ui/icon-defaults';
+} from '@voiceroom/ui-kit/components';
+import { iconMd } from '@voiceroom/ui-kit/icon-defaults';
 import { displayNameOf } from '@/shared/utils/display-name';
 import { BAN_DURATIONS, banRoomMember, kickRoomMember, type ModerationNotice } from '../room-moderation';
 import { useRoomMembershipStore } from '../room-membership.store';

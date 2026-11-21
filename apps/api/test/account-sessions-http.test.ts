@@ -9,7 +9,7 @@ import {
   Sessions,
   SessionsRevoked,
   WhatsNewAnswer
-} from '@voice-room/shared/contracts/account';
+} from '@voiceroom/shared/contracts/account';
 import { cookieFrom, request, startApiServer } from './fakes/server-process.ts';
 import { openWs, waitForClose } from './ws-harness.ts';
 

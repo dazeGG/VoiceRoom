@@ -5,9 +5,9 @@ import {
   encodeWidgetConfig,
   parseWidgetMessage,
   widgetOrigin
-} from '@voice-room/shared/contracts/widget';
-import { createWidgetLauncher } from '@voice-room/ui/components/widget-launcher';
-import { createWidgetFrameExpansion } from '@voice-room/ui/widget-frame-expansion';
+} from '@voiceroom/shared/contracts/widget';
+import { createWidgetLauncher } from '@voiceroom/ui-kit/components/widget-launcher';
+import { createWidgetFrameExpansion } from '@voiceroom/ui/widget-frame-expansion';
 
 export function mountWidget(container: HTMLElement, serviceOrigin: string): () => void {
   const config = decodeWidgetEmbedConfig(container.dataset.config ?? '');

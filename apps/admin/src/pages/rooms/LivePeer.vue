@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { MonitorUp, Video } from '@lucide/vue';
-import type { LiveRoomPeer } from '@voice-room/shared/contracts/admin';
+import type { LiveRoomPeer } from '@voiceroom/shared/contracts/admin';
 import { formatSince } from '../../format.ts';
 import { Avatar, Pill } from '../../ui';
 import type { OriginPick } from './call-filters.ts';

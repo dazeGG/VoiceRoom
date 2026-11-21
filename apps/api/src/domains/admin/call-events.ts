@@ -2,8 +2,8 @@
 // the changes of level are read from its stays; screens, cameras and the
 // computer's overload are what the stays kept (voice_call_events).
 
-import type { CallEvent, VoiceMinute } from '@voice-room/shared/contracts/admin';
-import type { NetworkLevel, NetworkPoint } from '@voice-room/shared/contracts/rooms';
+import type { CallEvent, VoiceMinute } from '@voiceroom/shared/contracts/admin';
+import type { NetworkLevel, NetworkPoint } from '@voiceroom/shared/contracts/rooms';
 import type { StayEvent } from '../rooms/voice-session.repository.ts';
 
 export interface EventfulStay {

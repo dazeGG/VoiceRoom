@@ -1,7 +1,7 @@
 import { t } from '@/shared/i18n';
 import { currentErrorMessage } from '@/shared/i18n/localized-text';
 import { markRaw, ref } from 'vue';
-import { isArray } from '@voice-room/shared/guards';
+import { isArray } from '@voiceroom/shared/guards';
 import {
   createAttachmentSlot,
   deleteAttachment,

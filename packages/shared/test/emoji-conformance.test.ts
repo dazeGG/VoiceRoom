@@ -7,7 +7,7 @@ import {
   cleanReactionEmoji,
   isReactionEmoji,
   listReactionEmojis
-} from '@voice-room/shared/emoji';
+} from '@voiceroom/shared/emoji';
 import packageJson from '../package.json' with { type: 'json' };
 
 const EXPECTED_CORPUS_SHA256 = '4a53e0c0dc317e6830f4055191e9fe287ab2db8978b2f78bdbaa43a60483d791';
@@ -91,7 +91,7 @@ test('listReactionEmojis returns a defensive copy', () => {
 });
 
 test('the package export, the source file and the declared types agree', async () => {
-  const esm = await import('@voice-room/shared/emoji');
+  const esm = await import('@voiceroom/shared/emoji');
   const directEsm = await import('../src/emoji.ts');
 
   for (const module of [esm, directEsm]) {

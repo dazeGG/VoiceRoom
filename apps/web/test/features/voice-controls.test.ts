@@ -4,25 +4,25 @@ import { createPinia, setActivePinia } from 'pinia';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { installWebCallPortsForTest } from '../helpers/call-ports';
 
-vi.mock('@voice-room/call/engine/media/cues', async (importOriginal) => ({
+vi.mock('@voiceroom/call/engine/media/cues', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   playMicCue: vi.fn()
 }));
-vi.mock('@voice-room/call/engine/room/presence', () => ({ postState: vi.fn(async () => {}) }));
-vi.mock('@voice-room/call/engine/services/livekit-service', async (importOriginal) => ({
+vi.mock('@voiceroom/call/engine/room/presence', () => ({ postState: vi.fn(async () => {}) }));
+vi.mock('@voiceroom/call/engine/services/livekit-service', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   syncLocalMicrophonePublicationMuted: vi.fn(async () => {})
 }));
 
-const cues = await import('@voice-room/call/engine/media/cues');
-const { state } = await import('@voice-room/call/engine/core/room-runtime.store');
-const { createInitialRoomState } = await import('@voice-room/call/engine/model/room-state');
-const hotkeys = await import('@voice-room/call/engine/core/hotkeys');
-const { isMicrophoneShownMuted } = await import('@voice-room/call/engine/core/microphone-mute');
+const cues = await import('@voiceroom/call/engine/media/cues');
+const { state } = await import('@voiceroom/call/engine/core/room-runtime.store');
+const { createInitialRoomState } = await import('@voiceroom/call/engine/model/room-state');
+const hotkeys = await import('@voiceroom/call/engine/core/hotkeys');
+const { isMicrophoneShownMuted } = await import('@voiceroom/call/engine/core/microphone-mute');
 const { beginPushToTalk, endPushToTalk, toggleMicrophoneMuted, toggleOutputMute } =
-  await import('@voice-room/call/engine/ui/controls');
-const { getStoredMicrophoneVolume, persistMicrophoneVolume } = await import('@voice-room/call/engine/core/settings');
-const { formatHotkeyBinding, hotkeyBindingFromEvent, hotkeyMatchesEvent } = await import('@voice-room/ui/hotkey');
+  await import('@voiceroom/call/engine/ui/controls');
+const { getStoredMicrophoneVolume, persistMicrophoneVolume } = await import('@voiceroom/call/engine/core/settings');
+const { formatHotkeyBinding, hotkeyBindingFromEvent, hotkeyMatchesEvent } = await import('@voiceroom/ui-kit/hotkey');
 
 const key = (overrides: KeyboardEventInit = {}) =>
   new KeyboardEvent('keydown', {

@@ -1,7 +1,7 @@
-import { voiceAssetUrls } from '@voice-room/call/voice-assets';
-import { MEET_CHAT_MAX_BYTES, type ClientCommand, type ServerFrame } from '@voice-room/shared/contracts/realtime';
-import type { RoomCapabilities } from '@voice-room/shared/contracts/rooms';
-import { validateClientCommand } from '@voice-room/shared/realtime';
+import { voiceAssetUrls } from '@voiceroom/call/voice-assets';
+import { MEET_CHAT_MAX_BYTES, type ClientCommand, type ServerFrame } from '@voiceroom/shared/contracts/realtime';
+import type { RoomCapabilities } from '@voiceroom/shared/contracts/rooms';
+import { validateClientCommand } from '@voiceroom/shared/realtime';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { consumeOwnerLink, createMeetApi } from '@/adapters/meet-api';
 import { createMeetIdentity } from '@/adapters/meet-identity';

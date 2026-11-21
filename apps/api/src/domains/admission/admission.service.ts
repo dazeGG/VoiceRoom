@@ -3,7 +3,7 @@
 // each reason is spelled for clients; unexpected failures throw, after the
 // credential that was already issued has been revoked.
 
-import type { RoomCapabilities } from '@voice-room/shared/contracts/rooms';
+import type { RoomCapabilities } from '@voiceroom/shared/contracts/rooms';
 import { ROOM_SURFACE_CEILINGS, roomCapabilities, type RoomSurface } from '../rooms/room-surface.policy.ts';
 import type { Logger } from 'pino';
 import { LOG_EVENTS } from '../../lib/log-events.ts';

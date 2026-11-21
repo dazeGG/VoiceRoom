@@ -32,7 +32,7 @@ import {
 import { createHostProbe } from '../platform/host-probe.ts';
 import { createSfuProbe } from '../platform/livekit-metrics.ts';
 import { createFastifyApp } from '../platform/http/fastify-app.ts';
-import { outdatedAndroidVersion } from '@voice-room/shared/client-version';
+import { outdatedAndroidVersion } from '@voiceroom/shared/client-version';
 import { asHttpServer, type ApiServer } from '../platform/http/http-server.ts';
 import type { Timer } from '../platform/types.ts';
 export type { ApiServer };

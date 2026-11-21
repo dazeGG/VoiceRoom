@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import { defaultWidgetConfig, encodeWidgetConfig } from '@voice-room/shared/contracts/widget';
+import { defaultWidgetConfig, encodeWidgetConfig } from '@voiceroom/shared/contracts/widget';
 import { expect, test } from '@playwright/test';
 import {
   createWidgetRoom,

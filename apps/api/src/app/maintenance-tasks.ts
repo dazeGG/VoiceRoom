@@ -5,7 +5,7 @@
 // admin-app sessions, the guest bans still stored by address, and the daily
 // roll-up of old activity into counts.
 
-import { VOICE_HISTORY_KEEP_DAYS } from '@voice-room/shared/contracts/admin';
+import { VOICE_HISTORY_KEEP_DAYS } from '@voiceroom/shared/contracts/admin';
 import type { MaintenanceTask } from '../platform/maintenance.ts';
 import { roomPruneTask } from './room-prune.ts';
 

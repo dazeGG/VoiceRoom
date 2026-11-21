@@ -10,8 +10,8 @@ import { createAvatarStorage } from '../src/lib/avatar-storage.ts';
 import type { StoreOverrides } from '../src/app/service-registry.ts';
 import { dbRoom, storedUser, userSession } from './fakes/index.ts';
 import type { StoredUser } from '../src/domains/account/user-records.ts';
-import { SignedIn } from '@voice-room/shared/contracts/account';
-import { RoomCard } from '@voice-room/shared/contracts/rooms';
+import { SignedIn } from '@voiceroom/shared/contracts/account';
+import { RoomCard } from '@voiceroom/shared/contracts/rooms';
 import { checked } from './helpers/checked.ts';
 import { defined } from './helpers/assert-defined.ts';
 

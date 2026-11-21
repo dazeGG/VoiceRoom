@@ -1,4 +1,4 @@
-import { buildRoomRealtimeSummary } from '@voice-room/shared/realtime';
+import { buildRoomRealtimeSummary } from '@voiceroom/shared/realtime';
 import type { UserRepository } from '../domains/account/user.repository.ts';
 import { publicChatMessage } from '../domains/messaging/room-chat-views.ts';
 import { LOG_EVENTS } from '../lib/log-events.ts';

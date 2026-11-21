@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-import type { AccountDetail } from '@voice-room/shared/contracts/admin';
+import type { AccountDetail } from '@voiceroom/shared/contracts/admin';
 import type { ChartSeries } from '../charts/chart-series.ts';
 import TimeChart from '../charts/TimeChart.vue';
 import { formatDay, formatHours } from '../format.ts';

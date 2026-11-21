@@ -7,11 +7,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Pool } from 'pg';
-import { SignedIn } from '@voice-room/shared/contracts/account';
-import { Failure } from '@voice-room/shared/contracts/http';
-import { RoomCallDetail } from '@voice-room/shared/contracts/feedback';
-import { StaticRooms } from '@voice-room/shared/contracts/admin';
-import type { StaffPermission } from '@voice-room/shared/contracts/staff';
+import { SignedIn } from '@voiceroom/shared/contracts/account';
+import { Failure } from '@voiceroom/shared/contracts/http';
+import { RoomCallDetail } from '@voiceroom/shared/contracts/feedback';
+import { StaticRooms } from '@voiceroom/shared/contracts/admin';
+import type { StaffPermission } from '@voiceroom/shared/contracts/staff';
 import { createAdminAccountsRepository } from '../src/domains/admin/admin-accounts.repository.ts';
 import { createAdminRoomsRepository } from '../src/domains/admin/admin-rooms.repository.ts';
 import { createAdminRoomsService } from '../src/domains/admin/admin-rooms.service.ts';
