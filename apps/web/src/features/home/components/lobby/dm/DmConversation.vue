@@ -51,7 +51,7 @@ interface Group {
 
 const lobby = useLobby();
 const { pushToast } = useToastsStore();
-const { openProfileCardFor } = useProfileCardUiStore();
+const { openProfileCardFor, previewProfileCardFor, leaveProfileCardPreview } = useProfileCardUiStore();
 // The view is mounted per peer, like the reaction store below.
 const outbox = lobby.outboxFor(peerId);
 const selfId = computed(() => self.id);
@@ -183,8 +183,8 @@ function jumpToMessage(messageId: string): void {
   scroll.jumpTo(messageId, () => pushToast(t('Сообщение не загружено — прокрутите историю выше')));
 }
 
-function openProfile(event: MouseEvent, fromMe: boolean): void {
-  const person: ProfileCardPerson | null = fromMe
+function profilePerson(fromMe: boolean): ProfileCardPerson | null {
+  return fromMe
     ? {
         userId: selfId.value,
         name: selfName.value,
@@ -203,6 +203,15 @@ function openProfile(event: MouseEvent, fromMe: boolean): void {
         avatarAccent: peer.avatarAccent,
         presence
       };
+}
+
+function previewProfile(event: PointerEvent | FocusEvent, fromMe: boolean): void {
+  const person = profilePerson(fromMe);
+  if (person) previewProfileCardFor(person, event);
+}
+
+function openProfile(event: MouseEvent, fromMe: boolean): void {
+  const person = profilePerson(fromMe);
   if (!person) return;
   event.preventDefault();
   event.stopPropagation();
@@ -302,6 +311,10 @@ function onMenuImage(action: (image: NonNullable<typeof menuImage.value>) => voi
             type="button"
             aria-haspopup="dialog"
             :aria-label="group.fromMe ? t('Ваш профиль') : t('Профиль {p0}', { p0: peerName })"
+            @pointerenter="previewProfile($event, group.fromMe)"
+            @pointerleave="leaveProfileCardPreview"
+            @focus="previewProfile($event, group.fromMe)"
+            @blur="leaveProfileCardPreview"
             @click="openProfile($event, group.fromMe)"
           >
             <Avatar
@@ -320,6 +333,10 @@ function onMenuImage(action: (image: NonNullable<typeof menuImage.value>) => voi
                 type="button"
                 aria-haspopup="dialog"
                 :aria-label="group.fromMe ? t('Ваш профиль') : t('Профиль {p0}', { p0: peerName })"
+                @pointerenter="previewProfile($event, group.fromMe)"
+                @pointerleave="leaveProfileCardPreview"
+                @focus="previewProfile($event, group.fromMe)"
+                @blur="leaveProfileCardPreview"
                 @click="openProfile($event, group.fromMe)"
               >
                 <EmojiText :text="group.fromMe ? selfName : peerName" /><AccountBadge

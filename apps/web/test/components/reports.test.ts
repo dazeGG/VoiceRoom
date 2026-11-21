@@ -32,7 +32,7 @@ test('reporting sits with deleting in one red moderation group', async () => {
   const remove = screen.getByRole('menuitem', { name: /Удалить/ });
   expect(report.nextElementSibling).toBe(remove);
   expect(report.previousElementSibling?.getAttribute('role')).toBe('separator');
-  for (const item of [report, remove]) expect(item.className).toContain('popover-menu-item--danger');
+  for (const item of [report, remove]) expect(item.className).toContain('ui-menu__item--danger');
 });
 
 test('a report needs a reason and sends the target, the reason and the comment', async () => {

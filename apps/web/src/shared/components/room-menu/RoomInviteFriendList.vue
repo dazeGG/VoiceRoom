@@ -7,7 +7,7 @@ import type { Friend } from '@/api/friends';
 import { ringRoomFriend } from '@/api/rooms';
 import EmojiText from '@/shared/chat/EmojiText.vue';
 import { effectivePresenceStatus } from '@/shared/presence';
-import { Avatar } from '@/shared/ui';
+import { Avatar, MenuItem } from '@/shared/ui';
 
 const props = withDefaults(
   defineProps<{
@@ -60,32 +60,30 @@ async function invite(userId: string, name: string): Promise<void> {
   <div class="room-invite-list">
     <p v-if="friends.length === 0" class="room-invite-list__empty">{{ t('Добавьте друзей, чтобы позвать их') }}</p>
     <template v-else>
-      <button
+      <MenuItem
         v-for="friend in friends"
         :key="friend.user.id"
-        class="room-invite-list__friend"
-        type="button"
-        role="menuitem"
+        :label="nameOf(friend)"
         :disabled="Boolean(ringingUserId) || presentUserIds.has(friend.user.id)"
+        :description="presentUserIds.has(friend.user.id) ? t('В комнате') : undefined"
         :title="presentUserIds.has(friend.user.id) ? t('Уже в комнате') : undefined"
-        @click="void invite(friend.user.id, nameOf(friend))"
+        @select.prevent="void invite(friend.user.id, nameOf(friend))"
       >
-        <Avatar
-          :name="nameOf(friend)"
-          :src="friend.user.avatarUrl"
-          :background="friend.user.avatarAccent || undefined"
-          :color-key="friend.user.avatarColorKey"
-          :size="26"
-          :online="presenceOf(friend) === 'online'"
-          :afk="presenceOf(friend) === 'away'"
-          :dnd="presenceOf(friend) === 'dnd'"
-          show-dot
-        />
-        <span class="room-invite-list__friend-name"><EmojiText :text="nameOf(friend)" /></span>
-        <small v-if="presentUserIds.has(friend.user.id)" class="room-invite-list__friend-note">{{
-          t('В комнате')
-        }}</small>
-      </button>
+        <template #icon>
+          <Avatar
+            :name="nameOf(friend)"
+            :src="friend.user.avatarUrl"
+            :background="friend.user.avatarAccent || undefined"
+            :color-key="friend.user.avatarColorKey"
+            :size="24"
+            :online="presenceOf(friend) === 'online'"
+            :afk="presenceOf(friend) === 'away'"
+            :dnd="presenceOf(friend) === 'dnd'"
+            show-dot
+          />
+        </template>
+        <EmojiText :text="nameOf(friend)" />
+      </MenuItem>
     </template>
   </div>
 </template>

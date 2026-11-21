@@ -6,7 +6,6 @@
 //   .attachment-compose-field                     -> .attachment-compose
 //   .attachment-compose-controls                  -> .attachment-compose__controls
 //   .attachment-upload-root                       -> .attachment-upload
-//   .attachment-upload-popover                    -> .attachment-upload__popover
 //   @keyframes attachment-spin                    -> unchanged
 //   .attachment-mosaic                            -> .attachment-mosaic
 //   .attachment-mosaic.single                     -> .attachment-mosaic--single
@@ -52,11 +51,6 @@
 .attachment-upload {
   align-self: flex-start;
   margin: 8px 0 0 8px;
-}
-
-.attachment-upload__popover {
-  width: 210px;
-  padding: 6px;
 }
 
 @keyframes attachment-spin {

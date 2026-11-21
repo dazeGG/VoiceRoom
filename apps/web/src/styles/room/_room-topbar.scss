@@ -12,7 +12,6 @@
 //   .room-heading-trigger-chevron        -> .room-topbar__heading-chevron
 //   .room-heading-actions                -> .room-topbar__heading-actions
 //   .room-invite-button                  -> .room-topbar__invite-button
-//   .room-invite-popover                 -> .room-topbar__invite-popover
 //   .room-invite-label                   -> .room-topbar__invite-label
 //   .room-panel-tabs button              -> .room-panel-tabs__tab
 //   .room-panel-tab-unread               -> .room-panel-tabs__unread
@@ -128,10 +127,6 @@ body.screen--room .room-topbar__heading {
   background: var(--vr-hover);
 }
 
-.room-topbar__invite-popover {
-  width: min(300px, calc(100vw - 24px));
-}
-
 .room-topbar__invite-label {
   display: inline;
 }
@@ -234,10 +229,8 @@ body.screen--room .room-topbar__status {
     white-space: nowrap;
   }
 
-  // A long room name must shrink inside the heading instead of widening the
-  // page: the menu's popover root otherwise sizes to the full title.
-  .room-topbar__heading-main > .popover {
+  // Allow a long room name to shrink inside the heading.
+  .room-topbar__heading-title-wrap {
     min-width: 0;
-    max-width: 100%;
   }
 }

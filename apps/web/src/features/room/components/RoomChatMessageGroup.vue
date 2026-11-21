@@ -27,6 +27,8 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   openProfile: [event: MouseEvent];
+  previewProfile: [event: PointerEvent | FocusEvent];
+  leaveProfile: [event: PointerEvent | FocusEvent];
   authorMenu: [event: MouseEvent];
   jump: [messageId: string];
   copy: [message: ChatMessage];
@@ -47,6 +49,10 @@ const profileLabel = computed(() =>
       aria-haspopup="dialog"
       :aria-label="profileLabel"
       :title="profileLabel"
+      @pointerenter="emit('previewProfile', $event)"
+      @pointerleave="emit('leaveProfile', $event)"
+      @focus="emit('previewProfile', $event)"
+      @blur="emit('leaveProfile', $event)"
       @click="emit('openProfile', $event)"
       @contextmenu="emit('authorMenu', $event)"
     >
@@ -76,6 +82,10 @@ const profileLabel = computed(() =>
           type="button"
           aria-haspopup="dialog"
           :aria-label="profileLabel"
+          @pointerenter="emit('previewProfile', $event)"
+          @pointerleave="emit('leaveProfile', $event)"
+          @focus="emit('previewProfile', $event)"
+          @blur="emit('leaveProfile', $event)"
           @click="emit('openProfile', $event)"
           @contextmenu="emit('authorMenu', $event)"
         >

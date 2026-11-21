@@ -99,7 +99,7 @@ const social = useRoomSocial();
 const sessionStore = useSessionStore();
 const roomPins = useRoomPinsStore();
 const membership = useRoomMembershipStore();
-const { openProfileCardFor } = useProfileCardUiStore();
+const { openProfileCardFor, previewProfileCardFor, leaveProfileCardPreview } = useProfileCardUiStore();
 
 const chatVisible = computed(() => props.visible && props.activeTab === 'chat');
 
@@ -239,14 +239,18 @@ const canOpenProfile = (group: ChatGroup): boolean => !group.self || Boolean(ses
 
 function openUserProfile(group: ChatGroup, event: MouseEvent): void {
   if (!canOpenProfile(group)) return;
-  const participant = getParticipantById(group.peerId);
   event.preventDefault();
   event.stopPropagation();
   const anchor = event.currentTarget;
-  const person = participant
+  const person = profilePerson(group);
+  queueMicrotask(() => openProfileCardFor(person, anchor));
+}
+
+function profilePerson(group: ChatGroup) {
+  const participant = getParticipantById(group.peerId);
+  return participant
     ? participantProfilePerson(social, participant)
     : roomMessageProfilePerson(social, group.messages[0]);
-  queueMicrotask(() => openProfileCardFor(person, anchor));
 }
 
 // A mention opens the same card the author's avatar opens, so "who is this"
@@ -364,6 +368,8 @@ const canReport = computed(() =>
               :on-save-edit="(messageId: string, text: string) => chat.saveEdit(messageId, text)"
               :on-mention="openMentionProfile"
               @open-profile="(event: MouseEvent) => openUserProfile(group, event)"
+              @preview-profile="(event) => previewProfileCardFor(profilePerson(group), event)"
+              @leave-profile="leaveProfileCardPreview"
               @author-menu="(event: MouseEvent) => openUserMenu(group, event)"
               @jump="chat.jumpTo"
               @copy="(message: ChatMessage) => void copyMessageText(message.text, toast)"

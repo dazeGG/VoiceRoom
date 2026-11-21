@@ -5,7 +5,7 @@ import { computed } from 'vue';
 import { useSessionStore } from '@/features/auth/session.store';
 import Topbar from '@/shared/components/Topbar.vue';
 import { RoomInviteFriendList, RoomMenu } from '@/shared/components/room-menu';
-import { Popover, PopoverDivider, PopoverMenuItem, PopoverMenuLabel } from '@/shared/ui';
+import { DropdownMenu, MenuSeparator, MenuItem, MenuLabel } from '@/shared/ui';
 import { iconMd, iconSm } from '@/shared/ui/icons';
 import { copyText } from '@/shared/utils/clipboard';
 import { state as roomClientState } from '@voice-room/call/engine/core/room-runtime.store';
@@ -82,7 +82,6 @@ function notifyRoomsChanged(): void {
           chevron-class="room-topbar__heading-chevron"
           heading
           heading-class="room-topbar__heading-title-wrap"
-          keep-content-mounted
           :relationship="roomSettingsUi.isOwner ? 'owner' : 'bookmarked'"
           :on-open-settings="roomSettingsUi.isOwner ? roomSettingsUi.openRoomSettings : undefined"
           :show-notification-controls="Boolean(roomClientState.self?.accountUserId)"
@@ -103,33 +102,20 @@ function notifyRoomsChanged(): void {
 
       <div class="room-topbar__heading-actions">
         <RoomCallTimer />
-        <Popover
-          placement="bottom-end"
-          role="menu"
-          :aria-label="t('Пригласить в комнату')"
-          panel-class="room-topbar__invite-popover"
-        >
-          <template #trigger="{ open, toggle, panelId }">
-            <button
-              class="room-topbar__invite-button"
-              type="button"
-              aria-haspopup="menu"
-              :aria-expanded="open"
-              :aria-controls="panelId"
-              :title="t('Пригласить')"
-              @click="toggle"
-            >
+        <DropdownMenu :aria-label="t('Пригласить в комнату')">
+          <template #trigger>
+            <button class="room-topbar__invite-button" type="button" :title="t('Пригласить')">
               <UserPlus v-bind="iconSm" aria-hidden="true" />
               <span class="room-topbar__invite-label">{{ t('Пригласить') }}</span>
             </button>
           </template>
           <template #content="{ close }">
-            <PopoverMenuItem :label="t('Скопировать ссылку')" @click="void copyInviteLink(close)">
+            <MenuItem :label="t('Скопировать ссылку')" @select.prevent="void copyInviteLink(close)">
               <template #icon><Link v-bind="iconMd" aria-hidden="true" /></template>
-            </PopoverMenuItem>
+            </MenuItem>
             <template v-if="roomClientState.self?.accountUserId">
-              <PopoverDivider />
-              <PopoverMenuLabel :text="t('Позвать друга')" />
+              <MenuSeparator />
+              <MenuLabel :text="t('Позвать друга')" />
               <RoomInviteFriendList
                 :friends="social.friends()"
                 :room-id="roomClientState.roomId"
@@ -139,7 +125,7 @@ function notifyRoomsChanged(): void {
               />
             </template>
           </template>
-        </Popover>
+        </DropdownMenu>
         <div
           class="room-panel-tabs room-panel-tabs--topbar"
           role="group"
