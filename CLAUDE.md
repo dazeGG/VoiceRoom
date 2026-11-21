@@ -4,6 +4,7 @@
 - `apps/api` is the Fastify/PostgreSQL/LiveKit backend.
 - `apps/web` is the Vue/Vite frontend.
 - `apps/admin` serves the staff console. `apps/widget` owns the public embed. `apps/meet` and `apps/get` make up the personal bundle.
+- `packages/ui` owns the UI kit: tokens, styles and Vue components on Reka UI, with Storybook (`npm run storybook`). `docs/DESIGN_SYSTEM.md` is the source of truth for tokens, the size grid and component rules; new UI uses its components and grid tokens.
 - `packages/shared` owns contracts shared by API and Web. Update shared contracts before their consumers.
 - `docs/GIT_FLOW.md` is the source of truth for branches, commits, pull requests, hotfixes, and releases.
 - A release may add a `docs/RELEASE_<version>_PLAN.md` target-state plan; none is active now. Do not describe an unmet gate as already implemented.
