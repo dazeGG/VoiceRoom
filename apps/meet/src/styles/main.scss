@@ -1,5 +1,10 @@
 @use 'pkg:@voice-room/ui/styles/tokens';
 @use 'pkg:@voice-room/ui/styles/typography';
+@use 'pkg:@voice-room/ui/styles/components/button';
+@use 'pkg:@voice-room/ui/styles/components/icon-button';
+@use 'pkg:@voice-room/ui/styles/components/tooltip';
+@use 'pkg:@voice-room/ui/styles/components/kbd';
+@use 'pkg:@voice-room/ui/styles/components/separator';
 @use 'pkg:@voice-room/ui/styles/components/popover';
 @use 'pkg:@voice-room/ui/styles/components/select';
 @use 'pkg:@voice-room/ui/styles/components/slider';

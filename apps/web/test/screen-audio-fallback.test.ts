@@ -21,11 +21,9 @@ vi.mock('@voice-room/call/engine/services/media-playback-service', () => ({
 }));
 vi.mock('@voice-room/call/engine/core/screen-ui.store', () => ({
   useScreenUiStore: () => ({
-    bumpScreenUiRevision: () => {},
     getActiveScreenPeer: () => null,
     getScreenStage: () => null,
-    getScreenVideo: () => null,
-    getStreamVolumeSlider: () => null
+    getScreenVideo: () => null
   })
 }));
 

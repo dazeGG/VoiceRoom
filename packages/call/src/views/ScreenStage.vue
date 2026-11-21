@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { t } from '@voice-room/ui/i18n';
-import { AvatarStack } from '@voice-room/ui/components';
+import { AvatarStack, Slider } from '@voice-room/ui/components';
 import { Maximize, Minimize, Volume2, VolumeX } from '@lucide/vue';
 import { ref, watch, watchEffect } from 'vue';
 import type { FullscreenView, ScreenMetaView, StreamVolumeView } from '../engine/core/screen-ui.store';
@@ -17,12 +17,12 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits<{
-  elementsChange: [stage: HTMLElement | null, video: HTMLVideoElement | null, slider: HTMLInputElement | null];
+  elementsChange: [stage: HTMLElement | null, video: HTMLVideoElement | null];
   streamAttached: [];
   interact: [event: MouseEvent | KeyboardEvent];
   activeChange: [active: boolean];
   toggleMute: [];
-  updateVolume: [];
+  updateVolume: [percent: number];
   toggleFullscreen: [];
 }>();
 
@@ -32,11 +32,10 @@ defineSlots<{
 
 const stageEl = ref<HTMLElement | null>(null);
 const videoEl = ref<HTMLVideoElement | null>(null);
-const volumeSliderEl = ref<HTMLInputElement | null>(null);
 
 watchEffect(
   () => {
-    emit('elementsChange', stageEl.value, videoEl.value, volumeSliderEl.value);
+    emit('elementsChange', stageEl.value, videoEl.value);
   },
   { flush: 'post' }
 );
@@ -122,26 +121,18 @@ watch(
           <span class="stream-volume__icon stream-volume__icon--off" aria-hidden="true"><VolumeX /></span>
         </button>
         <div id="streamVolumePopover" class="stream-volume__popover">
-          <output
-            class="stream-volume__value"
-            :class="{ 'stream-volume__value--muted': volume.muted }"
-            for="streamVolumeSlider"
-          >
+          <output class="stream-volume__value" :class="{ 'stream-volume__value--muted': volume.muted }">
             {{ volume.valuePercent }}%
           </output>
-          <div class="stream-volume__track">
-            <input
-              id="streamVolumeSlider"
-              ref="volumeSliderEl"
-              class="stream-volume__slider"
-              type="range"
-              min="0"
-              :max="volume.maxPercent"
-              :value="volume.valuePercent"
-              :aria-label="t('Громкость стрима')"
-              @input="emit('updateVolume')"
-            />
-          </div>
+          <Slider
+            class="stream-volume__slider"
+            orientation="vertical"
+            :max="volume.maxPercent"
+            :model-value="volume.valuePercent"
+            :aria-label="t('Громкость стрима')"
+            :aria-value-text="`${volume.valuePercent}%`"
+            @value-change="emit('updateVolume', $event)"
+          />
         </div>
       </div>
 

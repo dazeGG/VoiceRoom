@@ -66,27 +66,28 @@ const emit = defineEmits<{
           @update:model-value="emit('toggleGate')"
         />
       </div>
-      <div :class="['room-dock__gate-control', { 'room-dock__gate-control--disabled': !gate.markerActive }]">
-        <Slider
-          :model-value="gate.thresholdValue"
-          :min="GATE_THRESHOLD_MIN_DB"
-          :max="GATE_THRESHOLD_MAX_DB"
-          :step="1"
-          :disabled="!gate.markerActive"
-          :show-fill="false"
-          :aria-label="t('Порог гейта в децибелах')"
-          :aria-value-text="gate.thresholdLabel"
-          @value-change="emit('gateThreshold', $event)"
-        >
-          <template #background>
-            <span
-              :class="['room-dock__level-fill', { 'room-dock__level-fill--closed': gate.levelState === 'closed' }]"
-              :style="{ transform: `scaleX(${gate.levelScale.toFixed(3)})` }"
-            ></span>
-          </template>
-        </Slider>
+      <div class="room-dock__volume-head">
+        <span>{{ t('Порог гейта в децибелах') }}</span>
         <output id="gateThresholdValue">{{ gate.thresholdLabel }}</output>
       </div>
+      <Slider
+        :model-value="gate.thresholdValue"
+        :min="GATE_THRESHOLD_MIN_DB"
+        :max="GATE_THRESHOLD_MAX_DB"
+        :step="1"
+        :disabled="!gate.markerActive"
+        :show-fill="false"
+        :aria-label="t('Порог гейта в децибелах')"
+        :aria-value-text="gate.thresholdLabel"
+        @value-change="emit('gateThreshold', $event)"
+      >
+        <template #background>
+          <span
+            :class="['room-dock__level-fill', { 'room-dock__level-fill--closed': gate.levelState === 'closed' }]"
+            :style="{ transform: `scaleX(${gate.levelScale.toFixed(3)})` }"
+          ></span>
+        </template>
+      </Slider>
     </div>
   </template>
   <label v-else-if="device === 'output'" class="room-dock__field">
