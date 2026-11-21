@@ -353,7 +353,19 @@ jobs:
             e2e/widget-embed.spec.ts e2e/widget-media-boundary.spec.ts e2e/widget-reconnect.spec.ts
       - name: Report widget service states
         if: failure()
-        run: docker compose -p "$PLAYWRIGHT_WIDGET_COMPOSE_PROJECT" -f docker-compose.ci.yml ps --all
+        run: |
+          docker compose -p "$PLAYWRIGHT_WIDGET_COMPOSE_PROJECT" -f docker-compose.ci.yml ps --all
+          docker compose -p "$PLAYWRIGHT_WIDGET_COMPOSE_PROJECT" -f docker-compose.ci.yml logs --no-color --timestamps api livekit-gate livekit > widget-services.log
+          tail -n 200 widget-services.log
+      - name: Keep widget traces and service logs
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: widget-e2e-${{ github.run_attempt }}
+          path: |
+            apps/web/test-results
+            widget-services.log
+          retention-days: 7
       - name: Remove widget stack resources
         if: always()
         run: docker compose -p "$PLAYWRIGHT_WIDGET_COMPOSE_PROJECT" -f docker-compose.ci.yml down -v --rmi local

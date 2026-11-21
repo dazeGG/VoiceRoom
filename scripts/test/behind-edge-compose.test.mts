@@ -20,7 +20,10 @@ const ServiceSchema = Type.Object({
   networks: Type.Optional(Type.Record(Type.String(), Type.Unknown())),
   environment: Type.Optional(Type.Record(Type.String(), Type.String())),
   mem_limit: Type.Optional(Type.Union([Type.Number(), Type.String()])),
-  oom_score_adj: Type.Optional(Type.Number())
+  oom_score_adj: Type.Optional(Type.Number()),
+  cpu_shares: Type.Optional(Type.Number()),
+  cgroup_parent: Type.Optional(Type.String()),
+  healthcheck: Type.Optional(Type.Object({ test: Type.Optional(Type.Array(Type.String())) }))
 });
 const ConfigSchema = Type.Object({
   services: Type.Record(Type.String(), ServiceSchema),
@@ -126,6 +129,23 @@ test('a stack behind the edge publishes no web ports, joins the edge network and
   for (const [name, service] of Object.entries(config.services)) {
     assert.ok(Number(service.mem_limit) > 0, `${name} has a memory limit`);
     assert.ok((service.oom_score_adj ?? 0) > 0, `${name} goes before production under OOM`);
+    // Docker's default weight is 1024: production keeps it.
+    assert.ok((service.cpu_shares ?? 1024) < 1024, `${name} yields the CPU to production`);
+    assert.equal(service.cgroup_parent, 'guests.slice', `${name} shares the guests' caps`);
+  }
+});
+
+test('production keeps the default CPU weight and cgroup', { skip: !compose }, () => {
+  for (const [name, service] of Object.entries(resolve(['docker-compose.yml']).services)) {
+    assert.equal(service.cpu_shares, undefined, name);
+    assert.equal(service.cgroup_parent, undefined, name);
+  }
+});
+
+// Each `node` start costs the host most of a second of CPU; the check runs every 10 s.
+test('health checks of the production stack do not start Node', { skip: !compose }, () => {
+  for (const [name, service] of Object.entries(resolve(['docker-compose.yml']).services)) {
+    assert.doesNotMatch(service.healthcheck?.test?.join(' ') ?? '', /\bnode\b/, name);
   }
 });
 
