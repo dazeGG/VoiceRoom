@@ -21,7 +21,7 @@
   display: flex;
   min-width: 0;
   align-items: flex-start;
-  width: calc(100% + 42px);
+  width: calc(100% + var(--space-40));
   margin: var(--space-2) 0 0 calc(-1 * var(--space-40));
   padding: var(--space-2) var(--space-40) var(--space-2) var(--space-40);
   color: var(--vr-text);
@@ -57,7 +57,7 @@
 
 .message-bubble--first::before {
   top: -25px;
-  left: -42px;
+  left: calc(-1 * var(--space-40));
 }
 
 // A message that names you stays lit, so it is findable by scrolling back. The

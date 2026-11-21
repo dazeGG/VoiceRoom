@@ -84,7 +84,7 @@
   white-space: nowrap;
 }
 
-// Message rows reach 42px into the avatar column to widen the hover target, and
+// Message rows reach 40px (the avatar column) into it to widen the hover target, and
 // being positioned they paint over it. Lift the identity triggers back on top so
 // the avatar and the name stay clickable.
 .room-chat-group__avatar-button,
