@@ -59,6 +59,13 @@ test('a comment may name a data-* selector', (t) => {
   assert.deepEqual(checkWebStyles(repo), []);
 });
 
+test('the admin source follows the same style conventions', (t) => {
+  const { repo } = tree(t, { 'styles/legacy.css': '.panel { padding: 4px; }' }, 'apps/admin/src');
+  assert.deepEqual(checkWebStyles(repo), [
+    'apps/admin/src/styles/legacy.css:1 stylesheet must be a .scss partial under src/styles'
+  ]);
+});
+
 test('a <style> block in a .vue file fails unless the file is allowlisted with a comment', (t) => {
   const withStyle = '<template><p /></template>\n\n<style scoped>\np { color: red; }\n</style>\n';
   const { repo, src } = tree(t, { 'pages/A.vue': withStyle });

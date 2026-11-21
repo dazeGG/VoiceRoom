@@ -1,0 +1,71 @@
+.admin-product {
+  &__scroll {
+    max-inline-size: 100%;
+    overflow: auto;
+    border-radius: inherit;
+    background: var(--vr-surface);
+
+    &:focus-visible {
+      outline: var(--space-2) solid var(--vr-accent);
+      outline-offset: calc(-1 * var(--space-2));
+    }
+  }
+
+  &__table {
+    inline-size: 100%;
+    min-inline-size: calc(var(--space-64) * 10);
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 0.84375rem;
+    font-variant-numeric: tabular-nums;
+
+    th,
+    td {
+      padding: var(--space-8) var(--space-12);
+      text-align: start;
+      white-space: nowrap;
+    }
+
+    thead th {
+      border-block-end: calc(var(--space-2) / 2) solid var(--vr-line);
+      color: var(--vr-text-muted);
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+
+    tr > :first-child {
+      padding-inline-start: var(--space-16);
+    }
+
+    tr > :last-child {
+      padding-inline-end: var(--space-16);
+    }
+
+    tbody th {
+      position: sticky;
+      inset-inline-start: 0;
+      background: var(--vr-surface);
+      font-weight: 400;
+    }
+  }
+
+  &__cell {
+    display: grid;
+    min-height: var(--size-32);
+    place-items: center;
+    border-radius: var(--radius-8);
+    background: color-mix(in oklch, var(--vr-accent) var(--heat, 6%), transparent);
+    font-weight: 600;
+
+    &--pending {
+      background: transparent;
+      color: var(--vr-text-muted);
+      font-weight: 400;
+    }
+  }
+
+  &__foot {
+    border-block-start: calc(var(--space-2) / 2) solid var(--vr-line);
+    padding: var(--space-12) var(--space-16);
+  }
+}

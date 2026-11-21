@@ -1,0 +1,126 @@
+.ui-button {
+  // Keep the kit's default type sizes when the browser's preferred font size changes.
+  font-size: 0.875rem;
+
+  &--size-sm {
+    font-size: 0.8125rem;
+  }
+
+  &--size-xl {
+    font-size: 0.9375rem;
+  }
+}
+
+.admin-section,
+.admin-section__body {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--space-12);
+}
+
+.admin-section,
+.admin-panel {
+  &__header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-8);
+  }
+
+  &__title {
+    margin: 0;
+  }
+}
+
+.admin-section {
+  &__link {
+    margin-inline-start: auto;
+    color: var(--vr-text-muted);
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    &__chevron {
+      transition: transform 150ms var(--ease-out);
+    }
+  }
+
+  [aria-expanded='false'] &__chevron {
+    transform: rotate(-90deg);
+  }
+}
+
+.admin-panel--flush {
+  padding: 0;
+
+  .admin-panel__header {
+    padding: var(--space-16);
+  }
+}
+
+.admin-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, calc(var(--space-64) * 2 + var(--space-24))), 1fr));
+}
+
+.admin-stat {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--space-4);
+  border-inline-start: calc(var(--space-2) / 2) solid var(--vr-line);
+  padding: var(--space-12) var(--space-16);
+
+  &__label,
+  &__note {
+    color: var(--vr-text-muted);
+    font-size: 0.8125rem;
+  }
+
+  &__label {
+    display: flex;
+    align-items: center;
+    gap: var(--space-6);
+  }
+
+  &__value {
+    color: var(--admin-tone, var(--vr-text));
+    font: 500 1.5rem/1.25 var(--font-mono);
+  }
+}
+
+.admin-pill {
+  color: var(--admin-tone, var(--vr-text));
+}
+
+.admin-stat__dot,
+.admin-pill__dot {
+  width: var(--space-8);
+  height: var(--space-8);
+  flex: none;
+  border-radius: var(--radius-pill);
+  background: var(--admin-tone, var(--vr-text-muted));
+}
+
+.admin-tone {
+  &--accent {
+    --admin-tone: var(--vr-accent);
+  }
+  &--success {
+    --admin-tone: var(--vr-success);
+  }
+  &--warning {
+    --admin-tone: var(--vr-warning);
+  }
+  &--danger {
+    --admin-tone: var(--vr-danger);
+  }
+  &--info {
+    --admin-tone: var(--vr-info);
+  }
+}
+
+.admin-account-badge__icon {
+  width: var(--icon-12);
+  height: var(--icon-12);
+}

@@ -35,7 +35,7 @@ const AREAS: ReadonlyArray<{ folder: string; project: string; ignore?: readonly 
     project: 'tsconfig.test.json',
     ignore: ['src/**', 'test/**', 'e2e/**', 'scripts/**', 'public/**']
   },
-  // The admin app (React): its source, its tests and its vite config.
+  // The admin app: its source, its tests and its vite config.
   { folder: 'apps/admin/src', project: '../tsconfig.json' },
   { folder: 'apps/admin/test', project: '../tsconfig.json' },
   { folder: 'apps/admin', project: 'tsconfig.json', ignore: ['src/**', 'test/**'] },

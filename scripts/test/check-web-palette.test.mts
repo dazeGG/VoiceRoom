@@ -83,6 +83,13 @@ test('a surface token with a different value is reported', (t) => {
   ]);
 });
 
+test('admin backgrounds must use the shared palette', (t) => {
+  const palette = app(t, {
+    'apps/admin/src/styles/_card.scss': '.card { background: #123456; }'
+  });
+  assert.deepEqual(paletteProblems(palette), ['apps/admin/src/styles/_card.scss:1 .card -> #123456']);
+});
+
 test('a missing surface token is reported by name', (t) => {
   const palette = app(t, {}, SURFACES.replace(/ {2}--vr-bg:.*\n/, ''));
   assert.deepEqual(paletteProblems(palette), ['packages/ui/src/styles/_tokens.scss does not declare --vr-bg']);

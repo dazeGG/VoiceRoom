@@ -70,7 +70,7 @@ const overlays = [
 ];
 const styles = process.argv.includes('--site')
   ? ['apps/site/src/styles/site.scss']
-  : ['packages/ui/src/styles/_tokens.scss', 'apps/admin/src/styles/theme.css'];
+  : ['packages/ui/src/styles/_tokens.scss', 'apps/admin/src/styles/main.scss'];
 for (const path of styles) {
   const css = sass.compile(resolve(root, path), { importers: [new sass.NodePackageImporter(root)] }).css;
   const blocks = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((match) => ({
@@ -140,8 +140,6 @@ for (const path of styles) {
           if (overlay.includes('accent') && !['--vr-bg', '--vr-surface', '--vr-surface-2'].includes(name)) continue;
           check(`${name} + ${overlay}`, over(color(required(values, overlay)), background));
         }
-        // Admin selected rows use a literal 4% white background.
-        check(`${name} + selected`, over(color('rgb(255 255 255 / 0.04)'), background));
         check(
           `${name} + neutral verdict`,
           over({ ...color(required(values, '--vr-text-3')), alpha: 0.09 }, background)

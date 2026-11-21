@@ -4,6 +4,7 @@ export interface ComboboxOption {
   description?: string | undefined;
   searchText?: string;
   disabled?: boolean;
+  group?: string;
 }
 
 export interface ComboboxProps {
@@ -12,4 +13,8 @@ export interface ComboboxProps {
   size?: 'sm' | 'md' | 'lg';
   placeholder?: string;
   autoFocus?: boolean;
+  /** Options are already filtered by the caller. Bind the input with v-model:query. */
+  externalFilter?: boolean;
+  loading?: boolean;
+  resultsLabel?: string;
 }

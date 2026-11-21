@@ -1,6 +1,6 @@
 # Дизайн-система VoiceRoom
 
-Этот файл — источник правды для внешнего вида и компонентов веб-клиента (`apps/web`), виджета (`apps/widget`), личного сервера (`apps/meet`) и, после переписывания на Vue, админки (`apps/admin`). Все они берут токены, стили и компоненты из `packages/ui`.
+Этот файл — источник правды для внешнего вида и компонентов веб-клиента (`apps/web`), виджета (`apps/widget`), личного сервера (`apps/meet`) и админки (`apps/admin`). Все они берут токены, стили и компоненты из `packages/ui`.
 
 - Живые компоненты: Storybook в `packages/ui` (`npm run storybook`, порт 6006).
 - Брендбук с токенами: https://claude.ai/artifact/XS3241pLesrkV6YwuJUadt.
@@ -203,7 +203,7 @@
 
 ### Примитивы Reka UI, которые продукту сейчас не нужны
 
-VisuallyHidden, ScrollArea и Collapsible — по необходимости (миксин `visually-hidden` и стилизованные скроллбары уже есть). Accordion, PinInput, TagsInput, Editable, Menubar, NavigationMenu, Pagination, Calendar, DateField, DatePicker, TimeField, Stepper, Tree и AspectRatio не нужны: таких сценариев в продукте нет. Выбор периода в админке появится вместе с её переходом на Vue.
+VisuallyHidden, ScrollArea и Collapsible — по необходимости (миксин `visually-hidden` и стилизованные скроллбары уже есть). Accordion, PinInput, TagsInput, Editable, Menubar, NavigationMenu, Pagination, Calendar, DateField, DatePicker, TimeField, Stepper, Tree и AspectRatio не нужны: таких сценариев в продукте нет. В админке выбор периода использует SegmentControl, Popover и TextField.
 
 ## 8. Текущее состояние
 
@@ -216,7 +216,7 @@ VisuallyHidden, ScrollArea и Collapsible — по необходимости (�
 | `apps/meet` | На ките, док и сцена — общие из `packages/call` |
 | `apps/widget` | На ките; стили ограничены корнем `#widget`, загрузчик и протокол фрейма не менялись |
 | `apps/site` | Свои страницы на токенах из `packages/ui` |
-| `apps/admin` | Пока React со своими стилями и своими переменными в `src/styles/app.css`; переписывается на Vue и кит |
+| `apps/admin` | На ките: Vue 3, компоненты и токены `packages/ui`, SCSS по БЭМ |
 
 В `apps/web/src/shared/ui` остаются обёртки и вещи, которых нет в ките: `Select` (кит + эмодзи в пунктах), `AccountBadge` (значок подтверждённого аккаунта), `AvatarCropDialog`, `Ellipsis`, `MascotIcon`, иконки.
 

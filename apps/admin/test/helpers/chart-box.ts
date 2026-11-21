@@ -18,7 +18,7 @@ export function stubChartBox(): () => void {
   Object.defineProperty(HTMLElement.prototype, 'clientWidth', {
     configurable: true,
     get(this: HTMLElement) {
-      return this.classList.contains('chart-plot') ? PLOT_WIDTH : 0;
+      return this.classList.contains('admin-chart__plot') ? PLOT_WIDTH : 0;
     }
   });
   return () => {

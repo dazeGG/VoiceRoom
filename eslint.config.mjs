@@ -6,7 +6,6 @@
 // the list.
 
 import js from '@eslint/js';
-import reactHooks from 'eslint-plugin-react-hooks';
 import globals from 'globals';
 import tseslint from 'typescript-eslint';
 import vue from 'eslint-plugin-vue';
@@ -55,7 +54,7 @@ export default tseslint.config(
   // Vue rules apply to the Vue apps and the portable packages.
   ...vue.configs['flat/recommended-error'].map((config) => ({
     ...config,
-    files: config.files ?? ['apps/{meet,web,widget}/**/*.{ts,vue}', 'packages/{call,ui}/**/*.{ts,vue}']
+    files: config.files ?? ['apps/{admin,meet,web,widget}/**/*.{ts,vue}', 'packages/{call,ui}/**/*.{ts,vue}']
   })),
   {
     languageOptions: {
@@ -159,13 +158,6 @@ export default tseslint.config(
       ],
       'no-restricted-syntax': ['error', ...OVERLOAD_CAST]
     }
-  },
-  {
-    // The admin app (React): hooks are called the same way every render and
-    // effects name what they read.
-    files: ['apps/admin/**/*.{ts,tsx}'],
-    plugins: { 'react-hooks': reactHooks },
-    rules: { ...reactHooks.configs.recommended.rules }
   },
   {
     // Browser code logs through @/shared/log so records reach the failure

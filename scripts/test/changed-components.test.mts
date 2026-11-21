@@ -10,7 +10,7 @@ const everyLane = { app: true, site: true, docs: true };
 
 test('routes application, public site and documentation changes independently', () => {
   assert.deepEqual(
-    changedComponents(['apps/api/src/server.ts', 'apps/web/src/main.ts', 'apps/admin/src/main.tsx']),
+    changedComponents(['apps/api/src/server.ts', 'apps/web/src/main.ts', 'apps/admin/src/main.ts']),
     app
   );
   assert.deepEqual(changedComponents(['apps/meet/src/main.ts']), app);
