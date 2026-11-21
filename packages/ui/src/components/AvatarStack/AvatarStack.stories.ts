@@ -12,11 +12,11 @@ const items: AvatarStackItem[] = [
 ];
 
 const meta = {
-  title: 'Components/AvatarStack',
+  title: 'Components/People/AvatarStack',
   component: AvatarStack,
   tags: ['autodocs'],
   args: { items, size: 24, maxAvatars: 3, ariaLabel: 'Участники комнаты' },
-  argTypes: { size: { control: { type: 'range', min: 20, max: 80, step: 4 } } }
+  argTypes: { size: { control: 'select', options: [20, 24, 28, 32] } }
 } satisfies Meta<typeof AvatarStack>;
 
 export default meta;
@@ -25,7 +25,9 @@ type Story = StoryObj<typeof meta>;
 export const WithOverflow: Story = {};
 export const AllParticipants: Story = { args: { maxAvatars: null } };
 export const SingleParticipant: Story = { args: { items: items.slice(0, 1) } };
-export const Large: Story = { args: { size: 40 } };
+export const Small: Story = { args: { size: 20 } };
+export const Medium: Story = { args: { size: 28 } };
+export const Large: Story = { args: { size: 32 } };
 export const Empty: Story = {
   args: { items: [] },
   render: (args) => ({
