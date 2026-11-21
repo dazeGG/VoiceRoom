@@ -34,6 +34,7 @@ export default tseslint.config(
     ignores: [
       '**/node_modules/**',
       '**/dist/**',
+      'packages/ui/storybook-static/**',
       'coverage/**',
       '.omc/**',
       '.omx/**',
