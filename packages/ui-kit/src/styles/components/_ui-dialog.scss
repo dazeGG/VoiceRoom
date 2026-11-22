@@ -108,6 +108,25 @@
   }
 }
 
+// A header with even padding and a divider, and a body without padding: the
+// settings windows, whose NavList runs edge to edge under the title.
+.ui-dialog--flush {
+  .ui-dialog__head {
+    align-items: center;
+    padding: var(--space-16) var(--space-16) var(--space-16) var(--space-24);
+    border-bottom: 1px solid var(--vr-line);
+  }
+
+  .ui-dialog__titles {
+    padding-top: 0;
+  }
+
+  .ui-dialog__body {
+    gap: 0;
+    padding: 0;
+  }
+}
+
 .ui-dialog--media {
   width: min(100%, calc(var(--size-48) * 25));
   height: min(92dvh, 100%, calc(var(--size-36) * 25));
