@@ -1,5 +1,5 @@
 import { createLogger, reportClientLogs, type LogContext } from '../diagnostics';
-import { isActiveCandidatePair, readRtcStats, type RtcStat, type RtcStatsSource } from './rtc-stats';
+import { readRtcStats, type RtcStat, type RtcStatsSource } from './rtc-stats';
 import { playbackCounted, screenFpsSource } from './screen-fps-source';
 
 const log = createLogger('room:screen-startup');
@@ -9,34 +9,40 @@ const SAMPLE_LIMIT = WINDOW_MS / SAMPLE_MS;
 const STABLE_FPS = 27;
 const STABLE_RUN = 3;
 
-/** Cumulative since helper start, except the max*Us fields (about the last 2 s). */
-export interface PipelineCounters {
-  seq: number;
-  backend: string;
-  acquired: number;
-  acquireAttempts?: number | undefined;
-  acquireEmpty?: number | undefined;
-  callbackArrivals?: number | undefined;
-  maxLockWaitUs?: number | undefined;
-  pacingSkips: number;
-  pausedSkips: number;
-  written: number;
-  accumulated?: number | undefined;
-  sumMapUs: number;
-  sumWriteUs: number;
-  maxGapUs: number;
-  maxMapUs: number;
-  maxWriteUs: number;
+/** What the desktop's native capture reports; a browser share has none. */
+export interface CaptureCounters {
+  /** Cumulative frames delivered to the renderer. */
+  framesReceived?: number | undefined;
+  /** Cumulative frames dropped by flow control. */
+  framesDroppedBackpressure?: number | undefined;
+  /** `wgc` or `dxgi`; missing on desktops without the pipeline report. */
+  backend?: string | undefined;
+  /** The longest capture gap in about the last two seconds, in microseconds. */
+  maxGapUs?: number | undefined;
 }
 
-export interface CaptureCounters {
-  sessionId?: string | undefined;
-  restarts?: number | undefined;
-  pipeline?: PipelineCounters | undefined;
-  framesReceived?: number | undefined;
-  framesWritten?: number | undefined;
-  framesDroppedBackpressure?: number | undefined;
-  relayPausedMs?: number | undefined;
+/** What one sender sample measures, per second since the previous one. */
+export interface SenderSample {
+  captureFps: number | null;
+  encodedFps: number | null;
+  sentFps: number | null;
+  bitrate: number | null;
+  height: number | null;
+  limitation: string | null;
+  backpressure: number | null;
+  codec: string | null;
+  encoder: string | null;
+}
+
+/** What one viewer sample measures, per second since the previous one. */
+export interface ReceiverSample {
+  decodedFps: number | null;
+  renderedFps: number | null;
+  bitrate: number | null;
+  height: number | null;
+  lost: number | null;
+  freezes: number | null;
+  codec: string | null;
 }
 
 interface PlaybackCounters {
@@ -164,20 +170,36 @@ export function startScreenStartupDiagnostics(options: ScreenStartupDiagnosticsO
   }
 
   function readingFrom(current: Snapshot, before: Snapshot | undefined): Reading {
-    const context = options.direction === 'send' ? senderSample(current, before) : receiverSample(current, before);
-    const pipeline = current.capture?.pipeline;
-    return {
+    const shared = {
       elapsedMs: current.at - startedAt,
-      fps: contextNumber(options.direction === 'send' ? context.sentFps : context.renderedFps),
-      decodedFps: contextNumber(context.decodedFps),
-      height: contextNumber(context.height),
-      limitation: contextText(context.limitation),
-      codec: contextText(context.codec),
-      encoder: contextText(context.encoder),
-      freezes: contextNumber(context.freezes),
-      lost: contextNumber(context.lost),
-      backend: pipeline ? pipeline.backend.slice(0, 20) : null,
-      gapMs: pipelineGapMs(pipeline)
+      backend: captureBackend(current),
+      gapMs: captureGapMs(current)
+    };
+    if (options.direction === 'send') {
+      const sample = senderSample(current, before);
+      return {
+        ...shared,
+        fps: sample.sentFps,
+        decodedFps: null,
+        height: sample.height,
+        limitation: sample.limitation,
+        codec: sample.codec,
+        encoder: sample.encoder,
+        freezes: null,
+        lost: null
+      };
+    }
+    const sample = receiverSample(current, before);
+    return {
+      ...shared,
+      fps: sample.renderedFps,
+      decodedFps: sample.decodedFps,
+      height: sample.height,
+      limitation: null,
+      codec: sample.codec,
+      encoder: null,
+      freezes: sample.freezes,
+      lost: sample.lost
     };
   }
 
@@ -185,17 +207,13 @@ export function startScreenStartupDiagnostics(options: ScreenStartupDiagnosticsO
   return () => finish('stopped');
 }
 
-function contextNumber(value: LogContext[string] | undefined): number | null {
-  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+export function captureBackend(snapshot: Snapshot): string | null {
+  return snapshot.capture?.backend?.slice(0, 20) ?? null;
 }
 
-function contextText(value: LogContext[string] | undefined): string | null {
-  return typeof value === 'string' ? value : null;
-}
-
-function pipelineGapMs(pipeline: PipelineCounters | undefined): number | null {
-  if (!pipeline || !Number.isFinite(pipeline.maxGapUs)) return null;
-  return Math.round(pipeline.maxGapUs / 10) / 100;
+export function captureGapMs(snapshot: Snapshot): number | null {
+  const gapUs = finite(snapshot.capture?.maxGapUs);
+  return gapUs === null ? null : Math.round(gapUs / 10) / 100;
 }
 
 /**
@@ -313,46 +331,32 @@ function codecName(current: Snapshot, stat: RtcStat | undefined): string | null 
   return stat?.codecId ? (current.stats.get(stat.codecId)?.mimeType?.slice(0, 200) ?? null) : null;
 }
 
-export function senderSample(current: Snapshot, previous: Snapshot | undefined): LogContext {
+export function senderSample(current: Snapshot, previous: Snapshot | undefined): SenderSample {
   const stat = videoLayer(current.stats, 'outbound-rtp');
   const before = stat ? previous?.stats.get(stat.id) : undefined;
   const interval = frameInterval(current, previous, stat);
   const elapsed = previous ? current.at - previous.at : 0;
-  const encoded = delta(stat?.framesEncoded, before?.framesEncoded);
-  const encodeSeconds = delta(stat?.totalEncodeTime, before?.totalEncodeTime);
   const source = stat?.mediaSourceId ? current.stats.get(stat.mediaSourceId) : undefined;
   const previousSource = source ? previous?.stats.get(source.id) : undefined;
-  const nativeReceived = delta(current.capture?.framesReceived, previous?.capture?.framesReceived);
-  const pair = [...current.stats.values()].find(isActiveCandidatePair);
   const bytes = delta(stat?.bytesSent, before?.bytesSent);
   return {
-    layerId: stat?.id.slice(0, 200) ?? null,
     captureFps:
       current.capture?.framesReceived !== undefined
-        ? perSecond(nativeReceived, elapsed)
+        ? perSecond(delta(current.capture.framesReceived, previous?.capture?.framesReceived), elapsed)
         : (finite(source?.framesPerSecond) ??
           perSecond(delta(source?.frames, previousSource?.frames), frameInterval(current, previous, source))),
-    writtenFps: perSecond(delta(current.capture?.framesWritten, previous?.capture?.framesWritten), elapsed),
-    encodedFps: finite(stat?.framesPerSecond) ?? perSecond(encoded, interval),
+    encodedFps: finite(stat?.framesPerSecond) ?? perSecond(delta(stat?.framesEncoded, before?.framesEncoded), interval),
     sentFps: perSecond(delta(stat?.framesSent, before?.framesSent), interval),
     bitrate: perSecond(bytes === null ? null : bytes * 8, interval),
-    width: finite(stat?.frameWidth),
     height: finite(stat?.frameHeight),
     limitation: stat?.qualityLimitationReason?.slice(0, 200) ?? null,
-    availableBitrate: finite(pair?.availableOutgoingBitrate) ?? finite(pair?.estimatedOutgoingBitrate),
-    encodeMs:
-      encoded !== null && encoded > 0 && encodeSeconds !== null ? rounded((encodeSeconds * 1000) / encoded) : null,
-    dropped: delta(stat?.framesDropped, before?.framesDropped),
     backpressure: delta(current.capture?.framesDroppedBackpressure, previous?.capture?.framesDroppedBackpressure),
-    // Cumulative, not a 1s delta: relay snapshots arrive only every 2 seconds.
-    // Missing on older desktops; do not mistake missing telemetry for no pause.
-    relayPausedMs: rounded(finite(current.capture?.relayPausedMs)),
     codec: codecName(current, stat),
     encoder: stat?.encoderImplementation?.slice(0, 200) ?? null
   };
 }
 
-export function receiverSample(current: Snapshot, previous: Snapshot | undefined): LogContext {
+export function receiverSample(current: Snapshot, previous: Snapshot | undefined): ReceiverSample {
   const stat = videoLayer(current.stats, 'inbound-rtp');
   const before = stat ? previous?.stats.get(stat.id) : undefined;
   const interval = frameInterval(current, previous, stat);
@@ -361,19 +365,13 @@ export function receiverSample(current: Snapshot, previous: Snapshot | undefined
     ? previous.playback.totalVideoFrames - previous.playback.droppedVideoFrames
     : undefined;
   const bytes = delta(stat?.bytesReceived, before?.bytesReceived);
-  const jitter = finite(stat?.jitter);
   return {
-    layerId: stat?.id.slice(0, 200) ?? null,
-    receivedFps: perSecond(delta(stat?.framesReceived, before?.framesReceived), interval),
     decodedFps: finite(stat?.framesPerSecond) ?? perSecond(delta(stat?.framesDecoded, before?.framesDecoded), interval),
     renderedFps: perSecond(delta(shown, shownBefore), previous ? current.at - previous.at : 0),
     bitrate: perSecond(bytes === null ? null : bytes * 8, interval),
-    width: finite(stat?.frameWidth),
     height: finite(stat?.frameHeight),
-    dropped: delta(stat?.framesDropped, before?.framesDropped),
     lost: delta(stat?.packetsLost, before?.packetsLost),
     freezes: delta(stat?.freezeCount, before?.freezeCount),
-    jitterMs: jitter === null ? null : rounded(jitter * 1000),
     codec: codecName(current, stat)
   };
 }

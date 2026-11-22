@@ -78,23 +78,7 @@ test('a share that becomes stable records first frame, stable time and the worst
         { id: 'codec', type: 'codec', mimeType: 'video/VP8' }
       );
     },
-    capture: () => ({
-      sessionId: 'private-session',
-      restarts: 4,
-      pipeline: {
-        seq: tick,
-        backend: 'wgc',
-        acquired: 0,
-        pacingSkips: 0,
-        pausedSkips: 0,
-        written: 0,
-        sumMapUs: 0,
-        sumWriteUs: 0,
-        maxGapUs: plan[tick - 1]?.gapUs ?? 0,
-        maxMapUs: 0,
-        maxWriteUs: 0
-      }
-    })
+    capture: () => ({ backend: 'wgc', maxGapUs: plan[tick - 1]?.gapUs ?? 0 })
   });
   await vi.advanceTimersByTimeAsync(5_000);
   expect(info).not.toHaveBeenCalled();
@@ -120,8 +104,6 @@ test('a share that becomes stable records first frame, stable time and the worst
     maxGapMs: 80
   });
   expect(Object.keys(summary)).toHaveLength(18);
-  expect(JSON.stringify(info.mock.calls)).not.toContain('private-session');
-  expect(JSON.stringify(info.mock.calls)).not.toContain('restarts');
   expect(report).toHaveBeenCalledExactlyOnceWith('screen startup diagnostics', 'info');
 });
 

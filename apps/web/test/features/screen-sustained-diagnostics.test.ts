@@ -75,23 +75,7 @@ function sender(fpsAt: (tick: number) => number, options?: { gapUs?: number; bac
     },
     capture: () => ({
       framesDroppedBackpressure: options?.backpressure ? tick : 0,
-      ...(options?.gapUs === undefined
-        ? {}
-        : {
-            pipeline: {
-              seq: 1,
-              backend: 'wgc',
-              acquired: 0,
-              pacingSkips: 0,
-              pausedSkips: 0,
-              written: 0,
-              sumMapUs: 0,
-              sumWriteUs: 0,
-              maxGapUs: options.gapUs * tick,
-              maxMapUs: 0,
-              maxWriteUs: 0
-            }
-          })
+      ...(options?.gapUs === undefined ? {} : { backend: 'wgc', maxGapUs: options.gapUs * tick })
     })
   };
 }

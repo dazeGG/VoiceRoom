@@ -2,6 +2,7 @@ import { createLogger, reportClientLogs, type LogContext } from '../diagnostics'
 import { readRtcStats } from './rtc-stats';
 import { playbackCounted, screenFpsSource, type ScreenFpsSource } from './screen-fps-source';
 import {
+  captureGapMs,
   receiverSample,
   senderSample,
   type ScreenStartupDiagnosticsOptions,
@@ -255,33 +256,28 @@ export function startScreenSustainedDiagnostics(options: ScreenStartupDiagnostic
   function record(current: Snapshot): void {
     bucket.samples += 1;
     if (options.direction === 'send') {
-      const context = senderSample(current, previous);
-      bucket.fps.push(number(context.sentFps));
-      bucket.bitrate.push(number(context.bitrate));
-      bucket.height.push(number(context.height));
-      bucket.captureFps.push(number(context.captureFps));
-      bucket.encodedFps.push(number(context.encodedFps));
-      bucket.backpressure.push(number(context.backpressure));
-      const gapUs = current.capture?.pipeline?.maxGapUs;
-      bucket.gapMs.push(typeof gapUs === 'number' && Number.isFinite(gapUs) ? Math.round(gapUs / 10) / 100 : null);
+      const sample = senderSample(current, previous);
+      bucket.fps.push(sample.sentFps);
+      bucket.bitrate.push(sample.bitrate);
+      bucket.height.push(sample.height);
+      bucket.captureFps.push(sample.captureFps);
+      bucket.encodedFps.push(sample.encodedFps);
+      bucket.backpressure.push(sample.backpressure);
+      bucket.gapMs.push(captureGapMs(current));
     } else {
-      const context = receiverSample(current, previous);
+      const sample = receiverSample(current, previous);
       if (playbackCounted(current.playback)) playbackCounts = true;
-      bucket.fps.push(number(context.renderedFps));
-      bucket.decodedFps.push(number(context.decodedFps));
-      bucket.bitrate.push(number(context.bitrate));
-      bucket.height.push(number(context.height));
-      bucket.freezes.push(number(context.freezes));
-      bucket.lost.push(number(context.lost));
+      bucket.fps.push(sample.renderedFps);
+      bucket.decodedFps.push(sample.decodedFps);
+      bucket.bitrate.push(sample.bitrate);
+      bucket.height.push(sample.height);
+      bucket.freezes.push(sample.freezes);
+      bucket.lost.push(sample.lost);
     }
   }
 
   void sample();
   return finish;
-}
-
-function number(value: string | number | boolean | null | undefined): number | null {
-  return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 
 function present(series: Series): number[] {
