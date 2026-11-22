@@ -20,7 +20,7 @@ const meta = {
           '- Lay the body out as a column with a gap of 16 and padding of 20 and 24.',
           '- Pin the footer to the right, with the secondary button to the left of the primary.',
           '- By default, Escape and a backdrop click dismiss the modal and return focus to the trigger.',
-          '- For a large window such as settings, use lg with a NavList on the left. On a phone, make the window fill the screen.',
+          '- For a large window such as settings, use xl with `trim="flush"` and a NavList on the left: the header gets even padding over a divider and the body drops its padding. On a phone, make the window fill the screen.',
           '- Use `layout="media"` for an attachment viewer that must sit above other dialogs.',
           '- Use `layout="panel"` to place a modal at the bottom. Set `:modal="false"` to keep the panel inline in the page flow.'
         ].join('\n')
@@ -69,6 +69,7 @@ export const Small: Story = { args: { size: 'sm' } };
 export const Medium: Story = { args: { description: 'Пригласите друзей в голосовую комнату.' } };
 export const Large: Story = { args: { size: 'lg' } };
 export const ExtraWide: Story = { args: { size: 'xl', title: 'Настройки комнаты' } };
+export const Flush: Story = { args: { size: 'xl', trim: 'flush', title: 'Настройки' } };
 export const WithoutCloseButton: Story = { args: { closable: false } };
 
 export const FullScreen: Story = { args: { size: 'full', layer: 'raised' } };

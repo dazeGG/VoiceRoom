@@ -141,75 +141,68 @@ function onClose(): void {
 </script>
 
 <template>
-  <Dialog :open="Boolean(room)" :title="t('Настройки комнаты')" size="xl" :on-close="onClose">
-    <div v-if="room" class="room-settings">
-      <div class="settings__body settings__body--room">
-        <NavList class="settings__nav" :label="t('Разделы настроек комнаты')">
-          <NavListGroup class="settings__nav-main">
-            <NavListItem :label="t('Основное')" :current="section === 'general'" @click="section = 'general'">
-              <template #icon><SlidersHorizontal /></template>
-            </NavListItem>
-            <NavListItem :label="t('Участники')" :current="section === 'members'" @click="section = 'members'">
-              <template #icon><Users /></template>
-            </NavListItem>
-            <NavListItem :label="t('Блокировки')" :current="section === 'bans'" @click="section = 'bans'">
-              <template #icon><Ban /></template>
-            </NavListItem>
-          </NavListGroup>
-        </NavList>
+  <Dialog :open="Boolean(room)" :title="t('Настройки комнаты')" size="xl" trim="flush" :on-close="onClose">
+    <div v-if="room" class="settings__body settings__body--room">
+      <NavList class="settings__nav" :label="t('Разделы настроек комнаты')">
+        <NavListGroup class="settings__nav-main">
+          <NavListItem :label="t('Основное')" :current="section === 'general'" @click="section = 'general'">
+            <template #icon><SlidersHorizontal /></template>
+          </NavListItem>
+          <NavListItem :label="t('Участники')" :current="section === 'members'" @click="section = 'members'">
+            <template #icon><Users /></template>
+          </NavListItem>
+          <NavListItem :label="t('Блокировки')" :current="section === 'bans'" @click="section = 'bans'">
+            <template #icon><Ban /></template>
+          </NavListItem>
+        </NavListGroup>
+      </NavList>
 
-        <div v-if="section === 'members'" class="settings__content room-settings__content">
-          <RoomMemberList :room-id="room.roomId" can-moderate :on-notify="notifyModeration" />
-        </div>
-        <div v-else-if="section === 'bans'" class="settings__content room-settings__content">
-          <ModerationCenter :room-id="room.roomId" :on-notify="notifyModeration" />
-        </div>
-        <form v-else class="settings__content room-settings__content" @submit.prevent="save">
-          <p v-if="error" class="dialog__error" role="alert">{{ error }}</p>
-          <div class="room-settings__profile-head">
-            <RoomAvatarField
-              :key="room.roomId"
-              v-model:change="avatarChange"
-              v-model:cropping="cropOpen"
-              :saved-url="room.avatarUrl"
-              :name="name || room.roomId"
-              :disabled="saving || deleting"
-              @error="(message: string) => (error = message)"
-            />
-            <Field class="room-settings__name-field" :label="t('Название')">
-              <TextField v-model="name" maxlength="60" />
-            </Field>
-          </div>
-          <div class="settings__actions">
-            <Button variant="plain" class="settings__cancel" @click="emit('close')">{{ t('Отмена') }}</Button
-            ><Button
-              variant="primary"
-              class="settings__save"
-              type="submit"
-              :disabled="saving || !name.trim() || !dirty"
-            >
-              {{ saving ? t('Сохраняем…') : t('Сохранить') }}
-            </Button>
-          </div>
-          <div class="dialog__danger-zone">
-            <Button variant="danger-ghost" @click="openDeleteConfirmation">
-              {{ t('Удалить комнату') }}
-            </Button>
-            <AlertDialog
-              :open="confirmDelete"
-              :title="t('Удалить комнату «{p0}»?', { p0: room.name || room.roomId })"
-              :description="t('Комната будет удалена для всех участников. Это действие нельзя отменить.')"
-              :confirm-label="deleting ? t('Удаляем…') : t('Удалить')"
-              tone="danger"
-              :busy="deleting"
-              @cancel="cancelDeleteConfirmation"
-              @confirm="remove"
-            >
-              <p v-if="deleteError" class="dialog__error" role="alert">{{ deleteError }}</p>
-            </AlertDialog>
-          </div>
-        </form>
+      <div v-if="section === 'members'" class="settings__content room-settings__content">
+        <RoomMemberList :room-id="room.roomId" can-moderate :on-notify="notifyModeration" />
       </div>
+      <div v-else-if="section === 'bans'" class="settings__content room-settings__content">
+        <ModerationCenter :room-id="room.roomId" :on-notify="notifyModeration" />
+      </div>
+      <form v-else class="settings__content room-settings__content" @submit.prevent="save">
+        <p v-if="error" class="dialog__error" role="alert">{{ error }}</p>
+        <div class="room-settings__profile-head">
+          <RoomAvatarField
+            :key="room.roomId"
+            v-model:change="avatarChange"
+            v-model:cropping="cropOpen"
+            :saved-url="room.avatarUrl"
+            :name="name || room.roomId"
+            :disabled="saving || deleting"
+            @error="(message: string) => (error = message)"
+          />
+          <Field class="room-settings__name-field" :label="t('Название')">
+            <TextField v-model="name" maxlength="60" />
+          </Field>
+        </div>
+        <div class="settings__actions">
+          <Button variant="plain" class="settings__cancel" @click="emit('close')">{{ t('Отмена') }}</Button
+          ><Button variant="primary" class="settings__save" type="submit" :disabled="saving || !name.trim() || !dirty">
+            {{ saving ? t('Сохраняем…') : t('Сохранить') }}
+          </Button>
+        </div>
+        <div class="dialog__danger-zone">
+          <Button variant="danger-ghost" @click="openDeleteConfirmation">
+            {{ t('Удалить комнату') }}
+          </Button>
+          <AlertDialog
+            :open="confirmDelete"
+            :title="t('Удалить комнату «{p0}»?', { p0: room.name || room.roomId })"
+            :description="t('Комната будет удалена для всех участников. Это действие нельзя отменить.')"
+            :confirm-label="deleting ? t('Удаляем…') : t('Удалить')"
+            tone="danger"
+            :busy="deleting"
+            @cancel="cancelDeleteConfirmation"
+            @confirm="remove"
+          >
+            <p v-if="deleteError" class="dialog__error" role="alert">{{ deleteError }}</p>
+          </AlertDialog>
+        </div>
+      </form>
     </div>
   </Dialog>
 </template>

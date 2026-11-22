@@ -153,3 +153,12 @@ test.each([false, true])(
     await vi.waitFor(() => expect(document.activeElement).toBe(trigger));
   }
 );
+
+test('a flush dialog keeps its named title and close button and takes the flush chrome', async () => {
+  const onClose = vi.fn();
+  render(UiDialog, { props: { open: true, title: 'Настройки', trim: 'flush', size: 'xl', onClose } });
+  const dialog = await screen.findByRole('dialog', { name: 'Настройки' });
+  expect(dialog.classList.contains('ui-dialog--flush')).toBe(true);
+  await userEvent.click(screen.getByRole('button', { name: 'Закрыть' }));
+  expect(onClose).toHaveBeenCalledOnce();
+});

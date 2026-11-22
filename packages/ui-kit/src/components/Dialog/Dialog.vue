@@ -84,7 +84,11 @@ function onTab(event: KeyboardEvent): void {
             'ui-dialog',
             `ui-dialog--${size}`,
             layout !== 'standard' && 'ui-dialog--' + layout,
-            { 'ui-dialog--bare': trim === 'bare', 'ui-dialog--overflow-visible': overflowVisible }
+            {
+              'ui-dialog--bare': trim === 'bare',
+              'ui-dialog--flush': trim === 'flush',
+              'ui-dialog--overflow-visible': overflowVisible
+            }
           ]"
           :aria-modal="modal || undefined"
           @open-auto-focus="onOpenAutoFocus"

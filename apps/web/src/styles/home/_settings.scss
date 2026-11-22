@@ -32,7 +32,6 @@
 //
 // Component <style> blocks of the Svelte settings components (SettingsDialog, ProfileSettings,
 // AppearanceSettings, SoundSettings, HotkeySettings, NotificationSettings, AppSettings):
-//   (new)                           -> .settings__frame        (cancels the Dialog body padding)
 //   .settings-avatar-control        -> .settings__avatar-control
 //   .settings-avatar-input          -> .settings__avatar-input
 //   .settings-avatar-edit           -> .settings__avatar-edit
@@ -63,11 +62,6 @@
 
 // The Dialog body pads and spaces its content; the settings body and its sidebar
 // run edge to edge under the title, as in the Svelte modal.
-.settings__frame {
-  margin: calc(-1 * var(--space-20)) calc(-1 * var(--space-24));
-  border-top: 1px solid var(--vr-line);
-}
-
 .settings__body {
   display: flex;
 }
