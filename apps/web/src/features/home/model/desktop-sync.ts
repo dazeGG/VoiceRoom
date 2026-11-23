@@ -10,7 +10,7 @@ import { useRoomPresenceStore } from '@/entities/room/room-presence.store';
 import { useParticipantsUiStore } from '@voiceroom/call/engine';
 import { useVoiceSessionStore } from '@voiceroom/call/engine';
 import { countUnreadForBadge, syncDesktopBadgeCount } from '@/platform/desktop-attention';
-import { bindDesktopCallActions, syncDesktopCallState } from '@/platform/desktop-call';
+import { bindDesktopCallActions } from '@/platform/desktop-call';
 import { syncDesktopDiagnosticsContext } from '@/platform/desktop-diagnostics';
 import { syncDesktopOverlaySnapshot } from '@/platform/desktop-overlay';
 import { useNotificationPreferencesStore } from '@/shared/notifications/preferences.store';
@@ -19,7 +19,6 @@ export interface DesktopSyncSource {
   userId: string;
   /** The room voice is connected to, '' when none. */
   voiceRoomId: string;
-  voiceRoomName: string;
   friends: Friend[];
   rooms: OwnedRoom[];
   onDisconnect: () => void;
@@ -39,18 +38,7 @@ export function syncLobbyWithDesktop(source: DesktopSyncSource): void {
     });
     onCleanup(() => {
       unbind();
-      syncDesktopCallState({ active: false, micMuted: false, outputMuted: false, roomId: '', roomName: '' });
       syncDesktopBadgeCount(0);
-    });
-  });
-
-  watchEffect(() => {
-    syncDesktopCallState({
-      active: Boolean(source.voiceRoomId),
-      micMuted: voiceSession.muted,
-      outputMuted: voiceSession.deafened,
-      roomId: source.voiceRoomId,
-      roomName: source.voiceRoomName
     });
   });
 

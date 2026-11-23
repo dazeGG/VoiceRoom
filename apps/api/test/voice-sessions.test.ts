@@ -88,7 +88,19 @@ test('a stay in voice is recorded when the peer leaves and when the API stops', 
       .then((result) => result.rows);
   assert.deepEqual(await rows(), [], 'nothing is written while the stay goes on');
 
-  sendWs(guest.ws, 'room.leave', guestSeat);
+  const polled = { id: 'e2f04f3a-1fcc-4b2b-889c-09e4a9fa6970', kind: 'video', outcome: 'applied' } as const;
+  const afterLastPoll = { id: 'e2f04f3a-1fcc-4b2b-889c-09e4a9fa6971', kind: 'screen', outcome: 'failed' } as const;
+  sendWs(guest.ws, 'room.voice.report', {
+    ...guestSeat,
+    rttMs: null,
+    jitterBufferMs: null,
+    uplink: { packets: 0, lost: 0 },
+    transport: null,
+    heard: [],
+    relief: [polled]
+  });
+  // Use a raw frame so this test reaches the API even before the client contract is extended.
+  guest.ws.send(JSON.stringify({ type: 'room.leave', payload: { ...guestSeat, relief: [polled, afterLastPoll] } }));
   const afterGuestLeft = await waitFor(rows, (found) => found.length === 1);
   assert.equal(afterGuestLeft.length, 1);
   const guestRow = defined(afterGuestLeft[0], 'the guest voice session row');
@@ -121,6 +133,17 @@ test('a stay in voice is recorded when the peer leaves and when the API stops', 
   assert.equal(adaRow.client_id, adaClientId, 'older account clients sent their random browser id as guestId');
   assert.equal(adaRow.guest_id, null, 'a signed-in account does not become a guest');
   assert.ok(adaRow.left_at.getTime() >= beforeStop - 1000);
+  assert.deepEqual(
+    (
+      await db.query<{ relief_kind: string; relief_outcome: string }>(
+        `SELECT relief_kind, relief_outcome FROM voice_call_events WHERE kind = 'relief' ORDER BY relief_kind`
+      )
+    ).rows,
+    [
+      { relief_kind: 'screen', relief_outcome: 'failed' },
+      { relief_kind: 'video', relief_outcome: 'applied' }
+    ]
+  );
 });
 
 test('voice_sessions keeps a stay in order and rolls back cleanly', { skip }, async (t) => {

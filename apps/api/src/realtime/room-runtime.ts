@@ -18,7 +18,7 @@ import { createVoiceJoin, type JoinUser } from './voice-join.ts';
 import { claimMedia, decideMediaRequest, MEDIA_MIN_VIEWERS, type MediaLimits } from './media-budget.ts';
 import type { createMediaMinute } from './media-minute.ts';
 import { leaveReasonOf } from './runtime-types.ts';
-import { noteMicChange, noteVoiceReport, type noteStayEvent } from './voice-track.ts';
+import { noteMicChange, noteStayRelief, noteVoiceReport, type noteStayEvent } from './voice-track.ts';
 import { isRecord } from '@voiceroom/shared/guards';
 import type {
   FinalizeError,
@@ -271,7 +271,8 @@ function createRoomRealtimeRuntime(deps: RoomRuntimeDeps) {
 
   async function leaveVoiceRoom(
     connection: WsConnection,
-    payload: { roomId: string; peerId: string; sessionToken?: string } | null = connection.activeVoice,
+    payload:
+      (Omit<ClientCommands['room.leave'], 'sessionToken'> & { sessionToken?: string }) | null = connection.activeVoice,
     { cancelPendingJoin = true }: { cancelPendingJoin?: boolean } = {}
   ): Promise<void> {
     if (cancelPendingJoin) cancelConnectionVoiceJoin(connection, payload);
@@ -289,6 +290,7 @@ function createRoomRealtimeRuntime(deps: RoomRuntimeDeps) {
       tokensMatch(peer.sessionToken, sessionToken) &&
       peer.transport?.id === activeVoice.transportId;
     if (ownsCurrentGeneration) {
+      if (stayEvent && payload.relief) noteStayRelief(peer, payload.relief, now());
       await leases.finalize({
         roomId: payload.roomId,
         peerId: payload.peerId,

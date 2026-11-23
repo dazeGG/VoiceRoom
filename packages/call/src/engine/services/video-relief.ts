@@ -16,23 +16,53 @@ import { limitScreenCaptureFrameRate } from './screen-capture-service';
 /** Our camera publication, lighter while the call is relieved. */
 export async function applyVideoReliefToCamera(
   publication: LocalTrackPublication | null | undefined
-): Promise<boolean> {
-  const track = publication?.videoTrack;
-  if (!state.videoRelieved || !track) return false;
-  const { VideoQuality } = await loadLiveKitClient();
-  if (publication.videoTrack !== track) return false;
-  track.setPublishingQuality(VideoQuality.MEDIUM);
-  return true;
+): Promise<boolean | null> {
+  if (!state.videoRelieved || !publication) return null;
+  const track = publication.videoTrack;
+  const sender = track?.sender;
+  if (!sender) return false;
+  const { getBrowser } = await loadLiveKitClient();
+  if (publication.videoTrack !== track || track.sender !== sender) return false;
+
+  // Camera publishing uses H.264 or VP8 simulcast. LiveKit's quality setter
+  // returns before the sender update can succeed or fail. Its RIDs are q/h/f.
+  const parameters = sender.getParameters();
+  const high = parameters.encodings?.find((encoding) => encoding.rid === 'f');
+  const lower = parameters.encodings?.filter((encoding) => encoding.rid === 'h' || encoding.rid === 'q');
+  if (!high || !lower?.length) return false;
+  if (high.active === false) return null;
+  const previousBitrate = high.maxBitrate;
+  high.active = false;
+  for (const encoding of lower) encoding.active = true;
+  const firefox = getBrowser()?.name === 'Firefox';
+  if (firefox) {
+    // Keep the SDK's throttling fallback for Firefox's active flag.
+    high.scaleResolutionDownBy = 4;
+    high.maxBitrate = 10;
+    high.maxFramerate = 2;
+  }
+  await sender.setParameters(parameters);
+  if (publication.videoTrack !== track || track.sender !== sender) return false;
+  const confirmed = sender.getParameters().encodings?.find((encoding) => encoding.rid === 'f');
+  return (
+    confirmed !== undefined &&
+    (confirmed.active === false || (firefox && previousBitrate !== 10 && confirmed.maxBitrate === 10))
+  );
 }
 
 /** Our shared screen, at most RELIEVED_SCREEN_FRAME_RATE while the call is relieved. */
-export async function applyVideoReliefToScreen(stream: MediaStream | null | undefined): Promise<void> {
-  await requestScreenRelief(stream);
-}
-
-async function requestScreenRelief(stream: MediaStream | null | undefined): Promise<boolean | null> {
+export async function applyVideoReliefToScreen(stream: MediaStream | null | undefined): Promise<boolean | null> {
   if (!state.videoRelieved || !stream) return null;
   return limitScreenCaptureFrameRate(stream, getScreenProfile(state.localScreenProfileId), RELIEVED_SCREEN_FRAME_RATE);
+}
+
+export async function reportVideoRelief(
+  kind: 'video' | 'screen',
+  attempt: Promise<boolean | null>,
+  onResult?: (result: ProcessingRelief) => void
+): Promise<void> {
+  const applied = await attempt.catch(() => false);
+  if (applied !== null) onResult?.({ kind, outcome: applied ? 'applied' : 'failed' });
 }
 
 /** Makes the call's video lighter, once per call; the start of a call clears it (room.ts). */
@@ -41,19 +71,12 @@ export async function relieveVideo(onResult?: (result: ProcessingRelief) => void
   state.videoRelieved = true;
   const { localCameraPublication, localScreenStream } = state;
   await Promise.all([
-    Promise.all([syncRemoteCameraDemand(), applyVideoReliefToCamera(localCameraPublication)]).then(
-      ([remote, local]) => {
-        if (remote || local || localCameraPublication)
-          onResult?.({ kind: 'video', outcome: remote || local ? 'applied' : 'failed' });
-      },
-      () => onResult?.({ kind: 'video', outcome: 'failed' })
+    reportVideoRelief(
+      'video',
+      syncRemoteCameraDemand().then((changed) => (changed ? true : null)),
+      onResult
     ),
-    localScreenStream &&
-      requestScreenRelief(localScreenStream).then(
-        (applied) => {
-          if (applied !== null) onResult?.({ kind: 'screen', outcome: applied ? 'applied' : 'failed' });
-        },
-        () => onResult?.({ kind: 'screen', outcome: 'failed' })
-      )
+    reportVideoRelief('video', applyVideoReliefToCamera(localCameraPublication), onResult),
+    reportVideoRelief('screen', applyVideoReliefToScreen(localScreenStream), onResult)
   ]);
 }

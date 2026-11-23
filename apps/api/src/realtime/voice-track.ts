@@ -142,8 +142,9 @@ function noteCpu(voice: PeerVoice, minute: VoiceMinuteSample, poll: CpuPoll, at:
   voice.relieved ||= poll.relieved;
 }
 
-function noteRelief(voice: PeerVoice, relief: ReliefPoll[], at: number): void {
+export function noteStayRelief(peer: VoicePeer, relief: ReliefPoll[], at: number): void {
   if (relief.length === 0) return;
+  const voice = (peer.voice ??= emptyVoice());
   const seen = (voice.reliefIds ??= new Set());
   for (const { id, kind, outcome } of relief) {
     if (seen.has(id) || seen.size >= VOICE_EVENTS_MAX) continue;
@@ -363,7 +364,7 @@ export function noteVoiceReport<Peer extends VoicePeer>(
       playout.synthesizedSeconds += Math.min(poll.playout.synthesizedSeconds, poll.playout.totalSeconds);
       playout.events += poll.playout.events;
     }
-    if (poll.relief) noteRelief(voice, poll.relief, at);
+    if (poll.relief) noteStayRelief(peer, poll.relief, at);
   }
 
   const changes = judgeRoom(peers, at);

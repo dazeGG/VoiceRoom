@@ -54,7 +54,24 @@ test(
       /voice_call_events_relief_check/
     );
 
+    // Check the lock held at the exact point where a writer could race the down migration.
+    await pool.query(`CREATE FUNCTION require_voice_events_write_lock() RETURNS trigger LANGUAGE plpgsql AS $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_locks WHERE pid = pg_backend_pid()
+            AND relation = 'voice_call_events'::regclass AND granted
+            AND mode IN ('ShareLock', 'ShareRowExclusiveLock', 'ExclusiveLock', 'AccessExclusiveLock')
+        ) THEN
+          RAISE EXCEPTION 'voice_call_events must block writers before deleting relief rows';
+        END IF;
+        RETURN NULL;
+      END;
+    $$;
+    CREATE TRIGGER require_voice_events_write_lock BEFORE DELETE ON voice_call_events
+      FOR EACH STATEMENT EXECUTE FUNCTION require_voice_events_write_lock()`);
     await rollBackThrough(databaseUrl, MIGRATION);
+    await pool.query(`DROP TRIGGER require_voice_events_write_lock ON voice_call_events;
+      DROP FUNCTION require_voice_events_write_lock()`);
     const events = await pool.query<{ kind: string }>(`SELECT kind FROM voice_call_events`);
     assert.deepEqual(events.rows, [{ kind: 'relieved_ns' }]);
     await assert.rejects(pool.query(`SELECT desktop_version FROM voice_sessions`), /does not exist/);

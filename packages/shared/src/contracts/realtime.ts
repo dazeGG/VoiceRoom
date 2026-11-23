@@ -174,6 +174,7 @@ const ReliefPoll = Type.Object({
 });
 export type ReliefPoll = Static<typeof ReliefPoll>;
 export const RELIEF_POLL_MAX = 8;
+const ReliefResults = Type.Optional(Type.Array(ReliefPoll, { maxItems: RELIEF_POLL_MAX }));
 
 const DESKTOP_VERSION_PATTERN = '^[0-9][0-9A-Za-z.+-]{0,39}$';
 const desktopVersionPattern = new RegExp(DESKTOP_VERSION_PATTERN);
@@ -219,7 +220,7 @@ export const VoicePoll = Type.Object({
   windowState: Type.Optional(AppWindowState),
   playout: Type.Optional(PlayoutPoll),
   /** Present even before the first action so the API can distinguish legacy relief flags. */
-  relief: Type.Optional(Type.Array(ReliefPoll, { maxItems: RELIEF_POLL_MAX })),
+  relief: ReliefResults,
   /** On the first poll after a join. */
   joinTiming: Type.Optional(JoinTiming)
 });
@@ -279,7 +280,7 @@ export const ClientCommandFrames = {
       )
     })
   ),
-  'room.leave': Frame('room.leave', VoiceTarget),
+  'room.leave': Frame('room.leave', Type.Object({ ...VoiceTarget.properties, relief: ReliefResults })),
   'room.peer.update': Frame('room.peer.update', Type.Object({ ...VoiceTarget.properties, patch: PeerPatch })),
   /** Every stats poll while in voice; never answered on its own. */
   'room.voice.report': Frame('room.voice.report', VoicePoll),

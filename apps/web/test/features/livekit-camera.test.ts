@@ -101,6 +101,19 @@ function fakeCapture(settings: MediaTrackSettings = {}) {
 // The server's answer to the camera's media request; null is no answer at all.
 const GRANTED: MediaGrant = { roomId: 'room-1', kind: 'camera', granted: true };
 
+function fakeCameraSender() {
+  let encodings = [
+    { rid: 'f', active: true },
+    { rid: 'h', active: true }
+  ];
+  return {
+    getParameters: () => ({ encodings: structuredClone(encodings) }),
+    setParameters: vi.fn(async (parameters: { encodings: typeof encodings }) => {
+      encodings = parameters.encodings;
+    })
+  };
+}
+
 async function loadLocalCamera(
   getUserMedia: (constraints: MediaStreamConstraints) => Promise<unknown>,
   grant: MediaGrant | null = GRANTED,
@@ -123,7 +136,7 @@ async function loadLocalCamera(
   vi.stubGlobal('navigator', { mediaDevices: { getUserMedia } });
   const published: Array<{ track: unknown; options: Record<string, unknown> }> = [];
   const unpublished: unknown[] = [];
-  const setPublishingQuality = vi.fn();
+  const sender = fakeCameraSender();
   const room = {
     localParticipant: {
       trackPublications: new Map<string, unknown>(),
@@ -133,7 +146,7 @@ async function loadLocalCamera(
           track: { mediaStreamTrack: track },
           trackSid: 'camera-sid',
           source: options.source,
-          videoTrack: { setPublishingQuality }
+          videoTrack: { sender }
         };
       },
       unpublishTrack: async (track: unknown) => {
@@ -159,7 +172,7 @@ async function loadLocalCamera(
   const toasts = useToastUiStore();
   toasts.useViewportTimers();
   const camera = await import('@voiceroom/call/engine/services/camera-service');
-  return { lk, camera, room, published, unpublished, showToast, toasts, presence, setPublishingQuality };
+  return { lk, camera, room, published, unpublished, showToast, toasts, presence, sender };
 }
 
 test('turning the camera on captures 540p at 24 fps and publishes it with lighter layers; off stops it', async () => {
@@ -565,12 +578,15 @@ test('an overloaded computer lightens video silently: our camera stops at 360p, 
   await flushMicrotasks();
   expect(camera.calls.quality.at(-1)).toBe(MEDIUM);
 
-  const setPublishingQuality = vi.fn();
-  Object.assign(lk.state, { joined: true, localCameraPublication: { videoTrack: { setPublishingQuality } } });
+  const sender = fakeCameraSender();
+  Object.assign(lk.state, { joined: true, localCameraPublication: { videoTrack: { sender } } });
   await relieveVideo();
   await flushMicrotasks();
   expect(lk.state.videoRelieved).toBe(true);
-  expect(setPublishingQuality).toHaveBeenCalledWith(MEDIUM);
+  expect(sender.getParameters().encodings).toEqual([
+    { rid: 'f', active: false },
+    { rid: 'h', active: true }
+  ]);
   expect(camera.calls.quality.at(-1)).toBe(LOW);
 
   // A camera opened large still comes in full.
@@ -582,11 +598,66 @@ test('an overloaded computer lightens video silently: our camera stops at 360p, 
 
 test('a camera turned on after the call was lightened starts at 360p', async () => {
   const capture = fakeCapture();
-  const { lk, camera, setPublishingQuality } = await loadLocalCamera(async () => capture.stream);
+  const { lk, camera, sender } = await loadLocalCamera(async () => capture.stream);
+  const { processingReliefForPoll, startCaptureDiagnostics, stopCaptureDiagnostics } =
+    await import('@voiceroom/call/engine/room/capture-diagnostics');
   lk.state.videoRelieved = true;
-  await camera.toggleCamera();
-  expect(setPublishingQuality).toHaveBeenCalledWith(MEDIUM);
+  startCaptureDiagnostics();
+  try {
+    await camera.toggleCamera();
+    expect(sender.getParameters().encodings).toEqual([
+      { rid: 'f', active: false },
+      { rid: 'h', active: true }
+    ]);
+    expect(processingReliefForPoll()).toMatchObject([{ kind: 'video', outcome: 'applied' }]);
+  } finally {
+    stopCaptureDiagnostics();
+  }
 });
+
+test.each(['success', 'rejected', 'missing encoding'])(
+  'camera relief reports the confirmed encoding result (%s)',
+  async (result) => {
+    const { lk } = await loadRemoteCamera();
+    const { relieveVideo } = await import('@voiceroom/call/engine/services/video-relief');
+    const update = Promise.withResolvers<void>();
+    const encodings =
+      result === 'missing encoding'
+        ? []
+        : [
+            { rid: 'f', active: true },
+            { rid: 'h', active: true }
+          ];
+    let current = encodings;
+    const sender = {
+      getParameters: () => ({ encodings: structuredClone(current) }),
+      setParameters: vi.fn(async (parameters: { encodings: typeof encodings }) => {
+        await update.promise;
+        current = parameters.encodings;
+      })
+    };
+    Object.assign(lk.state, { joined: true, localCameraPublication: { videoTrack: { sender } } });
+    const note = vi.fn();
+    const relief = relieveVideo(note);
+    await flushMicrotasks();
+    if (result === 'success') update.resolve();
+    if (result === 'rejected') {
+      void update.promise.catch(() => {});
+      update.reject(new Error('sender refused the update'));
+    }
+    if (result !== 'missing encoding') expect(note).not.toHaveBeenCalled();
+    await relief;
+    expect(note).toHaveBeenCalledExactlyOnceWith({
+      kind: 'video',
+      outcome: result === 'success' ? 'applied' : 'failed'
+    });
+    if (result === 'success')
+      expect(current).toEqual([
+        { rid: 'f', active: false },
+        { rid: 'h', active: true }
+      ]);
+  }
+);
 
 async function loadScreenRelief(profileId = 'balanced-30', settings: MediaTrackSettings = { frameRate: 30 }) {
   const { lk } = await loadRemoteCamera();
@@ -723,7 +794,7 @@ test('a capture refusing relief stays live without breaking the call', async () 
   const capture = await loadScreenRelief();
   capture.applyConstraints.mockRejectedValue(new Error('OverconstrainedError'));
   capture.lk.state.videoRelieved = true;
-  await expect(capture.applyVideoReliefToScreen(capture.stream)).resolves.toBeUndefined();
+  await expect(capture.applyVideoReliefToScreen(capture.stream)).resolves.toBe(false);
   expect(capture.video.readyState).toBe('live');
   expect(capture.audio.readyState).toBe('live');
 });
@@ -756,6 +827,25 @@ test('a new screen and its republication retain relief through the real publish 
   expect(capture.video.readyState).toBe('live');
   expect(capture.audio.readyState).toBe('live');
 });
+
+test.each(['applied', 'failed', 'no change'] as const)(
+  'screen publication records its late relief result (%s)',
+  async (outcome) => {
+    const capture = await loadScreenRelief('balanced-30', { frameRate: outcome === 'no change' ? 15 : 30 });
+    const { processingReliefForPoll, startCaptureDiagnostics, stopCaptureDiagnostics } =
+      await import('@voiceroom/call/engine/room/capture-diagnostics');
+    await capture.lk.service.connectLiveKitRoom('room-1');
+    Object.assign(capture.lk.state, { joined: true, videoRelieved: true });
+    if (outcome === 'failed') capture.applyConstraints.mockRejectedValue(new Error('OverconstrainedError'));
+    startCaptureDiagnostics();
+    try {
+      await capture.lk.service.publishLocalScreenTracks();
+      expect(processingReliefForPoll()).toMatchObject(outcome === 'no change' ? [] : [{ kind: 'screen', outcome }]);
+    } finally {
+      stopCaptureDiagnostics();
+    }
+  }
+);
 
 test('camera-off policy blocks local capture and remote camera subscription', async () => {
   const capture = vi.fn(async () => fakeCapture().stream);

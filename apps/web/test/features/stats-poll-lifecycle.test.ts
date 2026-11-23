@@ -305,45 +305,79 @@ test('voice polls report browser visibility without suspending polling', async (
   expect(polls.at(-1)?.windowState).toBe('hidden');
 });
 
+const playoutReport = (total: number, synthesized: number, events: number) =>
+  report([
+    {
+      id: 'AP',
+      type: 'media-playout',
+      totalSamplesDuration: total,
+      synthesizedSamplesDuration: synthesized,
+      synthesizedSamplesEvents: events
+    }
+  ]);
+
+const playoutParticipant = (read: () => ReturnType<typeof report>) => ({
+  livekitParticipant: {
+    audioTrackPublications: new Map([
+      ['mic', { source: 'microphone', track: { receiver: {}, getRTCStatsReport: async () => read() } }]
+    ])
+  }
+});
+
 test('playout counters shared by receivers are differenced once and unsupported playout is omitted', async () => {
   const { stats, state, polls } = await loadPoll();
-  const playout = (total: number, synthesized: number, events: number) =>
-    report([
-      {
-        id: 'AP',
-        type: 'media-playout',
-        totalSamplesDuration: total,
-        synthesizedSamplesDuration: synthesized,
-        synthesizedSamplesEvents: events
-      }
-    ]);
-  let reading = playout(20, 2, 10);
-  const participant = () => ({
-    livekitParticipant: {
-      audioTrackPublications: new Map([
-        ['mic', { source: 'microphone', track: { getRTCStatsReport: async () => reading } }]
-      ])
-    }
-  });
-  Object.assign(state, {
-    peers: new Map([
-      ['a', participant()],
-      ['b', participant()]
-    ])
-  });
+  let reading = playoutReport(20, 2, 10);
+  const participant = () => playoutParticipant(() => reading);
+  const peers = new Map([
+    ['a', participant()],
+    ['b', participant()]
+  ]);
+  Object.assign(state, { peers });
   stats.startPeerLatencyStats();
   await vi.advanceTimersByTimeAsync(0);
   expect(polls.at(-1)).not.toHaveProperty('playout');
-  reading = playout(22, 2.5, 12);
+  peers.set('b', participant());
+  reading = playoutReport(22, 2.5, 12);
   await vi.advanceTimersByTimeAsync(3_000);
   expect(polls.at(-1)?.playout).toEqual({ totalSeconds: 2, synthesizedSeconds: 0.5, events: 2 });
   reading = inbound(100);
   await vi.advanceTimersByTimeAsync(3_000);
   expect(polls.at(-1)).not.toHaveProperty('playout');
-  reading = playout(1, 0.125, 1);
+  reading = playoutReport(1, 0.125, 1);
   await vi.advanceTimersByTimeAsync(3_000);
   expect(polls.at(-1)).not.toHaveProperty('playout');
-  reading = playout(2, 0.125, 1);
+  reading = playoutReport(2, 0.125, 1);
+  await vi.advanceTimersByTimeAsync(3_000);
+  expect(polls.at(-1)?.playout).toEqual({ totalSeconds: 1, synthesizedSeconds: 0, events: 0 });
+});
+
+test('a replacement receiver starts a new baseline for the same playout report ID', async () => {
+  const { stats, state, polls } = await loadPoll();
+  let reading = playoutReport(20, 2, 10);
+  const peer = playoutParticipant(() => reading);
+  Object.assign(state, { peers: new Map([['a', peer]]) });
+  stats.startPeerLatencyStats();
+  await vi.advanceTimersByTimeAsync(0);
+  const replacement = playoutParticipant(() => reading);
+  Object.assign(peer.livekitParticipant, replacement.livekitParticipant);
+  reading = playoutReport(22, 2, 10);
+  await vi.advanceTimersByTimeAsync(3_000);
+  expect(polls.at(-1)).not.toHaveProperty('playout');
+  reading = playoutReport(24, 2.5, 11);
+  await vi.advanceTimersByTimeAsync(3_000);
+  expect(polls.at(-1)?.playout).toEqual({ totalSeconds: 2, synthesizedSeconds: 0.5, events: 1 });
+});
+
+test('a consecutive playout counter reset starts a new baseline without a missing report', async () => {
+  const { stats, state, polls } = await loadPoll();
+  let reading = playoutReport(20, 2, 10);
+  Object.assign(state, { peers: new Map([['a', playoutParticipant(() => reading)]]) });
+  stats.startPeerLatencyStats();
+  await vi.advanceTimersByTimeAsync(0);
+  reading = playoutReport(1, 0.125, 1);
+  await vi.advanceTimersByTimeAsync(3_000);
+  expect(polls.at(-1)).not.toHaveProperty('playout');
+  reading = playoutReport(2, 0.125, 1);
   await vi.advanceTimersByTimeAsync(3_000);
   expect(polls.at(-1)?.playout).toEqual({ totalSeconds: 1, synthesizedSeconds: 0, events: 0 });
 });

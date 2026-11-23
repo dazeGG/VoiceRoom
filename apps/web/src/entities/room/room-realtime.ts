@@ -359,7 +359,7 @@ export function joinVoiceRoom(payload: { roomId: string; peerId: string; session
   getAppRealtime().send('room.join', join);
 }
 
-export function leaveVoiceRoom(payload: { roomId: string; peerId: string; sessionToken: string }): void {
+export function leaveVoiceRoom(payload: ClientCommands['room.leave']): void {
   if (activeVoiceJoin?.roomId === payload.roomId && activeVoiceJoin.peerId === payload.peerId) {
     activeVoiceJoin = null;
     lastActiveResyncKey = '';

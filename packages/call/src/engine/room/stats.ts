@@ -212,7 +212,8 @@ interface InboundReading {
   bufferSamples: number;
 }
 let previousInbound = new Map<string, InboundReading>();
-let previousPlayout: { room: typeof state.livekitRoom; reports: Map<string, PlayoutPoll> } | null = null;
+type PlayoutReading = PlayoutPoll & { receivers: Set<RTCRtpReceiver> };
+let previousPlayout: { room: typeof state.livekitRoom; reports: Map<string, PlayoutReading> } | null = null;
 let previousOutbound: { lost: number; sent: number } | null = null;
 let previousChecks: { seconds: number; checks: number; identity: string; publication: unknown } | null = null;
 const inboundLoss = createLossWindow();
@@ -233,7 +234,7 @@ type OutboundCounts = Pick<PollCounts, 'outboundPackets' | 'outboundLost' | 'rtt
 /** The growth of a counter since the last reading; a counter that went back (a new stream) starts over from zero. */
 const growth = (now: number, before: number) => (now >= before ? now - before : now);
 
-function playoutDelta(readings: Map<string, PlayoutPoll>): PlayoutPoll | null {
+function playoutDelta(readings: Map<string, PlayoutReading>): PlayoutPoll | null {
   const room = state.livekitRoom;
   const before = previousPlayout?.room === room ? previousPlayout?.reports : undefined;
   previousPlayout = { room, reports: readings };
@@ -242,6 +243,7 @@ function playoutDelta(readings: Map<string, PlayoutPoll>): PlayoutPoll | null {
     const last = before?.get(id);
     if (
       !last ||
+      ![...reading.receivers].some((receiver) => last.receivers.has(receiver)) ||
       reading.totalSeconds < last.totalSeconds ||
       reading.synthesizedSeconds < last.synthesizedSeconds ||
       reading.events < last.events
@@ -267,7 +269,7 @@ async function updateInboundAudioStats(isCurrent: () => boolean): Promise<Inboun
     jitterBufferMs: null,
     playout: null
   };
-  const playout = new Map<string, PlayoutPoll>();
+  const playout = new Map<string, PlayoutReading>();
   let jitterSum = 0;
   let jitterCount = 0;
   let bufferSeconds = 0;
@@ -278,21 +280,26 @@ async function updateInboundAudioStats(isCurrent: () => boolean): Promise<Inboun
     for (const publication of peer.livekitParticipant?.audioTrackPublications?.values() || []) {
       const voice = isMicrophonePublication(publication);
       const track = publication.track;
+      const receiver = track?.receiver;
       const stats = readRtcStats(await track?.getRTCStatsReport?.().catch(() => undefined));
       if (!isCurrent()) return counts;
       for (const report of stats.values()) {
         if (report.type === 'media-playout') {
           const { totalSamplesDuration, synthesizedSamplesDuration, synthesizedSamplesEvents } = report;
           if (
+            receiver &&
             totalSamplesDuration !== undefined &&
             synthesizedSamplesDuration !== undefined &&
             synthesizedSamplesEvents !== undefined
           ) {
             // Multiple audio receivers can report the same shared playout object.
+            const receivers = playout.get(report.id)?.receivers ?? new Set<RTCRtpReceiver>();
+            receivers.add(receiver);
             playout.set(report.id, {
               totalSeconds: totalSamplesDuration,
               synthesizedSeconds: synthesizedSamplesDuration,
-              events: synthesizedSamplesEvents
+              events: synthesizedSamplesEvents,
+              receivers
             });
           }
           continue;

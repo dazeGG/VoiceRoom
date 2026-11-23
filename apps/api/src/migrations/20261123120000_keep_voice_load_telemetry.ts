@@ -29,6 +29,7 @@ export async function up(pgm: MigrationBuilder): Promise<void> {
 
 export async function down(pgm: MigrationBuilder): Promise<void> {
   pgm.sql("SET LOCAL lock_timeout = '5s'");
+  pgm.sql('LOCK TABLE voice_call_events IN ACCESS EXCLUSIVE MODE');
   pgm.sql("DELETE FROM voice_call_events WHERE kind = 'relief'");
   pgm.dropConstraint('voice_call_events', RELIEF_CHECK);
   pgm.dropConstraint('voice_call_events', KIND_CHECK);

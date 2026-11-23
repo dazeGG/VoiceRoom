@@ -46,7 +46,7 @@ export interface CallTransport {
     onStateChange(listener: (connected: boolean, epoch: number) => void): () => void;
     subscribeRoom(roomId: string, handler: (event: CallRealtimeEvent) => void): () => void;
     join(input: Member & { name: string }): void;
-    leave(input: Member): void;
+    leave(input: ClientCommands['room.leave']): void;
     updatePeer(input: Member & { patch: Record<string, unknown> }): void;
     reportPoll(input: ClientCommands['room.voice.report']): void;
     requestMediaGrant(input: ClientCommands['room.media.request']): Promise<MediaGrant | null>;

@@ -24,7 +24,6 @@ import { loadLiveKitClient } from '../media/livekit-runtime';
 import {
   describeMicrophoneError,
   getLocalMicrophoneCapture,
-  getMicrophoneCaptureDiagnostics,
   stopMicrophoneCapture
 } from '../services/microphone-service';
 import { attachMeter, startMeters, stopMeters } from '../media/meters';
@@ -45,7 +44,6 @@ import {
   invalidateMicrophoneActions,
   startMicrophoneCall,
   setMicrophoneRecoveryObserver,
-  getMicrophoneCallGeneration,
   requestAutomaticMicrophoneConnectionReplacement,
   refreshMicrophoneLevelMeter,
   relieveNoiseSuppression,
@@ -57,7 +55,7 @@ import { noteCpuPressure, startCallStrainWatch, stopCallStrainWatch } from './ca
 import { canRecoverMic, startMicSendWatch, stopMicSendWatch } from './mic-send';
 import {
   noteCaptureRecovery,
-  noteProcessingRelief,
+  processingReliefForPoll,
   startCaptureDiagnostics,
   stopCaptureDiagnostics
 } from './capture-diagnostics';
@@ -65,13 +63,13 @@ import {
   finishCallQuality,
   type CallQualitySummary,
   recordCpuPressure,
-  recordCpuRelief,
   recordPeerCount,
   startCallQuality
 } from './call-quality';
 import { GATE_THRESHOLD_MIN_DB } from '../core/config';
 import { resolveRoomEntryName } from './room-entry';
 import { createVoiceEventHandler } from './voice-events';
+import { createProcessingReliefRecorder } from './processing-relief';
 import { isMicrophoneShownMuted } from '../core/microphone-mute';
 import type { MicrophoneCapture } from '../core/types';
 import {
@@ -351,43 +349,12 @@ async function performJoinRoom(generation: number): Promise<void> {
     recordPeerCount(state.peers.size);
     // Relief comes from the call showing strain (call-strain.ts), not from a busy system alone.
     startCallStrainWatch(() => {
-      // The noise suppression and, silently, the video (video-relief.ts).
-      const reliefGeneration = getMicrophoneCallGeneration();
-      const reliefRoomId = state.roomId;
-      const reliefSessionToken = state.sessionToken;
-      const reliefCurrent = () =>
-        state.joined &&
-        getMicrophoneCallGeneration() === reliefGeneration &&
-        state.roomId === reliefRoomId &&
-        state.sessionToken === reliefSessionToken;
-      const noiseStarted = performance.now();
-      const noteNoiseResult = (switched: boolean) => {
-        if (!reliefCurrent()) return;
-        if (switched) recordCpuRelief();
-        const capture = getMicrophoneCaptureDiagnostics();
-        noteProcessingRelief({
-          generation: reliefGeneration,
-          kind: 'noise',
-          outcome: switched ? 'applied' : 'failed',
-          requestedMode: 'browser',
-          actualMode: capture.actualMode,
-          durationMs: performance.now() - noiseStarted
-        });
+      const recordNoise = createProcessingReliefRecorder();
+      const noteNoiseResult = (switched: boolean | null) => {
+        if (switched !== null) recordNoise({ kind: 'noise', outcome: switched ? 'applied' : 'failed' });
       };
       void relieveNoiseSuppression().then(noteNoiseResult, () => noteNoiseResult(false));
-      const videoStarted = performance.now();
-      void relieveVideo(({ kind, outcome }) => {
-        if (!reliefCurrent()) return;
-        if (outcome === 'applied') recordCpuRelief();
-        noteProcessingRelief({
-          generation: reliefGeneration,
-          kind,
-          outcome,
-          requestedMode: null,
-          actualMode: getMicrophoneCaptureDiagnostics().actualMode,
-          durationMs: performance.now() - videoStarted
-        });
-      });
+      void relieveVideo(createProcessingReliefRecorder());
     });
     startMicSendWatch({
       reopen: reopenMicrophone,
@@ -459,6 +426,7 @@ async function openJoinMicrophone(isCurrent: () => boolean): Promise<MicrophoneC
 }
 
 export function leaveRoom(): void {
+  const relief = processingReliefForPoll();
   invalidateMicrophoneActions();
   setMicrophoneRecoveryObserver(null);
   stopCaptureDiagnostics();
@@ -489,7 +457,8 @@ export function leaveRoom(): void {
     getCallPorts().transport.realtime.leave({
       roomId: state.roomId,
       peerId: state.peerId,
-      sessionToken: state.sessionToken
+      sessionToken: state.sessionToken,
+      ...(relief.length ? { relief } : {})
     });
     voiceJoinSent = false;
   }

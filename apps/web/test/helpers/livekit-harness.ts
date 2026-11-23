@@ -101,6 +101,7 @@ export async function loadLiveKitHarness(
 
   const state: LiveKitHarness['state'] = {
     outputMuted: false,
+    localStream: null,
     peerId: 'self',
     peers: new Map(),
     screenSubscribedPeerIds: new Set(),
@@ -190,6 +191,7 @@ export async function loadLiveKitHarness(
       }
     },
     VideoQuality: { HIGH: 2, MEDIUM: 1, LOW: 0 },
+    getBrowser: () => undefined,
     VideoPresets: { h180: { resolution: { height: 180 } }, h360: { resolution: { height: 360 } } },
     VideoPreset: class {
       readonly args: unknown[];

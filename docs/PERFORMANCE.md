@@ -44,6 +44,21 @@ FROM stays WHERE rtt IS NOT NULL GROUP BY 1 ORDER BY 1;
 `join_timing` goes with the room's history after `VOICE_HISTORY_KEEP_DAYS`, as the
 stay's minutes do, and with the row when an account is deleted.
 
+### Manual rollback of voice load telemetry
+
+Drain active voice stays, then stop every API instance running the version that
+writes the new voice load telemetry. With
+`20261123120000_keep_voice_load_telemetry` at the head, run
+`npm --workspace @voiceroom/api run db:rollback` against the target database.
+Start the previous API version after the rollback succeeds. The migration CLI
+disables down migrations in production. The deploy script takes a database dump
+that can be used to restore the previous schema.
+
+The rollback permanently deletes `relief` events from `voice_call_events`, window
+state counts and audio playout measurements from `voice_session_samples`, and
+desktop shell versions from `voice_sessions`. Legacy call events, stay rows and
+other sample data are retained.
+
 ## The join bench
 
 `scripts/voice-bench/join-bench.mts` times every stage of a join in a real browser

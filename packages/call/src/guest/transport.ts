@@ -177,10 +177,10 @@ export function createGuestTransport(
     }, delay);
   }
 
-  function disconnect(): void {
+  function disconnect(relief?: ClientCommands['room.leave']['relief']): void {
     if (session) {
       const { roomId, peerId, sessionToken } = session.input;
-      send({ type: 'room.leave', payload: { roomId, peerId, sessionToken } });
+      send({ type: 'room.leave', payload: { roomId, peerId, sessionToken, ...(relief?.length ? { relief } : {}) } });
       session.lifetime.abort();
     }
     session = null;
@@ -331,7 +331,7 @@ export function createGuestTransport(
     },
     leave(payload) {
       if (!session || !isSamePeer(session.input, payload)) return;
-      disconnect();
+      disconnect(payload.relief);
     },
     updatePeer(payload) {
       if (session && rosterAttached.value && isSamePeer(session.input, payload))

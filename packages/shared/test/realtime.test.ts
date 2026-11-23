@@ -15,6 +15,19 @@ import {
 } from '../src/realtime.ts';
 import { defined } from './helpers/assert-defined.ts';
 
+test('a leave frame accepts bounded relief outcomes and still accepts legacy leave', () => {
+  const target = { roomId: 'abcdefghij', peerId: 'peer-0001', sessionToken: 't'.repeat(32) };
+  const legacy = { type: 'room.leave', payload: target };
+  assert.deepEqual(validateClientCommand(legacy), { ok: true, envelope: legacy });
+  const outcome = { id: 'e2f04f3a-1fcc-4b2b-889c-09e4a9fa6970', kind: 'screen', outcome: 'applied' };
+  const modern = { type: 'room.leave', payload: { ...target, relief: [outcome] } };
+  assert.deepEqual(validateClientCommand(modern), { ok: true, envelope: modern });
+  assert.equal(
+    validateClientCommand({ ...modern, payload: { ...target, relief: [{ ...outcome, id: 'bad' }] } }).ok,
+    false
+  );
+});
+
 test('voice joins accept a random installation UUID independently of the guest id', () => {
   const join = { roomId: 'abcdefghij', peerId: 'peer-0001', sessionToken: 't'.repeat(32), name: 'Alice' };
   const clientId = '123e4567-e89b-12d3-a456-426614174000';
