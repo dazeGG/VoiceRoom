@@ -106,6 +106,14 @@ FROM pg_stat_statements ORDER BY total_exec_time DESC LIMIT 20;
 route) and `voice_room_web_vital` (what browsers measured of the pages they opened,
 in milliseconds, CLS in thousandths). Both start over when the API restarts.
 
+The full-stack Compose deployment enables LiveKit forwarding latency on its own
+Prometheus endpoint. `livekit_forward_latency_ns_bucket` counts forwarding samples
+by latency in nanoseconds. For a one-minute percentile, scrape every 15 seconds
+and apply `histogram_quantile` to the one-minute rates of the buckets. The
+`livekit_forward_latency` gauge reports a rolling one-minute p90 in nanoseconds
+and updates every 15 seconds by default. These metrics cover transit inside the
+SFU and require active media forwarding to produce samples.
+
 Voice joins also send a best-effort `voice join outcome` client-log event on success,
 failure or cancellation. Its elapsed time covers the whole attempt; the stage is
 the last completed milestone, not a request duration. This requires client-log

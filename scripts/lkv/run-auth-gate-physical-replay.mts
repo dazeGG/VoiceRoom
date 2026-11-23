@@ -262,7 +262,7 @@ export async function runPhysicalReplay() {
     topology: {
       databaseUrl: DATABASE_URL.replace(/:\/\/([^:]+):([^@]+)@/, '://$1:<redacted>@'),
       gateEntrypoint: 'apps/api/src/domains/admission/livekit-auth-gate.service.ts',
-      livekitImage: 'livekit/livekit-server:v1.13.2',
+      livekitImage: 'livekit/livekit-server:v1.13.11',
       livekitInternalUrl: LIVEKIT_INTERNAL_URL
     }
   };

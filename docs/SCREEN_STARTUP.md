@@ -118,6 +118,8 @@ Log flush can lag by up to five minutes; `probeId` encodes the start in base 36.
 
 **Loopback topology observation (2026-11-10):** On Docker Desktop for Windows, the published-loopback-port setup below reached signaling but could not establish an ICE connection in this environment. An alternative test used LiveKit 1.13.2 and Chromium 149 in separate task-owned containers sharing a `--network none` namespace, with no published ports and no external ICE servers. Chromium used task-local `--allow-loopback-in-peer-connection` and `--disable-features=WebRtcHideLocalIpsWithMdns`; neither flag changes the application. The default one-viewer run passed all three startup cases and one 130-second-per-case run passed the sampled rendered-FPS/resolution sustained gate, with at least 125 seconds observed per case. The short run does not itself establish stability. The isolated Linux/headless result does not establish Windows desktop capture, game impact, actual display presentation or Internet performance. Prior Docker Desktop failures remain connectivity failures, not FPS measurements.
 
+The recipes below target LiveKit 1.13.11. To reproduce the historical run, use the original checkout and lockfile with client 2.22.4, LiveKit 1.13.2 and Chromium 149. The results above apply to that historical run.
+
 `SCREEN_BENCH_ISOLATED_LOOPBACK=1` opts the benchmark browser into exactly those two flags; unset or `0` preserves its normal browser arguments, and any other value is rejected. Use `1` **only** in a disposable, isolated network namespace: disabling mDNS host obfuscation can reveal local addresses to the SFU. The benchmark explicitly uses an empty ICE-server list in either mode. For example, from the repository root in PowerShell, with Docker Desktop running and enough disk for the pinned images and dependencies:
 
 ```powershell
@@ -134,7 +136,7 @@ try {
   if ($LASTEXITCODE -ne 0) { throw 'Node copy failed' }
   docker run --name $prep --label voiceroom.task=screen-bench --mount "type=volume,source=$volume,target=/work" $image bash -lc 'export PATH=/work/.node/bin:$PATH; cd /work; npm ci --no-audit --no-fund'
   if ($LASTEXITCODE -ne 0) { throw 'Dependency install failed' }
-  docker run -d --name $sfu --label voiceroom.task=screen-bench --network none -e 'LIVEKIT_KEYS=devkey: secret' livekit/livekit-server:v1.13.2 --dev --bind 127.0.0.1 --node-ip 127.0.0.1 --udp-port 17882 --rtc.tcp_port 0 --rtc.enable_loopback_candidate
+  docker run -d --name $sfu --label voiceroom.task=screen-bench --network none -e 'LIVEKIT_KEYS=devkey: secret' livekit/livekit-server:v1.13.11 --dev --bind 127.0.0.1 --node-ip 127.0.0.1 --udp-port 17882 --rtc.tcp_port 0 --rtc.enable_loopback_candidate
   if ($LASTEXITCODE -ne 0) { throw 'SFU start failed' }
   Start-Sleep -Seconds 3
   foreach ($run in @(@{name=$startup; seconds=15; file='startup'}, @{name=$full; seconds=130; file='full'})) {
@@ -162,7 +164,7 @@ The Windows published-loopback-port recipe below remains unverified for ICE in t
 $container = 'voiceroom-screen-ab-' + (Get-Date -Format 'yyyyMMddHHmmss')
 docker run -d --rm --name $container --label voiceroom.task=screen-encoding-ab `
   -p 127.0.0.1:17880:7880 -p 127.0.0.1:17881:17881 -p 127.0.0.1:17882:17882/udp `
-  -e 'LIVEKIT_KEYS=devkey: secret' livekit/livekit-server:v1.13.2 `
+  -e 'LIVEKIT_KEYS=devkey: secret' livekit/livekit-server:v1.13.11 `
   --dev --bind 0.0.0.0 --node-ip 127.0.0.1 --rtc.tcp_port 17881 `
   --udp-port 17882 --rtc.enable_loopback_candidate
 try {

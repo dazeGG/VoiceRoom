@@ -45,7 +45,7 @@ services:
       - /var/lib/postgresql/data
 
   livekit:
-    image: livekit/livekit-server:v1.13.2
+    image: livekit/livekit-server:v1.13.11
     command: --dev --bind 0.0.0.0 --node-ip 127.0.0.1
     environment:
       LIVEKIT_KEYS: "devkey: devsecret"

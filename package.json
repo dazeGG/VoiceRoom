@@ -30,7 +30,7 @@
     "dev:host:widget": "npm --workspace @voiceroom/widget run dev",
     "dev:host:admin": "npm --workspace @voiceroom/admin run dev",
     "dev:host:site": "npm --workspace @voiceroom/site run dev",
-    "dev:host:livekit": "docker run --rm -e LIVEKIT_KEYS=\"devkey: devsecret\" -p 7880:7880 -p 7881:7881 -p 7882:7882/udp livekit/livekit-server:v1.13.2 --dev --bind 0.0.0.0",
+    "dev:host:livekit": "docker run --rm -e LIVEKIT_KEYS=\"devkey: devsecret\" -p 7880:7880 -p 7881:7881 -p 7882:7882/udp livekit/livekit-server:v1.13.11 --dev --bind 0.0.0.0",
     "build": "npm run build:app && npm --workspace @voiceroom/site run build",
     "build:app": "npm --workspace @voiceroom/web run build && npm --workspace @voiceroom/admin run build && npm --workspace @voiceroom/meet run build && npm --workspace @voiceroom/widget run build",
     "check": "npm run check:app && npm run check:site && npm run format:check",

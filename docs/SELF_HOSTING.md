@@ -170,6 +170,9 @@ The GitHub equivalent of GitLab CI/CD variables is here:
 | `LIVEKIT_GATE_PUBLIC_URL` | `wss://livekit.example.com` | Public browser-facing auth-gate URL. By default it is built from `LIVEKIT_DOMAIN`. |
 | `LIVEKIT_INTERNAL_URL` | `ws://livekit:7880` | Internal LiveKit SFU address for the API when it is not started with the production compose. Production compose fixes the service URL itself. |
 | `LIVEKIT_METRICS_URL` | `http://livekit:6789/metrics` | LiveKit Prometheus metrics, which the API records once a minute for the «Система» (System) page in the admin app: traffic, packet loss in both directions, retransmissions, and LiveKit CPU and memory. Production compose sets the address inside its own network itself; without it these charts are empty. |
+| `LIVEKIT_FORWARD_STATS_SUMMARY_INTERVAL` | `1s` | How often LiveKit drains forwarding samples into its Prometheus histogram. |
+| `LIVEKIT_FORWARD_STATS_REPORT_INTERVAL` | `15s` | How often LiveKit updates the forwarding latency p90 gauge. |
+| `LIVEKIT_FORWARD_STATS_REPORT_WINDOW` | `1m` | Rolling window for the p90 gauge. Use Go duration strings for all three settings. Set any one to `0s` to disable forwarding telemetry. |
 | `LIVEKIT_URL` | optional | Legacy fallback for a host/dev run. In production do not use it as the public URL; set `LIVEKIT_GATE_PUBLIC_URL`. |
 | `LIVEKIT_PUBLIC_URL` | optional | For dev compose, if the external LiveKit port differs. |
 | `TRUST_PROXY` | `true` in compose/proxy | Turn on only behind a trusted reverse proxy. |

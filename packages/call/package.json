@@ -21,7 +21,7 @@
     "@voiceroom/shared": "file:../shared",
     "@voiceroom/ui": "file:../ui",
     "@voiceroom/ui-kit": "file:../ui-kit",
-    "livekit-client": "^2.22.4"
+    "livekit-client": "2.25.0"
   },
   "peerDependencies": {
     "pinia": "^4.1.0",

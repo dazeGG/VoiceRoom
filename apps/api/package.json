@@ -22,7 +22,7 @@
     "@voiceroom/shared": "file:../../packages/shared",
     "fastify": "^5.12.5",
     "kysely": "^0.29.6",
-    "livekit-server-sdk": "^2.15.4",
+    "livekit-server-sdk": "2.20.1",
     "maxmind": "^5.0.7",
     "node-pg-migrate": "^8.0.4",
     "pg": "^8.21.0",
