@@ -11,12 +11,18 @@ import type { CameraFacing } from '../core/types';
 import { stopStream } from '../core/utils';
 import { isRecord } from '@voiceroom/shared/guards';
 import { showToast } from '../ui/toast';
-import { publishLocalCamera, unpublishLocalCamera } from './livekit/local-publications';
+import {
+  publishLocalCamera,
+  publishLocalCameraForRoom,
+  unpublishCameraTrack,
+  unpublishLocalCamera
+} from './livekit/local-publications';
 import { askForMedia, describeMediaRefusal } from './media-grant';
 import { postState } from '../room/presence';
 import { createLogger, errorContext } from '../diagnostics';
 
 const log = createLogger('room:camera');
+let pendingCameraStream: MediaStream | null = null;
 
 export async function toggleCamera(): Promise<void> {
   if (state.cameraStarting) return;
@@ -28,7 +34,13 @@ export async function toggleCamera(): Promise<void> {
 }
 
 async function startCamera(): Promise<void> {
-  if (getInstalledCallPorts()?.mediaPolicy.camera === false || !state.joined) return;
+  if (
+    state.cameraStarting ||
+    state.localCameraStream ||
+    getInstalledCallPorts()?.mediaPolicy.camera === false ||
+    !state.joined
+  )
+    return;
   if (!navigator.mediaDevices?.getUserMedia) {
     showToast(t('Камера недоступна в этом браузере'));
     return;
@@ -37,28 +49,64 @@ async function startCamera(): Promise<void> {
   state.cameraStarting = true;
   const self = state.self;
   const isCurrent = () => state.joined && state.self === self;
+  const canUseCamera = () => isCurrent() && getInstalledCallPorts()?.mediaPolicy.camera !== false;
+  let stream: MediaStream | undefined;
   try {
     const grant = await askForMedia('camera');
-    if (!isCurrent() || getInstalledCallPorts()?.mediaPolicy.camera === false) return;
+    if (!canUseCamera()) return;
     if (grant && !grant.granted) {
       showToast(describeMediaRefusal(grant), { duration: 12000, variant: 'error' });
       return;
     }
-    const stream = await openCameraCapture(state.cameraDeviceId);
-    if (!isCurrent() || getInstalledCallPorts()?.mediaPolicy.camera === false) {
+    stream = await openCameraCapture(state.cameraDeviceId);
+    if (!canUseCamera()) {
       stopStream(stream);
       return;
     }
+    pendingCameraStream = stream;
+    const room = state.livekitRoom;
+    const isCurrentPublication = () => canUseCamera() && state.livekitRoom === room && pendingCameraStream === stream;
+    const publication = room && (await publishLocalCameraForRoom(room, stream, isCurrentPublication));
+    const [track] = stream.getVideoTracks();
+    if (
+      !publication ||
+      !isCurrentPublication() ||
+      track?.readyState !== 'live' ||
+      publication.track?.mediaStreamTrack !== track
+    ) {
+      if (room && publication && track) {
+        void unpublishCameraTrack(room, track).catch((error: unknown) =>
+          log.warn('camera unpublish failed', errorContext(error))
+        );
+      }
+      throw new Error('No live camera publication');
+    }
+    state.localCameraPublication = publication;
     adoptCameraStream(stream);
-    await publishLocalCamera();
+    pendingCameraStream = null;
     // The server counts the camera against its media budget from here on.
-    if (isCurrent()) await postState();
+    await postState();
   } catch (error) {
     if (!isCurrent()) return;
     log.warn('camera start failed', errorContext(error));
-    await stopCamera();
-    showToast(describeCameraError(error));
+    if (stream) {
+      if (state.localCameraStream === stream) await stopCamera();
+      if (isCurrent()) showToast(t('Не удалось включить камеру'));
+    } else if (isCameraPromptDismissed(error)) {
+      showToast(t('Запрос доступа к камере закрыт'), {
+        actionLabel: t('Повторить'),
+        action: () => {
+          if (isCurrent()) return startCamera();
+        }
+      });
+    } else {
+      showToast(describeCameraError(error));
+    }
   } finally {
+    if (stream && pendingCameraStream === stream) {
+      pendingCameraStream = null;
+      stopStream(stream);
+    }
     if (isCurrent()) state.cameraStarting = false;
   }
 }
@@ -66,18 +114,24 @@ async function startCamera(): Promise<void> {
 export async function stopCamera(): Promise<void> {
   const stream = state.localCameraStream;
   releaseLocalCamera();
-  await unpublishLocalCamera().catch((error: unknown) => log.warn('camera unpublish failed', errorContext(error)));
   if (stream) stopStream(stream);
+  const unpublishing = unpublishLocalCamera().catch((error: unknown) =>
+    log.warn('camera unpublish failed', errorContext(error))
+  );
   if (stream) await postState();
+  await unpublishing;
 }
 
 /** Leaving the room: the LiveKit room goes away with the publication. */
 export function stopLocalCamera(): void {
   const stream = state.localCameraStream;
+  const pending = pendingCameraStream;
+  pendingCameraStream = null;
   releaseLocalCamera();
   state.localCameraPublication = null;
   state.cameraStarting = false;
   if (stream) stopStream(stream);
+  if (pending) stopStream(pending);
 }
 
 export async function switchCamera(deviceId: string): Promise<void> {
@@ -223,6 +277,15 @@ function persistCameraDeviceId(deviceId: string): void {
 function isMissingDeviceError(error: unknown): boolean {
   const name = isRecord(error) ? error.name : undefined;
   return name === 'NotFoundError' || name === 'OverconstrainedError';
+}
+
+function isCameraPromptDismissed(error: unknown): boolean {
+  return (
+    isRecord(error) &&
+    error.name === 'NotAllowedError' &&
+    typeof error.message === 'string' &&
+    error.message.trim().toLowerCase() === 'permission dismissed'
+  );
 }
 
 export function describeCameraError(error: unknown): string {

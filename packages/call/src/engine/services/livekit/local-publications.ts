@@ -1,7 +1,7 @@
 // Our own tracks on the LiveKit room: the microphone, the camera and the shared screen.
 
 import { t } from '@voiceroom/ui-kit/i18n';
-import type { LocalTrackPublication, Room } from 'livekit-client';
+import type { LocalTrack, LocalTrackPublication, Room } from 'livekit-client';
 import {
   CAMERA_CAPTURE,
   CAMERA_SIMULCAST_LAYERS,
@@ -19,6 +19,9 @@ import { isMicrophoneShownMuted } from '../../core/microphone-mute';
 import { UserFacingError } from '../../core/utils';
 
 import { isCameraPublication, isMicrophonePublication } from './publication-kinds';
+
+// Keep detached captures available for retry without holding on to a room after it goes away.
+const cameraUnpublishes = new WeakMap<Room, Map<LocalTrack | MediaStreamTrack, 'pending' | 'failed'>>();
 
 /** A stale published track could not be detached; callers must retain quarantine. */
 export class MicrophonePublicationCleanupError extends Error {}
@@ -168,20 +171,46 @@ export async function publishLocalCameraForRoom(
     )
   });
   if (!isCurrent()) {
-    await room.localParticipant.unpublishTrack(publication.track ?? track, false).catch(() => {});
+    void unpublishCameraTrack(room, track).catch(() => {});
     return null;
   }
-  await applyVideoReliefToCamera(publication);
+  try {
+    await applyVideoReliefToCamera(publication);
+  } catch (error) {
+    void unpublishCameraTrack(room, track).catch(() => {});
+    throw error;
+  }
   return publication;
+}
+
+export async function unpublishCameraTrack(room: Room, track: LocalTrack | MediaStreamTrack): Promise<void> {
+  let tracks = cameraUnpublishes.get(room);
+  if (!tracks) {
+    tracks = new Map();
+    cameraUnpublishes.set(room, tracks);
+  }
+  if (tracks.get(track) === 'pending') return;
+  tracks.set(track, 'pending');
+  try {
+    // The capture is stopped by its owner, not by LiveKit.
+    await room.localParticipant.unpublishTrack(track, false);
+    tracks.delete(track);
+  } catch (error) {
+    tracks.set(track, 'failed');
+    throw error;
+  }
 }
 
 export async function unpublishLocalCamera(): Promise<void> {
   const room = state.livekitRoom;
   const track = state.localCameraPublication?.track;
   state.localCameraPublication = null;
-  if (!room || !track) return;
-  // The capture is stopped by its owner, not by LiveKit.
-  await room.localParticipant.unpublishTrack(track, false);
+  if (!room) return;
+  const tracks = new Set(
+    [...(cameraUnpublishes.get(room) ?? [])].filter(([, status]) => status === 'failed').map(([track]) => track)
+  );
+  if (track) tracks.add(track);
+  await Promise.all([...tracks].map((track) => unpublishCameraTrack(room, track)));
 }
 
 export async function ensureLocalCameraPublished(room: Room, isCurrent: () => boolean): Promise<void> {

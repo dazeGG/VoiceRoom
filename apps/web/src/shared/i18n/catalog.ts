@@ -191,7 +191,7 @@ export const english = {
   Блокировки: 'Locks',
   'Заблокированные не могут зайти в комнату. Заблокировать участника можно через меню «⋯» во вкладке «Участники».':
     'Blocked people cannot enter the room. You can block a participant through the “⋯” menu in the “Participants” tab.',
-  Повторить: 'Repeat',
+  Повторить: 'Retry',
   'Загружаем…': 'Loading...',
   'Активных блокировок нет': 'No active blocking',
   'Здесь появятся участники, которых вы заблокируете.': 'The members you block will appear here.',
@@ -1083,6 +1083,7 @@ export const english = {
   'Камера недоступна в этом браузере': 'Camera is not available in this browser',
   'Другой камеры нет': 'No other camera',
   'Камера отключилась': 'Camera turned off',
+  'Запрос доступа к камере закрыт': 'Camera permission prompt dismissed',
   'Нет доступа к камере: разрешите её в браузере': 'Camera cannot be accessed: allow it in your browser',
   'Камера не найдена': 'Camera not found',
   'Камера занята другим приложением': 'Camera is occupied by another application',
@@ -1887,7 +1888,7 @@ export const french: Record<MessageKey, string> = {
   Блокировки: 'Serrures',
   'Заблокированные не могут зайти в комнату. Заблокировать участника можно через меню «⋯» во вкладке «Участники».':
     "Les personnes bloquées ne peuvent pas entrer dans le salon. Vous pouvez bloquer un participant via le menu « ⋯ » de l'onglet « Participants ».",
-  Повторить: 'Répéter',
+  Повторить: 'Réessayer',
   'Загружаем…': 'Chargement...',
   'Активных блокировок нет': 'Aucun blocage actif',
   'Здесь появятся участники, которых вы заблокируете.': 'Les membres que vous bloquez apparaîtront ici.',
@@ -2791,6 +2792,7 @@ export const french: Record<MessageKey, string> = {
   'Камера недоступна в этом браузере': "La caméra n'est pas disponible dans ce navigateur",
   'Другой камеры нет': 'Aucune autre caméra',
   'Камера отключилась': 'Caméra éteinte',
+  'Запрос доступа к камере закрыт': 'La demande d’accès à la caméra a été fermée',
   'Нет доступа к камере: разрешите её в браузере':
     "La caméra n'est pas accessible : autorisez-la dans votre navigateur",
   'Камера не найдена': 'Caméra introuvable',
