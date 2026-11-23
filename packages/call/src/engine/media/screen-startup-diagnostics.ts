@@ -1,39 +1,48 @@
 import { createLogger, reportClientLogs, type LogContext } from '../diagnostics';
-import { isActiveCandidatePair, readRtcStats, type RtcStat, type RtcStatsSource } from './rtc-stats';
+import { readRtcStats, type RtcStat, type RtcStatsSource } from './rtc-stats';
+import { playbackCounted, screenFpsSource } from './screen-fps-source';
 
 const log = createLogger('room:screen-startup');
 const WINDOW_MS = 30_000;
 const SAMPLE_MS = 1000;
-const PIPELINE_RECORD_LIMIT = 16;
+const SAMPLE_LIMIT = WINDOW_MS / SAMPLE_MS;
+const STABLE_FPS = 27;
+const STABLE_RUN = 3;
 
-/** Cumulative since helper start, except the max*Us fields (about the last 2 s). */
-export interface PipelineCounters {
-  seq: number;
-  backend: string;
-  acquired: number;
-  acquireAttempts?: number | undefined;
-  acquireEmpty?: number | undefined;
-  callbackArrivals?: number | undefined;
-  maxLockWaitUs?: number | undefined;
-  pacingSkips: number;
-  pausedSkips: number;
-  written: number;
-  accumulated?: number | undefined;
-  sumMapUs: number;
-  sumWriteUs: number;
-  maxGapUs: number;
-  maxMapUs: number;
-  maxWriteUs: number;
+/** What the desktop's native capture reports; a browser share has none. */
+export interface CaptureCounters {
+  /** Cumulative frames delivered to the renderer. */
+  framesReceived?: number | undefined;
+  /** Cumulative frames dropped by flow control. */
+  framesDroppedBackpressure?: number | undefined;
+  /** `wgc` or `dxgi`; missing on desktops without the pipeline report. */
+  backend?: string | undefined;
+  /** The longest capture gap in about the last two seconds, in microseconds. */
+  maxGapUs?: number | undefined;
 }
 
-export interface CaptureCounters {
-  sessionId?: string | undefined;
-  restarts?: number | undefined;
-  pipeline?: PipelineCounters | undefined;
-  framesReceived?: number | undefined;
-  framesWritten?: number | undefined;
-  framesDroppedBackpressure?: number | undefined;
-  relayPausedMs?: number | undefined;
+/** What one sender sample measures, per second since the previous one. */
+export interface SenderSample {
+  captureFps: number | null;
+  encodedFps: number | null;
+  sentFps: number | null;
+  bitrate: number | null;
+  height: number | null;
+  limitation: string | null;
+  backpressure: number | null;
+  codec: string | null;
+  encoder: string | null;
+}
+
+/** What one viewer sample measures, per second since the previous one. */
+export interface ReceiverSample {
+  decodedFps: number | null;
+  renderedFps: number | null;
+  bitrate: number | null;
+  height: number | null;
+  lost: number | null;
+  freezes: number | null;
+  codec: string | null;
 }
 
 interface PlaybackCounters {
@@ -59,15 +68,28 @@ export interface Snapshot {
   playback: PlaybackCounters | undefined;
 }
 
+interface Reading {
+  elapsedMs: number;
+  /** Sent FPS for a sender, rendered FPS for a viewer. */
+  fps: number | null;
+  /** Viewer only: the measure where the browser counts no playback frames. */
+  decodedFps: number | null;
+  height: number | null;
+  limitation: string | null;
+  codec: string | null;
+  encoder: string | null;
+  freezes: number | null;
+  lost: number | null;
+  backend: string | null;
+  gapMs: number | null;
+}
+
 /** Observes startup only; it never changes a track, an encoding or a subscription. */
 export function startScreenStartupDiagnostics(options: ScreenStartupDiagnosticsOptions): () => void {
   const startedAt = Date.now();
   const probeId = `${options.direction}-${startedAt.toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-  const samples: LogContext[] = [];
-  // Separate records: the sender sample already uses all 18 intake keys.
-  const pipelineRecords: LogContext[] = [];
-  let previousPipeline: PipelineCounters | undefined;
-  let previousIdentity: Pick<CaptureCounters, 'sessionId' | 'restarts'> | undefined;
+  const observed: Reading[] = [];
+  let playbackCounts = false;
   let previous: Snapshot | undefined;
   let stopped = false;
   let errors = 0;
@@ -79,29 +101,51 @@ export function startScreenStartupDiagnostics(options: ScreenStartupDiagnosticsO
     stopped = true;
     clearTimeout(deadline);
     clearTimeout(next);
-    // Keep the global log ring free during sampling. At most 32 records enter it
-    // at once (30 samples, at most 16 pipeline records, 2 markers), each within
-    // the intake's 18-key / primitive-value limit.
-    log.info('screen startup started', {
-      probeId,
-      startedAt,
-      direction: options.direction,
-      trackId: options.trackId,
-      profileId: options.profileId
-    });
-    for (const context of samples) log.info('screen startup sample', context);
-    for (const context of pipelineRecords) log.info('screen capture pipeline', context);
-    log.info('screen startup ended', {
-      probeId,
-      elapsedMs: Date.now() - startedAt,
-      samples: samples.length,
-      errors,
-      reason
-    });
-    samples.length = 0;
-    pipelineRecords.length = 0;
+    // One record at the end, within the intake's 18-key / primitive-value limit.
+    log.info('screen startup summary', summaryContext(reason));
+    observed.length = 0;
     previous = undefined;
     void reportClientLogs('screen startup diagnostics', 'info').catch(() => {});
+  }
+
+  function summaryContext(reason: 'complete' | 'stopped'): LogContext {
+    const fpsSource = screenFpsSource(options.direction, playbackCounts);
+    const readings =
+      fpsSource === 'decoded' ? observed.map((reading) => ({ ...reading, fps: reading.decodedFps })) : observed;
+    const maxHeight = maxOf(readings.map((reading) => reading.height));
+    const stableMs = stableElapsed(readings, maxHeight);
+    // Sender is 18 keys and viewer is 17, within the intake's limit.
+    const shared = {
+      probeId,
+      trackId: options.trackId,
+      direction: options.direction,
+      profileId: options.profileId,
+      reason,
+      elapsedMs: Date.now() - startedAt,
+      samples: readings.length,
+      errors,
+      firstFrameMs: readings.find((reading) => reading.fps !== null && reading.fps > 0)?.elapsedMs ?? null,
+      stableMs,
+      minFpsAfterStable: minFpsFrom(readings, stableMs),
+      medianFps: medianOf(readings.map((reading) => reading.fps)),
+      maxHeight,
+      codec: lastText(readings.map((reading) => reading.codec))
+    };
+    if (options.direction === 'send') {
+      return {
+        ...shared,
+        limitation: frequentLimitation(readings.map((reading) => reading.limitation)),
+        encoder: lastText(readings.map((reading) => reading.encoder)),
+        backend: lastText(readings.map((reading) => reading.backend)),
+        maxGapMs: maxOf(readings.map((reading) => reading.gapMs))
+      };
+    }
+    return {
+      ...shared,
+      fpsSource,
+      freezes: sumOf(readings.map((reading) => reading.freezes)),
+      lost: sumOf(readings.map((reading) => reading.lost))
+    };
   }
 
   async function sample(): Promise<void> {
@@ -114,46 +158,8 @@ export function startScreenStartupDiagnostics(options: ScreenStartupDiagnosticsO
         capture: options.capture?.(),
         playback: options.playback?.()
       };
-      if (samples.length < WINDOW_MS / SAMPLE_MS) {
-        samples.push({
-          probeId,
-          elapsedMs: current.at - startedAt,
-          ...(options.direction === 'send' ? senderSample(current, previous) : receiverSample(current, previous))
-        });
-      }
-      const pipeline = current.capture?.pipeline;
-      const identity = current.capture;
-      if (!pipeline) {
-        previousPipeline = undefined;
-        previousIdentity = undefined;
-      } else {
-        const changed =
-          previousPipeline &&
-          (pipeline.backend !== previousPipeline.backend ||
-            pipeline.seq < previousPipeline.seq ||
-            (identity?.sessionId !== undefined &&
-              previousIdentity?.sessionId !== undefined &&
-              identity.sessionId !== previousIdentity.sessionId) ||
-            (identity?.restarts !== undefined &&
-              previousIdentity?.restarts !== undefined &&
-              identity.restarts !== previousIdentity.restarts));
-        if (changed) previousPipeline = undefined;
-        // Compare identity before deduplicating repeated relay snapshots.
-        if (pipeline.seq !== previousPipeline?.seq) {
-          if (pipelineRecords.length < PIPELINE_RECORD_LIMIT) {
-            pipelineRecords.push({
-              probeId,
-              elapsedMs: current.at - startedAt,
-              ...pipelineRecord(pipeline, previousPipeline)
-            });
-          }
-          previousPipeline = pipeline;
-        }
-        previousIdentity = {
-          sessionId: identity?.sessionId ?? previousIdentity?.sessionId,
-          restarts: identity?.restarts ?? previousIdentity?.restarts
-        };
-      }
+      if (playbackCounted(current.playback)) playbackCounts = true;
+      if (observed.length < SAMPLE_LIMIT) observed.push(readingFrom(current, previous));
       previous = current;
     } catch {
       // Exceptions can contain URLs/SDP. Count failures, never serialize them.
@@ -163,8 +169,127 @@ export function startScreenStartupDiagnostics(options: ScreenStartupDiagnosticsO
     if (!stopped) next = setTimeout(() => void sample(), SAMPLE_MS);
   }
 
+  function readingFrom(current: Snapshot, before: Snapshot | undefined): Reading {
+    const shared = {
+      elapsedMs: current.at - startedAt,
+      backend: captureBackend(current),
+      gapMs: captureGapMs(current)
+    };
+    if (options.direction === 'send') {
+      const sample = senderSample(current, before);
+      return {
+        ...shared,
+        fps: sample.sentFps,
+        decodedFps: null,
+        height: sample.height,
+        limitation: sample.limitation,
+        codec: sample.codec,
+        encoder: sample.encoder,
+        freezes: null,
+        lost: null
+      };
+    }
+    const sample = receiverSample(current, before);
+    return {
+      ...shared,
+      fps: sample.renderedFps,
+      decodedFps: sample.decodedFps,
+      height: sample.height,
+      limitation: null,
+      codec: sample.codec,
+      encoder: null,
+      freezes: sample.freezes,
+      lost: sample.lost
+    };
+  }
+
   void sample();
   return () => finish('stopped');
+}
+
+export function captureBackend(snapshot: Snapshot): string | null {
+  return snapshot.capture?.backend?.slice(0, 20) ?? null;
+}
+
+export function captureGapMs(snapshot: Snapshot): number | null {
+  const gapUs = finite(snapshot.capture?.maxGapUs);
+  return gapUs === null ? null : Math.round(gapUs / 10) / 100;
+}
+
+/**
+ * First sample of the first run of three at the window's largest height and at
+ * least 27 FPS. A failed or late read between two samples breaks the run.
+ */
+function stableElapsed(readings: Reading[], maxHeight: number | null): number | null {
+  if (maxHeight === null) return null;
+  let run = 0;
+  let before: Reading | undefined;
+  for (let index = 0; index < readings.length; index += 1) {
+    const reading = readings[index];
+    const stable =
+      reading !== undefined && reading.fps !== null && reading.fps >= STABLE_FPS && reading.height === maxHeight;
+    const continuous =
+      before !== undefined && reading !== undefined && reading.elapsedMs - before.elapsedMs <= SAMPLE_MS * 1.5;
+    run = stable ? (continuous ? run + 1 : 1) : 0;
+    before = reading;
+    if (run === STABLE_RUN) return readings[index - (STABLE_RUN - 1)]?.elapsedMs ?? null;
+  }
+  return null;
+}
+
+function minFpsFrom(readings: Reading[], stableMs: number | null): number | null {
+  if (stableMs === null) return null;
+  return minOf(readings.filter((reading) => reading.elapsedMs >= stableMs).map((reading) => reading.fps));
+}
+
+function lastText(values: (string | null)[]): string | null {
+  let last: string | null = null;
+  for (const value of values) if (value !== null) last = value;
+  return last;
+}
+
+function frequentLimitation(values: (string | null)[]): string | null {
+  const counts = new Map<string, number>();
+  for (const value of values) {
+    if (value === null) continue;
+    counts.set(value, (counts.get(value) ?? 0) + 1);
+  }
+  let selected: string | null = null;
+  let selectedCount = 0;
+  for (const [reason, count] of counts) {
+    if (reason === 'none' || count <= selectedCount) continue;
+    selected = reason;
+    selectedCount = count;
+  }
+  if (selected !== null) return selected;
+  return counts.has('none') ? 'none' : null;
+}
+
+function present(series: (number | null)[]): number[] {
+  return series.filter((value): value is number => value !== null);
+}
+
+function minOf(series: (number | null)[]): number | null {
+  const values = present(series);
+  return values.length === 0 ? null : Math.min(...values);
+}
+
+function maxOf(series: (number | null)[]): number | null {
+  const values = present(series);
+  return values.length === 0 ? null : Math.max(...values);
+}
+
+function sumOf(series: (number | null)[]): number | null {
+  const values = present(series);
+  return values.length === 0 ? null : values.reduce((total, value) => total + value, 0);
+}
+
+function medianOf(series: (number | null)[]): number | null {
+  const values = present(series).sort((left, right) => left - right);
+  if (values.length === 0) return null;
+  const middle = Math.floor(values.length / 2);
+  const value = values.length % 2 === 1 ? values[middle] : ((values[middle - 1] ?? 0) + (values[middle] ?? 0)) / 2;
+  return value === undefined ? null : Math.round(value * 100) / 100;
 }
 
 function finite(value: number | undefined): number | null {
@@ -179,34 +304,6 @@ function delta(value: number | undefined, before: number | undefined): number | 
   const current = finite(value);
   const previous = finite(before);
   return current === null || previous === null || current < previous ? null : current - previous;
-}
-
-function pipelineRecord(current: PipelineCounters, before: PipelineCounters | undefined): LogContext {
-  const written = delta(current.written, before?.written);
-  const averageMs = (sumUs: number | null) =>
-    sumUs !== null && written !== null && written > 0 ? rounded(sumUs / written / 1000) : null;
-  const ms = (us: number | undefined) => {
-    const value = finite(us);
-    return value === null ? null : rounded(value / 1000);
-  };
-  return {
-    seq: finite(current.seq),
-    backend: current.backend.slice(0, 20),
-    acquired: delta(current.acquired, before?.acquired),
-    acquireAttempts: delta(current.acquireAttempts, before?.acquireAttempts),
-    acquireEmpty: delta(current.acquireEmpty, before?.acquireEmpty),
-    callbackArrivals: delta(current.callbackArrivals, before?.callbackArrivals),
-    maxLockWaitMs: ms(current.maxLockWaitUs),
-    pacingSkips: delta(current.pacingSkips, before?.pacingSkips),
-    pausedSkips: delta(current.pausedSkips, before?.pausedSkips),
-    written,
-    accumulated: delta(current.accumulated, before?.accumulated),
-    maxGapMs: ms(current.maxGapUs),
-    maxMapMs: ms(current.maxMapUs),
-    avgMapMs: averageMs(delta(current.sumMapUs, before?.sumMapUs)),
-    maxWriteMs: ms(current.maxWriteUs),
-    avgWriteMs: averageMs(delta(current.sumWriteUs, before?.sumWriteUs))
-  };
 }
 
 function perSecond(value: number | null, elapsed: number): number | null {
@@ -234,46 +331,32 @@ function codecName(current: Snapshot, stat: RtcStat | undefined): string | null 
   return stat?.codecId ? (current.stats.get(stat.codecId)?.mimeType?.slice(0, 200) ?? null) : null;
 }
 
-export function senderSample(current: Snapshot, previous: Snapshot | undefined): LogContext {
+export function senderSample(current: Snapshot, previous: Snapshot | undefined): SenderSample {
   const stat = videoLayer(current.stats, 'outbound-rtp');
   const before = stat ? previous?.stats.get(stat.id) : undefined;
   const interval = frameInterval(current, previous, stat);
   const elapsed = previous ? current.at - previous.at : 0;
-  const encoded = delta(stat?.framesEncoded, before?.framesEncoded);
-  const encodeSeconds = delta(stat?.totalEncodeTime, before?.totalEncodeTime);
   const source = stat?.mediaSourceId ? current.stats.get(stat.mediaSourceId) : undefined;
   const previousSource = source ? previous?.stats.get(source.id) : undefined;
-  const nativeReceived = delta(current.capture?.framesReceived, previous?.capture?.framesReceived);
-  const pair = [...current.stats.values()].find(isActiveCandidatePair);
   const bytes = delta(stat?.bytesSent, before?.bytesSent);
   return {
-    layerId: stat?.id.slice(0, 200) ?? null,
     captureFps:
       current.capture?.framesReceived !== undefined
-        ? perSecond(nativeReceived, elapsed)
+        ? perSecond(delta(current.capture.framesReceived, previous?.capture?.framesReceived), elapsed)
         : (finite(source?.framesPerSecond) ??
           perSecond(delta(source?.frames, previousSource?.frames), frameInterval(current, previous, source))),
-    writtenFps: perSecond(delta(current.capture?.framesWritten, previous?.capture?.framesWritten), elapsed),
-    encodedFps: finite(stat?.framesPerSecond) ?? perSecond(encoded, interval),
+    encodedFps: finite(stat?.framesPerSecond) ?? perSecond(delta(stat?.framesEncoded, before?.framesEncoded), interval),
     sentFps: perSecond(delta(stat?.framesSent, before?.framesSent), interval),
     bitrate: perSecond(bytes === null ? null : bytes * 8, interval),
-    width: finite(stat?.frameWidth),
     height: finite(stat?.frameHeight),
     limitation: stat?.qualityLimitationReason?.slice(0, 200) ?? null,
-    availableBitrate: finite(pair?.availableOutgoingBitrate) ?? finite(pair?.estimatedOutgoingBitrate),
-    encodeMs:
-      encoded !== null && encoded > 0 && encodeSeconds !== null ? rounded((encodeSeconds * 1000) / encoded) : null,
-    dropped: delta(stat?.framesDropped, before?.framesDropped),
     backpressure: delta(current.capture?.framesDroppedBackpressure, previous?.capture?.framesDroppedBackpressure),
-    // Cumulative, not a 1s delta: relay snapshots arrive only every 2 seconds.
-    // Missing on older desktops; do not mistake missing telemetry for no pause.
-    relayPausedMs: rounded(finite(current.capture?.relayPausedMs)),
     codec: codecName(current, stat),
     encoder: stat?.encoderImplementation?.slice(0, 200) ?? null
   };
 }
 
-export function receiverSample(current: Snapshot, previous: Snapshot | undefined): LogContext {
+export function receiverSample(current: Snapshot, previous: Snapshot | undefined): ReceiverSample {
   const stat = videoLayer(current.stats, 'inbound-rtp');
   const before = stat ? previous?.stats.get(stat.id) : undefined;
   const interval = frameInterval(current, previous, stat);
@@ -282,19 +365,13 @@ export function receiverSample(current: Snapshot, previous: Snapshot | undefined
     ? previous.playback.totalVideoFrames - previous.playback.droppedVideoFrames
     : undefined;
   const bytes = delta(stat?.bytesReceived, before?.bytesReceived);
-  const jitter = finite(stat?.jitter);
   return {
-    layerId: stat?.id.slice(0, 200) ?? null,
-    receivedFps: perSecond(delta(stat?.framesReceived, before?.framesReceived), interval),
     decodedFps: finite(stat?.framesPerSecond) ?? perSecond(delta(stat?.framesDecoded, before?.framesDecoded), interval),
     renderedFps: perSecond(delta(shown, shownBefore), previous ? current.at - previous.at : 0),
     bitrate: perSecond(bytes === null ? null : bytes * 8, interval),
-    width: finite(stat?.frameWidth),
     height: finite(stat?.frameHeight),
-    dropped: delta(stat?.framesDropped, before?.framesDropped),
     lost: delta(stat?.packetsLost, before?.packetsLost),
     freezes: delta(stat?.freezeCount, before?.freezeCount),
-    jitterMs: jitter === null ? null : rounded(jitter * 1000),
     codec: codecName(current, stat)
   };
 }

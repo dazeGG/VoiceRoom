@@ -309,12 +309,15 @@ test('a viewer leaving does not restart the sender observation', async () => {
   service.stopLocalScreenStream();
 });
 
-test('startup capture adapter forwards internal identity and tolerates legacy absence', async () => {
+test('the capture adapter forwards the backend, the capture gap and both backpressure counters, and tolerates a desktop without a pipeline', async () => {
   const { service, startDiagnostics } = await loadScreenShare(null);
   const snapshot = {
     sessionId: 'internal-session',
+    framesReceived: 90,
+    framesDroppedBackpressure: 2,
     relay: {
       restarts: 3,
+      framesDroppedBackpressure: 5,
       pipeline: {
         seq: 1,
         backend: 'dxgi' as const,
@@ -324,7 +327,7 @@ test('startup capture adapter forwards internal identity and tolerates legacy ab
         written: 1,
         sumMapUs: 0,
         sumWriteUs: 0,
-        maxGapUs: 0,
+        maxGapUs: 4200,
         maxMapUs: 0,
         maxWriteUs: 0,
         acquireAttempts: 2
@@ -334,9 +337,14 @@ test('startup capture adapter forwards internal identity and tolerates legacy ab
   window.__voiceRoomNativeCaptureStats = () => snapshot;
   await service.handleScreenButtonClick();
   const capture = startDiagnostics.mock.calls[0]?.[0].capture;
-  expect(capture?.()).toMatchObject({ sessionId: 'internal-session', restarts: 3, pipeline: { acquireAttempts: 2 } });
+  expect(capture?.()).toEqual({ framesReceived: 90, framesDroppedBackpressure: 7, backend: 'dxgi', maxGapUs: 4200 });
   window.__voiceRoomNativeCaptureStats = () => ({ relay: null });
-  expect(capture?.()).toMatchObject({ sessionId: undefined, restarts: undefined, pipeline: undefined });
+  expect(capture?.()).toEqual({
+    framesReceived: undefined,
+    framesDroppedBackpressure: 0,
+    backend: undefined,
+    maxGapUs: undefined
+  });
   service.stopLocalScreenStream();
   delete window.__voiceRoomNativeCaptureStats;
 });

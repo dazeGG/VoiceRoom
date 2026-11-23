@@ -324,13 +324,10 @@ function readNativeCaptureCounters(): CaptureCounters | undefined {
   if (!capture) return undefined;
   return {
     framesReceived: capture.framesReceived,
-    framesWritten: capture.framesWritten,
-    relayPausedMs: capture.relay?.helperPausedMs,
-    pipeline: capture.relay?.pipeline,
-    sessionId: capture.sessionId,
-    restarts: capture.relay?.restarts,
     framesDroppedBackpressure:
-      (capture.framesDroppedBackpressure ?? 0) + (capture.relay?.framesDroppedBackpressure ?? 0)
+      (capture.framesDroppedBackpressure ?? 0) + (capture.relay?.framesDroppedBackpressure ?? 0),
+    backend: capture.relay?.pipeline?.backend,
+    maxGapUs: capture.relay?.pipeline?.maxGapUs
   };
 }
 
