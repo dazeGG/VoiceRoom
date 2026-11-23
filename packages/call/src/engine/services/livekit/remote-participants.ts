@@ -225,11 +225,11 @@ async function applyRemoteScreenVideoDemand(peer: Participant, publication: Remo
   publication.setVideoQuality(quality);
 }
 
-async function applyRemoteCameraDemand(peer: Participant, publication: RemoteTrackPublication): Promise<void> {
-  if (getInstalledCallPorts()?.mediaPolicy.camera === false) return;
+async function applyRemoteCameraDemand(peer: Participant, publication: RemoteTrackPublication): Promise<boolean> {
+  if (getInstalledCallPorts()?.mediaPolicy.camera === false) return false;
   const { VideoQuality } = await loadLiveKitClient();
-  if (publication.isDesired === false) return;
-  if (peer.livekitParticipant?.trackPublications.get(publication.trackSid) !== publication) return;
+  if (publication.isDesired === false) return false;
+  if (peer.livekitParticipant?.trackPublications.get(publication.trackSid) !== publication) return false;
   const demand = getCameraReceiverDemand(peer.id, {
     // A phone draws its own layout; the desktop spotlight under it may be stale.
     focusedPeerId: useMobileCallUiStore().isMobileCallActive()
@@ -243,6 +243,7 @@ async function applyRemoteCameraDemand(peer: Participant, publication: RemoteTra
   publication.setVideoQuality(
     shown === 'high' ? VideoQuality.HIGH : shown === 'medium' ? VideoQuality.MEDIUM : VideoQuality.LOW
   );
+  return shown !== demand;
 }
 
 /**
@@ -268,12 +269,14 @@ export function syncRemoteVideoVisibility(): void {
 }
 
 /** Re-picks every camera layer after the layout changed (focus, a screen, a join). */
-export function syncRemoteCameraDemand(): void {
+export async function syncRemoteCameraDemand(): Promise<boolean> {
+  const updates: Array<Promise<boolean>> = [];
   for (const peer of state.peers.values()) {
     peer.livekitParticipant?.trackPublications.forEach((publication) => {
-      if (isCameraPublication(publication)) void applyRemoteCameraDemand(peer, publication);
+      if (isCameraPublication(publication)) updates.push(applyRemoteCameraDemand(peer, publication));
     });
   }
+  return (await Promise.all(updates)).some(Boolean);
 }
 
 export function handleLiveKitTrackSubscriptionFailed(

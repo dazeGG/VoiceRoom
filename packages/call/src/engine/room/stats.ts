@@ -1,12 +1,11 @@
-import { getCallPorts } from '../ports';
-import { getInstalledCallPorts } from '../ports';
+import { getCallPorts, getInstalledCallPorts } from '../ports';
 import { PEER_LATENCY_INTERVAL_MS } from '../core/config';
 import { state } from '../core/room-runtime.store';
 import { findFirstLocalPublication, findLocalMicrophonePublication } from '../services/livekit-service';
 import { isMicrophonePublication } from '../services/livekit/publication-kinds';
 import { isActiveCandidatePair, readRtcStats, type RtcStat, type RtcStatsSource } from '../media/rtc-stats';
 import { isRecord } from '@voiceroom/shared/guards';
-import type { CpuPoll, HeardPoll } from '@voiceroom/shared/contracts/realtime';
+import type { CpuPoll, HeardPoll, PlayoutPoll } from '@voiceroom/shared/contracts/realtime';
 import { takeJoinTiming } from './join-timing';
 import {
   isCpuRelieved,
@@ -24,7 +23,7 @@ import {
   getMicrophoneProcessors,
   isMicrophoneProcessingIdle
 } from '../services/microphone-service';
-import { noteCaptureHealth } from './capture-diagnostics';
+import { noteCaptureHealth, processingReliefForPoll } from './capture-diagnostics';
 
 import { createLogger, errorContext } from '../diagnostics';
 
@@ -49,6 +48,7 @@ export function stopPeerLatencyStats(): void {
   pollGeneration += 1;
   pendingPoll = null;
   previousInbound = new Map();
+  previousPlayout = null;
   previousOutbound = null;
   previousChecks = null;
   previousRtt = null;
@@ -112,14 +112,19 @@ let lastMicUpstreamPaused: boolean | null = null;
 let lastStatsReadMs = 0;
 let lastStatsReceivedAt: number | null = null;
 
-/** How the computer did over the poll, for the admin panel's call page; nothing where the client can tell nothing. */
+/** How the computer did over the poll, including explicit unknown pressure. */
 function cpuPoll(load: LoadCounts): CpuPoll | null {
   const pressure = currentCpuPressure();
   const relieved = isCpuRelieved();
   const measured = load.systemTotalMs > 0;
-  if (!measured && pressure === null && !relieved) return null;
+  if (!measured && pressure === undefined && !relieved) return null;
   const percent = (ms: number) => (measured ? Math.min(100, (ms / load.systemTotalMs) * 100) : null);
-  return { appPct: percent(load.appCpuMs), systemPct: percent(load.systemBusyMs), pressure, relieved };
+  return {
+    appPct: percent(load.appCpuMs),
+    systemPct: percent(load.systemBusyMs),
+    pressure: pressure ?? null,
+    relieved
+  };
 }
 
 /** The poll as the server judges the room from it (room.voice.report); it answers with room.voice.quality. */
@@ -144,9 +149,10 @@ function postVoicePoll(inbound: InboundCounts, outbound: OutboundCounts, load: L
     statsReadMs: lastStatsReadMs,
     ageMs: lastStatsReceivedAt === null ? null : Math.max(0, performance.now() - lastStatsReceivedAt)
   });
-  const cpu = cpuPoll(load);
   const joinTiming = takeJoinTiming();
-  getCallPorts().transport.realtime.reportPoll({
+  const cpu = cpuPoll(load);
+  const { platform, transport } = getCallPorts();
+  transport.realtime.reportPoll({
     roomId: state.roomId,
     peerId: state.peerId,
     sessionToken: state.sessionToken,
@@ -156,8 +162,11 @@ function postVoicePoll(inbound: InboundCounts, outbound: OutboundCounts, load: L
     uplink: { packets: outbound.outboundPackets, lost: outbound.outboundLost },
     transport: state.localNetwork.transport,
     heard: inbound.heard,
-    ...(mic ? { mic } : {}),
+    windowState: platform.windowState?.() ?? (platform.isVisible() ? 'visible' : 'hidden'),
     ...(cpu ? { cpu } : {}),
+    relief: processingReliefForPoll(),
+    ...(inbound.playout ? { playout: inbound.playout } : {}),
+    ...(mic ? { mic } : {}),
     ...(joinTiming ? { joinTiming } : {})
   });
 }
@@ -203,6 +212,7 @@ interface InboundReading {
   bufferSamples: number;
 }
 let previousInbound = new Map<string, InboundReading>();
+let previousPlayout: { room: typeof state.livekitRoom; reports: Map<string, PlayoutPoll> } | null = null;
 let previousOutbound: { lost: number; sent: number } | null = null;
 let previousChecks: { seconds: number; checks: number; identity: string; publication: unknown } | null = null;
 const inboundLoss = createLossWindow();
@@ -216,11 +226,34 @@ type InboundCounts = Pick<
   heard: HeardPoll[];
   /** How long a played sample of the microphones waited in the jitter buffer, on average; null without any. */
   jitterBufferMs: number | null;
+  playout: PlayoutPoll | null;
 };
 type OutboundCounts = Pick<PollCounts, 'outboundPackets' | 'outboundLost' | 'rttSeconds' | 'rttChecks'>;
 
 /** The growth of a counter since the last reading; a counter that went back (a new stream) starts over from zero. */
 const growth = (now: number, before: number) => (now >= before ? now - before : now);
+
+function playoutDelta(readings: Map<string, PlayoutPoll>): PlayoutPoll | null {
+  const room = state.livekitRoom;
+  const before = previousPlayout?.room === room ? previousPlayout?.reports : undefined;
+  previousPlayout = { room, reports: readings };
+  let result: PlayoutPoll | null = null;
+  for (const [id, reading] of readings) {
+    const last = before?.get(id);
+    if (
+      !last ||
+      reading.totalSeconds < last.totalSeconds ||
+      reading.synthesizedSeconds < last.synthesizedSeconds ||
+      reading.events < last.events
+    )
+      continue;
+    result ??= { totalSeconds: 0, synthesizedSeconds: 0, events: 0 };
+    result.totalSeconds += reading.totalSeconds - last.totalSeconds;
+    result.synthesizedSeconds += reading.synthesizedSeconds - last.synthesizedSeconds;
+    result.events += reading.events - last.events;
+  }
+  return result;
+}
 
 async function updateInboundAudioStats(isCurrent: () => boolean): Promise<InboundCounts> {
   const counts: InboundCounts = {
@@ -231,8 +264,10 @@ async function updateInboundAudioStats(isCurrent: () => boolean): Promise<Inboun
     concealedSamples: 0,
     jitterMs: null,
     heard: [],
-    jitterBufferMs: null
+    jitterBufferMs: null,
+    playout: null
   };
+  const playout = new Map<string, PlayoutPoll>();
   let jitterSum = 0;
   let jitterCount = 0;
   let bufferSeconds = 0;
@@ -246,6 +281,22 @@ async function updateInboundAudioStats(isCurrent: () => boolean): Promise<Inboun
       const stats = readRtcStats(await track?.getRTCStatsReport?.().catch(() => undefined));
       if (!isCurrent()) return counts;
       for (const report of stats.values()) {
+        if (report.type === 'media-playout') {
+          const { totalSamplesDuration, synthesizedSamplesDuration, synthesizedSamplesEvents } = report;
+          if (
+            totalSamplesDuration !== undefined &&
+            synthesizedSamplesDuration !== undefined &&
+            synthesizedSamplesEvents !== undefined
+          ) {
+            // Multiple audio receivers can report the same shared playout object.
+            playout.set(report.id, {
+              totalSeconds: totalSamplesDuration,
+              synthesizedSeconds: synthesizedSamplesDuration,
+              events: synthesizedSamplesEvents
+            });
+          }
+          continue;
+        }
         if (report.type !== 'inbound-rtp' || report.kind !== 'audio') continue;
         const reading: InboundReading = {
           lost: Math.max(0, report.packetsLost || 0),
@@ -292,6 +343,7 @@ async function updateInboundAudioStats(isCurrent: () => boolean): Promise<Inboun
     if (heard) counts.heard.push(heard);
   }
   counts.jitterBufferMs = bufferSamples > 0 ? Math.round((bufferSeconds / bufferSamples) * 1000) : null;
+  counts.playout = playoutDelta(playout);
   state.localNetwork.inboundLossPct = inboundLoss.add(counts.inboundLost, counts.inboundPackets);
   state.localNetwork.jitterMs = jitterCount > 0 ? Math.round(jitterSum / jitterCount) : null;
   counts.jitterMs = state.localNetwork.jitterMs;

@@ -231,7 +231,8 @@ export function createAdminRoomsService(deps: AdminRoomsServiceDeps) {
     call: RoomCall,
     kept: ReadonlyMap<string, readonly StayEvent[]>,
     live: ReadonlySet<string>,
-    feedbackUntil: number
+    feedbackUntil: number,
+    includeRelief: boolean
   ): Promise<Payload<RoomCallDetail>> {
     const [origin, readsFeedback, rooms] = await Promise.all([
       seesOrigin(userId),
@@ -257,23 +258,38 @@ export function createAdminRoomsService(deps: AdminRoomsServiceDeps) {
     return {
       call: origin ? allowedCall : { ...allowedCall, stays: allowedCall.stays.map(withoutOrigin) },
       owner: rooms[0]?.owner ?? null,
-      events,
+      events: includeRelief ? events : events.filter((event) => event.kind !== 'relief'),
       ...(feedback ? { feedback } : {})
     };
   }
 
   /** A finished call by its first stay's id; undefined when no call goes by it. */
-  async function call(userId: string, callId: string): Promise<Payload<RoomCallDetail> | null | undefined> {
+  async function call(
+    userId: string,
+    callId: string,
+    includeRelief = false
+  ): Promise<Payload<RoomCallDetail> | null | undefined> {
     if (!(await allowed(userId))) return null;
     const stored = (await deps.repository().calls({ callId })).calls[0];
     if (!stored) return undefined;
     const { feedbackUntil, ...found } = stored;
     const kept = await deps.repository().stayEvents(found.stays.map((stay) => stay.id));
-    return detailOf(userId, found, kept, new Set(), feedbackUntil ?? found.endedAt + FEEDBACK_AFTER_CALL_MS);
+    return detailOf(
+      userId,
+      found,
+      kept,
+      new Set(),
+      feedbackUntil ?? found.endedAt + FEEDBACK_AFTER_CALL_MS,
+      includeRelief
+    );
   }
 
   /** The call going on in a room, its ends being now; undefined when nobody is in its voice. */
-  async function liveCall(userId: string, roomId: string): Promise<Payload<RoomCallDetail> | null | undefined> {
+  async function liveCall(
+    userId: string,
+    roomId: string,
+    includeRelief = false
+  ): Promise<Payload<RoomCallDetail> | null | undefined> {
     if (!(await allowed(userId))) return null;
     const room = [...deps.presenceRooms()].find((candidate) => candidate.id === roomId);
     const since = room && room.peers.size > 0 ? callSince(room) : null;
@@ -326,7 +342,7 @@ export function createAdminRoomsService(deps: AdminRoomsServiceDeps) {
       stays,
       kind: row?.kind ?? room.kind ?? 'main'
     };
-    return detailOf(userId, liveCallRow, kept, new Set(peers.map((peer) => peer.id)), at + 1);
+    return detailOf(userId, liveCallRow, kept, new Set(peers.map((peer) => peer.id)), at + 1, includeRelief);
   }
 
   return Object.freeze({ live, history, calls, staticRooms, call, liveCall });

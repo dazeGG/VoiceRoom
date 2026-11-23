@@ -6,7 +6,7 @@ const log = createLogger('desktop:system');
 
 // What the desktop shell knows about the computer around the page: a game in
 // front of the app window (game mode), whether the window can be seen at all
-// (hidden in the tray or minimized), and the computer waking from sleep or the
+// (hidden in the tray, minimized or covered), and the computer waking from sleep or the
 // lock screen. A browser, or a shell older than this contract, has no bridge
 // and every call here is a no-op.
 
@@ -36,6 +36,11 @@ export function normalizeWindowVisible(value: unknown): boolean {
   return !(isRecord(value) && value.windowVisible === false);
 }
 
+export function readDesktopRuntime(): Window['voiceRoomRuntime'] {
+  if (typeof window === 'undefined') return undefined;
+  return window.voiceRoomRuntime ?? window.voiceRoomDesktop;
+}
+
 export function normalizeWakeReason(value: unknown): DesktopWakeReason | null {
   const reason = isRecord(value) ? value.reason : undefined;
   return isOneOf(WAKE_REASONS, reason) ? reason : null;
@@ -57,7 +62,7 @@ export function bindDesktopSystem(handlers: DesktopSystemHandlers): () => void {
     const active = normalizeGameMode(payload);
     applyGameMode(active);
     handlers.onGameModeChange?.(active);
-    setDesktopWindowVisible(normalizeWindowVisible(payload));
+    setDesktopWindowVisible(normalizeWindowVisible(payload), isRecord(payload) && payload.windowCovered === true);
   };
 
   const unsubscribers: Array<() => void> = [];

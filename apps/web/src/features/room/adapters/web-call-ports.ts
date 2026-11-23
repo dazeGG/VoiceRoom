@@ -5,7 +5,7 @@ import { useSessionStore } from '@/features/auth/session.store';
 import { useCallFeedbackStore } from '@/features/call-feedback/call-feedback.store';
 import { guestBrowserId } from '@/entities/room/guest-id';
 import { getDesktopBoundaryPolicy } from '@/platform/desktop-boundary';
-import { isAppVisible, onAppVisibilityChange } from '@/platform/app-visibility';
+import { appWindowState, isAppVisible, onAppVisibilityChange } from '@/platform/app-visibility';
 import { markInAppRoomNavigation } from '@/platform/open-in-app';
 import { APP_HOME } from '@/shared/app-home';
 import { displayNameOf } from '@/shared/utils/display-name';
@@ -130,6 +130,7 @@ export function createWebCallPorts(pinia: Pinia): CallPorts {
     platform: {
       policy: getDesktopBoundaryPolicy,
       isVisible: isAppVisible,
+      windowState: appWindowState,
       onVisibilityChange: onAppVisibilityChange,
       prepareRoomNavigation: markInAppRoomNavigation,
       navigateToRoom: (roomId, method) => {

@@ -23,6 +23,9 @@ test('voice joins accept a random installation UUID independently of the guest i
   for (const bad of ['', 'hardware-id', 42, null, `${clientId}x`]) {
     assert.equal(validateClientCommand({ type: 'room.join', payload: { ...join, clientId: bad } }).ok, false);
   }
+  const desktopJoin = { type: 'room.join', payload: { ...join, desktopVersion: '2.3.4-beta.1' } };
+  assert.deepEqual(validateClientCommand(desktopJoin), { ok: true, envelope: desktopJoin });
+  assert.equal(validateClientCommand({ ...desktopJoin, payload: { ...join, desktopVersion: 'unknown' } }).ok, false);
 });
 
 test('typing notices name a room or a user and carry nothing the server trusts', () => {
@@ -121,6 +124,16 @@ test('a stats poll names the voice session and carries counts only; its verdict 
   assert.equal(poll({ mic: { ...mic, deliveredMs: -1 } }).ok, false);
   assert.equal(poll({ mic: { ...mic, reopens: 0.5 } }).ok, false);
   assert.equal(poll({ mic: { expectedMs: 3000 } }).ok, false);
+  const playout = { totalSeconds: 3, synthesizedSeconds: 0.05, events: 1 };
+  const relief = { id: 'e2f04f3a-1fcc-4b2b-889c-09e4a9fa6970', kind: 'screen', outcome: 'failed' };
+  const modern = poll({ windowState: 'covered', playout, relief: [relief] });
+  assert.ok(modern.ok && modern.envelope.type === 'room.voice.report');
+  assert.equal(modern.envelope.payload.windowState, 'covered');
+  assert.deepEqual(modern.envelope.payload.playout, playout);
+  assert.deepEqual(modern.envelope.payload.relief, [relief]);
+  assert.equal(poll({ windowState: 'unknown' }).ok, false);
+  assert.equal(poll({ playout: { ...playout, events: -1 } }).ok, false);
+  assert.equal(poll({ relief: [{ ...relief, outcome: 'unknown' }] }).ok, false);
   assert.deepEqual(poll({ peerId: 'x' }), { ok: false, code: 'invalid_peer_id' });
 
   const verdict = (payload: Record<string, unknown>) =>

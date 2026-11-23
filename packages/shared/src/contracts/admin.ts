@@ -6,7 +6,7 @@
 import { Type, type Static } from 'typebox';
 import { Nullable, Ok } from './http.ts';
 import { ReportReasonSchema } from './reports.ts';
-import { CpuPressure, NetworkLevel, NetworkPoint, VoiceCause } from './rooms.ts';
+import { CpuPressure, NetworkLevel, NetworkPoint, ProcessingRelief, VoiceCause } from './rooms.ts';
 import { StaffRoleSchema } from './staff.ts';
 import { AccountBadge } from './users.ts';
 
@@ -767,7 +767,8 @@ export const CallEventKind = Type.Union([
   Type.Literal('camera_off'),
   Type.Literal('network'),
   Type.Literal('cpu_critical'),
-  Type.Literal('relieved_ns')
+  Type.Literal('relieved_ns'),
+  Type.Literal('relief')
 ]);
 export type CallEventKind = Static<typeof CallEventKind>;
 
@@ -777,13 +778,16 @@ export const CallEvent = Type.Object({
   /** Whose: the stay it happened in. */
   stayId: Nullable(Type.String()),
   /** For a network change, the level it went to. */
-  detail: Type.Optional(Type.String())
+  detail: Type.Optional(Type.String()),
+  relief: Type.Optional(ProcessingRelief)
 });
 export type CallEvent = Static<typeof CallEvent>;
 
 /** A call's address: its first stay's id, which the room's own history keeps. */
 export const CallIdParams = Type.Object({ callId: Type.String({ pattern: '^[0-9a-f-]{36}$' }) });
 export const RoomIdParams = Type.Object({ roomId: Type.String({ minLength: 1, maxLength: 64 }) });
+/** Legacy admin tabs reject event kinds they do not recognize. */
+export const CallDetailQuery = Type.Object({ relief: Type.Optional(Type.Literal('1')) });
 
 export const RoomCalls = Ok({
   calls: Type.Array(RoomCall),

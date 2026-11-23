@@ -59,14 +59,12 @@ test('the camera layer follows the tile: roomy grid, spotlight, crowded call', a
   expect(camera.calls.quality.at(-1)).toBe(MEDIUM);
 
   participantsUi.focusedParticipantId = 'peer-a';
-  syncRemoteCameraDemand();
-  await flushMicrotasks();
+  await syncRemoteCameraDemand();
   expect(camera.calls.quality.at(-1)).toBe(HIGH);
 
   participantsUi.focusedParticipantId = '';
   for (const id of ['b', 'c', 'd', 'e']) lk.state.peers.set(id, { id });
-  syncRemoteCameraDemand();
-  await flushMicrotasks();
+  await syncRemoteCameraDemand();
   expect(camera.calls.quality.at(-1)).toBe(LOW);
 });
 
@@ -498,15 +496,13 @@ test('on a phone the camera layer follows its own big picture, whatever the desk
   try {
     // Left over from a screen view on the phone: it points at someone else.
     participantsUi.focusedParticipantId = 'someone-else';
-    syncRemoteCameraDemand();
-    await flushMicrotasks();
+    await syncRemoteCameraDemand();
     // Two people: the other one fills the phone.
     expect(camera.calls.quality.at(-1)).toBe(HIGH);
 
     // Swapped, I fill the phone and they sit in the small picture.
     mobileCallUi.duoSwappedWith = 'peer-a';
-    syncRemoteCameraDemand();
-    await flushMicrotasks();
+    await syncRemoteCameraDemand();
     expect(camera.calls.quality.at(-1)).toBe(LOW);
   } finally {
     mobileCallUi.enabled = false;
@@ -580,8 +576,7 @@ test('an overloaded computer lightens video silently: our camera stops at 360p, 
   // A camera opened large still comes in full.
   participantsUi.focusedParticipantId = 'peer-a';
   const { syncRemoteCameraDemand } = await import('@voiceroom/call/engine/services/livekit/remote-participants');
-  syncRemoteCameraDemand();
-  await flushMicrotasks();
+  await syncRemoteCameraDemand();
   expect(camera.calls.quality.at(-1)).toBe(HIGH);
 });
 
@@ -731,6 +726,16 @@ test('a capture refusing relief stays live without breaking the call', async () 
   await expect(capture.applyVideoReliefToScreen(capture.stream)).resolves.toBeUndefined();
   expect(capture.video.readyState).toBe('live');
   expect(capture.audio.readyState).toBe('live');
+});
+
+test.each([true, false])('screen relief reports its own capture result (accepted: %s)', async (accepted) => {
+  const capture = await loadScreenRelief();
+  if (!accepted) capture.applyConstraints.mockRejectedValue(new Error('OverconstrainedError'));
+  capture.lk.state.joined = true;
+  const { relieveVideo } = await import('@voiceroom/call/engine/services/video-relief');
+  const note = vi.fn();
+  await relieveVideo(note);
+  expect(note).toHaveBeenCalledExactlyOnceWith({ kind: 'screen', outcome: accepted ? 'applied' : 'failed' });
 });
 
 test('a new screen and its republication retain relief through the real publish path', async () => {

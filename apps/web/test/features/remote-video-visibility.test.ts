@@ -88,6 +88,39 @@ test('a background browser tab counts as not visible, and listeners hear each ch
   expect(changes).toEqual([false, true]);
 });
 
+test('game coverage reported by the shell pauses video and resumes it when the window is uncovered', async () => {
+  const lk = await loadLiveKitHarness();
+  const { bindDesktopSystem } = await import('@/platform/desktop-system.ts');
+  const { onAppVisibilityChange } = await import('@/platform/app-visibility.ts');
+  let pushState: (payload: unknown) => void = () => {};
+  vi.stubGlobal('voiceRoomDesktopSystem', {
+    onState(handler: typeof pushState) {
+      pushState = handler;
+    }
+  });
+  const unbind = bindDesktopSystem({ onWake: () => {} });
+  const unsubscribe = onAppVisibilityChange(lk.service.syncRemoteVideoVisibility);
+  const camera = new FakePublication('camera', 'TR_cam');
+  const screen = new FakePublication('screen-video', 'TR_screen');
+  const microphone = new FakePublication('microphone', 'TR_mic');
+  const screenAudio = new FakePublication('screen-audio', 'TR_screen_audio');
+  lk.syncParticipant(fakeParticipant('peer-a', [camera, screen, microphone, screenAudio]));
+  try {
+    pushState({ windowVisible: true, windowCovered: true });
+    expect(camera.enabledCalls).toEqual([false]);
+    expect(screen.enabledCalls).toEqual([false]);
+    expect(microphone.enabledCalls).toEqual([]);
+    expect(screenAudio.enabledCalls).toEqual([]);
+    pushState({ windowVisible: true, windowCovered: false });
+    expect(camera.enabledCalls).toEqual([false, true]);
+    expect(screen.enabledCalls).toEqual([false, true]);
+  } finally {
+    unsubscribe();
+    unbind();
+    vi.unstubAllGlobals();
+  }
+});
+
 test('a listener can be removed and the visibility API does nothing without listeners', () => {
   const listener = vi.fn();
   const stop = onAppVisibilityChange(listener);

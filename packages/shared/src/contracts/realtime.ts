@@ -12,7 +12,15 @@ import { AdminReportsEvent } from './admin.ts';
 import { Nullable } from './http.ts';
 import { DirectMessage, DirectMessageInvite, PinnedMessage, ReactionSummary, RoomMessage } from './messages.ts';
 import { NotificationPreferences } from './notifications.ts';
-import { CpuPressure, LobbyRoom, NetworkLevel, PublicPeer, RoomRelationship, VoiceCause } from './rooms.ts';
+import {
+  CpuPressure,
+  LobbyRoom,
+  NetworkLevel,
+  ProcessingRelief,
+  PublicPeer,
+  RoomRelationship,
+  VoiceCause
+} from './rooms.ts';
 import { PublicUser } from './users.ts';
 
 /** The room or direct conversation a message belongs to. */
@@ -148,6 +156,32 @@ export const CpuPoll = Type.Object({
 });
 export type CpuPoll = Static<typeof CpuPoll>;
 
+export const AppWindowState = Type.Enum(['visible', 'hidden', 'covered']);
+export type AppWindowState = Static<typeof AppWindowState>;
+
+const PlayoutSeconds = Type.Number({ minimum: 0, maximum: 86_400 });
+/** Deltas over one poll, summed before calculating the minute's share. */
+export const PlayoutPoll = Type.Object({
+  totalSeconds: PlayoutSeconds,
+  synthesizedSeconds: PlayoutSeconds,
+  events: PollCount
+});
+export type PlayoutPoll = Static<typeof PlayoutPoll>;
+
+const ReliefPoll = Type.Object({
+  ...ProcessingRelief.properties,
+  id: Type.String({ format: 'uuid' })
+});
+export type ReliefPoll = Static<typeof ReliefPoll>;
+export const RELIEF_POLL_MAX = 8;
+
+const DESKTOP_VERSION_PATTERN = '^[0-9][0-9A-Za-z.+-]{0,39}$';
+const desktopVersionPattern = new RegExp(DESKTOP_VERSION_PATTERN);
+
+export function normalizeDesktopShellVersion(value: unknown): string | null {
+  return typeof value === 'string' && desktopVersionPattern.test(value) ? value : null;
+}
+
 const JoinMs = Type.Integer({ minimum: 0, maximum: 600_000 });
 
 /**
@@ -182,6 +216,10 @@ export const VoicePoll = Type.Object({
   heard: Type.Array(HeardPoll, { maxItems: 64 }),
   mic: Type.Optional(MicPoll),
   cpu: Type.Optional(CpuPoll),
+  windowState: Type.Optional(AppWindowState),
+  playout: Type.Optional(PlayoutPoll),
+  /** Present even before the first action so the API can distinguish legacy relief flags. */
+  relief: Type.Optional(Type.Array(ReliefPoll, { maxItems: RELIEF_POLL_MAX })),
   /** On the first poll after a join. */
   joinTiming: Type.Optional(JoinTiming)
 });
@@ -233,6 +271,8 @@ export const ClientCommandFrames = {
       ...VoiceTarget.properties,
       name: Type.String(),
       guestId: Type.Optional(Type.String()),
+      /** The desktop shell's own version, available before the first stats poll. */
+      desktopVersion: Type.Optional(Type.String({ pattern: DESKTOP_VERSION_PATTERN })),
       /** Random browser/application installation id, independent of the signed-in account. */
       clientId: Type.Optional(
         Type.String({ pattern: '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$' })

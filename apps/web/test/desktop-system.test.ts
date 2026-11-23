@@ -91,8 +91,10 @@ test('the shell window state feeds the app visibility, and an older shell counts
   const unbind = system.bindDesktopSystem({ onWake: () => {} });
   fake.pushState({ gameMode: false, windowVisible: false });
   expect(visibility.isAppVisible()).toBe(false);
+  expect(visibility.appWindowState()).toBe('hidden');
   fake.pushState({ gameMode: false });
   expect(visibility.isAppVisible()).toBe(true);
+  expect(visibility.appWindowState()).toBe('visible');
   fake.pushState({ gameMode: false, windowVisible: false });
   unbind();
   expect(visibility.isAppVisible()).toBe(true);
@@ -113,4 +115,23 @@ test('wake-ups reach the handler with a known reason only', async () => {
   unbind();
   fake.pushWake({ reason: 'resume' });
   expect(reasons).toHaveLength(2);
+});
+
+test('a window hidden by a game is covered, and old shell states clear coverage', async () => {
+  const fake = fakeBridge();
+  const system = await load(fake.bridge);
+  const visibility = await import('../src/platform/app-visibility.ts');
+  const stop = system.bindDesktopSystem({ onWake: () => {} });
+  try {
+    fake.pushState({ gameMode: true, windowVisible: true, windowCovered: true });
+    expect(visibility.isAppVisible()).toBe(false);
+    expect(visibility.appWindowState()).toBe('covered');
+    fake.pushState({ gameMode: true, windowVisible: false, windowCovered: true });
+    expect(visibility.appWindowState()).toBe('hidden');
+    fake.pushState({ gameMode: true, windowVisible: true });
+    expect(visibility.isAppVisible()).toBe(true);
+    expect(visibility.appWindowState()).toBe('visible');
+  } finally {
+    stop();
+  }
 });

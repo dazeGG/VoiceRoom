@@ -22,7 +22,7 @@ import {
   type VoiceMinuteHeard,
   type VoiceQuality
 } from '@voiceroom/shared/contracts/admin';
-import { NetworkPoint, type CpuPressure, type NetworkLevel } from '@voiceroom/shared/contracts/rooms';
+import { NetworkPoint, ProcessingRelief, type CpuPressure, type NetworkLevel } from '@voiceroom/shared/contracts/rooms';
 import { concealedSpeechPct, gapsPerSpeechMin, speechSeconds, type HeardCounts } from '@voiceroom/shared/voice-quality';
 import { kyselyOn } from '../../platform/db/kysely.ts';
 import { escapeLike } from '../../platform/db/like.ts';
@@ -717,15 +717,24 @@ export function createAdminRoomsRepository({ pool }: { pool: pg.Pool }) {
     if (stayIds.length === 0) return byStay;
     const rows = await db
       .selectFrom('voice_call_events')
-      .select(['stay_id', 'at', 'kind'])
+      .select(['stay_id', 'at', 'kind', 'relief_kind', 'relief_outcome'])
       .where('stay_id', 'in', [...stayIds])
       .orderBy('at')
       .execute();
     for (const row of rows) {
-      const kind = stayEventKind(row.kind);
-      if (!kind) continue;
+      const at = toMillis(row.at);
+      let event: StayEvent;
+      if (row.kind === 'relief') {
+        const relief = { kind: row.relief_kind, outcome: row.relief_outcome };
+        if (!Value.Check(ProcessingRelief, relief)) continue;
+        event = { at, kind: 'relief', reliefKind: relief.kind, outcome: relief.outcome };
+      } else {
+        const kind = stayEventKind(row.kind);
+        if (!kind) continue;
+        event = { at, kind };
+      }
       const events = byStay.get(row.stay_id) ?? [];
-      events.push({ at: toMillis(row.at), kind });
+      events.push(event);
       byStay.set(row.stay_id, events);
     }
     return byStay;

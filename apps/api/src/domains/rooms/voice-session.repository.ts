@@ -11,8 +11,8 @@ import crypto from 'node:crypto';
 import { sql } from 'kysely';
 import type pg from 'pg';
 import type { ClientKind } from '@voiceroom/shared/contracts/admin';
-import type { CpuPressure, VoiceCause } from '@voiceroom/shared/contracts/rooms';
-import type { JoinTiming, VoiceTransport } from '@voiceroom/shared/contracts/realtime';
+import type { CpuPressure, ProcessingRelief, VoiceCause } from '@voiceroom/shared/contracts/rooms';
+import type { AppWindowState, JoinTiming, PlayoutPoll, VoiceTransport } from '@voiceroom/shared/contracts/realtime';
 import type { HeardCounts } from '@voiceroom/shared/voice-quality';
 import { kyselyOn } from '../../platform/db/kysely.ts';
 
@@ -41,6 +41,8 @@ export type VoiceMinuteSample = {
   transport: VoiceTransport | null;
   /** How its computer did, summed like the rest; absent while its client said nothing of it. */
   cpu?: MinuteCpu | undefined;
+  windowPolls?: Record<AppWindowState, number> | undefined;
+  playout?: PlayoutPoll | undefined;
 };
 
 /** The most of a minute's windows of one speaker: each number is the highest it saw, not always of the same window. */
@@ -59,7 +61,10 @@ export type MinuteCpu = {
 
 /** What the stay's seat did that the stay itself does not say (voice_call_events). */
 export type StayEventKind = 'screen_on' | 'screen_off' | 'camera_on' | 'camera_off' | 'cpu_critical' | 'relieved_ns';
-export type StayEvent = { at: number; kind: StayEventKind };
+export type StayEvent = { at: number } & (
+  | { kind: StayEventKind }
+  | { kind: 'relief'; reliefKind: ProcessingRelief['kind']; outcome: ProcessingRelief['outcome'] }
+);
 
 export type FinishedVoiceSession = {
   roomId: string;
@@ -74,6 +79,7 @@ export type FinishedVoiceSession = {
   /** Random browser/application installation id, independent of the account. */
   clientId?: string | null;
   client: ClientKind | null;
+  desktopVersion?: string | null;
   /** The system and browser the socket named; empty when it named none. */
   os: string;
   browser: string;
@@ -120,6 +126,7 @@ export function createVoiceSessionRepository({
             guest_id: (!session.userId && session.guestId) || null,
             client_id: session.clientId || (!session.userId && session.guestId) || null,
             client: session.client,
+            desktop_version: session.desktopVersion ?? null,
             os: session.os || null,
             browser: session.browser || null,
             ip_key: origins[index]?.ipKey ?? null,
@@ -142,7 +149,9 @@ export function createVoiceSessionRepository({
         (session.events ?? []).map((event) => ({
           stay_id: ids[index] ?? '',
           at: new Date(event.at),
-          kind: event.kind
+          kind: event.kind,
+          relief_kind: event.kind === 'relief' ? event.reliefKind : null,
+          relief_outcome: event.kind === 'relief' ? event.outcome : null
         }))
       );
       for (let start = 0; start < events.length; start += SAMPLE_BATCH) {
@@ -199,14 +208,15 @@ export function createVoiceSessionRepository({
   async function forgetAccountsBefore(cutoffDay: string): Promise<number> {
     const result = await db
       .updateTable('voice_sessions')
-      .set({ user_id: null, client: null, os: null, browser: null })
+      .set({ user_id: null, client: null, os: null, browser: null, desktop_version: null })
       .where('joined_at', '<', sql<Date>`(${cutoffDay}::date)::timestamp AT TIME ZONE 'Europe/Moscow'`)
       .where((eb) =>
         eb.or([
           eb('user_id', 'is not', null),
           eb('client', 'is not', null),
           eb('os', 'is not', null),
-          eb('browser', 'is not', null)
+          eb('browser', 'is not', null),
+          eb('desktop_version', 'is not', null)
         ])
       )
       .executeTakeFirst();
@@ -218,13 +228,14 @@ export function createVoiceSessionRepository({
 
 export type VoiceSessionRepository = ReturnType<typeof createVoiceSessionRepository>;
 
-// A row is 30 values, so this keeps a long call's minutes well under the 65535 parameters of one statement.
+// Keep a long call's minute inserts well under PostgreSQL's 65535 parameters per statement.
 const SAMPLE_BATCH = 1000;
 
 // The columns are 4-byte integers; a client's counts are bounded per poll, not per minute.
 const int = (value: number) => Math.min(Math.max(0, Math.round(value)), 2_147_483_647);
 
 function sampleRow(stayId: string, minute: VoiceMinuteSample) {
+  const { windowPolls, playout } = minute;
   return {
     stay_id: stayId,
     at: new Date(minute.at),
@@ -262,6 +273,12 @@ function sampleRow(stayId: string, minute: VoiceMinuteSample) {
     cpu_system_pct_sum: minute.cpu?.systemPctSum ?? 0,
     cpu_polls: int(minute.cpu?.polls ?? 0),
     cpu_pressure_max: minute.cpu?.pressureMax ?? null,
-    cpu_relieved: minute.cpu?.relieved ?? false
+    cpu_relieved: minute.cpu?.relieved ?? false,
+    window_visible_polls: windowPolls ? int(windowPolls.visible) : null,
+    window_hidden_polls: windowPolls ? int(windowPolls.hidden) : null,
+    window_covered_polls: windowPolls ? int(windowPolls.covered) : null,
+    playout_synthesized_pct:
+      playout && playout.totalSeconds > 0 ? (playout.synthesizedSeconds / playout.totalSeconds) * 100 : null,
+    playout_events: playout ? int(playout.events) : null
   };
 }

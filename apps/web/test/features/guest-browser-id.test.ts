@@ -43,8 +43,19 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.unstubAllGlobals();
   vi.doUnmock('@/api/realtime');
   vi.doUnmock('@/entities/room/room-presence.store');
+});
+
+test('a desktop voice join sends the preload shell version and a browser join omits it', async () => {
+  vi.stubGlobal('voiceRoomRuntime', { isDesktop: true, version: '2.3.4-beta.1' });
+  const realtime = await loadRoomRealtime();
+  expect(join(realtime)).toMatchObject({ desktopVersion: '2.3.4-beta.1' });
+  vi.stubGlobal('voiceRoomRuntime', { isDesktop: true, version: '' });
+  expect(join(realtime)).not.toHaveProperty('desktopVersion');
+  vi.unstubAllGlobals();
+  expect(join(realtime)).not.toHaveProperty('desktopVersion');
 });
 
 test('a voice join carries one lasting guest id, kept across joins and reloads', async () => {

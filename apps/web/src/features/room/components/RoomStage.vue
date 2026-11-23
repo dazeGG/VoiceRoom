@@ -32,7 +32,7 @@ const layoutKey = computed(() =>
 // Like the Svelte $effect, this also follows what syncRemoteCameraDemand reads itself:
 // a peer's LiveKit participant or camera changing without the head count changing.
 watchEffect(() => {
-  if (layoutKey.value !== '') syncRemoteCameraDemand();
+  if (layoutKey.value !== '') void syncRemoteCameraDemand();
 });
 </script>
 

@@ -490,7 +490,13 @@ test('over HTTP a call is for staff only, and an unknown one is not found', { sk
   const alice = await registerAccount(socketPath, 'alice');
   const start = NOW - HOUR;
   await createVoiceSessionRepository({ pool }).recordSessions([
-    stay('kitchen', start, start + MINUTE, { guestName: 'Петя' }, [minute(start, GOOD)])
+    {
+      ...stay('kitchen', start, start + MINUTE, { guestName: 'Петя' }, [minute(start, GOOD)]),
+      events: [
+        { at: start + 1, kind: 'relieved_ns' },
+        { at: start + 2, kind: 'relief', reliefKind: 'screen', outcome: 'failed' }
+      ]
+    }
   ]);
   const { rows } = await pool.query<{ id: string }>('SELECT id FROM voice_sessions');
   const callId = defined(rows[0], 'the stay').id;
@@ -504,6 +510,22 @@ test('over HTTP a call is for staff only, and an unknown one is not found', { sk
   const found = await request(socketPath, { pathname, cookie: admin }, RoomCallDetail);
   assert.equal(found.status, 200);
   assert.equal(found.body.call.stays[0]?.guestName, 'Петя');
+  assert.deepEqual(
+    found.body.events?.map((event) => event.kind),
+    ['join', 'relieved_ns', 'leave']
+  );
+
+  const modern = await request(socketPath, { pathname: `${pathname}?relief=1`, cookie: admin }, RoomCallDetail);
+  assert.equal(modern.status, 200);
+  assert.deepEqual(
+    modern.body.events?.find((event) => event.kind === 'relief'),
+    {
+      at: start + 2,
+      stayId: callId,
+      kind: 'relief',
+      relief: { kind: 'screen', outcome: 'failed' }
+    }
+  );
 
   const missing = await request(
     socketPath,

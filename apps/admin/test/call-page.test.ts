@@ -199,6 +199,26 @@ test('someone who may not read the answers is not offered them', async () => {
   expect(screen.queryByRole('link', { name: /^Отзывы/ })).toBeNull();
 });
 
+test('the call timeline shows action and outcome for relief and still reads the legacy event', async () => {
+  const relief: CallEvent[] = [
+    { at: START + 1, stayId: 's-artem', kind: 'relieved_ns' },
+    { at: START + 2, stayId: 's-artem', kind: 'relief', relief: { kind: 'noise', outcome: 'applied' } },
+    { at: START + 3, stayId: 's-artem', kind: 'relief', relief: { kind: 'video', outcome: 'failed' } },
+    { at: START + 4, stayId: 's-artem', kind: 'relief', relief: { kind: 'screen', outcome: 'applied' } }
+  ];
+  const calls = stubApi({ 'GET /api/admin/rooms/calls/call-1': { body: { ...detail, events: relief } } });
+  renderAsStaff(CallPage, { props: { call: { kind: 'finished', callId: 'call-1' }, ...handlers() } });
+  const feed = within(await screen.findByRole('region', { name: 'Что происходило' }));
+  expect(calls[0]?.url.searchParams.get('relief')).toBe('1');
+  for (const line of [
+    'Артём — включён облегчённый шумодав',
+    'Артём — снижена нагрузка шумоподавления',
+    'Артём — не удалось снизить нагрузку камер',
+    'Артём — снижена нагрузка показа экрана'
+  ])
+    expect(feed.getByText(line)).toBeTruthy();
+});
+
 test('a call going on asks again every few seconds and stops when it leaves', async () => {
   vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
   const calls = stubApi({ 'GET /api/admin/rooms/live/raid': { body: detail } });

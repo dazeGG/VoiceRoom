@@ -5,6 +5,7 @@
 // and our screen capture requests at most 15 frames a second.
 
 import type { LocalTrackPublication } from 'livekit-client';
+import type { ProcessingRelief } from '@voiceroom/shared/contracts/rooms';
 import { RELIEVED_SCREEN_FRAME_RATE } from '../core/config';
 import { state } from '../core/room-runtime.store';
 import { loadLiveKitClient } from '../media/livekit-runtime';
@@ -13,25 +14,46 @@ import { syncRemoteCameraDemand } from './livekit/remote-participants';
 import { limitScreenCaptureFrameRate } from './screen-capture-service';
 
 /** Our camera publication, lighter while the call is relieved. */
-export async function applyVideoReliefToCamera(publication: LocalTrackPublication | null | undefined): Promise<void> {
-  if (!state.videoRelieved || !publication) return;
+export async function applyVideoReliefToCamera(
+  publication: LocalTrackPublication | null | undefined
+): Promise<boolean> {
+  const track = publication?.videoTrack;
+  if (!state.videoRelieved || !track) return false;
   const { VideoQuality } = await loadLiveKitClient();
-  publication.videoTrack?.setPublishingQuality(VideoQuality.MEDIUM);
+  if (publication.videoTrack !== track) return false;
+  track.setPublishingQuality(VideoQuality.MEDIUM);
+  return true;
 }
 
 /** Our shared screen, at most RELIEVED_SCREEN_FRAME_RATE while the call is relieved. */
 export async function applyVideoReliefToScreen(stream: MediaStream | null | undefined): Promise<void> {
-  if (!state.videoRelieved || !stream) return;
-  await limitScreenCaptureFrameRate(stream, getScreenProfile(state.localScreenProfileId), RELIEVED_SCREEN_FRAME_RATE);
+  await requestScreenRelief(stream);
+}
+
+async function requestScreenRelief(stream: MediaStream | null | undefined): Promise<boolean | null> {
+  if (!state.videoRelieved || !stream) return null;
+  return limitScreenCaptureFrameRate(stream, getScreenProfile(state.localScreenProfileId), RELIEVED_SCREEN_FRAME_RATE);
 }
 
 /** Makes the call's video lighter, once per call; the start of a call clears it (room.ts). */
-export async function relieveVideo(): Promise<void> {
+export async function relieveVideo(onResult?: (result: ProcessingRelief) => void): Promise<void> {
   if (!state.joined || state.videoRelieved) return;
   state.videoRelieved = true;
-  syncRemoteCameraDemand();
+  const { localCameraPublication, localScreenStream } = state;
   await Promise.all([
-    applyVideoReliefToCamera(state.localCameraPublication),
-    applyVideoReliefToScreen(state.localScreenStream)
+    Promise.all([syncRemoteCameraDemand(), applyVideoReliefToCamera(localCameraPublication)]).then(
+      ([remote, local]) => {
+        if (remote || local || localCameraPublication)
+          onResult?.({ kind: 'video', outcome: remote || local ? 'applied' : 'failed' });
+      },
+      () => onResult?.({ kind: 'video', outcome: 'failed' })
+    ),
+    localScreenStream &&
+      requestScreenRelief(localScreenStream).then(
+        (applied) => {
+          if (applied !== null) onResult?.({ kind: 'screen', outcome: applied ? 'applied' : 'failed' });
+        },
+        () => onResult?.({ kind: 'screen', outcome: 'failed' })
+      )
   ]);
 }

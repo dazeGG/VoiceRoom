@@ -1,4 +1,5 @@
 import type { DesktopCapabilities } from '@voiceroom/call/engine/desktop-capabilities';
+import { readDesktopRuntime } from '@/platform/desktop-system';
 
 declare global {
   interface Window {
@@ -24,7 +25,7 @@ export const webCallDesktop: DesktopCapabilities = {
     return window.voiceRoomDesktopHotkeys;
   },
   get runtime() {
-    return window.voiceRoomRuntime;
+    return readDesktopRuntime();
   },
   get window() {
     return window.voiceRoomWindow;

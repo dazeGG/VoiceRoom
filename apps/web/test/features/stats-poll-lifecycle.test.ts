@@ -281,3 +281,90 @@ test('a rejected stats request releases the poll for the next timer tick', async
   await vi.advanceTimersByTimeAsync(3_000);
   expect(polls.at(-1)?.rttMs).toBe(50);
 });
+
+test('voice polls expire stale compute pressure', async () => {
+  const { stats, polls } = await loadPoll();
+  const { noteCpuPressure } = await import('@voiceroom/call/engine/room/call-strain');
+  noteCpuPressure('critical');
+  stats.startPeerLatencyStats();
+  await vi.advanceTimersByTimeAsync(0);
+  expect(polls.at(-1)?.cpu?.pressure).toBe('critical');
+  await vi.advanceTimersByTimeAsync(9_000);
+  expect(polls.at(-1)?.cpu?.pressure).toBe('critical');
+  await vi.advanceTimersByTimeAsync(3_000);
+  expect(polls.at(-1)?.cpu?.pressure).toBeNull();
+});
+
+test('voice polls report browser visibility without suspending polling', async () => {
+  const { stats, polls } = await loadPoll();
+  stats.startPeerLatencyStats();
+  await vi.advanceTimersByTimeAsync(0);
+  expect(polls.at(-1)?.windowState).toBe('visible');
+  vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
+  await vi.advanceTimersByTimeAsync(3_000);
+  expect(polls.at(-1)?.windowState).toBe('hidden');
+});
+
+test('playout counters shared by receivers are differenced once and unsupported playout is omitted', async () => {
+  const { stats, state, polls } = await loadPoll();
+  const playout = (total: number, synthesized: number, events: number) =>
+    report([
+      {
+        id: 'AP',
+        type: 'media-playout',
+        totalSamplesDuration: total,
+        synthesizedSamplesDuration: synthesized,
+        synthesizedSamplesEvents: events
+      }
+    ]);
+  let reading = playout(20, 2, 10);
+  const participant = () => ({
+    livekitParticipant: {
+      audioTrackPublications: new Map([
+        ['mic', { source: 'microphone', track: { getRTCStatsReport: async () => reading } }]
+      ])
+    }
+  });
+  Object.assign(state, {
+    peers: new Map([
+      ['a', participant()],
+      ['b', participant()]
+    ])
+  });
+  stats.startPeerLatencyStats();
+  await vi.advanceTimersByTimeAsync(0);
+  expect(polls.at(-1)).not.toHaveProperty('playout');
+  reading = playout(22, 2.5, 12);
+  await vi.advanceTimersByTimeAsync(3_000);
+  expect(polls.at(-1)?.playout).toEqual({ totalSeconds: 2, synthesizedSeconds: 0.5, events: 2 });
+  reading = inbound(100);
+  await vi.advanceTimersByTimeAsync(3_000);
+  expect(polls.at(-1)).not.toHaveProperty('playout');
+  reading = playout(1, 0.125, 1);
+  await vi.advanceTimersByTimeAsync(3_000);
+  expect(polls.at(-1)).not.toHaveProperty('playout');
+  reading = playout(2, 0.125, 1);
+  await vi.advanceTimersByTimeAsync(3_000);
+  expect(polls.at(-1)?.playout).toEqual({ totalSeconds: 1, synthesizedSeconds: 0, events: 0 });
+});
+
+test('independent processing relief results are carried by the voice poll', async () => {
+  const { stats, polls } = await loadPoll();
+  const { noteProcessingRelief, startCaptureDiagnostics, stopCaptureDiagnostics } =
+    await import('@voiceroom/call/engine/room/capture-diagnostics');
+  startCaptureDiagnostics();
+  onTestFinished(stopCaptureDiagnostics);
+  const base = { generation: 1, requestedMode: null, actualMode: null, durationMs: 5 };
+  noteProcessingRelief({ ...base, kind: 'noise', outcome: 'applied' });
+  noteProcessingRelief({ ...base, kind: 'video', outcome: 'failed' });
+  noteProcessingRelief({ ...base, kind: 'screen', outcome: 'applied' });
+  stats.startPeerLatencyStats();
+  await vi.advanceTimersByTimeAsync(0);
+  expect(polls.at(-1)?.relief).toMatchObject([
+    { kind: 'noise', outcome: 'applied' },
+    { kind: 'video', outcome: 'failed' },
+    { kind: 'screen', outcome: 'applied' }
+  ]);
+  await vi.advanceTimersByTimeAsync(3_000);
+  expect(polls.at(-1)?.relief).toEqual(polls[0]?.relief);
+});

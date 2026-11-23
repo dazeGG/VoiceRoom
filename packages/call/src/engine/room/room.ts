@@ -341,7 +341,7 @@ async function performJoinRoom(generation: number): Promise<void> {
     if (isMicrophoneShownMuted() || state.outputMuted) postState().catch(() => {});
     startMeters();
     startPeerLatencyStats();
-    // Remote video pauses while the app cannot be seen (tray, minimized, background tab).
+    // Remote video pauses in the tray, minimized, covered or in a background tab.
     stopVideoVisibilitySync?.();
     stopVideoVisibilitySync = getCallPorts().platform.onVisibilityChange(() => syncRemoteVideoVisibility());
     syncRemoteVideoVisibility();
@@ -361,7 +361,7 @@ async function performJoinRoom(generation: number): Promise<void> {
         state.roomId === reliefRoomId &&
         state.sessionToken === reliefSessionToken;
       const noiseStarted = performance.now();
-      void relieveNoiseSuppression().then((switched) => {
+      const noteNoiseResult = (switched: boolean) => {
         if (!reliefCurrent()) return;
         if (switched) recordCpuRelief();
         const capture = getMicrophoneCaptureDiagnostics();
@@ -373,15 +373,16 @@ async function performJoinRoom(generation: number): Promise<void> {
           actualMode: capture.actualMode,
           durationMs: performance.now() - noiseStarted
         });
-      });
+      };
+      void relieveNoiseSuppression().then(noteNoiseResult, () => noteNoiseResult(false));
       const videoStarted = performance.now();
-      void relieveVideo().then(() => {
+      void relieveVideo(({ kind, outcome }) => {
         if (!reliefCurrent()) return;
-        recordCpuRelief();
+        if (outcome === 'applied') recordCpuRelief();
         noteProcessingRelief({
           generation: reliefGeneration,
-          kind: 'video',
-          outcome: state.videoRelieved ? 'applied' : 'not_applied',
+          kind,
+          outcome,
           requestedMode: null,
           actualMode: getMicrophoneCaptureDiagnostics().actualMode,
           durationMs: performance.now() - videoStarted
@@ -395,9 +396,9 @@ async function performJoinRoom(generation: number): Promise<void> {
       canRecover: () => canRecoverMic() && canAdmitAutomaticMicrophoneAction()
     });
     startCpuPressureWatch({
-      onState: (pressure) => {
+      onState: (pressure, sampledAt) => {
         recordCpuPressure(pressure);
-        noteCpuPressure(pressure);
+        noteCpuPressure(pressure, sampledAt);
       }
     });
     playPeerCue('join');

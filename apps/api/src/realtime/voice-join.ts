@@ -380,6 +380,8 @@ export function createVoiceJoin(deps: VoiceJoinDeps) {
         id: peerId,
         gateGuestPrincipalId: identityResult.identity?.id || '',
         client: connection.client,
+        desktopVersion:
+          connection.client === 'desktop_app' ? (payload.desktopVersion ?? previous?.desktopVersion ?? null) : null,
         os: connection.device?.os ?? '',
         browser: connection.device?.browser ?? '',
         guestId: sessionUser ? '' : normalizeGuestId(payload.guestId),
