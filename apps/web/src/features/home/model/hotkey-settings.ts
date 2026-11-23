@@ -1,8 +1,8 @@
 // Saving a global hotkey. Push-to-talk without a key would leave the microphone
 // shut for good, so clearing that key switches the microphone back to open.
 
-import { setMicrophoneMode, writeHotkeyBinding, type HotkeyAction } from '@voice-room/call/engine';
-import type { HotkeyBinding } from '@/shared/ui/HotkeyRecorder/types';
+import { setMicrophoneMode, writeHotkeyBinding, type HotkeyAction } from '@voiceroom/call/engine';
+import type { HotkeyBinding } from '@voiceroom/ui-kit/hotkey';
 import { readSoundSettings } from './sound-settings';
 
 /** Stores the binding; answers true when that switched push-to-talk off. */

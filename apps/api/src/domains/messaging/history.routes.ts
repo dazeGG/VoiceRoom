@@ -3,8 +3,8 @@
 
 import type { TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
 import type { FastifyInstance } from 'fastify';
-import { Failure, RoomIdParams } from '@voice-room/shared/contracts/http';
-import { DirectHistoryPage, HistoryQuery, PeerParams, RoomHistoryPage } from '@voice-room/shared/contracts/messages';
+import { Failure, RoomIdParams } from '@voiceroom/shared/contracts/http';
+import { DirectHistoryPage, HistoryQuery, PeerParams, RoomHistoryPage } from '@voiceroom/shared/contracts/messages';
 import type { ApiContext } from '../../app/context.ts';
 import { failure } from '../../platform/http/http-kit.ts';
 

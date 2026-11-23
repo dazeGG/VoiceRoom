@@ -1,15 +1,16 @@
 <script setup lang="ts">
+import { IconButton } from '@voiceroom/ui-kit/components';
 // The room chat's compose form: text with @mentions, emoji, attachments and a
 // reply target. Sending itself belongs to the panel, which owns the messages.
 import { t } from '@/shared/i18n';
-import { onBeforeUnmount, onMounted, ref, nextTick } from 'vue';
+import { onBeforeUnmount, onMounted, ref, nextTick, useId } from 'vue';
 import { ArrowUp } from '@lucide/vue';
-import type { MembershipMember } from '@voice-room/shared/contracts/membership';
+import type { MembershipMember } from '@voiceroom/shared/contracts/membership';
 import {
   contentFromPlainText,
   MAX_ROOM_MESSAGE_LENGTH,
   projectRoomMessageContent
-} from '@voice-room/shared/room-message-content';
+} from '@voiceroom/shared/room-message-content';
 import type { ChatMessage } from '@/api/rooms';
 import { getAppRealtime } from '@/api/realtime';
 import { useRoomMembershipStore } from '@/entities/room/room-membership.store';
@@ -26,7 +27,6 @@ import MentionAutocomplete from '@/shared/chat/MentionAutocomplete.vue';
 import ReplyTargetBar from '@/shared/chat/ReplyTargetBar.vue';
 import TypingIndicator from '@/shared/chat/TypingIndicator.vue';
 import { createTypingNotifier } from '@/shared/chat/typing';
-import { iconSm } from '@/shared/ui/icons';
 import type { OutgoingRoomMessage } from '../use-room-chat-session';
 
 const props = defineProps<{
@@ -52,6 +52,7 @@ const session = useSessionStore();
 const membership = useRoomMembershipStore();
 const input = ref<ComposerHandle | null>(null);
 const { text, mentions } = props.draft;
+const mentionListId = useId();
 
 const typingNotifier = createTypingNotifier((activity) => {
   if (props.roomId) getAppRealtime().send('room.chat.typing', { roomId: props.roomId, activity });
@@ -187,6 +188,13 @@ const onPaste = (event: ClipboardEvent): Promise<void> =>
           class="room-chat-composer__input"
           :maxlength="MAX_ROOM_MESSAGE_LENGTH"
           markdown
+          :aria-controls="mentions.isOpen ? mentionListId : undefined"
+          :aria-autocomplete="mentions.isOpen ? 'list' : undefined"
+          :aria-activedescendant="
+            mentions.isOpen && mentions.candidates[mentions.activeIndex]
+              ? mentionListId + '-' + mentions.candidates[mentions.activeIndex]?.userId
+              : undefined
+          "
           :placeholder="t('Написать в комнату…')"
           @keydown="onKeydown"
           @input="onInput"
@@ -201,19 +209,21 @@ const onPaste = (event: ClipboardEvent): Promise<void> =>
           @pick="(emoji: string) => input?.insertText(emoji)"
           @browse="typingNotifier.notify('emoji')"
         />
-        <button
+        <IconButton
           class="room-chat-composer__send"
           type="submit"
-          :aria-label="t('Отправить')"
-          :title="t('Отправить')"
+          :label="t('Отправить')"
           :disabled="!(text.trim() || media?.canSend)"
+          :size="32"
+          variant="primary"
         >
-          <ArrowUp v-bind="iconSm" aria-hidden="true" />
-        </button>
+          <ArrowUp aria-hidden="true" />
+        </IconButton>
       </div>
     </div>
     <MentionAutocomplete
       v-if="mentions.isOpen"
+      :id="mentionListId"
       :candidates="mentions.candidates"
       :active-index="mentions.activeIndex"
       @select="chooseMention"

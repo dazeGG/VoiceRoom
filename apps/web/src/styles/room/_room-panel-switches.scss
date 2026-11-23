@@ -1,0 +1,10 @@
+.room-panel-switches {
+  height: auto;
+
+  &__unread {
+    --badge-ring: var(--vr-surface-2);
+    position: absolute;
+    top: var(--space-6);
+    right: var(--space-8);
+  }
+}

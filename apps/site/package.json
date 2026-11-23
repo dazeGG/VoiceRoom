@@ -1,6 +1,6 @@
 {
-  "name": "@voice-room/site",
-  "version": "1.0.0",
+  "name": "@voiceroom/site",
+  "version": "1.0.1",
   "private": true,
   "type": "module",
   "scripts": {
@@ -11,8 +11,9 @@
     "test": "node --test test/*.test.ts"
   },
   "dependencies": {
-    "@voice-room/shared": "file:../../packages/shared",
-    "@voice-room/ui": "file:../../packages/ui"
+    "@voiceroom/shared": "file:../../packages/shared",
+    "@voiceroom/ui": "file:../../packages/ui",
+    "@voiceroom/ui-kit": "file:../../packages/ui-kit"
   },
   "devDependencies": {
     "@astrojs/check": "0.9.12",

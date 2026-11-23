@@ -35,7 +35,7 @@ const AREAS: ReadonlyArray<{ folder: string; project: string; ignore?: readonly 
     project: 'tsconfig.test.json',
     ignore: ['src/**', 'test/**', 'e2e/**', 'scripts/**', 'public/**']
   },
-  // The admin app (React): its source, its tests and its vite config.
+  // The admin app: its source, its tests and its vite config.
   { folder: 'apps/admin/src', project: '../tsconfig.json' },
   { folder: 'apps/admin/test', project: '../tsconfig.json' },
   { folder: 'apps/admin', project: 'tsconfig.json', ignore: ['src/**', 'test/**'] },
@@ -44,6 +44,7 @@ const AREAS: ReadonlyArray<{ folder: string; project: string; ignore?: readonly 
   // The emoji corpus is byte-pinned (G07) and stays as it is.
   { folder: 'packages/shared/src', project: '../tsconfig.test.json', ignore: ['emoji.ts'] },
   { folder: 'packages/shared/test', project: '../tsconfig.test.json' },
+  { folder: 'packages/ui-kit/src', project: '../tsconfig.json' },
   { folder: 'packages/ui/src', project: '../tsconfig.json' },
   { folder: 'packages/call/src', project: '../tsconfig.json' },
   { folder: 'scripts', project: 'tsconfig.json' }

@@ -1,5 +1,5 @@
 import { beforeEach, expect, test, vi } from 'vitest';
-import type { Ban } from '@voice-room/shared/contracts/moderation';
+import type { Ban } from '@voiceroom/shared/contracts/moderation';
 import type { ModerationNotice } from '@/entities/room/room-moderation';
 import { defined } from '../helpers/assert';
 

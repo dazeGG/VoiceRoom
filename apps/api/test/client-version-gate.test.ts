@@ -5,9 +5,9 @@
 import test, { type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
 import WebSocket from 'ws';
-import { ClientPolicy } from '@voice-room/shared/contracts/client';
-import { Capabilities } from '@voice-room/shared/contracts/ops';
-import { Failure } from '@voice-room/shared/contracts/http';
+import { ClientPolicy } from '@voiceroom/shared/contracts/client';
+import { Capabilities } from '@voiceroom/shared/contracts/ops';
+import { Failure } from '@voiceroom/shared/contracts/http';
 import { createApiRuntime } from '../src/app/api-runtime.ts';
 import { checked } from './helpers/checked.ts';
 import { openWs } from './ws-harness.ts';

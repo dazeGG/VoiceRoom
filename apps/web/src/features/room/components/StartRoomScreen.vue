@@ -1,11 +1,12 @@
 <script setup lang="ts">
+import { Button, Field, TextField } from '@voiceroom/ui-kit/components';
 import { t } from '@/shared/i18n';
-import { createRoomFromStart, handleRoomCodeKeydown, joinRoomByCode } from '@voice-room/call/engine/room/room-start';
-import { saveStartName, updateNameStatuses } from '@voice-room/call/engine/ui/names';
-import { useStartUiStore } from '@voice-room/call/engine/core/start-ui.store';
+import { createRoomFromStart, joinRoomByCode } from '@voiceroom/call/engine/room/room-start';
+import { saveStartName, updateNameStatuses } from '@voiceroom/call/engine/ui/names';
+import { useStartUiStore } from '@voiceroom/call/engine/core/start-ui.store';
 import FeatureList from '@/shared/components/FeatureList.vue';
 import { START_FEATURES } from '@/shared/start-features';
-import { useCallPageStore } from '@voice-room/call/engine/core/call-page.store';
+import { useCallPageStore } from '@voiceroom/call/engine/core/call-page.store';
 
 const startUi = useStartUiStore();
 const page = useCallPageStore();
@@ -34,20 +35,19 @@ function handleCreateClick(): void {
 
     <section class="start-room__panel" :aria-label="t('Создать или найти комнату')">
       <form id="startForm" class="start-room__form" @submit="saveStartName">
-        <label class="start-room__field">
-          <span>{{ t('Ваше имя') }}</span>
-          <input
-            id="startNameInput"
+        <Field id="startNameInput" :label="t('Ваше имя')">
+          <TextField
             v-model="startUi.nameInput"
+            size="lg"
             maxlength="40"
             autocomplete="name"
             :placeholder="t('Ваше имя')"
             required
-            @input="updateNameStatuses(startUi.nameInput)"
+            @update:model-value="updateNameStatuses"
           />
-        </label>
+        </Field>
 
-        <button class="start-room__button start-room__button--secondary" type="submit">{{ t('Сохранить имя') }}</button>
+        <Button variant="outline" size="lg" type="submit">{{ t('Сохранить имя') }}</Button>
         <p
           id="startNameStatus"
           :class="['start-room__status', { 'start-room__status--dirty': startUi.savedNameState === 'dirty' }]"
@@ -61,38 +61,37 @@ function handleCreateClick(): void {
       </div>
 
       <div class="start-room__actions">
-        <button
+        <Button
           id="createRoomButton"
-          class="start-room__button start-room__button--primary"
+          variant="primary"
+          size="xl"
           type="button"
-          :disabled="startUi.createRoomLoading"
+          :busy="startUi.createRoomLoading"
           @click="handleCreateClick"
         >
           {{ startUi.createRoomLoading ? t('Создаём...') : t('Создать комнату') }}
-        </button>
+        </Button>
 
-        <label class="start-room__field">
-          <span>{{ t('Код комнаты') }}</span>
-          <input
-            id="roomCodeInput"
-            v-model="startUi.roomCode"
-            maxlength="120"
-            autocapitalize="off"
-            autocomplete="off"
-            spellcheck="false"
-            placeholder="x7m2kq9p"
-            @keydown="handleRoomCodeKeydown"
-          />
-        </label>
-
-        <button
-          id="joinByCodeButton"
-          class="start-room__button start-room__button--secondary"
-          type="button"
-          @click="joinRoomByCode"
-        >
-          {{ t('Войти по коду') }}
-        </button>
+        <form @submit.prevent="joinRoomByCode">
+          <Field id="roomCodeInput" :label="t('Код комнаты')">
+            <TextField
+              v-model="startUi.roomCode"
+              size="lg"
+              variant="mono"
+              maxlength="120"
+              autocapitalize="off"
+              autocomplete="off"
+              spellcheck="false"
+              placeholder="x7m2kq9p"
+            >
+              <template #action>
+                <Button id="joinByCodeButton" variant="outline" size="lg" type="submit">
+                  {{ t('Войти по коду') }}
+                </Button>
+              </template>
+            </TextField>
+          </Field>
+        </form>
       </div>
     </section>
   </main>

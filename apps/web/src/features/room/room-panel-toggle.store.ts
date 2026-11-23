@@ -3,7 +3,7 @@
 import { defineStore } from 'pinia';
 import { markRoomChatRead } from '@/api/rooms';
 import { useRoomPresenceStore } from '@/entities/room/room-presence.store';
-import { state as roomClientState } from '@voice-room/call/engine/core/room-runtime.store';
+import { state as roomClientState } from '@voiceroom/call/engine/core/room-runtime.store';
 import { useRoomUiStore, type RoomPanelTab } from './room-ui.store';
 
 export const useRoomPanelToggleStore = defineStore('room-panel-toggle', () => {

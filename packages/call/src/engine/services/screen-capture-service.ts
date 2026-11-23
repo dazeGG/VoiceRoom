@@ -1,11 +1,11 @@
 import { getInstalledCallPorts } from '../ports';
-import { t } from '@voice-room/ui/i18n';
+import { t } from '@voiceroom/ui-kit/i18n';
 import { DEFAULT_SCREEN_PROFILE_ID, SCREEN_QUALITY_OPTIONS } from '../core/config';
 import { state } from '../core/room-runtime.store';
 import { showToast } from '../ui/toast';
 import { createScreenProfileId, getScreenProfile } from '../media/profiles';
 import { createAbortError, isCaptureCancelled } from '../core/utils';
-import { isRecord } from '@voice-room/shared/guards';
+import { isRecord } from '@voiceroom/shared/guards';
 import { showScreenSourcePicker } from '../ui/screen-source-picker';
 import { setLocalAppAudioSuppressed } from './media-playback-service';
 import { hasNativeDesktopSafeAudio, startDesktopSafeScreenAudioCapture } from './desktop-screen-audio';

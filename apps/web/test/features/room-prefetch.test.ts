@@ -5,8 +5,8 @@ import { expect, test, vi } from 'vitest';
 import { stubFetch } from '../fixtures/fetch';
 
 vi.mock('@/features/room/RoomPage.vue', () => ({ default: {} }));
-vi.mock('@voice-room/call/engine/main', () => ({}));
-vi.mock('@voice-room/call/engine/media/livekit-runtime', () => ({ loadLiveKitClient: vi.fn(async () => ({})) }));
+vi.mock('@voiceroom/call/engine/main', () => ({}));
+vi.mock('@voiceroom/call/engine/media/livekit-runtime', () => ({ loadLiveKitClient: vi.fn(async () => ({})) }));
 
 test('the noise suppression files are fetched before the visitor asks to join', async () => {
   const { calls } = stubFetch({});

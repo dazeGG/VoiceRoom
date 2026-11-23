@@ -10,10 +10,10 @@
 import crypto from 'node:crypto';
 import { sql } from 'kysely';
 import type pg from 'pg';
-import type { ClientKind } from '@voice-room/shared/contracts/admin';
-import type { CpuPressure, VoiceCause } from '@voice-room/shared/contracts/rooms';
-import type { JoinTiming, VoiceTransport } from '@voice-room/shared/contracts/realtime';
-import type { HeardCounts } from '@voice-room/shared/voice-quality';
+import type { ClientKind } from '@voiceroom/shared/contracts/admin';
+import type { CpuPressure, VoiceCause } from '@voiceroom/shared/contracts/rooms';
+import type { JoinTiming, VoiceTransport } from '@voiceroom/shared/contracts/realtime';
+import type { HeardCounts } from '@voiceroom/shared/voice-quality';
 import { kyselyOn } from '../../platform/db/kysely.ts';
 
 /** One minute of a stay's voice, summed by the server from its stats polls (realtime/voice-track.ts). */

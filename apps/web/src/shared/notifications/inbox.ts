@@ -1,7 +1,7 @@
 import { useLocalizedText, currentErrorMessage } from '@/shared/i18n/localized-text';
 import { t } from '@/shared/i18n';
 import { ref } from 'vue';
-import type { InboxItem, InboxItemRead, InboxPage, InboxReadAll } from '@voice-room/shared/contracts/notifications';
+import type { InboxItem, InboxItemRead, InboxPage, InboxReadAll } from '@voiceroom/shared/contracts/notifications';
 import { uniqueBy } from '@/shared/utils/collections';
 
 /** The inbox routes; their answers are checked against the contract by the API client. */

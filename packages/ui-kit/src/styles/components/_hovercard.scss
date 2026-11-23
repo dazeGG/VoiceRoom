@@ -1,0 +1,13 @@
+.ui-hovercard {
+  z-index: 150;
+  box-sizing: border-box;
+  width: 288px;
+  max-width: calc(100vw - var(--space-16));
+  max-height: min(var(--reka-popper-available-height, 100dvh), calc(100dvh - var(--space-16)));
+  overflow: auto;
+  border: calc(var(--space-2) / 2) solid var(--vr-line-strong);
+  border-radius: var(--radius-16);
+  background: var(--vr-surface-2);
+  box-shadow: var(--vr-shadow-popover);
+  color: var(--vr-text);
+}

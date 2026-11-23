@@ -1,15 +1,14 @@
 // Test components: a popover with a button trigger, three menu items and an optional submenu.
 
 import { defineComponent, h, ref } from 'vue';
-import { Popover, PopoverMenuItem, PopoverSubmenu } from '@voice-room/ui/components';
-import type { PopoverCloseReason, PopoverRole } from '@voice-room/ui/components';
+import { Popover } from '@voiceroom/ui-kit/components';
+import type { PopoverCloseReason, PopoverRole } from '@voiceroom/ui-kit/components';
 
 export type PopoverHarnessProps = {
   label?: string;
   role?: PopoverRole;
   keepContentMounted?: boolean;
   floating?: boolean;
-  withSubmenu?: boolean;
   onBeforeClose?: (reason: PopoverCloseReason) => boolean | void;
 };
 
@@ -33,14 +32,17 @@ export function popoverHarness(props: PopoverHarnessProps = {}) {
         {
           trigger: ({ toggle, panelId }: { toggle: () => void; panelId: string }) =>
             h('button', { type: 'button', 'aria-controls': panelId, onClick: toggle }, label),
-          content: () => [
-            h(PopoverMenuItem, { label: `${label} A` }),
-            h(PopoverMenuItem, { label: `${label} B` }),
-            h(PopoverMenuItem, { label: `${label} C` }),
-            ...(props.withSubmenu
-              ? [h(PopoverSubmenu, { label: 'Ещё' }, { default: () => [h(PopoverMenuItem, { label: 'Вложенный' })] })]
-              : [])
-          ]
+          content: () =>
+            ['A', 'B', 'C'].map((letter) =>
+              h(
+                'button',
+                {
+                  type: 'button',
+                  role: props.role === 'dialog' ? undefined : 'menuitem'
+                },
+                `${label} ${letter}`
+              )
+            )
         }
       );
     };

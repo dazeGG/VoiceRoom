@@ -1,7 +1,7 @@
 // The page every history endpoint serves: list by mode, drop what the viewer
 // may not see, project the rest in one go, and point the cursors at both ends.
 
-import type { HistoryMode } from '@voice-room/shared/contracts/messages';
+import type { HistoryMode } from '@voiceroom/shared/contracts/messages';
 import type { CursorTuple } from '../../platform/cursor-codec.ts';
 
 /** What a history request may carry, as the query string hands it over. */

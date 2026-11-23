@@ -5,7 +5,7 @@
 import assert from 'node:assert/strict';
 import { Type, type Static, type TSchema } from 'typebox';
 import { Value } from 'typebox/value';
-import { firstMismatch } from '@voice-room/shared/contracts/http';
+import { firstMismatch } from '@voiceroom/shared/contracts/http';
 import type pg from 'pg';
 
 /** The value, typed by `schema`, or a failed assertion naming the first mismatch. */

@@ -13,7 +13,7 @@ import { getCallPorts } from '../ports';
 // so a stall can be read later: the capture's clock tells a capture that stopped
 // from one that ran and gave nothing.
 
-import type { MicPoll } from '@voice-room/shared/contracts/realtime';
+import type { MicPoll } from '@voiceroom/shared/contracts/realtime';
 import { createLogger, reportClientLogs } from '../diagnostics';
 import { LOSS_WINDOW_POLLS, createRatioWindow } from './loss-window';
 

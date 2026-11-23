@@ -8,12 +8,12 @@ import { expect, test, vi } from 'vitest';
 import { stubFetch } from '../fixtures/fetch';
 import { FakeWebSocket } from '../fixtures/fake-websocket';
 
-vi.mock('@voice-room/call/engine/ui/devices', async (importOriginal) => ({
+vi.mock('@voiceroom/call/engine/ui/devices', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   refreshDevices: vi.fn(async () => {})
 }));
-vi.mock('@voice-room/call/engine/ui/toast', () => ({ showToast: vi.fn() }));
-vi.mock('@voice-room/call/engine/media/livekit-runtime', () => ({
+vi.mock('@voiceroom/call/engine/ui/toast', () => ({ showToast: vi.fn() }));
+vi.mock('@voiceroom/call/engine/media/livekit-runtime', () => ({
   TRACK_SOURCE: { Camera: 'camera', Microphone: 'microphone', ScreenShare: 'screen_share' },
   loadLiveKitClient: async () => ({
     Room: class {
@@ -56,10 +56,10 @@ test('LiveKit being unreachable shows a Russian toast and "no route to voice"', 
       }
     }
   });
-  const room = await import('@voice-room/call/engine/room/room');
-  const { state } = await import('@voice-room/call/engine/core/room-runtime.store');
-  const { getConnectionStatusView } = await import('@voice-room/call/engine/ui/status');
-  const { showToast } = await import('@voice-room/call/engine/ui/toast');
+  const room = await import('@voiceroom/call/engine/room/room');
+  const { state } = await import('@voiceroom/call/engine/core/room-runtime.store');
+  const { getConnectionStatusView } = await import('@voiceroom/call/engine/ui/status');
+  const { showToast } = await import('@voiceroom/call/engine/ui/toast');
   Object.assign(state, { roomId: 'abc123', peerId: 'peer-1', sessionToken: 'session-1' });
 
   await room.joinRoom();

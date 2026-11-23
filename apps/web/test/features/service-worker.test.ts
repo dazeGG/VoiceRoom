@@ -2,7 +2,7 @@
 // a click opens its target on this site only, reusing an open window.
 
 import { beforeEach, expect, test, vi, type Mock } from 'vitest';
-import { buildProviderPayload } from '@voice-room/shared/notifications';
+import { buildProviderPayload } from '@voiceroom/shared/notifications';
 import { freshImport } from '../helpers/fresh-module.ts';
 import { defined } from '../helpers/assert.ts';
 

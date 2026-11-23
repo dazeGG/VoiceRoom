@@ -1,5 +1,5 @@
 import { getLocale, t } from '@/shared/i18n';
-import { localeTag } from '@voice-room/shared/localization';
+import { localeTag } from '@voiceroom/shared/localization';
 import type { LoginAlert } from '@/api/auth';
 import { timeAgo } from '@/shared/utils/date-format';
 import { sessionDeviceLabel } from './account-security';

@@ -4,16 +4,16 @@
 
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { createPinia, setActivePinia } from 'pinia';
-import type { ReplacementOutcome } from '@voice-room/call/engine/recovery/realtime-recovery';
-import { state } from '@voice-room/call/engine/core/room-runtime.store';
-import { createInitialRoomState } from '@voice-room/call/engine/model/room-state';
+import type { ReplacementOutcome } from '@voiceroom/call/engine/recovery/realtime-recovery';
+import { state } from '@voiceroom/call/engine/core/room-runtime.store';
+import { createInitialRoomState } from '@voiceroom/call/engine/model/room-state';
 import {
   invalidateMicrophoneActions,
   requestAutomaticMicrophoneConnectionReplacement,
   setMicrophoneRecoveryObserver,
   startMicrophoneCall,
   type MicrophoneRecoveryEvent
-} from '@voice-room/call/engine/ui/devices';
+} from '@voiceroom/call/engine/ui/devices';
 import { installWebCallPortsForTest } from '../helpers/call-ports';
 
 vi.mock('@/entities/room/room-realtime', () => ({
@@ -26,7 +26,7 @@ vi.mock('@/shared/log', async (importOriginal) => ({
 }));
 
 const { reportClientLogs } = await import('@/shared/log');
-const recovery = await import('@voice-room/call/engine/recovery/room-recovery');
+const recovery = await import('@voiceroom/call/engine/recovery/room-recovery');
 
 beforeEach(() => vi.mocked(reportClientLogs).mockClear());
 beforeEach(installWebCallPortsForTest);

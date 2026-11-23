@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { isErrorCode } from '@voice-room/shared/contracts/errors';
-import { normalizeMentionUserIds } from '@voice-room/shared/mentions';
+import { isErrorCode } from '@voiceroom/shared/contracts/errors';
+import { normalizeMentionUserIds } from '@voiceroom/shared/mentions';
 import { createMentionEligibilityService } from '../src/domains/notifications/mention-eligibility.service.ts';
 import { fakeDb, result } from './fakes/index.ts';
 test('G55-A01 mentions are unique, bounded and never self/everyone', () => {

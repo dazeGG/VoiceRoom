@@ -4,7 +4,7 @@ import { defineStore } from 'pinia';
 import { ref } from 'vue';
 import { Type } from 'typebox';
 import { Value } from 'typebox/value';
-import { MembershipMember } from '@voice-room/shared/contracts/membership';
+import { MembershipMember } from '@voiceroom/shared/contracts/membership';
 import { fetchRoomMemberships, leaveRoomMembership } from '@/api/memberships';
 import { ApiError } from '@/api/client';
 import { removeStorage } from '@/shared/storage';

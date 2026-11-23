@@ -3,7 +3,7 @@
 // opened on) and the message being reported. The room and direct chats each
 // hold one; it also shows every message's reactions as the thread renders it.
 import { markRaw, ref, shallowRef, watch, type ShallowRef, type WatchHandle } from 'vue';
-import type { Attachment, ReactionSummary } from '@voice-room/shared/contracts/messages';
+import type { Attachment, ReactionSummary } from '@voiceroom/shared/contracts/messages';
 import { attachmentAt } from './attachment-actions';
 import type { ReactionStore } from './reaction-store';
 

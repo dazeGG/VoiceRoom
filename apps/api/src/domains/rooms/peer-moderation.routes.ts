@@ -1,7 +1,7 @@
 // The room owner's participant menu: kick, server mute, ban and undoing a ban.
 
 import type { TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
-import { Done, RoomIdParams } from '@voice-room/shared/contracts/http';
+import { Done, RoomIdParams } from '@voiceroom/shared/contracts/http';
 import {
   BanParams,
   PeerBanned,
@@ -9,9 +9,9 @@ import {
   RoomFailure,
   ServerMuteBody,
   ServerMuted
-} from '@voice-room/shared/contracts/rooms';
+} from '@voiceroom/shared/contracts/rooms';
 import type { FastifyInstance } from 'fastify';
-import { normalizePeerId, normalizeRoomId } from '@voice-room/shared/validation';
+import { normalizePeerId, normalizeRoomId } from '@voiceroom/shared/validation';
 import type { ApiContext } from '../../app/context.ts';
 import { failure, optionalJsonBody } from '../../platform/http/http-kit.ts';
 import type { PeerModerationService } from './peer-moderation.service.ts';

@@ -3,7 +3,7 @@
 
 import type { TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { Failure } from '@voice-room/shared/contracts/http';
+import { Failure } from '@voiceroom/shared/contracts/http';
 import {
   AdminReportPage,
   AdminUserReportPage,
@@ -13,7 +13,7 @@ import {
   ReportResolveBody,
   ReportResolved,
   UserReportResolveBody
-} from '@voice-room/shared/contracts/reports';
+} from '@voiceroom/shared/contracts/reports';
 import type { ApiContext } from '../../app/context.ts';
 import { failure } from '../../platform/http/http-kit.ts';
 import type { ReportService } from './report.service.ts';

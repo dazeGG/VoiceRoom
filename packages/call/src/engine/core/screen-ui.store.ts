@@ -1,9 +1,10 @@
-import { t } from '@voice-room/ui/i18n';
+import { t } from '@voiceroom/ui-kit/i18n';
 import { defineStore } from 'pinia';
 import { computed, ref, shallowRef } from 'vue';
 import { state } from './room-runtime.store';
-import { getAvatarPresentation } from '@voice-room/ui/avatar-presentation';
-import type { AvatarStackItem } from '@voice-room/ui/components';
+import { MAX_STREAM_VOLUME } from './config';
+import { getAvatarPresentation } from '@voiceroom/ui/avatar-presentation';
+import type { AvatarStackItem } from '@voiceroom/ui-kit/components';
 import { getScreenProfileLabels } from '../media/profiles';
 import { getAllParticipants, getParticipantById } from '../room/participants';
 import type { Participant } from './types';
@@ -67,7 +68,6 @@ export const useScreenUiStore = defineStore('screen-ui', () => {
 
   let screenVideoEl: HTMLVideoElement | null = null;
   let screenStageEl: HTMLElement | null = null;
-  let streamVolumeSliderEl: HTMLInputElement | null = null;
 
   function registerScreenVideo(element: HTMLVideoElement | null): void {
     screenVideoEl = element;
@@ -77,20 +77,12 @@ export const useScreenUiStore = defineStore('screen-ui', () => {
     screenStageEl = element;
   }
 
-  function registerStreamVolumeSlider(element: HTMLInputElement | null): void {
-    streamVolumeSliderEl = element;
-  }
-
   function getScreenVideo(): HTMLVideoElement | null {
     return screenVideoEl;
   }
 
   function getScreenStage(): HTMLElement | null {
     return screenStageEl;
-  }
-
-  function getStreamVolumeSlider(): HTMLInputElement | null {
-    return streamVolumeSliderEl;
   }
 
   // Reading it makes the caller depend on the revision.
@@ -137,7 +129,7 @@ export const useScreenUiStore = defineStore('screen-ui', () => {
     const valuePercent = Math.round(state.screenVolume * 100);
     return {
       hidden: hideVolume,
-      maxPercent: 200,
+      maxPercent: MAX_STREAM_VOLUME * 100,
       valuePercent,
       muted,
       ariaLabel: muted ? t('Включить звук стрима') : t('Выключить звук стрима')
@@ -165,10 +157,8 @@ export const useScreenUiStore = defineStore('screen-ui', () => {
     showScreenExit,
     registerScreenVideo,
     registerScreenStage,
-    registerStreamVolumeSlider,
     getScreenVideo,
     getScreenStage,
-    getStreamVolumeSlider,
     bumpScreenUiRevision,
     getActiveScreenPeer,
     getScreenMetaView,

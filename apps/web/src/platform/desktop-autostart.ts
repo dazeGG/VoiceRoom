@@ -2,7 +2,7 @@
 // this module natively under Node, where neither the `@/` alias nor an
 // extensionless specifier resolves.
 import { createLogger, errorContext } from '../shared/log.ts';
-import { isRecord } from '@voice-room/shared/guards';
+import { isRecord } from '@voiceroom/shared/guards';
 
 const log = createLogger('desktop:autostart');
 

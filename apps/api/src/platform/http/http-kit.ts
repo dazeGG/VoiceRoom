@@ -4,8 +4,8 @@
 // with them all of this, so no route does.
 
 import type { FastifyError, FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { isErrorCode, type ErrorCode } from '@voice-room/shared/contracts/errors';
-import type { Failure as FailureBody } from '@voice-room/shared/contracts/http';
+import { isErrorCode, type ErrorCode } from '@voiceroom/shared/contracts/errors';
+import type { Failure as FailureBody } from '@voiceroom/shared/contracts/http';
 import { codeOf } from '../error-code.ts';
 import { fieldOf } from '../record.ts';
 

@@ -1,0 +1,92 @@
+@use './input';
+
+.ui-textarea {
+  display: grid;
+  gap: var(--space-6);
+  min-width: 0;
+
+  &__sizer {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  &__mirror,
+  &__control {
+    box-sizing: border-box;
+    grid-area: 1 / 1;
+    width: 100%;
+    min-height: calc(var(--size-40) * 2);
+    max-height: calc(var(--size-40) * 6);
+    padding: var(--space-8) var(--space-12);
+    font: 400 0.875rem/var(--size-20) var(--font-ui);
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
+  }
+
+  &__mirror {
+    overflow: hidden;
+    visibility: hidden;
+    border: calc(var(--space-2) / 2) solid transparent;
+  }
+
+  &__control {
+    @include input.surface;
+
+    height: 100%;
+    min-width: 0;
+    overflow: auto;
+    border-radius: var(--radius-10);
+    resize: none;
+
+    &:focus {
+      @include input.focus;
+      outline: none;
+    }
+
+    &[aria-invalid='true'] {
+      border-color: var(--vr-danger);
+    }
+
+    &:disabled {
+      @include input.disabled;
+    }
+
+    &::placeholder {
+      color: var(--vr-text-muted);
+    }
+  }
+
+  @supports (field-sizing: content) {
+    &__mirror {
+      display: none;
+    }
+
+    &__control {
+      height: auto;
+      field-sizing: content;
+    }
+  }
+
+  &__count {
+    justify-self: end;
+    color: var(--vr-text-muted);
+    font: 500 0.75rem/1.4 var(--font-mono);
+    font-variant-numeric: tabular-nums;
+
+    &--over {
+      color: var(--vr-danger);
+    }
+  }
+}
+
+.ui-textarea--mono :is(.ui-textarea__control, .ui-textarea__mirror) {
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.ui-textarea--compact :is(.ui-textarea__control, .ui-textarea__mirror) {
+  min-height: var(--size-44);
+  max-height: calc(var(--size-44) * 2);
+  padding: var(--space-12);
+  line-height: var(--size-16);
+}

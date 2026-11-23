@@ -1,9 +1,9 @@
-import { LiveKitAdmission, LiveKitTokenBody } from '@voice-room/shared/contracts/admission';
+import { LiveKitAdmission, LiveKitTokenBody } from '@voiceroom/shared/contracts/admission';
 import { api, ApiError } from '@/api/client';
 import { ERROR_TEXTS } from '@/api/error-texts';
 import { fetchRoomStatus } from '@/api/rooms';
 import { preloadRuntimeConfig, resolveLiveKitUrls } from '@/platform/runtime-config';
-import type { CallTransport, CallRealtimeEvent, LiveKitCredentials } from '@voice-room/call/engine/transport';
+import type { CallTransport, CallRealtimeEvent, LiveKitCredentials } from '@voiceroom/call/engine/transport';
 
 async function requestLiveKitToken(input: {
   name: string;

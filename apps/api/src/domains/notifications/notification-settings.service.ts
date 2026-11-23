@@ -5,13 +5,13 @@ import type { StoredUser } from '../account/user-records.ts';
 
 import type { AccountMessage } from '../../realtime/account-events.ts';
 import type { Logger } from 'pino';
-import { cleanPresenceStatus } from '@voice-room/shared/validation';
-import { isRecord, textOf } from '@voice-room/shared/guards';
-import type { PushConfig } from '@voice-room/shared/contracts/notifications';
+import { cleanPresenceStatus } from '@voiceroom/shared/validation';
+import { isRecord, textOf } from '@voiceroom/shared/guards';
+import type { PushConfig } from '@voiceroom/shared/contracts/notifications';
 import { cleanPushEndpoint } from '../../lib/push-endpoint.ts';
 import type { RateCheck } from '../../lib/rate-limit.ts';
 import type { NotificationPreferencesRepository, PreferencesResult } from './notification-preferences.repository.ts';
-import type { PushLocaleIntent, PushRegistrationState } from '@voice-room/shared/contracts/push-registration';
+import type { PushLocaleIntent, PushRegistrationState } from '@voiceroom/shared/contracts/push-registration';
 
 export type NotificationPreferenceStore = Pick<
   NotificationPreferencesRepository,

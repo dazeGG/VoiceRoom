@@ -6,7 +6,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Pool } from 'pg';
 import { Value } from 'typebox/value';
-import { RoomHistory } from '@voice-room/shared/contracts/admin';
+import { RoomHistory } from '@voiceroom/shared/contracts/admin';
 import { hashPassword } from '../src/lib/password.ts';
 import { cookieFrom, request, startApiServer } from './fakes/server-process.ts';
 import { staffCookie } from './staff-session.ts';

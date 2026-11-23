@@ -1,8 +1,8 @@
 // Room summaries: the lobby card of a room (name, unread count, who is in the
 // call) sent to every account that lists the room, coalesced per room.
 
-import type { LobbyRoom, PublicPeer } from '@voice-room/shared/contracts/rooms';
-import { buildRoomRealtimeSummary, SUMMARY_COALESCE_MS } from '@voice-room/shared/realtime';
+import type { LobbyRoom, PublicPeer } from '@voiceroom/shared/contracts/rooms';
+import { buildRoomRealtimeSummary, SUMMARY_COALESCE_MS } from '@voiceroom/shared/realtime';
 import { LOG_EVENTS } from '../lib/log-events.ts';
 import type { StoredRoom } from '../domains/rooms/room-views.ts';
 import { buildServerEnvelope } from './envelope.ts';

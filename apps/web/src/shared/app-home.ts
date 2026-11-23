@@ -1,7 +1,7 @@
-import { APP_HOME as LEGACY_APP_HOME } from '@voice-room/shared/app-home';
+import { APP_HOME as LEGACY_APP_HOME } from '@voiceroom/shared/app-home';
 
 export { LEGACY_APP_HOME };
-export { START_ROOM_QUERY } from '@voice-room/shared/app-home';
+export { START_ROOM_QUERY } from '@voiceroom/shared/app-home';
 
 export const PRODUCTION_APP_HOST = 'app.voiceroom.ru';
 const ROOT_APP_HOSTS = new Set([PRODUCTION_APP_HOST, 'app.dev.voiceroom.ru']);

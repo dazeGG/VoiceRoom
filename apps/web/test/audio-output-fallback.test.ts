@@ -60,8 +60,8 @@ async function loadBus(savedSink = '') {
   vi.stubGlobal('AudioContext', FakeAudioContext);
   vi.resetModules();
   await installWebCallPortsForTest();
-  const bus = await import('@voice-room/call/engine/services/audio-bus');
-  const { state } = await import('@voice-room/call/engine/core/room-runtime.store');
+  const bus = await import('@voiceroom/call/engine/services/audio-bus');
+  const { state } = await import('@voiceroom/call/engine/core/room-runtime.store');
   const graph = bus.getAudioBusGraph();
   const context = instanceOf(graph.context, FakeAudioContext, 'the bus context');
   const limiter = instanceOf(graph.limiter, FakeNode, 'the limiter');

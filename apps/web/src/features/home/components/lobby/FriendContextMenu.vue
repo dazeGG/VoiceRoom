@@ -6,8 +6,8 @@ import { useProfileCardUiStore } from '@/entities/profile-card/profile-card-ui.s
 import { t } from '@/shared/i18n';
 import { useNotificationPreferencesStore } from '@/shared/notifications/preferences.store';
 import { effectivePresenceStatus } from '@/shared/presence';
-import { Button, ContextMenu, Dialog, PopoverDivider, PopoverMenuItem, PopoverMenuLabel } from '@/shared/ui';
-import { iconSm } from '@/shared/ui/icons';
+import { Button, ContextMenu, Dialog, MenuSeparator, MenuItem, MenuLabel } from '@voiceroom/ui-kit/components';
+import { iconSm } from '@voiceroom/ui-kit/icon-defaults';
 import { displayNameOf } from '@/shared/utils/display-name';
 import type { FriendMenuTarget } from '../../model/friend-menu';
 import { useLobby } from '../../model/lobby-context';
@@ -99,26 +99,26 @@ function confirmBlock(): void {
     @close="target = null"
   >
     <template #default="{ close }">
-      <PopoverMenuLabel :text="name" />
-      <PopoverMenuItem :label="t('Написать')" @click="message(close)">
+      <MenuLabel :text="name" />
+      <MenuItem :label="t('Написать')" @select.prevent="message(close)">
         <template #icon><MessageSquare v-bind="iconSm" /></template>
-      </PopoverMenuItem>
-      <PopoverMenuItem :label="t('Профиль')" @click="profile(close)">
+      </MenuItem>
+      <MenuItem :label="t('Профиль')" @select.prevent="profile(close)">
         <template #icon><UserRound v-bind="iconSm" /></template>
-      </PopoverMenuItem>
-      <PopoverMenuItem
+      </MenuItem>
+      <MenuItem
         :label="muted ? t('Включить уведомления') : t('Выключить уведомления')"
-        @click="toggleMute(close)"
+        @select.prevent="toggleMute(close)"
       >
         <template #icon><component :is="muted ? BellOff : Bell" v-bind="iconSm" /></template>
-      </PopoverMenuItem>
-      <PopoverDivider />
-      <PopoverMenuItem :label="t('Удалить из друзей')" variant="danger" @click="remove(close)">
+      </MenuItem>
+      <MenuSeparator />
+      <MenuItem :label="t('Удалить из друзей')" tone="danger" @select.prevent="remove(close)">
         <template #icon><UserMinus v-bind="iconSm" /></template>
-      </PopoverMenuItem>
-      <PopoverMenuItem :label="t('Заблокировать')" variant="danger" @click="requestBlock(close)">
+      </MenuItem>
+      <MenuItem :label="t('Заблокировать')" tone="danger" @select.prevent="requestBlock(close)">
         <template #icon><Ban v-bind="iconSm" /></template>
-      </PopoverMenuItem>
+      </MenuItem>
     </template>
   </ContextMenu>
 
@@ -130,11 +130,11 @@ function confirmBlock(): void {
     initial-focus="[data-friend-block-cancel]"
   >
     <p>{{ t('Пользователь больше не сможет писать вам и звать в комнаты. Дружба будет разорвана.') }}</p>
-    <div class="home-dialog__actions">
+    <template #footer>
       <Button variant="ghost" type="button" data-friend-block-cancel @click="blockTarget = null">{{
         t('Отмена')
       }}</Button>
       <Button variant="danger" type="button" @click="confirmBlock">{{ t('Заблокировать') }}</Button>
-    </div>
+    </template>
   </Dialog>
 </template>

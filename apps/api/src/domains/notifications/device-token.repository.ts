@@ -4,9 +4,9 @@
 
 import { sql } from 'kysely';
 import type pg from 'pg';
-import type { DevicePushProvider } from '@voice-room/shared/contracts/devices';
-import type { PushLocaleIntent, PushRegistrationState } from '@voice-room/shared/contracts/push-registration';
-import { resolveLocale, type AppLocale } from '@voice-room/shared/localization';
+import type { DevicePushProvider } from '@voiceroom/shared/contracts/devices';
+import type { PushLocaleIntent, PushRegistrationState } from '@voiceroom/shared/contracts/push-registration';
+import { resolveLocale, type AppLocale } from '@voiceroom/shared/localization';
 import { lockKeys, lockXact } from '../../platform/db/locks.ts';
 import { kyselyOn } from '../../platform/db/kysely.ts';
 import { createRowId } from '../../platform/db/ids.ts';

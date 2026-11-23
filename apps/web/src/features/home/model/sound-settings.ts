@@ -33,14 +33,14 @@ import {
   OUTPUT_DEVICE_STORAGE_KEY,
   type MicrophoneMode,
   type NoiseMode
-} from '@voice-room/call/engine';
+} from '@voiceroom/call/engine';
 import { listPhysicalDevices } from '@/shared/audio/device-list';
 
 export {
   getNotificationVolumeMultiplier,
   persistMasterVolume,
   persistNotificationVolume
-} from '@voice-room/call/engine';
+} from '@voiceroom/call/engine';
 
 export { GATE_THRESHOLD_MAX_DB, GATE_THRESHOLD_MIN_DB };
 

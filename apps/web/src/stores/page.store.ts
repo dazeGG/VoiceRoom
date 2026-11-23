@@ -1,5 +1,5 @@
 import { defineStore, storeToRefs } from 'pinia';
-import { useCallPageStore } from '@voice-room/call/engine/core/call-page.store';
+import { useCallPageStore } from '@voiceroom/call/engine/core/call-page.store';
 import { ref, watchEffect, type WatchHandle } from 'vue';
 
 /**

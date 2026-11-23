@@ -6,20 +6,20 @@ import { createPinia, setActivePinia } from 'pinia';
 import { markRaw } from 'vue';
 import { Room, RoomEvent } from 'livekit-client';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
-import type { MicrophoneCapture } from '@voice-room/call/engine/core/types';
-import { state } from '@voice-room/call/engine/core/room-runtime.store';
-import { createInitialRoomState } from '@voice-room/call/engine/model/room-state';
-import * as devices from '@voice-room/call/engine/ui/devices';
-import * as microphone from '@voice-room/call/engine/services/microphone-service';
-import * as livekit from '@voice-room/call/engine/services/livekit-service';
-import * as publications from '@voice-room/call/engine/services/livekit/local-publications';
-import * as playback from '@voice-room/call/engine/services/media-playback-service';
-import { showToast } from '@voice-room/call/engine/ui/toast';
-import { useRoomDeviceUiStore } from '@voice-room/call/engine/core/room-device-ui.store';
+import type { MicrophoneCapture } from '@voiceroom/call/engine/core/types';
+import { state } from '@voiceroom/call/engine/core/room-runtime.store';
+import { createInitialRoomState } from '@voiceroom/call/engine/model/room-state';
+import * as devices from '@voiceroom/call/engine/ui/devices';
+import * as microphone from '@voiceroom/call/engine/services/microphone-service';
+import * as livekit from '@voiceroom/call/engine/services/livekit-service';
+import * as publications from '@voiceroom/call/engine/services/livekit/local-publications';
+import * as playback from '@voiceroom/call/engine/services/media-playback-service';
+import { showToast } from '@voiceroom/call/engine/ui/toast';
+import { useRoomDeviceUiStore } from '@voiceroom/call/engine/core/room-device-ui.store';
 import { defined } from '../helpers/assert';
 import { installWebCallPortsForTest } from '../helpers/call-ports';
 
-vi.mock('@voice-room/call/engine/services/livekit-service', () => ({
+vi.mock('@voiceroom/call/engine/services/livekit-service', () => ({
   publishLocalMicrophone: vi.fn(async () => {}),
   replaceLocalMicrophoneTrack: vi.fn(async () => true),
   syncLocalMicrophonePublicationMuted: vi.fn(async () => {}),
@@ -30,12 +30,12 @@ const microphonePublication = vi.hoisted(() => ({
   mute: vi.fn(),
   unmute: vi.fn()
 }));
-vi.mock('@voice-room/call/engine/services/livekit/local-publications', async (importOriginal) => ({
+vi.mock('@voiceroom/call/engine/services/livekit/local-publications', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   publishLocalMicrophoneForRoom: vi.fn(async () => microphonePublication),
   replaceLocalMicrophoneTrackForPublication: vi.fn(async () => true)
 }));
-vi.mock('@voice-room/call/engine/services/media-playback-service', () => {
+vi.mock('@voiceroom/call/engine/services/media-playback-service', () => {
   let onSystem = false;
   return {
     isOutputOnSystemFallback: () => onSystem,
@@ -51,21 +51,21 @@ vi.mock('@voice-room/call/engine/services/media-playback-service', () => {
     syncAudioOutputDevices: vi.fn(async () => true)
   };
 });
-vi.mock('@voice-room/call/engine/services/microphone-service', async (importOriginal) => ({
+vi.mock('@voiceroom/call/engine/services/microphone-service', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   openLocalMicrophone: vi.fn(),
   stopMicrophoneCapture: vi.fn()
 }));
-vi.mock('@voice-room/call/engine/media/meters', () => ({
+vi.mock('@voiceroom/call/engine/media/meters', () => ({
   attachMeter: vi.fn(),
   syncSpeakingThresholds: vi.fn()
 }));
-vi.mock('@voice-room/call/engine/room/participants', () => ({ setParticipantSpeaking: vi.fn() }));
-vi.mock('@voice-room/call/engine/ui/controls', () => ({
+vi.mock('@voiceroom/call/engine/room/participants', () => ({ setParticipantSpeaking: vi.fn() }));
+vi.mock('@voiceroom/call/engine/ui/controls', () => ({
   syncMicrophoneControls: vi.fn(),
   syncOutputDeviceUiState: vi.fn()
 }));
-vi.mock('@voice-room/call/engine/ui/toast', () => ({ showToast: vi.fn() }));
+vi.mock('@voiceroom/call/engine/ui/toast', () => ({ showToast: vi.fn() }));
 
 // A class instance, like a real MediaStream, so the room state keeps it as is
 // instead of wrapping it in a reactive proxy. Registered as the global
@@ -1300,7 +1300,7 @@ test('in the call without a microphone, plugging one in adds it muted', async ()
 
 test('the microphone button in a call without one asks for it again and says why it failed', async () => {
   const { state, devices, open } = await load();
-  const { showToast } = await import('@voice-room/call/engine/ui/toast');
+  const { showToast } = await import('@voiceroom/call/engine/ui/toast');
   Object.assign(state, { joined: true, microphoneMissing: true });
   open.mockRejectedValueOnce(Object.assign(new Error('denied'), { name: 'NotAllowedError' }));
 
@@ -1316,7 +1316,7 @@ test('the microphone button in a call without one asks for it again and says why
 
 test('a listener without a microphone shows as muted to the room', async () => {
   const { state } = await load();
-  const { isMicrophoneShownMuted } = await import('@voice-room/call/engine/core/microphone-mute');
+  const { isMicrophoneShownMuted } = await import('@voiceroom/call/engine/core/microphone-mute');
   state.joined = true;
   expect(isMicrophoneShownMuted()).toBe(false);
   state.microphoneMissing = true;

@@ -1,9 +1,10 @@
 <script setup lang="ts">
+import { Button } from '@voiceroom/ui-kit/components';
 // One person big and everyone else in a strip below, me first on its left.
 import { t } from '@/shared/i18n';
 import { PinOff } from '@lucide/vue';
 import { computed } from 'vue';
-import type { Participant } from '@voice-room/call/engine/core/types';
+import type { Participant } from '@voiceroom/call/engine/core/types';
 import { STRIP_FITTING_TILES } from '@/features/room/mobile-call-layout';
 import { useMobileCallUiStore } from '@/features/room/mobile-call-ui.store';
 import MobileCallTile from './MobileCallTile.vue';
@@ -23,10 +24,10 @@ const fits = computed(() => props.strip.length + (props.self ? 1 : 0) <= STRIP_F
       <MobileCallTile :participant="big" variant="focus" @tap="mobileCall.toggleChrome" />
       <div v-if="pinned" class="mobile-call-focus__pin-controls" :inert="!mobileCall.chromeVisible">
         <MobileCameraFlip v-if="big.isLocal && big.cameraStream" />
-        <button class="mobile-call-focus__unpin" type="button" @click="mobileCall.unpin">
-          <PinOff :size="20" aria-hidden="true" />
+        <Button variant="outline" scrim size="xl" class="mobile-call-focus__unpin" @click="mobileCall.unpin">
+          <template #icon><PinOff :size="20" aria-hidden="true" /></template>
           <span>{{ t('Открепить') }}</span>
-        </button>
+        </Button>
       </div>
     </div>
     <div

@@ -1,0 +1,34 @@
+// The fitted tile width comes from the grid's own size. A short last row stays centred.
+.tile-grid {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  align-content: center;
+  justify-content: center;
+  gap: var(--space-16);
+  min-width: 0;
+  min-height: 0;
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  padding-inline: var(--tile-gutter, 0);
+  overflow: hidden auto;
+  scrollbar-width: thin;
+  scrollbar-gutter: stable both-edges;
+}
+
+.tile-grid--scroll {
+  align-content: flex-start;
+}
+
+.tile-grid > :is(.stream-tile, .participant) {
+  flex: 0 0 auto;
+  width: var(--tile-width, min(100%, 10 * var(--size-48)));
+}
+
+.tile-grid--empty {
+  display: block;
+  height: auto;
+  --tile-grid-empty-max: calc(10 * var(--size-36));
+  min-height: clamp(calc(5 * var(--size-36)), 100dvh - var(--tile-grid-empty-max), var(--tile-grid-empty-max));
+}

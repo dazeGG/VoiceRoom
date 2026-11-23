@@ -25,7 +25,7 @@
 .room-chat-group {
   position: relative;
   display: flex;
-  gap: 10px;
+  gap: var(--space-8);
   isolation: isolate;
 }
 
@@ -41,8 +41,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: var(--size-32);
+  height: var(--size-32);
   border-radius: 50%;
   font-size: 0.8125rem;
   font-weight: 600;
@@ -50,8 +50,8 @@
 
 .room-chat-group__avatar-button {
   flex: none;
-  width: 32px;
-  height: 32px;
+  width: var(--size-32);
+  height: var(--size-32);
   padding: 0;
   border: 0;
   border-radius: 50%;
@@ -59,8 +59,8 @@
 
   &:hover,
   &:focus-visible {
-    outline: 2px solid var(--vr-accent);
-    outline-offset: 2px;
+    outline: var(--space-2) solid var(--vr-accent);
+    outline-offset: var(--space-2);
   }
 }
 
@@ -72,7 +72,7 @@
 .room-chat-group__meta {
   display: flex;
   align-items: baseline;
-  gap: 8px;
+  gap: var(--space-8);
 }
 
 .room-chat-group__author {
@@ -84,7 +84,7 @@
   white-space: nowrap;
 }
 
-// Message rows reach 42px into the avatar column to widen the hover target, and
+// Message rows reach 40px (the avatar column) into it to widen the hover target, and
 // being positioned they paint over it. Lift the identity triggers back on top so
 // the avatar and the name stay clickable.
 .room-chat-group__avatar-button,
@@ -113,7 +113,6 @@ button.room-chat-group__author {
 .room-chat-group__author.room-chat-group__trigger:hover,
 .room-chat-group__author.room-chat-group__trigger:focus-visible {
   text-decoration: underline;
-  outline: none;
 }
 
 .room-chat-group__time {
@@ -138,15 +137,15 @@ button.room-chat-group__author {
 }
 
 .room-chat-group__edited {
-  margin-left: 5px;
+  margin-left: var(--space-4);
   color: var(--vr-text-muted);
   font-family: var(--font-mono);
-  font-size: 0.65625rem;
+  font-size: 11px;
   white-space: nowrap;
 }
 
 .room-chat-group .message-bubble + .message-bubble {
-  margin-top: 3px;
+  margin-top: var(--space-2);
 }
 
 .room-chat-group .message-bubble a {
@@ -165,7 +164,7 @@ button.room-chat-group__author {
   display: grid;
   min-width: 0;
   flex: 1;
-  gap: 4px;
+  gap: var(--space-4);
   justify-items: start;
 }
 

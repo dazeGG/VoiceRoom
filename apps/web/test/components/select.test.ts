@@ -1,7 +1,9 @@
-import { render, screen } from '@testing-library/vue';
+import { render, screen, within } from '@testing-library/vue';
 import userEvent from '@testing-library/user-event';
 import { expect, test, vi } from 'vitest';
-import Select from '@/shared/ui/Select/Select.vue';
+import { Field, Select, type SelectSize } from '@voiceroom/ui-kit/components';
+import { defineComponent, h, shallowRef } from 'vue';
+import EmojiText from '@/shared/chat/EmojiText.vue';
 import { stubOverlayDom } from '../helpers/overlay-dom';
 
 stubOverlayDom();
@@ -107,11 +109,61 @@ test('a select without options does not open', async () => {
 
 test('web draws emoji artwork in the selected label and in the option list', async () => {
   render(Select, {
-    props: { modelValue: 'headset', options: [{ value: 'headset', label: 'Music 🎵' }] }
+    props: { modelValue: 'headset', options: [{ value: 'headset', label: 'Music 🎵' }] },
+    slots: { 'option-label': ({ text }: { text: string }) => h(EmojiText, { text }) }
   });
   const trigger = screen.getByRole('combobox');
   expect(trigger.querySelector('img')?.getAttribute('alt')).toBe('🎵');
 
   await userEvent.click(trigger);
   expect(screen.getByRole('option').querySelector('img')?.getAttribute('alt')).toBe('🎵');
+});
+
+test.each<SelectSize>(['sm', 'md', 'lg'])(
+  'select size %s keeps its field label and keyboard selection',
+  async (size) => {
+    const onValueChange = vi.fn();
+    const Host = defineComponent({
+      render: () =>
+        h(Field, { label: 'Микрофон', error: 'Выберите микрофон' }, () => h(Select, { size, options, onValueChange }))
+    });
+    render(Host);
+    const trigger = screen.getByRole('combobox', { name: 'Микрофон', description: 'Выберите микрофон' });
+    expect(trigger.getAttribute('aria-invalid')).toBe('true');
+    await userEvent.tab();
+    expect(document.activeElement).toBe(trigger);
+    await userEvent.keyboard('{ArrowDown}{ArrowDown}{Enter}');
+    expect(onValueChange).toHaveBeenLastCalledWith('headset');
+  }
+);
+
+test('the system picker still reports a language change through Select', async () => {
+  const onValueChange = vi.fn();
+  render(Select, {
+    props: {
+      native: true,
+      label: 'Язык',
+      options: [
+        { value: '', label: 'Русский' },
+        { value: 'fr', label: 'Français', lang: 'fr' }
+      ],
+      onValueChange
+    }
+  });
+  await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Язык' }), 'fr');
+  expect(screen.getByRole('option', { name: 'Français', selected: true })).toBeTruthy();
+  expect(onValueChange).toHaveBeenCalledExactlyOnceWith('fr');
+});
+
+test('the dropdown stays inside its provided theme container', async () => {
+  const Host = defineComponent(() => {
+    const preview = shallowRef<HTMLElement | null>(null);
+    return () => [
+      h('section', { ref: preview, 'aria-label': 'Виджет' }),
+      h(Select, { label: 'Устройство', options, portalTarget: preview.value ?? undefined })
+    ];
+  });
+  render(Host);
+  await userEvent.click(screen.getByRole('combobox', { name: 'Устройство' }));
+  expect(within(screen.getByRole('region', { name: 'Виджет' })).getByRole('listbox')).toBeTruthy();
 });

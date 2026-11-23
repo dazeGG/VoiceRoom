@@ -1,12 +1,12 @@
 import { sql } from 'kysely';
-import { isRecord } from '@voice-room/shared/guards';
+import { isRecord } from '@voiceroom/shared/guards';
 import type pg from 'pg';
 import { kyselyOn, type Database } from '../../platform/db/kysely.ts';
 import { fromMicros, microsOf } from '../../platform/db/micros.ts';
 import type { CursorTuple } from '../../platform/cursor-codec.ts';
 import { epochMillis, toMillis } from '../../platform/epoch-millis.ts';
-import { normalizeLinkPreview, type LinkPreview } from '@voice-room/shared/link-preview';
-import { normalizeRoomMessageContent, type RoomMessageContentV1 } from '@voice-room/shared/room-message-content';
+import { normalizeLinkPreview, type LinkPreview } from '@voiceroom/shared/link-preview';
+import { normalizeRoomMessageContent, type RoomMessageContentV1 } from '@voiceroom/shared/room-message-content';
 
 type Direction = 'before' | 'after' | 'at-or-after';
 

@@ -1,0 +1,22 @@
+.admin-metric-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-12);
+}
+
+.admin-metric-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, calc(var(--space-64) * 7 + var(--space-32))), 1fr));
+  gap: var(--space-16);
+}
+
+.admin-metric-note {
+  margin: 0;
+  color: var(--vr-text-muted);
+  font-size: 0.8125rem;
+}
+
+.admin-metric-mono {
+  font-family: var(--font-mono);
+}

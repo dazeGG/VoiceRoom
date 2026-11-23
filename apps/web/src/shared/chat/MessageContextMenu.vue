@@ -6,8 +6,8 @@
 import { t } from '@/shared/i18n';
 import { computed, onBeforeUnmount, onMounted } from 'vue';
 import { Copy, Download, Flag, Image as ImageIcon, Pencil, Pin, PinOff, Reply, SmilePlus, Trash2 } from '@lucide/vue';
-import { ContextMenu, PopoverDivider, PopoverMenuItem } from '@/shared/ui';
-import { iconMd } from '@/shared/ui/icons';
+import { ContextMenu, ContextMenuHeaderButton, MenuSeparator, MenuItem } from '@voiceroom/ui-kit/components';
+import { iconMd } from '@voiceroom/ui-kit/icon-defaults';
 import Emoji from './Emoji.vue';
 
 const props = withDefaults(
@@ -102,121 +102,113 @@ onBeforeUnmount(() => window.removeEventListener('keydown', handleShortcut));
 </script>
 
 <template>
-  <ContextMenu v-bind="menuProps" @close="emit('close')">
-    <template #default="{ close }">
-      <div class="message-menu">
-        <template v-if="canReact && quickReactions.length > 0">
-          <div class="message-menu__reactions" role="group" :aria-label="t('Быстрые реакции')">
-            <button
-              v-for="emoji in quickReactions"
-              :key="emoji"
-              class="message-menu__reaction"
-              :class="{ 'message-menu__reaction--active': activeReactions.includes(emoji) }"
-              type="button"
-              role="menuitem"
-              :disabled="busy"
-              :aria-label="t('Реакция {p0}', { p0: emoji })"
-              :title="t('Реакция {p0}', { p0: emoji })"
-              @click="
-                onReact?.(emoji);
-                close();
-              "
-            >
-              <Emoji :emoji="emoji" :size="20" decorative />
-            </button>
-            <button
-              class="message-menu__reaction message-menu__reaction--more"
-              type="button"
-              role="menuitem"
-              :disabled="busy"
-              :aria-label="t('Поставить реакцию')"
-              :title="t('Поставить реакцию')"
-              @click="
-                (event: MouseEvent) => {
-                  const anchor = event.currentTarget;
-                  onOpenReactionPicker?.(anchor);
-                  close();
-                }
-              "
-            >
-              <SmilePlus v-bind="iconMd" aria-hidden="true" />
-            </button>
-          </div>
-
-          <PopoverDivider />
-        </template>
-
-        <PopoverMenuItem v-if="onReply" :label="t('Ответить')" :disabled="busy" @click="pick(onReply, close)">
-          <template #icon><Reply v-bind="iconMd" aria-hidden="true" /></template>
-        </PopoverMenuItem>
-
-        <PopoverMenuItem :label="t('Скопировать текст')" :disabled="busy" @click="pick(onCopy, close)">
-          <template #icon><Copy v-bind="iconMd" aria-hidden="true" /></template>
-        </PopoverMenuItem>
-
-        <PopoverMenuItem
-          v-if="onCopyImage"
-          :label="t('Скопировать изображение')"
-          :disabled="busy"
-          @click="pick(onCopyImage, close)"
-        >
-          <template #icon><ImageIcon v-bind="iconMd" aria-hidden="true" /></template>
-        </PopoverMenuItem>
-
-        <PopoverMenuItem
-          v-if="onDownloadImage"
-          :label="t('Скачать изображение')"
-          :disabled="busy"
-          @click="pick(onDownloadImage, close)"
-        >
-          <template #icon><Download v-bind="iconMd" aria-hidden="true" /></template>
-        </PopoverMenuItem>
-
-        <PopoverDivider v-if="canPin || canEdit" />
-
-        <PopoverMenuItem
-          v-if="canPin"
-          :label="pinned ? t('Открепить') : t('Закрепить в комнате')"
-          :disabled="busy"
-          @click="pick(onTogglePin, close)"
-        >
-          <template #icon>
-            <PinOff v-if="pinned" v-bind="iconMd" aria-hidden="true" />
-            <Pin v-else v-bind="iconMd" aria-hidden="true" />
-          </template>
-        </PopoverMenuItem>
-
-        <PopoverMenuItem v-if="canEdit" :label="t('Изменить')" hint="E" :disabled="busy" @click="pick(onEdit, close)">
-          <template #icon><Pencil v-bind="iconMd" aria-hidden="true" /></template>
-        </PopoverMenuItem>
-
-        <!-- Moderation: reporting and deleting sit together, both in red. -->
-        <PopoverDivider v-if="onReport || canDelete" />
-
-        <PopoverMenuItem
-          v-if="onReport"
-          :label="t('Пожаловаться')"
-          variant="danger"
-          :disabled="busy"
-          @click="
-            onReport();
+  <ContextMenu v-bind="menuProps" :header-label="t('Быстрые реакции')" @close="emit('close')">
+    <template v-if="canReact && quickReactions.length > 0" #header="{ close }">
+      <ContextMenuHeaderButton
+        v-for="emoji in quickReactions"
+        :key="emoji"
+        :pressed="activeReactions.includes(emoji)"
+        :disabled="busy"
+        :label="t('Реакция {p0}', { p0: emoji })"
+        @click="
+          onReact?.(emoji);
+          close();
+        "
+      >
+        <Emoji :emoji="emoji" :size="20" decorative />
+      </ContextMenuHeaderButton>
+      <ContextMenuHeaderButton
+        :disabled="busy"
+        :label="t('Поставить реакцию')"
+        @click="
+          (event: MouseEvent) => {
+            const anchor = event.currentTarget;
+            onOpenReactionPicker?.(anchor);
             close();
-          "
-        >
-          <template #icon><Flag v-bind="iconMd" aria-hidden="true" /></template>
-        </PopoverMenuItem>
+          }
+        "
+      >
+        <SmilePlus v-bind="iconMd" aria-hidden="true" />
+      </ContextMenuHeaderButton>
+    </template>
 
-        <PopoverMenuItem
-          v-if="canDelete"
-          :label="t('Удалить')"
-          hint="⌫"
-          variant="danger"
-          :disabled="busy"
-          @click="pick(onDelete, close)"
-        >
-          <template #icon><Trash2 v-bind="iconMd" aria-hidden="true" /></template>
-        </PopoverMenuItem>
-      </div>
+    <template #default="{ close }">
+      <MenuItem v-if="onReply" :label="t('Ответить')" :disabled="busy" @select.prevent="pick(onReply, close)">
+        <template #icon><Reply v-bind="iconMd" aria-hidden="true" /></template>
+      </MenuItem>
+
+      <MenuItem :label="t('Скопировать текст')" :disabled="busy" @select.prevent="pick(onCopy, close)">
+        <template #icon><Copy v-bind="iconMd" aria-hidden="true" /></template>
+      </MenuItem>
+
+      <MenuItem
+        v-if="onCopyImage"
+        :label="t('Скопировать изображение')"
+        :disabled="busy"
+        @select.prevent="pick(onCopyImage, close)"
+      >
+        <template #icon><ImageIcon v-bind="iconMd" aria-hidden="true" /></template>
+      </MenuItem>
+
+      <MenuItem
+        v-if="onDownloadImage"
+        :label="t('Скачать изображение')"
+        :disabled="busy"
+        @select.prevent="pick(onDownloadImage, close)"
+      >
+        <template #icon><Download v-bind="iconMd" aria-hidden="true" /></template>
+      </MenuItem>
+
+      <MenuSeparator v-if="canPin || canEdit" />
+
+      <MenuItem
+        v-if="canPin"
+        :label="pinned ? t('Открепить') : t('Закрепить в комнате')"
+        :disabled="busy"
+        @select.prevent="pick(onTogglePin, close)"
+      >
+        <template #icon>
+          <PinOff v-if="pinned" v-bind="iconMd" aria-hidden="true" />
+          <Pin v-else v-bind="iconMd" aria-hidden="true" />
+        </template>
+      </MenuItem>
+
+      <MenuItem
+        v-if="canEdit"
+        :label="t('Изменить')"
+        shortcut="E"
+        :disabled="busy"
+        @select.prevent="pick(onEdit, close)"
+      >
+        <template #icon><Pencil v-bind="iconMd" aria-hidden="true" /></template>
+      </MenuItem>
+
+      <!-- Moderation: reporting and deleting sit together, both in red. -->
+      <MenuSeparator v-if="onReport || canDelete" />
+
+      <MenuItem
+        v-if="onReport"
+        :label="t('Пожаловаться')"
+        tone="danger"
+        :disabled="busy"
+        @select.prevent="
+          onReport();
+          close();
+        "
+      >
+        <template #icon><Flag v-bind="iconMd" aria-hidden="true" /></template>
+      </MenuItem>
+
+      <MenuItem
+        v-if="canDelete"
+        :label="t('Удалить')"
+        shortcut="⌫"
+        tone="danger"
+        :disabled="busy"
+        @select.prevent="pick(onDelete, close)"
+      >
+        <template #icon><Trash2 v-bind="iconMd" aria-hidden="true" /></template>
+      </MenuItem>
     </template>
   </ContextMenu>
 </template>

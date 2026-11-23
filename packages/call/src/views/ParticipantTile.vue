@@ -1,7 +1,6 @@
 <script setup lang="ts">
-import { t } from '@voice-room/ui/i18n';
-import { ParticipantTileFace } from '@voice-room/ui/components';
-import { iconSm } from '@voice-room/ui/icon-defaults';
+import { t } from '@voiceroom/ui-kit/i18n';
+import { Button, ParticipantTileFace } from '@voiceroom/ui-kit/components';
 import { MonitorPlay } from '@lucide/vue';
 import { computed, ref, watch } from 'vue';
 import type { Participant } from '../engine/core/types';
@@ -147,16 +146,17 @@ function handleKeydown(event: KeyboardEvent): void {
         ><slot name="name">{{ participant.name }}</slot></template
       >
       <template #badge><slot name="badge" /></template>
-      <button
+      <Button
         class="participant__screen-action"
-        type="button"
+        size="sm"
+        variant="primary"
         :hidden="!canWatch"
         :disabled="screenRequesting"
         @click="handleScreenAction"
       >
-        <MonitorPlay v-bind="iconSm" aria-hidden="true" />
+        <template #icon><MonitorPlay aria-hidden="true" /></template>
         <span>{{ screenActionLabel }}</span>
-      </button>
+      </Button>
     </ParticipantTileFace>
   </div>
 </template>

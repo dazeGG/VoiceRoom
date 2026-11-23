@@ -1,11 +1,11 @@
 import webPush from 'web-push';
-import { PLATFORM_CLASSES } from '@voice-room/shared/platform-class';
+import { PLATFORM_CLASSES } from '@voiceroom/shared/platform-class';
 import { cleanPushEndpoint, describePushEndpoint } from './push-endpoint.ts';
 import { LOG_EVENTS } from './log-events.ts';
 import { createLogger } from './logger.ts';
 import { readPushConfig, type PushConfig } from '../app/config.ts';
 import { fieldOf } from '../platform/record.ts';
-import { localizeNotificationPayload } from '@voice-room/shared/notification-text';
+import { localizeNotificationPayload } from '@voiceroom/shared/notification-text';
 
 type Env = NodeJS.ProcessEnv;
 type PushLogger = { warn(...args: unknown[]): void };

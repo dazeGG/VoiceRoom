@@ -9,14 +9,15 @@ import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import LobbyPage from '@/features/home/LobbyPage.vue';
 import type { ToastOptions } from '@/features/home/model/toasts.store';
 import { useSessionStore } from '@/features/auth/session.store';
-import { state as roomClientState } from '@voice-room/call/engine/core/room-runtime.store';
-import { useVoiceSessionStore } from '@voice-room/call/engine/core/voice-session.store';
+import { state as roomClientState } from '@voiceroom/call/engine/core/room-runtime.store';
+import { useVoiceSessionStore } from '@voiceroom/call/engine/core/voice-session.store';
 import { stubFetch } from '../fixtures/fetch.ts';
 import { FakeWebSocket, installFakeWebSocket } from '../fixtures/fake-websocket.ts';
 import { authUser } from '../fixtures/users.ts';
 import { defined } from '../helpers/assert.ts';
 import { stubMatchMedia } from '../helpers/match-media.ts';
 import { stubOverlayDom } from '../helpers/overlay-dom';
+import { stubSplitterLayout } from '../helpers/splitter-layout';
 import { renderWithApp } from '../helpers/render.ts';
 
 stubOverlayDom();
@@ -77,34 +78,39 @@ async function socket(): Promise<FakeWebSocket> {
 
 test('the sidebar clamps drag widths, cancels interrupted drags and restores its saved width after collapse', async () => {
   stubLobby();
+  stubSplitterLayout();
+  const user = userEvent.setup();
   const view = await renderLobby();
   const separator = screen.getByRole('separator', { name: 'Ширина боковой панели' });
-  const pointer = { button: 0, pointerId: 1, isPrimary: true };
-  const width = () => Number(separator.getAttribute('aria-valuenow'));
-  const maxWidth = Number(separator.getAttribute('aria-valuemax'));
+  const width = () => Number.parseInt(separator.getAttribute('aria-valuetext') ?? '', 10);
   expect(width()).toBe(280);
 
-  await fireEvent.pointerDown(separator, { ...pointer, clientX: 280 });
-  await fireEvent.pointerMove(separator, { ...pointer, clientX: 600 });
-  expect(width()).toBe(maxWidth);
-  await fireEvent.pointerCancel(separator, pointer);
+  await fireEvent.touchStart(separator, { touches: [{ clientX: 280, clientY: 10 }] });
+  await fireEvent.touchMove(separator, { touches: [{ clientX: 600, clientY: 10 }] });
+  expect(width()).toBe(420);
+  await fireEvent.touchCancel(separator, { touches: [] });
   expect(width()).toBe(280);
 
-  await fireEvent.pointerDown(separator, { ...pointer, clientX: 280 });
-  await fireEvent.pointerUp(separator, { ...pointer, clientX: 320 });
+  const startDrag = (x: number) => user.pointer({ keys: '[MouseLeft>]', target: separator, coords: { x, y: 10 } });
+  const moveDrag = (x: number) => user.pointer({ target: separator, coords: { x, y: 10 } });
+  const endDrag = (x: number) => user.pointer({ keys: '[/MouseLeft]', target: separator, coords: { x, y: 10 } });
+
+  await startDrag(280);
+  await moveDrag(320);
+  await endDrag(320);
   expect(width()).toBe(320);
 
-  await fireEvent.pointerDown(separator, { ...pointer, clientX: 320 });
-  await fireEvent.pointerMove(separator, { ...pointer, clientX: 200 });
+  await startDrag(320);
+  await moveDrag(200);
   expect(width()).toBe(240);
-  await fireEvent.pointerMove(separator, { ...pointer, clientX: 100 });
-  expect(width()).toBe(0);
+  await moveDrag(100);
+  expect(width()).toBe(48);
   expect(screen.queryByRole('complementary')).toBeNull();
-  await fireEvent.pointerMove(separator, { ...pointer, clientX: 220 });
+  await moveDrag(220);
   expect(width()).toBe(240);
-  await fireEvent.pointerMove(separator, { ...pointer, clientX: 100 });
-  await fireEvent.pointerUp(separator, { ...pointer, clientX: 100 });
-  expect(width()).toBe(0);
+  await moveDrag(100);
+  await endDrag(100);
+  expect(screen.queryByRole('separator')).toBeNull();
   expect(screen.queryByRole('complementary')).toBeNull();
 
   view.unmount();
@@ -120,7 +126,7 @@ test('the sidebar clamps drag widths, cancels interrupted drags and restores its
   await fireEvent.pointerEnter(rail, { pointerType: 'mouse' });
   expect(screen.getByRole('complementary')).toBeTruthy();
   expect(screen.queryByRole('separator')).toBeNull();
-  expect(rail.parentElement?.classList.contains('lobby-shell--sidebar-collapsed')).toBe(true);
+  expect(rail.closest('.lobby-shell')?.classList.contains('lobby-shell--sidebar-collapsed')).toBe(true);
   await fireEvent.pointerLeave(rail, { pointerType: 'mouse' });
   expect(screen.queryByRole('complementary')).toBeNull();
   await fireEvent.pointerEnter(rail, { pointerType: 'mouse' });
@@ -131,11 +137,12 @@ test('the sidebar clamps drag widths, cancels interrupted drags and restores its
   await fireEvent.pointerLeave(rail, { pointerType: 'mouse' });
   expect(screen.getByRole('complementary')).toBeTruthy();
   const restored = screen.getByRole('separator', { name: 'Ширина боковой панели' });
-  expect(restored.getAttribute('aria-valuenow')).toBe('320');
-  await fireEvent.keyDown(restored, { key: 'ArrowRight' });
-  expect(restored.getAttribute('aria-valuenow')).toBe('336');
+  expect(restored.getAttribute('aria-valuetext')).toBe('320 px');
+  restored.focus();
+  await user.keyboard('{ArrowRight}');
+  expect(restored.getAttribute('aria-valuetext')).toBe('336 px');
   await userEvent.click(screen.getByRole('button', { name: 'Свернуть боковую панель' }));
-  expect(restored.getAttribute('aria-valuenow')).toBe('0');
+  expect(screen.queryByRole('separator')).toBeNull();
 });
 
 test('a session ended on another device signs out with a message', async () => {

@@ -1,5 +1,5 @@
 import { getCallPorts } from './ports';
-import { t } from '@voice-room/ui/i18n';
+import { t } from '@voiceroom/ui-kit/i18n';
 import { GATE_THRESHOLD_MIN_DB } from './core/config';
 import { useRoomDeviceUiStore } from './core/room-device-ui.store';
 import { useStartUiStore } from './core/start-ui.store';
@@ -42,7 +42,6 @@ import {
   syncScreenVideoAudio,
   updateScreenFullscreenState
 } from './ui/screen-view';
-import { closeScreenSourceOnEscape } from './ui/screen-source-picker';
 
 import { createLogger, errorContext, reportClientLogs } from './diagnostics';
 import { DISPLAY_NAME_STORAGE_KEY, readStorage } from './core/storage';
@@ -236,7 +235,6 @@ export function mountRoomClient(
   syncScreenVideoAudio();
   bindScreenStageIdleUi(listenerSignal);
 
-  document.addEventListener('keydown', closeScreenSourceOnEscape, { signal: listenerSignal });
   document.addEventListener('pointerdown', handleAudioUnlockGesture, { passive: true, signal: listenerSignal });
   document.addEventListener('keydown', handleAudioUnlockGesture, { signal: listenerSignal });
   document.addEventListener('fullscreenchange', updateScreenFullscreenState, { signal: listenerSignal });

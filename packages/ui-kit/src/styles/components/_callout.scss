@@ -1,0 +1,92 @@
+.ui-callout {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-12);
+  padding: var(--space-12) var(--space-16);
+  border: 1px solid color-mix(in oklch, var(--callout-tone, var(--vr-info)), transparent 70%);
+  border-radius: var(--radius-16);
+  background: color-mix(in oklch, var(--callout-tone, var(--vr-info)), var(--callout-surface, transparent) 92%);
+
+  &--warning {
+    --callout-tone: var(--vr-away);
+  }
+  &--danger {
+    --callout-tone: var(--vr-danger);
+  }
+  &--accent {
+    --callout-tone: var(--vr-accent);
+  }
+
+  &__icon {
+    flex: none;
+    padding-top: var(--space-6);
+    color: var(--callout-tone, var(--vr-info));
+    svg {
+      width: var(--icon-20);
+      height: var(--icon-20);
+    }
+  }
+
+  &__body {
+    display: grid;
+    flex: 1;
+    gap: var(--space-2);
+    min-width: 0;
+    padding-block: var(--space-6);
+  }
+
+  &__title {
+    margin: 0;
+    font: 600 14px/1.35 var(--font-ui);
+    color: var(--vr-text);
+  }
+  &__text {
+    margin: 0;
+    font-size: 13px;
+    line-height: 1.45;
+    color: var(--vr-text-2);
+  }
+  &__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-8);
+    margin-top: var(--space-8);
+  }
+
+  &--pill {
+    align-items: center;
+    gap: var(--space-8);
+    padding: var(--space-6) var(--space-6) var(--space-6) var(--space-12);
+    border-color: var(--vr-line-strong);
+    border-radius: var(--radius-pill);
+    background: var(--vr-surface);
+    box-shadow: var(--vr-shadow-toast);
+
+    .ui-callout__body {
+      display: flex;
+      flex-wrap: nowrap;
+      align-items: center;
+      gap: var(--space-8);
+      padding: 0;
+    }
+    .ui-callout__title {
+      font-size: 0.8125rem;
+      white-space: nowrap;
+    }
+    .ui-callout__text {
+      color: var(--vr-text-muted);
+    }
+    .ui-callout__actions {
+      flex: none;
+      margin: 0;
+    }
+  }
+
+  &__dot {
+    flex: none;
+    width: var(--space-8);
+    height: var(--space-8);
+    border-radius: var(--radius-pill);
+    background: var(--callout-tone, var(--vr-info));
+  }
+}

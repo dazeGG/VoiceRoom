@@ -1,0 +1,175 @@
+@use '../components/avatar';
+
+.participant {
+  --participant-pastel: var(--vr-surface-3);
+  --participant-avatar-fg: var(--vr-text);
+  --participant-tile-bg: color-mix(in oklch, var(--participant-pastel), var(--vr-bg) 30%);
+  --participant-outline: inset 0 0 0 calc(var(--space-2) / 2) var(--vr-line);
+  position: relative;
+  display: grid;
+  min-height: 0;
+  height: auto;
+  aspect-ratio: 16 / 9;
+  container-type: size;
+  place-items: center;
+  border: 0;
+  border-radius: var(--radius-16);
+  overflow: hidden;
+  background: var(--participant-tile-bg);
+  box-shadow: var(--participant-outline);
+  cursor: pointer;
+  transition: background 180ms ease;
+
+  &:hover {
+    background: color-mix(in oklch, var(--participant-tile-bg), var(--vr-text) 5%);
+  }
+
+  &:focus-visible {
+    outline: var(--space-2) solid var(--vr-accent);
+    outline-offset: var(--space-2);
+  }
+}
+
+.participant--speaking {
+  --participant-outline: inset 0 0 0 var(--space-2) var(--vr-accent);
+}
+
+.participant__camera {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  background: var(--vr-video-bg);
+  object-fit: contain;
+}
+
+.participant__camera--mirrored {
+  transform: scaleX(-1);
+}
+
+.participant--camera {
+  .participant__ring {
+    display: none;
+  }
+
+  // The picture covers the tile's background, so draw its outline over the video.
+  &::after {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    border-radius: inherit;
+    box-shadow: var(--participant-outline);
+    content: '';
+    pointer-events: none;
+  }
+
+  .participant__copy {
+    z-index: 1;
+  }
+}
+
+.participant__ring {
+  display: grid;
+  height: min(40cqh, clamp(76px, 20cqw, 160px));
+  aspect-ratio: 1;
+  container-type: size;
+  place-items: center;
+}
+
+.participant__avatar {
+  position: relative;
+  display: grid;
+  width: 100%;
+  height: 100%;
+  place-items: center;
+  overflow: hidden;
+  border-radius: var(--radius-pill);
+  background: var(--participant-pastel);
+  color: var(--participant-avatar-fg);
+  font-size: 29cqh;
+  font-weight: 600;
+}
+
+.participant__avatar > img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  object-fit: cover;
+}
+
+.participant--screen .participant__screen-action,
+.participant__screen-action[hidden] {
+  display: none;
+}
+
+.participant__copy {
+  position: absolute;
+  inset: auto auto var(--space-8) var(--space-8);
+  display: grid;
+  justify-items: start;
+  gap: var(--space-4);
+  max-width: calc(100% - var(--space-16));
+  min-width: 0;
+}
+
+.participant__heading {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-6);
+  max-width: 100%;
+  height: var(--size-24);
+  margin: 0;
+  overflow: hidden;
+  border-radius: var(--radius-8);
+  padding-inline: var(--space-8);
+  background: var(--vr-scrim);
+  color: var(--vr-text);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.participant__name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.participant__you {
+  flex: none;
+}
+
+.participant__muted-icon,
+.participant__deafened-icon {
+  display: none;
+  flex: none;
+  color: var(--vr-danger);
+
+  svg {
+    width: var(--icon-16);
+    height: var(--icon-16);
+  }
+}
+
+.participant--muted .participant__muted-icon,
+.participant--deafened .participant__deafened-icon {
+  display: grid;
+}
+
+.participant__status {
+  max-width: 100%;
+  margin: 0;
+  overflow: hidden;
+  border-radius: var(--radius-pill);
+  padding: var(--space-2) var(--space-8);
+  background: var(--vr-scrim);
+  color: var(--vr-text-2);
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1.1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

@@ -1,9 +1,9 @@
 <script setup lang="ts">
+import { Field, Spinner, TextField, Button } from '@voiceroom/ui-kit/components';
 import { t } from '@/shared/i18n';
 import { ArrowRight } from '@lucide/vue';
 import { START_FEATURES } from '@/shared/start-features';
-import { Button } from '@/shared/ui';
-import { iconMd } from '@/shared/ui/icons';
+import { iconMd } from '@voiceroom/ui-kit/icon-defaults';
 import LandingFeatureGrid from './LandingFeatureGrid.vue';
 
 defineProps<{ creatingTemp: boolean; joining: boolean }>();
@@ -11,12 +11,6 @@ defineProps<{ creatingTemp: boolean; joining: boolean }>();
 const roomCode = defineModel<string>('roomCode', { required: true });
 
 const emit = defineEmits<{ createTemp: []; join: [] }>();
-
-function onRoomCodeKeydown(event: KeyboardEvent): void {
-  if (event.key !== 'Enter') return;
-  event.preventDefault();
-  emit('join');
-}
 </script>
 
 <template>
@@ -33,29 +27,33 @@ function onRoomCodeKeydown(event: KeyboardEvent): void {
 
     <div class="landing-hero__cta-row">
       <Button variant="primary" size="xl" :disabled="creatingTemp" @click="emit('createTemp')">
-        <span v-if="creatingTemp" class="home-spinner" aria-hidden="true"></span> {{ t('Создать комнату') }}
+        <Spinner v-if="creatingTemp" aria-hidden="true" /> {{ t('Создать комнату') }}
         <ArrowRight v-bind="iconMd" aria-hidden="true" />
       </Button>
 
       <form class="landing-hero__join" @submit.prevent="emit('join')">
-        <!-- A search field, so iCloud Passwords does not offer logins here. -->
-        <input
-          v-model="roomCode"
-          class="landing-hero__join-input"
-          type="search"
-          name="room-search"
-          :placeholder="t('Код комнаты')"
-          :aria-label="t('Код комнаты')"
-          maxlength="120"
-          autocapitalize="off"
-          autocomplete="off"
-          spellcheck="false"
-          data-1p-ignore
-          data-lpignore="true"
-          data-bwignore
-          @keydown="onRoomCodeKeydown"
-        />
-        <button class="landing-hero__join-btn" type="submit" :disabled="joining">{{ t('Войти в комнату') }}</button>
+        <!-- A search field keeps iCloud Passwords from offering logins here. -->
+        <Field visually-hidden-label class="landing-hero__join-field" :label="t('Код комнаты')">
+          <TextField
+            v-model="roomCode"
+            type="search"
+            size="lg"
+            variant="mono"
+            name="room-search"
+            :placeholder="t('Код комнаты')"
+            maxlength="120"
+            autocapitalize="off"
+            autocomplete="off"
+            spellcheck="false"
+            data-1p-ignore
+            data-lpignore="true"
+            data-bwignore
+          >
+            <template #action>
+              <Button variant="outline" size="lg" type="submit" :disabled="joining">{{ t('Войти в комнату') }}</Button>
+            </template>
+          </TextField>
+        </Field>
       </form>
     </div>
 

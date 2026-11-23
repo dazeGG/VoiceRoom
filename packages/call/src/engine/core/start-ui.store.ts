@@ -1,5 +1,5 @@
-import { t } from '@voice-room/ui/i18n';
-import { useLocalizedText } from '@voice-room/ui/localized-text';
+import { t } from '@voiceroom/ui-kit/i18n';
+import { useLocalizedText } from '@voiceroom/ui/localized-text';
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
 

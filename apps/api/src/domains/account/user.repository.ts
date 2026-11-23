@@ -7,12 +7,12 @@ import type pg from 'pg';
 import { kyselyOn, type Database } from '../../platform/db/kysely.ts';
 import { codeOf } from '../../platform/error-code.ts';
 import { hashPassword, verifyPassword } from '../../lib/password.ts';
-import { cleanAvatarColorKey } from '@voice-room/shared/validation';
+import { cleanAvatarColorKey } from '@voiceroom/shared/validation';
 import {
   RECOVERY_CODES_REMINDER_SNOOZE_MS,
   WHATS_NEW_VERSION,
   normalizeReleaseVersion
-} from '@voice-room/shared/account-security';
+} from '@voiceroom/shared/account-security';
 import { toDate } from '../../platform/epoch-millis.ts';
 import { UNIQUE_VIOLATION, mapUser, randomAvatarColorKey, storedUser } from './user-records.ts';
 

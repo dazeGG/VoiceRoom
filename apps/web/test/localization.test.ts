@@ -1,7 +1,8 @@
 import { createPinia, setActivePinia } from 'pinia';
-import { computed, nextTick } from 'vue';
+import { computed } from 'vue';
 import { beforeEach, expect, test, vi } from 'vitest';
-import { fireEvent } from '@testing-library/vue';
+import { screen } from '@testing-library/vue';
+import userEvent from '@testing-library/user-event';
 import { english, french, russian } from '../src/shared/i18n/catalog';
 import { LOCALE_STORAGE_KEY, t, useLocaleStore } from '../src/shared/i18n';
 import { formatNumber } from '../src/shared/i18n';
@@ -9,14 +10,17 @@ import { currentErrorMessage, useLocalizedText } from '../src/shared/i18n/locali
 import { ApiError } from '../src/api/client';
 import { errorText } from '../src/api/error-texts';
 import { t as runtimeTranslation } from '../src/shared/i18n/runtime.ts';
-import { NOISE_MODES } from '@voice-room/call/engine/core/config';
+import { NOISE_MODES } from '@voiceroom/call/engine/core/config';
 import { dayMonth, timeAgo } from '../src/shared/utils/date-format';
 import { formatTypingLabel } from '../src/shared/chat/typing';
 import { displayNameOf } from '../src/shared/utils/display-name';
 import { CALL_FEEDBACK_TAG_LABELS } from '../src/shared/i18n/feedback-labels';
 import { buildNotificationPayload, type NotificationDmMessageEvent } from '../src/shared/notifications/router';
 import LanguageControl from '../src/shared/i18n/LanguageControl.vue';
+import { stubOverlayDom } from './helpers/overlay-dom';
 import { renderWithApp } from './helpers/render';
+
+stubOverlayDom();
 
 beforeEach(() => {
   setActivePinia(createPinia());
@@ -105,13 +109,13 @@ test('desktop authority is separate from browser storage and newer pushes beat i
 });
 
 test('language control is usable without an account and labels react to its selection', async () => {
-  const view = await renderWithApp(LanguageControl);
-  await fireEvent.update(view.getByRole('combobox'), 'en');
-  await nextTick();
-  expect(view.getByRole('combobox', { name: 'Language' })).toBeTruthy();
-  await fireEvent.update(view.getByRole('combobox'), 'fr');
-  await nextTick();
-  expect(view.getByRole('combobox', { name: 'Langue' })).toBeTruthy();
+  await renderWithApp(LanguageControl);
+  await userEvent.click(screen.getByRole('combobox', { name: 'Язык' }));
+  await userEvent.click(await screen.findByRole('option', { name: 'English' }));
+  expect(screen.getByRole('combobox', { name: 'Language' })).toBeTruthy();
+  await userEvent.click(screen.getByRole('combobox', { name: 'Language' }));
+  await userEvent.click(await screen.findByRole('option', { name: 'Français' }));
+  expect(screen.getByRole('combobox', { name: 'Langue' })).toBeTruthy();
 });
 
 test('a stale desktop save response cannot overwrite a newer selection', async () => {

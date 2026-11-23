@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-import { StreamTile } from '@voice-room/call/views';
-import { state } from '@voice-room/call/engine/core/room-runtime.store';
-import type { Participant } from '@voice-room/call/engine/core/types';
-import { getScreenProfileLabels } from '@voice-room/call/engine/media/profiles';
-import { playMediaElement } from '@voice-room/call/engine/services/media-playback-service';
-import { enterScreenView } from '@voice-room/call/engine/ui/screen-view';
+import { StreamTile } from '@voiceroom/call/views';
+import { state } from '@voiceroom/call/engine/core/room-runtime.store';
+import type { Participant } from '@voiceroom/call/engine/core/types';
+import { getScreenProfileLabels } from '@voiceroom/call/engine/media/profiles';
+import { playMediaElement } from '@voiceroom/call/engine/services/media-playback-service';
+import { enterScreenView } from '@voiceroom/call/engine/ui/screen-view';
 import { createLogger, errorContext } from '@/shared/log';
-import { getAvatarPresentation } from '@/shared/ui/avatar-presentation';
+import { getAvatarPresentation } from '@voiceroom/ui/avatar-presentation';
 
 const { participant } = defineProps<{
   participant: Participant;

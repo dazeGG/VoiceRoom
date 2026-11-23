@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Button, Callout } from '@voiceroom/ui-kit/components';
 import { t } from '@/shared/i18n';
 import { computed } from 'vue';
 import { useAppUpdateStore } from './app-update.store';
@@ -12,12 +13,17 @@ const action = computed(() => (update.pending === 'app' ? t('Перезапус�
 </script>
 
 <template>
-  <div v-if="update.pending !== 'none'" class="app-update" role="status" aria-live="polite">
-    <span class="app-update__dot" aria-hidden="true"></span>
-    <span class="app-update__title">{{ title }}</span>
-    <span v-if="inCall" class="app-update__note">{{ t('после звонка') }}</span>
-    <button v-else class="app-update__action" type="button" :disabled="update.applying" @click="update.apply()">
-      {{ action }}
-    </button>
-  </div>
+  <Callout
+    v-if="update.pending !== 'none'"
+    class="app-update"
+    layout="pill"
+    tone="accent"
+    :title="title"
+    :text="inCall ? t('после звонка') : undefined"
+    role="status"
+  >
+    <template v-if="!inCall" #actions>
+      <Button variant="primary" size="xs" pill :disabled="update.applying" @click="update.apply()">{{ action }}</Button>
+    </template>
+  </Callout>
 </template>

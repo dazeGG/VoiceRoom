@@ -1,8 +1,9 @@
 <script setup lang="ts">
+import { Button } from '@voiceroom/ui-kit/components';
 import { t } from '@/shared/i18n';
-import { showRoomRoute } from '@voice-room/call/engine/room/room';
+import { showRoomRoute } from '@voiceroom/call/engine/room/room';
 import { APP_HOME } from '@/shared/app-home';
-import { useCallPageStore } from '@voice-room/call/engine/core/call-page.store';
+import { useCallPageStore } from '@voiceroom/call/engine/core/call-page.store';
 
 const page = useCallPageStore();
 
@@ -29,9 +30,9 @@ function retry(): void {
         }}
       </p>
       <div class="not-found__actions">
-        <button id="entryRetryButton" class="not-found__home" type="button" @click="retry">
+        <Button id="entryRetryButton" variant="primary" size="sm" class="not-found__home" @click="retry">
           {{ t('Повторить проверку') }}
-        </button>
+        </Button>
         <!-- A full page load, as data-sveltekit-reload was. -->
         <a class="not-found__home" :href="APP_HOME">{{ t('На стартовый экран') }}</a>
       </div>

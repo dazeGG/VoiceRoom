@@ -1,6 +1,6 @@
 // MobileCallTopbar (features/room/components/MobileCallTopbar.vue): the call's own
 // top bar. Svelte: the <style> of MobileCallTopbar.svelte. The chat and participants
-// buttons are the shared room-panel-tabs control (_room-panel-tabs.scss).
+// buttons are the shared room-panel-switches control (_room-panel-switches.scss).
 //
 // Svelte class -> BEM class
 //   .mc-topbar                            -> .mobile-call-topbar
@@ -9,16 +9,16 @@
 //   .mc-topbar-title                      -> .mobile-call-topbar__title
 //   .mc-topbar-meta                       -> .mobile-call-topbar__meta
 //   .mc-topbar-dot                        -> .mobile-call-topbar__dot
-//   .mc-topbar-actions                    -> .mobile-call-topbar__actions (with .room-panel-tabs)
-//   .mc-topbar-actions button             -> .room-panel-tabs__tab inside .mobile-call-topbar__actions
+//   .mc-topbar-actions                    -> .mobile-call-topbar__actions (with .room-panel-switches)
+//   .mc-topbar-actions button             -> .room-panel-switches__button inside .mobile-call-topbar__actions
 //   .mc-topbar-view                       -> .mobile-call-topbar__view
-//   .room-panel-tab-unread                -> .room-panel-tabs__unread
+//   .room-panel-tab-unread                -> .room-panel-switches__unread
 //   .room-call-timer--topbar              -> .room-call-timer--topbar
 //   .mobile-call[data-chrome='hidden']    -> .mobile-call--chrome-hidden
 //
 // [data-*] -> modifier class
 //   .mc-topbar[data-duo='true']           -> .mobile-call-topbar--duo
-//   button[data-active]                   -> aria-pressed (room-panel-tabs)
+//   button[data-active]                   -> aria-pressed (room-panel-switches)
 
 .mobile-call-topbar {
   position: absolute;
@@ -28,9 +28,9 @@
   z-index: 5;
   display: flex;
   align-items: center;
-  gap: 10px;
-  height: calc(var(--mc-safe-top) + 56px);
-  padding: var(--mc-safe-top) 10px 0 14px;
+  gap: var(--space-8);
+  height: calc(var(--mc-safe-top) + var(--size-56));
+  padding: var(--mc-safe-top) var(--space-8) 0 var(--space-12);
   box-sizing: border-box;
   background: color-mix(in oklch, var(--vr-bg) 94%, transparent);
   transition:
@@ -42,7 +42,7 @@
 .mobile-call-topbar--duo {
   align-items: flex-start;
   height: calc(var(--mc-safe-top) + 96px);
-  padding-top: calc(var(--mc-safe-top) + 10px);
+  padding-top: calc(var(--mc-safe-top) + var(--space-8));
   background: linear-gradient(
     180deg,
     var(--vr-scrim) 0%,
@@ -70,7 +70,7 @@
   display: flex;
   flex: 1 1 auto;
   align-items: center;
-  gap: 10px;
+  gap: var(--space-8);
   min-width: 0;
   padding: 0;
   border: 0;
@@ -85,7 +85,7 @@
   display: grid;
   flex: 1 1 auto;
   min-width: 0;
-  gap: 3px;
+  gap: var(--space-2);
 }
 
 .mobile-call-topbar__title {
@@ -103,7 +103,7 @@
 .mobile-call-topbar__meta {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-8);
   margin: 0;
   color: var(--vr-text-2);
   font-size: 0.75rem;
@@ -121,11 +121,6 @@
 
 .mobile-call-topbar__actions {
   flex: none;
-
-  .room-panel-tabs__tab {
-    width: 40px;
-    height: 40px;
-  }
 }
 
 .mobile-call-topbar__view {

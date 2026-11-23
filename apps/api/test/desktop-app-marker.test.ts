@@ -2,7 +2,7 @@ import test, { type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import { Pool } from 'pg';
-import { Me, SignedIn } from '@voice-room/shared/contracts/account';
+import { Me, SignedIn } from '@voiceroom/shared/contracts/account';
 
 import { runMigrations } from '../src/lib/migrate.ts';
 import { createUserStore } from '../src/app/user-store.ts';

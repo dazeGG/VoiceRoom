@@ -6,9 +6,9 @@
 import { roomAllowsSurface } from '../domains/rooms/room-surface.policy.ts';
 import type { FastifyBaseLogger } from 'fastify';
 import { buildServerEnvelope } from '../realtime/envelope.ts';
-import { mentionUserIdsFromContent } from '@voice-room/shared/mentions';
+import { mentionUserIdsFromContent } from '@voiceroom/shared/mentions';
 import { LOG_EVENTS } from '../lib/log-events.ts';
-import type { AdminReportsEvent, LiveNumbers } from '@voice-room/shared/contracts/admin';
+import type { AdminReportsEvent, LiveNumbers } from '@voiceroom/shared/contracts/admin';
 import packageJson from '../../package.json' with { type: 'json' };
 import { createAccountService } from '../domains/account/account.service.ts';
 import { createAdminService } from '../domains/admin/admin.service.ts';

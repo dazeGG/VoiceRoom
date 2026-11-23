@@ -1,0 +1,57 @@
+// The kit with its fonts and base reset, then the call surfaces and story-only layout.
+@use 'pkg:@voiceroom/ui-kit/styles/standalone';
+@use 'pkg:@voiceroom/ui-kit/styles/room/participant';
+@use 'pkg:@voiceroom/ui-kit/styles/room/room-dock';
+@use 'pkg:@voiceroom/ui-kit/styles/room/tile-grid';
+
+.story-popover-setting {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-12);
+}
+
+.story-hovercard__banner {
+  height: var(--space-64);
+  background: color-mix(in oklch, var(--avatar-blurple-bg) 70%, var(--vr-bg));
+}
+
+.story-hovercard__body {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-12);
+  padding: 0 var(--space-16) var(--space-16);
+  margin-top: calc(-1 * var(--size-28));
+}
+
+.story-participant-tile {
+  width: min(calc(10 * var(--size-48)), 100vw - var(--space-64));
+}
+
+.story-participant-tile--small {
+  width: min(calc(5 * var(--size-48)), 100vw - var(--space-64));
+}
+
+.story-participant-tile--large {
+  width: min(calc(18 * var(--size-48)), 100vw - var(--space-64));
+}
+
+.story-participant-tile__sizes {
+  display: grid;
+  gap: var(--space-16);
+}
+
+.story-room-dock {
+  position: relative;
+  display: grid;
+  width: min(calc(12 * var(--size-48)), 100vw - var(--space-64));
+  height: calc(10 * var(--size-48));
+  border-radius: var(--radius-20);
+  background: var(--vr-surface);
+}
+
+.widget-shell.story-widget {
+  width: min(calc(var(--size-48) * 8), 100%);
+  height: calc(var(--size-48) * 8);
+  min-height: 0;
+}

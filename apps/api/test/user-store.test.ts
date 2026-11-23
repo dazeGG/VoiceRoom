@@ -4,7 +4,7 @@ import crypto from 'node:crypto';
 
 import { createUserStore } from '../src/app/user-store.ts';
 import { publicUser } from '../src/domains/account/user-records.ts';
-import { AVATAR_COLOR_KEYS } from '@voice-room/shared/validation';
+import { AVATAR_COLOR_KEYS } from '@voiceroom/shared/validation';
 import { runMigrations } from '../src/lib/migrate.ts';
 import { createTestDatabase } from './db-harness.ts';
 

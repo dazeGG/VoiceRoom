@@ -1,0 +1,94 @@
+.ui-segment {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  box-sizing: border-box;
+  gap: var(--space-2);
+  min-height: var(--size-40);
+  min-width: 0;
+  max-width: 100%;
+  padding: calc(var(--space-6) / 2);
+  border: calc(var(--space-2) / 2) solid var(--vr-line);
+  border-radius: var(--radius-12);
+  background: var(--vr-surface-2);
+
+  &--sm {
+    min-height: var(--size-32);
+    border-radius: var(--radius-10);
+  }
+
+  &__item {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-6);
+    min-height: var(--size-32);
+    min-width: min-content;
+    max-width: 100%;
+    padding-inline: var(--space-12);
+    border: 0;
+    border-radius: var(--radius-8);
+    background: transparent;
+    color: var(--vr-text-2);
+    font: 500 0.8125rem/1 var(--font-ui);
+    white-space: nowrap;
+    cursor: pointer;
+
+    &:hover:not(:disabled) {
+      background: var(--vr-hover);
+      color: var(--vr-text);
+    }
+
+    &[aria-selected='true'],
+    &[aria-checked='true'] {
+      background: var(--vr-surface-3);
+      color: var(--vr-text);
+    }
+
+    &:focus-visible {
+      outline: var(--space-2) solid var(--vr-accent);
+      outline-offset: calc(-1 * var(--space-2));
+    }
+
+    &:disabled {
+      cursor: not-allowed;
+      opacity: 0.55;
+    }
+  }
+
+  &--sm .ui-segment__item {
+    min-height: var(--size-24);
+    padding-inline: var(--space-8);
+    border-radius: var(--radius-6);
+    font-size: 0.75rem;
+  }
+
+  &__count {
+    color: var(--vr-text-muted);
+    font: 500 0.75rem/1 var(--font-mono);
+  }
+
+  &__dot {
+    flex: none;
+    width: var(--space-6);
+    height: var(--space-6);
+    border-radius: var(--radius-pill);
+    background: var(--vr-accent);
+  }
+}
+
+.ui-segment--equal,
+.ui-segment--responsive {
+  width: 100%;
+
+  .ui-segment__item {
+    flex: 1 1 auto;
+    min-width: min-content;
+  }
+}
+
+.ui-segment--responsive .ui-segment__item {
+  min-height: var(--size-48);
+  padding-inline: var(--space-8);
+  font-size: 13px;
+}

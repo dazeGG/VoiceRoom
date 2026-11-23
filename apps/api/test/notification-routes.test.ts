@@ -6,8 +6,8 @@ import test, { type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
 import fastify from 'fastify';
 
-import type { Failure } from '@voice-room/shared/contracts/http';
-import type { InboxItemRead, InboxPage } from '@voice-room/shared/contracts/notifications';
+import type { Failure } from '@voiceroom/shared/contracts/http';
+import type { InboxItemRead, InboxPage } from '@voiceroom/shared/contracts/notifications';
 import type { ApiContext } from '../src/app/context.ts';
 import type { InboxNotification, InboxRepository } from '../src/domains/notifications/inbox.repository.ts';
 import { createNotificationService } from '../src/domains/notifications/notification.service.ts';

@@ -1,8 +1,7 @@
 <script setup lang="ts">
 import { t } from '@/shared/i18n';
 import { ref, watch } from 'vue';
-import EmojiText from '@/shared/chat/EmojiText.vue';
-import { Button, Dialog } from '@/shared/ui';
+import { AlertDialog, Checkbox } from '@voiceroom/ui-kit/components';
 
 const props = defineProps<{ open: boolean; fromName: string; toName: string }>();
 
@@ -20,20 +19,16 @@ watch(
 </script>
 
 <template>
-  <Dialog
+  <AlertDialog
     :open="open"
     :title="t('Перейти в комнату «{p0}»?', { p0: toName })"
-    :on-close="() => emit('cancel')"
-    :width="430"
+    :description="t('Вы покинете звонок в «{p0}».', { p0: fromName })"
+    :confirm-label="t('Перейти')"
+    @cancel="emit('cancel')"
+    @confirm="emit('confirm', dontAskAgain)"
   >
-    <p class="room-switch__text">{{ t('Вы покинете звонок в «') }}<EmojiText :text="fromName" />».</p>
-    <label class="room-switch__remember">
-      <input v-model="dontAskAgain" type="checkbox" />
-      <span>{{ t('Больше не спрашивать') }}</span>
-    </label>
-    <div class="home-dialog__actions">
-      <Button variant="ghost" type="button" @click="emit('cancel')">{{ t('Отмена') }}</Button>
-      <Button variant="primary" type="button" @click="emit('confirm', dontAskAgain)">{{ t('Перейти') }}</Button>
-    </div>
-  </Dialog>
+    <Checkbox :model-value="dontAskAgain" @update:model-value="dontAskAgain = $event === true">
+      {{ t('Больше не спрашивать') }}
+    </Checkbox>
+  </AlertDialog>
 </template>

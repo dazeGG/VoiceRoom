@@ -1,0 +1,126 @@
+.admin-account-panel {
+  display: grid;
+  min-width: 0;
+  gap: var(--space-12);
+
+  &__card {
+    display: grid;
+    gap: var(--space-12);
+  }
+
+  &__identity {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: var(--space-8);
+
+    h2 {
+      margin: 0;
+      font-size: 1rem;
+      overflow-wrap: anywhere;
+    }
+  }
+
+  &__login {
+    font: 400 0.75rem/1.4 var(--font-mono);
+    overflow-wrap: anywhere;
+  }
+
+  &__login,
+  &__quiet,
+  &__head span,
+  dt {
+    color: var(--vr-text-muted);
+  }
+
+  &__quiet,
+  &__head span {
+    margin: 0;
+    font-size: 0.8125rem;
+  }
+
+  &__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-8);
+
+    h3 {
+      margin: 0;
+      font-size: 0.9375rem;
+    }
+  }
+
+  &__facts,
+  &__network {
+    display: grid;
+    margin: 0;
+    gap: var(--space-6) var(--space-12);
+    font-size: 0.8125rem;
+
+    dd {
+      margin: 0;
+      color: var(--admin-tone, var(--vr-text));
+      font-variant-numeric: tabular-nums;
+    }
+  }
+
+  &__facts > div {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--space-8);
+  }
+
+  &__network {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  &__legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-6) var(--space-12);
+    color: var(--vr-text-2);
+    font-size: 0.75rem;
+
+    > span {
+      display: flex;
+      align-items: center;
+      gap: var(--space-4);
+    }
+  }
+
+  &__dot--good,
+  &__dot--unstable,
+  &__dot--bad,
+  &__dot--unknown {
+    display: inline-block;
+    width: var(--space-8);
+    height: var(--space-8);
+    flex: none;
+    border-radius: var(--radius-pill);
+  }
+
+  &__dot--good {
+    background: var(--vr-success);
+  }
+  &__dot--unstable {
+    background: var(--vr-warning);
+  }
+  &__dot--bad {
+    background: var(--vr-danger);
+  }
+  &__dot--unknown {
+    background: var(--vr-text-muted);
+  }
+
+  &__calls {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  &__actions {
+    display: grid;
+    gap: var(--space-8);
+  }
+}

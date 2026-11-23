@@ -1,0 +1,100 @@
+.vr-slider {
+  --slider-thumb: var(--size-16);
+  --slider-track-h: var(--space-8);
+  --slider-position: calc(var(--slider-thumb) / 2 + (100% - var(--slider-thumb)) * var(--slider-fraction));
+  display: grid;
+  min-width: 0;
+  touch-action: none;
+  user-select: none;
+}
+
+.vr-slider__control {
+  position: relative;
+  display: grid;
+  align-items: center;
+  min-width: 0;
+  height: var(--size-32);
+  cursor: pointer;
+}
+
+.vr-slider__track {
+  position: relative;
+  height: var(--slider-track-h);
+  border-radius: var(--radius-pill);
+  background: var(--vr-surface-3);
+}
+
+.vr-slider__fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: var(--slider-position);
+  border-radius: inherit;
+  background: var(--slider-fill, var(--vr-accent));
+}
+
+.vr-slider__thumb {
+  position: absolute;
+  top: 50%;
+  left: var(--slider-position);
+  width: var(--slider-thumb);
+  height: var(--slider-thumb);
+  border-radius: var(--radius-pill);
+  background: var(--vr-text);
+  box-shadow: var(--vr-shadow-toast);
+  transform: translate(-50%, -50%);
+}
+
+.vr-slider__input {
+  display: block;
+  width: var(--slider-thumb);
+  height: var(--size-32);
+  border-radius: var(--radius-pill);
+  background: transparent;
+  outline: none;
+}
+
+.vr-slider--vertical {
+  .vr-slider__control {
+    justify-items: center;
+    width: var(--size-32);
+    height: 100%;
+  }
+
+  .vr-slider__track {
+    width: var(--slider-track-h);
+    height: 100%;
+  }
+
+  .vr-slider__fill {
+    inset: auto 0 0;
+    width: 100%;
+    height: var(--slider-position);
+  }
+
+  .vr-slider__thumb {
+    inset: auto auto var(--slider-position) 50%;
+    transform: translate(-50%, 50%);
+  }
+
+  .vr-slider__input {
+    width: var(--size-32);
+    height: var(--slider-thumb);
+  }
+}
+
+.vr-slider__control:focus-within .vr-slider__track {
+  background: var(--vr-surface-3-hover);
+}
+
+.vr-slider__control:focus-within .vr-slider__thumb {
+  outline: var(--space-2) solid var(--vr-accent);
+  outline-offset: var(--space-2);
+}
+
+.vr-slider[aria-disabled='true'] {
+  opacity: 0.55;
+
+  .vr-slider__control {
+    cursor: not-allowed;
+  }
+}

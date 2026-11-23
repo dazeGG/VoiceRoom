@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia';
 import { reactive, toRaw, toRefs } from 'vue';
-import type { RoomPeerSummary } from '@voice-room/shared/contracts/realtime';
+import type { RoomPeerSummary } from '@voiceroom/shared/contracts/realtime';
 import type { RoomRealtimeSummary } from '@/api/realtime';
 
 export const useRoomPresenceStore = defineStore('room-presence', () => {

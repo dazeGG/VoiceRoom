@@ -1,9 +1,11 @@
 <script setup lang="ts">
+import { X } from '@lucide/vue';
+import { IconButton, Button } from '@voiceroom/ui-kit/components';
 import { t } from '@/shared/i18n';
 import { computed, onMounted, ref } from 'vue';
 import EmojiText from './EmojiText.vue';
 import Emoji from './Emoji.vue';
-import { avatarInitial } from '@voice-room/ui/avatar-initial';
+import { avatarInitial } from '@voiceroom/ui-kit/avatar-initial';
 import type { ReactionStore } from './reaction-store';
 
 const { store, messageId, emoji } = defineProps<{
@@ -29,9 +31,9 @@ onMounted(() => {
       <h3 id="reactor-list-title" ref="heading" class="reactor-list__title" tabindex="-1">
         {{ t('Реакция') }} <Emoji :emoji="emoji" :size="18" decorative />
       </h3>
-      <button class="reactor-list__close" type="button" :aria-label="t('Закрыть список')" @click="emit('close')">
-        ×
-      </button>
+      <IconButton :label="t('Закрыть список')" :size="40" @click="emit('close')">
+        <X aria-hidden="true" />
+      </IconButton>
     </header>
 
     <p v-if="listState.error" class="reactor-list__message" role="alert">{{ listState.error }}</p>
@@ -57,13 +59,14 @@ onMounted(() => {
     </p>
 
     <p v-if="listState.loading" class="reactor-list__message" aria-live="polite">{{ t('Загрузка…') }}</p>
-    <button
+    <Button
       v-else-if="listState.nextCursor"
+      variant="ghost"
+      size="md"
       class="reactor-list__more"
-      type="button"
       @click="void store.loadReactors(messageId, emoji, true)"
     >
       {{ t('Показать ещё') }}
-    </button>
+    </Button>
   </section>
 </template>

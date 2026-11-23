@@ -3,10 +3,10 @@
 // avatar, name and time. Pure, so the layout rules are tested without a DOM.
 
 import { t } from '@/shared/i18n';
-import type { PublicPeer } from '@voice-room/shared/contracts/rooms';
+import type { PublicPeer } from '@voiceroom/shared/contracts/rooms';
 import type { ChatMessage } from '@/api/rooms';
 import { formatChatDayLabel, isSameDay } from '@/shared/utils/chat-date';
-import { getAvatarPresentation } from '@/shared/ui/avatar-presentation';
+import { getAvatarPresentation } from '@voiceroom/ui/avatar-presentation';
 
 const BURST_GAP_MS = 5 * 60 * 1000;
 

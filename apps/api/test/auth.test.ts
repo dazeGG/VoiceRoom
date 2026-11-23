@@ -1,9 +1,9 @@
 import test, { type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
-import { Me, SignedIn } from '@voice-room/shared/contracts/account';
-import { Failure } from '@voice-room/shared/contracts/http';
-import { Preferences } from '@voice-room/shared/contracts/notifications';
-import { RoomCard, RoomCreated, RoomList, RoomUnbookmarked } from '@voice-room/shared/contracts/rooms';
+import { Me, SignedIn } from '@voiceroom/shared/contracts/account';
+import { Failure } from '@voiceroom/shared/contracts/http';
+import { Preferences } from '@voiceroom/shared/contracts/notifications';
+import { RoomCard, RoomCreated, RoomList, RoomUnbookmarked } from '@voiceroom/shared/contracts/rooms';
 import { cookieFrom, request, startApiServer } from './fakes/server-process.ts';
 
 function startServer(t: TestContext) {

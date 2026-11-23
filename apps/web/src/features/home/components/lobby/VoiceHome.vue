@@ -1,4 +1,17 @@
 <script setup lang="ts">
+import EmojiText from '@/shared/chat/EmojiText.vue';
+import {
+  Badge,
+  Field,
+  IconButton,
+  TextField,
+  Avatar,
+  AvatarStack,
+  Button,
+  ContextMenu,
+  Ellipsis,
+  Pressable
+} from '@voiceroom/ui-kit/components';
 import { t } from '@/shared/i18n';
 import { BellOff, Plus, ShieldCheck, UserPlus, X } from '@lucide/vue';
 import { computed, ref, shallowRef } from 'vue';
@@ -6,8 +19,7 @@ import type { OwnedRoom } from '@/api/auth';
 import { useRoomPresenceStore } from '@/entities/room/room-presence.store';
 import { RoomMenuContent } from '@/shared/components/room-menu';
 import { useNotificationPreferencesStore } from '@/shared/notifications/preferences.store';
-import { Avatar, AvatarStack, Badge, Button, ContextMenu, Ellipsis } from '@/shared/ui';
-import { iconMd, iconSm } from '@/shared/ui/icons';
+import { iconMd, iconSm } from '@voiceroom/ui-kit/icon-defaults';
 import { roomPeerAvatarItems } from '../../model/room-avatars';
 import { roomDisplayName } from '../../model/rooms';
 import { useLobby } from '../../model/lobby-context';
@@ -78,10 +90,6 @@ function roomNotificationsMuted(room: OwnedRoom): boolean {
   return notificationPreferences.mutedRoomIds.includes(room.roomId);
 }
 
-function countLabel(count: number): string | number {
-  return count > 99 ? '99+' : count;
-}
-
 // Only the owner gets the settings item, so only the owner gets a handler.
 function settingsOpener(room: OwnedRoom): (() => void) | undefined {
   return room.relationship === 'owner' ? () => emit('openRoomSettings', room.roomId) : undefined;
@@ -135,31 +143,32 @@ function closeRoomContextMenu(): void {
            a search field is the one kind it leaves alone. The data-* skip
            attributes do the same for 1Password, LastPass and Bitwarden. -->
           <form class="voice-home__join" @submit.prevent="submitJoinCode">
-            <input
-              v-model="joinCode"
-              class="voice-home__join-input"
-              type="search"
-              name="room-search"
-              :placeholder="t('Код или ссылка')"
-              :aria-label="t('Код или ссылка на комнату')"
-              aria-describedby="roomAutoSaveHint"
-              autocapitalize="off"
-              autocomplete="off"
-              spellcheck="false"
-              data-1p-ignore
-              data-lpignore="true"
-              data-bwignore
-            />
-            <span id="roomAutoSaveHint" class="voice-home__hint">{{
-              t('Постоянные комнаты сохраняются автоматически')
-            }}</span>
-            <button
-              class="voice-home__join-button"
-              type="submit"
-              :title="t('Постоянные комнаты сохраняются автоматически')"
+            <Field
+              visually-hidden-label
+              visually-hidden-hint
+              class="voice-home__join-field"
+              :label="t('Код или ссылка на комнату')"
+              :hint="t('Постоянные комнаты сохраняются автоматически')"
             >
-              {{ t('Войти в комнату') }}
-            </button>
+              <TextField
+                v-model="joinCode"
+                type="search"
+                size="lg"
+                variant="mono"
+                name="room-search"
+                :placeholder="t('Код или ссылка')"
+                autocapitalize="off"
+                autocomplete="off"
+                spellcheck="false"
+                data-1p-ignore
+                data-lpignore="true"
+                data-bwignore
+              >
+                <template #action>
+                  <Button variant="outline" size="lg" type="submit">{{ t('Войти в комнату') }}</Button>
+                </template>
+              </TextField>
+            </Field>
           </form>
           <Button variant="primary" size="lg" @click="emit('createRoom')">
             <template #icon><Plus v-bind="iconSm" aria-hidden="true" /></template> {{ t('Создать комнату') }}
@@ -168,7 +177,7 @@ function closeRoomContextMenu(): void {
       </div>
 
       <div v-if="recoveryCodesReminder" class="voice-home__callout">
-        <button class="voice-home__callout-main" type="button" @click="emit('openRecoveryCodes')">
+        <Pressable class="voice-home__callout-main" @click="emit('openRecoveryCodes')">
           <span class="voice-home__callout-icon voice-home__callout-icon--warning">
             <ShieldCheck v-bind="iconMd" aria-hidden="true" />
           </span>
@@ -178,19 +187,11 @@ function closeRoomContextMenu(): void {
               t('Создайте коды восстановления — без них забытый пароль не вернуть')
             }}</span>
           </span>
-        </button>
-        <Button variant="outline" class="ui-button--compact" @click="emit('openRecoveryCodes')">{{
-          t('Создать коды')
-        }}</Button>
-        <button
-          class="voice-home__callout-dismiss"
-          type="button"
-          :aria-label="t('Напомнить через 3 дня')"
-          :title="t('Напомнить через 3 дня')"
-          @click="emit('snoozeRecoveryCodes')"
-        >
-          <X v-bind="iconSm" aria-hidden="true" />
-        </button>
+        </Pressable>
+        <Button variant="outline" size="sm" @click="emit('openRecoveryCodes')">{{ t('Создать коды') }}</Button>
+        <IconButton :size="28" :label="t('Напомнить через 3 дня')" @click="emit('snoozeRecoveryCodes')"
+          ><X aria-hidden="true"
+        /></IconButton>
       </div>
 
       <div v-if="showRequestBanner" class="voice-home__callout voice-home__callout--request">
@@ -204,16 +205,8 @@ function closeRoomContextMenu(): void {
           </span>
           <span class="voice-home__callout-sub">{{ t('Откройте, чтобы принять или отклонить') }}</span>
         </span>
-        <Button variant="primary" class="ui-button--compact" @click="lobby.showPeople">{{ t('Открыть') }}</Button>
-        <button
-          class="voice-home__callout-dismiss"
-          type="button"
-          :aria-label="t('Скрыть')"
-          :title="t('Скрыть')"
-          @click="dismissRequestBanner"
-        >
-          <X v-bind="iconSm" aria-hidden="true" />
-        </button>
+        <Button variant="primary" size="sm" @click="lobby.showPeople">{{ t('Открыть') }}</Button>
+        <IconButton :size="28" :label="t('Скрыть')" @click="dismissRequestBanner"><X aria-hidden="true" /></IconButton>
       </div>
 
       <div v-if="rooms.length === 0" class="voice-home__empty">
@@ -224,11 +217,11 @@ function closeRoomContextMenu(): void {
       <section v-if="liveRooms.length > 0" class="voice-home__section" :aria-label="t('Сейчас в эфире')">
         <h2 class="voice-home__section-title"><span class="voice-home__live-dot"></span>{{ t('Сейчас в эфире') }}</h2>
         <div class="voice-home__cards">
-          <button
+          <Pressable
             v-for="room in liveRooms"
             :key="room.roomId"
+            inset
             :class="['voice-home__card', { 'voice-home__card--context': contextRoomId === room.roomId }]"
-            type="button"
             aria-haspopup="menu"
             @click="emit('openRoom', room.roomId)"
             @contextmenu="openRoomContextMenu($event, room.roomId)"
@@ -243,7 +236,9 @@ function closeRoomContextMenu(): void {
                 foreground="var(--vr-text)"
                 :size="40"
               />
-              <Ellipsis :text="roomDisplayName(room)" class="voice-home__room-name" tag="span" />
+              <Ellipsis :text="roomDisplayName(room)" class="voice-home__room-name" tag="span"
+                ><EmojiText :text="roomDisplayName(room)"
+              /></Ellipsis>
               <span
                 v-if="roomNotificationsMuted(room)"
                 class="voice-home__muted"
@@ -254,15 +249,17 @@ function closeRoomContextMenu(): void {
                 <BellOff v-bind="iconSm" aria-hidden="true" />
               </span>
               <span class="voice-home__spacer"></span>
-              <Badge v-if="roomUnreadCount(room) > 0" :tone="roomNotificationsMuted(room) ? 'muted' : 'default'">
-                {{ countLabel(roomUnreadCount(room)) }}
-              </Badge>
+              <Badge
+                v-if="roomUnreadCount(room) > 0"
+                :tone="roomNotificationsMuted(room) ? 'muted' : 'accent'"
+                :count="roomUnreadCount(room)"
+              />
             </span>
             <span class="voice-home__card-foot">
               <span class="voice-home__live-dot"></span>
               <AvatarStack :items="roomAvatars(room.roomId)" :max-avatars="5" :size="24" :aria-label="t('В комнате')" />
             </span>
-          </button>
+          </Pressable>
         </div>
       </section>
 
@@ -273,15 +270,15 @@ function closeRoomContextMenu(): void {
       >
         <h2 class="voice-home__section-title">{{ t('Остальные') }}</h2>
         <div class="voice-home__quiet-list">
-          <button
+          <Pressable
             v-for="room in quietRooms"
             :key="room.roomId"
+            inset
             :class="[
               'voice-home__card',
               'voice-home__card--quiet',
               { 'voice-home__card--context': contextRoomId === room.roomId }
             ]"
-            type="button"
             aria-haspopup="menu"
             @click="emit('openRoom', room.roomId)"
             @contextmenu="openRoomContextMenu($event, room.roomId)"
@@ -295,7 +292,9 @@ function closeRoomContextMenu(): void {
               foreground="var(--vr-text-2)"
               :size="32"
             />
-            <Ellipsis :text="roomDisplayName(room)" class="voice-home__room-name" tag="span" />
+            <Ellipsis :text="roomDisplayName(room)" class="voice-home__room-name" tag="span"
+              ><EmojiText :text="roomDisplayName(room)"
+            /></Ellipsis>
             <span
               v-if="roomNotificationsMuted(room)"
               class="voice-home__muted"
@@ -306,11 +305,13 @@ function closeRoomContextMenu(): void {
               <BellOff v-bind="iconSm" aria-hidden="true" />
             </span>
             <span class="voice-home__spacer"></span>
-            <Badge v-if="roomUnreadCount(room) > 0" :tone="roomNotificationsMuted(room) ? 'muted' : 'default'">
-              {{ countLabel(roomUnreadCount(room)) }}
-            </Badge>
+            <Badge
+              v-if="roomUnreadCount(room) > 0"
+              :tone="roomNotificationsMuted(room) ? 'muted' : 'accent'"
+              :count="roomUnreadCount(room)"
+            />
             <span class="voice-home__room-sub">{{ t('тихо') }}</span>
-          </button>
+          </Pressable>
         </div>
       </section>
     </div>

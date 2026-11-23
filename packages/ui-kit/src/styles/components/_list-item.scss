@@ -1,0 +1,105 @@
+.ui-list-item {
+  --list-item-px: var(--space-12);
+  --list-item-py: var(--space-8);
+  --list-item-gap: var(--space-12);
+  --list-item-height: var(--size-56);
+  --list-item-radius: var(--radius-12);
+
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  border-radius: var(--list-item-radius);
+  color: var(--vr-text);
+
+  &:hover,
+  &:focus-within {
+    background: var(--vr-hover);
+  }
+
+  &--dense {
+    --list-item-px: var(--space-8);
+    --list-item-py: 0;
+    --list-item-gap: var(--space-8);
+    --list-item-height: var(--size-36);
+    --list-item-radius: var(--radius-10);
+  }
+
+  &__body {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    gap: var(--list-item-gap);
+    min-width: 0;
+    min-height: var(--list-item-height);
+    padding: var(--list-item-py) var(--list-item-px);
+    border: 0;
+    border-radius: inherit;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: start;
+  }
+
+  &__body:enabled {
+    cursor: pointer;
+  }
+
+  &__body:focus-visible {
+    outline: var(--space-2) solid var(--vr-accent);
+    outline-offset: calc(-1 * var(--space-2));
+  }
+
+  &__text {
+    display: grid;
+    flex: 1;
+    gap: var(--space-2);
+    min-width: 0;
+  }
+
+  &__title,
+  &__caption {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__title {
+    font: 500 0.875rem / 1.3 var(--font-ui);
+  }
+
+  &__caption {
+    color: var(--vr-text-muted);
+    font-size: 0.75rem;
+  }
+
+  &__meta,
+  &__actions {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: var(--space-4);
+  }
+
+  &__actions {
+    gap: var(--space-2);
+    padding-inline-end: var(--list-item-px);
+  }
+
+  &__time {
+    color: var(--vr-text-muted);
+    font: 500 0.6875rem / 1 var(--font-mono);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    &__actions {
+      opacity: 0;
+      transition: opacity 120ms ease;
+    }
+
+    &:hover &__actions,
+    &:focus-within &__actions,
+    &__actions:has([aria-expanded='true']) {
+      opacity: 1;
+    }
+  }
+}

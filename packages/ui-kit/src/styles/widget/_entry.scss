@@ -1,0 +1,43 @@
+.widget-entry__title {
+  margin: 0 0 var(--space-16);
+  font-size: 1.125rem;
+  font-weight: 650;
+  line-height: 1.25;
+}
+
+.widget-shell__status ~ .widget-entry .widget-entry__title {
+  margin-block-start: var(--space-12);
+}
+
+.widget-entry__field {
+  margin-block-end: var(--space-16);
+}
+
+.widget-entry__form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-16);
+}
+
+.widget-entry__divider {
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+  color: color-mix(in srgb, var(--vr-text) 55%, transparent);
+  font-size: 0.6875rem;
+
+  &::before,
+  &::after {
+    height: 1px;
+    flex: 1;
+    background: color-mix(in srgb, var(--vr-text) 12%, transparent);
+    content: '';
+  }
+}
+
+.widget-entry__join {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-8);
+}

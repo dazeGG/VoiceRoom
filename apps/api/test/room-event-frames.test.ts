@@ -10,9 +10,9 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import sharp from 'sharp';
-import type { ServerFrame } from '@voice-room/shared/contracts/realtime';
-import { RoomCreated } from '@voice-room/shared/contracts/rooms';
-import { isArray, isRecord } from '@voice-room/shared/guards';
+import type { ServerFrame } from '@voiceroom/shared/contracts/realtime';
+import { RoomCreated } from '@voiceroom/shared/contracts/rooms';
+import { isArray, isRecord } from '@voiceroom/shared/guards';
 import { joinVoiceRoom, openWs, sendWs, subscribeRoomPreview, type WsSession } from './ws-harness.ts';
 import { registerAccount, request, startApiServer, wait } from './fakes/server-process.ts';
 

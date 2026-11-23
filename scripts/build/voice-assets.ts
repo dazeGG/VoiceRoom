@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { extname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { voiceAssetLicensePath, voiceAssetPaths } from '@voice-room/call/voice-assets';
+import { voiceAssetLicensePath, voiceAssetPaths } from '@voiceroom/call/voice-assets';
 import type { Plugin } from 'vite';
 
 export const voiceAssetDirectory = fileURLToPath(new URL('../../packages/call/assets', import.meta.url));

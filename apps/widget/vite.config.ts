@@ -1,6 +1,6 @@
 import { fileURLToPath } from 'node:url';
 import { NodePackageImporter } from 'sass';
-import { voiceAssetUrls } from '@voice-room/call/voice-assets';
+import { voiceAssetUrls } from '@voiceroom/call/voice-assets';
 import vue from '@vitejs/plugin-vue';
 import { build, type Plugin } from 'vite';
 import { defineConfig } from 'vitest/config';

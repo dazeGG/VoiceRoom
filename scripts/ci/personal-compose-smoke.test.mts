@@ -7,10 +7,10 @@ import test from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';
 import { connect, type TLSSocket } from 'node:tls';
 import { SignalResponse } from '@livekit/protocol';
-import { LiveKitAdmission } from '@voice-room/shared/contracts/admission';
-import type { ClientCommands, ClientCommandType, ServerFrame } from '@voice-room/shared/contracts/realtime';
-import { MeetOwnerAuthorization, MeetRoomCreated } from '@voice-room/shared/contracts/rooms';
-import { parseServerFrame } from '@voice-room/shared/realtime';
+import { LiveKitAdmission } from '@voiceroom/shared/contracts/admission';
+import type { ClientCommands, ClientCommandType, ServerFrame } from '@voiceroom/shared/contracts/realtime';
+import { MeetOwnerAuthorization, MeetRoomCreated } from '@voiceroom/shared/contracts/rooms';
+import { parseServerFrame } from '@voiceroom/shared/realtime';
 import { Value } from 'typebox/value';
 import WebSocket from 'ws';
 

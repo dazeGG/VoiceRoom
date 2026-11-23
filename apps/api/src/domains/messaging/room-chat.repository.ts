@@ -5,10 +5,10 @@
 import crypto from 'node:crypto';
 import { sql, type Selectable } from 'kysely';
 import type pg from 'pg';
-import { normalizeLinkPreview } from '@voice-room/shared/link-preview';
-import { contentFromPlainText, type RoomMessageContentV1 } from '@voice-room/shared/room-message-content';
-import { MessageContent } from '@voice-room/shared/contracts/messages';
-import { isRecord } from '@voice-room/shared/guards';
+import { normalizeLinkPreview } from '@voiceroom/shared/link-preview';
+import { contentFromPlainText, type RoomMessageContentV1 } from '@voiceroom/shared/room-message-content';
+import { MessageContent } from '@voiceroom/shared/contracts/messages';
+import { isRecord } from '@voiceroom/shared/guards';
 import { Value } from 'typebox/value';
 import { transaction } from '../../platform/db/pool.ts';
 import { kyselyOn, type Database } from '../../platform/db/kysely.ts';

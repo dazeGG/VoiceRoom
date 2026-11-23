@@ -1,10 +1,12 @@
-import type { MemberPresenceStatus } from '@voice-room/shared/contracts/membership';
-import { screen } from '@testing-library/vue';
+import type { MemberPresenceStatus } from '@voiceroom/shared/contracts/membership';
+import { screen, waitFor } from '@testing-library/vue';
+import userEvent from '@testing-library/user-event';
 import { expect, test } from 'vitest';
 import RoomMemberList from '@/entities/room/components/RoomMemberList.vue';
 import { useSessionStore } from '@/features/auth/session.store';
 import { stubFetch } from '../fixtures/fetch.ts';
 import { authUser } from '../fixtures/users.ts';
+import { stubOverlayDom } from '../helpers/overlay-dom';
 import { renderWithApp } from '../helpers/render.ts';
 
 function member(userId: string, displayName: string, presenceStatus: MemberPresenceStatus) {
@@ -47,6 +49,34 @@ test('the participants tab lists the roster from the server, split into online a
   expect(screen.getByText('Anna')).toBeTruthy();
   expect(screen.getByText('Vera')).toBeTruthy();
   expect(calls.map((call) => call.url)).toEqual(['/api/rooms/room-a/members?limit=50']);
+});
+
+test('moderation opens from the row action without activating the profile', async () => {
+  stubOverlayDom();
+  const user = userEvent.setup();
+  stubFetch({
+    '/api/rooms/room-moderation/members?limit=50': {
+      body: {
+        contractVersion: 1,
+        roomId: 'room-moderation',
+        members: [member('00000000-0000-4000-8000-000000000018', 'Anna', 'online')],
+        pageInfo: { hasMore: false },
+        presenceRevision: 1
+      }
+    }
+  });
+  const { pinia } = await renderWithApp(RoomMemberList, { props: { roomId: 'room-moderation', canModerate: true } });
+  useSessionStore(pinia).setUser(authUser());
+
+  const action = await screen.findByRole('button', { name: 'Действия с Anna' });
+  await user.click(action);
+  expect(action.getAttribute('aria-expanded')).toBe('true');
+  expect(await screen.findByRole('menu', { name: 'Действия с Anna' })).toBeTruthy();
+  expect(screen.queryByRole('dialog')).toBeNull();
+  await user.keyboard('{Escape}');
+  await waitFor(() => expect(document.activeElement).toBe(action));
+  await user.keyboard('{Enter}');
+  expect(await screen.findByRole('menuitem', { name: 'Профиль' })).toBeTruthy();
 });
 
 test('a guest is told the roster needs an account instead of getting an error', async () => {

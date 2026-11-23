@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import net from 'node:net';
 import { LOG_EVENTS } from './log-events.ts';
 import { createLogger } from './logger.ts';
-import { isRecord } from '@voice-room/shared/guards';
+import { isRecord } from '@voiceroom/shared/guards';
 import { fieldOf } from '../platform/record.ts';
 import type { Logger } from '../platform/types.ts';
 

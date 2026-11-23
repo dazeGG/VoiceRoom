@@ -30,9 +30,9 @@ a {
   display: none !important;
 }
 
-:where(button, a, input, select):focus-visible {
-  outline: 2px solid var(--vr-accent);
-  outline-offset: 3px;
+:where(a, select):focus-visible {
+  outline: var(--space-2) solid var(--vr-accent);
+  outline-offset: var(--space-2);
 }
 
 .meet-shell {
@@ -44,8 +44,8 @@ a {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 1rem;
-    padding: 0.75rem clamp(1rem, 4vw, 3rem);
+    gap: var(--space-16);
+    padding: var(--space-12) clamp(var(--space-16), 4vw, var(--space-48));
     border-bottom: 1px solid var(--vr-line);
     background: var(--vr-surface);
   }
@@ -53,7 +53,7 @@ a {
   &__brand {
     display: inline-flex;
     align-items: center;
-    gap: 0.625rem;
+    gap: var(--space-12);
     font-weight: 600;
     text-decoration: none;
     white-space: nowrap;
@@ -66,19 +66,24 @@ a {
   &__mark {
     display: grid;
     place-items: center;
-    width: 2.125rem;
-    height: 2.125rem;
-    border-radius: var(--radius-sm);
+    width: var(--size-36);
+    height: var(--size-36);
+    border-radius: var(--radius-8);
     background: var(--vr-accent);
     color: var(--vr-accent-ink);
+
+    svg {
+      width: var(--icon-20);
+      height: var(--icon-20);
+    }
   }
 
   &__language {
-    min-height: 2.5rem;
-    max-width: 9rem;
-    padding-inline: 0.65rem;
+    min-height: var(--size-40);
+    max-width: calc(var(--size-48) * 3);
+    padding-inline: var(--space-12);
     border: 1px solid var(--vr-line-strong);
-    border-radius: var(--radius-sm);
+    border-radius: var(--radius-8);
     background: var(--vr-surface-2);
     color: var(--vr-text);
   }

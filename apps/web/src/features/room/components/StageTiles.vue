@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-import { StageTiles } from '@voice-room/call/views';
-import { state } from '@voice-room/call/engine/core/room-runtime.store';
-import { useParticipantsUiStore } from '@voice-room/call/engine/core/participants-ui.store';
-import { useScreenUiStore } from '@voice-room/call/engine/core/screen-ui.store';
-import { getScreenParticipants } from '@voice-room/call/engine/ui/screen-view';
+import { StageTiles } from '@voiceroom/call/views';
+import { state } from '@voiceroom/call/engine/core/room-runtime.store';
+import { useParticipantsUiStore } from '@voiceroom/call/engine/core/participants-ui.store';
+import { useScreenUiStore } from '@voiceroom/call/engine/core/screen-ui.store';
+import { getScreenParticipants } from '@voiceroom/call/engine/ui/screen-view';
 import ParticipantContextMenu from './ParticipantContextMenu.vue';
 import ParticipantList from './ParticipantList.vue';
 import StreamTiles from './StreamTiles.vue';

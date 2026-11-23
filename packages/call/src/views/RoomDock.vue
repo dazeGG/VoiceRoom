@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { t } from '@voice-room/ui/i18n';
+import { t } from '@voiceroom/ui-kit/i18n';
 import {
-  ChevronDown,
+  ChevronUp,
   HeadphoneOff,
   Headphones,
   Mic,
@@ -12,7 +12,10 @@ import {
   Video,
   VideoOff
 } from '@lucide/vue';
-import { Popover } from '@voice-room/ui/components';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { IconButton, Popover, Separator, Tooltip } from '@voiceroom/ui-kit/components';
+import { formatHotkeyKeys } from '@voiceroom/ui-kit/hotkey';
+import { HOTKEY_BINDINGS_CHANGED_EVENT, readHotkeyBinding } from '../engine/core/hotkeys';
 import type {
   CallControlsView,
   CameraControlsView,
@@ -22,7 +25,7 @@ import type {
 import type { ConnectionStatusView } from '../engine/ui/status';
 import type { CallDevice } from './types';
 
-defineProps<{
+const props = defineProps<{
   connection: ConnectionStatusView;
   callControls: CallControlsView;
   outputControls: OutputControlsView;
@@ -49,20 +52,39 @@ const emit = defineEmits<{
 }>();
 
 defineSlots<{ deviceSettings(props: { device: CallDevice }): unknown }>();
+
+function readDockBindings() {
+  return {
+    mic: readHotkeyBinding('mic-mute'),
+    pushToTalk: readHotkeyBinding('push-to-talk'),
+    output: readHotkeyBinding('output-mute')
+  };
+}
+
+const bindings = ref(readDockBindings());
+const microphoneShortcut = computed(() => {
+  const binding = props.pushToTalk ? bindings.value.pushToTalk : bindings.value.mic;
+  return binding ? formatHotkeyKeys(binding) : undefined;
+});
+const outputShortcut = computed(() => (bindings.value.output ? formatHotkeyKeys(bindings.value.output) : undefined));
+
+function refreshHotkeys(): void {
+  bindings.value = readDockBindings();
+}
+
+onMounted(() => window.addEventListener(HOTKEY_BINDINGS_CHANGED_EVENT, refreshHotkeys));
+onBeforeUnmount(() => window.removeEventListener(HOTKEY_BINDINGS_CHANGED_EVENT, refreshHotkeys));
 </script>
 
 <template>
-  <div class="room-dock" :aria-label="t('Управление голосом')">
+  <div class="room-dock" role="group" :aria-label="t('Управление голосом')">
     <div class="room-dock__shell">
       <div class="room-dock__cluster">
         <Popover
           :open="microphoneMenu"
           placement="top-end"
           role="dialog"
-          :aria-label="t('Настройки микрофона')"
-          root-class="room-dock__anchor"
-          panel-class="room-dock__device-popover"
-          keep-content-mounted
+          :title="t('Настройки микрофона')"
           flip
           @update:open="emit('updateDeviceMenu', 'microphone', $event)"
         >
@@ -71,45 +93,42 @@ defineSlots<{ deviceSettings(props: { device: CallDevice }): unknown }>();
               :class="[
                 'room-dock__split',
                 {
-                  'room-dock__split--muted': callControls.stateName === 'muted',
-                  'room-dock__split--active': callControls.stateName === 'ptt-active'
+                  'room-dock__split--muted': callControls.stateName === 'muted' || callControls.stateName === 'ptt',
+                  'room-dock__split--on': callControls.stateName === 'live' || pushToTalkActive
                 }
               ]"
             >
-              <button
+              <IconButton
                 id="muteButton"
-                :class="[
-                  'room-dock__button',
-                  'room-dock__button--mic',
-                  { 'room-dock__button--muted': callControls.stateName === 'muted' }
-                ]"
-                type="button"
+                class="room-dock__button room-dock__button--mic"
+                :size="44"
                 :aria-pressed="callControls.ariaPressed"
-                :aria-label="callControls.label"
+                :label="callControls.label"
+                :shortcut="microphoneShortcut"
                 :disabled="callControls.disabled"
                 @click="emit('toggleMicrophone', $event)"
               >
-                <span class="room-dock__icon room-dock__icon--mic" aria-hidden="true"><Mic /></span>
-                <span class="room-dock__icon room-dock__icon--muted" aria-hidden="true"><MicOff /></span>
+                <MicOff v-if="callControls.stateName === 'muted'" aria-hidden="true" />
+                <Mic v-else aria-hidden="true" />
                 <span
                   v-if="pushToTalk"
                   :class="['room-dock__ptt-badge', { 'room-dock__ptt-badge--active': pushToTalkActive }]"
                   aria-hidden="true"
                   >PTT</span
                 >
-                <span id="muteText" class="room-dock__label">{{ callControls.label }}</span>
-              </button>
-              <button
+              </IconButton>
+              <IconButton
                 id="deviceMenuButton"
                 class="room-dock__menu-button"
-                type="button"
+                :size="24"
                 :aria-expanded="open"
                 :aria-controls="panelId"
-                :aria-label="t('Выбрать микрофон')"
+                aria-haspopup="dialog"
+                :label="t('Выбрать микрофон')"
                 @click.stop="emit('toggleDeviceMenu', 'microphone')"
               >
-                <ChevronDown />
-              </button>
+                <ChevronUp aria-hidden="true" />
+              </IconButton>
             </div>
           </template>
 
@@ -122,42 +141,41 @@ defineSlots<{ deviceSettings(props: { device: CallDevice }): unknown }>();
           :open="outputMenu"
           placement="top-end"
           role="dialog"
-          :aria-label="t('Настройки динамика')"
-          root-class="room-dock__anchor"
-          panel-class="room-dock__device-popover"
-          keep-content-mounted
+          :title="t('Настройки динамика')"
           flip
           @update:open="emit('updateDeviceMenu', 'output', $event)"
         >
           <template #trigger="{ open, panelId }">
-            <div :class="['room-dock__split', { 'room-dock__split--muted': outputControls.stateName === 'muted' }]">
-              <button
+            <div
+              :class="[
+                'room-dock__split',
+                outputControls.ariaPressed ? 'room-dock__split--muted' : 'room-dock__split--on'
+              ]"
+            >
+              <IconButton
                 id="outputButton"
-                :class="[
-                  'room-dock__button',
-                  'room-dock__button--output',
-                  { 'room-dock__button--muted': outputControls.stateName === 'muted' }
-                ]"
-                type="button"
+                class="room-dock__button room-dock__button--output"
+                :size="44"
                 :aria-pressed="outputControls.ariaPressed"
-                :aria-label="outputControls.label"
+                :label="outputControls.label"
+                :shortcut="outputShortcut"
                 @click="emit('toggleOutput')"
               >
-                <span class="room-dock__icon room-dock__icon--output" aria-hidden="true"><Headphones /></span>
-                <span class="room-dock__icon room-dock__icon--output-muted" aria-hidden="true"><HeadphoneOff /></span>
-                <span id="outputText" class="room-dock__label">{{ outputControls.label }}</span>
-              </button>
-              <button
+                <HeadphoneOff v-if="outputControls.ariaPressed" aria-hidden="true" />
+                <Headphones v-else aria-hidden="true" />
+              </IconButton>
+              <IconButton
                 id="outputMenuButton"
                 class="room-dock__menu-button"
-                type="button"
+                :size="24"
                 :aria-expanded="open"
                 :aria-controls="panelId"
-                :aria-label="t('Выбрать динамик')"
+                aria-haspopup="dialog"
+                :label="t('Выбрать динамик')"
                 @click.stop="emit('toggleDeviceMenu', 'output')"
               >
-                <ChevronDown />
-              </button>
+                <ChevronUp aria-hidden="true" />
+              </IconButton>
             </div>
           </template>
 
@@ -170,43 +188,41 @@ defineSlots<{ deviceSettings(props: { device: CallDevice }): unknown }>();
           :open="cameraMenu"
           placement="top-end"
           role="dialog"
-          :aria-label="t('Настройки камеры')"
-          root-class="room-dock__anchor"
-          panel-class="room-dock__device-popover"
-          keep-content-mounted
+          :title="t('Настройки камеры')"
           flip
           @update:open="emit('updateDeviceMenu', 'camera', $event)"
         >
           <template #trigger="{ open, panelId }">
-            <div :class="['room-dock__split', { 'room-dock__split--on': cameraControls.stateName === 'on' }]">
-              <button
+            <div
+              :class="[
+                'room-dock__split',
+                cameraControls.ariaPressed ? 'room-dock__split--on' : 'room-dock__split--muted'
+              ]"
+            >
+              <IconButton
                 id="cameraButton"
-                :class="[
-                  'room-dock__button',
-                  'room-dock__button--camera',
-                  { 'room-dock__button--on': cameraControls.stateName === 'on' }
-                ]"
-                type="button"
+                class="room-dock__button room-dock__button--camera"
+                :size="44"
                 :aria-pressed="cameraControls.ariaPressed"
-                :aria-label="cameraControls.label"
+                :label="cameraControls.label"
                 :disabled="cameraControls.disabled"
                 @click="emit('toggleCamera')"
               >
-                <span class="room-dock__icon room-dock__icon--camera" aria-hidden="true"><Video /></span>
-                <span class="room-dock__icon room-dock__icon--camera-off" aria-hidden="true"><VideoOff /></span>
-                <span class="room-dock__label">{{ cameraControls.label }}</span>
-              </button>
-              <button
+                <Video v-if="cameraControls.ariaPressed" aria-hidden="true" />
+                <VideoOff v-else aria-hidden="true" />
+              </IconButton>
+              <IconButton
                 id="cameraMenuButton"
                 class="room-dock__menu-button"
-                type="button"
+                :size="24"
                 :aria-expanded="open"
                 :aria-controls="panelId"
-                :aria-label="t('Выбрать камеру')"
+                aria-haspopup="dialog"
+                :label="t('Выбрать камеру')"
                 @click.stop="emit('toggleDeviceMenu', 'camera')"
               >
-                <ChevronDown />
-              </button>
+                <ChevronUp aria-hidden="true" />
+              </IconButton>
             </div>
           </template>
 
@@ -215,66 +231,57 @@ defineSlots<{ deviceSettings(props: { device: CallDevice }): unknown }>();
       </div>
 
       <div class="room-dock__cluster room-dock__cluster--screen">
-        <button
+        <IconButton
           id="screenButton"
-          :class="[
-            'room-dock__button',
-            'room-dock__button--screen',
-            { 'room-dock__button--live': screenControls.stateName === 'live' }
-          ]"
-          type="button"
+          class="room-dock__button room-dock__button--screen"
+          :size="44"
+          :variant="screenControls.ariaPressed ? 'primary' : 'filled'"
           :aria-pressed="screenControls.ariaPressed"
-          :aria-label="screenControls.label"
+          :label="screenControls.label"
           :disabled="screenControls.disabled"
           @click="emit('toggleScreen')"
         >
-          <span class="room-dock__icon room-dock__icon--screen" aria-hidden="true"><ScreenShare /></span>
-          <span class="room-dock__icon room-dock__icon--screen-stop" aria-hidden="true"><ScreenShareOff /></span>
-          <span id="screenText" class="room-dock__label">{{ screenControls.label }}</span>
-        </button>
+          <ScreenShareOff v-if="screenControls.ariaPressed" aria-hidden="true" />
+          <ScreenShare v-else aria-hidden="true" />
+        </IconButton>
       </div>
 
-      <span class="room-dock__divider" aria-hidden="true"></span>
+      <Separator class="room-dock__divider" orientation="vertical" decorative />
 
       <div class="room-dock__connection-wrap">
-        <div
-          :class="['room-dock__connection', `room-dock__connection--${connection.stateName}`]"
-          role="status"
-          :aria-label="connection.label || t('Связь')"
-        >
-          <span class="room-dock__bar" aria-hidden="true"></span>
-          <span class="room-dock__bar" aria-hidden="true"></span>
-          <span class="room-dock__bar" aria-hidden="true"></span>
-        </div>
-        <span
-          :class="['room-dock__connection-popover', `room-dock__connection-popover--${connection.stateName}`]"
-          role="tooltip"
-        >
-          <span class="room-dock__connection-dot" aria-hidden="true"></span>
-          <span class="room-dock__connection-label">{{ connection.label || t('Связь') }}</span>
-        </span>
+        <Tooltip :text="connection.label || t('Связь')">
+          <div
+            :class="['room-dock__connection', `room-dock__connection--${connection.stateName}`]"
+            role="status"
+            :aria-label="connection.label || t('Связь')"
+          >
+            <span class="room-dock__bar" aria-hidden="true"></span>
+            <span class="room-dock__bar" aria-hidden="true"></span>
+            <span class="room-dock__bar" aria-hidden="true"></span>
+          </div>
+        </Tooltip>
       </div>
 
-      <button
+      <IconButton
         id="leaveButton"
         class="room-dock__button room-dock__button--leave"
-        type="button"
-        :aria-label="t('Покинуть звонок')"
+        :size="44"
+        :label="t('Покинуть звонок')"
         :hidden="hideLeaveButton"
         @click="emit('leave')"
       >
         <PhoneOff aria-hidden="true" />
-      </button>
-      <button
+      </IconButton>
+      <IconButton
         id="screenExitButton"
         class="room-dock__button room-dock__button--screen-exit"
-        type="button"
-        :aria-label="t('Выйти со стрима')"
+        :size="44"
+        :label="t('Выйти со стрима')"
         :hidden="!showScreenExit"
         @click="emit('exitScreen')"
       >
         <ScreenShareOff aria-hidden="true" />
-      </button>
+      </IconButton>
     </div>
   </div>
 </template>

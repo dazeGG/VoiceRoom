@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { Toolbar, ToolbarToggle } from '@voiceroom/ui-kit/components';
+import { isApplePlatform } from '@voiceroom/ui-kit/hotkey';
 import { t } from '@/shared/i18n';
 import { Bold, CodeXml, Italic, Strikethrough } from '@lucide/vue';
 import { computed, ref, watch } from 'vue';
@@ -10,20 +12,15 @@ const props = defineProps<{
   limit: number | null;
 }>();
 const emit = defineEmits<{ apply: [format: MarkdownFormat]; dismiss: [] }>();
-const actions = computed(
-  () =>
-    [
-      { format: 'bold', icon: Bold, label: t('Жирный') },
-      { format: 'italic', icon: Italic, label: t('Курсив') },
-      { format: 'strike', icon: Strikethrough, label: t('Зачёркнутый') },
-      { format: 'code', icon: CodeXml, label: t('Код') }
-    ] as const
-);
+const modifier = isApplePlatform() ? '⌘' : 'Ctrl';
+const actions = computed(() => [
+  { format: 'bold' as const, icon: Bold, label: t('Жирный'), shortcut: [modifier, 'B'] },
+  { format: 'italic' as const, icon: Italic, label: t('Курсив'), shortcut: [modifier, 'I'] },
+  { format: 'strike' as const, icon: Strikethrough, label: t('Зачёркнутый'), shortcut: undefined },
+  { format: 'code' as const, icon: CodeXml, label: t('Код'), shortcut: undefined }
+]);
 
 const panel = ref<HTMLElement | null>(null);
-const nativeFocusGroup = 'focusGroup' in HTMLElement.prototype;
-const focusGroup = { focusgroup: 'toolbar wrap' };
-const current = ref(0);
 
 watch(
   [panel, () => props.anchor, () => props.limit],
@@ -40,52 +37,24 @@ watch(
   },
   { flush: 'post' }
 );
-
-function onKeydown(event: KeyboardEvent): void {
-  if (event.key === 'Escape') {
-    event.preventDefault();
-    emit('dismiss');
-    return;
-  }
-  if (nativeFocusGroup) return;
-  const count = actions.value.length;
-  const steps: Record<string, number> = {
-    ArrowLeft: (current.value + count - 1) % count,
-    ArrowRight: (current.value + 1) % count,
-    Home: 0,
-    End: count - 1
-  };
-  const next = steps[event.key];
-  if (next === undefined || !Object.hasOwn(steps, event.key)) return;
-  event.preventDefault();
-  panel.value?.querySelectorAll('button')[next]?.focus();
-}
 </script>
 
 <template>
   <div ref="panel" popover="manual" class="composer-format">
-    <div
-      v-bind="focusGroup"
-      role="toolbar"
-      :aria-label="t('Форматирование сообщения')"
-      class="composer-format__actions"
-      @keydown="onKeydown"
-    >
-      <button
-        v-for="(action, index) in actions"
+    <Toolbar :label="t('Форматирование сообщения')" @keydown.esc.prevent="emit('dismiss')">
+      <ToolbarToggle
+        v-for="action in actions"
         :key="action.format"
-        type="button"
-        :aria-label="action.label"
-        :aria-pressed="active.includes(action.format)"
-        :title="action.label"
-        :tabindex="nativeFocusGroup ? undefined : index === current ? 0 : -1"
-        @focus="current = index"
+        :label="action.label"
+        :pressed="active.includes(action.format)"
+        :shortcut="action.shortcut"
+        :tooltip-target="panel ?? undefined"
         @mousedown.prevent
-        @click="emit('apply', action.format)"
+        @update:pressed="emit('apply', action.format)"
       >
-        <component :is="action.icon" :size="16" aria-hidden="true" />
-      </button>
-    </div>
+        <component :is="action.icon" aria-hidden="true" />
+      </ToolbarToggle>
+    </Toolbar>
     <p class="composer-format__status" role="status">
       {{ limit === null ? '' : t('Лимит сообщения — {p0} символов', { p0: limit }) }}
     </p>

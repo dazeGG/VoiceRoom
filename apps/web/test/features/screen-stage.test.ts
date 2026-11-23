@@ -3,12 +3,12 @@
 
 import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, expect, test } from 'vitest';
-import { state } from '@voice-room/call/engine/core/room-runtime.store';
-import { createInitialRoomState } from '@voice-room/call/engine/model/room-state';
-import { createParticipant } from '@voice-room/call/engine/room/participants';
-import { queueAudioUnlock } from '@voice-room/call/engine/services/media-playback-service';
-import { useScreenUiStore } from '@voice-room/call/engine/core/screen-ui.store';
-import { useStartUiStore } from '@voice-room/call/engine/core/start-ui.store';
+import { state } from '@voiceroom/call/engine/core/room-runtime.store';
+import { createInitialRoomState } from '@voiceroom/call/engine/model/room-state';
+import { createParticipant } from '@voiceroom/call/engine/room/participants';
+import { queueAudioUnlock } from '@voiceroom/call/engine/services/media-playback-service';
+import { useScreenUiStore } from '@voiceroom/call/engine/core/screen-ui.store';
+import { useStartUiStore } from '@voiceroom/call/engine/core/start-ui.store';
 
 beforeEach(() => {
   setActivePinia(createPinia());

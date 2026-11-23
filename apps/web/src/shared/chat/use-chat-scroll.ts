@@ -6,7 +6,7 @@ import { t } from '@/shared/i18n';
 import { nextTick } from 'vue';
 import { copyAttachmentImage } from './attachment-actions';
 import { copyText } from '../utils/clipboard';
-import type { Attachment as MessageAttachment } from '@voice-room/shared/contracts/messages';
+import type { Attachment as MessageAttachment } from '@voiceroom/shared/contracts/messages';
 
 /** Within this many pixels of the end the reader counts as being at the newest message. */
 const PINNED_THRESHOLD_PX = 48;

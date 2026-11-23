@@ -1,7 +1,7 @@
 import { Value } from 'typebox/value';
 import type { Static, TSchema } from 'typebox';
-import { isErrorCode, type ErrorCode } from '@voice-room/shared/contracts/errors';
-import { isRecord } from '@voice-room/shared/guards';
+import { isErrorCode, type ErrorCode } from '@voiceroom/shared/contracts/errors';
+import { isRecord } from '@voiceroom/shared/guards';
 
 export function widgetErrorMessage(code: string): string {
   switch (code) {

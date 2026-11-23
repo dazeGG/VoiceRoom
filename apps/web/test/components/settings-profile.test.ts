@@ -12,7 +12,7 @@ import { instanceOf } from '../helpers/assert.ts';
 import { renderWithApp } from '../helpers/render.ts';
 
 vi.mock(
-  '@/shared/ui/AvatarCropDialog/canvas-2d.ts',
+  '@/shared/components/AvatarCropDialog/canvas-2d.ts',
   async () => (await import('../helpers/fake-canvas.ts')).fakeCanvas2d
 );
 
@@ -42,10 +42,10 @@ async function renderSettings(user: AuthUser = saved) {
   return { ...view, props, session };
 }
 
-const profileImage = () => document.querySelector<HTMLImageElement>('.settings__profile-avatar img');
+const profileImage = () => screen.queryByRole('button', { name: 'Изменить аватар' })?.querySelector('img') ?? null;
 
 async function pickAndCrop(): Promise<void> {
-  const input = instanceOf(document.querySelector('.settings__avatar-input'), HTMLInputElement, 'avatar input');
+  const input = instanceOf(screen.getByLabelText('Аватар'), HTMLInputElement, 'avatar input');
   await userEvent.upload(input, new File(['picture'], 'me.png', { type: 'image/png' }));
   const done = await screen.findByRole('button', { name: 'Готово' });
   await vi.waitFor(() => expect(done).toHaveProperty('disabled', false));
@@ -101,7 +101,7 @@ test('a new crop after a removal uploads instead of deleting', async () => {
 
 test('a file that is not an image, or is too large, never reaches the crop dialog', async () => {
   const { props } = await renderSettings();
-  const input = instanceOf(document.querySelector('.settings__avatar-input'), HTMLInputElement, 'avatar input');
+  const input = instanceOf(screen.getByLabelText('Аватар'), HTMLInputElement, 'avatar input');
 
   await fireEvent.change(input, { target: { files: [new File(['text'], 'notes.txt', { type: 'text/plain' })] } });
   expect(props.onToast).toHaveBeenLastCalledWith('Выберите изображение JPEG, PNG или WebP');

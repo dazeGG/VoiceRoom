@@ -31,7 +31,7 @@ import {
   type MicrophoneMode,
   type NoiseMode
 } from './config';
-import { isRecord } from '@voice-room/shared/guards';
+import { isRecord } from '@voiceroom/shared/guards';
 import { readStorage, writeStorage } from './storage';
 
 export function isNoiseMode(mode: unknown): mode is NoiseMode {

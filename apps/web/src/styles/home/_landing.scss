@@ -8,7 +8,7 @@
 //   .landing-layout                     -> .landing__layout
 //   .landing-legal                      -> .landing__legal
 //   body:not([data-screen='room'])      -> body:not(.screen--room)
-@use 'pkg:@voice-room/ui/styles/mixins' as *;
+@use 'pkg:@voiceroom/ui-kit/styles/mixins' as *;
 
 .landing__container {
   width: min(100%, 1160px);
@@ -23,21 +23,21 @@ body:not(.screen--room) .landing__container .topbar {
   flex: none;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-8);
 
   @include below(560px) {
-    gap: 6px;
+    gap: var(--space-6);
   }
 }
 
 .landing__login {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  height: 38px;
-  padding: 0 16px;
+  gap: var(--space-6);
+  height: var(--size-40);
+  padding: 0 var(--space-16);
   border: 1px solid var(--vr-line-strong);
-  border-radius: 10px;
+  border-radius: var(--radius-10);
   color: var(--vr-text);
   font-size: 0.875rem;
   font-weight: 500;
@@ -52,10 +52,10 @@ body:not(.screen--room) .landing__container .topbar {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr));
   align-items: center;
-  gap: 40px;
+  gap: var(--space-40);
   width: min(100%, 1160px);
   margin-inline: auto;
-  padding: 24px 0 40px;
+  padding: var(--space-24) 0 var(--space-40);
 }
 
 .landing__legal {
@@ -63,8 +63,8 @@ body:not(.screen--room) .landing__container .topbar {
   flex-wrap: wrap;
   align-items: center;
   justify-content: center;
-  gap: 12px 20px;
-  padding: 8px 16px 24px;
+  gap: var(--space-12) var(--space-20);
+  padding: var(--space-8) var(--space-16) var(--space-24);
 }
 
 // The brand name hides next to the login button on a narrow phone.

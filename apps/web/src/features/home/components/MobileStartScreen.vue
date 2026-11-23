@@ -4,8 +4,8 @@ import { ArrowRight, MessageSquare, Mic, MonitorPlay } from '@lucide/vue';
 import { onMounted, ref } from 'vue';
 import { createRoom } from '@/api/rooms';
 import { markInAppRoomNavigation } from '@/platform/open-in-app';
-import { Button, MascotIcon } from '@/shared/ui';
-import { iconMd, iconSm } from '@/shared/ui/icons';
+import { Button, MascotIcon } from '@voiceroom/ui-kit/components';
+import { iconMd, iconSm } from '@voiceroom/ui-kit/icon-defaults';
 
 const props = withDefaults(defineProps<{ startRoom?: boolean }>(), { startRoom: false });
 const emit = defineEmits<{ toast: [message: string] }>();

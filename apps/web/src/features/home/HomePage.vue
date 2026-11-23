@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Button, Callout, MascotIcon } from '@voiceroom/ui-kit/components';
 import { t } from '@/shared/i18n';
 import LanguageControl from '@/shared/i18n/LanguageControl.vue';
 import { ArrowRight } from '@lucide/vue';
@@ -14,7 +15,6 @@ import { APP_HOME } from '@/shared/app-home';
 import { lazyPage } from '@/shared/components/lazy-page';
 import LegalLinks from '@/shared/components/LegalLinks.vue';
 import Topbar from '@/shared/components/Topbar.vue';
-import { MascotIcon, ToastStack } from '@/shared/ui';
 import { extractRoomId } from '@/shared/utils/room';
 import { usePageStore } from '@/stores/page.store';
 import DesktopAppCard from './components/DesktopAppCard.vue';
@@ -204,16 +204,21 @@ function switchAuthMode(mode: AuthMode): void {
     <Topbar label="VoiceRoom" show-language />
     <main class="auth-session-error" :aria-label="t('Ошибка проверки аккаунта')" aria-live="polite">
       <div class="auth-session-error__card">
-        <p class="auth-session-error__kicker">{{ t('Сессия не проверена') }}</p>
-        <h1 class="auth-session-error__title">{{ t('Не удалось проверить аккаунт') }}</h1>
-        <p class="auth-session-error__text">
-          {{
+        <p class="auth-session-error__context">{{ t('Сессия не проверена') }}</p>
+        <Callout
+          title-as="h1"
+          tone="danger"
+          :title="t('Не удалось проверить аккаунт')"
+          :text="
             t(
               'Проверьте подключение к серверу и повторите попытку. Мы не будем показывать лобби или сбрасывать сессию, пока проверка не пройдет.'
             )
-          }}
-        </p>
-        <button type="button" @click="retrySessionLoad">{{ t('Повторить') }}</button>
+          "
+        >
+          <template #actions>
+            <Button variant="primary" size="sm" @click="retrySessionLoad">{{ t('Повторить') }}</Button>
+          </template>
+        </Callout>
       </div>
     </main>
   </div>
@@ -276,6 +281,4 @@ function switchAuthMode(mode: AuthMode): void {
     @update:mode="(mode: AuthMode) => (offerAuthMode = mode)"
     @close="offerAuthMode = null"
   />
-
-  <ToastStack :toasts="toasts.items" :on-dismiss="toasts.dismissToast" />
 </template>

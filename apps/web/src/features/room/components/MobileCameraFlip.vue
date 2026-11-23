@@ -1,9 +1,10 @@
 <script setup lang="ts">
+import { Button, IconButton } from '@voiceroom/ui-kit/components';
 import { t } from '@/shared/i18n';
 import { SwitchCamera } from '@lucide/vue';
 import { computed, ref } from 'vue';
-import { state as roomClientState } from '@voice-room/call/engine/core/room-runtime.store';
-import { flipCamera } from '@voice-room/call/engine/services/camera-service';
+import { state as roomClientState } from '@voiceroom/call/engine/core/room-runtime.store';
+import { flipCamera } from '@voiceroom/call/engine/services/camera-service';
 import { useMobileCallUiStore } from '@/features/room/mobile-call-ui.store';
 import { useRoomUiStore } from '@/features/room/room-ui.store';
 
@@ -31,17 +32,38 @@ function keepControls(event: PointerEvent): void {
 </script>
 
 <template>
-  <button
-    :class="['mobile-call-flip', `mobile-call-flip--${variant}`]"
-    type="button"
-    :aria-label="t('{p0} камеру', { p0: label })"
+  <IconButton
+    v-if="variant === 'round'"
+    scrim
+    pill
+    class="mobile-call-flip--round"
+    :label="t('{p0} камеру', { p0: label })"
+    :size="44"
+    variant="outline"
     :disabled="roomClientState.cameraStarting"
     @click="flip"
     @pointerdown="keepControls"
   >
     <span class="mobile-call-flip__icon" :style="{ transform: `rotate(${turns * 180}deg)` }">
-      <SwitchCamera :size="variant === 'round' ? 20 : 22" aria-hidden="true" />
+      <SwitchCamera aria-hidden="true" />
     </span>
-    <span v-if="variant === 'pill'">{{ label }}</span>
-  </button>
+  </IconButton>
+  <Button
+    v-else
+    scrim
+    class="mobile-call-flip"
+    variant="outline"
+    size="lg"
+    :aria-label="t('{p0} камеру', { p0: label })"
+    :disabled="roomClientState.cameraStarting"
+    @click="flip"
+    @pointerdown="keepControls"
+  >
+    <template #icon>
+      <span class="mobile-call-flip__icon" :style="{ transform: `rotate(${turns * 180}deg)` }">
+        <SwitchCamera aria-hidden="true" />
+      </span>
+    </template>
+    {{ label }}
+  </Button>
 </template>

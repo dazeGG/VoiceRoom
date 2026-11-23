@@ -26,19 +26,19 @@
 
 .room-bans {
   display: grid;
-  gap: 16px;
+  gap: var(--space-16);
   color: var(--vr-text);
 }
 
 .room-bans__head {
   display: grid;
-  gap: 6px;
+  gap: var(--space-6);
 }
 
 .room-bans__title {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-8);
   margin: 0;
   font-size: 0.9375rem;
   font-weight: 600;
@@ -47,7 +47,7 @@
 .room-bans__count {
   color: var(--vr-text-muted);
   font-family: var(--font-mono);
-  font-size: 0.71875rem;
+  font-size: 12px;
   font-weight: 400;
   font-variant-numeric: tabular-nums;
 }
@@ -55,7 +55,7 @@
 .room-bans__hint {
   margin: 0;
   color: var(--vr-text-muted);
-  font-size: 0.78125rem;
+  font-size: 13px;
   line-height: 1.5;
 }
 
@@ -63,9 +63,9 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding: 10px 12px;
-  border-radius: 10px;
+  gap: var(--space-12);
+  padding: var(--space-8) var(--space-12);
+  border-radius: var(--radius-10);
   background: var(--vr-danger-soft);
   color: var(--vr-danger);
   font-size: 0.8125rem;
@@ -89,12 +89,12 @@
 .room-bans__empty {
   display: grid;
   justify-items: center;
-  gap: 6px;
-  padding: 28px 16px;
+  gap: var(--space-6);
+  padding: var(--space-24) var(--space-16);
   border: 1px dashed var(--vr-line);
-  border-radius: 14px;
+  border-radius: var(--radius-12);
   color: var(--vr-text-muted);
-  font-size: 0.78125rem;
+  font-size: 13px;
   text-align: center;
 }
 
@@ -105,18 +105,18 @@
 
 .room-bans__empty-icon {
   display: grid;
-  width: 40px;
-  height: 40px;
-  margin-bottom: 4px;
+  width: var(--size-40);
+  height: var(--size-40);
+  margin-bottom: var(--space-4);
   place-items: center;
-  border-radius: 12px;
+  border-radius: var(--radius-12);
   background: var(--vr-surface-3);
   color: var(--vr-text-2);
 }
 
 .room-bans__list {
   display: grid;
-  gap: 8px;
+  gap: var(--space-8);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -126,23 +126,23 @@
   display: grid;
   grid-template-columns: 36px minmax(0, 1fr) auto;
   align-items: center;
-  gap: 12px;
-  padding: 12px;
+  gap: var(--space-12);
+  padding: var(--space-12);
   border: 1px solid var(--vr-line);
-  border-radius: 12px;
+  border-radius: var(--radius-12);
   background: var(--vr-surface-2);
 }
 
 .room-ban__body {
   display: grid;
-  gap: 3px;
+  gap: var(--space-2);
   min-width: 0;
 }
 
 .room-ban__name {
   display: flex;
   align-items: baseline;
-  gap: 6px;
+  gap: var(--space-6);
   min-width: 0;
 }
 
@@ -160,13 +160,13 @@
 .room-ban__login {
   color: var(--vr-text-muted);
   font-family: var(--font-mono);
-  font-size: 0.71875rem;
+  font-size: 12px;
 }
 
 .room-ban__term {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: var(--space-4);
   color: var(--vr-text-2);
   font-size: 0.75rem;
 }
@@ -186,22 +186,6 @@
 
 .room-bans__more {
   justify-self: stretch;
-  min-height: 38px;
-  border: 1px solid var(--vr-line-strong);
-  border-radius: 10px;
-  background: transparent;
-  color: var(--vr-text);
-  font: 600 0.8125rem var(--font-ui);
-  cursor: pointer;
-}
-
-.room-bans__more:hover:not(:disabled) {
-  background: var(--vr-hover);
-}
-
-.room-bans__more:disabled {
-  cursor: default;
-  opacity: 0.6;
 }
 
 @media (max-width: 520px) {

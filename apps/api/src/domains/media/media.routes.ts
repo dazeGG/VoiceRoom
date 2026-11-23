@@ -5,14 +5,14 @@
 
 import type { TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { Failure, IdParams } from '@voice-room/shared/contracts/http';
+import { Failure, IdParams } from '@voiceroom/shared/contracts/http';
 import {
   AttachmentAnswer,
   AttachmentVariantParams,
   AttachmentVariantQuery,
   CreateAttachmentBody
-} from '@voice-room/shared/contracts/media';
-import { isUuid } from '@voice-room/shared/validation';
+} from '@voiceroom/shared/contracts/media';
+import { isUuid } from '@voiceroom/shared/validation';
 import type { ApiContext } from '../../app/context.ts';
 import { failure, optionalJsonBody } from '../../platform/http/http-kit.ts';
 import type { MediaService, PublicAttachment } from './media.service.ts';

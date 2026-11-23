@@ -7,7 +7,6 @@
 //   .mobile-start-kicker    -> .mobile-start__kicker
 //   .mobile-start-card h1   -> .mobile-start__title
 //   .mobile-start-lead      -> .mobile-start__lead
-//   .ui-button (in card)    -> .mobile-start__create
 //   .mobile-start-spinner   -> .mobile-start__spinner
 //   .mobile-start-features  -> .mobile-start__features
 //   ...features li          -> .mobile-start__feature
@@ -18,7 +17,7 @@
   min-height: 100dvh;
   display: grid;
   place-items: center;
-  padding: 24px 16px calc(24px + env(safe-area-inset-bottom));
+  padding: var(--space-24) var(--space-16) calc(var(--space-24) + env(safe-area-inset-bottom));
   background: var(--vr-bg);
   font-family: var(--font-ui);
 }
@@ -28,11 +27,11 @@
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 14px;
+  gap: var(--space-12);
   width: min(440px, 100%);
-  padding: clamp(22px, 6vw, 30px);
+  padding: clamp(var(--space-20), 6vw, var(--space-32));
   border: 1px solid var(--vr-line-strong);
-  border-radius: var(--radius-xl);
+  border-radius: var(--radius-24);
   background: var(--vr-surface-2);
   box-shadow: var(--vr-shadow-popover);
 }
@@ -40,9 +39,9 @@
 .mobile-start__orb {
   display: grid;
   place-items: center;
-  width: 64px;
-  height: 64px;
-  border-radius: 20px;
+  width: var(--space-64);
+  height: var(--space-64);
+  border-radius: var(--radius-20);
   background: color-mix(in oklch, var(--vr-accent) 12%, var(--vr-surface-3));
 }
 
@@ -67,18 +66,18 @@
 .mobile-start__lead {
   margin: 0;
   color: var(--vr-text-2);
-  font-size: 0.90625rem;
+  font-size: 15px;
   line-height: 1.5;
 }
 
 .mobile-start__create {
   width: 100%;
-  margin-top: 4px;
+  margin-top: var(--space-4);
 }
 
 .mobile-start__spinner {
-  width: 15px;
-  height: 15px;
+  width: var(--space-16);
+  height: var(--space-16);
   border: 2px solid color-mix(in srgb, var(--vr-accent-ink) 35%, transparent);
   border-top-color: var(--vr-accent-ink);
   border-radius: 50%;
@@ -94,7 +93,7 @@
 .mobile-start__features {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--space-8);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -103,19 +102,19 @@
 .mobile-start__feature {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 11px;
+  gap: var(--space-6);
+  padding: var(--space-6) var(--space-12);
   border: 1px solid var(--vr-line);
   border-radius: var(--radius-pill);
   background: var(--vr-surface-3);
   color: var(--vr-text);
-  font-size: 0.78125rem;
+  font-size: 13px;
   font-weight: 650;
 }
 
 .mobile-start__note {
   margin: 0;
   color: var(--vr-text-2);
-  font-size: 0.78125rem;
+  font-size: 13px;
   line-height: 1.45;
 }

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Button } from '@voiceroom/ui-kit/components';
 // Edits one sent message in place: Enter saves, Escape or Отмена leaves it
 // as it was. Shared by the room and direct chats; `variant` picks the
 // surrounding chat's look.
@@ -69,8 +70,8 @@ async function save(): Promise<void> {
       @keydown="onKeydown"
     />
     <div class="message-editor__actions">
-      <button type="button" :disabled="saving" @click="emit('close')">{{ t('Отмена') }}</button>
-      <button type="button" :disabled="saving || !text.trim()" @click="save">{{ t('Сохранить') }}</button>
+      <Button variant="ghost" size="sm" :disabled="saving" @click="emit('close')">{{ t('Отмена') }}</Button>
+      <Button variant="ghost" size="sm" :disabled="saving || !text.trim()" @click="save">{{ t('Сохранить') }}</Button>
     </div>
   </div>
 </template>

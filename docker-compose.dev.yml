@@ -34,7 +34,7 @@ services:
     build:
       context: .
       target: deps
-    command: npm --workspace @voice-room/api run dev
+    command: npm --workspace @voiceroom/api run dev
     working_dir: /app
     depends_on:
       deps:
@@ -92,7 +92,7 @@ services:
     build:
       context: .
       target: deps
-    command: npm --workspace @voice-room/web run dev
+    command: npm --workspace @voiceroom/web run dev
     working_dir: /app
     depends_on:
       deps:
@@ -117,7 +117,7 @@ services:
     build:
       context: .
       target: deps
-    command: npm --workspace @voice-room/admin run dev
+    command: npm --workspace @voiceroom/admin run dev
     working_dir: /app
     depends_on:
       deps:

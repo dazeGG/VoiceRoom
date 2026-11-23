@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import { AVATAR_COLOR_KEYS } from '@voice-room/shared/validation';
+import { AVATAR_COLOR_KEYS } from '@voiceroom/shared/validation';
 
 /** The avatar colour a guest peer id always gets, until they choose one. */
 export function avatarColorForPeerId(peerId: unknown): string {

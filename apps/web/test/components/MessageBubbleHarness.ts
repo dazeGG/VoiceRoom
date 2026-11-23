@@ -1,7 +1,7 @@
 // Test component: one bubble with its text as the content slot and, when given,
 // a card in place of every part.
 
-import type { Attachment } from '@voice-room/shared/contracts/messages';
+import type { Attachment } from '@voiceroom/shared/contracts/messages';
 import { defineComponent, h } from 'vue';
 import MessageBubble from '@/shared/chat/MessageBubble.vue';
 import type { ReactionStore } from '@/shared/chat/reaction-store';

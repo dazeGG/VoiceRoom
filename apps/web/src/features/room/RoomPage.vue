@@ -37,7 +37,7 @@ onMounted(() => {
   // while this page is marked active.
   setRoomRouteActive(true);
 
-  void import('@voice-room/call/engine/main').then(({ mountRoomClient }) => {
+  void import('@voiceroom/call/engine/main').then(({ mountRoomClient }) => {
     if (!mountedClient || !roomRoot.value) return;
     cleanup = mountRoomClient(roomRoot.value, {
       roomId: props.embeddedRoomId || props.roomId,

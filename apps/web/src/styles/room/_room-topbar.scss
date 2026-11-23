@@ -1,7 +1,7 @@
 // RoomTopbar (features/room/components/RoomTopbar.vue): the room heading, the
 // invite menu and the connection pill in the top bar. The Svelte rules lived in
 // room/layout.css and responsive.css. The chat/participants tabs are the shared
-// .room-panel-tabs block (_room-panel-tabs.scss).
+// .room-panel-switches block (_room-panel-switches.scss).
 //
 // Svelte class -> BEM class
 //   .room-heading.topbar-room-heading    -> .room-topbar__heading
@@ -12,10 +12,9 @@
 //   .room-heading-trigger-chevron        -> .room-topbar__heading-chevron
 //   .room-heading-actions                -> .room-topbar__heading-actions
 //   .room-invite-button                  -> .room-topbar__invite-button
-//   .room-invite-popover                 -> .room-topbar__invite-popover
 //   .room-invite-label                   -> .room-topbar__invite-label
-//   .room-panel-tabs button              -> .room-panel-tabs__tab
-//   .room-panel-tab-unread               -> .room-panel-tabs__unread
+//   .room-panel-switches button              -> .room-panel-switches__button
+//   .room-panel-tab-unread               -> .room-panel-switches__unread
 //   .status-pill                         -> .room-topbar__status
 //   .status-dot                          -> .room-topbar__status-dot
 //
@@ -23,7 +22,7 @@
 //   .status-pill[data-state='x']                    -> .room-topbar__status--x
 //   body[data-screen='room'] .topbar-room-heading   -> body.screen--room .room-topbar__heading
 //   html[data-platform-class='mobile']              -> html.platform--mobile
-@use 'pkg:@voice-room/ui/styles/mixins' as *;
+@use 'pkg:@voiceroom/ui-kit/styles/mixins' as *;
 
 .room-topbar__heading {
   display: none;
@@ -31,7 +30,7 @@
   min-width: 0;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: var(--space-12);
 }
 
 body.screen--room .room-topbar__heading {
@@ -47,18 +46,18 @@ body.screen--room .room-topbar__heading {
   min-width: 0;
   flex: 0 1 auto;
   align-items: center;
-  gap: 10px;
+  gap: var(--space-8);
 }
 
 .room-topbar__heading-trigger {
   display: inline-flex;
   min-width: 60px;
   align-items: center;
-  gap: 10px;
+  gap: var(--space-8);
   max-width: 100%;
   border: 0;
-  border-radius: 12px;
-  padding: 4px 10px 4px 4px;
+  border-radius: var(--radius-12);
+  padding: var(--space-4) var(--space-8) var(--space-4) var(--space-4);
   background: transparent;
   color: inherit;
   cursor: pointer;
@@ -101,36 +100,11 @@ body.screen--room .room-topbar__heading {
   display: flex;
   flex: none;
   align-items: center;
-  gap: 12px;
+  gap: var(--space-12);
   margin-left: auto;
 }
 
 // The invite button is a label plus an icon; narrow stages keep the icon.
-.room-topbar__invite-button {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  height: 36px;
-  padding: 0 12px;
-  border: 1px solid var(--vr-line-strong);
-  border-radius: 10px;
-  background: transparent;
-  color: var(--vr-text);
-  font-family: var(--font-ui);
-  font-size: 0.84375rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background 0.15s ease;
-}
-
-.room-topbar__invite-button:hover,
-.room-topbar__invite-button[aria-expanded='true'] {
-  background: var(--vr-hover);
-}
-
-.room-topbar__invite-popover {
-  width: min(300px, calc(100vw - 24px));
-}
 
 .room-topbar__invite-label {
   display: inline;
@@ -142,23 +116,16 @@ body.screen--room .room-topbar__heading {
   }
 }
 
-// The heading tabs are the only way into chat on a phone, so they get the same
-// 44px target as the dock.
-html.platform--mobile .room-panel-tabs--topbar .room-panel-tabs__tab {
-  width: 40px;
-  height: 40px;
-}
-
 .room-topbar__status {
   display: inline-flex;
   align-items: center;
   min-width: 178px;
   margin-left: auto;
   justify-content: center;
-  gap: var(--space-xs);
+  gap: var(--space-8);
   border: 1px solid var(--vr-line-strong);
-  border-radius: 999px;
-  padding: 8px 12px;
+  border-radius: var(--radius-pill);
+  padding: var(--space-8) var(--space-12);
   background: var(--vr-surface-2);
   color: var(--vr-text-2);
   font-size: 0.875rem;
@@ -176,8 +143,8 @@ body.screen--room .room-topbar__status {
 }
 
 .room-topbar__status-dot {
-  width: 8px;
-  height: 8px;
+  width: var(--space-8);
+  height: var(--space-8);
   border-radius: 50%;
   background: var(--vr-away);
 }
@@ -206,7 +173,7 @@ body.screen--room .room-topbar__status {
   .room-topbar__heading {
     align-items: center;
     flex-direction: row;
-    gap: var(--space-sm);
+    gap: var(--space-12);
   }
 
   .room-topbar__heading-main {
@@ -221,7 +188,7 @@ body.screen--room .room-topbar__status {
     width: auto;
     min-width: 0;
     max-width: 46vw;
-    padding-inline: 10px;
+    padding-inline: var(--space-8);
     overflow: hidden;
     text-overflow: ellipsis;
   }
@@ -234,10 +201,8 @@ body.screen--room .room-topbar__status {
     white-space: nowrap;
   }
 
-  // A long room name must shrink inside the heading instead of widening the
-  // page: the menu's popover root otherwise sizes to the full title.
-  .room-topbar__heading-main > .popover {
+  // Allow a long room name to shrink inside the heading.
+  .room-topbar__heading-title-wrap {
     min-width: 0;
-    max-width: 100%;
   }
 }

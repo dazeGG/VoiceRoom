@@ -1,16 +1,16 @@
 import { createPinia, setActivePinia } from 'pinia';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { shallowRef } from 'vue';
-import type { RoomCapabilities } from '@voice-room/shared/contracts/rooms';
-import { callPageState } from '@voice-room/call/engine/core/call-page.store';
-import { state } from '@voice-room/call/engine/core/room-runtime.store';
-import { mountGuestRoomClient } from '@voice-room/call/engine/main';
-import { joinRoom } from '@voice-room/call/engine/room/room';
-import { createGuestJoinController } from '@voice-room/call/guest';
+import type { RoomCapabilities } from '@voiceroom/shared/contracts/rooms';
+import { callPageState } from '@voiceroom/call/engine/core/call-page.store';
+import { state } from '@voiceroom/call/engine/core/room-runtime.store';
+import { mountGuestRoomClient } from '@voiceroom/call/engine/main';
+import { joinRoom } from '@voiceroom/call/engine/room/room';
+import { createGuestJoinController } from '@voiceroom/call/guest';
 import { createMeetApi } from '@/adapters/meet-api';
 
-vi.mock('@voice-room/call/engine/main', () => ({ mountGuestRoomClient: vi.fn() }));
-vi.mock('@voice-room/call/engine/room/room', () => ({ joinRoom: vi.fn() }));
+vi.mock('@voiceroom/call/engine/main', () => ({ mountGuestRoomClient: vi.fn() }));
+vi.mock('@voiceroom/call/engine/room/room', () => ({ joinRoom: vi.fn() }));
 
 const room = {
   roomId: 'meet-abc',

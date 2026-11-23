@@ -1,6 +1,6 @@
-import { isRecord, textOf } from '@voice-room/shared/guards';
-import { REPLY_PREVIEW_TEXT_MAX_LENGTH, isSystemCard } from '@voice-room/shared/messaging-send';
-import type { ReplyPreview } from '@voice-room/shared/contracts/messages';
+import { isRecord, textOf } from '@voiceroom/shared/guards';
+import { REPLY_PREVIEW_TEXT_MAX_LENGTH, isSystemCard } from '@voiceroom/shared/messaging-send';
+import type { ReplyPreview } from '@voiceroom/shared/contracts/messages';
 import { epochMillis } from '../../platform/epoch-millis.ts';
 import { DomainError } from '../../platform/http/domain-error.ts';
 

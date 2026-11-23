@@ -1,10 +1,10 @@
-@use 'pkg:@voice-room/ui/styles/mixins' as *;
+@use 'pkg:@voiceroom/ui-kit/styles/mixins' as *;
 
 .language-control {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(112px, 200px);
   align-items: center;
-  gap: 8px 16px;
+  gap: var(--space-8) var(--space-16);
   min-width: 0;
   max-width: 100%;
   color: var(--vr-text-2);
@@ -14,7 +14,7 @@
 .language-control__label {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--space-8);
   min-width: 0;
   font-weight: 500;
 }
@@ -28,20 +28,6 @@
   min-width: 0;
 }
 
-.language-control__select.select__trigger {
-  appearance: none;
-  padding-right: 38px;
-}
-
-.language-control__chevron {
-  position: absolute;
-  top: 50%;
-  right: 14px;
-  transform: translateY(-50%);
-  pointer-events: none;
-  color: var(--vr-text-muted);
-}
-
 .language-control__error {
   grid-column: 1 / -1;
   color: var(--vr-danger);
@@ -52,10 +38,10 @@
   position: relative;
   display: inline-flex;
   justify-content: center;
-  width: var(--interactive-md, 40px);
-  height: var(--interactive-md, 40px);
+  width: var(--size-40);
+  height: var(--size-40);
   flex: none;
-  border-radius: 10px;
+  border-radius: var(--radius-10);
   cursor: pointer;
 
   &:hover {
@@ -64,8 +50,8 @@
   }
 
   &:focus-within {
-    outline: 2px solid var(--focus-border);
-    outline-offset: 2px;
+    outline: var(--space-2) solid var(--vr-accent);
+    outline-offset: var(--space-2);
   }
 
   .language-control__caption {
@@ -81,25 +67,14 @@
     min-height: 0;
   }
 
-  .language-control__select.select__trigger {
-    padding: 0;
-    border: 0;
-    opacity: 0;
-    cursor: pointer;
-  }
-
-  .language-control__chevron {
-    display: none;
-  }
-
   .language-control__error {
     position: absolute;
     bottom: calc(100% + 8px);
     width: max-content;
     max-width: 240px;
-    padding: 8px 10px;
+    padding: var(--space-8) var(--space-8);
     border: 1px solid var(--vr-line-strong);
-    border-radius: 8px;
+    border-radius: var(--radius-8);
     background: var(--vr-surface);
   }
 }

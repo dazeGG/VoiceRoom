@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { resolvePopoverPlacement } from '@voice-room/ui/components';
+import { resolvePopoverPlacement } from '@voiceroom/ui-kit/components';
 
 const VIEWPORT = 800;
 const rect = (top: number, height: number): DOMRect => ({

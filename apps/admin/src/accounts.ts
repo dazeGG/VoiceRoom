@@ -6,8 +6,8 @@ import {
   BlockDuration,
   type AccountsSort,
   type AdminActionEntry
-} from '@voice-room/shared/contracts/admin';
-import { STAFF_ROLE_LABELS } from '@voice-room/shared/contracts/staff';
+} from '@voiceroom/shared/contracts/admin';
+import { STAFF_ROLE_LABELS } from '@voiceroom/shared/contracts/staff';
 import { formatDateTime } from './format.ts';
 
 const FILTER_LABELS: Record<AccountsFilter, string> = {

@@ -1,15 +1,14 @@
 <script setup lang="ts">
+import { Dialog, IconButton } from '@voiceroom/ui-kit/components';
 // Full-screen image viewer.
 //
 // It takes plain sources rather than message attachments, so the same viewer
 // opens a picture already in the chat and one still sitting in the composer —
 // the moment you most want a closer look is before you send it.
-//
-// The native modal puts the viewer above the room, regardless of the chat's stacking context.
 import { t } from '@/shared/i18n';
-import { Download, Minus, Plus, RotateCcw, X } from '@lucide/vue';
-import { computed, onMounted, ref } from 'vue';
-import { iconSm } from '@/shared/ui/icons';
+import { ChevronLeft, ChevronRight, Download, Minus, Plus, RotateCcw, X } from '@lucide/vue';
+import { computed, ref } from 'vue';
+import { iconSm } from '@voiceroom/ui-kit/icon-defaults';
 
 export interface LightboxItem {
   src: string;
@@ -37,7 +36,6 @@ const offsetY = ref(0);
 const dragging = ref(false);
 let dragStartX = 0;
 let dragStartY = 0;
-const dialog = ref<HTMLDialogElement | null>(null);
 
 const item = computed(() => items[current.value]);
 const zoomed = computed(() => scale.value > MIN_SCALE + 0.001);
@@ -110,21 +108,18 @@ function keydown(event: KeyboardEvent): void {
     reset();
   }
 }
-
-function onBackdropClick(event: MouseEvent): void {
-  if (event.target === event.currentTarget) dialog.value?.close();
-}
-
-onMounted(() => dialog.value?.showModal());
 </script>
 
 <template>
-  <dialog
-    ref="dialog"
-    class="attachment-lightbox__backdrop"
-    :aria-label="t('Изображение {p0} из {p1}', { p0: current + 1, p1: items.length })"
+  <Dialog
+    v-slot="{ close }"
+    open
+    layout="media"
+    trim="bare"
+    :closable="false"
+    :title="t('Изображение {p0} из {p1}', { p0: current + 1, p1: items.length })"
+    initial-focus=".attachment-lightbox__close"
     @keydown="keydown"
-    @click="onBackdropClick"
     @contextmenu.stop
     @close="emit('close')"
   >
@@ -132,32 +127,46 @@ onMounted(() => dialog.value?.showModal());
       <header class="attachment-lightbox__header">
         <span class="attachment-lightbox__counter">{{ current + 1 }} / {{ items.length }}</span>
         <div class="attachment-lightbox__tools">
-          <button type="button" :disabled="!zoomed" :aria-label="t('Уменьшить')" @click="zoomTo(scale - STEP)">
-            <Minus v-bind="iconSm" aria-hidden="true" />
-          </button>
+          <IconButton
+            :tooltip="false"
+            :disabled="!zoomed"
+            :label="t('Уменьшить')"
+            :size="32"
+            @click="zoomTo(scale - STEP)"
+          >
+            <Minus aria-hidden="true" />
+          </IconButton>
           <span class="attachment-lightbox__scale">{{ Math.round(scale * 100) }}%</span>
-          <button
-            type="button"
+          <IconButton
+            :tooltip="false"
             :disabled="scale >= MAX_SCALE"
-            :aria-label="t('Увеличить')"
+            :label="t('Увеличить')"
+            :size="32"
             @click="zoomTo(scale + STEP)"
           >
-            <Plus v-bind="iconSm" aria-hidden="true" />
-          </button>
-          <button
-            type="button"
+            <Plus aria-hidden="true" />
+          </IconButton>
+          <IconButton
+            :tooltip="false"
             :disabled="!zoomed && !offsetX && !offsetY"
-            :aria-label="t('Исходный размер')"
+            :label="t('Исходный размер')"
+            :size="32"
             @click="reset"
           >
-            <RotateCcw v-bind="iconSm" aria-hidden="true" />
-          </button>
+            <RotateCcw aria-hidden="true" />
+          </IconButton>
           <a v-if="item?.downloadHref" :href="item.downloadHref" download rel="external" :aria-label="t('Скачать')"
             ><Download v-bind="iconSm" aria-hidden="true"
           /></a>
-          <button type="button" autofocus :aria-label="t('Закрыть просмотр')" @click="dialog?.close()">
-            <X v-bind="iconSm" aria-hidden="true" />
-          </button>
+          <IconButton
+            class="attachment-lightbox__close"
+            :tooltip="false"
+            :label="t('Закрыть просмотр')"
+            :size="32"
+            @click="close"
+          >
+            <X aria-hidden="true" />
+          </IconButton>
         </div>
       </header>
 
@@ -186,23 +195,27 @@ onMounted(() => dialog.value?.showModal());
       </div>
 
       <template v-if="items.length > 1">
-        <button
+        <IconButton
+          :tooltip="false"
           class="attachment-lightbox__previous"
-          type="button"
-          :aria-label="t('Предыдущее изображение')"
+          :label="t('Предыдущее изображение')"
+          :size="40"
+          variant="filled"
           @click="move(-1)"
         >
-          ‹
-        </button>
-        <button
+          <ChevronLeft aria-hidden="true" />
+        </IconButton>
+        <IconButton
+          :tooltip="false"
           class="attachment-lightbox__next"
-          type="button"
-          :aria-label="t('Следующее изображение')"
+          :label="t('Следующее изображение')"
+          :size="40"
+          variant="filled"
           @click="move(1)"
         >
-          ›
-        </button>
+          <ChevronRight aria-hidden="true" />
+        </IconButton>
       </template>
     </div>
-  </dialog>
+  </Dialog>
 </template>

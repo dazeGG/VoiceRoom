@@ -1,7 +1,7 @@
 // The 404 page's room field: a code or a pasted room link opens the room
 // itself. Without this script the form opens the app, which asks for the code.
 
-import { extractRoomId, roomHref } from '@voice-room/shared/app-home';
+import { extractRoomId, roomHref } from '@voiceroom/shared/app-home';
 
 const form = document.querySelector<HTMLFormElement>('form[data-join-room]');
 const input = form?.querySelector<HTMLInputElement>('input');

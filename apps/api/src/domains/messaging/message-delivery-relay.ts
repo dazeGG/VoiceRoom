@@ -7,7 +7,7 @@
 // was down are replayed: otherwise live chat would stop until a restart while
 // the outbox and the health check both looked fine.
 
-import { isRecord } from '@voice-room/shared/guards';
+import { isRecord } from '@voiceroom/shared/guards';
 import { isStoredDirectMessage } from '../social/social-records.ts';
 import type { AccountMessage } from '../../realtime/account-events.ts';
 import type { Logger } from 'pino';

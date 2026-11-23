@@ -3,9 +3,9 @@
 
 import type { TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
 import type { FastifyInstance } from 'fastify';
-import { DeviceRegistrationBody, DeviceTokenBody } from '@voice-room/shared/contracts/devices';
-import { Done, Failure } from '@voice-room/shared/contracts/http';
-import { PushRegistrationSuccess, PushRegistrationConflict } from '@voice-room/shared/contracts/push-registration';
+import { DeviceRegistrationBody, DeviceTokenBody } from '@voiceroom/shared/contracts/devices';
+import { Done, Failure } from '@voiceroom/shared/contracts/http';
+import { PushRegistrationSuccess, PushRegistrationConflict } from '@voiceroom/shared/contracts/push-registration';
 import { requireSession, type ApiContext } from '../../app/context.ts';
 import { failure, sendRateLimited } from '../../platform/http/http-kit.ts';
 import type { DeviceTokenService } from './device-token.service.ts';

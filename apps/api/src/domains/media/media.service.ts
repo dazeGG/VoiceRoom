@@ -1,6 +1,6 @@
 import type pg from 'pg';
 import sharp from 'sharp';
-import type { AttachmentDraft } from '@voice-room/shared/contracts/media';
+import type { AttachmentDraft } from '@voiceroom/shared/contracts/media';
 import { epochMillis } from '../../platform/epoch-millis.ts';
 import { codeOf } from '../../platform/error-code.ts';
 import { DomainError } from '../../platform/http/domain-error.ts';

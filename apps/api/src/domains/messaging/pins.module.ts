@@ -2,7 +2,7 @@
 // detail stream (the pinned bar is shared state, not a per-viewer view).
 
 import type pg from 'pg';
-import type { ServerEnvelope } from '@voice-room/shared/realtime';
+import type { ServerEnvelope } from '@voiceroom/shared/realtime';
 import { createPinRepository } from './pin.repository.ts';
 import { createPinService } from './pin.service.ts';
 

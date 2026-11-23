@@ -10,7 +10,7 @@ import RoomPreviewView from '@/features/home/components/lobby/RoomPreviewView.vu
 import { provideLobby } from '@/features/home/model/lobby-context';
 import { useLobbyStore } from '@/features/home/model/lobby.store';
 import type { OwnedRoom } from '@/api/auth';
-import type { PublicPeer } from '@voice-room/shared/contracts/rooms';
+import type { PublicPeer } from '@voiceroom/shared/contracts/rooms';
 import { stubFetch } from '../fixtures/fetch.ts';
 import { FakeWebSocket, installFakeWebSocket } from '../fixtures/fake-websocket.ts';
 import { authUser } from '../fixtures/users.ts';

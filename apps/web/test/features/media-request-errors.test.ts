@@ -2,14 +2,14 @@ import type { RealtimeEvent } from '@/api/realtime';
 import { expect, test, vi } from 'vitest';
 import type * as RoomRealtime from '@/entities/room/room-realtime';
 
-vi.mock('@voice-room/call/engine/ui/toast', () => ({ showToast: vi.fn() }));
+vi.mock('@voiceroom/call/engine/ui/toast', () => ({ showToast: vi.fn() }));
 vi.mock('@/entities/room/room-realtime', async (importOriginal) => ({
   ...(await importOriginal<typeof RoomRealtime>()),
   isMediaRequestError: (id: string | undefined) => id === 'media-1'
 }));
 
-const { showToast } = await import('@voice-room/call/engine/ui/toast');
-const { createVoiceEventHandler } = await import('@voice-room/call/engine/room/voice-events');
+const { showToast } = await import('@voiceroom/call/engine/ui/toast');
+const { createVoiceEventHandler } = await import('@voiceroom/call/engine/room/voice-events');
 const { mapWebCallEvent } = await import('@/features/room/adapters/web-call-transport');
 
 function handler() {

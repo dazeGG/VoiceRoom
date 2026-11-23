@@ -1,6 +1,6 @@
 /// <reference lib="webworker" />
 
-import { parsePushPayload, type PushPayload } from '@voice-room/shared/notifications';
+import { parsePushPayload, type PushPayload } from '@voiceroom/shared/notifications';
 
 declare const self: ServiceWorkerGlobalScope;
 

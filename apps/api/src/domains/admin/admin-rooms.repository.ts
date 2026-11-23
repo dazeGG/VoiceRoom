@@ -21,14 +21,9 @@ import {
   type VoiceMinute,
   type VoiceMinuteHeard,
   type VoiceQuality
-} from '@voice-room/shared/contracts/admin';
-import { NetworkPoint, type CpuPressure, type NetworkLevel } from '@voice-room/shared/contracts/rooms';
-import {
-  concealedSpeechPct,
-  gapsPerSpeechMin,
-  speechSeconds,
-  type HeardCounts
-} from '@voice-room/shared/voice-quality';
+} from '@voiceroom/shared/contracts/admin';
+import { NetworkPoint, type CpuPressure, type NetworkLevel } from '@voiceroom/shared/contracts/rooms';
+import { concealedSpeechPct, gapsPerSpeechMin, speechSeconds, type HeardCounts } from '@voiceroom/shared/voice-quality';
 import { kyselyOn } from '../../platform/db/kysely.ts';
 import { escapeLike } from '../../platform/db/like.ts';
 import { toMillis } from '../../platform/epoch-millis.ts';

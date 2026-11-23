@@ -9,7 +9,7 @@ import {
 } from '../core/config';
 import { state } from '../core/room-runtime.store';
 import { amplitudeToDb } from '../core/settings';
-import { isRecord } from '@voice-room/shared/guards';
+import { isRecord } from '@voiceroom/shared/guards';
 import { getSharedAudioContext } from '../services/media-playback-service';
 import { isGateDisabled } from '../services/microphone-service';
 import type { Participant } from '../core/types';

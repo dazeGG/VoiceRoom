@@ -1,8 +1,8 @@
 // Global styles for apps/web; src/main.ts imports this file. Sass module
 // system only (@use/@forward), never @import. Order: tokens, then the rules
 // that read them.
-@use 'pkg:@voice-room/ui/styles/tokens';
-@use 'pkg:@voice-room/ui/styles/typography';
+@use 'pkg:@voiceroom/ui-kit/styles/tokens';
+@use 'pkg:@voiceroom/ui-kit/styles/typography';
 @use 'base';
 @use 'desktop-shell';
 @use 'ui';

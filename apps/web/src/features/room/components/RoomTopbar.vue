@@ -1,19 +1,28 @@
 <script setup lang="ts">
+import {
+  IconButton,
+  Tooltip,
+  DropdownMenu,
+  MenuSeparator,
+  MenuItem,
+  MenuLabel,
+  Button,
+  ControlGroup
+} from '@voiceroom/ui-kit/components';
 import { t } from '@/shared/i18n';
 import { Link, MessageSquare, UserPlus, Users } from '@lucide/vue';
 import { computed } from 'vue';
 import { useSessionStore } from '@/features/auth/session.store';
 import Topbar from '@/shared/components/Topbar.vue';
 import { RoomInviteFriendList, RoomMenu } from '@/shared/components/room-menu';
-import { Popover, PopoverDivider, PopoverMenuItem, PopoverMenuLabel } from '@/shared/ui';
-import { iconMd, iconSm } from '@/shared/ui/icons';
+import { iconMd, iconSm } from '@voiceroom/ui-kit/icon-defaults';
 import { copyText } from '@/shared/utils/clipboard';
-import { state as roomClientState } from '@voice-room/call/engine/core/room-runtime.store';
-import { getConnectionStatusView } from '@voice-room/call/engine/ui/status';
-import { showToast } from '@voice-room/call/engine/ui/toast';
-import { useParticipantsUiStore } from '@voice-room/call/engine/core/participants-ui.store';
+import { state as roomClientState } from '@voiceroom/call/engine/core/room-runtime.store';
+import { getConnectionStatusView } from '@voiceroom/call/engine/ui/status';
+import { showToast } from '@voiceroom/call/engine/ui/toast';
+import { useParticipantsUiStore } from '@voiceroom/call/engine/core/participants-ui.store';
 import { useRoomPanelToggleStore } from '../room-panel-toggle.store';
-import { useCallPageStore } from '@voice-room/call/engine/core/call-page.store';
+import { useCallPageStore } from '@voiceroom/call/engine/core/call-page.store';
 import { useRoomSettingsStore } from '../room-settings.store';
 import { useRoomUiStore } from '../room-ui.store';
 import { useRoomShell } from '../shell';
@@ -76,13 +85,12 @@ function notifyRoomsChanged(): void {
           :room-id="roomClientState.roomId"
           :name="heading"
           :avatar-url="roomClientState.roomAvatarUrl"
-          :avatar-size="38"
+          :avatar-size="40"
           trigger-class="room-topbar__heading-trigger"
           title-class="room-topbar__heading-title"
           chevron-class="room-topbar__heading-chevron"
           heading
           heading-class="room-topbar__heading-title-wrap"
-          keep-content-mounted
           :relationship="roomSettingsUi.isOwner ? 'owner' : 'bookmarked'"
           :on-open-settings="roomSettingsUi.isOwner ? roomSettingsUi.openRoomSettings : undefined"
           :show-notification-controls="Boolean(roomClientState.self?.accountUserId)"
@@ -103,33 +111,22 @@ function notifyRoomsChanged(): void {
 
       <div class="room-topbar__heading-actions">
         <RoomCallTimer />
-        <Popover
-          placement="bottom-end"
-          role="menu"
-          :aria-label="t('Пригласить в комнату')"
-          panel-class="room-topbar__invite-popover"
-        >
-          <template #trigger="{ open, toggle, panelId }">
-            <button
-              class="room-topbar__invite-button"
-              type="button"
-              aria-haspopup="menu"
-              :aria-expanded="open"
-              :aria-controls="panelId"
-              :title="t('Пригласить')"
-              @click="toggle"
+        <DropdownMenu :aria-label="t('Пригласить в комнату')">
+          <template #trigger>
+            <Tooltip :text="t('Пригласить')"
+              ><Button variant="outline" :aria-label="t('Пригласить')" size="sm" class="room-topbar__invite-button">
+                <template #icon><UserPlus v-bind="iconSm" aria-hidden="true" /></template>
+                <span class="room-topbar__invite-label">{{ t('Пригласить') }}</span>
+              </Button></Tooltip
             >
-              <UserPlus v-bind="iconSm" aria-hidden="true" />
-              <span class="room-topbar__invite-label">{{ t('Пригласить') }}</span>
-            </button>
           </template>
           <template #content="{ close }">
-            <PopoverMenuItem :label="t('Скопировать ссылку')" @click="void copyInviteLink(close)">
+            <MenuItem :label="t('Скопировать ссылку')" @select.prevent="void copyInviteLink(close)">
               <template #icon><Link v-bind="iconMd" aria-hidden="true" /></template>
-            </PopoverMenuItem>
+            </MenuItem>
             <template v-if="roomClientState.self?.accountUserId">
-              <PopoverDivider />
-              <PopoverMenuLabel :text="t('Позвать друга')" />
+              <MenuSeparator />
+              <MenuLabel :text="t('Позвать друга')" />
               <RoomInviteFriendList
                 :friends="social.friends()"
                 :room-id="roomClientState.roomId"
@@ -139,34 +136,31 @@ function notifyRoomsChanged(): void {
               />
             </template>
           </template>
-        </Popover>
-        <div
-          class="room-panel-tabs room-panel-tabs--topbar"
-          role="group"
-          :aria-label="t('Открыть раздел панели комнаты')"
+        </DropdownMenu>
+        <ControlGroup
+          class="room-panel-switches room-panel-switches--topbar"
+          :label="t('Открыть раздел панели комнаты')"
         >
-          <button
-            class="room-panel-tabs__tab"
-            type="button"
-            :aria-label="t('Чат')"
+          <IconButton
+            class="room-panel-switches__button"
+            :label="t('Чат')"
             :aria-pressed="chatActive"
-            :title="t('Чат')"
+            :dot="roomUnreadCount > 0"
+            :size="32"
             @click="panelToggle.toggleRoomPanel('chat')"
           >
-            <MessageSquare v-bind="iconSm" aria-hidden="true" />
-            <span v-if="roomUnreadCount > 0" class="room-panel-tabs__unread" aria-hidden="true"></span>
-          </button>
-          <button
-            class="room-panel-tabs__tab"
-            type="button"
-            :aria-label="t('Участники')"
+            <MessageSquare aria-hidden="true" />
+          </IconButton>
+          <IconButton
+            class="room-panel-switches__button"
+            :label="t('Участники')"
             :aria-pressed="participantsActive"
-            :title="t('Участники')"
+            :size="32"
             @click="panelToggle.toggleRoomPanel('participants')"
           >
-            <Users v-bind="iconSm" aria-hidden="true" />
-          </button>
-        </div>
+            <Users aria-hidden="true" />
+          </IconButton>
+        </ControlGroup>
       </div>
     </div>
 

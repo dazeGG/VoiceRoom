@@ -1,4 +1,4 @@
-import { isRecord } from '@voice-room/shared/guards';
+import { isRecord } from '@voiceroom/shared/guards';
 import type { Pinia } from 'pinia';
 import { addRoomByCode, fetchOwnedRooms, type AuthUser } from '@/api/auth';
 import { useSessionStore } from '@/features/auth/session.store';
@@ -16,7 +16,7 @@ import {
   reportClientLogs,
   reportVoiceJoinOutcome
 } from '@/shared/log';
-import type { CallIdentity, CallPorts, EntryIdentity } from '@voice-room/call/engine/ports';
+import type { CallIdentity, CallPorts, EntryIdentity } from '@voiceroom/call/engine/ports';
 
 import { createRoom } from '@/api/rooms';
 import { useRoomMembershipStore } from '@/entities/room/room-membership.store';

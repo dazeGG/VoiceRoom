@@ -18,7 +18,6 @@
 //   .room-layout, .stage                  -> unchanged (RoomStage.vue)
 //   .screen-meta, .screen-meta-title, -detail -> .screen-meta, .screen-meta__title, __detail
 //   .screen-view-controls, .screen-control-button -> .screen-view-controls, .screen-view-controls__button
-//   .screen-source-dialog, -panel, -heading h2, -options -> .screen-source-dialog, __panel, __heading h2, __options (_screen-source-dialog.scss)
 //   .chat-rail-collapse                   -> .room-panel-header__collapse
 //   .heading-actions, .room-heading (stacked) -> not used by any ported component; left out
 //
@@ -28,7 +27,7 @@
 //   body[data-lobby-embedded='true']      -> body.lobby--embedded
 //   body[data-screen-view='true']         -> body.screen-view--open
 //   html[data-platform-class='mobile']    -> html.platform--mobile
-@use 'pkg:@voice-room/ui/styles/mixins' as *;
+@use 'pkg:@voiceroom/ui-kit/styles/mixins' as *;
 
 body.screen--room .topbar__brand {
   display: none;
@@ -49,7 +48,7 @@ body.screen--room .app-shell {
 body.screen--room .topbar {
   grid-column: 1;
   grid-row: 1;
-  padding: 0 20px;
+  padding: 0 var(--space-20);
   box-sizing: border-box;
   min-height: var(--vr-room-head-h);
   border-bottom: 1px solid var(--vr-line);
@@ -80,7 +79,7 @@ body.lobby--embedded .app-shell.room-embedded-shell {
 body.lobby--embedded .room-embedded-shell .topbar {
   width: 100%;
   margin-inline: 0;
-  padding: 0 20px;
+  padding: 0 var(--space-20);
   box-sizing: border-box;
   min-height: var(--vr-room-head-h);
 }
@@ -100,7 +99,7 @@ body.lobby--embedded .room-embedded-shell .topbar {
 
   .stage {
     min-height: 100%;
-    padding-inline: var(--space-md);
+    padding-inline: var(--space-16);
   }
 
   h1 {
@@ -110,13 +109,13 @@ body.lobby--embedded .room-embedded-shell .topbar {
 
 @include below($bp-phone-sm) {
   body.screen-view--open .stage {
-    padding: var(--space-sm) var(--space-sm) 88px;
+    padding: var(--space-12) var(--space-12) calc(var(--space-64) + var(--space-24));
   }
 
   .screen-meta {
     max-width: calc(100% - 16px);
-    gap: 5px;
-    padding: 6px 8px;
+    gap: var(--space-4);
+    padding: var(--space-6) var(--space-8);
   }
 
   .screen-meta__title {
@@ -130,38 +129,12 @@ body.lobby--embedded .room-embedded-shell .topbar {
   .screen-view-controls {
     right: 0;
     bottom: 0;
-    gap: 6px;
-    padding: var(--space-xs);
+    gap: var(--space-6);
+    padding: var(--space-8);
   }
 
   .screen-view-controls__button {
-    width: 40px;
-    height: 40px;
+    width: var(--size-40);
+    height: var(--size-40);
   }
-
-  .screen-source-dialog {
-    padding: var(--space-sm);
-  }
-
-  .screen-source-dialog__panel {
-    max-height: calc(100vh - 24px);
-    padding: var(--space-md);
-  }
-
-  .screen-source-dialog__heading h2 {
-    font-size: 1.24rem;
-  }
-
-  .screen-source-dialog__options {
-    max-height: calc(100vh - 160px);
-    grid-template-columns: 1fr;
-  }
-}
-
-// The collapse button is the only way out of the chat on a phone, so it gets
-// the same 40px target as the heading tabs.
-html.platform--mobile .room-panel-header__collapse {
-  width: 40px;
-  height: 40px;
-  border-radius: 11px;
 }

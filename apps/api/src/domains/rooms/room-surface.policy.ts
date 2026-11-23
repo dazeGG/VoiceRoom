@@ -1,4 +1,4 @@
-import type { RoomCapabilities } from '@voice-room/shared/contracts/rooms';
+import type { RoomCapabilities } from '@voiceroom/shared/contracts/rooms';
 
 // Scope comes from server transport wiring, never a request body or header.
 export type RoomSurface = 'main' | 'widget' | 'meet';

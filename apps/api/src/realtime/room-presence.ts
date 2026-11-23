@@ -2,8 +2,8 @@
 // events to them, taking a peer out and keeping the durable active/empty
 // marker of each room in step with the roster.
 
-import type { PeerLeaveReason } from '@voice-room/shared/contracts/realtime';
-import type { ServerEnvelope } from '@voice-room/shared/realtime';
+import type { PeerLeaveReason } from '@voiceroom/shared/contracts/realtime';
+import type { ServerEnvelope } from '@voiceroom/shared/realtime';
 import type { Logger } from 'pino';
 import type { AdmissionPeer } from '../domains/admission/admission.service.ts';
 import { LOG_EVENTS } from '../lib/log-events.ts';

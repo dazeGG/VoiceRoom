@@ -4,7 +4,7 @@ import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, expect, test, vi } from 'vitest';
 import RoomChatPanel from '@/features/room/components/RoomChatPanel.vue';
 import { useSessionStore } from '@/features/auth/session.store';
-import { PostRoomMessageBody, type RoomMessage } from '@voice-room/shared/contracts/messages';
+import { PostRoomMessageBody, type RoomMessage } from '@voiceroom/shared/contracts/messages';
 import { stubFetch, type Reply } from '../fixtures/fetch.ts';
 import { installFakeWebSocket } from '../fixtures/fake-websocket.ts';
 import { authUser } from '../fixtures/users.ts';

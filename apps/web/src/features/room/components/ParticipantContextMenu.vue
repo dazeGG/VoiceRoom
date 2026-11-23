@@ -5,17 +5,17 @@ import { computed, ref, watch } from 'vue';
 import { banRoomPeer, kickRoomPeer, setRoomPeerServerMute, undoRoomBan } from '@/api/rooms';
 import { useSessionStore } from '@/features/auth/session.store';
 import { useProfileCardUiStore } from '@/entities/profile-card/profile-card-ui.store';
-import { ContextMenu, PopoverDivider, PopoverMenuItem, PopoverMenuLabel, Slider } from '@/shared/ui';
-import { iconMd, iconSm } from '@/shared/ui/icons';
+import { ContextMenu, MenuSeparator, MenuItem, MenuLabel, Slider } from '@voiceroom/ui-kit/components';
+import { iconMd, iconSm } from '@voiceroom/ui-kit/icon-defaults';
 import {
   getParticipantAudioPreference,
   getParticipantAudioPreferenceKey,
   storeParticipantAudioPreference
-} from '@voice-room/call/engine/core/settings';
-import { state as roomState } from '@voice-room/call/engine/core/room-runtime.store';
-import { applyRemoteParticipantAudioPreferences } from '@voice-room/call/engine/services/media-playback-service';
-import { getParticipantById } from '@voice-room/call/engine/room/participants';
-import { showToast } from '@voice-room/call/engine/ui/toast';
+} from '@voiceroom/call/engine/core/settings';
+import { state as roomState } from '@voiceroom/call/engine/core/room-runtime.store';
+import { applyRemoteParticipantAudioPreferences } from '@voiceroom/call/engine/services/media-playback-service';
+import { getParticipantById } from '@voiceroom/call/engine/room/participants';
+import { showToast } from '@voiceroom/call/engine/ui/toast';
 import { useParticipantContextUiStore } from '../participant-context-ui.store';
 import { participantProfilePerson } from '../profile-card-adapter';
 import { useRoomSettingsStore } from '../room-settings.store';
@@ -83,17 +83,16 @@ function act(action: () => Promise<void>, fallback: string): void {
     });
 }
 
-function showProfile(event: MouseEvent): void {
+function showProfile(): void {
   const current = peer.value;
   if (!current?.accountUserId) return;
   const person = participantProfilePerson(social, current);
-  const anchor = event.currentTarget instanceof HTMLElement ? event.currentTarget : null;
-  const anchorRect = anchor?.getBoundingClientRect() ?? null;
   const restoreFocus = participantContextMenu.restoreFocus;
+  const { x, y } = participantContextMenu;
   participantContextMenu.closeParticipantContextMenu(current.id, false);
   // Deferred so the closing menu does not swallow the card's own outside-click
   // listener during the same pointer event.
-  queueMicrotask(() => openProfileCardFor(person, { rect: anchorRect, restoreFocus }));
+  queueMicrotask(() => openProfileCardFor(person, { rect: { left: x, right: x, top: y }, restoreFocus }));
 }
 
 function toggleLocalMute(): void {
@@ -208,64 +207,49 @@ function friendRequestToast(status: 'sent' | 'accepted' | 'already_sent' | 'alre
     :y="participantContextMenu.y"
     v-bind="{ ariaLabel: t('Действия для {p0}', { p0: peer.name }) }"
     :restore-focus="participantContextMenu.restoreFocus"
-    role="dialog"
     @close="participantContextMenu.closeParticipantContextMenu('', false)"
   >
     <div class="participant-menu" :data-peer-id="peer.id">
-      <PopoverMenuLabel :text="showAudioControls ? t('Плитка в сетке') : t('Участник')" />
+      <MenuLabel :text="showAudioControls ? t('Плитка в сетке') : t('Участник')" />
 
-      <PopoverMenuItem v-if="peer.accountUserId" role="button" :label="t('Профиль')" @click="showProfile">
+      <MenuItem v-if="peer.accountUserId" :label="t('Профиль')" @select.prevent="showProfile">
         <template #icon><User v-bind="iconMd" aria-hidden="true" /></template>
-      </PopoverMenuItem>
+      </MenuItem>
 
       <template v-if="canUseSocialActions">
-        <PopoverMenuItem role="button" :label="t('Написать')" @click="openDirectMessage">
+        <MenuItem :label="t('Написать')" @select.prevent="openDirectMessage">
           <template #icon><MessageSquare v-bind="iconMd" aria-hidden="true" /></template>
-        </PopoverMenuItem>
+        </MenuItem>
 
-        <PopoverMenuItem
+        <MenuItem
           v-if="relationship === 'friend'"
-          role="button"
           :label="t('Удалить из друзей')"
-          variant="danger"
-          @click="dropFriend"
+          tone="danger"
+          @select.prevent="dropFriend"
         >
           <template #icon><UserMinus v-bind="iconMd" aria-hidden="true" /></template>
-        </PopoverMenuItem>
-        <PopoverMenuItem
+        </MenuItem>
+        <MenuItem
           v-else-if="relationship === 'incoming'"
-          role="button"
           :label="t('Принять заявку')"
-          variant="friendly"
-          @click="acceptFriendRequest"
+          tone="friendly"
+          @select.prevent="acceptFriendRequest"
         >
           <template #icon><Check v-bind="iconMd" aria-hidden="true" /></template>
-        </PopoverMenuItem>
-        <PopoverMenuItem
-          v-else-if="relationship === 'outgoing'"
-          role="button"
-          :label="t('Заявка отправлена')"
-          variant="friendly"
-          disabled
-        >
+        </MenuItem>
+        <MenuItem v-else-if="relationship === 'outgoing'" :label="t('Заявка отправлена')" tone="friendly" disabled>
           <template #icon><UserPlus v-bind="iconMd" aria-hidden="true" /></template>
-        </PopoverMenuItem>
-        <PopoverMenuItem
-          v-else
-          role="button"
-          :label="t('Добавить в друзья')"
-          variant="friendly"
-          @click="sendFriendRequest"
-        >
+        </MenuItem>
+        <MenuItem v-else :label="t('Добавить в друзья')" tone="friendly" @select.prevent="sendFriendRequest">
           <template #icon><UserPlus v-bind="iconMd" aria-hidden="true" /></template>
-        </PopoverMenuItem>
+        </MenuItem>
       </template>
       <p v-else-if="!peer.accountUserId" class="participant-menu__note">
         {{ t('Гость: доступны только локальные настройки звука.') }}
       </p>
 
       <template v-if="showAudioControls">
-        <PopoverDivider />
+        <MenuSeparator />
 
         <div class="participant-menu__volume">
           <div class="participant-menu__volume-head">
@@ -289,48 +273,43 @@ function friendRequestToast(status: 'sent' | 'accepted' | 'already_sent' | 'alre
           />
         </div>
 
-        <PopoverMenuItem
-          role="button"
+        <MenuItem
           :label="localMuted ? t('Включить для меня') : t('Заглушить для меня')"
-          :variant="localMuted ? 'accent' : 'default'"
-          @click="toggleLocalMute"
+          @select.prevent="toggleLocalMute"
         >
           <template #icon><VolumeX v-bind="iconMd" aria-hidden="true" /></template>
-        </PopoverMenuItem>
+        </MenuItem>
       </template>
 
       <template v-if="canModerate">
-        <PopoverDivider />
-        <PopoverMenuLabel :text="t('Модерация')" />
+        <MenuSeparator />
+        <MenuLabel :text="t('Модерация')" />
 
-        <PopoverMenuItem
+        <MenuItem
           v-if="showAudioControls"
-          role="button"
           :label="peer.serverMuted ? t('Включить микрофон') : t('Выключить микрофон')"
           :disabled="moderating"
-          @click="toggleServerMute"
+          @select.prevent="toggleServerMute"
         >
           <template #icon><MicOff v-bind="iconMd" aria-hidden="true" /></template>
-        </PopoverMenuItem>
+        </MenuItem>
 
-        <PopoverMenuItem
-          role="button"
+        <MenuItem
           :label="t('Исключить из комнаты')"
-          variant="danger"
+          tone="danger"
           :disabled="moderating"
-          @click="kickParticipant"
+          @select.prevent="kickParticipant"
         >
           <template #icon><LogOut v-bind="iconMd" aria-hidden="true" /></template>
-        </PopoverMenuItem>
-        <PopoverMenuItem
-          role="button"
+        </MenuItem>
+        <MenuItem
           :label="t('Заблокировать в комнате')"
-          variant="danger"
+          tone="danger"
           :disabled="moderating"
-          @click="banParticipant"
+          @select.prevent="banParticipant"
         >
           <template #icon><Ban v-bind="iconMd" aria-hidden="true" /></template>
-        </PopoverMenuItem>
+        </MenuItem>
       </template>
     </div>
   </ContextMenu>

@@ -1,21 +1,33 @@
 <script setup lang="ts">
+import {
+  Field,
+  Spinner,
+  TextField,
+  Tabs,
+  TabsPanel,
+  type TabOption,
+  Button,
+  Dialog
+} from '@voiceroom/ui-kit/components';
 import { useLocalizedText } from '@/shared/i18n/localized-text';
 
 import { t } from '@/shared/i18n';
 import { Check, Clock } from '@lucide/vue';
-import { ref, watch } from 'vue';
-import { Button, Dialog } from '@/shared/ui';
-import { iconSm } from '@/shared/ui/icons';
+import { computed, ref, useId, watch } from 'vue';
+import { iconSm } from '@voiceroom/ui-kit/icon-defaults';
 
 const props = defineProps<{ open: boolean; creating: boolean }>();
 
 const emit = defineEmits<{ close: []; create: [payload: { name: string; isStatic: boolean }] }>();
 
 const tab = ref<'permanent' | 'temp'>('permanent');
+const formId = useId();
 const name = ref('');
 const error = useLocalizedText();
-const permanentTab = ref<HTMLButtonElement | null>(null);
-const tempTab = ref<HTMLButtonElement | null>(null);
+const items = computed<TabOption<'permanent' | 'temp'>[]>(() => [
+  { value: 'permanent', label: t('Постоянная'), error: Boolean(error.value) },
+  { value: 'temp', label: t('Временная') }
+]);
 
 // Reset the form each time the dialog opens.
 watch(
@@ -41,27 +53,6 @@ function submit(): void {
     isStatic: tab.value === 'permanent'
   });
 }
-
-function selectTab(nextTab: 'permanent' | 'temp', focus = false): void {
-  tab.value = nextTab;
-  if (focus) queueMicrotask(() => (nextTab === 'permanent' ? permanentTab.value : tempTab.value)?.focus());
-}
-
-function onTabsKeydown(event: KeyboardEvent): void {
-  if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') {
-    event.preventDefault();
-    selectTab(tab.value === 'permanent' ? 'temp' : 'permanent', true);
-  } else if (event.key === 'ArrowRight' || event.key === 'ArrowDown') {
-    event.preventDefault();
-    selectTab(tab.value === 'permanent' ? 'temp' : 'permanent', true);
-  } else if (event.key === 'Home') {
-    event.preventDefault();
-    selectTab('permanent', true);
-  } else if (event.key === 'End') {
-    event.preventDefault();
-    selectTab('temp', true);
-  }
-}
 </script>
 
 <template>
@@ -69,85 +60,42 @@ function onTabsKeydown(event: KeyboardEvent): void {
     :open="open"
     :title="t('Новая комната')"
     :on-close="() => emit('close')"
-    :width="430"
-    initial-focus="#createRoomPermanentTab"
+    size="sm"
+    initial-focus="[role='tab'][aria-selected='true']"
   >
-    <div class="create-room__tabs" role="tablist" :aria-label="t('Тип комнаты')" tabindex="-1" @keydown="onTabsKeydown">
-      <button
-        id="createRoomPermanentTab"
-        ref="permanentTab"
-        class="create-room__tab"
-        role="tab"
-        :aria-selected="tab === 'permanent'"
-        aria-controls="createRoomPermanentPanel"
-        type="button"
-        :tabindex="tab === 'permanent' ? 0 : -1"
-        @click="selectTab('permanent')"
-      >
-        {{ t('Постоянная') }}
-      </button>
-      <button
-        id="createRoomTempTab"
-        ref="tempTab"
-        class="create-room__tab"
-        role="tab"
-        :aria-selected="tab === 'temp'"
-        aria-controls="createRoomTempPanel"
-        type="button"
-        :tabindex="tab === 'temp' ? 0 : -1"
-        @click="selectTab('temp')"
-      >
-        {{ t('Временная') }}
-      </button>
-    </div>
-
-    <form class="create-room__form" @submit.prevent="submit">
-      <p v-if="error" class="create-room__error" role="alert">{{ error }}</p>
-
-      <div class="create-room__field">
-        <label class="create-room__label" for="createRoomName">
-          {{ t('Название')
-          }}<span v-if="tab === 'temp'" class="create-room__label-soft"> {{ t('· необязательно') }}</span>
-        </label>
-        <input
-          id="createRoomName"
-          v-model="name"
-          class="create-room__input"
-          maxlength="60"
-          :placeholder="tab === 'permanent' ? t('Название комнаты') : t('Название созвона')"
-        />
-      </div>
-
-      <div
-        v-if="tab === 'permanent'"
-        id="createRoomPermanentPanel"
-        class="create-room__note create-room__note--ok"
-        role="tabpanel"
-        aria-labelledby="createRoomPermanentTab"
-      >
-        <Check v-bind="iconSm" aria-hidden="true" />
-        <span>{{ t('Всегда остаётся в вашем списке — заходите в любой момент.') }}</span>
-      </div>
-      <div
-        v-else
-        id="createRoomTempPanel"
-        class="create-room__note create-room__note--warn"
-        role="tabpanel"
-        aria-labelledby="createRoomTempTab"
-      >
-        <Clock v-bind="iconSm" aria-hidden="true" />
-        <span>{{
-          t('Код появится после создания. После выхода всех участников комната исчезнет примерно через 15 минут.')
-        }}</span>
-      </div>
-
-      <div class="home-dialog__actions">
-        <Button variant="ghost" type="button" @click="emit('close')">{{ t('Отмена') }}</Button>
-        <Button variant="primary" type="submit" :disabled="creating">
-          <span v-if="creating" class="home-spinner" aria-hidden="true"></span>
-          {{ tab === 'permanent' ? t('Создать комнату') : t('Создать на время') }}
-        </Button>
-      </div>
+    <form :id="formId" @submit.prevent="submit">
+      <Tabs v-model="tab" :items="items" :label="t('Тип комнаты')" stretch>
+        <TabsPanel v-for="item in items" :key="item.value" :value="item.value">
+          <div class="create-room__form">
+            <p v-if="item.value === 'permanent' && error" class="create-room__error" role="alert">{{ error }}</p>
+            <Field :id="formId + '-' + item.value" :label="t('Название')" :optional="item.value === 'temp'">
+              <TextField
+                v-model="name"
+                size="lg"
+                maxlength="60"
+                :placeholder="item.value === 'permanent' ? t('Название комнаты') : t('Название созвона')"
+              />
+            </Field>
+            <div v-if="item.value === 'permanent'" class="create-room__note create-room__note--ok">
+              <Check v-bind="iconSm" aria-hidden="true" />
+              <span>{{ t('Всегда остаётся в вашем списке — заходите в любой момент.') }}</span>
+            </div>
+            <div v-else class="create-room__note create-room__note--warn">
+              <Clock v-bind="iconSm" aria-hidden="true" />
+              <span>{{
+                t('Код появится после создания. После выхода всех участников комната исчезнет примерно через 15 минут.')
+              }}</span>
+            </div>
+          </div>
+        </TabsPanel>
+      </Tabs>
     </form>
+    <template #footer>
+      <Button variant="ghost" type="button" @click="emit('close')">{{ t('Отмена') }}</Button>
+      <Button variant="primary" type="submit" :form="formId" :disabled="creating">
+        <Spinner v-if="creating" aria-hidden="true" />
+        {{ tab === 'permanent' ? t('Создать комнату') : t('Создать на время') }}
+      </Button>
+    </template>
   </Dialog>
 </template>

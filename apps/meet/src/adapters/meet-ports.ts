@@ -1,7 +1,7 @@
-import type { CallPorts, IdentityPort } from '@voice-room/call/engine/ports';
-import type { VoiceAssetUrls } from '@voice-room/call/voice-assets';
-import { classifyPlatform } from '@voice-room/shared/platform-class';
-import { createLogger } from '@voice-room/ui/log';
+import type { CallPorts, IdentityPort } from '@voiceroom/call/engine/ports';
+import type { VoiceAssetUrls } from '@voiceroom/call/voice-assets';
+import { classifyPlatform } from '@voiceroom/shared/platform-class';
+import { createLogger } from '@voiceroom/ui/log';
 import type { MeetTransport } from '@/adapters/meet-transport';
 
 export function createMeetPorts({

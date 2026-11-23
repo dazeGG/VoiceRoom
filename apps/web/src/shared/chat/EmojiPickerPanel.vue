@@ -1,6 +1,18 @@
 <script setup lang="ts">
+import {
+  DropdownMenu,
+  Field,
+  IconButton,
+  MenuLabel,
+  MenuRadioGroup,
+  MenuRadioItem,
+  Pressable,
+  TextField,
+  Toolbar
+} from '@voiceroom/ui-kit/components';
+import { Search } from '@lucide/vue';
 import { t } from '@/shared/i18n';
-import { SKIN_TONES } from '@voice-room/shared/emoji-skin-tones';
+import { SKIN_TONES } from '@voiceroom/shared/emoji-skin-tones';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
 import Emoji from './Emoji.vue';
 import { NEUTRAL_TONE, loadSkinTone, saveSkinTone } from './skin-tone-preference';
@@ -33,9 +45,9 @@ const HEADER_HEIGHT = 28;
 const OVERSCAN_ROWS = 2;
 const TONE_HOVER_DELAY_MS = 300;
 const TONE_CLOSE_GRACE_MS = 260;
-const TONE_SWATCH = 34;
+const TONE_SWATCH = 32;
 const TONE_SWATCH_GAP = 2;
-const TONE_STRIP_PADDING = 5;
+const TONE_STRIP_PADDING = 4;
 const TONE_STRIP_MARGIN = 8;
 
 const {
@@ -59,13 +71,12 @@ const emit = defineEmits<{ pick: [emoji: string] }>();
 const search = ref('');
 const activeIndex = ref(0);
 const skinTone = ref(loadSkinTone(SKIN_TONES.length));
-const toneMenuOpen = ref(false);
 const toneStripFor = ref('');
 const toneStripLeft = ref(0);
 const toneStripTop = ref(0);
 const strip = ref<HTMLDivElement | null>(null);
 const scroller = ref<HTMLDivElement | null>(null);
-const searchInput = ref<HTMLInputElement | null>(null);
+const searchInput = ref<{ input: HTMLInputElement | null } | null>(null);
 const scrollTop = ref(0);
 const viewportHeight = ref(300);
 let toneHoverTimer = 0;
@@ -161,7 +172,7 @@ const toneStripOptions = computed(() => (toneStripFor.value ? skinToneChoices(to
 
 onMounted(() => {
   void nextTick().then(() => {
-    searchInput.value?.focus();
+    searchInput.value?.input?.focus();
     if (scroller.value) viewportHeight.value = scroller.value.clientHeight || viewportHeight.value;
   });
 });
@@ -261,21 +272,21 @@ function categoryKeydown(event: KeyboardEvent): void {
   anchors[next]?.click();
 }
 
-/** A press anywhere that is not the strip or the tone menu puts them away. */
-function dismissOverlays(event: PointerEvent): void {
+/** A press outside the swatch strip and emoji cells puts the strip away. */
+function dismissToneStrip(event: PointerEvent): void {
   const target = event.target;
   if (!(target instanceof Node)) return;
   if (strip.value?.contains(target)) return;
-  if (!(target instanceof Element) || !target.closest('.emoji-picker__tone')) toneMenuOpen.value = false;
   if (!(target instanceof Element) || !target.closest('.emoji-picker__cell')) {
     toneStripFor.value = '';
   }
 }
 
-function chooseTone(tone: number): void {
+function chooseTone(value: string | undefined): void {
+  if (value === undefined) return;
+  const tone = Number(value);
   skinTone.value = tone;
   saveSkinTone(tone, SKIN_TONES.length);
-  toneMenuOpen.value = false;
 }
 
 // A one-off pick, which leaves the remembered default alone. It opens on a
@@ -288,7 +299,7 @@ function openToneStrip(emoji: string, tile: HTMLElement): void {
   const pickerBox = picker.value.getBoundingClientRect();
   // Six swatches plus the padding and border around them. Kept in sync with
   // the stylesheet so the strip can be clamped before it is measured.
-  const width = 6 * TONE_SWATCH + 5 * TONE_SWATCH_GAP + 2 * TONE_STRIP_PADDING;
+  const width = 6 * TONE_SWATCH + 5 * TONE_SWATCH_GAP + 2 * (TONE_STRIP_PADDING + 1);
   const half = width / 2;
   const centre = tileBox.left - pickerBox.left + tileBox.width / 2;
   // Clamped to the panel: unclamped, a swatch row over the leftmost column
@@ -354,88 +365,76 @@ function onSearchInput(): void {
 </script>
 
 <template>
-  <div ref="picker" class="emoji-picker" role="presentation" @pointerdown="dismissOverlays">
+  <div ref="picker" class="emoji-picker" role="presentation" @pointerdown="dismissToneStrip">
     <div class="emoji-picker__head">
       <div class="emoji-picker__search-row">
-        <label class="emoji-picker__search">
-          <span class="emoji-picker__label">{{ searchLabel }}</span>
-          <input
+        <Field visually-hidden-label class="emoji-picker__search" :label="searchLabel">
+          <TextField
             ref="searchInput"
             v-model="search"
-            class="emoji-picker__input"
+            size="sm"
             type="search"
             :placeholder="searchLabel"
-            @input="onSearchInput"
-          />
-        </label>
-
-        <div class="emoji-picker__tone">
-          <button
-            class="emoji-picker__tone-trigger"
-            type="button"
-            :aria-label="t('Цвет кожи по умолчанию')"
-            :title="t('Цвет кожи по умолчанию')"
-            aria-haspopup="true"
-            :aria-expanded="toneMenuOpen"
-            @click="toneMenuOpen = !toneMenuOpen"
+            @update:model-value="onSearchInput"
           >
-            <Emoji :emoji="withSkinTone(TONE_SWATCH_BASE, skinTone)" :size="20" decorative />
-          </button>
+            <template #leading><Search /></template>
+          </TextField>
+        </Field>
 
-          <div v-if="toneMenuOpen" class="emoji-picker__tone-menu" role="menu" :aria-label="t('Цвет кожи')">
-            <button
-              v-for="(swatch, index) in skinToneChoices(TONE_SWATCH_BASE)"
-              :key="swatch"
-              class="emoji-picker__tone-option"
-              type="button"
-              role="menuitemradio"
-              :aria-checked="index - 1 === skinTone"
-              :aria-label="index - 1 === NEUTRAL_TONE ? t('Без цвета кожи') : t('Тон {p0}', { p0: index })"
-              @click="chooseTone(index - 1)"
-            >
-              <Emoji :emoji="swatch" :size="20" decorative />
-            </button>
-          </div>
-        </div>
+        <DropdownMenu :aria-label="t('Цвет кожи')" focus-checked inline>
+          <template #trigger>
+            <IconButton :label="t('Цвет кожи по умолчанию')" variant="outline">
+              <Emoji :emoji="withSkinTone(TONE_SWATCH_BASE, skinTone)" :size="16" decorative />
+            </IconButton>
+          </template>
+          <template #content>
+            <MenuRadioGroup :model-value="String(skinTone)" @update:model-value="chooseTone">
+              <MenuRadioItem
+                v-for="(swatch, index) in skinToneChoices(TONE_SWATCH_BASE)"
+                :key="swatch"
+                :value="String(index - 1)"
+                :label="index - 1 === NEUTRAL_TONE ? t('Без цвета кожи') : t('Тон {p0}', { p0: index })"
+              >
+                <template #icon><Emoji :emoji="swatch" :size="16" decorative /></template>
+              </MenuRadioItem>
+            </MenuRadioGroup>
+          </template>
+        </DropdownMenu>
       </div>
 
       <!-- Anchors, not tabs: they scroll the one list rather than swapping
            its contents. -->
-      <div
+      <Toolbar
+        variant="bare"
         class="emoji-picker__anchors"
-        role="toolbar"
         tabindex="-1"
-        :aria-label="sectionsLabel"
+        :label="sectionsLabel"
         @keydown="categoryKeydown"
       >
-        <button
+        <IconButton
           v-if="frequentEmoji.length"
-          class="emoji-picker__anchor"
-          :class="{ 'emoji-picker__anchor--active': !searching && activeSectionKey === 'frequent' }"
-          type="button"
           data-category="frequent"
-          :aria-label="t('Часто используемые')"
-          :aria-current="activeSectionKey === 'frequent' ? 'true' : undefined"
-          :title="t('Часто используемые')"
+          :label="t('Часто используемые')"
+          :aria-current="!searching && activeSectionKey === 'frequent' ? 'true' : undefined"
+          :size="32"
+          :variant="!searching && activeSectionKey === 'frequent' ? 'soft' : 'default'"
           @click="goToSection('frequent')"
         >
           🕘
-        </button>
-        <button
+        </IconButton>
+        <IconButton
           v-for="group in CATEGORIES"
           :key="group.key"
-          class="emoji-picker__anchor"
-          :class="{ 'emoji-picker__anchor--active': !searching && activeSectionKey === group.key }"
-          type="button"
           :data-category="group.key"
-          :aria-label="group.label"
-          :aria-current="activeSectionKey === group.key ? 'true' : undefined"
-          :title="group.label"
+          :label="group.label"
+          :aria-current="!searching && activeSectionKey === group.key ? 'true' : undefined"
+          :size="32"
+          :variant="!searching && activeSectionKey === group.key ? 'soft' : 'default'"
           @click="goToSection(group.key)"
         >
           <Emoji :emoji="group.icon" :size="20" decorative />
-        </button>
-      </div>
+        </IconButton>
+      </Toolbar>
     </div>
 
     <div
@@ -449,15 +448,17 @@ function onSearchInput(): void {
     >
       <div class="emoji-picker__spacer" :style="{ height: `${layout.totalHeight}px` }">
         <template v-for="row in visibleRows" :key="row.key">
-          <span v-if="row.kind === 'header'" class="emoji-picker__section" :style="{ top: `${row.top}px` }">{{
-            row.label
-          }}</span>
+          <MenuLabel
+            v-if="row.kind === 'header'"
+            class="emoji-picker__section"
+            :style="{ top: `${row.top}px` }"
+            :text="row.label"
+          />
           <div v-else class="emoji-picker__row" :style="{ top: `${row.top}px` }" role="row">
-            <button
+            <Pressable
               v-for="(emoji, column) in row.emojis"
               :key="emoji"
               class="emoji-picker__cell"
-              type="button"
               role="gridcell"
               :data-option-index="row.firstIndex + column"
               :tabindex="row.firstIndex + column === activeIndex ? 0 : -1"
@@ -471,7 +472,7 @@ function onSearchInput(): void {
             >
               <Emoji :emoji="toned(emoji)" decorative />
               <span v-if="hasSkinToneChoices(emoji)" class="emoji-picker__tone-hint" aria-hidden="true"></span>
-            </button>
+            </Pressable>
           </div>
         </template>
       </div>
@@ -492,16 +493,15 @@ function onSearchInput(): void {
       @pointerenter="cancelToneClose"
       @pointerleave="scheduleToneClose"
     >
-      <button
+      <Pressable
         v-for="option in toneStripOptions"
         :key="option"
         class="emoji-picker__tone-strip-option"
-        type="button"
         :aria-label="optionLabel(option)"
         @click="chooseFromStrip(option)"
       >
         <Emoji :emoji="option" decorative />
-      </button>
+      </Pressable>
     </div>
   </div>
 </template>

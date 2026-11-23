@@ -2,8 +2,8 @@
 
 import type { TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import type { ErrorCode } from '@voice-room/shared/contracts/errors';
-import { Done, Failure, RoomIdParams, UserIdParams } from '@voice-room/shared/contracts/http';
+import type { ErrorCode } from '@voiceroom/shared/contracts/errors';
+import { Done, Failure, RoomIdParams, UserIdParams } from '@voiceroom/shared/contracts/http';
 import {
   DoNotDisturbBody,
   MuteBody,
@@ -14,14 +14,14 @@ import {
   PushConfig,
   SubscribeBody,
   UnsubscribeBody
-} from '@voice-room/shared/contracts/notifications';
-import { cleanPresenceStatus, normalizeRoomId } from '@voice-room/shared/validation';
+} from '@voiceroom/shared/contracts/notifications';
+import { cleanPresenceStatus, normalizeRoomId } from '@voiceroom/shared/validation';
 import type { ApiContext } from '../../app/context.ts';
 import { failure, optionalJsonBody } from '../../platform/http/http-kit.ts';
 import { cleanUuid } from '../messaging/message-input.ts';
 import type { MutationResult, NotificationSettingsService } from './notification-settings.service.ts';
 import { Type } from 'typebox';
-import { PushRegistrationSuccess, PushRegistrationConflict } from '@voice-room/shared/contracts/push-registration';
+import { PushRegistrationSuccess, PushRegistrationConflict } from '@voiceroom/shared/contracts/push-registration';
 
 const answers = <Success>(success: Success) => ({ 200: success, '4xx': Failure, 503: Failure });
 const INVALID_TARGET = failure('Invalid notification target', { code: 'invalid_notification_target' });

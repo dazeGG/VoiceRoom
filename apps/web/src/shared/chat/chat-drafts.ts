@@ -1,6 +1,6 @@
-import type { ConversationRef } from '@voice-room/shared/contracts/realtime';
-import { isArray, isRecord } from '@voice-room/shared/guards';
-import { MAX_MENTIONS_PER_MESSAGE } from '@voice-room/shared/mentions';
+import type { ConversationRef } from '@voiceroom/shared/contracts/realtime';
+import { isArray, isRecord } from '@voiceroom/shared/guards';
+import { MAX_MENTIONS_PER_MESSAGE } from '@voiceroom/shared/mentions';
 import type { SelectedMention } from './mention-composer';
 
 // Unsent text is kept per account and per chat on this device only. Nothing is

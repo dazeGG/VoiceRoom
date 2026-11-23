@@ -7,7 +7,7 @@ import { CursorCodecError } from '../../platform/cursor-codec.ts';
 import type { CursorTuple } from '../../platform/cursor-codec.ts';
 import { epochMillis } from '../../platform/epoch-millis.ts';
 import { avatarUrl } from '../../lib/avatar-url.ts';
-import type { Ban, BanProfile } from '@voice-room/shared/contracts/moderation';
+import type { Ban, BanProfile } from '@voiceroom/shared/contracts/moderation';
 import { storedIpKey, type IpKeyOf } from '../../lib/ip-key.ts';
 
 type QueryClient = Pick<pg.PoolClient, 'query'>;

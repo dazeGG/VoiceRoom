@@ -14,8 +14,8 @@ import {
   type StaffMe,
   type StaffPermission,
   type StaffRole
-} from '@voice-room/shared/contracts/staff';
-import { normalizeLogin } from '@voice-room/shared/validation';
+} from '@voiceroom/shared/contracts/staff';
+import { normalizeLogin } from '@voiceroom/shared/validation';
 import type { AdminActionRepository } from '../admin/admin-action.repository.ts';
 import type { StaffAccountRow, StaffRepository } from './staff.repository.ts';
 

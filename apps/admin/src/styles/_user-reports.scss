@@ -1,0 +1,43 @@
+.admin-user-reports {
+  display: grid;
+  gap: var(--space-12);
+
+  h2,
+  h3,
+  p {
+    margin: 0;
+  }
+
+  &__quiet {
+    color: var(--vr-text-muted);
+  }
+
+  &__list,
+  &__items {
+    display: grid;
+    gap: var(--space-8);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  &__card {
+    display: grid;
+    justify-items: start;
+    gap: var(--space-12);
+  }
+
+  &__heading,
+  &__actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-8);
+  }
+
+  &__items p {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    color: var(--vr-text-2);
+  }
+}

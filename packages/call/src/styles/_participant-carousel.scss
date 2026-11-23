@@ -23,7 +23,7 @@
   min-height: 0;
   grid-template-rows: minmax(0, 1fr) auto;
   place-items: center;
-  gap: var(--space-md);
+  gap: var(--space-16);
 }
 
 .participant-focus__stage {
@@ -47,7 +47,7 @@
   width: min(100%, 790px);
   grid-template-columns: 34px minmax(0, 1fr) 34px;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-8);
 }
 
 .participant-carousel__viewport {
@@ -65,7 +65,7 @@
   width: max-content;
   height: 112px;
   align-items: center;
-  gap: 10px;
+  gap: var(--space-8);
   margin-inline: auto;
 
   :is(.participant, .stream-tile) {
@@ -73,7 +73,7 @@
     height: 84px;
     flex: 0 0 148px;
     align-self: center;
-    border-radius: 12px;
+    border-radius: var(--radius-12);
   }
 
   // Carousel tiles stay minimal: no watch/status chrome, just the tile itself.
@@ -91,23 +91,23 @@
   }
 
   .participant__heading {
-    height: 20px;
-    gap: 4px;
-    border-radius: 6px;
-    padding: 0 6px;
-    font-size: 0.71875rem;
+    height: var(--size-20);
+    gap: var(--space-4);
+    border-radius: var(--radius-6);
+    padding: 0 var(--space-6);
+    font-size: 12px;
   }
 
   .participant__muted-icon,
   .participant__deafened-icon,
   .participant__muted-icon svg,
   .participant__deafened-icon svg {
-    width: 12px;
-    height: 12px;
+    width: var(--icon-12);
+    height: var(--icon-12);
   }
 
   .participant__ring {
-    height: 34px;
+    height: var(--size-32);
   }
 
   .participant__avatar {
@@ -115,21 +115,9 @@
   }
 
   .stream-tile__icon svg {
-    width: 24px;
-    height: 24px;
+    width: var(--icon-24);
+    height: var(--icon-24);
   }
-}
-
-.participant-carousel__nav {
-  display: grid;
-  width: 34px;
-  height: 34px;
-  place-items: center;
-  border: 1px solid var(--vr-line-strong);
-  border-radius: 50%;
-  background: var(--vr-surface-2);
-  color: var(--vr-text-2);
-  cursor: pointer;
 }
 
 // Arrows appear only when there is another page on that side.

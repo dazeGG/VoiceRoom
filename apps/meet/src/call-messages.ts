@@ -271,6 +271,7 @@ export const callMessages = new Map<string, { en: string; fr: string }>([
   ['Смотреть стрим', { en: 'Watch stream', fr: 'Regarder le flux' }],
   ['Смотреть стрим {p0}', { en: 'Watch stream {p0}', fr: 'Regarder le flux {p0}' }],
   ['Смотреть экран', { en: 'Watch screen', fr: 'Écran de montre' }],
+  ['{p0} и ещё {p1}', { en: '{p0} and {p1} more', fr: '{p0} et {p1} de plus' }],
   ['Смотрят стрим', { en: 'Watching the stream', fr: 'Regarder le flux' }],
   ['Смотрят: 0', { en: 'Views: 0', fr: 'Vues : 0' }],
   ['Сначала подключитесь к комнате', { en: 'Connect to the room first', fr: "Connectez-vous d'abord à le salon" }],

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { IconButton, Avatar, Button } from '@voiceroom/ui-kit/components';
 import { t } from '@/shared/i18n';
 import { Bell, BellOff, UserMinus, X } from '@lucide/vue';
 import { computed, ref } from 'vue';
@@ -6,8 +7,7 @@ import type { PublicUser } from '@/api/friends';
 import EmojiText from '@/shared/chat/EmojiText.vue';
 import { useNotificationPreferencesStore } from '@/shared/notifications/preferences.store';
 import type { PresenceStatus } from '@/shared/presence';
-import { Avatar } from '@/shared/ui';
-import { iconMd, iconSm } from '@/shared/ui/icons';
+import { iconMd } from '@voiceroom/ui-kit/icon-defaults';
 import { displayNameOf } from '@/shared/utils/display-name';
 import { useLobby } from '../../../model/lobby-context';
 
@@ -37,9 +37,9 @@ async function toggleMute(): Promise<void> {
 <template>
   <div class="dm-profile">
     <div class="dm-profile__cover" :style="{ '--profile-cover-accent': peer.avatarAccent || undefined }">
-      <button class="dm-profile__close" type="button" :aria-label="t('Закрыть')" @click="lobby.closeProfile">
-        <X v-bind="iconSm" aria-hidden="true" />
-      </button>
+      <IconButton class="dm-profile__close" :label="t('Закрыть')" :size="32" @click="lobby.closeProfile">
+        <X aria-hidden="true" />
+      </IconButton>
     </div>
     <div class="dm-profile__body">
       <Avatar
@@ -47,7 +47,7 @@ async function toggleMute(): Promise<void> {
         :src="peer.avatarUrl"
         :color-key="peer.avatarColorKey"
         :background="peer.avatarAccent || undefined"
-        :size="76"
+        :size="80"
         :online="presence === 'online'"
         :afk="presence === 'away'"
         :dnd="presence === 'dnd'"
@@ -68,19 +68,20 @@ async function toggleMute(): Promise<void> {
         </div>
       </div>
 
-      <button class="dm-profile__action" type="button" :disabled="muteSaving" @click="toggleMute">
+      <Button variant="ghost" size="sm" class="dm-profile__action" :disabled="muteSaving" @click="toggleMute">
         <BellOff v-if="muted" v-bind="iconMd" aria-hidden="true" />
         <Bell v-else v-bind="iconMd" aria-hidden="true" />
         <span>{{ muted ? t('Уведомления выключены') : t('Выключить уведомления') }}</span>
-      </button>
-      <button
+      </Button>
+      <Button
+        variant="ghost"
+        size="sm"
         class="dm-profile__action dm-profile__action--danger"
-        type="button"
         @click="void lobby.removeFriend(peer.id)"
       >
-        <UserMinus v-bind="iconMd" aria-hidden="true" />
+        <template #icon><UserMinus v-bind="iconMd" aria-hidden="true" /></template>
         <span>{{ t('Удалить из друзей') }}</span>
-      </button>
+      </Button>
     </div>
   </div>
 </template>

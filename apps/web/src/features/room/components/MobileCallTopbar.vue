@@ -1,15 +1,15 @@
 <script setup lang="ts">
+import { IconButton, Avatar, Pressable, ControlGroup } from '@voiceroom/ui-kit/components';
 import { t } from '@/shared/i18n';
 import { LayoutGrid, MessageSquare, Users } from '@lucide/vue';
 import { computed } from 'vue';
-import { isRecord } from '@voice-room/shared/guards';
-import { state as roomClientState } from '@voice-room/call/engine/core/room-runtime.store';
-import { showToast } from '@voice-room/call/engine/ui/toast';
+import { isRecord } from '@voiceroom/shared/guards';
+import { state as roomClientState } from '@voiceroom/call/engine/core/room-runtime.store';
+import { showToast } from '@voiceroom/call/engine/ui/toast';
 import { useMobileCallUiStore } from '@/features/room/mobile-call-ui.store';
-import { useParticipantsUiStore } from '@voice-room/call/engine/core/participants-ui.store';
+import { useParticipantsUiStore } from '@voiceroom/call/engine/core/participants-ui.store';
 import { useRoomPanelToggleStore } from '@/features/room/room-panel-toggle.store';
-import { useVoiceSessionStore } from '@voice-room/call/engine/core/voice-session.store';
-import { Avatar } from '@/shared/ui';
+import { useVoiceSessionStore } from '@voiceroom/call/engine/core/voice-session.store';
 import { copyText } from '@/shared/utils/clipboard';
 import RoomCallTimer from './RoomCallTimer.vue';
 
@@ -52,9 +52,8 @@ function handleInviteClick(): void {
 
 <template>
   <header :class="['mobile-call-topbar', { 'mobile-call-topbar--duo': duo }]">
-    <button
+    <Pressable
       class="mobile-call-topbar__room"
-      type="button"
       :aria-label="t('Пригласить в «{p0}»', { p0: heading })"
       @click="handleInviteClick"
     >
@@ -73,14 +72,13 @@ function handleInviteClick(): void {
           <span>{{ participantsUi.getParticipantCount() }} {{ t('в звонке') }}</span>
         </span>
       </span>
-    </button>
-    <div class="room-panel-tabs mobile-call-topbar__actions" role="group" :aria-label="t('Звонок')">
-      <button
+    </Pressable>
+    <ControlGroup class="room-panel-switches mobile-call-topbar__actions" :label="t('Звонок')">
+      <IconButton
         v-if="!duo"
-        type="button"
-        class="room-panel-tabs__tab mobile-call-topbar__view"
-        :aria-label="viewLabel"
-        :title="viewLabel"
+        class="room-panel-switches__button mobile-call-topbar__view"
+        :label="viewLabel"
+        :size="44"
         @click="mobileCall.toggleMobileCallView"
       >
         <!-- One big frame over three small ones: the focus layout. -->
@@ -97,27 +95,27 @@ function handleInviteClick(): void {
           <rect x="7" y="13" width="4" height="3.5" rx="1" fill="currentColor" />
           <rect x="12.5" y="13" width="4" height="3.5" rx="1" fill="currentColor" />
         </svg>
-        <LayoutGrid v-else :size="18" aria-hidden="true" />
-      </button>
-      <button
-        type="button"
-        class="room-panel-tabs__tab"
-        :aria-label="t('Чат')"
+        <LayoutGrid v-else aria-hidden="true" />
+      </IconButton>
+      <IconButton
+        class="room-panel-switches__button"
+        :label="t('Чат')"
         :aria-pressed="panels.isRoomPanelOpen('chat')"
+        :dot="unread > 0"
+        :size="44"
         @click="panels.toggleRoomPanel('chat')"
       >
-        <MessageSquare :size="18" aria-hidden="true" />
-        <span v-if="unread > 0" class="room-panel-tabs__unread" aria-hidden="true"></span>
-      </button>
-      <button
-        type="button"
-        class="room-panel-tabs__tab"
-        :aria-label="t('Участники')"
+        <MessageSquare aria-hidden="true" />
+      </IconButton>
+      <IconButton
+        class="room-panel-switches__button"
+        :label="t('Участники')"
         :aria-pressed="panels.isRoomPanelOpen('participants')"
+        :size="44"
         @click="panels.toggleRoomPanel('participants')"
       >
-        <Users :size="18" aria-hidden="true" />
-      </button>
-    </div>
+        <Users aria-hidden="true" />
+      </IconButton>
+    </ControlGroup>
   </header>
 </template>

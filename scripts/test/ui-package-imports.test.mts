@@ -6,7 +6,7 @@ import { REPO_ROOT } from '../lib/glob.mts';
 
 const eslint = new ESLint({ cwd: REPO_ROOT, overrideConfig: tseslint.configs.disableTypeChecked });
 const tsPath = 'packages/ui/src/utils/fixture.ts';
-const vuePath = 'packages/ui/src/components/fixtures/Fixture.vue';
+const vuePath = 'packages/ui-kit/src/components/fixtures/Fixture.vue';
 const forms = [
   { rule: 'no-restricted-imports', source: (target: string) => `import { value } from '${target}';` },
   { rule: 'no-restricted-imports', source: (target: string) => `import type { Value } from '${target}';` },
@@ -37,7 +37,7 @@ for (const [filePath, relativePath] of [
   [vuePath, '../../../../../apps/site/src/site.ts']
 ] as const) {
   test(`${filePath} rejects app dependencies in each import form`, async () => {
-    for (const target of ['@/shared/log', relativePath, '/repo/apps/admin/src/main.ts', '@voice-room/api']) {
+    for (const target of ['@/shared/log', relativePath, '/repo/apps/admin/src/main.ts', '@voiceroom/api']) {
       for (const form of forms) {
         const source = form.source(target);
         assert.deepEqual(await boundaryRuleIds(filePath, source), [form.rule], source);
@@ -46,7 +46,7 @@ for (const [filePath, relativePath] of [
   });
 
   test(`${filePath} accepts internal modules and package exports`, async () => {
-    for (const target of ['./local', '../utils/tile-grid.ts', 'vue', 'pinia', '@voice-room/shared/contracts/rooms']) {
+    for (const target of ['./local', '../utils/tile-grid.ts', 'vue', 'pinia', '@voiceroom/shared/contracts/rooms']) {
       for (const form of forms) {
         const source = form.source(target);
         assert.deepEqual(await boundaryRuleIds(filePath, source), [], source);

@@ -26,15 +26,16 @@ async function renderSidebar() {
   return { onToast, preferences: preferences.notificationPreferences };
 }
 
-const focusedLabel = () => document.activeElement?.querySelector('.sidebar__status-label')?.textContent;
+const focusedLabel = () => document.activeElement?.getAttribute('aria-label');
 
 test('the status list opens on the current status and moves with arrows, Home, End and typing', async () => {
   stubFetch({});
   await renderSidebar();
 
   await userEvent.click(screen.getByRole('button', { name: /Ада/ }));
-  expect(await screen.findByRole('listbox', { name: 'Статус пользователя' })).toBeTruthy();
+  expect(await screen.findByRole('menu', { name: 'Статус пользователя' })).toBeTruthy();
   await vi.waitFor(() => expect(focusedLabel()).toBe('В сети'));
+  expect(screen.getByRole('menuitemradio', { name: 'В сети', checked: true })).toBeTruthy();
   expect(screen.getByText('Уведомления и звуковые сигналы будут отключены')).toBeTruthy();
 
   await userEvent.keyboard('{ArrowDown}');
@@ -59,11 +60,11 @@ test('choosing do-not-disturb saves it and shows what the server stored', async 
   const { preferences } = await renderSidebar();
 
   await userEvent.click(screen.getByRole('button', { name: /Ада/ }));
-  await userEvent.click(await screen.findByRole('option', { name: /Не беспокоить/ }));
+  await userEvent.click(await screen.findByRole('menuitemradio', { name: /Не беспокоить/ }));
 
   await vi.waitFor(() => expect(preferences.presenceStatus).toBe('dnd'));
   expect(calls[0]).toMatchObject({ url: '/api/presence/status', body: { status: 'dnd', automatic: false } });
-  await vi.waitFor(() => expect(screen.queryByRole('listbox')).toBeNull());
+  await vi.waitFor(() => expect(screen.queryByRole('menu')).toBeNull());
 });
 
 test('a refused change keeps the old status and says so', async () => {
@@ -71,7 +72,7 @@ test('a refused change keeps the old status and says so', async () => {
   const { onToast, preferences } = await renderSidebar();
 
   await userEvent.click(screen.getByRole('button', { name: /Ада/ }));
-  await userEvent.click(await screen.findByRole('option', { name: /Отошёл/ }));
+  await userEvent.click(await screen.findByRole('menuitemradio', { name: /Отошёл/ }));
 
   await vi.waitFor(() => expect(onToast).toHaveBeenCalledWith('Не удалось изменить статус'));
   expect(preferences.presenceStatus).toBe('online');
@@ -82,7 +83,7 @@ test('the status list is drawn outside the sidebar so its edge cannot clip it', 
   await renderSidebar();
 
   await userEvent.click(screen.getByRole('button', { name: /Ада/ }));
-  const panel = await screen.findByRole('listbox', { name: 'Статус пользователя' });
+  const panel = await screen.findByRole('menu', { name: 'Статус пользователя' });
   await settle();
   expect(panel.closest('.sidebar')).toBeNull();
   expect(document.body.contains(panel)).toBe(true);

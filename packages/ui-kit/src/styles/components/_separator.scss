@@ -1,0 +1,14 @@
+.ui-separator {
+  flex: none;
+  height: 1px;
+  margin: 0;
+  border: 0;
+  background: var(--vr-line);
+
+  &--vertical {
+    width: 1px;
+    height: var(--size-20);
+    margin-inline: var(--space-4);
+    background: var(--vr-line-strong);
+  }
+}

@@ -1,6 +1,8 @@
-import { fireEvent, screen } from '@testing-library/vue';
+import { fireEvent, screen, waitFor } from '@testing-library/vue';
+import userEvent from '@testing-library/user-event';
 import { expect, test } from 'vitest';
 import { nextTick } from 'vue';
+import ComposerEmojiPicker from '@/shared/chat/ComposerEmojiPicker.vue';
 import EmojiPickerPanel from '@/shared/chat/EmojiPickerPanel.vue';
 import { defined } from '../helpers/assert.ts';
 import { renderWithApp } from '../helpers/render.ts';
@@ -27,6 +29,26 @@ test('right-clicking an emoji opens its skin tone choices', async () => {
   const option = defined(screen.getAllByRole('gridcell', { name: 'Реакция 👍' })[0], 'thumbs-up emoji');
   await fireEvent.contextMenu(option);
   expect(screen.getByRole('group', { name: 'Цвет кожи для этой реакции' }).querySelectorAll('button')).toHaveLength(6);
+});
+
+test('the skin tone menu supports keyboard selection and Escape leaves the picker open', async () => {
+  await renderWithApp(ComposerEmojiPicker);
+  const user = userEvent.setup();
+  await user.click(screen.getByRole('button', { name: 'Добавить эмодзи' }));
+  const trigger = await screen.findByRole('button', { name: 'Цвет кожи по умолчанию' });
+  await user.click(trigger);
+  expect(await screen.findByRole('menu', { name: 'Цвет кожи' })).toBeTruthy();
+  await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('menuitemradio', { checked: true })));
+
+  await user.keyboard('{Escape}');
+  await waitFor(() => expect(screen.queryByRole('menu')).toBeNull());
+  expect(screen.getByRole('searchbox', { name: 'Поиск эмодзи' })).toBeTruthy();
+  await waitFor(() => expect(document.activeElement).toBe(trigger));
+
+  await user.keyboard('{Enter}');
+  await user.click(await screen.findByRole('menuitemradio', { name: 'Тон 2' }));
+  await user.click(trigger);
+  expect(await screen.findByRole('menuitemradio', { name: 'Тон 2', checked: true })).toBeTruthy();
 });
 
 test('emoji show as artwork while the value stays plain text', async () => {

@@ -2,7 +2,7 @@
 // engine reads about a page (title, description, canonical address, sitemap)
 // comes from here, so a page cannot be added without them.
 
-import { APP_HOME, START_ROOM_HREF } from '@voice-room/shared/app-home';
+import { APP_HOME, START_ROOM_HREF } from '@voiceroom/shared/app-home';
 
 /** The public host. Caddy marks every other host noindex (CANONICAL_HOST, Caddyfile). */
 export const SITE_ORIGIN = 'https://voiceroom.ru';
@@ -63,7 +63,7 @@ export const PAGES = {
     title: 'Голосовой виджет для сайта — VoiceRoom',
     description:
       'Настройте голосовой виджет VoiceRoom и вставьте его на свой сайт. Гости смогут создавать комнаты и подключаться к ним по коду без регистрации.',
-    nav: 'Виджеты'
+    nav: 'Виджет'
   },
   download: {
     path: '/download',

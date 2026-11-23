@@ -1,0 +1,23 @@
+.ui-tooltip {
+  z-index: 500;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-8);
+  max-width: calc(var(--space-24) * 10);
+  min-height: var(--size-28);
+  padding: var(--space-6) var(--space-8);
+  border: 1px solid var(--vr-line-strong);
+  border-radius: var(--radius-8);
+  background: var(--vr-surface-3);
+  box-shadow: var(--vr-shadow-popover);
+  color: var(--vr-text);
+  font: 500 12px/1.35 var(--font-ui);
+  white-space: nowrap;
+}
+
+.ui-tooltip__text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

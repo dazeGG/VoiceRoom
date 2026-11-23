@@ -5,14 +5,14 @@
 // "join" finds them in the cache. A failed prefetch is dropped; the real load
 // asks again.
 
-import { loadLiveKitClient } from '@voice-room/call/engine/media/livekit-runtime';
+import { loadLiveKitClient } from '@voiceroom/call/engine/media/livekit-runtime';
 
 export const loadRoomPage = () => import('./RoomPage.vue');
 
 export function prefetchRoom(): void {
   const ignore = () => {};
   loadRoomPage().catch(ignore);
-  import('@voice-room/call/engine/main').catch(ignore);
+  import('@voiceroom/call/engine/main').catch(ignore);
   loadLiveKitClient().catch(ignore);
   import('@/shared/media/voice-assets')
     .then(({ MICROPHONE_ASSET_URLS }) => {

@@ -8,9 +8,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Pool } from 'pg';
-import { Me, SignedIn } from '@voice-room/shared/contracts/account';
-import { LiveRooms, RoomCalls, RoomHistory } from '@voice-room/shared/contracts/admin';
-import { AdminCallFeedbackPage, type CallFeedbackBody } from '@voice-room/shared/contracts/feedback';
+import { Me, SignedIn } from '@voiceroom/shared/contracts/account';
+import { LiveRooms, RoomCalls, RoomHistory } from '@voiceroom/shared/contracts/admin';
+import { AdminCallFeedbackPage, type CallFeedbackBody } from '@voiceroom/shared/contracts/feedback';
 import { hashPassword } from '../src/lib/password.ts';
 import { runMigrations } from '../src/lib/migrate.ts';
 import { createCallFeedbackRepository } from '../src/domains/feedback/call-feedback.repository.ts';

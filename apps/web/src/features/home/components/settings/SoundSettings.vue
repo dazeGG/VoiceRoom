@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import EmojiText from '@/shared/chat/EmojiText.vue';
 import { t } from '@/shared/i18n';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import {
@@ -15,9 +16,18 @@ import {
   setOutputDevice,
   syncAudioBusSettings,
   type MicrophoneMode
-} from '@voice-room/call/engine';
+} from '@voiceroom/call/engine';
 import { withSavedDeviceMissing } from '@/shared/audio/device-list';
-import { SegmentControl, Select, Slider, type SegmentOption } from '@/shared/ui';
+import {
+  SegmentControl,
+  Slider,
+  Switch,
+  type SegmentOption,
+  SettingRow,
+  SettingsGroup,
+  Select,
+  Button
+} from '@voiceroom/ui-kit/components';
 import {
   enumerateMicrophones,
   enumerateSpeakers,
@@ -250,183 +260,189 @@ function previewNotificationSound(): void {
 <template>
   <div class="settings__sound">
     <div class="settings__sound-devices">
-      <section class="settings__sound-device" aria-labelledby="microphoneSettingsTitle">
-        <div>
-          <span id="microphoneSettingsTitle" class="settings__field-label">{{ t('Микрофон') }}</span>
-          <Select
-            v-model="micId"
-            :options="microphoneOptions"
-            :label="t('Микрофон')"
-            variant="field"
-            @value-change="onMicChange"
-          />
-        </div>
-        <div>
-          <div class="settings__sound-head">
-            <span class="settings__field-label">{{ t('Громкость микрофона') }}</span>
-            <output class="settings__sound-value">{{ Math.round(micVolume) }}%</output>
-          </div>
-          <Slider
-            v-model="micVolume"
-            :min="0"
-            :max="200"
-            :default-value="100"
-            :step="1"
-            :aria-label="t('Громкость микрофона')"
-            :aria-value-text="`${Math.round(micVolume)}%`"
-            @value-change="onMicrophoneVolumeChange"
-          />
-          <div class="settings__gate-hint">{{ t('Усиление после шумодава и гейта. Выше 100% работает лимитер.') }}</div>
-        </div>
-
-        <div class="settings__sound-device-section">
-          <span class="settings__field-label">{{ t('Шумоподавление') }}</span>
-          <SegmentControl
-            class="settings__segment"
-            :options="noiseOptions"
-            :value="noiseMode"
-            v-bind="{ ariaLabel: t('Шумоподавление') }"
-            @change="onNoiseChange"
-          />
-        </div>
-
-        <div class="settings__sound-device-section">
-          <div class="settings__gate-head">
-            <span class="settings__field-label">{{ t('Гейт') }}</span>
-            <button
-              class="settings__switch"
-              type="button"
-              role="switch"
-              :aria-checked="gateOn"
-              :aria-label="t('Шумовой гейт')"
-              @click="toggleGate"
-            >
-              <span class="settings__switch-knob" aria-hidden="true"></span>
-            </button>
-          </div>
-
-          <div class="settings__gate-body" :class="{ 'settings__gate-body--disabled': !gateOn }">
-            <div class="settings__gate">
-              <Slider
-                v-model="gateDb"
-                :min="GATE_THRESHOLD_MIN_DB"
-                :max="GATE_THRESHOLD_MAX_DB"
-                :step="1"
-                :default-value="GATE_ON_DEFAULT_DB"
-                :disabled="!gateOn"
-                :show-fill="false"
-                :aria-label="t('Порог гейта в децибелах')"
-                :aria-value-text="gateLabel"
-                @value-change="onGateChange"
-              >
-                <template #background>
-                  <span
-                    class="settings__gate-fill"
-                    :class="{ 'settings__gate-fill--closed': !gateOpen }"
-                    :style="{ transform: `scaleX(${levelScale})` }"
-                  ></span>
-                </template>
-              </Slider>
-              <span class="settings__gate-value">{{ gateLabel }}</span>
-            </div>
-            <div class="settings__gate-hint">
-              {{ t('Микрофон открывается, только когда звук громче порога — отсекает фоновый шум и дыхание.') }}
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section class="settings__sound-device" aria-labelledby="speakerSettingsTitle">
-        <div>
-          <span id="speakerSettingsTitle" class="settings__field-label">{{ t('Динамик') }}</span>
-          <Select
-            v-model="speakerId"
-            :options="speakerOptions"
-            :label="t('Динамик')"
-            variant="field"
-            @value-change="onSpeakerChange"
-          />
-        </div>
-        <div>
-          <div class="settings__sound-head">
-            <span class="settings__field-label">{{ t('Общая громкость') }}</span>
-            <output class="settings__sound-value">{{ Math.round(masterVolume) }}%</output>
-          </div>
-          <Slider
-            v-model="masterVolume"
-            :min="0"
-            :max="200"
-            :default-value="100"
-            :step="1"
-            :aria-label="t('Общая громкость')"
-            :aria-value-text="`${Math.round(masterVolume)}%`"
-            @value-change="onMasterVolumeChange"
-          />
-          <div class="settings__gate-hint">{{ t('Голоса, стримы и интерфейс. Выше 100% работает лимитер.') }}</div>
-        </div>
-
-        <div class="settings__sound-device-section">
-          <div class="settings__sound-head">
-            <span class="settings__field-label">{{ t('Звуки интерфейса') }}</span>
-            <output class="settings__sound-value">{{ Math.round(notificationVolume) }}%</output>
-          </div>
-          <Slider
-            v-model="notificationVolume"
-            :min="0"
-            :max="200"
-            :default-value="100"
-            :step="1"
-            :aria-label="t('Звуки интерфейса')"
-            :aria-value-text="`${Math.round(notificationVolume)}%`"
-            @value-change="onNotificationVolumeChange"
-          />
-          <div class="settings__sound-actions">
-            <button
-              class="settings__sound-preview"
-              type="button"
-              :disabled="previewingSoundSet"
-              @click="previewNotificationSound"
-            >
-              {{ previewingSoundSet ? t('Проверяем…') : t('Проверить набор') }}
-            </button>
-          </div>
-        </div>
-      </section>
-    </div>
-
-    <div>
-      <div class="settings__gate-head">
-        <span class="settings__field-label">{{ t('Спрашивать перед переходом в другую комнату') }}</span>
-        <button
-          class="settings__switch"
-          type="button"
-          role="switch"
-          :aria-checked="confirmRoomSwitch"
-          :aria-label="t('Спрашивать перед переходом в другую комнату')"
-          @click="toggleRoomSwitchConfirm"
+      <SettingsGroup role="region" :aria-label="t('Микрофон')">
+        <SettingRow :label="t('Микрофон')" stacked>
+          <template #control>
+            <Select
+              v-model="micId"
+              :options="microphoneOptions"
+              :label="t('Микрофон')"
+              size="md"
+              @value-change="onMicChange"
+              ><template #option-label="{ text }"><EmojiText :text="text" /></template
+            ></Select>
+          </template>
+        </SettingRow>
+        <SettingRow
+          :label="t('Громкость микрофона')"
+          :description="t('Усиление после шумодава и гейта. Выше 100% работает лимитер.')"
+          stacked
         >
-          <span class="settings__switch-knob" aria-hidden="true"></span>
-        </button>
-      </div>
-      <div class="settings__gate-hint">
-        {{ t('Когда вы уже в голосе, VoiceRoom уточнит, прежде чем переключить звонок.') }}
-      </div>
+          <template #control>
+            <div class="settings__sound-control">
+              <Slider
+                v-model="micVolume"
+                :min="0"
+                :max="200"
+                :default-value="100"
+                :step="1"
+                :aria-label="t('Громкость микрофона')"
+                :aria-value-text="`${Math.round(micVolume)}%`"
+                @value-change="onMicrophoneVolumeChange"
+              />
+              <output class="settings__sound-value">{{ Math.round(micVolume) }}%</output>
+            </div>
+          </template>
+        </SettingRow>
+
+        <SettingRow :label="t('Шумоподавление')" stacked>
+          <template #control>
+            <SegmentControl
+              layout="equal"
+              class="settings__segment"
+              :options="noiseOptions"
+              :value="noiseMode"
+              v-bind="{ ariaLabel: t('Шумоподавление') }"
+              @change="onNoiseChange"
+            />
+          </template>
+        </SettingRow>
+
+        <SettingRow :label="t('Гейт')">
+          <template #control>
+            <Switch :model-value="gateOn" v-bind="{ ariaLabel: t('Шумовой гейт') }" @update:model-value="toggleGate" />
+          </template>
+        </SettingRow>
+
+        <div class="settings__gate-body" :class="{ 'settings__gate-body--disabled': !gateOn }">
+          <div class="settings__gate">
+            <Slider
+              v-model="gateDb"
+              :min="GATE_THRESHOLD_MIN_DB"
+              :max="GATE_THRESHOLD_MAX_DB"
+              :step="1"
+              :default-value="GATE_ON_DEFAULT_DB"
+              :disabled="!gateOn"
+              :show-fill="false"
+              :aria-label="t('Порог гейта в децибелах')"
+              :aria-value-text="gateLabel"
+              @value-change="onGateChange"
+            >
+              <template #background>
+                <span
+                  class="settings__gate-fill"
+                  :class="{ 'settings__gate-fill--closed': !gateOpen }"
+                  :style="{ transform: `scaleX(${levelScale})` }"
+                >
+                </span>
+              </template>
+            </Slider>
+            <span class="settings__gate-value">{{ gateLabel }}</span>
+          </div>
+          <div class="settings__gate-hint">
+            {{ t('Микрофон открывается, только когда звук громче порога — отсекает фоновый шум и дыхание.') }}
+          </div>
+        </div>
+      </SettingsGroup>
+
+      <SettingsGroup role="region" :aria-label="t('Динамик')">
+        <SettingRow :label="t('Динамик')" stacked>
+          <template #control>
+            <Select
+              v-model="speakerId"
+              :options="speakerOptions"
+              :label="t('Динамик')"
+              size="md"
+              @value-change="onSpeakerChange"
+              ><template #option-label="{ text }"><EmojiText :text="text" /></template
+            ></Select>
+          </template>
+        </SettingRow>
+        <SettingRow
+          :label="t('Общая громкость')"
+          :description="t('Голоса, стримы и интерфейс. Выше 100% работает лимитер.')"
+          stacked
+        >
+          <template #control>
+            <div class="settings__sound-control">
+              <Slider
+                v-model="masterVolume"
+                :min="0"
+                :max="200"
+                :default-value="100"
+                :step="1"
+                :aria-label="t('Общая громкость')"
+                :aria-value-text="`${Math.round(masterVolume)}%`"
+                @value-change="onMasterVolumeChange"
+              />
+              <output class="settings__sound-value">{{ Math.round(masterVolume) }}%</output>
+            </div>
+          </template>
+        </SettingRow>
+
+        <SettingRow :label="t('Звуки интерфейса')" stacked>
+          <template #control>
+            <div class="settings__sound-control">
+              <Slider
+                v-model="notificationVolume"
+                :min="0"
+                :max="200"
+                :default-value="100"
+                :step="1"
+                :aria-label="t('Звуки интерфейса')"
+                :aria-value-text="`${Math.round(notificationVolume)}%`"
+                @value-change="onNotificationVolumeChange"
+              />
+              <output class="settings__sound-value">{{ Math.round(notificationVolume) }}%</output>
+            </div>
+            <div class="settings__sound-actions">
+              <Button
+                variant="ghost"
+                size="sm"
+                class="settings__sound-preview"
+                :disabled="previewingSoundSet"
+                @click="previewNotificationSound"
+              >
+                {{ previewingSoundSet ? t('Проверяем…') : t('Проверить набор') }}
+              </Button>
+            </div>
+          </template>
+        </SettingRow>
+      </SettingsGroup>
     </div>
 
-    <div v-if="desktopApp" class="settings__hotkeys">
-      <div>
-        <span class="settings__section-title">{{ t('Режим микрофона') }}</span>
-        <SegmentControl
-          class="settings__segment"
-          :options="MICROPHONE_MODE_OPTIONS"
-          :value="microphoneMode"
-          v-bind="{ ariaLabel: t('Режим микрофона') }"
-          @change="changeMicrophoneMode"
-        />
-        <div class="settings__gate-hint">
-          {{ t('В Push-to-talk микрофон открыт, пока вы удерживаете назначенную клавишу.') }}
-        </div>
-      </div>
+    <SettingsGroup>
+      <SettingRow
+        :label="t('Спрашивать перед переходом в другую комнату')"
+        :description="t('Когда вы уже в голосе, VoiceRoom уточнит, прежде чем переключить звонок.')"
+      >
+        <template #control>
+          <Switch
+            :model-value="confirmRoomSwitch"
+            v-bind="{ ariaLabel: t('Спрашивать перед переходом в другую комнату') }"
+            @update:model-value="toggleRoomSwitchConfirm"
+          />
+        </template>
+      </SettingRow>
+    </SettingsGroup>
+
+    <SettingsGroup v-if="desktopApp">
+      <SettingRow
+        :label="t('Режим микрофона')"
+        :description="t('В Push-to-talk микрофон открыт, пока вы удерживаете назначенную клавишу.')"
+        stacked
+      >
+        <template #control>
+          <SegmentControl
+            layout="equal"
+            class="settings__segment"
+            :options="MICROPHONE_MODE_OPTIONS"
+            :value="microphoneMode"
+            v-bind="{ ariaLabel: t('Режим микрофона') }"
+            @change="changeMicrophoneMode"
+          />
+        </template>
+      </SettingRow>
 
       <HotkeyRow
         action="push-to-talk"
@@ -436,6 +452,6 @@ function previewNotificationSound(): void {
         :disabled="microphoneMode !== 'push-to-talk'"
         @push-to-talk-off="onPushToTalkOff"
       />
-    </div>
+    </SettingsGroup>
   </div>
 </template>

@@ -2,7 +2,7 @@
 import { t } from '@/shared/i18n';
 import { onMounted, ref } from 'vue';
 import { createDesktopDownload } from '@/platform/desktop-download';
-import { Button, Dialog } from '@/shared/ui';
+import { Button, Dialog } from '@voiceroom/ui-kit/components';
 
 defineProps<{ open: boolean }>();
 
@@ -64,7 +64,7 @@ async function download(): Promise<void> {
 </script>
 
 <template>
-  <Dialog :open="open" :title="t('VoiceRoom на компьютере')" :on-close="() => emit('close')" :width="460">
+  <Dialog :open="open" :title="t('VoiceRoom на компьютере')" :on-close="() => emit('close')">
     <ul class="app-benefits">
       <li v-for="benefit in BENEFITS" :key="benefit.title" class="app-benefits__item">
         <strong class="app-benefits__title">{{ benefit.title }}</strong>

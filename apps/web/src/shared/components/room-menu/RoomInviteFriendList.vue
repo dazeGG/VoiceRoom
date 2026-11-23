@@ -1,13 +1,13 @@
 <script setup lang="ts">
 // Friend picker behind "Пригласить". Inviting no longer requires being in the
 // room, so this works the same from the lobby and from inside the room.
+import { Combobox, type ComboboxOption, Avatar } from '@voiceroom/ui-kit/components';
 import { t } from '@/shared/i18n';
 import { computed, ref } from 'vue';
 import type { Friend } from '@/api/friends';
 import { ringRoomFriend } from '@/api/rooms';
 import EmojiText from '@/shared/chat/EmojiText.vue';
 import { effectivePresenceStatus } from '@/shared/presence';
-import { Avatar } from '@/shared/ui';
 
 const props = withDefaults(
   defineProps<{
@@ -32,6 +32,26 @@ const friends = computed(() =>
       (a.user.displayName || a.user.login).localeCompare(b.user.displayName || b.user.login, 'ru')
   )
 );
+
+const friendsById = computed(() => new Map(friends.value.map((friend) => [friend.user.id, friend])));
+const options = computed<ComboboxOption[]>(() =>
+  friends.value.map((friend) => ({
+    value: friend.user.id,
+    label: nameOf(friend),
+    searchText: nameOf(friend) + ' ' + friend.user.login,
+    description: props.presentUserIds.has(friend.user.id) ? t('В комнате') : '@' + friend.user.login,
+    disabled: Boolean(ringingUserId.value) || props.presentUserIds.has(friend.user.id)
+  }))
+);
+
+function onSearchKeydown(event: KeyboardEvent): void {
+  // The combobox owns typing and navigation. Leave Escape for the topmost overlay.
+  if (event.key !== 'Escape') event.stopPropagation();
+}
+
+function select(option: ComboboxOption): void {
+  void invite(option.value, option.label);
+}
 
 function nameOf(friend: Friend): string {
   return friend.user.displayName || friend.user.login;
@@ -59,33 +79,35 @@ async function invite(userId: string, name: string): Promise<void> {
 <template>
   <div class="room-invite-list">
     <p v-if="friends.length === 0" class="room-invite-list__empty">{{ t('Добавьте друзей, чтобы позвать их') }}</p>
-    <template v-else>
-      <button
-        v-for="friend in friends"
-        :key="friend.user.id"
-        class="room-invite-list__friend"
-        type="button"
-        role="menuitem"
-        :disabled="Boolean(ringingUserId) || presentUserIds.has(friend.user.id)"
-        :title="presentUserIds.has(friend.user.id) ? t('Уже в комнате') : undefined"
-        @click="void invite(friend.user.id, nameOf(friend))"
+    <div v-else class="room-invite-list__search" @keydown="onSearchKeydown">
+      <Combobox
+        :options="options"
+        :label="t('Найти друга')"
+        :placeholder="t('Имя или логин')"
+        size="sm"
+        inline
+        visually-hidden-label
+        auto-focus
+        @select="select"
       >
-        <Avatar
-          :name="nameOf(friend)"
-          :src="friend.user.avatarUrl"
-          :background="friend.user.avatarAccent || undefined"
-          :color-key="friend.user.avatarColorKey"
-          :size="26"
-          :online="presenceOf(friend) === 'online'"
-          :afk="presenceOf(friend) === 'away'"
-          :dnd="presenceOf(friend) === 'dnd'"
-          show-dot
-        />
-        <span class="room-invite-list__friend-name"><EmojiText :text="nameOf(friend)" /></span>
-        <small v-if="presentUserIds.has(friend.user.id)" class="room-invite-list__friend-note">{{
-          t('В комнате')
-        }}</small>
-      </button>
-    </template>
+        <template #avatar="{ option }">
+          <template v-for="friend in [friendsById.get(option.value)]" :key="friend?.user.id">
+            <Avatar
+              v-if="friend"
+              :name="option.label"
+              :src="friend.user.avatarUrl"
+              :background="friend.user.avatarAccent || undefined"
+              :color-key="friend.user.avatarColorKey"
+              :size="28"
+              :online="presenceOf(friend) === 'online'"
+              :afk="presenceOf(friend) === 'away'"
+              :dnd="presenceOf(friend) === 'dnd'"
+              show-dot
+            />
+          </template>
+        </template>
+        <template #option="{ option }"><EmojiText :text="option.label" /></template>
+      </Combobox>
+    </div>
   </div>
 </template>

@@ -1,7 +1,7 @@
 // What the message menu can do with the picture it was opened on: copy it to
 // the clipboard or save it as a file.
 
-import type { Attachment } from '@voice-room/shared/contracts/messages';
+import type { Attachment } from '@voiceroom/shared/contracts/messages';
 import { attachmentVariantUrl } from '../../api/attachments';
 
 /** The ready attachment a right-click landed on, or null when it landed elsewhere in the message. */

@@ -10,7 +10,7 @@
 // averaging per-poll percentages; the worst moments are the worst 15-second
 // windows (loss-window.ts); too little to count says nothing.
 
-import { CONCEALMENT_THRESHOLDS } from '@voice-room/shared/network-quality';
+import { CONCEALMENT_THRESHOLDS } from '@voiceroom/shared/network-quality';
 import { reportClientLogs, createLogger, type LogContext } from '../diagnostics';
 import { maxCpuPressure, type CpuPressureState } from '../services/cpu-pressure';
 import { CONCEALMENT_MIN_SAMPLES, LOSS_MIN_PACKETS, createConcealmentWindow, createRatioWindow } from './loss-window';

@@ -1,24 +1,24 @@
 <script setup lang="ts">
+import { IconButton, Badge, Splitter, type SplitterWidth, Avatar } from '@voiceroom/ui-kit/components';
 import { PanelLeftClose, PanelLeftOpen } from '@lucide/vue';
 import { t } from '@/shared/i18n';
-import type { InboxItem } from '@voice-room/shared/contracts/notifications';
-import { computed, onBeforeUnmount, onMounted, ref, shallowRef, useTemplateRef, watch, watchEffect } from 'vue';
+import type { InboxItem } from '@voiceroom/shared/contracts/notifications';
+import { computed, onBeforeUnmount, onMounted, ref, shallowRef, useTemplateRef, watchEffect } from 'vue';
 import type { AuthUser, OwnedRoom } from '@/api/auth';
 import { getAppRealtime } from '@/api/realtime';
 import { createRoom } from '@/api/rooms';
 import { useProfileCardUiStore } from '@/entities/profile-card/profile-card-ui.store';
-import { clientRoomName } from '@voice-room/call/engine';
+import { clientRoomName } from '@voiceroom/call/engine';
 import { provideRoomShell } from '@/features/room/shell';
 import { provideRoomSocial } from '@/features/room/social';
 import { useRoomUiStore } from '@/features/room/room-ui.store';
-import { useScreenUiStore } from '@voice-room/call/engine';
-import { useVoiceSessionStore } from '@voice-room/call/engine';
+import { useScreenUiStore } from '@voiceroom/call/engine';
+import { useVoiceSessionStore } from '@voiceroom/call/engine';
 import RoomPage from '@/features/room/RoomPage.vue';
 import { useSessionStore } from '@/features/auth/session.store';
 import { usePageStore } from '@/stores/page.store';
 import { useNotificationPreferencesStore } from '@/shared/notifications/preferences.store';
 import { effectivePresenceStatus } from '@/shared/presence';
-import { Avatar, Badge } from '@/shared/ui';
 import { displayNameOf } from '@/shared/utils/display-name';
 import { extractRoomId } from '@/shared/utils/room';
 import CreateRoomDialog from './components/CreateRoomDialog.vue';
@@ -99,20 +99,24 @@ const sidebar = useLobbySidebar(() =>
 );
 const {
   visible: sidebarVisible,
-  layoutCollapsed: sidebarLayoutCollapsed,
+  collapsed: sidebarLayoutCollapsed,
   peeking: sidebarPeeking,
   width: sidebarWidth,
   maxWidth: sidebarMaxWidth,
+  dragging: sidebarDragging,
   dragWidth
 } = sidebar;
 const sidebarToggleLabel = computed(() =>
   sidebarLayoutCollapsed.value ? t('Развернуть боковую панель') : t('Свернуть боковую панель')
 );
 const sidebarToggle = useTemplateRef<HTMLButtonElement>('sidebarToggle');
-const sidebarResizer = useTemplateRef<HTMLDivElement>('sidebarResizer');
-watch([sidebarLayoutCollapsed, dragWidth], ([collapsed, width]) => {
-  if (collapsed && width === null && document.activeElement === sidebarResizer.value) sidebarToggle.value?.focus();
-});
+const sidebarHandleId = 'lobby-sidebar-resize';
+function commitSidebar(layout: SplitterWidth): void {
+  if (layout.collapsed && document.activeElement?.id === sidebarHandleId) {
+    sidebarToggle.value?.focus();
+  }
+  sidebar.commit(layout);
+}
 
 // What the room shown in the lobby tells it.
 provideRoomShell({
@@ -296,104 +300,101 @@ function roomDeleted(): void {
 </script>
 
 <template>
-  <div
+  <Splitter
+    v-model:collapsed="sidebarLayoutCollapsed"
+    side-class="lobby-shell__side"
     class="lobby-shell"
     :class="{
       'lobby-shell--sidebar-collapsed': sidebarLayoutCollapsed,
       'lobby-shell--sidebar-peeking': sidebarPeeking,
-      'lobby-shell--resizing': dragWidth !== null
+      'lobby-shell--resizing': sidebarDragging
     }"
-    :style="{ '--lv-side-w': `${sidebarWidth}px` }"
+    :style="{ '--lv-side-w': `${dragWidth ?? sidebarWidth}px` }"
+    :width="sidebarWidth"
+    :min-width="sidebar.minWidth"
+    :max-width="sidebarMaxWidth"
+    :collapsed-width="48"
+    :handle-id="sidebarHandleId"
+    :label="t('Ширина боковой панели')"
+    @dragging="sidebar.setDragging"
+    @resize="sidebar.resize"
+    @commit="commitSidebar"
   >
-    <div class="lobby-shell__sidebar" @pointerenter="sidebar.showPreview" @pointerleave="sidebar.hidePreview">
-      <div v-if="sidebarLayoutCollapsed" class="lobby-shell__sidebar-rail" aria-hidden="true">
-        <span class="sidebar__brand-mark"></span>
-        <div class="lobby-shell__sidebar-avatars">
-          <div v-for="friend in sidebarFriends" :key="friend.user.id" class="lobby-shell__sidebar-avatar">
+    <template #side>
+      <div class="lobby-shell__sidebar" @pointerenter="sidebar.showPreview" @pointerleave="sidebar.hidePreview">
+        <div v-if="sidebarLayoutCollapsed" class="lobby-shell__sidebar-rail" aria-hidden="true">
+          <div class="lobby-shell__sidebar-brand">
+            <span class="sidebar__brand-mark"></span>
+          </div>
+          <div class="lobby-shell__sidebar-avatars">
+            <div v-for="friend in sidebarFriends" :key="friend.user.id" class="lobby-shell__sidebar-avatar">
+              <Avatar
+                :name="displayNameOf(friend.user)"
+                :src="friend.user.avatarUrl"
+                :color-key="friend.user.avatarColorKey"
+                :background="friend.user.avatarAccent || undefined"
+                :online="friend.presence === 'online'"
+                :afk="friend.presence === 'away'"
+                :dnd="friend.presence === 'dnd'"
+                :size="32"
+                show-dot
+                ring="var(--vr-surface)"
+              />
+              <Badge
+                v-if="friend.unreadCount > 0"
+                class="lobby-shell__sidebar-unread"
+                :tone="friend.muted ? 'muted' : 'accent'"
+                :count="friend.unreadCount"
+                size="sm"
+                ring
+              />
+            </div>
+          </div>
+          <div class="lobby-shell__sidebar-account">
             <Avatar
-              :name="displayNameOf(friend.user)"
-              :src="friend.user.avatarUrl"
-              :color-key="friend.user.avatarColorKey"
-              :background="friend.user.avatarAccent || undefined"
-              :online="friend.presence === 'online'"
-              :afk="friend.presence === 'away'"
-              :dnd="friend.presence === 'dnd'"
-              :size="30"
-              show-dot
-              ring="var(--vr-surface)"
+              :name="displayNameOf(user)"
+              :src="user.avatarUrl"
+              :color-key="user.avatarColorKey"
+              :background="user.avatarAccent || undefined"
+              :size="32"
             />
-            <Badge
-              v-if="friend.unreadCount > 0"
-              class="lobby-shell__sidebar-unread"
-              :tone="friend.muted ? 'muted' : 'default'"
-              >{{ friend.unreadCount > 99 ? '99+' : friend.unreadCount }}</Badge
-            >
           </div>
         </div>
-        <div class="lobby-shell__sidebar-account">
-          <Avatar
-            :name="displayNameOf(user)"
-            :src="user.avatarUrl"
-            :color-key="user.avatarColorKey"
-            :background="user.avatarAccent || undefined"
-            :size="32"
+        <IconButton
+          ref="sidebarToggle"
+          class="lobby-shell__sidebar-toggle"
+          aria-controls="lobby-sidebar"
+          :aria-expanded="sidebarVisible"
+          neutral-expanded
+          :label="sidebarToggleLabel"
+          :size="32"
+          @click="sidebar.toggle"
+        >
+          <PanelLeftClose v-if="!sidebarLayoutCollapsed" aria-hidden="true" />
+          <PanelLeftOpen v-else aria-hidden="true" />
+        </IconButton>
+        <Transition name="lobby-sidebar-peek" :css="sidebarLayoutCollapsed && !sidebarDragging">
+          <Sidebar
+            v-show="sidebarVisible"
+            id="lobby-sidebar"
+            v-model:friend-menu="friendMenu"
+            :aria-hidden="!sidebarVisible"
+            :inert="!sidebarVisible"
+            :user="user"
+            :admin-url="adminUrl"
+            :admin-badge="openReports"
+            :notifications-open="notificationsOpen"
+            :notification-unread-count="notifications.inbox.unreadCount"
+            :active-voice="activeVoice"
+            @go-home="routing.goHome"
+            @open-people="openPeople"
+            @open-settings="prompts.openSettings"
+            @open-notifications="notifications.toggle"
+            @toast="(message: string) => toast(message)"
           />
-        </div>
+        </Transition>
       </div>
-      <button
-        ref="sidebarToggle"
-        class="sidebar__icon-button lobby-shell__sidebar-toggle"
-        type="button"
-        aria-controls="lobby-sidebar"
-        :aria-expanded="sidebarVisible"
-        :aria-label="sidebarToggleLabel"
-        :title="sidebarToggleLabel"
-        @click="sidebar.toggle"
-      >
-        <PanelLeftClose v-if="!sidebarLayoutCollapsed" :size="16" aria-hidden="true" />
-        <PanelLeftOpen v-else :size="16" aria-hidden="true" />
-      </button>
-      <Transition name="lobby-sidebar-peek" :css="sidebarLayoutCollapsed && dragWidth === null">
-        <Sidebar
-          v-show="sidebarVisible"
-          id="lobby-sidebar"
-          v-model:friend-menu="friendMenu"
-          :aria-hidden="!sidebarVisible"
-          :inert="!sidebarVisible"
-          :user="user"
-          :admin-url="adminUrl"
-          :admin-badge="openReports"
-          :notifications-open="notificationsOpen"
-          :notification-unread-count="notifications.inbox.unreadCount"
-          :active-voice="activeVoice"
-          @go-home="routing.goHome"
-          @open-people="openPeople"
-          @open-settings="prompts.openSettings"
-          @open-notifications="notifications.toggle"
-          @toast="(message: string) => toast(message)"
-        />
-      </Transition>
-      <div
-        v-show="!sidebarLayoutCollapsed || dragWidth !== null"
-        ref="sidebarResizer"
-        class="lobby-shell__sidebar-resizer"
-        role="separator"
-        :tabindex="sidebarLayoutCollapsed ? -1 : 0"
-        :aria-hidden="sidebarLayoutCollapsed"
-        aria-orientation="vertical"
-        aria-controls="lobby-sidebar"
-        :aria-label="t('Ширина боковой панели')"
-        :aria-valuemin="0"
-        :aria-valuemax="sidebarMaxWidth"
-        :aria-valuenow="sidebarVisible ? sidebarWidth : 0"
-        @pointerdown="sidebar.startResize"
-        @pointermove="sidebar.resize"
-        @pointerup="sidebar.finishResize"
-        @pointercancel="sidebar.cancelResize"
-        @lostpointercapture="sidebar.cancelResize"
-        @keydown="sidebar.resizeWithKeyboard"
-      ></div>
-    </div>
+    </template>
 
     <main class="lobby-shell__main" :aria-label="t('Главная VoiceRoom')">
       <div v-if="embeddedRoomId" class="lobby-shell__room" :hidden="!embeddedRoomVisible">
@@ -460,7 +461,7 @@ function roomDeleted(): void {
         @open="openNotification"
       />
     </aside>
-  </div>
+  </Splitter>
 
   <CreateRoomDialog
     :open="createDialogOpen"

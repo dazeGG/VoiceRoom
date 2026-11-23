@@ -1,8 +1,8 @@
-import { t } from '@voice-room/ui/i18n';
+import { t } from '@voiceroom/ui-kit/i18n';
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
 import { GATE_THRESHOLD_MIN_DB } from './config';
-import type { SelectOption } from '@voice-room/ui/components';
+import type { SelectOption } from '@voiceroom/ui-kit/components';
 
 export const NOISE_MODE_SELECT_OPTIONS: SelectOption[] = [
   {

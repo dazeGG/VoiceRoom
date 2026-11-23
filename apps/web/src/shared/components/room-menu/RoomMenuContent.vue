@@ -1,13 +1,14 @@
 <script setup lang="ts">
+import EmojiText from '@/shared/chat/EmojiText.vue';
 import { t } from '@/shared/i18n';
 import { Bell, BellOff, Copy, Link, Settings, Trash2, UserRoundPlus } from '@lucide/vue';
-import type { RoomRelationship } from '@voice-room/shared/contracts/rooms';
+import type { RoomRelationship } from '@voiceroom/shared/contracts/rooms';
 import { computed, ref } from 'vue';
 import type { Friend } from '@/api/friends';
 import { removeRoomFromList } from '@/api/auth';
 import { useNotificationPreferencesStore } from '@/shared/notifications/preferences.store';
-import { Avatar, Ellipsis, PopoverDivider, PopoverMenuItem, PopoverMenuLabel, PopoverSubmenu } from '@/shared/ui';
-import { iconMd } from '@/shared/ui/icons';
+import { Avatar, Ellipsis, MenuSeparator, MenuItem, MenuLabel, MenuSub } from '@voiceroom/ui-kit/components';
+import { iconMd } from '@voiceroom/ui-kit/icon-defaults';
 import { copyText } from '@/shared/utils/clipboard';
 import RoomInviteFriendList from './RoomInviteFriendList.vue';
 
@@ -119,25 +120,26 @@ async function removeBookmark(): Promise<void> {
 <template>
   <div class="room-menu-content" data-room-menu-content>
     <div class="room-menu-content__head">
-      <Avatar :name="name" :src="avatarUrl" shape="squircle" background="var(--vr-surface-3)" :size="44" />
+      <Avatar :name="name" :src="avatarUrl" shape="squircle" background="var(--vr-surface-3)" :size="40" />
       <div class="room-menu-content__info">
-        <Ellipsis class="room-menu-content__name" :text="name" />
+        <Ellipsis class="room-menu-content__name" :text="name"><EmojiText :text="name" /></Ellipsis>
         <Ellipsis class="room-menu-content__code" :text="roomId" />
       </div>
     </div>
 
-    <PopoverDivider />
-    <PopoverMenuLabel :text="t('Комната')" />
+    <MenuSeparator />
+    <MenuLabel :text="t('Комната')" />
 
-    <PopoverSubmenu
+    <MenuSub
       v-if="$slots.inviteContent"
       :label="t('Пригласить')"
+      tone="friendly"
       :aria-label="t('Позвать друга в {p0}', { p0: name })"
     >
       <template #icon><UserRoundPlus v-bind="iconMd" aria-hidden="true" /></template>
       <slot name="inviteContent" :close="() => emit('close')" />
-    </PopoverSubmenu>
-    <PopoverSubmenu v-else-if="friends" :label="t('Пригласить')" :aria-label="t('Позвать друга в {p0}', { p0: name })">
+    </MenuSub>
+    <MenuSub v-else-if="friends" :label="t('Пригласить')" :aria-label="t('Позвать друга в {p0}', { p0: name })">
       <template #icon><UserRoundPlus v-bind="iconMd" aria-hidden="true" /></template>
       <template #default="{ close: closeSubmenu }">
         <RoomInviteFriendList
@@ -151,42 +153,42 @@ async function removeBookmark(): Promise<void> {
           "
         />
       </template>
-    </PopoverSubmenu>
+    </MenuSub>
 
-    <PopoverMenuItem :label="t('Скопировать код')" @click="void copyValue(roomId, t('Код скопирован'))">
+    <MenuItem :label="t('Скопировать код')" @select.prevent="void copyValue(roomId, t('Код скопирован'))">
       <template #icon><Copy v-bind="iconMd" aria-hidden="true" /></template>
-    </PopoverMenuItem>
+    </MenuItem>
 
-    <PopoverMenuItem :label="t('Скопировать ссылку')" @click="void copyLink()">
+    <MenuItem :label="t('Скопировать ссылку')" @select.prevent="void copyLink()">
       <template #icon><Link v-bind="iconMd" aria-hidden="true" /></template>
-    </PopoverMenuItem>
+    </MenuItem>
 
     <template v-if="showNotificationControls">
-      <PopoverDivider />
-      <PopoverMenuItem
+      <MenuSeparator />
+      <MenuItem
         :label="roomMuted ? t('Включить уведомления') : t('Выключить уведомления')"
         :disabled="muteSaving"
-        @click="void toggleRoomMute()"
+        @select.prevent="void toggleRoomMute()"
       >
         <template #icon>
           <BellOff v-if="roomMuted" v-bind="iconMd" aria-hidden="true" />
           <Bell v-else v-bind="iconMd" aria-hidden="true" />
         </template>
-      </PopoverMenuItem>
+      </MenuItem>
     </template>
 
-    <PopoverDivider />
-    <PopoverMenuItem v-if="isOwner && onOpenSettings" :label="t('Настройки комнаты')" @click="openSettings">
+    <MenuSeparator />
+    <MenuItem v-if="isOwner && onOpenSettings" :label="t('Настройки комнаты')" @select.prevent="openSettings">
       <template #icon><Settings v-bind="iconMd" aria-hidden="true" /></template>
-    </PopoverMenuItem>
-    <PopoverMenuItem
+    </MenuItem>
+    <MenuItem
       v-else-if="!isOwner"
       :label="t('Удалить из списка')"
-      variant="danger"
+      tone="danger"
       :disabled="removeSaving"
-      @click="void removeBookmark()"
+      @select.prevent="void removeBookmark()"
     >
       <template #icon><Trash2 v-bind="iconMd" aria-hidden="true" /></template>
-    </PopoverMenuItem>
+    </MenuItem>
   </div>
 </template>

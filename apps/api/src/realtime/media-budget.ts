@@ -18,8 +18,8 @@
 // watched by 24 lost a third of its packets). With MEDIA_BUDGET_VOICE_PEERS set
 // the budget shrinks linearly with the people in voice and is gone at that many.
 
-import { CAMERA_VIEWER_BITRATE, screenProfileBitrate, screenProfileFallbacks } from '@voice-room/shared/media-budget';
-import type { MediaGrant, MediaKind } from '@voice-room/shared/contracts/realtime';
+import { CAMERA_VIEWER_BITRATE, screenProfileBitrate, screenProfileFallbacks } from '@voiceroom/shared/media-budget';
+import type { MediaGrant, MediaKind } from '@voiceroom/shared/contracts/realtime';
 import type { Peer, PresenceRoom } from './runtime-types.ts';
 
 /** How long a grant holds its share of the budget until the stream shows up in presence. */

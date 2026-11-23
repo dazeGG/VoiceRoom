@@ -1,7 +1,7 @@
 // Who is signed in to the admin app, the staff list and their roles.
 
 import { Type } from 'typebox';
-import { StaffList, StaffMe, type StaffRole } from '@voice-room/shared/contracts/staff';
+import { StaffList, StaffMe, type StaffRole } from '@voiceroom/shared/contracts/staff';
 import { api } from './client.ts';
 
 export const fetchMe = () => api.get('/api/staff/me', StaffMe, 'Не удалось загрузить профиль');

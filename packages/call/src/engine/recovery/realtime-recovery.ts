@@ -1,4 +1,4 @@
-import { RETRYABLE_JOIN_CODES, TERMINAL_JOIN_CODES } from '@voice-room/shared/contracts/errors';
+import { RETRYABLE_JOIN_CODES, TERMINAL_JOIN_CODES } from '@voiceroom/shared/contracts/errors';
 import {
   cancelGlobalTimer,
   scheduleGlobalTimer,
@@ -6,7 +6,7 @@ import {
   type ScheduleTimer,
   type TimerHandle
 } from '../core/timers';
-import { isRecord } from '@voice-room/shared/guards';
+import { isRecord } from '@voiceroom/shared/guards';
 
 export type RecoveryPhase =
   'idle' | 'waiting-app-snapshot' | 'waiting-livekit' | 'recovering' | 'healthy' | 'failed' | 'cancelled';

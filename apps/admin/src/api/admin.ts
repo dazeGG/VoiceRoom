@@ -18,20 +18,20 @@ import {
   type RoomCallsQuery,
   type StaticRoomsQuery,
   type SystemQuery
-} from '@voice-room/shared/contracts/admin';
+} from '@voiceroom/shared/contracts/admin';
 import {
   AdminCallFeedbackPage,
   RoomCallDetail,
   type AdminCallFeedbackQuery
-} from '@voice-room/shared/contracts/feedback';
+} from '@voiceroom/shared/contracts/feedback';
 import {
   AdminReportPage,
   AdminUserReportPage,
   ReportResolved,
   type ReportResolveBody,
   type UserReportResolveBody
-} from '@voice-room/shared/contracts/reports';
-import type { AccountBadge } from '@voice-room/shared/contracts/users';
+} from '@voiceroom/shared/contracts/reports';
+import type { AccountBadge } from '@voiceroom/shared/contracts/users';
 import { api, search } from './client.ts';
 
 export const fetchOverview = () => api.get('/api/admin/overview', AdminOverview, 'Не удалось загрузить обзор');

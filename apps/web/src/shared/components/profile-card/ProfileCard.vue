@@ -1,11 +1,13 @@
 <script setup lang="ts">
+import EmojiText from '@/shared/chat/EmojiText.vue';
+import { badgeOf } from '@/shared/badges';
 import { t } from '@/shared/i18n';
 import { Check, MessageSquare, UserMinus, UserPlus } from '@lucide/vue';
 import { computed } from 'vue';
-import { AccountBadge, Avatar, Button, Ellipsis } from '@/shared/ui';
-import { iconSm } from '@/shared/ui/icons';
+import { AccountBadge, Avatar, Button, Ellipsis } from '@voiceroom/ui-kit/components';
+import { iconSm } from '@voiceroom/ui-kit/icon-defaults';
 import { dayMonthYear } from '@/shared/utils/date-format';
-import { getAvatarColor } from '@voice-room/ui/avatar-colors';
+import { getAvatarColor } from '@voiceroom/ui-kit/avatar-colors';
 import type { ProfileCardProps } from './types';
 
 const props = withDefaults(defineProps<ProfileCardProps>(), { friendsSince: null, busy: false });
@@ -22,6 +24,7 @@ const friendsSinceLabel = computed(() => {
 
 <template>
   <div class="profile-card" data-profile-card :style="{ '--profile-accent': accent }">
+    <div class="profile-card__banner"></div>
     <div class="profile-card__body">
       <span class="profile-card__avatar">
         <Avatar
@@ -29,7 +32,7 @@ const friendsSinceLabel = computed(() => {
           :src="person.avatarUrl"
           :color-key="person.avatarColorKey"
           :background="person.avatarAccent || undefined"
-          :size="72"
+          :size="56"
           :online="person.presence === 'online'"
           :afk="person.presence === 'away'"
           :dnd="person.presence === 'dnd'"
@@ -40,10 +43,14 @@ const friendsSinceLabel = computed(() => {
 
       <span class="profile-card__identity">
         <span class="profile-card__name-row">
-          <Ellipsis class="profile-card__name" :text="person.name" tag="span" />
-          <AccountBadge :user-id="person.userId" :size="18" />
+          <Ellipsis class="profile-card__name" :text="person.name" tag="span"
+            ><EmojiText :text="person.name"
+          /></Ellipsis>
+          <AccountBadge :badge="badgeOf(person.userId)" :size="18" />
         </span>
-        <Ellipsis v-if="person.login" class="profile-card__handle" :text="`@${person.login}`" tag="span" />
+        <Ellipsis v-if="person.login" class="profile-card__handle" :text="`@${person.login}`" tag="span"
+          ><EmojiText :text="`@${person.login}`"
+        /></Ellipsis>
       </span>
 
       <span v-if="friendsSinceLabel" class="profile-card__since">
@@ -61,17 +68,24 @@ const friendsSinceLabel = computed(() => {
       </p>
       <div v-else class="profile-card__actions">
         <template v-if="relationship === 'friend'">
-          <Button variant="primary" :disabled="busy" @click="onMessage?.()">
+          <Button fill size="sm" variant="primary" :disabled="busy" @click="onMessage?.()">
             <template #icon><MessageSquare v-bind="iconSm" aria-hidden="true" /></template> {{ t('Написать') }}
           </Button>
-          <Button variant="danger-ghost" :disabled="busy" @click="onRemoveFriend?.()">
+          <Button fill size="sm" variant="danger-ghost" :disabled="busy" @click="onRemoveFriend?.()">
             <template #icon><UserMinus v-bind="iconSm" aria-hidden="true" /></template> {{ t('Удалить из друзей') }}
           </Button>
         </template>
-        <Button v-else-if="relationship === 'incoming'" variant="primary" :disabled="busy" @click="onAcceptRequest?.()">
+        <Button
+          v-else-if="relationship === 'incoming'"
+          fill
+          size="sm"
+          variant="primary"
+          :disabled="busy"
+          @click="onAcceptRequest?.()"
+        >
           <template #icon><Check v-bind="iconSm" aria-hidden="true" /></template> {{ t('Принять заявку') }}
         </Button>
-        <Button v-else variant="soft" :disabled="busy" @click="onAddFriend?.()">
+        <Button v-else fill size="sm" variant="soft" :disabled="busy" @click="onAddFriend?.()">
           <template #icon><UserPlus v-bind="iconSm" aria-hidden="true" /></template> {{ t('Добавить в друзья') }}
         </Button>
       </div>

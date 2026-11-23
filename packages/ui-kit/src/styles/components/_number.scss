@@ -1,0 +1,10 @@
+.ui-number {
+  width: calc(var(--space-64) * 2 + var(--space-20));
+  max-width: 100%;
+  padding-inline: var(--space-4);
+
+  &__value {
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+  }
+}

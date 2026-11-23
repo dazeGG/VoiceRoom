@@ -1,9 +1,8 @@
 <script setup lang="ts">
+import { IconButton, Popover } from '@voiceroom/ui-kit/components';
 import { t } from '@/shared/i18n';
 import { ref, watch } from 'vue';
 import { SmilePlus } from '@lucide/vue';
-import { iconSm } from '@/shared/ui/icons';
-import { Popover } from '@/shared/ui';
 import Emoji from './Emoji.vue';
 import EmojiPickerPanel from './EmojiPickerPanel.vue';
 import type { ReactionStore } from './reaction-store';
@@ -22,6 +21,8 @@ const props = withDefaults(
   }>(),
   { disabled: false, showQuickReactions: true }
 );
+
+defineSlots<{ trigger?(state: { toggle: () => void; panelId: string | undefined; open: boolean }): unknown }>();
 
 /** Bindable so a host toolbar can stay visible while the panel is open. */
 const open = defineModel<boolean>('open', { default: false });
@@ -61,42 +62,43 @@ async function choose(emoji: string, close: () => void): Promise<void> {
 <template>
   <div v-if="!store.isDeleted(messageId)" class="reaction-picker" role="group" :aria-label="t('Быстрые реакции')">
     <template v-if="showQuickReactions">
-      <button
+      <IconButton
         v-for="emoji in frequentEmoji"
         :key="emoji"
         class="reaction-picker__button"
-        type="button"
         :disabled="disabled"
-        :aria-label="t('Добавить быструю реакцию {p0}', { p0: emoji })"
-        :title="t('Реакция {p0}', { p0: emoji })"
+        :label="t('Добавить быструю реакцию {p0}', { p0: emoji })"
+        :size="32"
         @click="void react(emoji)"
       >
         <Emoji :emoji="emoji" :size="20" decorative />
-      </button>
+      </IconButton>
     </template>
     <Popover
       v-model:open="open"
       placement="top-start"
       flip
       floating
+      inset="flush"
       role="dialog"
       :aria-label="t('Выбор реакции')"
       panel-class="reaction-picker-panel"
     >
       <template #trigger="{ toggle, panelId }">
-        <button
-          class="reaction-picker__button reaction-picker__button--more"
-          type="button"
-          :disabled="disabled"
-          :aria-label="t('Открыть выбор эмодзи')"
-          :title="t('Добавить другую реакцию')"
-          aria-haspopup="dialog"
-          :aria-expanded="open"
-          :aria-controls="panelId"
-          @click="toggle"
-        >
-          <SmilePlus v-bind="iconSm" aria-hidden="true" />
-        </button>
+        <slot name="trigger" :toggle="toggle" :panel-id="panelId" :open="open">
+          <IconButton
+            class="reaction-picker__button reaction-picker__button--more"
+            :disabled="disabled"
+            :label="t('Открыть выбор эмодзи')"
+            aria-haspopup="dialog"
+            :aria-expanded="open"
+            :aria-controls="panelId"
+            :size="32"
+            @click="toggle"
+          >
+            <SmilePlus aria-hidden="true" />
+          </IconButton>
+        </slot>
       </template>
 
       <template #content="{ close }">

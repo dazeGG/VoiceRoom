@@ -4,14 +4,14 @@
 // caller acts on. buildRuStoreMessage shapes the message and keeps it within
 // RuStore's 4096 bytes.
 
-import type { PushPayload } from '@voice-room/shared/notifications';
+import type { PushPayload } from '@voiceroom/shared/notifications';
 import {
   NATIVE_PUSH_TEXT_LIMITS,
   buildNativePushData,
   clipNativePushText,
   nativePushChannel
-} from '@voice-room/shared/native-push';
-import { textOf } from '@voice-room/shared/guards';
+} from '@voiceroom/shared/native-push';
+import { textOf } from '@voiceroom/shared/guards';
 import { fieldOf } from '../platform/record.ts';
 
 const RUSTORE_PUSH_ORIGIN = 'https://vkpns.rustore.ru';

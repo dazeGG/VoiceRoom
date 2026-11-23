@@ -7,8 +7,8 @@ import test, { type TestContext } from 'node:test';
 import type { LightMyRequestResponse } from 'fastify';
 import assert from 'node:assert/strict';
 import type { StoreOverrides } from '../src/app/service-registry.ts';
-import { Failure } from '@voice-room/shared/contracts/http';
-import { Health, PowChallenge } from '@voice-room/shared/contracts/ops';
+import { Failure } from '@voiceroom/shared/contracts/http';
+import { Health, PowChallenge } from '@voiceroom/shared/contracts/ops';
 import { checked } from './helpers/checked.ts';
 
 const { createApiApp } = await import('../src/server.ts');

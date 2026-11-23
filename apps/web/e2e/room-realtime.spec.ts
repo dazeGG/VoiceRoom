@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { APP_HOME } from '@voice-room/shared/app-home';
+import { APP_HOME } from '@voiceroom/shared/app-home';
 import {
   createPermanentRoom,
   enterRoom,

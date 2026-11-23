@@ -3,7 +3,7 @@
 // of the configured repository is ever passed through.
 
 import type { Logger } from 'pino';
-import { isArray, isRecord, textOf } from '@voice-room/shared/guards';
+import { isArray, isRecord, textOf } from '@voiceroom/shared/guards';
 import { LOG_EVENTS } from '../../lib/log-events.ts';
 
 export interface DesktopAsset {

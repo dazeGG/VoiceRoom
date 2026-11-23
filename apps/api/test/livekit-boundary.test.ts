@@ -17,7 +17,7 @@ import type { GateClaims } from '../src/domains/admission/gate-credential-signer
 import { fake, type Fakes } from './fakes/index.ts';
 import type { GateRoomStore } from '../src/domains/admission/credential-boundary.service.ts';
 import { normalizeGatePrincipal } from '../src/domains/admission/gate-credential.repository.ts';
-import { isRecord } from '@voice-room/shared/guards';
+import { isRecord } from '@voiceroom/shared/guards';
 import { Type } from 'typebox';
 import { checked } from './helpers/checked.ts';
 

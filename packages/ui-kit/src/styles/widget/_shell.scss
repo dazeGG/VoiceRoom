@@ -1,0 +1,90 @@
+@use 'entry';
+
+.widget-shell {
+  --widget-radius: var(--radius-16);
+  --vr-surface-2: color-mix(in srgb, var(--vr-text) 7%, var(--vr-bg));
+  --vr-surface-3: color-mix(in srgb, var(--vr-text) 9%, var(--vr-bg));
+  --vr-surface-3-hover: color-mix(in srgb, var(--vr-text) 14%, var(--vr-bg));
+  --vr-line: color-mix(in srgb, var(--vr-text) 14%, transparent);
+  --vr-line-strong: color-mix(in srgb, var(--vr-text) 18%, var(--vr-bg));
+  --vr-accent-ink: var(--vr-bg);
+  --vr-accent-hover: color-mix(in oklch, var(--vr-accent), var(--vr-text) 12%);
+  --vr-accent-line: color-mix(in srgb, var(--vr-accent) 48%, transparent);
+  --vr-accent-soft: color-mix(in srgb, var(--vr-accent) 18%, transparent);
+  --vr-hover: color-mix(in srgb, var(--vr-text) 12%, transparent);
+  --vr-text-2: color-mix(in srgb, var(--vr-text) 85%, var(--vr-bg));
+  --vr-text-muted: color-mix(in srgb, var(--vr-text) 65%, var(--vr-bg));
+  container-type: inline-size;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  min-height: 100dvh;
+  padding: var(--space-24) var(--space-24) var(--space-6);
+  overflow-wrap: anywhere;
+  background: var(--vr-bg);
+  color: var(--vr-text);
+  font-family: var(--font-ui);
+  font-size: 0.875rem;
+  line-height: 1.5;
+
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+}
+
+.widget-shell--preview {
+  overflow: auto;
+
+  :disabled,
+  .ui-input:has(.ui-input__control:disabled) {
+    opacity: 1;
+    cursor: default;
+  }
+}
+
+.widget-shell__header {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.widget-shell__notice {
+  margin-block-start: var(--space-8);
+}
+
+.widget-shell__credit {
+  margin-block-start: auto;
+  padding-block-start: var(--space-16);
+  color: color-mix(in srgb, var(--vr-text) 73%, var(--vr-bg));
+  font-size: 0.75rem;
+  text-align: center;
+
+  a {
+    color: inherit;
+    text-decoration: underline;
+    text-underline-offset: var(--space-2);
+  }
+
+  a:is(:hover, :focus-visible) {
+    color: var(--vr-accent);
+  }
+}
+
+.widget-shell__status {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+  margin: var(--space-12) 0 0;
+  color: color-mix(in srgb, var(--vr-text) 65%, transparent);
+  font-size: 0.6875rem;
+
+  &::before {
+    width: var(--space-4);
+    height: var(--space-4);
+    flex: none;
+    border-radius: var(--radius-pill);
+    background: var(--vr-accent);
+    content: '';
+  }
+}

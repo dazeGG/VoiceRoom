@@ -1,0 +1,22 @@
+@use 'select-control';
+@use 'menu';
+
+.ui-select {
+  &__panel {
+    z-index: 150;
+    width: max-content;
+    min-width: var(--reka-select-trigger-width);
+    max-width: max(var(--reka-select-trigger-width), var(--reka-select-content-available-width));
+  }
+
+  &__viewport .ui-menu__indicator {
+    margin-inline-start: auto;
+  }
+
+  &__viewport {
+    max-height: min(
+      calc(var(--space-64) * 5 - var(--space-4) * 2 - var(--space-2)),
+      calc(var(--reka-select-content-available-height) - var(--space-4) * 2 - var(--space-2))
+    );
+  }
+}

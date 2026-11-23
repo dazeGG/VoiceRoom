@@ -1,13 +1,14 @@
 <script setup lang="ts">
+import EmojiText from '@/shared/chat/EmojiText.vue';
 import { t } from '@/shared/i18n';
 import { BellOff, ChevronDown } from '@lucide/vue';
-import type { RoomRelationship } from '@voice-room/shared/contracts/rooms';
+import type { RoomRelationship } from '@voiceroom/shared/contracts/rooms';
 import { computed } from 'vue';
 import type { Friend } from '@/api/friends';
 import { useNotificationPreferencesStore } from '@/shared/notifications/preferences.store';
-import { Avatar, Ellipsis, Popover } from '@/shared/ui';
-import { iconSm } from '@/shared/ui/icons';
-import type { PopoverPlacement } from '@/shared/ui';
+import { Avatar, DropdownMenu, Ellipsis, Pressable } from '@voiceroom/ui-kit/components';
+import { iconSm } from '@voiceroom/ui-kit/icon-defaults';
+import type { PopoverPlacement } from '@voiceroom/ui-kit/components';
 import RoomMenuContent from './RoomMenuContent.vue';
 
 const props = withDefaults(
@@ -22,7 +23,6 @@ const props = withDefaults(
     heading?: boolean | undefined;
     headingClass?: string | undefined;
     placement?: PopoverPlacement | undefined;
-    keepContentMounted?: boolean | undefined;
     relationship?: RoomRelationship | undefined;
     friends?: Friend[] | undefined;
     presentUserIds?: Set<string> | undefined;
@@ -32,14 +32,13 @@ const props = withDefaults(
   }>(),
   {
     avatarUrl: null,
-    avatarSize: 38,
+    avatarSize: 40,
     triggerClass: '',
     titleClass: '',
     chevronClass: '',
     heading: false,
     headingClass: '',
     placement: 'bottom-start',
-    keepContentMounted: false,
     relationship: 'owner',
     friends: undefined,
     presentUserIds: () => new Set<string>(),
@@ -58,25 +57,23 @@ const roomMuted = computed(() => props.showNotificationControls && preferences.i
 </script>
 
 <template>
-  <Popover
-    :placement="placement"
-    role="menu"
-    :aria-label="t('Меню комнаты')"
-    panel-class="room-menu__popover"
-    :keep-content-mounted="keepContentMounted"
+  <component
+    :is="heading ? 'div' : 'span'"
+    :class="headingClass"
+    :role="heading ? 'heading' : undefined"
+    :aria-level="heading ? 1 : undefined"
   >
-    <template #trigger="{ open, toggle, panelId }">
-      <div v-if="heading" :class="headingClass" role="heading" aria-level="1">
-        <button
-          :class="['room-menu__trigger', triggerClass]"
-          type="button"
-          aria-haspopup="menu"
-          :aria-expanded="open"
-          :aria-controls="panelId"
-          @click="toggle"
-        >
+    <DropdownMenu
+      :side="placement.startsWith('top') ? 'top' : 'bottom'"
+      :align="placement.endsWith('start') ? 'start' : 'end'"
+      :aria-label="t('Меню комнаты')"
+    >
+      <template #trigger>
+        <Pressable :class="['room-menu__trigger', triggerClass]">
           <Avatar :name="name" :src="avatarUrl" shape="squircle" background="var(--vr-surface-3)" :size="avatarSize" />
-          <Ellipsis :text="name" :title="roomId" :class="['room-menu__title', titleClass]" />
+          <Ellipsis :text="name" :title="roomId" :class="['room-menu__title', titleClass]"
+            ><EmojiText :text="name"
+          /></Ellipsis>
           <span
             v-if="roomMuted"
             class="room-menu__notifications-muted"
@@ -89,53 +86,28 @@ const roomMuted = computed(() => props.showNotificationControls && preferences.i
           <span :class="['room-menu__chevron', chevronClass]" aria-hidden="true">
             <ChevronDown v-bind="iconSm" aria-hidden="true" />
           </span>
-        </button>
-      </div>
-      <button
-        v-else
-        :class="['room-menu__trigger', triggerClass]"
-        type="button"
-        aria-haspopup="menu"
-        :aria-expanded="open"
-        :aria-controls="panelId"
-        @click="toggle"
-      >
-        <Avatar :name="name" :src="avatarUrl" shape="squircle" background="var(--vr-surface-3)" :size="avatarSize" />
-        <Ellipsis :text="name" :title="roomId" :class="['room-menu__title', titleClass]" />
-        <span
-          v-if="roomMuted"
-          class="room-menu__notifications-muted"
-          role="img"
-          :aria-label="t('Уведомления отключены')"
-          :title="t('Уведомления отключены')"
+        </Pressable>
+      </template>
+      <template #content="{ close }">
+        <RoomMenuContent
+          :room-id="roomId"
+          :name="name"
+          :avatar-url="avatarUrl"
+          :relationship="relationship"
+          :friends="friends"
+          :present-user-ids="presentUserIds"
+          :can-close="(targetRoomId: string) => targetRoomId === roomId"
+          :on-open-settings="onOpenSettings"
+          :show-notification-controls="showNotificationControls"
+          @close="close"
+          @toast="$emit('toast', $event)"
+          @rooms-changed="$emit('roomsChanged')"
         >
-          <BellOff v-bind="iconSm" aria-hidden="true" />
-        </span>
-        <span :class="['room-menu__chevron', chevronClass]" aria-hidden="true">
-          <ChevronDown v-bind="iconSm" aria-hidden="true" />
-        </span>
-      </button>
-    </template>
-
-    <template #content="{ close }">
-      <RoomMenuContent
-        :room-id="roomId"
-        :name="name"
-        :avatar-url="avatarUrl"
-        :relationship="relationship"
-        :friends="friends"
-        :present-user-ids="presentUserIds"
-        :can-close="(targetRoomId: string) => targetRoomId === roomId"
-        :on-open-settings="onOpenSettings"
-        :show-notification-controls="showNotificationControls"
-        @close="close"
-        @toast="$emit('toast', $event)"
-        @rooms-changed="$emit('roomsChanged')"
-      >
-        <template v-if="$slots.inviteContent" #inviteContent="slotProps">
-          <slot name="inviteContent" v-bind="slotProps" />
-        </template>
-      </RoomMenuContent>
-    </template>
-  </Popover>
+          <template v-if="$slots.inviteContent" #inviteContent="slotProps">
+            <slot name="inviteContent" v-bind="slotProps" />
+          </template>
+        </RoomMenuContent>
+      </template>
+    </DropdownMenu>
+  </component>
 </template>

@@ -33,8 +33,8 @@ const emit = defineEmits<{ retry: [localId: string]; discard: [localId: string] 
       </div>
       <div v-if="item.state === 'failed'" class="outgoing-messages__status" role="alert">
         <span>{{ t('Не отправлено:') }} {{ item.error }}</span>
-        <button type="button" @click="emit('retry', item.localId)">{{ t('Повторить') }}</button>
-        <button type="button" @click="emit('discard', item.localId)">{{ t('Удалить') }}</button>
+        <Button variant="ghost" size="sm" @click="emit('retry', item.localId)">{{ t('Повторить') }}</Button>
+        <Button variant="ghost" size="sm" @click="emit('discard', item.localId)">{{ t('Удалить') }}</Button>
       </div>
       <div v-else class="outgoing-messages__status" role="status">{{ t('Отправляется…') }}</div>
     </li>

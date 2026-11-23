@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { NavList, NavListGroup, NavListItem, Dialog } from '@voiceroom/ui-kit/components';
 // The open settings. Mounted fresh on every opening, so each tab starts from
 // what is saved; only the profile edits live here, so they survive a look at
 // another tab before saving.
@@ -9,8 +10,6 @@ import type { AuthUser, OwnedRoom } from '@/api/auth';
 import type { PublicUser } from '@/api/friends';
 import LegalLinks from '@/shared/components/LegalLinks.vue';
 import { useNotificationPreferencesStore } from '@/shared/notifications/preferences.store';
-import { Dialog } from '@/shared/ui';
-import { iconMd } from '@/shared/ui/icons';
 import { usePushNotificationsStore } from '../../model/push-notifications.store';
 import { readSettingsSupport } from '../../model/settings-support';
 import type { ToastOptions } from '../../model/toasts.store';
@@ -121,70 +120,66 @@ onBeforeUnmount(profile.dispose);
 
 <template>
   <!-- Escape, the click beside the card, focus and the stack of dialogs opened from here belong to Dialog. -->
-  <Dialog :open="true" :title="t('Настройки')" :width="940" :on-close="() => emit('close')">
-    <div class="settings__frame">
-      <div class="settings__body">
-        <nav class="settings__nav" :aria-label="t('Разделы настроек')">
-          <div class="settings__nav-main">
-            <button
-              v-for="item in navItems"
-              :key="item.id"
-              class="settings__nav-item"
-              type="button"
-              :aria-current="tab === item.id ? 'page' : undefined"
-              @click="tab = item.id"
-            >
-              <component :is="item.icon" v-bind="iconMd" aria-hidden="true" />
-              {{ item.label }}
-            </button>
-          </div>
-          <LegalLinks compact new-tab />
-          <button
-            class="settings__nav-item settings__nav-item--danger"
-            type="button"
-            :disabled="loggingOut"
-            @click="emit('logout')"
+  <Dialog open size="xl" trim="flush" :title="t('Настройки')" :on-close="() => emit('close')">
+    <div class="settings__body">
+      <NavList responsive class="settings__nav" :label="t('Разделы настроек')">
+        <NavListGroup class="settings__nav-main">
+          <NavListItem
+            v-for="item in navItems"
+            :key="item.id"
+            :label="item.label"
+            :current="tab === item.id"
+            @click="tab = item.id"
           >
-            <LogOut v-bind="iconMd" aria-hidden="true" />
-            {{ loggingOut ? t('Выходим…') : t('Выйти из аккаунта') }}
-          </button>
-        </nav>
+            <template #icon><component :is="item.icon" /></template>
+          </NavListItem>
+        </NavListGroup>
+        <LegalLinks compact new-tab />
+        <NavListItem
+          class="settings__nav-logout"
+          tone="danger"
+          :label="loggingOut ? t('Выходим…') : t('Выйти из аккаунта')"
+          :disabled="loggingOut"
+          @click="emit('logout')"
+        >
+          <template #icon><LogOut /></template>
+        </NavListItem>
+      </NavList>
 
-        <div class="settings__content">
-          <ProfileSettings
-            v-if="tab === 'profile'"
-            v-model:name="profile.name"
-            :user="user"
-            :draft="profile"
-            @close="emit('close')"
-            @toast="toast"
-          />
-          <AccountSecuritySettings
-            v-else-if="tab === 'security'"
-            :login="user?.login ?? ''"
-            :highlight-recovery-codes="securityHighlight === 'recovery-codes'"
-            :highlight-password="securityHighlight === 'password'"
-            @toast="toast"
-          />
-          <SoundSettings v-else-if="tab === 'sound'" :desktop-app="support.desktopApp" @toast="toast" />
-          <AppearanceSettings v-else-if="tab === 'appearance'" />
-          <HotkeySettings
-            v-else-if="tab === 'hotkeys' && support.desktopApp"
-            :global-hotkeys="support.globalHotkeys"
-            @toast="toast"
-          />
-          <template v-else-if="tab === 'app' && appTab">
-            <AppSettings v-if="support.desktopApp" :support="support" @toast="toast" />
-            <DesktopAppCard v-else :title="t('VoiceRoom для компьютера')" embedded />
-          </template>
-          <NotificationSettings
-            v-else
-            :support="support"
-            :users="notificationUsers"
-            :rooms="notificationRooms"
-            @toast="toast"
-          />
-        </div>
+      <div class="settings__content">
+        <ProfileSettings
+          v-if="tab === 'profile'"
+          v-model:name="profile.name"
+          :user="user"
+          :draft="profile"
+          @close="emit('close')"
+          @toast="toast"
+        />
+        <AccountSecuritySettings
+          v-else-if="tab === 'security'"
+          :login="user?.login ?? ''"
+          :highlight-recovery-codes="securityHighlight === 'recovery-codes'"
+          :highlight-password="securityHighlight === 'password'"
+          @toast="toast"
+        />
+        <SoundSettings v-else-if="tab === 'sound'" :desktop-app="support.desktopApp" @toast="toast" />
+        <AppearanceSettings v-else-if="tab === 'appearance'" />
+        <HotkeySettings
+          v-else-if="tab === 'hotkeys' && support.desktopApp"
+          :global-hotkeys="support.globalHotkeys"
+          @toast="toast"
+        />
+        <template v-else-if="tab === 'app' && appTab">
+          <AppSettings v-if="support.desktopApp" :support="support" @toast="toast" />
+          <DesktopAppCard v-else :title="t('VoiceRoom для компьютера')" embedded />
+        </template>
+        <NotificationSettings
+          v-else
+          :support="support"
+          :users="notificationUsers"
+          :rooms="notificationRooms"
+          @toast="toast"
+        />
       </div>
     </div>
   </Dialog>

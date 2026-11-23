@@ -6,28 +6,5 @@
 //   .sound-button -> .sound-button
 
 .sound-button {
-  min-height: 48px;
-  border: 1px solid var(--vr-line-strong);
-  border-radius: 999px;
-  padding: 0 18px;
-  background: var(--vr-surface-3);
-  color: var(--vr-text);
-  font-weight: 800;
   pointer-events: auto;
-  transition:
-    background 160ms var(--ease-out),
-    color 160ms var(--ease-out),
-    border-color 160ms var(--ease-out),
-    box-shadow 160ms var(--ease-out),
-    transform 160ms var(--ease-out);
-}
-
-.sound-button:hover {
-  border-color: color-mix(in oklch, var(--vr-line-strong), var(--vr-text) 22%);
-  background: var(--vr-surface-3-hover);
-  box-shadow: 0 0 0 3px var(--vr-line-strong);
-}
-
-.sound-button:active {
-  transform: translateY(1px);
 }

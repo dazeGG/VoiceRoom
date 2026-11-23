@@ -5,9 +5,9 @@ import {
   WidgetCodeParams,
   WidgetRoomCreated,
   WidgetRoomInfo
-} from '@voice-room/shared/contracts/widget';
-import { RoomFailure } from '@voice-room/shared/contracts/rooms';
-import { normalizeRoomId } from '@voice-room/shared/validation';
+} from '@voiceroom/shared/contracts/widget';
+import { RoomFailure } from '@voiceroom/shared/contracts/rooms';
+import { normalizeRoomId } from '@voiceroom/shared/validation';
 import type { ApiContext } from '../../app/context.ts';
 import { failure } from '../../platform/http/http-kit.ts';
 import type { RoomRoutesDeps } from './rooms.routes.ts';

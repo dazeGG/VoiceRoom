@@ -21,9 +21,9 @@
   --lv-row-pad: 0 10px;
   --lv-name: 0.84375rem;
   --lv-sub: 0.71875rem;
-  --lv-gap: 16px;
+  --lv-gap: var(--space-16);
 
-  height: 100vh;
+  --splitter-height: 100vh;
   position: relative;
   display: flex;
   overflow: hidden;
@@ -42,11 +42,12 @@
 .lobby-shell__sidebar {
   position: relative;
   display: flex;
-  flex: 0 0 var(--lobby-sidebar-width);
+  width: 100%;
+  height: 100%;
 }
 
 .lobby-shell--sidebar-collapsed {
-  .lobby-shell__sidebar {
+  .lobby-shell__side {
     z-index: 40;
   }
 
@@ -55,11 +56,6 @@
     inset-block: 0;
     inset-inline-start: 0;
     box-shadow: var(--vr-shadow-popover);
-  }
-
-  .lobby-shell__sidebar-resizer {
-    opacity: 0;
-    pointer-events: none;
   }
 }
 
@@ -72,10 +68,23 @@
   flex: 1;
   flex-direction: column;
   align-items: center;
-  gap: 16px;
-  padding-block-start: 20px;
+  gap: var(--space-4);
   background: var(--vr-surface);
   pointer-events: none;
+}
+
+.lobby-shell__sidebar-brand,
+.lobby-shell__sidebar-account {
+  display: grid;
+  flex: none;
+  inline-size: 100%;
+  place-items: center;
+  padding-block: var(--space-12);
+}
+
+.lobby-shell__sidebar-brand {
+  min-block-size: calc(var(--size-32) + var(--space-24));
+  border-block-end: 1px solid var(--vr-line);
 }
 
 .lobby-shell__sidebar-avatars {
@@ -83,7 +92,7 @@
   flex: 1;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-4);
   inline-size: 100%;
   overflow: clip;
 }
@@ -94,26 +103,16 @@
   flex: none;
   inline-size: 100%;
   place-items: center;
-  padding-block: 3px;
+  padding-block: var(--space-2);
 }
 
 .lobby-shell__sidebar-avatar .lobby-shell__sidebar-unread {
   position: absolute;
   inset-block-start: 0;
-  inset-inline-end: 2px;
-  min-inline-size: 16px;
-  block-size: 16px;
-  padding-inline: 3px;
-  font-size: 0.625rem;
-  box-shadow: 0 0 0 2px var(--vr-surface);
+  inset-inline-end: var(--space-2);
 }
 
 .lobby-shell__sidebar-account {
-  display: grid;
-  flex: none;
-  inline-size: 100%;
-  place-items: center;
-  padding-block: 12px;
   border-block-start: 1px solid var(--vr-line);
 }
 
@@ -143,8 +142,8 @@
   inset-inline-start: calc(var(--lobby-sidebar-toggle-edge, var(--lobby-sidebar-width)) - 40px);
 
   &:focus-visible {
-    outline: 2px solid var(--vr-accent);
-    outline-offset: -2px;
+    outline: var(--space-2) solid var(--vr-accent);
+    outline-offset: calc(-1 * var(--space-2));
   }
 }
 
@@ -152,32 +151,6 @@
   .lobby-shell--sidebar-collapsed:not(.lobby-shell--sidebar-peeking) .lobby-shell__sidebar-toggle:not(:focus-visible) {
     opacity: 0;
     pointer-events: none;
-  }
-}
-
-.lobby-shell__sidebar-resizer {
-  position: absolute;
-  z-index: 2;
-  inset-block: 0;
-  inset-inline-start: calc(var(--lobby-sidebar-width) - 5px);
-  inline-size: 9px;
-  outline: none;
-  cursor: col-resize;
-  touch-action: none;
-
-  &::after {
-    position: absolute;
-    inset-block: 0;
-    inset-inline-start: 4px;
-    inline-size: 2px;
-    background: var(--vr-line);
-    content: '';
-  }
-
-  &:hover::after,
-  &:focus-visible::after,
-  .lobby-shell--resizing &::after {
-    background: var(--vr-accent);
   }
 }
 
@@ -212,7 +185,7 @@
   max-height: min(620px, calc(100vh - 32px));
   overflow: hidden;
   border: 1px solid var(--vr-line-strong);
-  border-radius: 18px;
+  border-radius: var(--radius-16);
   background: var(--vr-surface-2);
   box-shadow: var(--vr-shadow-popover);
   animation: lobby-shell-inbox-in 140ms ease-out;

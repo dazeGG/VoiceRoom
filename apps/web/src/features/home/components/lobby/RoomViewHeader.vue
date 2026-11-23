@@ -1,10 +1,10 @@
 <script setup lang="ts">
+import { IconButton } from '@voiceroom/ui-kit/components';
 import { t } from '@/shared/i18n';
 import { ChevronLeft } from '@lucide/vue';
 import { computed } from 'vue';
 import type { OwnedRoom } from '@/api/auth';
 import { RoomMenu } from '@/shared/components/room-menu';
-import { iconMd } from '@/shared/ui/icons';
 import { useLobby } from '../../model/lobby-context';
 import { roomDisplayName } from '../../model/rooms';
 
@@ -27,21 +27,15 @@ const name = computed(() => roomDisplayName(props.room));
 
 <template>
   <div class="room-view-header">
-    <button
-      class="room-view-header__back"
-      type="button"
-      :title="t('К списку комнат')"
-      :aria-label="t('Назад')"
-      @click="$emit('back')"
-    >
-      <ChevronLeft v-bind="iconMd" aria-hidden="true" />
-    </button>
+    <IconButton :label="t('Назад')" :size="40" variant="filled" @click="$emit('back')">
+      <ChevronLeft aria-hidden="true" />
+    </IconButton>
 
     <RoomMenu
       :room-id="room.roomId"
       :name="name"
       :avatar-url="room.avatarUrl"
-      :avatar-size="34"
+      :avatar-size="36"
       trigger-class="room-view-header__trigger"
       title-class="room-view-header__name"
       chevron-class="room-view-header__chevron"

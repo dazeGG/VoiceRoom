@@ -1,4 +1,4 @@
-import { isRecord } from '@voice-room/shared/guards';
+import { isRecord } from '@voiceroom/shared/guards';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { createCursorCodec } from '../src/platform/cursor-codec.ts';

@@ -1,6 +1,6 @@
 import test, { type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
-import { LoginAlerts, Me } from '@voice-room/shared/contracts/account';
+import { LoginAlerts, Me } from '@voiceroom/shared/contracts/account';
 import { cookieFrom, request, startApiServer } from './fakes/server-process.ts';
 import { openWs, waitForClose, waitForWsType } from './ws-harness.ts';
 

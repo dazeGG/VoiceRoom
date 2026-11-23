@@ -1,0 +1,40 @@
+@use 'menu';
+
+.ui-combobox {
+  &--inline {
+    display: grid;
+    gap: var(--space-4);
+  }
+
+  &__panel {
+    min-width: 0;
+  }
+
+  &__viewport {
+    max-height: calc(var(--space-64) * 5);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  &__option--highlighted:not([aria-disabled='true']):not([aria-selected='true']) {
+    background: var(--vr-hover);
+  }
+
+  &__avatar {
+    display: inline-flex;
+    flex: none;
+  }
+
+  &__empty {
+    margin: 0;
+    padding: var(--space-8) var(--space-12);
+    color: var(--vr-text-muted);
+    font-size: 0.8125rem;
+  }
+}
+
+.ui-combobox__panel--overlay {
+  position: absolute;
+  z-index: 1;
+  inset: calc(100% + var(--space-4)) 0 auto;
+}

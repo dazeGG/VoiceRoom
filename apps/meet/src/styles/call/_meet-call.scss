@@ -1,18 +1,18 @@
-@use 'pkg:@voice-room/ui/styles/mixins';
+@use 'pkg:@voiceroom/ui-kit/styles/mixins';
 
 .meet-call {
   position: relative;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
-  min-height: 30rem;
-  height: calc(100dvh - 65px);
+  min-height: calc(var(--size-48) * 10);
+  height: calc(100dvh - var(--size-40) - var(--space-24) - var(--space-2) / 2);
 
   &__header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 0.75rem;
-    padding: 0.85rem clamp(1rem, 4vw, 3rem) 0;
+    gap: var(--space-12);
+    padding: var(--space-12) clamp(var(--space-16), 4vw, var(--space-48)) 0;
   }
 
   h1 {
@@ -23,16 +23,16 @@
   &__connection {
     display: inline-flex;
     align-items: center;
-    gap: 0.45rem;
+    gap: var(--space-8);
     color: var(--vr-text-muted);
     font-size: 0.875rem;
 
     &::before {
       content: '';
-      width: 0.45rem;
-      height: 0.45rem;
+      width: var(--space-8);
+      height: var(--space-8);
       flex: 0 0 auto;
-      border-radius: 50%;
+      border-radius: var(--radius-pill);
       background: var(--vr-success);
     }
 
@@ -44,24 +44,20 @@
   &__header-actions {
     display: flex;
     align-items: center;
-    gap: clamp(0.5rem, 2vw, 1rem);
+    gap: clamp(var(--space-8), 2vw, var(--space-16));
   }
 
   &__chat-toggle {
-    min-height: 2.75rem;
-    padding: 0.4rem 0.75rem;
-    white-space: nowrap;
-
     &[aria-expanded='true'] {
       border-color: var(--vr-accent-line);
       color: var(--vr-accent);
     }
 
     @include mixins.below(mixins.$bp-phone) {
-      width: 2.75rem;
+      width: var(--size-44);
       padding: 0;
 
-      span {
+      .meet-call__chat-label {
         @include mixins.visually-hidden;
       }
     }
@@ -88,41 +84,24 @@
     grid-template-rows: minmax(0, 1fr) auto;
   }
   &--screen .stage-strip {
-    height: 7rem;
+    height: calc(var(--size-56) * 2);
   }
+}
 
-  &__toasts {
-    position: absolute;
-    inset: auto 1rem 6.5rem auto;
-    z-index: 4;
-    display: grid;
-    gap: 0.5rem;
-    width: min(20rem, calc(100% - 2rem));
-    pointer-events: none;
-  }
-
-  &__toast {
-    display: grid;
-    gap: 0.4rem;
-    padding: 0.75rem 1rem;
-    border: 1px solid var(--vr-line-strong);
-    border-radius: var(--radius-md);
-    background: var(--vr-surface-3);
-    box-shadow: var(--vr-shadow-toast);
-    pointer-events: auto;
-  }
+#meet-toasts {
+  bottom: calc(var(--size-56) + var(--space-48));
 }
 
 @media (max-width: 480px) {
   .meet-call .stage {
-    padding-inline: 0.75rem;
-    padding-bottom: 7.25rem;
+    padding-inline: var(--space-12);
+    padding-bottom: calc(var(--size-56) * 2 + var(--space-4));
   }
   .meet-call .room-dock {
-    padding-inline: 0.5rem;
-    bottom: 0.75rem;
+    padding-inline: var(--space-8);
+    bottom: var(--space-12);
   }
   .meet-call .room-dock__shell {
-    gap: 0.3rem;
+    gap: var(--space-4);
   }
 }

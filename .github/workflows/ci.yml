@@ -144,7 +144,7 @@ jobs:
           LIVEKIT_DOMAIN: "lk$&x$'y.example.com"
         run: |
           npm run build:app
-          WEB_DEPLOY_CONTRACT=built npm --workspace @voice-room/web run test -- \
+          WEB_DEPLOY_CONTRACT=built npm --workspace @voiceroom/web run test -- \
             test/deploy-contract.test.ts -t 'a production (web|widget) build keeps the deployment contract'
 
   # API and web tests run as separate jobs so neither waits for the other.
@@ -183,8 +183,8 @@ jobs:
       - name: Run shared and API tests without coverage on push
         if: github.event_name == 'push'
         run: |
-          npm --workspace @voice-room/shared run test
-          npm --workspace @voice-room/api run test
+          npm --workspace @voiceroom/shared run test
+          npm --workspace @voiceroom/api run test
       - name: Script tests and real Caddy log-redaction regression
         env:
           CADDY_TEST_IMAGE: caddy:2.11.4-alpine
@@ -256,12 +256,12 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci
-      - run: npm --workspace @voice-room/web run test
+      - run: npm --workspace @voiceroom/web run test
         env:
           WEB_DEPLOY_CONTRACT: checked
-      - run: npm --workspace @voice-room/admin run test
-      - run: npm --workspace @voice-room/meet run test
-      - run: npm --workspace @voice-room/widget run test
+      - run: npm --workspace @voiceroom/admin run test
+      - run: npm --workspace @voiceroom/meet run test
+      - run: npm --workspace @voiceroom/widget run test
 
   voice-join:
     name: Voice room join smoke
@@ -275,7 +275,7 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: npm
-      - run: npm ci --workspace @voice-room/web --workspace @voice-room/shared --workspace @voice-room/ui --workspace @voice-room/call
+      - run: npm ci --workspace @voiceroom/web --workspace @voiceroom/shared --workspace @voiceroom/ui --workspace @voiceroom/ui-kit --workspace @voiceroom/call
       - name: Start the voice stack and pull the Playwright image
         run: |
           version=$(node -p "require('./package-lock.json').packages['node_modules/@playwright/test'].version")
@@ -289,7 +289,7 @@ jobs:
         run: |
           docker run --rm --init --network host --ipc host --user "$(id -u):$(id -g)" \
             -e HOME=/tmp -e CI -v "$GITHUB_WORKSPACE:/work" -w /work "$PLAYWRIGHT_IMAGE" \
-            npm --workspace @voice-room/web run e2e -- \
+            npm --workspace @voiceroom/web run e2e -- \
             e2e/room-voice.spec.ts e2e/rnnoise-assets.spec.ts e2e/microphone-recovery.spec.ts \
             e2e/chat-image-paste.spec.ts e2e/manual-chat-polish.spec.ts e2e/chat-drafts.spec.ts \
             e2e/chat-typing.spec.ts e2e/guest-account-cta.spec.ts e2e/mobile-room.spec.ts \
@@ -340,7 +340,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx playwright install --with-deps chromium
-      - run: npm --workspace @voice-room/widget run build
+      - run: npm --workspace @voiceroom/widget run build
       - name: Start the isolated widget API and SFU
         run: |
           docker compose -p "$PLAYWRIGHT_WIDGET_COMPOSE_PROJECT" -f docker-compose.ci.yml up -d --build --wait --wait-timeout 180 api
@@ -349,7 +349,7 @@ jobs:
             -c 'UPDATE widget_boundary_activation SET widget_boundary_required=true, widget_admission_enabled=true WHERE singleton'
       - name: Exercise frozen loader compatibility, reconnect and SFU denials
         run: |
-          npm --workspace @voice-room/web run e2e -- \
+          npm --workspace @voiceroom/web run e2e -- \
             e2e/widget-embed.spec.ts e2e/widget-media-boundary.spec.ts e2e/widget-reconnect.spec.ts
       - name: Report widget service states
         if: failure()
@@ -400,13 +400,13 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: npm
-      - run: npm ci --workspace @voice-room/api --workspace @voice-room/meet --workspace @voice-room/shared --workspace @voice-room/ui --workspace @voice-room/call
+      - run: npm ci --workspace @voiceroom/api --workspace @voiceroom/meet --workspace @voiceroom/shared --workspace @voiceroom/ui --workspace @voiceroom/ui-kit --workspace @voiceroom/call
       - run: npx playwright install --with-deps chromium
       - name: Start the personal stack with clean project volumes
         run: docker compose -p "$PERSONAL_SMOKE_PROJECT" -f docker-compose.personal.yml up -d --build --wait --wait-timeout 120
       - run: node --test scripts/ci/personal-compose-smoke.test.mts
       - name: Exercise a two-guest Meet call through Caddy
-        run: npm --workspace @voice-room/meet run e2e
+        run: npm --workspace @voiceroom/meet run e2e
       - name: Report personal service states
         if: failure()
         run: docker compose -p "$PERSONAL_SMOKE_PROJECT" -f docker-compose.personal.yml ps --all

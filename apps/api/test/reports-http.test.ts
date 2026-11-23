@@ -5,9 +5,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Pool } from 'pg';
-import { Me, SignedIn } from '@voice-room/shared/contracts/account';
-import { Failure } from '@voice-room/shared/contracts/http';
-import { AdminReportPage, ReportFiled, ReportResolved } from '@voice-room/shared/contracts/reports';
+import { Me, SignedIn } from '@voiceroom/shared/contracts/account';
+import { Failure } from '@voiceroom/shared/contracts/http';
+import { AdminReportPage, ReportFiled, ReportResolved } from '@voiceroom/shared/contracts/reports';
 import { Type } from 'typebox';
 import { hashPassword } from '../src/lib/password.ts';
 import { cookieFrom, registerAccount, request, startApiServer } from './fakes/server-process.ts';

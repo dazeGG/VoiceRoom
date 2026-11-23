@@ -1,0 +1,12 @@
+.ui-account-badge {
+  display: inline-flex;
+  flex: none;
+  margin-left: var(--space-4);
+  vertical-align: -0.15em;
+  color: var(--vr-accent-ink);
+  line-height: 0;
+}
+
+.ui-account-badge svg {
+  fill: var(--vr-accent);
+}

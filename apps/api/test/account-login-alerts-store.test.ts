@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 
 import { createUserStore } from '../src/app/user-store.ts';
 import { runMigrations } from '../src/lib/migrate.ts';
-import { LOGIN_ALERT_TTL_MS, LOGIN_FAMILIARITY_WINDOW_MS } from '@voice-room/shared/account-security';
+import { LOGIN_ALERT_TTL_MS, LOGIN_FAMILIARITY_WINDOW_MS } from '@voiceroom/shared/account-security';
 import { createTestDatabase } from './db-harness.ts';
 
 const SILENT = { log() {}, info() {}, warn() {}, error() {} };

@@ -5,7 +5,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { Type } from 'typebox';
-import type { JoinTiming } from '@voice-room/shared/contracts/realtime';
+import type { JoinTiming } from '@voiceroom/shared/contracts/realtime';
 import {
   createVoiceSessionRepository,
   type FinishedVoiceSession

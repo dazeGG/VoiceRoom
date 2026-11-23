@@ -2,9 +2,9 @@
 // (chat, edits, reactions), typing notices, and the
 // bell notification a new message raises for the room's other members.
 
-import type { RoomMessage } from '@voice-room/shared/contracts/messages';
-import type { TypingActivity, ServerEnvelope } from '@voice-room/shared/realtime';
-import { cleanName } from '@voice-room/shared/validation';
+import type { RoomMessage } from '@voiceroom/shared/contracts/messages';
+import type { TypingActivity, ServerEnvelope } from '@voiceroom/shared/realtime';
+import { cleanName } from '@voiceroom/shared/validation';
 import { avatarUrl } from '../lib/avatar-url.ts';
 import { LOG_EVENTS } from '../lib/log-events.ts';
 import type { StoredUser } from '../domains/account/user-records.ts';

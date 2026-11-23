@@ -3,15 +3,15 @@
 
 import type { TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
 import type { FastifyInstance } from 'fastify';
-import { LiveKitAdmission, LiveKitTokenBody } from '@voice-room/shared/contracts/admission';
-import { RoomFailure } from '@voice-room/shared/contracts/rooms';
+import { LiveKitAdmission, LiveKitTokenBody } from '@voiceroom/shared/contracts/admission';
+import { RoomFailure } from '@voiceroom/shared/contracts/rooms';
 import {
   cleanGuestName,
   isReservedPeerId,
   normalizePeerId,
   normalizeRoomId,
   normalizeSessionToken
-} from '@voice-room/shared/validation';
+} from '@voiceroom/shared/validation';
 import type { ApiContext } from '../../app/context.ts';
 import { failure, type Failure } from '../../platform/http/http-kit.ts';
 import { ROOM_SURFACE_CEILINGS } from '../rooms/room-surface.policy.ts';

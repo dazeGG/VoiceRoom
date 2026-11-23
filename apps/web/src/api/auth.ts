@@ -1,11 +1,11 @@
 // Account auth client. Every request goes through the shared client, so the
 // HttpOnly session cookie set by the API rides along (including on /api/rooms,
 // which is how a signed-in user's persistent rooms get an owner). Shapes come
-// from @voice-room/shared/contracts/account.
+// from @voiceroom/shared/contracts/account.
 
 import { t } from '../shared/i18n/runtime.ts';
-import { normalizeReleaseVersion } from '@voice-room/shared/account-security';
-import { isUuid } from '@voice-room/shared/validation';
+import { normalizeReleaseVersion } from '@voiceroom/shared/account-security';
+import { isUuid } from '@voiceroom/shared/validation';
 import {
   AppPromptSeen,
   DeletionPreview,
@@ -34,15 +34,15 @@ import {
   type RecoveryCodesStatus,
   type SelfUser,
   type WhatsNew
-} from '@voice-room/shared/contracts/account';
-import { Done } from '@voice-room/shared/contracts/http';
+} from '@voiceroom/shared/contracts/account';
+import { Done } from '@voiceroom/shared/contracts/http';
 import {
   BookmarkRoomBody,
   RoomCard,
   RoomList,
   RoomUnbookmarked,
   type LobbyRoom
-} from '@voice-room/shared/contracts/rooms';
+} from '@voiceroom/shared/contracts/rooms';
 // Explicit extensions: the release coverage gate (scripts/test/g08-*) loads
 // this module in plain Node, without Vite's resolver.
 import { api } from './client.ts';

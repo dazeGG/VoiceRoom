@@ -9,12 +9,10 @@
 //   .landing-lead          -> .landing-hero__lead
 //   .landing-cta-row       -> .landing-hero__cta-row
 //   .landing-join          -> .landing-hero__join
-//   .landing-join-input    -> .landing-hero__join-input
-//   .landing-join-btn      -> .landing-hero__join-btn
 //   .landing-disclaimer    -> .landing-hero__disclaimer
 // The Svelte home.css also had .lv-join* and .landing-features grid rules; the
 // component styles overrode the latter and .lv-join* belongs to the lobby.
-@use 'pkg:@voice-room/ui/styles/mixins' as *;
+@use 'pkg:@voiceroom/ui-kit/styles/mixins' as *;
 
 .landing-hero {
   display: flex;
@@ -26,16 +24,16 @@
 .landing-hero__kicker {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin: 0 0 16px;
+  gap: var(--space-8);
+  margin: 0 0 var(--space-16);
   color: var(--vr-accent);
-  font-size: 0.84375rem;
+  font-size: 14px;
   font-weight: 500;
 }
 
 .landing-hero__kicker-dot {
-  width: 6px;
-  height: 6px;
+  width: var(--space-6);
+  height: var(--space-6);
   border-radius: 50%;
   background: var(--vr-accent);
   box-shadow: 0 0 0 3px var(--vr-accent-soft);
@@ -53,7 +51,7 @@
 
 .landing-hero__lead {
   max-width: 500px;
-  margin: 18px 0 0;
+  margin: var(--space-16) 0 0;
   color: var(--vr-text-2);
   font-size: 1.0625rem;
   line-height: 1.55;
@@ -65,8 +63,8 @@
   flex-wrap: wrap;
   align-items: center;
   justify-content: center;
-  gap: 10px;
-  margin-top: 28px;
+  gap: var(--space-8);
+  margin-top: var(--space-24);
 
   @include below(560px) {
     flex-direction: column;
@@ -74,57 +72,16 @@
 }
 
 .landing-hero__join {
-  display: flex;
-  align-items: stretch;
-  height: 50px;
-  overflow: hidden;
-  border: 1px solid var(--vr-line-strong);
-  border-radius: 13px;
-  background: var(--vr-surface-2);
-
-  &:focus-within {
-    border-color: var(--vr-accent-line);
-  }
+  min-width: 0;
+  max-width: 100%;
 }
 
-.landing-hero__join-input {
-  appearance: none;
-  width: 170px;
-  height: 100%;
-  padding: 0 16px;
-  border: 0;
-  outline: 0;
-  background: transparent;
-  color: var(--vr-text);
-  font-family: var(--font-mono);
-  font-size: 0.875rem;
-
-  &::placeholder {
-    color: var(--vr-text-muted);
-  }
-
-  &::-webkit-search-cancel-button,
-  &::-webkit-search-decoration {
-    appearance: none;
-  }
-}
-
-.landing-hero__join-btn {
-  padding: 0 18px;
-  border: 0;
-  border-left: 1px solid var(--vr-line-strong);
-  background: transparent;
-  color: var(--vr-text);
-  font: 500 0.90625rem var(--font-ui);
-  cursor: pointer;
-
-  &:hover:not(:disabled) {
-    background: var(--vr-hover);
-  }
+.landing-hero__join-field {
+  width: min(100%, calc(var(--space-64) * 4));
 }
 
 .landing-hero__disclaimer {
-  margin: 14px 0 0;
+  margin: var(--space-12) 0 0;
   color: var(--vr-text-muted);
   font-size: 0.8125rem;
 }

@@ -12,14 +12,14 @@
  * survives to what can actually be drawn.
  */
 
-import { listReactionEmojiGroups } from '@voice-room/shared/emoji-groups';
+import { listReactionEmojiGroups } from '@voiceroom/shared/emoji-groups';
 import {
   SKIN_TONES,
   applySkinTone,
   hasSkinToneVariants,
   listCollapsedReactionEmojis,
   listSkinToneVariants
-} from '@voice-room/shared/emoji-skin-tones';
+} from '@voiceroom/shared/emoji-skin-tones';
 
 import coverage from './emoji-coverage.json';
 

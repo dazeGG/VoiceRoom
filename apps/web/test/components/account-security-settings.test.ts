@@ -8,7 +8,6 @@ import AccountSecuritySettings from '@/features/home/components/AccountSecurityS
 import { useSessionStore } from '@/features/auth/session.store';
 import { stubFetch } from '../fixtures/fetch.ts';
 import { authUser } from '../fixtures/users.ts';
-import { instanceOf, defined } from '../helpers/assert.ts';
 import { renderWithApp } from '../helpers/render.ts';
 
 const HERE = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
@@ -51,20 +50,13 @@ test('other sessions can be ended one by one or all at once; this device cannot'
   });
   const { onToast } = await renderTab();
 
-  const here = instanceOf(
-    (await screen.findByText('Это устройство')).closest('.account-security__row'),
-    HTMLElement,
-    'this device row'
-  );
-  expect(within(here).queryByRole('button', { name: 'Завершить' })).toBeNull();
+  const here = within(await screen.findByRole('group', { name: /Firefox/ }));
+  expect(here.getByText('Это устройство')).toBeTruthy();
+  expect(here.queryByRole('button', { name: 'Завершить' })).toBeNull();
   expect(screen.getAllByRole('button', { name: 'Завершить' })).toHaveLength(2);
 
-  await userEvent.click(
-    defined(
-      screen.getAllByRole('button', { name: 'Завершить' })[0],
-      "screen.getAllByRole('button', { name: 'Завершить' })[0]"
-    )
-  );
+  const phone = within(screen.getByRole('group', { name: /Chrome/ }));
+  await userEvent.click(phone.getByRole('button', { name: 'Завершить' }));
   await vi.waitFor(() => expect(onToast).toHaveBeenCalledWith('Сеанс завершён'));
   expect(calls.some((call) => call.method === 'DELETE' && call.url.endsWith(PHONE))).toBe(true);
   expect(screen.getAllByRole('button', { name: 'Завершить' })).toHaveLength(1);

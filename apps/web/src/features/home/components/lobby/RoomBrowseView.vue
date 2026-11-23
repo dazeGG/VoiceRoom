@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { IconButton, ControlGroup } from '@voiceroom/ui-kit/components';
 import { useLocalizedText } from '@/shared/i18n/localized-text';
 
 import { t } from '@/shared/i18n';
@@ -14,9 +15,9 @@ import { subscribeRoomPreview } from '@/entities/room/room-realtime';
 import { useSessionStore } from '@/features/auth/session.store';
 import RoomPanelHeader from '@/features/room/components/RoomPanelHeader.vue';
 import EmojiText from '@/shared/chat/EmojiText.vue';
-import { getAvatarPresentation } from '@/shared/ui/avatar-presentation';
-import { iconSm } from '@/shared/ui/icons';
-import { fitTiles } from '@voice-room/ui/tile-grid';
+import { getAvatarPresentation } from '@voiceroom/ui/avatar-presentation';
+import { iconSm } from '@voiceroom/ui-kit/icon-defaults';
+import { fitTiles } from '@voiceroom/ui/tile-grid';
 import { roomDisplayName } from '../../model/rooms';
 import LobbyStreamTile from './LobbyStreamTile.vue';
 import RoomPreviewChat from './RoomPreviewChat.vue';
@@ -168,33 +169,30 @@ function selectPanel(panel: Panel): void {
         @toast="(message: string) => emit('toast', message)"
       />
       <div class="room-preview__actions">
-        <div
-          class="room-panel-tabs room-panel-tabs--topbar"
-          role="group"
-          :aria-label="t('Открыть раздел панели комнаты')"
+        <ControlGroup
+          class="room-panel-switches room-panel-switches--topbar"
+          :label="t('Открыть раздел панели комнаты')"
         >
-          <button
-            class="room-panel-tabs__tab"
-            type="button"
-            :aria-label="t('Чат')"
+          <IconButton
+            class="room-panel-switches__button"
+            :label="t('Чат')"
             :aria-pressed="activePanel === 'chat'"
-            :title="t('Чат')"
+            :size="32"
+            :dot="roomUnreadCount > 0"
             @click="selectPanel('chat')"
           >
-            <MessageSquare v-bind="iconSm" aria-hidden="true" />
-            <span v-if="roomUnreadCount > 0" class="room-panel-tabs__unread" aria-hidden="true"></span>
-          </button>
-          <button
-            class="room-panel-tabs__tab"
-            type="button"
-            :aria-label="t('Участники')"
+            <MessageSquare aria-hidden="true" />
+          </IconButton>
+          <IconButton
+            class="room-panel-switches__button"
+            :label="t('Участники')"
             :aria-pressed="activePanel === 'participants'"
-            :title="t('Участники')"
+            :size="32"
             @click="selectPanel('participants')"
           >
-            <Users v-bind="iconSm" aria-hidden="true" />
-          </button>
-        </div>
+            <Users aria-hidden="true" />
+          </IconButton>
+        </ControlGroup>
       </div>
     </header>
 

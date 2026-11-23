@@ -34,7 +34,7 @@
   }
 
   :not(pre) > code {
-    border-radius: 4px;
+    border-radius: var(--radius-4);
     padding-inline: 0.25em;
     background: var(--vr-surface-2);
   }
@@ -44,40 +44,27 @@
   min-width: 0;
   max-width: 100%;
   border: 1px solid var(--vr-line);
-  border-radius: 8px;
+  border-radius: var(--radius-8);
   background: var(--vr-surface-2);
-
-  button {
-    display: block;
-    margin-inline-start: auto;
-    border: 0;
-    border-radius: 7px;
-    padding: 4px 8px;
-    background: transparent;
-    color: var(--vr-text-muted);
-    font: inherit;
-    font-size: 0.75em;
-    cursor: pointer;
-
-    &:hover {
-      background: var(--vr-hover);
-      color: var(--vr-text);
-    }
-  }
 
   pre {
     overflow-x: auto;
     margin: 0;
-    padding: 0 8px 8px;
+    padding: 0 var(--space-8) var(--space-8);
     white-space: pre;
     overflow-wrap: normal;
   }
 }
 
+.structured-message__copy {
+  display: flex;
+  margin-inline-start: auto;
+}
+
 .structured-message__mention {
-  padding: 0 3px;
+  padding: 0 var(--space-2);
   border: 0;
-  border-radius: 5px;
+  border-radius: var(--radius-4);
   background: var(--vr-accent-soft);
   color: var(--vr-accent);
   font: inherit;
@@ -90,6 +77,5 @@
   &:hover,
   &:focus-visible {
     background: var(--vr-accent-soft-hover);
-    outline: none;
   }
 }

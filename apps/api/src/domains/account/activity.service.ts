@@ -4,7 +4,7 @@
 // rest are answered from memory, so a request never waits on it.
 
 import type { Logger } from 'pino';
-import { clientKind } from '@voice-room/shared/account-security';
+import { clientKind } from '@voiceroom/shared/account-security';
 import { LOG_EVENTS } from '../../lib/log-events.ts';
 import type { ActivityMark, ActivityRepository } from './activity.repository.ts';
 

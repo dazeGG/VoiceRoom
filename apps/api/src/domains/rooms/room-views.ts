@@ -1,9 +1,9 @@
 // What clients see of a room and of the peers in it: the shapes of
-// @voice-room/shared/contracts/rooms, which the HTTP routes register and the
+// @voiceroom/shared/contracts/rooms, which the HTTP routes register and the
 // realtime runtime sends over the socket.
 
-import type { LobbyRoom, PublicPeer, RoomRelationship } from '@voice-room/shared/contracts/rooms';
-import type { ClientKind } from '@voice-room/shared/contracts/admin';
+import type { LobbyRoom, PublicPeer, RoomRelationship } from '@voiceroom/shared/contracts/rooms';
+import type { ClientKind } from '@voiceroom/shared/contracts/admin';
 import { avatarUrl } from '../../lib/avatar-url.ts';
 import { avatarColorForPeerId } from './avatar-color.ts';
 import { failure, type Failure } from '../../platform/http/http-kit.ts';

@@ -11,8 +11,8 @@ import {
   ACCOUNT_DELETION_GRACE_MS,
   DELETED_ACCOUNT_NAME,
   DELETED_LOGIN_PREFIX
-} from '@voice-room/shared/account-security';
-import type { AccountDeletionPreview } from '@voice-room/shared/contracts/account';
+} from '@voiceroom/shared/account-security';
+import type { AccountDeletionPreview } from '@voiceroom/shared/contracts/account';
 
 const UNUSABLE_PASSWORD_HASH = '!';
 

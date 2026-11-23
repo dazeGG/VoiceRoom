@@ -5,7 +5,6 @@
 //   .topbar       -> .topbar
 //   .brand        -> .topbar__brand
 //   .brand-mark   -> .topbar__brand-mark
-//   .beta-mark    -> .beta-mark (block, ui/_beta-mark.scss)
 
 .topbar {
   display: flex;
@@ -13,13 +12,13 @@
   min-width: 0;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
+  gap: var(--space-16);
 }
 
 .topbar__brand {
   display: inline-flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--space-12);
   color: inherit;
   font-size: 0.9375rem;
   font-weight: 600;
@@ -28,8 +27,8 @@
 }
 
 .topbar__brand-mark {
-  width: 24px;
-  height: 24px;
+  width: var(--size-24);
+  height: var(--size-24);
   display: block;
   flex: 0 0 auto;
   background: var(--vr-accent);

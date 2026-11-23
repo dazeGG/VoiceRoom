@@ -1,14 +1,15 @@
 <script setup lang="ts">
+import { badgeOf } from '@/shared/badges';
 import { computed } from 'vue';
-import { ParticipantTile } from '@voice-room/call/views';
-import { state } from '@voice-room/call/engine/core/room-runtime.store';
-import type { Participant } from '@voice-room/call/engine/core/types';
-import { useParticipantsUiStore } from '@voice-room/call/engine/core/participants-ui.store';
-import { enterScreenView, leaveScreenView } from '@voice-room/call/engine/ui/screen-view';
+import { ParticipantTile } from '@voiceroom/call/views';
+import { state } from '@voiceroom/call/engine/core/room-runtime.store';
+import type { Participant } from '@voiceroom/call/engine/core/types';
+import { useParticipantsUiStore } from '@voiceroom/call/engine/core/participants-ui.store';
+import { enterScreenView, leaveScreenView } from '@voiceroom/call/engine/ui/screen-view';
 import EmojiText from '@/shared/chat/EmojiText.vue';
 import { createLogger, errorContext } from '@/shared/log';
-import { AccountBadge } from '@/shared/ui';
-import { getAvatarPresentation } from '@/shared/ui/avatar-presentation';
+import { AccountBadge } from '@voiceroom/ui-kit/components';
+import { getAvatarPresentation } from '@voiceroom/ui/avatar-presentation';
 import { useParticipantContextUiStore } from '../participant-context-ui.store';
 
 const { participant, variant = 'grid' } = defineProps<{
@@ -54,6 +55,6 @@ function openMenu(x: number, y: number, tile: HTMLElement | null): void {
     @context-menu="openMenu"
   >
     <template #name><EmojiText :text="participant.name" /></template>
-    <template #badge><AccountBadge :user-id="participant.accountUserId" /></template>
+    <template #badge><AccountBadge :badge="badgeOf(participant.accountUserId)" /></template>
   </ParticipantTile>
 </template>

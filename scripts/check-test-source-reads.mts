@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Ratchet for tests that read source code instead of exercising it
-// (CLAUDE.md "Tests"). Counts, per test tree, lines that read a file and name
+// (AGENTS.md "Tests"). Counts, per test tree, lines that read a file and name
 // a code file (any literal ending in a code extension) or a src directory
 // (a literal that is `src` or contains a `src/` segment, as path.join
 // arguments do). Migrations, the generated DB schema, JSON data and

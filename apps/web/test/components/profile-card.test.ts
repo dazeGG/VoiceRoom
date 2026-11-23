@@ -6,7 +6,7 @@ import { screen } from '@testing-library/vue';
 import { expect, test } from 'vitest';
 import { ProfileCard } from '@/shared/components/profile-card';
 import type { ProfileCardPerson } from '@/shared/components/profile-card/types';
-import { getAvatarColor } from '@voice-room/ui/avatar-colors';
+import { getAvatarColor } from '@voiceroom/ui-kit/avatar-colors';
 import { renderWithApp } from '../helpers/render.ts';
 
 function person(extra: Partial<ProfileCardPerson> = {}): ProfileCardPerson {

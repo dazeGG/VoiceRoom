@@ -1,14 +1,14 @@
 import type { StoredRoom } from '../domains/rooms/room-views.ts';
 import { roomAllowsChat, roomAllowsSurface, ROOM_SURFACE_CEILINGS } from '../domains/rooms/room-surface.policy.ts';
-import type { ErrorCode } from '@voice-room/shared/contracts/errors';
-import type { ClientCommands, PeerLeaveReason, VoiceTarget } from '@voice-room/shared/contracts/realtime';
-import type { LobbyRoom, PublicPeer } from '@voice-room/shared/contracts/rooms';
-import { normalizePeerId, cleanGuestName, cleanStreamId, cleanScreenProfileId } from '@voice-room/shared/validation';
+import type { ErrorCode } from '@voiceroom/shared/contracts/errors';
+import type { ClientCommands, PeerLeaveReason, VoiceTarget } from '@voiceroom/shared/contracts/realtime';
+import type { LobbyRoom, PublicPeer } from '@voiceroom/shared/contracts/rooms';
+import { normalizePeerId, cleanGuestName, cleanStreamId, cleanScreenProfileId } from '@voiceroom/shared/validation';
 import { buildServerEnvelope } from './envelope.ts';
-import type { ServerEnvelope } from '@voice-room/shared/realtime';
+import type { ServerEnvelope } from '@voiceroom/shared/realtime';
 import { LOG_EVENTS } from '../lib/log-events.ts';
 import { createLogger } from '../lib/logger.ts';
-import type { RoomSnapshot } from '@voice-room/shared/contracts/realtime';
+import type { RoomSnapshot } from '@voiceroom/shared/contracts/realtime';
 import type { ActiveBanRecord } from '../domains/moderation/active-ban.repository.ts';
 import type { CredentialBoundaryService } from '../domains/admission/credential-boundary.service.ts';
 import type { ConnectionRegistry, WsConnection } from './registry.ts';
@@ -19,7 +19,7 @@ import { claimMedia, decideMediaRequest, MEDIA_MIN_VIEWERS, type MediaLimits } f
 import type { createMediaMinute } from './media-minute.ts';
 import { leaveReasonOf } from './runtime-types.ts';
 import { noteMicChange, noteVoiceReport, type noteStayEvent } from './voice-track.ts';
-import { isRecord } from '@voice-room/shared/guards';
+import { isRecord } from '@voiceroom/shared/guards';
 import type {
   FinalizeError,
   CallRoomStore,

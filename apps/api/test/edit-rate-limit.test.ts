@@ -7,7 +7,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 const { createApiApp } = await import('../src/server.ts');
-import type { Failure } from '@voice-room/shared/contracts/http';
+import type { Failure } from '@voiceroom/shared/contracts/http';
 import type { FastifyInstance } from 'fastify';
 import { dbRoom, storedDirectMessage, userSession, type Fakes } from './fakes/index.ts';
 import { injectWs, sendWs, waitForWsType } from './ws-harness.ts';

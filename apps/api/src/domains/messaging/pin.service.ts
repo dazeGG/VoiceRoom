@@ -1,6 +1,6 @@
 import type pg from 'pg';
-import type { PinnedMessage } from '@voice-room/shared/contracts/messages';
-import type { PinAction } from '@voice-room/shared/contracts/realtime';
+import type { PinnedMessage } from '@voiceroom/shared/contracts/messages';
+import type { PinAction } from '@voiceroom/shared/contracts/realtime';
 import { DomainError } from '../../platform/http/domain-error.ts';
 import type { createPinRepository } from './pin.repository.ts';
 // Any room participant may pin, so the only guard against a room turning into

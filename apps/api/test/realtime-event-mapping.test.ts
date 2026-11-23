@@ -7,9 +7,9 @@ import {
   type ServerEventOf,
   type ServerEvents,
   type ServerEventType
-} from '@voice-room/shared/contracts/realtime';
+} from '@voiceroom/shared/contracts/realtime';
 import { Value } from 'typebox/value';
-import type { ServerEnvelope } from '@voice-room/shared/realtime';
+import type { ServerEnvelope } from '@voiceroom/shared/realtime';
 import { toWsAccountEvent } from '../src/realtime/account-events.ts';
 import { notificationPreferences, storedDirectMessage } from './fakes/index.ts';
 

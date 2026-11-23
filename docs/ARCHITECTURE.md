@@ -7,20 +7,21 @@ differ. Import rules live in `config/import-boundaries.v1.json` and `eslint.conf
 ## 1. Repository shape: one monorepo
 
 API, web, Meet, widget, site, admin, and the shared workspaces stay in one repository. `apps/admin` is
-the React staff console (admin.voiceroom.ru), signed in by handoff from the
+the Vue staff console (admin.voiceroom.ru), built on `packages/ui-kit` and signed in by handoff from the
 main site; it talks to the API's admin routes.
 
 - `packages/shared` owns the wire contracts (validators, realtime envelopes,
   screen profile ids, reserved peer ids). Consumers build the package from
   source and release on separate schedules, so contract changes must work
   across adjacent releases. See [Git Flow](GIT_FLOW.md).
-- `packages/ui` owns portable call UI primitives, preview utilities and shared
-  theme styles. The web app, embedded widget and site consume its package
-  exports. The package imports no app code. Web owns product stores, locale
-  registration and the client log reporting sink.
+- `packages/ui-kit` owns the Vue components, design tokens, styles and Storybook.
+  `packages/ui` owns the shared browser helpers and widget views. Both packages
+  expose source for their consumers and keep application imports outside their
+  boundaries. Web owns product stores, locale registration and the client log
+  reporting sink.
 - `packages/call` owns the reusable call engine, its core views and the voice
   asset source. Web wires its full-product ports. Meet and widget compose the
-  headless `@voice-room/call/guest` controller and guest transport with their
+  headless `@voiceroom/call/guest` controller and guest transport with their
   own API routes and entry and call screens. Each app emits the same versioned
   voice asset URLs from the shared asset source.
 - `apps/widget` owns the v1 loader, iframe handshake, room creation proof,
@@ -77,8 +78,8 @@ main site; it talks to the API's admin routes.
 - Everything is strict TypeScript. The API and `packages/shared` run on Node 24
   type stripping with no build step: erasable syntax only, imports with
   explicit `.ts` extensions, `tsc` in `npm run check`. The web (Vue 3) is
-  compiled by Vite and checked by `vue-tsc`. `packages/ui` exports TypeScript
-  source for each Vite consumer to compile and keeps Vue and Pinia as peers.
+  compiled by Vite and checked by `vue-tsc`. The UI workspaces export TypeScript
+  source for their Vite consumers and share Vue as a peer dependency.
 - JavaScript stays only where it must: the byte-pinned `.cjs` migrations,
   `scripts/geoip/fetch-dbip-city-lite.mjs` (host crontabs run it by path) and
   the AudioWorklet modules in `packages/call/assets` (served unbundled).
@@ -195,9 +196,8 @@ above, list it here so nobody copies the old pattern.
 | Without a database, routes answer 503 `internal_error` | `app/service-registry.ts`, `app/domain-services.ts` (no catalogued code; `http-kit.ts` masks status >= 500) | Add a catalogued code before surfacing a new 503 |
 | Device state has two sources of truth | `packages/call/src/engine/core/room-device-ui.store.ts` against `packages/call/src/engine/core/types.ts`, copied by hand in `packages/call/src/engine/ui/devices.ts` and `packages/call/src/engine/services/microphone-service.ts` | One owner per value; the UI reads it and the action writes it; type `noiseMode` as `NoiseMode` |
 | Reconnect jitter is written three times | `api/realtime.ts`, `packages/call/src/engine/recovery/realtime-recovery.ts`, `packages/call/src/engine/services/livekit/reconnect-policy.ts` | Do not add a fourth `Math.random()` backoff; share one jitter helper |
-| Listbox keyboard handling is copied | `features/home/components/lobby/Sidebar.vue` (own typeahead) against `shared/ui/Select/Select.vue` | Use `Select`; do not write another typeahead |
 | Screen profile ids are free strings in the room client | `packages/call/src/engine/core/types.ts`, `packages/call/src/engine/media/profiles.ts` | Narrow ids in the client; keep the wire field `PublicPeer.screenProfileId` a plain string |
-| Large components | `shared/chat/EmojiPickerPanel.vue` (506 lines) | Split by concern before adding to it |
+| Large components | `shared/chat/EmojiPickerPanel.vue` (495 lines) | Split by concern before adding to it |
 | The lobby store is large | `features/home/model/lobby.store.ts` (577 lines) | New lobby state goes in its own store or `use-*.ts` composable, not in `lobby.store.ts` |
 | `on(client)` query-shape guard: a value that is not a client falls back to the pool | `domains/media/attachment.repository.ts`, `domains/media/media-job.repository.ts` (`media-job-repository.test.ts` pins the fallback) | Kept on purpose. A new repository takes a typed `QueryClient` and does not guess the shape at run time |
 | Optional authorizers with a deny-all default | `domains/media/media-visibility.service.ts` (`authorizeDirectAttachment`, `authorizeRoomAttachment`; production passes both, `release-metrics.test.ts` builds without) | Kept on purpose. A new dependency is required in the factory's type, not optional with a default |
@@ -206,7 +206,7 @@ above, list it here so nobody copies the old pattern.
 | Internal error classes that are not a `DomainError` | `MediaError` in `domains/media/storage.ts` (storage codes), `FetchError` in `lib/link-preview-fetcher.ts` (no HTTP status), `MessageDeliveryFenceError` in `domains/messaging/` | An error that reaches a route is a `DomainError` with a catalogued code; add the code first. Keep the internal classes internal |
 | Run-time fail-safe on a typed result | `domains/moderation/moderation.service.ts` (`revoked?.status !== 'revoked'` on a typed `PrincipalRevocation` result) | Kept on purpose. Type a new port result as a union |
 | Optional `credentialBoundary` | `realtime/room-runtime.ts` (`RuntimeCredentialBoundary \| null`; null without a 32-byte gate secret, then leases revoke through the room store) | Kept on purpose. Do not add another nullable collaborator to `RoomRuntimeDeps` |
-| Large lobby components | `features/home/components/lobby/Sidebar.vue` (405 lines), `features/home/LobbyPage.vue` (374 lines) | Extract a composable or a child component before adding to either |
+| Large lobby components | `features/home/LobbyPage.vue` (494 lines), `features/home/components/lobby/Sidebar.vue` (284 lines) | Extract a composable or a child component before adding to either |
 
 Paths in the web rows without a package prefix are under `apps/web/src/`, the rest under
 `apps/api/src/`.
@@ -238,7 +238,7 @@ styles/                 SCSS: tokens, mixins and one partial per BEM block
   (`features/room/social.ts`); `entities`, `shared`, `platform` and `api`
   never import `features/home` or `features/room`. ESLint enforces both.
 - Vue 3 `<script setup lang="ts">` only; the rules are in
-  `apps/web/CLAUDE.md`.
+  `apps/web/AGENTS.md`.
 - `watch`/`watchEffect` synchronise with the outside world (DOM, listeners,
   timers). Values computed from state are `computed`; reactions to a user
   action belong in the action function, not in a watcher on the state it
@@ -260,8 +260,8 @@ styles/                 SCSS: tokens, mixins and one partial per BEM block
   `room-chat-view.ts` for the room chat, `services/livekit/*` behind
   `livekit-service.ts`.
 - Styles: no `<style>` in `.vue` files. Each BEM block has a partial in web's
-  `styles/<area>` or `packages/ui/src/styles`. Colours use the `--vr-*` tokens
-  in `packages/ui/src/styles/_tokens.scss`. State is `aria-*` or a BEM modifier
+  `styles/<area>` or `packages/ui-kit/src/styles`. Colours use the `--vr-*` tokens
+  in `packages/ui-kit/src/styles/_tokens.scss`. State is `aria-*` or a BEM modifier
   class, never a `[data-*]` selector. `scripts/check-web-styles.mts` and
   `scripts/check-web-palette.mts` enforce this in `npm run check`.
 - Browser, desktop, media and LiveKit fallbacks stay explicit and testable.

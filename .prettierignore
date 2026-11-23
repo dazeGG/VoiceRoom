@@ -12,6 +12,7 @@ packages/shared/src/emoji.ts
 apps/api/src/platform/db/schema.ts
 # Build output, caches and local state.
 node_modules/
+packages/ui-kit/storybook-static/
 coverage/
 !scripts/coverage/
 apps/web/public/

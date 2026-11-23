@@ -1,6 +1,6 @@
 import { getLocale, t } from '@/shared/i18n';
-import { localeTag } from '@voice-room/shared/localization';
-import { RECOVERY_CODE_COUNT, isRecoveryCodesReminderDue } from '@voice-room/shared/account-security';
+import { localeTag } from '@voiceroom/shared/localization';
+import { RECOVERY_CODE_COUNT, isRecoveryCodesReminderDue } from '@voiceroom/shared/account-security';
 import { dayMonthYear, timeAgo } from '@/shared/utils/date-format';
 import type { AccountSecurity, AccountSession, RecoveryCodesStatus } from '@/api/auth';
 

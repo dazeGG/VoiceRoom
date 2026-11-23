@@ -5,7 +5,7 @@ import type { RosterPeer } from '../src/realtime/room-presence.ts';
 import { createRoomRealtimeRuntime } from '../src/realtime/room-runtime.ts';
 import { createFullTestRuntime, runtimeDeps } from './fakes/room-runtime.ts';
 import { dbRoom } from './fakes/index.ts';
-import { buildServerEnvelope } from '@voice-room/shared/realtime';
+import { buildServerEnvelope } from '@voiceroom/shared/realtime';
 
 function harness() {
   const frames: string[] = [];

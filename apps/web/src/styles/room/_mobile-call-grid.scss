@@ -41,7 +41,7 @@
 
 // Room for the page dots under the grid.
 .mobile-call-grid--paged .mobile-call-grid__pages {
-  margin-bottom: 28px;
+  margin-bottom: var(--space-24);
 }
 
 // Six columns take rows of one, two or three tiles alike.
@@ -49,9 +49,9 @@
   display: grid;
   flex: 0 0 100%;
   grid-template-columns: repeat(6, minmax(0, 1fr));
-  gap: 6px;
+  gap: var(--space-6);
   min-height: 0;
-  padding: 0 8px;
+  padding: 0 var(--space-8);
   box-sizing: border-box;
   scroll-snap-align: start;
 }
@@ -93,10 +93,10 @@
   left: 50%;
   bottom: 3px;
   display: flex;
-  gap: 2px;
-  height: 22px;
-  padding: 0 4px;
-  border-radius: 11px;
+  gap: var(--space-2);
+  height: var(--size-24);
+  padding: 0 var(--space-4);
+  border-radius: var(--radius-10);
   background: var(--vr-scrim);
   transform: translateX(-50%);
   transition: opacity 250ms ease;
@@ -109,8 +109,8 @@
 
 .mobile-call-grid__dot {
   position: relative;
-  width: 16px;
-  height: 22px;
+  width: var(--size-16);
+  height: var(--size-24);
   padding: 0;
   border: 0;
   background: transparent;
@@ -119,8 +119,8 @@
     position: absolute;
     top: 8px;
     left: 5px;
-    width: 6px;
-    height: 6px;
+    width: var(--space-6);
+    height: var(--space-6);
     border-radius: 50%;
     background: color-mix(in oklch, var(--vr-text) 30%, transparent);
     content: '';

@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { t } from '@voice-room/ui/i18n';
-import { iconLg } from '@voice-room/ui/icon-defaults';
+import { Pressable } from '@voiceroom/ui-kit/components';
+import { t } from '@voiceroom/ui-kit/i18n';
+import { iconLg } from '@voiceroom/ui-kit/icon-defaults';
 import { Monitor } from '@lucide/vue';
 import { computed, ref, watch } from 'vue';
 import type { Participant } from '../engine/core/types';
@@ -80,14 +81,14 @@ watch(
       </template>
       <span v-else class="stream-tile__icon" aria-hidden="true"><Monitor v-bind="iconLg" /></span>
     </span>
-    <button
+    <Pressable
       v-if="isCollapsed"
+      inset
       class="stream-tile__expand"
-      type="button"
       :aria-pressed="isActive"
       :aria-label="t('Развернуть стрим {p0}', { p0: participant.isLocal ? t('ваш') : participant.name })"
       @click="handleEnter"
-    ></button>
+    ></Pressable>
     <span v-if="isCollapsed || isIdle" :class="['stream-tile__copy', { 'stream-tile__copy--idle': !isCollapsed }]">
       <span class="stream-tile__plate">
         <span

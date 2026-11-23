@@ -13,7 +13,7 @@ import {
   PeerParams,
   ReadBody,
   SendDirectMessageBody
-} from '@voice-room/shared/contracts/messages';
+} from '@voiceroom/shared/contracts/messages';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { ApiContext } from '../../app/context.ts';
 import { failure, optionalJsonBody } from '../../platform/http/http-kit.ts';

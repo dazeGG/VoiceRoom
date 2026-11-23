@@ -3,9 +3,9 @@
 
 import type pg from 'pg';
 import { sql } from 'kysely';
-import type { AdminActionEntry, AdminActionKind } from '@voice-room/shared/contracts/admin';
-import type { AccountBadge } from '@voice-room/shared/contracts/users';
-import { isStaffRole, type StaffRole } from '@voice-room/shared/contracts/staff';
+import type { AdminActionEntry, AdminActionKind } from '@voiceroom/shared/contracts/admin';
+import type { AccountBadge } from '@voiceroom/shared/contracts/users';
+import { isStaffRole, type StaffRole } from '@voiceroom/shared/contracts/staff';
 import { kyselyOn } from '../../platform/db/kysely.ts';
 
 const ACTIONS = new Set<string>([

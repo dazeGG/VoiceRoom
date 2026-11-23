@@ -20,6 +20,13 @@ import { stubMatchMedia } from '../helpers/match-media.ts';
 import { stubOverlayDom } from '../helpers/overlay-dom';
 import { renderWithApp } from '../helpers/render.ts';
 
+// The room page loads the call engine on demand and mounts it into its shell.
+// These tests are about the route and the shell, not the call: the engine needs
+// the call ports the app's composition root installs, so it is a stand-in here
+// that records each mount.
+const engine = vi.hoisted(() => ({ mountRoomClient: vi.fn(() => () => {}) }));
+vi.mock('@voiceroom/call/engine/main', () => engine);
+
 // The lobby is a chunk the route loads on demand; compiling it here keeps that
 // one-off cost out of the wait for the lobby to render.
 beforeAll(async () => {
@@ -83,6 +90,7 @@ test('returning to the tab preserves the mounted room after choosing to continue
     const continueButton = await screen.findByRole('button', { name: 'Продолжить в браузере' });
     await fireEvent.click(continueButton);
     const room = defined(container.querySelector('.room-embedded-shell'), 'mounted room');
+    await vi.waitFor(() => expect(engine.mountRoomClient).toHaveBeenCalledOnce());
     const session = useSessionStore(pinia);
     expect(session.user?.id).toBe(user.id);
     const sessionCheck = Promise.withResolvers<void>();
@@ -106,6 +114,7 @@ test('returning to the tab preserves the mounted room after choosing to continue
     expect(container.querySelector('.room-embedded-shell')).toBe(room);
     expect(screen.queryByRole('button', { name: 'Продолжить в браузере' })).toBeNull();
     expect(launch).toHaveBeenCalledOnce();
+    expect(engine.mountRoomClient).toHaveBeenCalledOnce();
   } finally {
     window.history.replaceState(null, '', previousUrl);
     offer.mockRestore();

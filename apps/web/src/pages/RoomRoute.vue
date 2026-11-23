@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Button, Callout, MascotIcon } from '@voiceroom/ui-kit/components';
 // What /r/:roomId shows on a load or a real navigation: the lobby for a
 // signed-in desktop visit, the room itself for a guest or a phone.
 import { t } from '@/shared/i18n';
@@ -8,7 +9,6 @@ import { signOut } from '@/features/home/model/sign-out';
 import { useToastsStore, type ToastOptions } from '@/features/home/model/toasts.store';
 import { loadRoomPage } from '@/features/room/prefetch';
 import { lazyPage } from '@/shared/components/lazy-page';
-import { MascotIcon, ToastStack } from '@/shared/ui';
 import { ProfileCardHost } from '@/features/home/components/profile-card';
 import OpenInAppScreen from '@/features/home/components/OpenInAppScreen.vue';
 import { applyDesktopBoundaryToDocument } from '@/platform/desktop-boundary';
@@ -119,11 +119,13 @@ async function handleLogout(): Promise<void> {
   <div v-else-if="!roomAllowed" class="app-shell">
     <main class="auth-session-error" :aria-label="t('Неподдерживаемое устройство')" aria-live="polite">
       <div class="auth-session-error__card">
-        <p class="auth-session-error__kicker">{{ t('Только для компьютера') }}</p>
-        <h1 class="auth-session-error__title">{{ t('Откройте комнату на компьютере') }}</h1>
-        <p class="auth-session-error__text">
-          {{ t('Мобильные браузеры не подключаются к realtime, LiveKit, медиа и push-инфраструктуре VoiceRoom.') }}
-        </p>
+        <p class="auth-session-error__context">{{ t('Только для компьютера') }}</p>
+        <Callout
+          title-as="h1"
+          tone="warning"
+          :title="t('Откройте комнату на компьютере')"
+          :text="t('Мобильные браузеры не подключаются к realtime, LiveKit, медиа и push-инфраструктуре VoiceRoom.')"
+        />
       </div>
     </main>
   </div>
@@ -139,16 +141,21 @@ async function handleLogout(): Promise<void> {
   <div v-else-if="session.loadError" class="app-shell">
     <main class="auth-session-error" :aria-label="t('Ошибка проверки аккаунта')" aria-live="polite">
       <div class="auth-session-error__card">
-        <p class="auth-session-error__kicker">{{ t('Сессия не проверена') }}</p>
-        <h1 class="auth-session-error__title">{{ t('Не удалось проверить аккаунт') }}</h1>
-        <p class="auth-session-error__text">
-          {{
+        <p class="auth-session-error__context">{{ t('Сессия не проверена') }}</p>
+        <Callout
+          title-as="h1"
+          tone="danger"
+          :title="t('Не удалось проверить аккаунт')"
+          :text="
             t(
               'Проверьте подключение к серверу и повторите попытку. Мы не будем открывать комнату как гостевую, пока проверка не пройдет.'
             )
-          }}
-        </p>
-        <button type="button" @click="retrySessionLoad">{{ t('Повторить') }}</button>
+          "
+        >
+          <template #actions>
+            <Button variant="primary" size="sm" @click="retrySessionLoad">{{ t('Повторить') }}</Button>
+          </template>
+        </Callout>
       </div>
     </main>
   </div>
@@ -166,6 +173,4 @@ async function handleLogout(): Promise<void> {
     <!-- The lobby mounts its own host; a second one would fight it for the card. -->
     <ProfileCardHost @toast="(message: string) => showToast(message)" />
   </template>
-
-  <ToastStack :toasts="toasts.items" :on-dismiss="toasts.dismissToast" />
 </template>

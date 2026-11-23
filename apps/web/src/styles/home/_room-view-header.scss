@@ -5,7 +5,6 @@
 //
 // Svelte class -> BEM class (block "room-view-header")
 //   .lobby-roomview-head     -> .room-view-header
-//   .lobby-roomview-back     -> .room-view-header__back
 //   .lobby-roomview-trigger  -> .room-view-header__trigger (RoomMenu triggerClass)
 //   .lobby-roomview-name     -> .room-view-header__name (RoomMenu titleClass)
 //   .lobby-roomview-chevron  -> .room-view-header__chevron (RoomMenu chevronClass)
@@ -16,36 +15,17 @@
 .room-view-header {
   display: flex;
   align-items: center;
-  gap: 10px;
-}
-
-.room-view-header__back {
-  flex: none;
-  width: 40px;
-  height: 40px;
-  border-radius: 11px;
-  border: 1px solid var(--vr-line);
-  background: var(--vr-surface-3);
-  color: var(--vr-text);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: background 0.15s ease;
-
-  &:hover {
-    background: var(--vr-surface-3-hover);
-  }
+  gap: var(--space-8);
 }
 
 .room-view-header__trigger {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--space-8);
   max-width: 360px;
-  padding: 4px 10px 4px 4px;
+  padding: var(--space-4) var(--space-8) var(--space-4) var(--space-4);
   border: none;
-  border-radius: 12px;
+  border-radius: var(--radius-12);
   background: transparent;
   cursor: pointer;
   transition: background 0.15s ease;

@@ -2,7 +2,6 @@
 // Svelte: RecoveryCodesDialog.svelte <style>.
 //
 // Svelte class -> BEM class (block "recovery-dialog")
-//   .recovery-dialog-layer .ui-dialog-overlay -> .ui-dialog__overlay:has(.recovery-dialog)
 //     (the Dialog portals its overlay to <body>, so a wrapper cannot style it;
 //     the settings overlay sits at z-index 60)
 //   .recovery-form                   -> .recovery-dialog / .recovery-dialog__form
@@ -12,15 +11,11 @@
 //   .recovery-confirm                -> .recovery-dialog__confirm
 //   [data-recovery-codes]            -> .recovery-dialog__codes (focus target)
 //   .settings-field-label, .settings-input -> settings__field-label, settings__input
-@use 'pkg:@voice-room/ui/styles/mixins' as *;
-
-.ui-dialog__overlay:has(.recovery-dialog) {
-  z-index: 100;
-}
+@use 'pkg:@voiceroom/ui-kit/styles/mixins' as *;
 
 .recovery-dialog__form {
   display: grid;
-  gap: 14px;
+  gap: var(--space-12);
 }
 
 .recovery-dialog__text,
@@ -46,11 +41,11 @@
 .recovery-dialog__codes {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px 16px;
-  margin: 14px 0;
-  padding: 14px 16px 14px 36px;
+  gap: var(--space-8) var(--space-16);
+  margin: var(--space-12) 0;
+  padding: var(--space-12) var(--space-16) var(--space-12) var(--space-32);
   border: 1px solid var(--vr-line-strong);
-  border-radius: 12px;
+  border-radius: var(--radius-12);
   background: var(--vr-bg);
   color: var(--vr-text-muted);
   outline: none;
@@ -71,22 +66,9 @@
 .recovery-dialog__tools {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--space-8);
 }
 
 .recovery-dialog__confirm {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  margin: 14px 0 4px;
-  color: var(--vr-text);
-  font-size: 0.875rem;
-  cursor: pointer;
-
-  input {
-    width: 16px;
-    height: 16px;
-    margin: 0;
-    accent-color: var(--vr-accent, currentColor);
-  }
+  margin: var(--space-12) 0 var(--space-4);
 }

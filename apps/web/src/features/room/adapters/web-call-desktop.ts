@@ -1,4 +1,4 @@
-import type { DesktopCapabilities } from '@voice-room/call/engine/desktop-capabilities';
+import type { DesktopCapabilities } from '@voiceroom/call/engine/desktop-capabilities';
 
 declare global {
   interface Window {

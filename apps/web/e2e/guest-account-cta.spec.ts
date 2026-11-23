@@ -1,6 +1,6 @@
 import { expect, test, type Browser, type Page } from '@playwright/test';
-import { Me } from '@voice-room/shared/contracts/account';
-import { RoomList } from '@voice-room/shared/contracts/rooms';
+import { Me } from '@voiceroom/shared/contracts/account';
+import { RoomList } from '@voiceroom/shared/contracts/rooms';
 import { parse } from '../test/helpers/assert';
 import { PASSWORD, createPermanentRoom, registerViaUi, uniqueLogin } from './helpers';
 

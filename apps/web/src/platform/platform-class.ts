@@ -3,7 +3,7 @@ import {
   type PlatformClass,
   type PlatformPolicy,
   type PlatformSignals
-} from '@voice-room/shared/platform-class';
+} from '@voiceroom/shared/platform-class';
 
 function runtimeWindow(): Window | null {
   return typeof window === 'undefined' ? null : window;

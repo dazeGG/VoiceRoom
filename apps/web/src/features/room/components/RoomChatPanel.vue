@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Separator, Button, TabsPanel } from '@voiceroom/ui-kit/components';
 // The one room chat. The in-room rail and the lobby preview differ only in how
 // the viewer is identified and in who owns the surrounding panel chrome, so
 // both render this component instead of keeping parallel implementations.
@@ -21,9 +22,9 @@ import MessageContextMenu from '@/shared/chat/MessageContextMenu.vue';
 import OutgoingMessages from '@/shared/chat/OutgoingMessages.vue';
 import ReportMessageDialog from '@/shared/chat/ReportMessageDialog.vue';
 import { useChatDraft } from '@/shared/chat/use-chat-draft';
-import { applyRoomDeleted, applyRoomNotFound, applyRoomUpdated } from '@voice-room/call/engine/room/lifecycle';
-import { getParticipantById } from '@voice-room/call/engine/room/participants';
-import { state as roomState } from '@voice-room/call/engine/core/room-runtime.store';
+import { applyRoomDeleted, applyRoomNotFound, applyRoomUpdated } from '@voiceroom/call/engine/room/lifecycle';
+import { getParticipantById } from '@voiceroom/call/engine/room/participants';
+import { state as roomState } from '@voiceroom/call/engine/core/room-runtime.store';
 import { mentionProfilePerson, participantProfilePerson, roomMessageProfilePerson } from '../profile-card-adapter';
 import { buildChatDays, type ChatGroup } from '../room-chat-view';
 import { useRoomSocial } from '../social';
@@ -99,7 +100,7 @@ const social = useRoomSocial();
 const sessionStore = useSessionStore();
 const roomPins = useRoomPinsStore();
 const membership = useRoomMembershipStore();
-const { openProfileCardFor } = useProfileCardUiStore();
+const { openProfileCardFor, previewProfileCardFor, leaveProfileCardPreview } = useProfileCardUiStore();
 
 const chatVisible = computed(() => props.visible && props.activeTab === 'chat');
 
@@ -170,7 +171,8 @@ watch(
 
 // The scrolling body and each day section tell the scroll helper when their
 // height changes, so a reader at the newest message stays on it.
-const bodyElement = ref<HTMLElement | null>(null);
+const bodyPanel = ref<{ panel: HTMLElement | null } | null>(null);
+const bodyElement = computed(() => bodyPanel.value?.panel ?? null);
 const daySections = ref<HTMLElement[]>([]);
 const sectionWatchers = new Map<HTMLElement, () => void>();
 
@@ -239,14 +241,18 @@ const canOpenProfile = (group: ChatGroup): boolean => !group.self || Boolean(ses
 
 function openUserProfile(group: ChatGroup, event: MouseEvent): void {
   if (!canOpenProfile(group)) return;
-  const participant = getParticipantById(group.peerId);
   event.preventDefault();
   event.stopPropagation();
   const anchor = event.currentTarget;
-  const person = participant
+  const person = profilePerson(group);
+  queueMicrotask(() => openProfileCardFor(person, anchor));
+}
+
+function profilePerson(group: ChatGroup) {
+  const participant = getParticipantById(group.peerId);
+  return participant
     ? participantProfilePerson(social, participant)
     : roomMessageProfilePerson(social, group.messages[0]);
-  queueMicrotask(() => openProfileCardFor(person, anchor));
 }
 
 // A mention opens the same card the author's avatar opens, so "who is this"
@@ -325,25 +331,25 @@ const canReport = computed(() =>
         @jump="chat.jumpTo"
         @unpin="(messageId: string) => void chat.togglePinned(messageId)"
       />
-      <div
+      <TabsPanel
         :id="chatPanelId"
-        ref="bodyElement"
+        ref="bodyPanel"
         class="room-chat-panel__body"
-        role="tabpanel"
         :aria-labelledby="chatTabId"
         @scroll="scroll.onScroll(chat.loadOlder)"
       >
         <p v-if="timeline.loading" class="room-chat-panel__note">{{ t('Загружаем сообщения…') }}</p>
         <template v-else-if="days.length">
-          <button
+          <Button
             v-if="timeline.paged && (timeline.loadingOlder || timeline.hasMoreBefore)"
+            variant="plain"
+            size="sm"
             class="room-chat-panel__note"
-            type="button"
             :disabled="timeline.loadingOlder"
             @click="chat.loadOlder(scroll.element)"
           >
             {{ timeline.loadingOlder ? t('Загружаем…') : t('Показать предыдущие') }}
-          </button>
+          </Button>
           <section
             v-for="day in days"
             :key="day.key"
@@ -351,9 +357,9 @@ const canReport = computed(() =>
             class="room-chat-panel__day"
             :aria-label="day.label"
           >
-            <div class="room-chat-panel__day-divider" role="separator" :aria-label="day.label">
+            <Separator class="room-chat-panel__day-divider" :aria-label="day.label">
               <span class="room-chat-panel__day-label">{{ day.label }}</span>
-            </div>
+            </Separator>
             <RoomChatMessageGroup
               v-for="group in day.groups"
               :key="group.key"
@@ -364,6 +370,8 @@ const canReport = computed(() =>
               :on-save-edit="(messageId: string, text: string) => chat.saveEdit(messageId, text)"
               :on-mention="openMentionProfile"
               @open-profile="(event: MouseEvent) => openUserProfile(group, event)"
+              @preview-profile="(event) => previewProfileCardFor(profilePerson(group), event)"
+              @leave-profile="leaveProfileCardPreview"
               @author-menu="(event: MouseEvent) => openUserMenu(group, event)"
               @jump="chat.jumpTo"
               @copy="(message: ChatMessage) => void copyMessageText(message.text, toast)"
@@ -380,7 +388,7 @@ const canReport = computed(() =>
           @retry="(localId: string) => outbox.retry(localId)"
           @discard="(localId: string) => outbox.discard(localId)"
         />
-      </div>
+      </TabsPanel>
 
       <p v-if="timeline.error" class="room-chat-panel__error">{{ timeline.error }}</p>
 
@@ -397,15 +405,14 @@ const canReport = computed(() =>
         @toast="toast"
       />
     </template>
-    <div
+    <TabsPanel
       v-else-if="$slots.participants"
       :id="participantsPanelId"
       class="room-chat-panel__members"
-      role="tabpanel"
       :aria-labelledby="participantsTabId"
     >
       <slot name="participants" />
-    </div>
+    </TabsPanel>
   </aside>
 
   <MessageContextMenu

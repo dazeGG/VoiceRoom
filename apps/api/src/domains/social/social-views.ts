@@ -1,7 +1,7 @@
 // How people appear to each other outside a room: the actor on a
 // notification, and whether an account can still be written to or invited.
 
-import type { NotificationActor } from '@voice-room/shared/contracts/realtime';
+import type { NotificationActor } from '@voiceroom/shared/contracts/realtime';
 import { publicUser, type StoredUser } from '../account/user-records.ts';
 
 export type SocialUser = StoredUser;

@@ -6,7 +6,7 @@ import { render, screen } from '@testing-library/vue';
 import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, expect, test, vi } from 'vitest';
 import RoomChatPanel from '@/features/room/components/RoomChatPanel.vue';
-import type { RoomMessage } from '@voice-room/shared/contracts/messages';
+import type { RoomMessage } from '@voiceroom/shared/contracts/messages';
 import { stubFetch } from '../fixtures/fetch.ts';
 import { FakeWebSocket, installFakeWebSocket } from '../fixtures/fake-websocket.ts';
 

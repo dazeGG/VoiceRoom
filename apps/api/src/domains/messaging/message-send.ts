@@ -6,7 +6,7 @@
 
 import crypto from 'node:crypto';
 import type pg from 'pg';
-import type { ReplyPreview } from '@voice-room/shared/contracts/messages';
+import type { ReplyPreview } from '@voiceroom/shared/contracts/messages';
 import { replayedMessage, type IdempotencyInput, type Reservation } from './message-idempotency.repository.ts';
 import { requireReplyTarget } from './reply-projector.ts';
 

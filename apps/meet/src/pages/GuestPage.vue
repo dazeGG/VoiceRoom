@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { ArrowRight, Link2Off, LogOut, UsersRound } from '@lucide/vue';
-import { createGuestJoinController } from '@voice-room/call/guest';
-import { t } from '@voice-room/ui/i18n';
-import { cleanDisplayName, normalizeRoomId } from '@voice-room/shared/validation';
+import { createGuestJoinController } from '@voiceroom/call/guest';
+import { Button, Callout, Field, TextField } from '@voiceroom/ui-kit/components';
+import { t } from '@voiceroom/ui-kit/i18n';
+import { cleanDisplayName, normalizeRoomId } from '@voiceroom/shared/validation';
 import { computed, onBeforeUnmount, onMounted, ref, useTemplateRef, watch } from 'vue';
 import MeetCall from '@/components/MeetCall.vue';
 import { useMeetStore } from '@/meet.store';
@@ -19,7 +20,7 @@ const controller = createGuestJoinController({
 const { phase, failure, capabilities } = controller;
 const name = ref(meet.identity.displayName());
 const nameInvalid = ref(false);
-const nameInput = useTemplateRef<HTMLInputElement>('nameInput');
+const nameInput = useTemplateRef<{ input: HTMLInputElement | null }>('nameInput');
 const heading = useTemplateRef<HTMLHeadingElement>('heading');
 const inCall = computed(() => phase.value === 'call' || phase.value === 'reconnecting');
 
@@ -36,7 +37,7 @@ function join(): void {
   const displayName = cleanDisplayName(name.value);
   nameInvalid.value = !displayName;
   if (!displayName) {
-    nameInput.value?.focus();
+    nameInput.value?.input?.focus();
     return;
   }
   void controller.join(displayName);
@@ -53,51 +54,55 @@ function join(): void {
   <main v-else class="meet-entry">
     <section class="meet-card" :aria-busy="phase === 'checking' || phase === 'joining'">
       <template v-if="phase === 'left'">
-        <div class="meet-card__icon"><LogOut :size="26" aria-hidden="true" /></div>
+        <div class="meet-card__icon"><LogOut aria-hidden="true" /></div>
         <h1 ref="heading" tabindex="-1">{{ t('meet.left') }}</h1>
         <p>{{ t('meet.leftDescription') }}</p>
-        <button class="meet-button" type="button" @click="controller.check()">{{ t('meet.rejoin') }}</button>
-        <RouterLink class="meet-button meet-button--secondary" to="/">{{ t('meet.home') }}</RouterLink>
+        <Button size="lg" variant="primary" @click="controller.check()">{{ t('meet.rejoin') }}</Button>
+        <Button class="meet-card__link" variant="plain" size="lg" to="/">
+          {{ t('meet.home') }}
+        </Button>
       </template>
       <template v-else-if="phase === 'not-found' || phase === 'closed'">
-        <div class="meet-card__icon"><Link2Off :size="26" aria-hidden="true" /></div>
+        <div class="meet-card__icon"><Link2Off aria-hidden="true" /></div>
         <h1 ref="heading" tabindex="-1">{{ t('meet.missing') }}</h1>
         <p>{{ t('meet.missingDescription') }}</p>
-        <RouterLink class="meet-button meet-button--secondary" to="/">{{ t('meet.home') }}</RouterLink>
+        <Button class="meet-card__link" variant="plain" size="lg" to="/">
+          {{ t('meet.home') }}
+        </Button>
       </template>
       <template v-else>
-        <div class="meet-card__icon"><UsersRound :size="26" aria-hidden="true" /></div>
+        <div class="meet-card__icon"><UsersRound aria-hidden="true" /></div>
         <h1>{{ t('meet.join') }}</h1>
         <p v-if="phase === 'checking'" role="status">{{ t('meet.checking') }}</p>
         <template v-else-if="phase === 'error' && failure === 'status'">
-          <p class="meet-card__error" role="alert">{{ t('meet.error.unavailable') }}</p>
-          <button class="meet-button" type="button" @click="controller.check()">{{ t('meet.retry') }}</button>
+          <Callout role="alert" tone="danger" :title="t('meet.error.unavailable')" />
+          <Button size="lg" variant="primary" @click="controller.check()">{{ t('meet.retry') }}</Button>
         </template>
         <template v-else>
           <p>{{ t('meet.joinDescription') }}</p>
           <form class="meet-card__fields" method="post" @submit.prevent="join">
-            <label class="meet-card__label" for="display-name">{{ t('meet.name') }}</label>
-            <input
-              id="display-name"
-              ref="nameInput"
-              v-model="name"
-              name="display-name"
-              class="meet-card__input"
-              maxlength="40"
-              autocomplete="off"
-              enterkeyhint="go"
-              required
-              :readonly="phase === 'joining'"
-              :aria-invalid="nameInvalid"
-              :aria-describedby="nameInvalid ? 'name-error' : undefined"
-              @input="nameInvalid = false"
-            />
-            <p v-if="nameInvalid" id="name-error" class="meet-card__error" role="alert">{{ t('meet.nameRequired') }}</p>
-            <p v-else-if="failure === 'join'" class="meet-card__error" role="alert">{{ t('meet.error.join') }}</p>
-            <button class="meet-button" type="submit" :disabled="phase === 'joining'">
+            <Field id="display-name" :label="t('meet.name')">
+              <TextField
+                ref="nameInput"
+                v-model="name"
+                size="lg"
+                name="display-name"
+                maxlength="40"
+                autocomplete="off"
+                enterkeyhint="go"
+                required
+                :readonly="phase === 'joining'"
+                :aria-invalid="nameInvalid"
+                :aria-describedby="nameInvalid ? 'name-error' : undefined"
+                @input="nameInvalid = false"
+              />
+            </Field>
+            <Callout v-if="nameInvalid" id="name-error" role="alert" tone="danger" :title="t('meet.nameRequired')" />
+            <Callout v-else-if="failure === 'join'" role="alert" tone="danger" :title="t('meet.error.join')" />
+            <Button size="lg" variant="primary" type="submit" :busy="phase === 'joining'">
               {{ t(phase === 'joining' ? 'meet.joining' : 'meet.join') }}
-              <ArrowRight :size="18" aria-hidden="true" />
-            </button>
+              <ArrowRight v-if="phase !== 'joining'" aria-hidden="true" />
+            </Button>
           </form>
         </template>
       </template>

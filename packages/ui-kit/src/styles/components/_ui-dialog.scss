@@ -1,0 +1,269 @@
+@use '../mixins' as *;
+
+.ui-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-24);
+  background: var(--vr-backdrop);
+  backdrop-filter: blur(var(--space-4));
+  -webkit-backdrop-filter: blur(var(--space-4));
+  pointer-events: auto;
+}
+
+.ui-dialog {
+  --dialog-width: 520px;
+
+  display: flex;
+  flex-direction: column;
+  width: min(var(--dialog-width), 100%);
+  max-height: calc(100dvh - var(--space-48));
+  overflow: hidden;
+  border: 1px solid var(--vr-line-strong);
+  border-radius: var(--radius-20);
+  background: var(--vr-surface);
+  box-shadow: var(--vr-shadow-modal);
+  animation: ui-dialog-in 120ms var(--ease-out);
+}
+
+.ui-dialog--sm {
+  --dialog-width: 400px;
+}
+
+.ui-dialog--lg {
+  --dialog-width: 720px;
+}
+
+.ui-dialog--xl {
+  --dialog-width: 940px;
+  max-height: min(90dvh, calc(100dvh - var(--space-48)));
+}
+
+.ui-overlay--raised {
+  z-index: 60;
+}
+.ui-overlay--nested {
+  z-index: 100;
+}
+.ui-overlay--security {
+  z-index: 110;
+}
+.ui-overlay--auth {
+  z-index: 120;
+}
+
+.ui-overlay--full {
+  padding: 0;
+}
+
+.ui-overlay--media {
+  z-index: 1000;
+  overflow: hidden;
+  padding: var(--space-20);
+  overscroll-behavior: contain;
+  background: color-mix(in oklch, var(--vr-bg), transparent 6%);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.ui-overlay--panel {
+  align-items: end;
+  overflow: hidden;
+  padding: 0;
+  overscroll-behavior: contain;
+}
+
+.ui-overlay--inline {
+  position: static;
+  z-index: auto;
+  display: flex;
+  align-items: stretch;
+  padding: 0;
+  overflow: visible;
+  background: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  pointer-events: inherit;
+}
+
+.ui-dialog--full {
+  width: 100%;
+  height: 100%;
+  max-height: none;
+  border: 0;
+  border-radius: 0;
+}
+
+.ui-dialog--bare {
+  background: transparent;
+  box-shadow: none;
+
+  .ui-dialog__body {
+    flex: 1;
+    display: block;
+    padding: 0;
+  }
+}
+
+// A header with even padding and a divider, and a body without padding: the
+// settings windows, whose NavList runs edge to edge under the title.
+.ui-dialog--flush {
+  .ui-dialog__head {
+    align-items: center;
+    padding: var(--space-16) var(--space-16) var(--space-16) var(--space-24);
+    border-bottom: 1px solid var(--vr-line);
+  }
+
+  .ui-dialog__titles {
+    padding-top: 0;
+  }
+
+  .ui-dialog__body {
+    gap: 0;
+    padding: 0;
+  }
+}
+
+.ui-dialog--media {
+  width: min(100%, calc(var(--size-48) * 25));
+  height: min(92dvh, 100%, calc(var(--size-36) * 25));
+  max-height: none;
+  border: 0;
+  border-radius: 0;
+
+  .ui-dialog__body {
+    overflow: hidden;
+  }
+}
+
+.ui-dialog--panel {
+  width: 100%;
+  height: min(80dvh, calc(var(--size-48) * 12));
+  max-height: 100%;
+  padding-bottom: env(safe-area-inset-bottom);
+  border-radius: var(--radius-20) var(--radius-20) 0 0;
+
+  .ui-dialog__head {
+    align-items: center;
+    padding: var(--space-12) var(--space-16);
+  }
+
+  .ui-dialog__titles {
+    padding-top: 0;
+  }
+
+  .ui-dialog__body {
+    flex: 1;
+    display: grid;
+    padding: 0;
+    overflow: hidden;
+  }
+}
+
+.ui-overlay--inline .ui-dialog--panel {
+  width: clamp(calc(var(--size-44) * 6 + var(--space-8)), 28vw, calc(var(--size-48) * 8));
+  height: auto;
+  margin: var(--space-20) clamp(var(--space-16), 4vw, var(--space-48)) var(--space-20) 0;
+  padding-bottom: 0;
+  border-radius: var(--radius-20);
+  box-shadow: none;
+}
+
+.ui-dialog__head--hidden {
+  @include visually-hidden;
+}
+
+.ui-dialog--overflow-visible {
+  overflow: visible;
+}
+
+.ui-dialog__head {
+  display: flex;
+  flex: none;
+  align-items: flex-start;
+  gap: var(--space-12);
+  padding: var(--space-20) var(--space-20) 0 var(--space-24);
+}
+
+.ui-dialog__titles {
+  flex: 1;
+  min-width: 0;
+  padding-top: var(--space-6);
+}
+
+.ui-dialog__title {
+  margin: 0;
+  color: var(--vr-text);
+  font: 600 1.0625rem/1.25 var(--font-ui);
+  letter-spacing: -0.015em;
+  overflow-wrap: anywhere;
+}
+
+.ui-dialog__desc {
+  margin: var(--space-6) 0 0;
+  color: var(--vr-text-2);
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.ui-dialog__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-16);
+  min-height: 0;
+  padding: var(--space-20) var(--space-24);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.ui-dialog__foot {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-8);
+  padding: 0 var(--space-24) var(--space-24);
+}
+
+@keyframes ui-dialog-in {
+  from {
+    opacity: 0;
+    transform: translateY(var(--space-4));
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ui-dialog {
+    animation: none;
+  }
+}
+
+@include below($bp-phone) {
+  .ui-overlay:not(.ui-overlay--alert, .ui-overlay--media) {
+    padding: 0;
+  }
+
+  .ui-overlay--media {
+    padding: var(--space-8);
+  }
+
+  .ui-dialog:not(.ui-dialog--alert, .ui-dialog--media, .ui-dialog--panel) {
+    width: 100%;
+    height: 100%;
+    max-height: none;
+    border: 0;
+    border-radius: 0;
+  }
+
+  .ui-dialog:not(.ui-dialog--alert, .ui-dialog--media, .ui-dialog--panel) .ui-dialog__body {
+    flex: 1;
+  }
+}

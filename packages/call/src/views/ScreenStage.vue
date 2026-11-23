@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { t } from '@voice-room/ui/i18n';
-import { AvatarStack } from '@voice-room/ui/components';
+import { t } from '@voiceroom/ui-kit/i18n';
+import { AvatarStack, Slider, IconButton } from '@voiceroom/ui-kit/components';
 import { Maximize, Minimize, Volume2, VolumeX } from '@lucide/vue';
 import { ref, watch, watchEffect } from 'vue';
 import type { FullscreenView, ScreenMetaView, StreamVolumeView } from '../engine/core/screen-ui.store';
@@ -17,12 +17,12 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits<{
-  elementsChange: [stage: HTMLElement | null, video: HTMLVideoElement | null, slider: HTMLInputElement | null];
+  elementsChange: [stage: HTMLElement | null, video: HTMLVideoElement | null];
   streamAttached: [];
   interact: [event: MouseEvent | KeyboardEvent];
   activeChange: [active: boolean];
   toggleMute: [];
-  updateVolume: [];
+  updateVolume: [percent: number];
   toggleFullscreen: [];
 }>();
 
@@ -32,11 +32,10 @@ defineSlots<{
 
 const stageEl = ref<HTMLElement | null>(null);
 const videoEl = ref<HTMLVideoElement | null>(null);
-const volumeSliderEl = ref<HTMLInputElement | null>(null);
 
 watchEffect(
   () => {
-    emit('elementsChange', stageEl.value, videoEl.value, volumeSliderEl.value);
+    emit('elementsChange', stageEl.value, videoEl.value);
   },
   { flush: 'post' }
 );
@@ -101,7 +100,7 @@ watch(
           v-else
           :items="meta.viewerAvatars"
           :max-avatars="null"
-          :size="22"
+          :size="24"
           :aria-label="t('Смотрят стрим')"
           class="screen-meta__avatar-stack"
         />
@@ -110,46 +109,44 @@ watch(
 
     <div id="screenViewControls" class="screen-view-controls" :hidden="!showControls">
       <div id="streamVolumeControl" class="stream-volume" :hidden="volume.hidden">
-        <button
+        <IconButton
           id="streamVolumeButton"
+          :size="40"
+          variant="outline"
+          scrim
+          :tooltip="false"
           class="screen-view-controls__button stream-volume__button"
-          type="button"
-          :aria-label="volume.ariaLabel"
+          :label="volume.ariaLabel"
           :aria-pressed="volume.muted"
           @click="emit('toggleMute')"
         >
           <span class="stream-volume__icon stream-volume__icon--on" aria-hidden="true"><Volume2 /></span>
           <span class="stream-volume__icon stream-volume__icon--off" aria-hidden="true"><VolumeX /></span>
-        </button>
+        </IconButton>
         <div id="streamVolumePopover" class="stream-volume__popover">
-          <output
-            class="stream-volume__value"
-            :class="{ 'stream-volume__value--muted': volume.muted }"
-            for="streamVolumeSlider"
-          >
+          <output class="stream-volume__value" :class="{ 'stream-volume__value--muted': volume.muted }">
             {{ volume.valuePercent }}%
           </output>
-          <div class="stream-volume__track">
-            <input
-              id="streamVolumeSlider"
-              ref="volumeSliderEl"
-              class="stream-volume__slider"
-              type="range"
-              min="0"
-              :max="volume.maxPercent"
-              :value="volume.valuePercent"
-              :aria-label="t('Громкость стрима')"
-              @input="emit('updateVolume')"
-            />
-          </div>
+          <Slider
+            class="stream-volume__slider"
+            orientation="vertical"
+            :max="volume.maxPercent"
+            :model-value="volume.valuePercent"
+            :aria-label="t('Громкость стрима')"
+            :aria-value-text="`${volume.valuePercent}%`"
+            @value-change="emit('updateVolume', $event)"
+          />
         </div>
       </div>
 
-      <button
+      <IconButton
         id="screenFullscreenButton"
+        :size="40"
+        variant="outline"
+        scrim
+        :tooltip="false"
         class="screen-view-controls__button screen-view-controls__fullscreen"
-        type="button"
-        :aria-label="fullscreen.ariaLabel"
+        :label="fullscreen.ariaLabel"
         :aria-pressed="fullscreen.fullscreen"
         @click="emit('toggleFullscreen')"
       >
@@ -163,7 +160,7 @@ watch(
           aria-hidden="true"
           ><Minimize
         /></span>
-      </button>
+      </IconButton>
     </div>
   </div>
 </template>

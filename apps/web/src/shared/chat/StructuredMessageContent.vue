@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { t } from '@/shared/i18n';
+import { Button, Pressable } from '@voiceroom/ui-kit/components';
 import { computed, h, shallowRef, type VNode } from 'vue';
-import type { RoomMessageContentV1 } from '@voice-room/shared/room-message-content';
+import type { RoomMessageContentV1 } from '@voiceroom/shared/room-message-content';
 import ChatText from '@/shared/components/ChatText.vue';
 import { copyText } from '@/shared/utils/clipboard';
 import EmojiText from './EmojiText.vue';
@@ -47,15 +48,15 @@ function renderInline(node: MarkdownInline): VNode {
       const attributes = { class: 'structured-message__mention', 'data-user-id': userId };
       if (!onmention || !userId) return h('span', attributes, text);
       return h(
-        'button',
+        Pressable,
         {
           ...attributes,
           class: [attributes.class, 'structured-message__mention--button'],
-          type: 'button',
+          display: 'inline',
           'aria-label': t('Открыть профиль {p0}', { p0: text }),
           onClick: (event: MouseEvent) => onmention(userId, label, event)
         },
-        text
+        () => text
       );
     }
     default:
@@ -79,7 +80,17 @@ function renderBlock(block: MarkdownBlock): VNode {
       const state = copyFeedback.value?.block === block ? copyFeedback.value : null;
       const copyLabel = state ? (state.copied ? t('Скопировано') : t('Не удалось скопировать')) : t('Копировать');
       return h('div', { class: 'structured-message__code' }, [
-        h('button', { type: 'button', 'aria-live': 'polite', onClick: () => void copyCode(block) }, copyLabel),
+        h(
+          Button,
+          {
+            variant: 'plain',
+            size: 'sm',
+            class: 'structured-message__copy',
+            'aria-live': 'polite',
+            onClick: () => void copyCode(block)
+          },
+          () => copyLabel
+        ),
         h('pre', { tabindex: 0 }, [h('code', block.text)])
       ]);
     }

@@ -15,8 +15,8 @@ import { fake, notificationPreferences, storedUser } from './fakes/index.ts';
 import { registerNotificationSettingsRoutes } from '../src/domains/notifications/notification-settings.routes.ts';
 import { AJV_OPTIONS, registerHttpKit } from '../src/platform/http/http-kit.ts';
 import type { ApiContext } from '../src/app/context.ts';
-import { Failure } from '@voice-room/shared/contracts/http';
-import { PushRegistrationConflict, PushRegistrationSuccess } from '@voice-room/shared/contracts/push-registration';
+import { Failure } from '@voiceroom/shared/contracts/http';
+import { PushRegistrationConflict, PushRegistrationSuccess } from '@voiceroom/shared/contracts/push-registration';
 import { checked } from './helpers/checked.ts';
 import { mistyped } from './helpers/mistyped.ts';
 

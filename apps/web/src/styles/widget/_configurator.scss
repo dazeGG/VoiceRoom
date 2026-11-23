@@ -1,9 +1,9 @@
-@use 'pkg:@voice-room/ui/styles/mixins' as *;
+@use 'pkg:@voiceroom/ui-kit/styles/mixins' as *;
 
 .widget-configurator {
   width: min(100%, 1200px);
   margin-inline: auto;
-  padding: var(--space-xl) var(--space-lg) var(--space-2xl);
+  padding: var(--space-32) var(--space-24) var(--space-48);
 }
 
 .widget-configurator__nav,
@@ -14,7 +14,7 @@
 .widget-configurator__code-head {
   display: flex;
   align-items: center;
-  gap: var(--space-xs);
+  gap: var(--space-8);
 }
 
 .widget-configurator__nav,
@@ -24,7 +24,7 @@
 }
 
 .widget-configurator__back {
-  min-height: var(--interactive-md);
+  min-height: var(--size-40);
   color: var(--vr-text);
   text-decoration: none;
   font-weight: 650;
@@ -40,10 +40,10 @@
 }
 
 .widget-configurator__header {
-  margin-block: var(--space-xl);
+  margin-block: var(--space-32);
 
   h1 {
-    margin-block: var(--space-xs) var(--space-sm);
+    margin-block: var(--space-8) var(--space-12);
     font-size: clamp(2rem, 1.5rem + 1.5vw, 2.75rem);
     line-height: 1.16;
     letter-spacing: -0.045em;
@@ -60,19 +60,19 @@
   display: grid;
   grid-template-columns: minmax(0, 420px) minmax(0, 1fr);
   align-items: start;
-  gap: var(--space-lg);
+  gap: var(--space-24);
 }
 
 .widget-configurator__settings,
 .widget-configurator__code {
   min-width: 0;
   border: 1px solid var(--vr-line-strong);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-20);
   background: var(--vr-surface);
 }
 
 .widget-configurator__settings {
-  padding: var(--space-lg);
+  padding: var(--space-24);
 }
 
 .widget-configurator__group {
@@ -83,34 +83,23 @@
 
   legend {
     padding: 0;
-    margin-block-end: var(--space-md);
+    margin-block-end: var(--space-16);
     font-size: 0.9375rem;
     font-weight: 650;
   }
 
   + .widget-configurator__group {
-    margin-block-start: var(--space-lg);
+    margin-block-start: var(--space-24);
     border-block-start: 1px solid var(--vr-line);
   }
 
   > legend + .widget-configurator__pair {
     margin-block-start: 0;
   }
-
-  .ui-segment {
-    width: 100%;
-  }
-
-  .ui-segment__item {
-    flex: 1;
-    min-height: var(--interactive-lg);
-    padding-inline: var(--space-xs);
-    font-size: 0.8125rem;
-  }
 }
 
 .widget-configurator__hint {
-  margin: var(--space-sm) 0 0;
+  margin: var(--space-12) 0 0;
   color: var(--vr-text-muted);
   font-size: 0.8125rem;
   line-height: 1.5;
@@ -119,136 +108,23 @@
 .widget-configurator__pair {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--space-sm);
-  margin-block-start: var(--space-md);
-}
-
-.widget-configurator__field,
-.widget-configurator__color {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  gap: var(--space-xs);
-  color: var(--vr-text-2);
-  font-size: 0.8125rem;
-}
-
-.widget-configurator__field select,
-.widget-configurator__title-input,
-.widget-configurator__number,
-.widget-configurator__color-control {
-  min-width: 0;
-  min-height: var(--interactive-lg);
-  border: 1px solid var(--vr-line-strong);
-  border-radius: var(--radius-md);
-  background: var(--vr-surface-2);
-  color: var(--vr-text);
-}
-
-.widget-configurator__field select,
-.widget-configurator__title-input {
-  width: 100%;
-  padding-inline: var(--space-sm);
-  font: inherit;
-  font-size: 1rem;
-}
-
-.widget-configurator__number {
-  display: flex;
-  align-items: center;
-  padding-inline: var(--space-sm);
-  gap: var(--space-xs);
-
-  input {
-    width: 100%;
-    min-width: 0;
-    min-height: 50px;
-    padding: 0;
-    border: 0;
-    background: transparent;
-    color: inherit;
-    font: inherit;
-    font-size: 1rem;
-  }
-
-  > span {
-    color: var(--vr-text-muted);
-    font-family: var(--font-mono);
-    font-size: 0.75rem;
-  }
-}
-
-.widget-configurator__number:focus-within,
-.widget-configurator__color-control:focus-within {
-  border-color: var(--focus-border);
-  outline: 2px solid var(--focus-ring);
-  outline-offset: 2px;
-}
-
-.widget-configurator__number input:focus-visible {
-  outline: none;
+  gap: var(--space-12);
+  margin-block-start: var(--space-16);
 }
 
 .widget-configurator__colors {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 7rem), 1fr));
-  gap: var(--space-xs);
-  margin-block-start: var(--space-sm);
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr));
+  gap: var(--space-8);
+  margin-block-start: var(--space-12);
 }
 
 .widget-configurator__color-control {
   display: grid;
-  grid-template-columns: 2rem minmax(0, 1fr);
+  grid-template-columns: var(--size-40) minmax(0, 1fr);
   align-items: center;
-  padding: 6px;
-  gap: var(--space-xs);
+  gap: var(--space-8);
   color-scheme: dark;
-
-  // Keep injected color-picker shortcuts out of the two-control grid.
-  > :not(input[type='color'], input[type='text']) {
-    display: none !important;
-  }
-
-  input[type='color'] {
-    appearance: none;
-    forced-color-adjust: none;
-    width: 100%;
-    height: 2rem;
-    padding: 0;
-    overflow: hidden;
-    border: 1px solid var(--vr-line-strong);
-    border-radius: var(--radius-sm);
-    background: transparent;
-    cursor: pointer;
-  }
-
-  input::-webkit-color-swatch-wrapper {
-    padding: 0;
-  }
-
-  input::-webkit-color-swatch {
-    border: 0;
-    border-radius: inherit;
-  }
-
-  input::-moz-color-swatch {
-    border: 0;
-    border-radius: inherit;
-  }
-
-  input[type='text'] {
-    width: 100%;
-    min-width: 0;
-    padding: 4px 0;
-    border: 0;
-    background: transparent;
-    color: inherit;
-    font: 0.75rem var(--font-mono);
-  }
-}
-
-.widget-configurator__color-control:has([aria-invalid='true']) {
-  border-color: var(--vr-danger);
 }
 
 @media (forced-colors: active) {
@@ -261,7 +137,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-md);
+  gap: var(--space-16);
 
   label {
     font-weight: 550;
@@ -269,7 +145,7 @@
   }
 
   .widget-configurator__hint {
-    margin-block-start: var(--space-2xs);
+    margin-block-start: var(--space-4);
   }
 }
 
@@ -279,7 +155,7 @@
 
 .widget-configurator__preview-head {
   flex-wrap: wrap;
-  padding: var(--space-sm) var(--space-2xs) var(--space-md);
+  padding: var(--space-12) var(--space-4) var(--space-16);
 
   > span {
     color: var(--vr-text-muted);
@@ -296,25 +172,25 @@
 }
 
 .widget-configurator__canvas {
-  padding: var(--space-xl);
+  padding: var(--space-32);
   overflow: auto;
   border: 1px solid var(--vr-line-strong);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-20);
   background-color: var(--vr-surface-2);
   background-image: radial-gradient(var(--vr-line-strong) 1px, transparent 1px);
   background-size: 16px 16px;
 }
 
 .widget-configurator__preview-controls {
-  margin-block-end: var(--space-md);
+  margin-block-end: var(--space-16);
 }
 
 .widget-configurator__preview-actions {
   display: flex;
   flex-wrap: wrap;
   align-items: start;
-  gap: var(--space-sm);
-  margin-block-start: var(--space-sm);
+  gap: var(--space-12);
+  margin-block-start: var(--space-12);
 
   .widget-configurator__size {
     flex: 1 1 7rem;
@@ -322,7 +198,7 @@
 }
 
 .widget-configurator__radius {
-  margin-block-start: var(--space-md);
+  margin-block-start: var(--space-16);
 }
 
 .widget-configurator__size {
@@ -333,7 +209,7 @@
   display: flex;
   flex-wrap: wrap;
   justify-content: space-between;
-  gap: var(--space-xs);
+  gap: var(--space-8);
   color: var(--vr-text-2);
   font-size: 0.8125rem;
 
@@ -369,12 +245,12 @@
 .widget-configurator__launcher {
   display: flex;
   width: fit-content;
-  min-height: 48px;
+  min-height: var(--size-48);
   align-items: center;
-  gap: var(--space-xs);
-  margin-block-start: var(--space-sm);
+  gap: var(--space-8);
+  margin-block-start: var(--space-12);
   margin-inline-start: auto;
-  padding-inline: var(--space-md);
+  padding-inline: var(--space-16);
   border: 1px solid color-mix(in srgb, var(--vr-text) 12%, transparent);
   border-radius: var(--radius-pill);
   font-size: 0.8125rem;
@@ -387,8 +263,8 @@
   display: flex;
   align-items: flex-start;
   justify-content: center;
-  gap: var(--space-xs);
-  margin: var(--space-md) 0 0;
+  gap: var(--space-8);
+  margin: var(--space-16) 0 0;
   color: var(--vr-text-muted);
   font-size: 0.75rem;
   line-height: 1.5;
@@ -400,52 +276,29 @@
 }
 
 .widget-configurator__code {
-  margin-block-start: var(--space-lg);
-  padding: var(--space-lg);
+  margin-block-start: var(--space-24);
+  padding: var(--space-24);
 
   > p {
     color: var(--vr-text-2);
     font-size: 0.875rem;
     line-height: 1.6;
   }
-
-  textarea {
-    display: block;
-    width: 100%;
-    min-height: 128px;
-    resize: vertical;
-    padding: var(--space-md);
-    border: 1px solid var(--vr-line-strong);
-    border-radius: var(--radius-md);
-    background: var(--vr-bg);
-    color: var(--vr-text-2);
-    font-family: var(--font-mono);
-    font-size: 0.75rem;
-    line-height: 1.75;
-  }
 }
 
 .widget-configurator__code-head {
   flex-wrap: wrap;
-  gap: var(--space-md);
-  margin-block-end: var(--space-xs);
-
-  .widget-configurator__copy {
-    min-inline-size: 36px;
-    min-block-size: 36px;
-    padding: 0;
-    border-radius: var(--radius-sm);
-    color: var(--vr-text-2);
-  }
+  gap: var(--space-16);
+  margin-block-end: var(--space-8);
 }
 
 .widget-configurator__code > .widget-configurator__error {
   color: var(--vr-danger);
 }
 
-.widget-configurator :where(a, button, select, textarea, input[type='color']):focus-visible {
-  outline: 2px solid var(--focus-border);
-  outline-offset: 3px;
+.widget-configurator :where(a, .widget-configurator__swatch):focus-visible {
+  outline: var(--space-2) solid var(--vr-accent);
+  outline-offset: var(--space-2);
 }
 
 .widget-configurator__sr-only {
@@ -455,30 +308,30 @@
 @include below($bp-narrow) {
   .widget-configurator__builder {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
-    gap: var(--space-md);
+    gap: var(--space-16);
   }
 
   .widget-configurator__settings,
   .widget-configurator__code {
-    padding: var(--space-md);
+    padding: var(--space-16);
   }
 
   .widget-configurator__canvas {
-    padding: var(--space-md);
+    padding: var(--space-16);
   }
 }
 
 @media (max-width: 760px) {
   .widget-configurator {
-    padding: var(--space-md) var(--space-md) var(--space-xl);
+    padding: var(--space-16) var(--space-16) var(--space-32);
   }
 
   .widget-configurator__builder {
     grid-template-columns: minmax(0, 1fr);
-    gap: var(--space-lg);
+    gap: var(--space-24);
   }
 
   .widget-configurator__header {
-    margin-block: var(--space-lg);
+    margin-block: var(--space-24);
   }
 }

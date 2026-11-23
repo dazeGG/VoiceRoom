@@ -4,14 +4,14 @@
 import { installWebCallPortsForTest } from '../helpers/call-ports';
 import { expect, test, vi } from 'vitest';
 
-vi.mock('@voice-room/call/engine/ui/toast', () => ({ showToast: vi.fn() }));
+vi.mock('@voiceroom/call/engine/ui/toast', () => ({ showToast: vi.fn() }));
 
 test('leaving a room the lobby hosts tells the lobby which room it was', async () => {
   vi.resetModules();
   await installWebCallPortsForTest();
-  const { handleLeaveButtonClick } = await import('@voice-room/call/engine/room/room');
-  const { setRoomEmbedded, setRoomShell } = await import('@voice-room/call/engine/core/embed');
-  const { state } = await import('@voice-room/call/engine/core/room-runtime.store');
+  const { handleLeaveButtonClick } = await import('@voiceroom/call/engine/room/room');
+  const { setRoomEmbedded, setRoomShell } = await import('@voiceroom/call/engine/core/embed');
+  const { state } = await import('@voiceroom/call/engine/core/room-runtime.store');
   const shell = { roomLeft: vi.fn<(roomId: string) => void>(), roomsChanged: vi.fn<(roomId: string) => void>() };
   setRoomEmbedded(true);
   setRoomShell(shell);

@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
-import { MEET_CHAT_MAX_BYTES } from '@voice-room/shared/contracts/realtime';
-import { cleanName } from '@voice-room/shared/validation';
+import { MEET_CHAT_MAX_BYTES } from '@voiceroom/shared/contracts/realtime';
+import { cleanName } from '@voiceroom/shared/validation';
 import { roomAllowsEphemeralChat } from '../domains/rooms/room-surface.policy.ts';
 import { createRateLimiter } from '../lib/rate-limit.ts';
 import { buildServerEnvelope } from './envelope.ts';

@@ -1,1 +1,1 @@
-export * from '@voice-room/call/engine/core/mobile-call-ui.store';
+export * from '@voiceroom/call/engine/core/mobile-call-ui.store';

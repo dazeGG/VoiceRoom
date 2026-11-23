@@ -31,7 +31,7 @@ body.screen--not-found {
   width: min(100%, 1020px);
   min-height: min(760px, calc(100dvh - 116px));
   margin-inline: auto;
-  padding-bottom: clamp(40px, 9vh, 90px);
+  padding-bottom: clamp(var(--space-40), 9vh, 90px);
 }
 
 // Bleeds off the bottom-right of the viewport, behind everything (z-index -1
@@ -58,7 +58,7 @@ body.screen--not-found {
 
 .not-found__mascot {
   display: inline-flex;
-  margin-bottom: 22px;
+  margin-bottom: var(--space-20);
 }
 
 .not-found__title {
@@ -75,7 +75,7 @@ body.screen--not-found {
 
 .not-found__copy {
   max-width: 520px;
-  margin: 26px 0 0;
+  margin: var(--space-24) 0 0;
   font-size: 1.125rem;
   line-height: 1.55;
   color: var(--vr-text-muted);
@@ -84,13 +84,13 @@ body.screen--not-found {
 .not-found__code {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  padding: 4px 10px;
+  gap: var(--space-6);
+  padding: var(--space-4) var(--space-8);
   border: 1px solid var(--vr-line-strong);
-  border-radius: 8px;
+  border-radius: var(--radius-8);
   background: var(--vr-surface-3);
   font-family: var(--font-mono);
-  font-size: 0.90625rem;
+  font-size: 15px;
   letter-spacing: 0.04em;
   color: var(--vr-text-2);
   vertical-align: middle;
@@ -98,24 +98,24 @@ body.screen--not-found {
 }
 
 .not-found__code-dot {
-  width: 6px;
-  height: 6px;
+  width: var(--space-6);
+  height: var(--space-6);
   flex: 0 0 auto;
   border-radius: 50%;
   background: var(--vr-danger);
 }
 
 .not-found__actions {
-  margin-top: 34px;
+  margin-top: var(--space-32);
 }
 
 .not-found__home {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--space-8);
   border: none;
-  border-radius: 13px;
-  padding: 14px 22px;
+  border-radius: var(--radius-12);
+  padding: var(--space-12) var(--space-20);
   background: var(--vr-accent);
   color: var(--vr-accent-ink);
   font-family: var(--font-ui);
@@ -138,9 +138,8 @@ body.screen--not-found {
   }
 
   &:focus-visible {
-    outline: none;
-    border-color: var(--focus-border);
-    box-shadow: none;
+    outline: var(--space-2) solid var(--vr-accent);
+    outline-offset: var(--space-2);
   }
 
   svg {

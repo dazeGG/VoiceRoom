@@ -1,0 +1,176 @@
+@use 'pkg:@voiceroom/ui-kit/styles/mixins' as ui;
+
+* {
+  box-sizing: border-box;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+body {
+  margin: 0;
+  background: var(--vr-bg);
+  color: var(--vr-text);
+  font: 400 0.9375rem/1.45 var(--font-ui);
+}
+
+a {
+  color: inherit;
+}
+
+.admin-startup {
+  display: grid;
+  min-height: 60dvh;
+  place-items: center;
+  color: var(--vr-text-muted);
+
+  &--failed {
+    display: block;
+    padding: var(--space-24);
+  }
+
+  &__status {
+    display: flex;
+    align-items: center;
+    gap: var(--space-8);
+  }
+}
+
+.admin-frame {
+  display: flex;
+  height: 100dvh;
+  overflow: hidden;
+
+  &__column {
+    display: flex;
+    min-width: 0;
+    flex: 1;
+    flex-direction: column;
+  }
+
+  &__main {
+    min-height: 0;
+    flex: 1;
+    overflow: auto;
+  }
+
+  &__content {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: var(--space-20);
+    padding: var(--space-24) var(--space-32) var(--size-56);
+
+    @include ui.below(ui.$bp-phone) {
+      padding-inline: var(--space-16);
+    }
+  }
+}
+
+.admin-topbar {
+  z-index: 1;
+  display: flex;
+  min-height: var(--space-64);
+  align-items: center;
+  gap: var(--space-16);
+  border-bottom: calc(var(--space-2) / 2) solid var(--vr-line);
+  padding: var(--space-8) var(--space-32);
+  background: var(--vr-bg);
+
+  &__location {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: var(--space-8);
+  }
+
+  &__crumb,
+  &__still {
+    color: var(--vr-text-muted);
+    font-size: 0.8125rem;
+  }
+
+  &__chevron {
+    width: var(--icon-16);
+    height: var(--icon-16);
+    flex: none;
+    color: var(--vr-text-3);
+  }
+
+  &__title {
+    overflow: hidden;
+    max-width: calc(var(--space-64) * 5 + var(--space-40));
+    margin: 0;
+    font-size: 1.125rem;
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  @include ui.below(ui.$bp-narrow) {
+    flex-wrap: wrap;
+    gap: var(--space-8) var(--space-12);
+    padding-inline: var(--space-16);
+  }
+}
+
+.admin-freshness {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: var(--space-8);
+
+  &__status {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: var(--space-8);
+    color: var(--vr-text-2);
+    font-size: 0.8125rem;
+    font-variant-numeric: tabular-nums;
+  }
+
+  &__ago,
+  &__every {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__every {
+    color: var(--vr-text-muted);
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    &__reload[aria-busy='true'] svg {
+      animation: admin-refresh 800ms linear infinite;
+    }
+  }
+}
+
+@keyframes admin-refresh {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.admin-search {
+  position: relative;
+  max-width: calc(var(--space-64) * 8 + var(--space-8));
+  min-width: var(--space-64);
+  flex: 1;
+  margin-inline: auto;
+
+  @include ui.below(ui.$bp-narrow) {
+    max-width: none;
+    flex-basis: 100%;
+    order: 1;
+  }
+
+  @include ui.below(ui.$bp-phone) {
+    &__shortcut {
+      display: none;
+    }
+  }
+}

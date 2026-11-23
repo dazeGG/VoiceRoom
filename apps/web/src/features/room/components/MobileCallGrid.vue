@@ -1,10 +1,11 @@
 <script setup lang="ts">
+import { Pressable } from '@voiceroom/ui-kit/components';
 // Everyone at once, filling the screen: rows of equal height, the tiles of a
 // row sharing its width. With no camera on the tiles keep the room stage's
 // 16:9 shape instead. Past nine people the grid pages sideways.
 import { t } from '@/shared/i18n';
 import { computed, ref } from 'vue';
-import type { Participant } from '@voice-room/call/engine/core/types';
+import type { Participant } from '@voiceroom/call/engine/core/types';
 import { useMobileCallUiStore } from '@/features/room/mobile-call-ui.store';
 import MobileCallTile from './MobileCallTile.vue';
 import MobileCameraFlip from './MobileCameraFlip.vue';
@@ -82,15 +83,14 @@ function tapTile(participant: Participant): void {
       :aria-label="t('Страницы')"
       :inert="!mobileCall.chromeVisible"
     >
-      <button
+      <Pressable
         v-for="(_, index) in pages"
         :key="index"
-        type="button"
         class="mobile-call-grid__dot"
         :aria-label="t('Страница {p0}', { p0: index + 1 })"
         :aria-current="index === currentPage ? 'page' : undefined"
         @click="goToPage(index)"
-      ></button>
+      ></Pressable>
     </div>
   </div>
 </template>

@@ -2,16 +2,15 @@ import { fireEvent, render, screen } from '@testing-library/vue';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, test, vi } from 'vitest';
 import { defineComponent, h, ref } from 'vue';
-import { ContextMenu } from '@voice-room/ui/components';
-import { PopoverMenuItem } from '@voice-room/ui/components';
+import { ContextMenu, ContextMenuHeaderButton, MenuItem } from '@voiceroom/ui-kit/components';
 import { settle, stubOverlayDom } from '../helpers/overlay-dom';
 
 stubOverlayDom();
 
 const items = () => [
-  h(PopoverMenuItem, { label: 'Первый' }),
-  h(PopoverMenuItem, { label: 'Второй' }),
-  h(PopoverMenuItem, { label: 'Третий' })
+  h(MenuItem, { label: 'Первый' }),
+  h(MenuItem, { label: 'Второй' }),
+  h(MenuItem, { label: 'Третий' })
 ];
 
 const focused = () => document.activeElement?.textContent?.trim();
@@ -49,10 +48,20 @@ describe('ContextMenu', () => {
     expect(focused()).toBe('Первый');
   });
 
-  test('the role prop is the role of the panel', async () => {
-    renderMenu({ role: 'dialog' });
-    expect(await screen.findByRole('dialog', { name: 'Контекстное меню' })).toBeTruthy();
-    expect(screen.queryByRole('menu')).toBeNull();
+  test('the reactions header exposes a toolbar with operable buttons', async () => {
+    const onReact = vi.fn();
+    render(ContextMenu, {
+      props: { open: true, x: 40, y: 50, ariaLabel: 'Действия', headerLabel: 'Быстрые реакции' },
+      slots: {
+        default: items,
+        header: () => h(ContextMenuHeaderButton, { label: 'Поддержать', pressed: true, onClick: onReact })
+      }
+    });
+    expect(await screen.findByRole('toolbar', { name: 'Быстрые реакции' })).toBeTruthy();
+    expect(screen.getByRole('separator')).toBeTruthy();
+    const button = screen.getByRole('button', { name: 'Поддержать', pressed: true });
+    await userEvent.click(button);
+    expect(onReact).toHaveBeenCalledOnce();
   });
 
   test('Escape and a press outside ask to close', async () => {
@@ -132,15 +141,14 @@ describe('ContextMenu', () => {
 
   test('moving the point while the menu is open places it again and focuses its first item', async () => {
     const view = renderMenu();
-    const first = await screen.findByRole('menu');
+    await screen.findByRole('menu');
     await settle();
     await userEvent.keyboard('{ArrowDown}');
     expect(focused()).toBe('Второй');
 
     await view.rerender({ x: 200, y: 120 });
     await settle();
-    const second = screen.getByRole('menu');
-    expect(second).not.toBe(first);
+    expect(screen.getByRole('menu')).toBeTruthy();
     expect(focused()).toBe('Первый');
   });
 

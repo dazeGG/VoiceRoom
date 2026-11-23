@@ -1,0 +1,71 @@
+// Popover: floating panel chrome. Popover owns open/close + placement;
+// consumers fill the slots.
+//
+// Svelte class -> BEM class
+//   .popover-root                          -> .popover
+//   .popover-panel                         -> .popover__panel
+//   .popover-panel--closed                 -> .popover__panel--closed
+//   .popover-panel--floating               -> .popover__panel--floating (z-index only; Reka places the panel)
+//   [data-placement]                       -> gone: Reka places the panel
+
+// A grid root drops the whitespace text run Svelte left between the trigger
+// and the panel anchor. As a block box that run added a full line box under
+// the trigger, which inflated the root and pushed the trigger off the centre
+// line of any toolbar hosting it.
+.popover {
+  position: relative;
+  display: grid;
+  flex: none;
+}
+
+.popover__panel {
+  z-index: 50;
+  --popover-available-height: var(--reka-popover-content-available-height);
+  box-sizing: border-box;
+  display: grid;
+  gap: var(--space-16);
+  width: 300px;
+  max-width: calc(100vw - var(--space-16));
+  padding: var(--space-16);
+  border: calc(var(--space-2) / 2) solid var(--vr-line-strong);
+  border-radius: var(--radius-12);
+  background: var(--vr-surface-2);
+  box-shadow: var(--vr-shadow-popover);
+}
+
+.ui-popover__title {
+  margin: 0;
+  color: var(--vr-text);
+  font: 600 0.875rem/1.3 var(--font-ui);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .popover__panel:not(.popover__panel--closed) {
+    animation: popover-panel-enter 120ms ease-out;
+  }
+}
+
+@keyframes popover-panel-enter {
+  from {
+    opacity: 0;
+    transform: translateY(var(--space-4));
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.popover__panel--floating {
+  z-index: 150;
+}
+
+.popover__panel--flush {
+  padding: 0;
+}
+
+.popover__panel--closed {
+  display: none !important;
+  pointer-events: none;
+}

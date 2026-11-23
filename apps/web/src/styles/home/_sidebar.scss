@@ -9,7 +9,6 @@
 //   .lv-side-head               -> .sidebar__head
 //   .lv-brand-mark              -> .sidebar__brand-mark
 //   .lv-brand-name              -> .sidebar__brand-name
-//   .lobby-gear                 -> .sidebar__icon-button (also .lv-admin-button, .lv-notification-button)
 //   .lv-notification-count      -> .sidebar__count
 //   .lv-side-scroll             -> .sidebar__scroll
 //   .lv-sec-head                -> .sidebar__section-head
@@ -30,19 +29,10 @@
 //   .lv-profile-name            -> .sidebar__profile-name
 //   .lv-profile-handle          -> .sidebar__profile-handle
 //   .lv-profile-actions         -> .sidebar__profile-actions
-//   .lv-status-popover          -> .sidebar__status-popover (the Popover's panelClass)
-//   .lv-status-list             -> .sidebar__status-list
-//   .lv-status-option           -> .sidebar__status-option
 //   .lv-status-dot              -> .sidebar__status-dot
-//   .lv-status-copy             -> .sidebar__status-copy
-//   .lv-status-label            -> .sidebar__status-label
-//   .lv-status-note             -> .sidebar__status-note
-//   .lv-status-check            -> .sidebar__status-check
 //
 // [data-*] and state classes -> aria or modifier
 //   .lv-row.is-active                    -> .sidebar__row[aria-current='true']
-//   .lv-notification-button.is-open      -> .sidebar__icon-button[aria-expanded='true']
-//   .lv-status-option.is-selected        -> .sidebar__status-option[aria-selected='true']
 //   .lv-status-dot[data-status='online'] -> .sidebar__status-dot--online (--away, --dnd)
 // Not here: .lobby-gear on the download trigger (SidebarDownload) is that component's.
 
@@ -58,22 +48,22 @@
 .sidebar__top {
   display: flex;
   align-items: center;
-  gap: 2px;
-  margin: 8px 42px 4px 8px;
+  gap: var(--space-2);
+  margin: var(--space-8) var(--space-40) var(--space-4) var(--space-8);
   flex: none;
 }
 
 .sidebar__head {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--space-8);
   margin: 0;
-  padding: 12px;
-  padding-inline-end: 4px;
+  padding: var(--space-12);
+  padding-inline-end: var(--space-4);
   flex: 1;
   min-width: 0;
   border: none;
-  border-radius: 12px;
+  border-radius: var(--radius-12);
   background: transparent;
   color: inherit;
   cursor: pointer;
@@ -85,14 +75,14 @@
   }
 
   &:focus-visible {
-    outline: 2px solid var(--vr-accent);
-    outline-offset: -2px;
+    outline: var(--space-2) solid var(--vr-accent);
+    outline-offset: calc(-1 * var(--space-2));
   }
 }
 
 .sidebar__brand-mark {
-  width: 22px;
-  height: 22px;
+  width: var(--size-24);
+  height: var(--size-24);
   flex: none;
   background: var(--vr-accent);
   mask: url('/voiceroom-mascot.svg') center / contain no-repeat;
@@ -109,44 +99,18 @@
   letter-spacing: -0.01em;
 }
 
-.sidebar__icon-button {
-  position: relative;
-  flex: none;
-  width: 32px;
-  height: 32px;
-  border-radius: 9px;
-  border: none;
-  background: transparent;
-  color: var(--vr-text-2);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: background 0.15s ease;
-
-  &:hover {
-    background: var(--vr-hover);
-    color: var(--vr-text);
-  }
-
-  &[aria-expanded='true']:not(.lobby-shell__sidebar-toggle) {
-    background: var(--vr-surface-3);
-    color: var(--vr-text);
-  }
-}
-
 .sidebar__count {
   position: absolute;
   top: -6px;
   right: -6px;
   box-sizing: content-box;
   display: grid;
-  min-width: 10px;
-  height: 14px;
+  min-width: var(--space-8);
+  height: var(--space-12);
   place-items: center;
   border: 2px solid var(--vr-surface);
-  border-radius: 999px;
-  padding: 0 2px;
+  border-radius: var(--radius-pill);
+  padding: 0 var(--space-2);
   background: var(--vr-accent);
   color: var(--vr-accent-ink);
   font-size: 0.5625rem;
@@ -157,62 +121,43 @@
 .sidebar__scroll {
   flex: 1;
   overflow: auto;
-  padding: 4px 10px;
+  padding: var(--space-4) var(--space-8);
 }
 
 .sidebar__section-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 10px 6px;
+  padding: var(--space-8) var(--space-8) var(--space-6);
   color: var(--vr-text-2);
-  font-size: 0.78125rem;
+  font-size: 13px;
   font-weight: 500;
 }
 
 .sidebar__section-title {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-6);
 }
 
 .sidebar__section-count {
   color: var(--vr-text-muted);
   font-family: var(--font-mono);
-  font-size: 0.71875rem;
+  font-size: 12px;
   font-weight: 400;
 }
 
 .sidebar__section-actions {
   display: flex;
-  gap: 2px;
-}
-
-.sidebar__mini-button {
-  position: relative;
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
-  border: none;
-  background: transparent;
-  color: var(--vr-text-2);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-
-  &:hover {
-    background: var(--vr-hover);
-    color: var(--vr-text);
-  }
+  gap: var(--space-2);
 }
 
 .sidebar__mini-button-dot {
   position: absolute;
   top: 3px;
   right: 3px;
-  width: 7px;
-  height: 7px;
+  width: var(--space-6);
+  height: var(--space-6);
   border-radius: 50%;
   background: var(--vr-accent);
   box-shadow: 0 0 0 2px var(--vr-surface);
@@ -222,11 +167,11 @@
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 12px;
-  margin: 4px 4px 0;
-  padding: 16px;
+  gap: var(--space-12);
+  margin: var(--space-4) var(--space-4) 0;
+  padding: var(--space-16);
   border: 1px dashed var(--vr-line-strong);
-  border-radius: 14px;
+  border-radius: var(--radius-12);
   color: var(--vr-text-2);
 
   p {
@@ -240,15 +185,15 @@
 .sidebar__row {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--space-8);
   width: 100%;
   border: none;
   background: transparent;
   cursor: pointer;
   text-align: left;
   color: inherit;
-  height: 42px;
-  border-radius: 10px;
+  height: var(--size-40);
+  border-radius: var(--radius-10);
   padding: var(--lv-row-pad);
   font-family: var(--font-ui);
   transition: background 0.13s ease;
@@ -270,7 +215,7 @@
 .sidebar__row-title {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-6);
   min-width: 0;
 }
 
@@ -294,8 +239,8 @@
 .sidebar__profile {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 12px 16px;
+  gap: var(--space-8);
+  padding: var(--space-12) var(--space-16);
   border-top: 1px solid var(--vr-line);
   flex: none;
 }
@@ -305,7 +250,7 @@
   flex: 1;
   min-width: 0;
   align-items: center;
-  gap: 10px;
+  gap: var(--space-8);
   border: 0;
   padding: 0;
   background: transparent;
@@ -332,7 +277,7 @@
 .sidebar__profile-handle {
   color: var(--vr-text-muted);
   font-family: var(--font-mono);
-  font-size: 0.71875rem;
+  font-size: 12px;
 }
 
 .sidebar__profile-actions {
@@ -340,54 +285,14 @@
   flex: none;
   align-items: center;
   justify-content: flex-end;
-  gap: 2px;
+  gap: var(--space-2);
   margin-left: auto;
 }
 
-.sidebar__status-popover {
-  width: min(286px, calc(100vw - 28px));
-}
-
-.sidebar__status-list {
-  display: grid;
-  gap: 2px;
-}
-
-.sidebar__status-option {
-  display: grid;
-  grid-template-columns: 11px minmax(0, 1fr) 18px;
-  align-items: center;
-  gap: 11px;
-  width: 100%;
-  min-height: 40px;
-  padding: 8px 10px;
-  border: 0;
-  border-radius: 8px;
-  background: transparent;
-  color: var(--vr-text);
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-  transition:
-    background 140ms ease,
-    color 140ms ease;
-
-  &:hover,
-  &:focus-visible,
-  &[aria-selected='true'] {
-    background: var(--vr-hover);
-  }
-
-  &:disabled {
-    cursor: wait;
-    opacity: 0.64;
-  }
-}
-
 .sidebar__status-dot {
-  width: 11px;
-  height: 11px;
-  border-radius: 50%;
+  width: var(--icon-12);
+  height: var(--icon-12);
+  border-radius: var(--radius-pill);
   background: var(--vr-offline);
 }
 
@@ -401,27 +306,4 @@
 
 .sidebar__status-dot--dnd {
   background: var(--vr-dnd);
-}
-
-.sidebar__status-copy {
-  display: grid;
-  gap: 3px;
-  min-width: 0;
-}
-
-.sidebar__status-label {
-  color: currentColor;
-  font-size: 0.875rem;
-  line-height: 1.25;
-}
-
-.sidebar__status-note {
-  max-width: 29ch;
-  color: var(--vr-text-muted);
-  font-size: 0.71875rem;
-  line-height: 1.4;
-}
-
-.sidebar__status-check {
-  color: var(--vr-accent);
 }

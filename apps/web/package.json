@@ -1,6 +1,6 @@
 {
-  "name": "@voice-room/web",
-  "version": "1.0.0",
+  "name": "@voiceroom/web",
+  "version": "1.1.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -17,9 +17,10 @@
   "dependencies": {
     "@fortawesome/free-brands-svg-icons": "^7.3.0",
     "@lucide/vue": "^1.61.0",
-    "@voice-room/call": "file:../../packages/call",
-    "@voice-room/shared": "file:../../packages/shared",
-    "@voice-room/ui": "file:../../packages/ui",
+    "@voiceroom/call": "file:../../packages/call",
+    "@voiceroom/shared": "file:../../packages/shared",
+    "@voiceroom/ui": "file:../../packages/ui",
+    "@voiceroom/ui-kit": "file:../../packages/ui-kit",
     "livekit-client": "^2.22.4",
     "pinia": "^4.1.0",
     "reka-ui": "^2.11.0",

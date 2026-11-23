@@ -375,11 +375,10 @@ function onKeydown(event: KeyboardEvent): void {
   emit('keydown', event);
   if (event.defaultPrevented || event.isComposing) return;
   if (event.key === 'Tab' && !event.shiftKey && formatting.value) {
-    const toolbar = root.value?.nextElementSibling;
-    const button = toolbar?.querySelector<HTMLButtonElement>('button[tabindex="0"], button:not([tabindex])');
-    if (button) {
+    const toolbar = root.value?.nextElementSibling?.querySelector<HTMLElement>('[role="toolbar"]');
+    if (toolbar) {
       event.preventDefault();
-      button.focus();
+      toolbar.focus();
       return;
     }
   }

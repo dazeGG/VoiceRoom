@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Field, Spinner, SettingRow, SettingsGroup, TextField, Button } from '@voiceroom/ui-kit/components';
 import { t } from '@/shared/i18n';
 import { KeyRound, Laptop, MonitorSmartphone } from '@lucide/vue';
 import { computed, onMounted, ref, watch } from 'vue';
@@ -13,7 +14,7 @@ import {
 } from '@/api/auth';
 import { isValidPassword, PASSWORD_MIN_LENGTH } from '@/features/auth/account';
 import { useSessionStore } from '@/features/auth/session.store';
-import { iconMd } from '@/shared/ui/icons';
+import { iconMd } from '@voiceroom/ui-kit/icon-defaults';
 import { formatLastSeen, recoveryCodesSummary, sessionDeviceLabel } from '../model/account-security';
 import type { ToastOptions } from '../model/toasts.store';
 import RecoveryCodesDialog from './RecoveryCodesDialog.vue';
@@ -34,8 +35,8 @@ const emit = defineEmits<{ toast: [message: string, options?: ToastOptions] }>()
 
 const { expectSessionEnd, clearSession } = useSessionStore();
 
-const recoveryCodesButton = ref<HTMLButtonElement>();
-const currentPasswordInput = ref<HTMLInputElement>();
+const recoveryCodesButton = ref<{ button: HTMLElement | null }>();
+const currentPasswordInput = ref<{ input: HTMLInputElement | null }>();
 
 const recoveryCodes = ref<RecoveryCodesStatus | null>(null);
 const sessions = ref<AccountSession[]>([]);
@@ -58,14 +59,15 @@ const recoveryCodesHighlighted = computed(() => props.highlightRecoveryCodes && 
 watch(
   recoveryCodesHighlighted,
   (highlighted) => {
-    if (highlighted) recoveryCodesButton.value?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    if (highlighted) recoveryCodesButton.value?.button?.scrollIntoView({ block: 'center', behavior: 'smooth' });
   },
   { flush: 'post' }
 );
 
 watch(
   [() => props.highlightPassword, currentPasswordInput],
-  ([highlight, input], _before, onCleanup) => {
+  ([highlight, field], _before, onCleanup) => {
+    const input = field?.input;
     if (!highlight || !input) return;
     // After the settings dialog has placed its own initial focus.
     const timer = window.setTimeout(() => {
@@ -156,140 +158,144 @@ async function endOtherSessions(): Promise<void> {
 
 <template>
   <div class="account-security">
-    <section class="settings__notification-group" aria-labelledby="accountPasswordTitle">
-      <span id="accountPasswordTitle" class="settings__section-title">{{ t('Пароль') }}</span>
+    <SettingsGroup :heading="t('Пароль')">
       <form class="account-security__password" @submit.prevent="submitPasswordChange">
         <div class="settings__password-fields">
-          <label>
-            <span class="settings__field-label">{{ t('Текущий пароль') }}</span>
-            <input
+          <Field :label="t('Текущий пароль')">
+            <TextField
               ref="currentPasswordInput"
               v-model="currentPassword"
-              class="settings__input"
+              name="current-password"
               type="password"
               placeholder="••••••••"
               autocomplete="current-password"
             />
-          </label>
-          <label>
-            <span class="settings__field-label">{{ t('Новый пароль') }}</span>
-            <input
+          </Field>
+          <Field :label="t('Новый пароль')">
+            <TextField
               v-model="newPassword"
-              class="settings__input"
+              name="new-password"
               type="password"
               :placeholder="t('Минимум {p0} символов', { p0: PASSWORD_MIN_LENGTH })"
               autocomplete="new-password"
             />
-          </label>
+          </Field>
         </div>
         <div class="account-security__password-foot">
           <div class="settings__gate-hint">{{ t('После смены пароля завершатся все сеансы, включая этот.') }}</div>
-          <button
+          <Button
+            variant="primary"
             class="settings__save account-security__action"
             :class="{ 'account-security__action--highlight': highlightPassword }"
             type="submit"
             :disabled="changingPassword || !currentPassword || !newPassword"
           >
-            <span v-if="changingPassword" class="home-spinner" aria-hidden="true"></span> {{ t('Сменить пароль') }}
-          </button>
+            <Spinner v-if="changingPassword" aria-hidden="true" /> {{ t('Сменить пароль') }}
+          </Button>
         </div>
       </form>
-    </section>
+    </SettingsGroup>
 
-    <section class="settings__notification-group" aria-labelledby="recoveryCodesTitle">
-      <span id="recoveryCodesTitle" class="settings__section-title">{{ t('Коды восстановления') }}</span>
+    <SettingsGroup :heading="t('Коды восстановления')">
       <div v-if="loading && !recoveryCodes" class="settings__notification-empty" role="status">
         {{ t('Загружаем…') }}
       </div>
       <template v-else-if="recoveryCodes">
-        <div
-          class="settings__notification-row account-security__row"
+        <SettingRow
           :class="{ 'account-security__row--warning': recoveryCodes.remaining === 0 || lowOnCodes }"
+          :label="recoveryCodes.remaining > 0 ? t('Коды созданы') : t('Коды не созданы')"
+          :description="recoveryCodesSummary(recoveryCodes)"
         >
-          <span class="account-security__icon" aria-hidden="true"><KeyRound v-bind="iconMd" /></span>
-          <span class="settings__notification-name">
-            <strong>{{ recoveryCodes.remaining > 0 ? t('Коды созданы') : t('Коды не созданы') }}</strong>
-            <small>{{ recoveryCodesSummary(recoveryCodes) }}</small>
-          </span>
-          <button
-            ref="recoveryCodesButton"
-            class="settings__save account-security__action"
-            :class="{ 'account-security__action--highlight': recoveryCodesHighlighted }"
-            type="button"
-            @click="codesDialogOpen = true"
-          >
-            {{ recoveryCodes.generatedAt ? t('Создать новые') : t('Создать коды') }}
-          </button>
-        </div>
+          <template #leading>
+            <span class="account-security__icon" aria-hidden="true"><KeyRound v-bind="iconMd" /></span>
+          </template>
+          <template #control>
+            <Button
+              ref="recoveryCodesButton"
+              variant="primary"
+              class="settings__save account-security__action"
+              :class="{ 'account-security__action--highlight': recoveryCodesHighlighted }"
+              @click="codesDialogOpen = true"
+            >
+              {{ recoveryCodes.generatedAt ? t('Создать новые') : t('Создать коды') }}
+            </Button>
+          </template>
+        </SettingRow>
         <div v-if="lowOnCodes" class="settings__gate-hint">
           {{ t('Кодов почти не осталось — создайте новый набор.') }}
         </div>
       </template>
-    </section>
+    </SettingsGroup>
 
-    <section class="settings__notification-group" aria-labelledby="accountSessionsTitle">
-      <div class="account-security__head">
-        <div>
-          <span id="accountSessionsTitle" class="settings__section-title">{{ t('Устройства') }}</span>
-          <div class="settings__gate-hint">
-            {{ t('Где открыт ваш аккаунт. Незнакомый сеанс завершите — пароль после этого лучше сменить.') }}
-          </div>
-        </div>
-        <button
-          v-if="hasOtherSessions"
+    <SettingsGroup
+      :heading="t('Устройства')"
+      :description="t('Где открыт ваш аккаунт. Незнакомый сеанс завершите — пароль после этого лучше сменить.')"
+    >
+      <template v-if="hasOtherSessions" #actions>
+        <Button
+          variant="ghost"
+          size="sm"
           class="settings__unblock-button"
-          type="button"
           :disabled="endingOthers || Boolean(endingSessionId)"
           @click="void endOtherSessions()"
         >
           {{ endingOthers ? t('Завершаем…') : t('Выйти на других устройствах') }}
-        </button>
-      </div>
+        </Button>
+      </template>
       <div v-if="loading && sessions.length === 0" class="settings__notification-empty" role="status">
         {{ t('Загружаем…') }}
       </div>
-      <div v-else-if="sessions.length > 0" class="settings__notification-list">
-        <div v-for="session in sessions" :key="session.id" class="settings__notification-row account-security__row">
-          <span class="account-security__icon" aria-hidden="true">
-            <MonitorSmartphone v-if="session.client === 'VoiceRoom Desktop'" v-bind="iconMd" />
-            <Laptop v-else v-bind="iconMd" />
-          </span>
-          <span class="settings__notification-name">
-            <strong>{{ sessionDeviceLabel(session) }}</strong>
-            <small>
-              {{ session.current ? t('Это устройство') : formatLastSeen(session.lastSeenAt)
-              }}{{ session.location ? ` · ${session.location}` : '' }}
-            </small>
-          </span>
-          <button
-            v-if="!session.current"
-            class="settings__unblock-button"
-            type="button"
-            :disabled="endingOthers || Boolean(endingSessionId)"
-            @click="void endSession(session)"
-          >
-            {{ endingSessionId === session.id ? t('Завершаем…') : t('Завершить') }}
-          </button>
-        </div>
-      </div>
+      <template v-else-if="sessions.length > 0">
+        <SettingRow
+          v-for="session in sessions"
+          :key="session.id"
+          role="group"
+          :aria-label="sessionDeviceLabel(session)"
+          :label="sessionDeviceLabel(session)"
+        >
+          <template #leading>
+            <span class="account-security__icon" aria-hidden="true">
+              <MonitorSmartphone v-if="session.client === 'VoiceRoom Desktop'" v-bind="iconMd" />
+              <Laptop v-else v-bind="iconMd" />
+            </span>
+          </template>
+          <template #description>
+            {{ session.current ? t('Это устройство') : formatLastSeen(session.lastSeenAt)
+            }}{{ session.location ? ` · ${session.location}` : '' }}
+          </template>
+          <template v-if="!session.current" #control>
+            <Button
+              variant="ghost"
+              size="sm"
+              class="settings__unblock-button"
+              :disabled="endingOthers || Boolean(endingSessionId)"
+              @click="void endSession(session)"
+            >
+              {{ endingSessionId === session.id ? t('Завершаем…') : t('Завершить') }}
+            </Button>
+          </template>
+        </SettingRow>
+      </template>
       <div v-else class="settings__notification-empty">{{ t('Активных сеансов нет.') }}</div>
       <div v-if="sessions.some((session) => session.location)" class="settings__gate-hint">
         {{ t('Город определяется по IP-адресу с помощью') }}
         <a href="https://db-ip.com" target="_blank" rel="noreferrer">DB-IP</a>{{ t('; сам адрес не сохраняется.') }}
       </div>
-    </section>
+    </SettingsGroup>
 
-    <section class="settings__notification-group" aria-labelledby="accountDeletionTitle">
-      <span id="accountDeletionTitle" class="settings__section-title">{{ t('Удаление аккаунта') }}</span>
-      <div class="account-security__danger">
-        <div class="settings__gate-hint">
-          {{ t('Аккаунт скроется сразу и удалится через 7 дней. До этого его можно восстановить, войдя с паролем.') }}
-        </div>
-        <button class="settings__unblock-button" type="button" @click="deleteDialogOpen = true">
-          {{ t('Удалить аккаунт') }}
-        </button>
-      </div>
-    </section>
+    <SettingsGroup :heading="t('Удаление аккаунта')">
+      <SettingRow
+        :description="
+          t('Аккаунт скроется сразу и удалится через 7 дней. До этого его можно восстановить, войдя с паролем.')
+        "
+      >
+        <template #control>
+          <Button variant="ghost" size="sm" class="settings__unblock-button" @click="deleteDialogOpen = true">
+            {{ t('Удалить аккаунт') }}
+          </Button>
+        </template>
+      </SettingRow>
+    </SettingsGroup>
   </div>
 
   <DeleteAccountDialog

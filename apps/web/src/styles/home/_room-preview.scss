@@ -16,14 +16,14 @@
 //   .lobby-preview-chat                       -> .room-preview__chat (rootClass of RoomChatPanel)
 //   .lobby-room-members                       -> .room-preview__members
 //   .lobby-room-members-body                  -> .room-preview__members-body
-//   .room-panel-tab-unread, [data-active]     -> .room-panel-tabs__unread, [aria-pressed] (room/_room-panel-tabs.scss)
+//   .room-panel-tab-unread, [data-active]     -> .room-panel-switches__unread, [aria-pressed] (room/_room-panel-switches.scss)
 //
 // [data-*] -> class
 //   .tile-grid[data-count='0']                -> .tile-grid--empty (as in the room's tile grid)
 //   data-preview-chat-open, data-members-open -> dropped (no rule read them)
 //   .participant[data-muted|data-screen]      -> .participant--muted / --screen (room/_participant.scss)
 
-@use 'pkg:@voice-room/ui/styles/mixins' as *;
+@use 'pkg:@voiceroom/ui-kit/styles/mixins' as *;
 
 // One grid, like the room: the top bar and the stage in the first column, the
 // chat or members panel beside them over the full height.
@@ -46,8 +46,8 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
-  padding: 0 20px;
+  gap: var(--space-16);
+  padding: 0 var(--space-20);
   box-sizing: border-box;
   min-height: var(--vr-room-head-h);
   border-bottom: 1px solid var(--vr-line);
@@ -63,7 +63,7 @@
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 10px;
+  gap: var(--space-8);
 }
 
 .room-preview__content {
@@ -101,7 +101,7 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 0 24px;
+  padding: 0 var(--space-24);
   text-align: center;
 }
 
@@ -118,11 +118,11 @@
   transform: translateX(-50%);
   z-index: 5;
   margin: 0;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--vr-danger-soft);
   color: var(--vr-danger);
-  padding: 8px 13px;
-  font-size: 0.78125rem;
+  padding: var(--space-8) var(--space-12);
+  font-size: 13px;
   font-weight: 600;
 }
 
@@ -147,7 +147,7 @@
 }
 
 .room-preview__members-body {
-  padding: 12px 10px 28px;
+  padding: var(--space-12) var(--space-8) var(--space-24);
 }
 
 @include below(1199px) {
@@ -174,6 +174,6 @@
     left: 12px;
     width: auto;
     border: 1px solid var(--vr-line-strong);
-    border-radius: 18px;
+    border-radius: var(--radius-16);
   }
 }

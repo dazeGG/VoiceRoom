@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import '@/styles/widget/_configurator.scss';
-import '@voice-room/ui/styles/widget/shell';
+import '@voiceroom/ui-kit/styles/widget/shell';
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
 import { ArrowLeft, Check, Copy, PanelTop, ShieldCheck } from '@lucide/vue';
 import {
@@ -15,18 +15,43 @@ import {
   normalizeWidgetColor,
   widgetEmbedMarkup,
   type WidgetConfig
-} from '@voice-room/shared/contracts/widget';
-import { createRoomCode } from '@voice-room/shared/validation';
-import { WidgetCallLayout, WidgetJoinControls } from '@voice-room/ui/widget';
-import { createWidgetFrameExpansion } from '@voice-room/ui/widget-frame-expansion';
-import { Button } from '@voice-room/ui/components';
-import { SegmentControl } from '@/shared/ui/SegmentControl';
-import type { SegmentOption } from '@/shared/ui/SegmentControl/types';
-import { Switch } from '@/shared/ui/Switch';
-import { Slider } from '@voice-room/ui/components';
+} from '@voiceroom/shared/contracts/widget';
+import { createRoomCode } from '@voiceroom/shared/validation';
+import { WidgetCallLayout, WidgetJoinControls } from '@voiceroom/ui/widget';
+import { createWidgetFrameExpansion } from '@voiceroom/ui/widget-frame-expansion';
+import {
+  Button,
+  Field,
+  IconButton,
+  NumberField,
+  SegmentControl,
+  Slider,
+  Switch,
+  Textarea,
+  TextField,
+  type SegmentOption,
+  Select,
+  ColorField
+} from '@voiceroom/ui-kit/components';
 import { copyText } from '@/shared/utils/clipboard';
 
 const config = reactive({ ...defaultWidgetConfig });
+const offset = ref<number | null>(config.offset);
+// Reka commits on blur. Keep the draft available to the preview while the user types.
+const offsetDraft = ref<number>();
+const previewOffset = computed(() => offsetDraft.value ?? offset.value ?? NaN);
+
+function previewTypedOffset(event: Event): void {
+  if (!(event.target instanceof HTMLInputElement)) return;
+  const typed = event.target.value.trim();
+  offsetDraft.value = typed ? Number(typed.replace(',', '.')) : NaN;
+}
+
+function commitOffset(value: number | null): void {
+  offset.value = value;
+  offsetDraft.value = undefined;
+}
+
 const cameraAllowed = ref(true);
 const stage = ref<HTMLElement | null>(null);
 const demoViewport = ref<HTMLElement | null>(null);
@@ -77,7 +102,7 @@ const copiedCode = ref('');
 let copyTimer: ReturnType<typeof setTimeout> | undefined;
 const failedCode = ref('');
 const showValidation = ref(false);
-const codeField = ref<HTMLTextAreaElement | null>(null);
+const codeField = ref<{ textarea: HTMLTextAreaElement | null } | null>(null);
 const placementOptions: SegmentOption<WidgetConfig['mode']>[] = [
   { value: 'inline', label: 'Внутри страницы' },
   { value: 'floating', label: 'Плавающая панель' }
@@ -93,6 +118,18 @@ const colorCodes = reactive({
   accent: config.accent
 });
 type ColorKey = keyof typeof colorCodes;
+const cornerOptions = [
+  { value: 'bottom-right', label: 'Справа внизу' },
+  { value: 'bottom-left', label: 'Слева внизу' },
+  { value: 'top-right', label: 'Справа вверху' },
+  { value: 'top-left', label: 'Слева вверху' }
+] as const;
+
+function selectCorner(value: string): void {
+  const option = cornerOptions.find((corner) => corner.value === value);
+  if (option) config.corner = option.value;
+}
+
 function updateColorCode(key: ColorKey, code: string) {
   colorCodes[key] = code;
   const color = normalizeWidgetColor(code);
@@ -105,6 +142,7 @@ const result = computed(() => {
   try {
     const settings = {
       ...config,
+      offset: previewOffset.value,
       ...(isFloating.value ? panelSize : {}),
       ...(cameraAllowed.value ? {} : { camera: false }),
       ...(heading.value === DEFAULT_WIDGET_TITLE ? {} : { title: heading.value })
@@ -172,8 +210,8 @@ async function copyCode() {
   } catch {
     if (result.value.code !== code) return;
     failedCode.value = code;
-    codeField.value?.focus();
-    codeField.value?.select();
+    codeField.value?.textarea?.focus();
+    codeField.value?.textarea?.select();
   }
 }
 </script>
@@ -202,6 +240,7 @@ async function copyCode() {
         <fieldset class="widget-configurator__group">
           <legend>Размещение</legend>
           <SegmentControl
+            layout="responsive"
             :value="config.mode"
             :options="placementOptions"
             v-bind="{ ariaLabel: 'Размещение' }"
@@ -215,24 +254,27 @@ async function copyCode() {
             }}
           </p>
           <div v-if="isFloating" class="widget-configurator__pair">
-            <label class="widget-configurator__field"
-              >Положение
-              <select v-model="config.corner" name="corner">
-                <option value="bottom-right">Справа внизу</option>
-                <option value="bottom-left">Слева внизу</option>
-                <option value="top-right">Справа вверху</option>
-                <option value="top-left">Слева вверху</option>
-              </select>
-            </label>
-            <label class="widget-configurator__field"
-              >Отступ
-              <span class="widget-configurator__number"
-                ><input v-model.number="config.offset" name="offset" type="number" min="0" max="48" /><span
-                  aria-hidden="true"
-                  >px</span
-                ></span
-              >
-            </label>
+            <Field label="Положение">
+              <Select
+                native
+                :model-value="config.corner"
+                name="corner"
+                :options="cornerOptions"
+                @value-change="selectCorner"
+              />
+            </Field>
+            <Field label="Отступ, px">
+              <NumberField
+                :model-value="offset"
+                name="offset"
+                :min="0"
+                :max="48"
+                allow-invalid
+                @input="previewTypedOffset"
+                @blur="offsetDraft = undefined"
+                @update:model-value="commitOffset"
+              />
+            </Field>
             <div v-for="(limits, dimension) in WIDGET_SIZE_LIMITS" :key="dimension" class="widget-configurator__size">
               <span class="widget-configurator__size-label">
                 <span>{{ sizeLabels[dimension] }}</span
@@ -251,32 +293,35 @@ async function copyCode() {
 
         <fieldset class="widget-configurator__group">
           <legend>Оформление</legend>
-          <label class="widget-configurator__field">
-            Заголовок виджета
-            <input v-model="title" class="widget-configurator__title-input" :maxlength="WIDGET_TITLE_LIMIT" />
-          </label>
+          <Field label="Заголовок виджета">
+            <TextField v-model="title" :maxlength="WIDGET_TITLE_LIMIT" />
+          </Field>
           <div class="widget-configurator__colors">
-            <div v-for="color in colors" :key="color.key" class="widget-configurator__color">
-              <label :for="`widget-${color.key}`">{{ color.label }}</label>
+            <Field
+              v-for="color in colors"
+              :key="color.key"
+              :label="`${color.label} (HEX или RGB)`"
+              :error="
+                showValidation && !normalizeWidgetColor(colorCodes[color.key]) ? 'Введите HEX или RGB.' : undefined
+              "
+            >
               <div class="widget-configurator__color-control">
-                <input
-                  :id="`widget-${color.key}`"
-                  :value="config[color.key]"
+                <ColorField
+                  secondary
+                  :model-value="config[color.key]"
                   :name="color.key"
-                  type="color"
-                  @input="updateColorCode(color.key, ($event.target as HTMLInputElement).value)"
+                  :aria-label="color.label"
+                  @update:model-value="updateColorCode(color.key, $event)"
                 />
-                <input
-                  :aria-label="`${color.label} (HEX или RGB)`"
-                  :aria-invalid="showValidation && !normalizeWidgetColor(colorCodes[color.key])"
-                  :value="colorCodes[color.key]"
-                  type="text"
+                <TextField
+                  :model-value="colorCodes[color.key]"
+                  variant="mono"
                   spellcheck="false"
                   autocomplete="off"
-                  @input="updateColorCode(color.key, ($event.target as HTMLInputElement).value)"
+                  @update:model-value="updateColorCode(color.key, $event)"
                 />
               </div>
-            </div>
+            </Field>
           </div>
           <div class="widget-configurator__radius widget-configurator__size">
             <span class="widget-configurator__size-label">
@@ -344,6 +389,7 @@ async function copyCode() {
           </div>
           <div class="widget-configurator__preview-actions">
             <SegmentControl
+              layout="responsive"
               :value="previewScreen"
               :options="screenOptions"
               v-bind="{ ariaLabel: 'Экран виджета' }"
@@ -360,7 +406,7 @@ async function copyCode() {
         </fieldset>
         <div
           class="widget-configurator__canvas"
-          :style="{ padding: config.mode === 'floating' ? `${config.offset}px` : undefined }"
+          :style="{ padding: config.mode === 'floating' ? `${previewOffset}px` : undefined }"
         >
           <div ref="stage" class="widget-configurator__stage">
             <div class="widget-configurator__sample" :style="sampleStyle">
@@ -405,17 +451,24 @@ async function copyCode() {
                         <div v-if="demoDevice" class="widget-call__settings">
                           <label
                             >{{ demoDevices[demoDevice] }}
-                            <select disabled>
-                              <option>По умолчанию</option>
-                            </select></label
-                          >
+                            <Select
+                              class="widget-call__select"
+                              native
+                              size="sm"
+                              :options="[{ value: '', label: 'По умолчанию' }]"
+                              disabled
+                          /></label>
                           <label v-if="demoDevice === 'input'">
                             Шумоподавление
-                            <select disabled>
-                              <option>RNNoise</option>
-                            </select>
+                            <Select
+                              class="widget-call__select"
+                              native
+                              size="sm"
+                              :options="[{ value: '', label: 'RNNoise' }]"
+                              disabled
+                            />
                           </label>
-                          <button type="button" @click="demoDevice = null">Закрыть</button>
+                          <Button size="sm" @click="demoDevice = null">Закрыть</Button>
                         </div>
                       </WidgetCallLayout>
                     </div>
@@ -448,26 +501,14 @@ async function copyCode() {
     <section class="widget-configurator__code" aria-labelledby="widget-code-heading">
       <div class="widget-configurator__code-head">
         <h2 id="widget-code-heading">Код вставки</h2>
-        <Button
-          variant="ghost"
-          class="widget-configurator__copy"
-          aria-label="Скопировать код"
-          :title="copied ? 'Скопировано' : 'Скопировать код'"
-          :disabled="!result.code"
-          @click="copyCode"
-        >
-          <Check v-if="copied" :size="18" aria-hidden="true" />
-          <Copy v-else :size="18" aria-hidden="true" />
-        </Button>
+        <IconButton label="Скопировать код" :disabled="!result.code" @click="copyCode">
+          <Check v-if="copied" aria-hidden="true" />
+          <Copy v-else aria-hidden="true" />
+        </IconButton>
       </div>
-      <textarea
-        ref="codeField"
-        :value="result.code"
-        aria-labelledby="widget-code-heading"
-        readonly
-        rows="4"
-        spellcheck="false"
-      />
+      <Field visually-hidden-label class="widget-configurator__code-field" label="Код вставки">
+        <Textarea ref="codeField" variant="mono" :model-value="result.code" readonly spellcheck="false" />
+      </Field>
       <p v-if="result.error && showValidation" role="alert" class="widget-configurator__error">{{ result.error }}</p>
       <p v-if="copyFailed" role="status">Не удалось скопировать автоматически. Код выделен — нажмите Ctrl+C или ⌘C.</p>
       <span class="widget-configurator__sr-only" aria-live="polite">{{ copied ? 'Код скопирован.' : '' }}</span>

@@ -1,10 +1,10 @@
 // The notifications inbox: paging, read state, and links that open the
 // message without joining the room's voice.
 
-import type { InboxItem, InboxPage } from '@voice-room/shared/contracts/notifications';
+import type { InboxItem, InboxPage } from '@voiceroom/shared/contracts/notifications';
 import { expect, test, vi } from 'vitest';
 import { ApiError } from '@/api/client';
-import { notificationRoute } from '@voice-room/shared/notifications';
+import { notificationRoute } from '@voiceroom/shared/notifications';
 import { createNotificationInbox } from '@/shared/notifications/inbox';
 
 const item = (id: string, readAt: number | null = null): InboxItem => ({

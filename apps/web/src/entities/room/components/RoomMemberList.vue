@@ -1,15 +1,25 @@
 <script setup lang="ts">
+import { badgeOf } from '@/shared/badges';
 import { t } from '@/shared/i18n';
 import { Ban, Ellipsis, User, UserX } from '@lucide/vue';
-import { presenceOfMember, type MembershipMember } from '@voice-room/shared/contracts/membership';
+import { presenceOfMember, type MembershipMember } from '@voiceroom/shared/contracts/membership';
 import { computed, ref, watch } from 'vue';
 import type { ModerationDuration } from '@/api/moderation';
 import { useProfileCardUiStore } from '@/entities/profile-card/profile-card-ui.store';
 import { useSessionStore } from '@/features/auth/session.store';
 import type { ProfileCardPerson } from '@/shared/components/profile-card';
-import { AccountBadge, Popover, PopoverDivider, PopoverMenuItem, PopoverSubmenu } from '@/shared/ui';
-import { Avatar } from '@voice-room/ui/components';
-import { iconMd } from '@/shared/ui/icons';
+import {
+  AccountBadge,
+  DropdownMenu,
+  MenuSeparator,
+  MenuItem,
+  MenuSub,
+  EmptyState,
+  IconButton,
+  ListItem,
+  Button
+} from '@voiceroom/ui-kit/components';
+import { iconMd } from '@voiceroom/ui-kit/icon-defaults';
 import { displayNameOf } from '@/shared/utils/display-name';
 import { BAN_DURATIONS, banRoomMember, kickRoomMember, type ModerationNotice } from '../room-moderation';
 import { useRoomMembershipStore } from '../room-membership.store';
@@ -28,7 +38,7 @@ const props = withDefaults(
 const membership = useRoomMembershipStore();
 const presence = useRoomPresenceStore();
 const session = useSessionStore();
-const { openProfileCardFor } = useProfileCardUiStore();
+const { openProfileCardFor, previewProfileCardFor, leaveProfileCardPreview } = useProfileCardUiStore();
 
 const roster = computed(() => membership.byRoomId[props.roomId] ?? null);
 const onlineMembers = computed(() =>
@@ -80,9 +90,8 @@ function profilePerson(member: MembershipMember): ProfileCardPerson {
   };
 }
 
-function toggleMenu(event: MouseEvent, toggle: () => void): void {
+function rememberMenuAnchor(event: MouseEvent | KeyboardEvent): void {
   menuAnchor = event.currentTarget instanceof HTMLElement ? event.currentTarget : null;
-  toggle();
 }
 
 function openMemberProfile(member: MembershipMember, event: MouseEvent): void {
@@ -137,7 +146,7 @@ async function ban(member: MembershipMember, duration: ModerationDuration): Prom
     </div>
     <div v-else-if="roster?.error && roster.members.length === 0" class="room-member-list__notice" role="alert">
       <p>{{ roster.error }}</p>
-      <button type="button" @click="membership.loadRoomMembership(roomId)">{{ t('Повторить') }}</button>
+      <Button variant="ghost" size="sm" @click="membership.loadRoomMembership(roomId)">{{ t('Повторить') }}</Button>
     </div>
     <template v-else>
       <template v-for="group in groups" :key="group.heading">
@@ -146,116 +155,101 @@ async function ban(member: MembershipMember, duration: ModerationDuration): Prom
         </h3>
         <ul class="room-member-list__list" :aria-label="group.label">
           <li v-for="member in group.members" :key="member.userId" class="room-member-list__item">
-            <div class="room-member-list__row">
-              <button
-                class="room-member-list__member"
-                type="button"
-                aria-haspopup="dialog"
-                :aria-label="t('Профиль {p0}', { p0: nameFor(member) })"
-                @click="openMemberProfile(member, $event)"
-              >
-                <Avatar
-                  :name="nameFor(member)"
-                  :src="member.avatarUrl"
-                  :color-key="member.avatarColorKey"
-                  :size="32"
-                  show-dot
-                  :online="member.presenceStatus !== 'offline'"
-                  :dnd="member.presenceStatus === 'dnd'"
-                  :afk="member.presenceStatus === 'afk'"
-                />
-                <span class="room-member-list__text"
-                  ><strong class="room-member-list__name"
-                    >{{ nameFor(member) }}<AccountBadge :user-id="member.userId" /><em
-                      v-if="member.userId === session.user?.id"
-                      class="room-member-list__you"
-                      >{{ t('вы') }}</em
-                    ></strong
-                  ><small class="room-member-list__login">@{{ member.login }}</small></span
+            <ListItem
+              interactive
+              aria-haspopup="dialog"
+              :aria-label="t('Профиль {p0}', { p0: nameFor(member) })"
+              :avatar="{
+                name: nameFor(member),
+                src: member.avatarUrl,
+                colorKey: member.avatarColorKey,
+                showDot: true,
+                online: member.presenceStatus !== 'offline',
+                dnd: member.presenceStatus === 'dnd',
+                afk: member.presenceStatus === 'afk'
+              }"
+              :caption="'@' + member.login"
+              @pointerenter="previewProfileCardFor(profilePerson(member), $event)"
+              @pointerleave="leaveProfileCardPreview"
+              @focus="previewProfileCardFor(profilePerson(member), $event)"
+              @blur="leaveProfileCardPreview"
+              @activate="openMemberProfile(member, $event)"
+            >
+              <template #title>
+                {{ nameFor(member) }}<AccountBadge :badge="badgeOf(member.userId)" />
+                <em v-if="member.userId === session.user?.id" class="room-member-list__you">{{ t('вы') }}</em>
+              </template>
+              <template v-if="canModerateMember(member)" #actions>
+                <DropdownMenu
+                  :aria-label="t('Действия с {p0}', { p0: nameFor(member) })"
+                  :disabled="banningUserId === member.userId"
                 >
-              </button>
+                  <template #trigger>
+                    <IconButton
+                      :size="28"
+                      :label="t('Действия с {p0}', { p0: nameFor(member) })"
+                      @click="rememberMenuAnchor"
+                      @keydown="rememberMenuAnchor"
+                    >
+                      <Ellipsis aria-hidden="true" />
+                    </IconButton>
+                  </template>
 
-              <Popover
-                v-if="canModerateMember(member)"
-                placement="bottom-end"
-                flip
-                floating
-                role="menu"
-                :aria-label="t('Действия с {p0}', { p0: nameFor(member) })"
-                root-class="room-member-list__menu-root"
-              >
-                <template #trigger="{ open, toggle, panelId }">
-                  <button
-                    class="room-member-list__menu-trigger"
-                    type="button"
-                    :aria-label="t('Действия с {p0}', { p0: nameFor(member) })"
-                    :title="t('Действия')"
-                    aria-haspopup="menu"
-                    :aria-expanded="open"
-                    :aria-controls="panelId"
-                    :disabled="banningUserId === member.userId"
-                    @click="toggleMenu($event, toggle)"
-                  >
-                    <Ellipsis v-bind="iconMd" aria-hidden="true" />
-                  </button>
-                </template>
-
-                <template #content="{ close }">
-                  <div class="room-member-list__menu">
-                    <PopoverMenuItem :label="t('Профиль')" @click="showProfileFromMenu(member, close)">
+                  <template #content="{ close }">
+                    <MenuItem :label="t('Профиль')" @select.prevent="showProfileFromMenu(member, close)">
                       <template #icon><User v-bind="iconMd" aria-hidden="true" /></template>
-                    </PopoverMenuItem>
-                    <PopoverDivider />
-                    <PopoverMenuItem
+                    </MenuItem>
+                    <MenuSeparator />
+                    <MenuItem
                       :label="t('Выгнать')"
-                      variant="danger"
+                      tone="danger"
                       :disabled="!livePeerId(member)"
-                      @click="
+                      @select.prevent="
                         close();
                         void kick(member);
                       "
                     >
                       <template #icon><UserX v-bind="iconMd" aria-hidden="true" /></template>
-                    </PopoverMenuItem>
-                    <PopoverSubmenu
+                    </MenuItem>
+                    <MenuSub
                       :label="t('Заблокировать')"
+                      tone="danger"
                       :aria-label="t('Срок блокировки {p0}', { p0: nameFor(member) })"
                     >
                       <template #icon><Ban v-bind="iconMd" aria-hidden="true" /></template>
                       <template #default="{ close: closeSubmenu }">
-                        <PopoverMenuItem
+                        <MenuItem
                           v-for="option in BAN_DURATIONS"
                           :key="option.value"
                           :label="option.label"
-                          variant="danger"
-                          @click="
+                          tone="danger"
+                          @select.prevent="
                             closeSubmenu();
                             close();
                             void ban(member, option.value);
                           "
                         />
                       </template>
-                    </PopoverSubmenu>
-                  </div>
-                </template>
-              </Popover>
-            </div>
+                    </MenuSub>
+                  </template>
+                </DropdownMenu>
+              </template>
+            </ListItem>
           </li>
         </ul>
       </template>
 
-      <button
+      <Button
         v-if="roster?.hasMore"
+        variant="outline"
+        size="md"
         class="room-member-list__more"
-        type="button"
         :disabled="roster.loading"
         @click="membership.loadRoomMembership(roomId, { append: true })"
       >
         {{ roster.loading ? t('Загрузка…') : t('Показать ещё') }}
-      </button>
-      <p v-else-if="roster?.loaded && roster.members.length === 0" class="room-member-list__empty">
-        {{ t('Никого не найдено') }}
-      </p>
+      </Button>
+      <EmptyState v-else-if="roster?.loaded && roster.members.length === 0" :title="t('Никого не найдено')" compact />
     </template>
   </section>
 </template>

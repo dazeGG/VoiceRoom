@@ -8,7 +8,7 @@ import { useProfileCardUiStore } from '@/entities/profile-card/profile-card-ui.s
 import { useSessionStore } from '@/features/auth/session.store';
 import { useRoomSocial } from '@/features/room/social';
 import { ProfileCard, type ProfileCardRelationship } from '@/shared/components/profile-card';
-import { ContextMenu } from '@/shared/ui';
+import { HoverCard } from '@voiceroom/ui-kit/components';
 
 const emit = defineEmits<{ toast: [message: string] }>();
 
@@ -20,6 +20,13 @@ const { profileCardUi } = cardUi;
 const busy = ref(false);
 
 const person = computed(() => profileCardUi.person);
+const anchor = computed(() =>
+  profileCardUi.restoreFocus
+    ? profileCardUi.restoreFocus
+    : {
+        getBoundingClientRect: () => new DOMRect(profileCardUi.x, profileCardUi.y, 0, 0)
+      }
+);
 const relationship = computed<ProfileCardRelationship>(() => {
   const current = person.value;
   if (current?.userId && current.userId === session.user?.id) return 'self';
@@ -84,16 +91,17 @@ function dropFriend(): void {
 </script>
 
 <template>
-  <ContextMenu
+  <HoverCard
     v-if="person"
     :open="profileCardUi.open"
-    :x="profileCardUi.x"
-    :y="profileCardUi.y"
-    v-bind="{ ariaLabel: t('Профиль {p0}', { p0: person.name }) }"
-    :restore-focus="profileCardUi.restoreFocus"
-    role="dialog"
-    :padded="false"
-    @close="cardUi.closeProfileCard(false)"
+    :anchor="anchor"
+    :pinned="!profileCardUi.preview"
+    :side="profileCardUi.restoreFocus ? 'right' : 'bottom'"
+    :aria-label="t('Профиль {p0}', { p0: person.name })"
+    @pointerenter="cardUi.keepProfilePreview"
+    @pointerleave="cardUi.schedulePreviewClose"
+    @escape="cardUi.closeProfileCard(!profileCardUi.preview)"
+    @update:open="(value: boolean) => !value && cardUi.closeProfileCard(false)"
   >
     <ProfileCard
       :person="person"
@@ -105,5 +113,5 @@ function dropFriend(): void {
       :on-accept-request="acceptRequest"
       :on-remove-friend="dropFriend"
     />
-  </ContextMenu>
+  </HoverCard>
 </template>

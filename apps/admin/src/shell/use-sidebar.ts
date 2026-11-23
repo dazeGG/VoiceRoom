@@ -5,7 +5,7 @@
 // content while the mouse is on the folded rail. Both live in localStorage; a
 // narrow window with nothing saved starts folded.
 
-import { useCallback, useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 
 const WIDTH_KEY = 'vr-admin-sidebar-width';
 const COLLAPSED_KEY = 'vr-admin-sidebar-collapsed';
@@ -44,79 +44,85 @@ function savedCollapsed(): boolean {
 }
 
 export function useSidebar() {
-  const [preferredWidth, setPreferredWidth] = useState(savedWidth);
-  const [collapsed, setCollapsedState] = useState(savedCollapsed);
-  const [viewportWidth, setViewportWidth] = useState(() => window.innerWidth);
-  const [dragWidth, setDragWidth] = useState<number | null>(null);
-  const [hovered, setHovered] = useState(false);
-  const drag = useRef<{ pointerId: number; startX: number; startWidth: number } | null>(null);
+  const preferredWidth = ref(savedWidth());
+  const collapsed = ref(savedCollapsed());
+  const viewportWidth = ref(window.innerWidth);
+  const dragWidth = ref<number | null>(null);
+  const hovered = ref(false);
+  let drag: { pointerId: number; startX: number; startWidth: number } | null = null;
 
-  const maxWidth = Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, Math.floor(viewportWidth * 0.45)));
-  const clamp = useCallback((value: number) => Math.max(MIN_WIDTH, Math.min(maxWidth, Math.round(value))), [maxWidth]);
-  const width = clamp(dragWidth ?? preferredWidth);
-  const layoutCollapsed = dragWidth === null ? collapsed : dragWidth < COLLAPSE_THRESHOLD;
-  const peeking = collapsed && hovered && dragWidth === null;
-  const visible = !layoutCollapsed || peeking;
+  const maxWidth = computed(() => Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, Math.floor(viewportWidth.value * 0.45))));
+  const clamp = (value: number) => Math.max(MIN_WIDTH, Math.min(maxWidth.value, Math.round(value)));
+  const width = computed(() => clamp(dragWidth.value ?? preferredWidth.value));
+  const layoutCollapsed = computed(() =>
+    dragWidth.value === null ? collapsed.value : dragWidth.value < COLLAPSE_THRESHOLD
+  );
+  const peeking = computed(() => collapsed.value && hovered.value && dragWidth.value === null);
+  const visible = computed(() => !layoutCollapsed.value || peeking.value);
+  const resizing = computed(() => dragWidth.value !== null);
 
-  useEffect(() => {
-    const onResize = () => setViewportWidth(window.innerWidth);
-    const onKeyDown = (event: globalThis.KeyboardEvent) => {
-      if (event.key === 'Escape') setHovered(false);
-    };
+  const onResize = () => {
+    viewportWidth.value = window.innerWidth;
+  };
+  const onKeyDown = (event: KeyboardEvent) => {
+    if (event.key === 'Escape') hidePreview();
+  };
+  onMounted(() => {
     window.addEventListener('resize', onResize);
     window.addEventListener('keydown', onKeyDown);
-    return () => {
-      window.removeEventListener('resize', onResize);
-      window.removeEventListener('keydown', onKeyDown);
-    };
-  }, []);
+  });
+  onBeforeUnmount(() => {
+    window.removeEventListener('resize', onResize);
+    window.removeEventListener('keydown', onKeyDown);
+  });
 
   function setWidth(value: number): void {
     const next = clamp(value);
-    setPreferredWidth(next);
+    preferredWidth.value = next;
     write(WIDTH_KEY, String(next));
   }
 
   function setCollapsed(value: boolean): void {
-    setHovered(false);
-    setCollapsedState(value);
+    hovered.value = false;
+    collapsed.value = value;
     write(COLLAPSED_KEY, String(value));
   }
 
   function toggle(): void {
-    if (!drag.current) setCollapsed(!collapsed);
+    if (!drag) setCollapsed(!collapsed.value);
   }
 
   function showPreview(event: PointerEvent): void {
-    if (event.pointerType === 'mouse' && event.buttons === 0 && collapsed && !drag.current) setHovered(true);
+    if (event.pointerType === 'mouse' && event.buttons === 0 && collapsed.value && !drag) hovered.value = true;
   }
 
   function hidePreview(): void {
-    setHovered(false);
+    hovered.value = false;
   }
 
-  function startResize(event: PointerEvent<HTMLElement>): void {
-    if (collapsed || event.button !== 0 || !event.isPrimary || drag.current) return;
+  function startResize(event: PointerEvent): void {
+    if (collapsed.value || event.button !== 0 || !event.isPrimary || drag) return;
     const handle = event.currentTarget;
+    if (!(handle instanceof HTMLElement)) return;
     handle.focus({ preventScroll: true });
     handle.setPointerCapture?.(event.pointerId);
-    drag.current = { pointerId: event.pointerId, startX: event.clientX, startWidth: width };
+    drag = { pointerId: event.pointerId, startX: event.clientX, startWidth: width.value };
   }
 
   function resize(event: PointerEvent): void {
-    const current = drag.current;
+    const current = drag;
     if (!current || current.pointerId !== event.pointerId) return;
-    setDragWidth(current.startWidth + event.clientX - current.startX);
+    dragWidth.value = current.startWidth + event.clientX - current.startX;
   }
 
   function cancelResize(event: PointerEvent): void {
-    if (drag.current?.pointerId !== event.pointerId) return;
-    drag.current = null;
-    setDragWidth(null);
+    if (drag?.pointerId !== event.pointerId) return;
+    drag = null;
+    dragWidth.value = null;
   }
 
   function finishResize(event: PointerEvent): void {
-    const current = drag.current;
+    const current = drag;
     if (!current || current.pointerId !== event.pointerId) return;
     const delta = event.clientX - current.startX;
     const value = current.startWidth + delta;
@@ -127,7 +133,7 @@ export function useSidebar() {
   }
 
   function resizeWithKeyboard(event: KeyboardEvent): void {
-    if (collapsed || drag.current || event.altKey || event.ctrlKey || event.metaKey) return;
+    if (collapsed.value || drag || event.altKey || event.ctrlKey || event.metaKey) return;
     switch (event.key) {
       case 'Enter':
         toggle();
@@ -136,13 +142,13 @@ export function useSidebar() {
         setCollapsed(true);
         break;
       case 'End':
-        setWidth(maxWidth);
+        setWidth(maxWidth.value);
         break;
       case 'ArrowLeft':
-        setWidth(width - KEY_STEP);
+        setWidth(width.value - KEY_STEP);
         break;
       case 'ArrowRight':
-        setWidth(width + KEY_STEP);
+        setWidth(width.value + KEY_STEP);
         break;
       default:
         return;
@@ -157,7 +163,7 @@ export function useSidebar() {
     visible,
     width,
     maxWidth,
-    resizing: dragWidth !== null,
+    resizing,
     toggle,
     showPreview,
     hidePreview,

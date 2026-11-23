@@ -1,10 +1,8 @@
 <script setup lang="ts">
+import { IconButton, DropdownMenu, MenuItem, FileDrop } from '@voiceroom/ui-kit/components';
 import { t } from '@/shared/i18n';
 import { Image as ImageIcon, Plus } from '@lucide/vue';
-import { ref } from 'vue';
-import { Popover, PopoverMenuItem } from '@/shared/ui';
-import type { PopoverContentState, PopoverTriggerState } from '@/shared/ui';
-import { iconSm } from '@/shared/ui/icons';
+import { iconSm } from '@voiceroom/ui-kit/icon-defaults';
 import type { AttachmentComposeStore } from './attachment-compose';
 
 const { store, disabled } = defineProps<{
@@ -14,63 +12,55 @@ const { store, disabled } = defineProps<{
 
 const emit = defineEmits<{ error: [message: string] }>();
 
-const input = ref<HTMLInputElement | null>(null);
+let closeMenu: ((restoreFocus?: boolean) => void) | undefined;
 
-async function addSelectedFiles(close: (restoreFocus?: boolean) => void): Promise<void> {
-  const files = input.value?.files;
-  if (!files?.length) return;
-  close(false);
+function chooseFile(choose: () => void, close: (restoreFocus?: boolean) => void): void {
+  closeMenu = close;
+  choose();
+}
+
+async function addSelectedFiles(files: File[]): Promise<void> {
+  closeMenu?.(false);
+  closeMenu = undefined;
   try {
     await store.addFiles(files);
   } catch (cause) {
     emit('error', cause instanceof Error ? cause.message : t('Не удалось загрузить изображение'));
-  } finally {
-    if (input.value) input.value.value = '';
   }
 }
 </script>
 
 <template>
-  <Popover
-    placement="top-start"
-    role="menu"
-    :aria-label="t('Добавить вложение')"
-    root-class="attachment-upload"
-    panel-class="attachment-upload__popover"
-    keep-content-mounted
+  <FileDrop
+    v-slot="{ choose }"
+    class="attachment-upload"
+    variant="trigger"
+    accept="image/jpeg,image/png,image/webp"
+    multiple
+    :disabled="disabled || store.drafts.length >= 4"
+    :validate-accept="false"
+    @files="void addSelectedFiles($event)"
   >
-    <template #trigger="{ toggle, panelId, open }: PopoverTriggerState">
-      <button
-        class="attachment-upload__button"
-        type="button"
-        :aria-label="t('Добавить вложение')"
-        aria-haspopup="menu"
-        :aria-controls="panelId"
-        :aria-expanded="open"
-        :disabled="disabled || store.drafts.length >= 4"
-        @click="toggle"
-      >
-        <Plus v-bind="iconSm" aria-hidden="true" />
-      </button>
-    </template>
-    <template #content="{ close }: PopoverContentState">
-      <input
-        ref="input"
-        class="attachment-upload__input"
-        type="file"
-        accept="image/jpeg,image/png,image/webp"
-        multiple
-        tabindex="-1"
-        aria-hidden="true"
-        @change="void addSelectedFiles(close)"
-      />
-      <PopoverMenuItem
-        :label="t('Загрузить фото')"
-        :disabled="disabled || store.drafts.length >= 4"
-        @click="input?.click()"
-      >
-        <template #icon><ImageIcon v-bind="iconSm" /></template>
-      </PopoverMenuItem>
-    </template>
-  </Popover>
+    <DropdownMenu
+      side="top"
+      align="start"
+      :aria-label="t('Добавить вложение')"
+      :disabled="disabled || store.drafts.length >= 4"
+    >
+      <template #trigger>
+        <IconButton :label="t('Добавить вложение')" :size="32">
+          <Plus aria-hidden="true" />
+        </IconButton>
+      </template>
+      <template #content="{ close }">
+        <MenuItem
+          :label="t('Загрузить фото')"
+          :disabled="disabled || store.drafts.length >= 4"
+          @select.prevent="chooseFile(choose, close)"
+        >
+          <template #icon><ImageIcon v-bind="iconSm" /></template>
+        </MenuItem>
+      </template>
+    </DropdownMenu>
+  </FileDrop>
 </template>

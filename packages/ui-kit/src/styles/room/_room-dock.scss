@@ -1,0 +1,276 @@
+@use '../mixins' as *;
+
+.room-dock {
+  position: absolute;
+  inset: auto 0 var(--space-20);
+  z-index: 3;
+  display: flex;
+  justify-content: center;
+  padding-inline: var(--space-20);
+  pointer-events: none;
+}
+
+.room-dock__shell {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-8);
+  max-width: 100%;
+  border: calc(var(--space-2) / 2) solid var(--vr-line-strong);
+  border-radius: var(--radius-20);
+  padding: var(--space-8);
+  background: var(--vr-dock-bg);
+  -webkit-backdrop-filter: blur(calc(var(--space-12) + var(--space-2)));
+  backdrop-filter: blur(calc(var(--space-12) + var(--space-2)));
+  box-shadow: var(--vr-shadow-dock);
+  pointer-events: auto;
+}
+
+.room-dock__cluster,
+.room-dock__connection-wrap {
+  display: flex;
+}
+
+.room-dock__split {
+  display: flex;
+  height: var(--size-44);
+  overflow: hidden;
+  border-radius: var(--radius-12);
+  background: var(--vr-surface-3);
+  color: var(--vr-text);
+}
+
+.room-dock__split--muted {
+  background: var(--vr-danger-off);
+  color: var(--vr-danger);
+}
+
+.room-dock__split--on {
+  background: var(--vr-accent-soft);
+  color: var(--vr-accent);
+}
+
+.room-dock__button,
+.room-dock__menu-button {
+  position: relative;
+  display: grid;
+  width: var(--size-44);
+  height: var(--size-44);
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-12);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  transition:
+    background 150ms var(--ease-out),
+    color 150ms var(--ease-out);
+
+  &[hidden] {
+    display: none;
+  }
+
+  &:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+}
+
+.room-dock__split :is(.room-dock__button, .room-dock__menu-button) {
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+
+  // The split clips the corners, so each half draws its focus ring inwards.
+  &:focus-visible {
+    outline-offset: calc(-1 * var(--space-2));
+  }
+
+  &:hover:not(:disabled),
+  &[aria-expanded='true'] {
+    background: var(--vr-hover);
+  }
+
+  // Enlarging one half would cover the neighbouring control.
+  &::before {
+    content: none;
+  }
+}
+
+.room-dock :is(.room-dock__button, .room-dock__menu-button, .room-dock__connection):focus-visible {
+  outline: var(--space-2) solid var(--vr-accent);
+}
+
+.room-dock__button svg {
+  width: var(--icon-20);
+  height: var(--icon-20);
+}
+
+.room-dock__split .room-dock__menu-button {
+  width: var(--size-24);
+  border-inline-start: calc(var(--space-2) / 2) solid var(--vr-line);
+
+  svg {
+    width: var(--icon-12);
+    height: var(--icon-12);
+  }
+}
+
+.room-dock__button--screen {
+  background: var(--vr-surface-3);
+  color: var(--vr-text);
+
+  &:hover:not(:disabled) {
+    background: var(--vr-surface-3-hover);
+  }
+
+  &[aria-pressed='true'] {
+    background: var(--vr-accent);
+    color: var(--vr-accent-ink);
+
+    &:hover:not(:disabled) {
+      background: var(--vr-accent-hover);
+    }
+  }
+}
+
+.room-dock__button--leave,
+.room-dock__button--screen-exit {
+  background: var(--vr-danger);
+  color: var(--vr-on-danger);
+
+  &:hover:not(:disabled) {
+    background: color-mix(in oklch, var(--vr-danger), var(--vr-on-danger) 12%);
+    color: var(--vr-on-danger);
+  }
+}
+
+.room-dock__ptt-badge {
+  position: absolute;
+  inset: auto var(--space-2) var(--space-2) auto;
+  border-radius: var(--radius-4);
+  padding-inline: var(--space-4);
+  background: var(--vr-hover);
+  color: var(--vr-text-2);
+  font-size: 0.5rem;
+  font-weight: 700;
+  line-height: 1.15;
+}
+
+.room-dock__ptt-badge--active {
+  background: var(--vr-accent-soft-hover);
+  color: var(--vr-accent);
+}
+
+.room-dock .room-dock__divider {
+  flex: none;
+  width: calc(var(--space-2) / 2);
+  height: var(--size-20);
+  margin-inline: var(--space-2);
+  background: var(--vr-line-strong);
+}
+
+.room-dock__connection {
+  display: flex;
+  width: var(--size-44);
+  height: var(--size-44);
+  align-items: flex-end;
+  justify-content: center;
+  gap: var(--space-2);
+  border-radius: var(--radius-12);
+  padding-block-end: calc(var(--space-12) + var(--space-2));
+  background: var(--vr-surface-3);
+}
+
+.room-dock__connection--connected {
+  --room-dock-signal: var(--vr-success);
+}
+
+.room-dock__connection--connecting {
+  --room-dock-signal: var(--vr-info);
+}
+
+.room-dock__connection--warning {
+  --room-dock-signal: var(--vr-away);
+}
+
+.room-dock__connection--error {
+  --room-dock-signal: var(--vr-danger);
+}
+
+.room-dock__bar {
+  width: var(--space-4);
+  height: var(--space-6);
+  border-radius: var(--radius-pill);
+  background: var(--room-dock-signal, var(--vr-text-3));
+
+  &:nth-child(2) {
+    height: var(--space-12);
+  }
+
+  &:nth-child(3) {
+    height: var(--size-16);
+  }
+}
+
+.room-dock__field {
+  display: grid;
+  gap: var(--space-8);
+  min-width: 0;
+  color: var(--vr-text-2);
+  font-size: 0.8125rem;
+  font-weight: 500;
+}
+
+.room-dock__volume-head,
+.room-dock__gate-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-8);
+}
+
+.room-dock__field output {
+  color: var(--vr-text);
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  text-align: end;
+  white-space: nowrap;
+}
+
+.room-dock__level-fill {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--vr-success);
+  transform-origin: left center;
+  transition:
+    transform 80ms linear,
+    background 120ms ease;
+}
+
+.room-dock__level-fill--closed {
+  background: var(--vr-surface-3-hover);
+}
+
+@container stage (max-width: #{$bp-phone}) {
+  .room-dock :is(.room-dock__menu-button, .room-dock__connection-wrap, .room-dock__divider) {
+    display: none;
+  }
+}
+
+@include below($bp-phone-sm) {
+  .room-dock {
+    padding-inline: var(--space-8);
+  }
+
+  .room-dock__shell {
+    gap: var(--space-6);
+  }
+}
+
+html.platform--mobile .room-dock__cluster--screen {
+  display: none;
+}

@@ -1,10 +1,9 @@
 <script setup lang="ts">
+import { IconButton, Popover } from '@voiceroom/ui-kit/components';
 import { t } from '@/shared/i18n';
 import { Smile } from '@lucide/vue';
 import { onBeforeUnmount, ref, watch } from 'vue';
-import { Popover } from '@/shared/ui';
-import type { PopoverContentState, PopoverTriggerState } from '@/shared/ui';
-import { iconSm } from '@/shared/ui/icons';
+import type { PopoverContentState, PopoverTriggerState } from '@voiceroom/ui-kit/components';
 import EmojiPickerPanel from './EmojiPickerPanel.vue';
 import { DEFAULT_FREQUENT_REACTIONS, loadFrequentReactions, recordFrequentReaction } from './frequent-reactions';
 import { TYPING_NOTICE_INTERVAL_MS } from './typing';
@@ -83,25 +82,24 @@ function choose(emoji: string, close: (restoreFocus?: boolean) => void): void {
     placement="top-end"
     flip
     floating
+    inset="flush"
     role="dialog"
     :aria-label="t('Выбор эмодзи')"
     root-class="composer-emoji-picker"
     panel-class="reaction-picker-panel"
   >
     <template #trigger="{ toggle, panelId }: PopoverTriggerState">
-      <button
-        class="composer-emoji-picker__trigger"
-        type="button"
+      <IconButton
         :disabled="disabled"
-        :aria-label="t('Добавить эмодзи')"
-        :title="t('Эмодзи')"
+        :label="t('Добавить эмодзи')"
         aria-haspopup="dialog"
         :aria-expanded="open"
         :aria-controls="panelId"
+        :size="32"
         @click="toggle"
       >
-        <Smile v-bind="iconSm" aria-hidden="true" />
-      </button>
+        <Smile aria-hidden="true" />
+      </IconButton>
     </template>
 
     <template #content="{ close }: PopoverContentState">

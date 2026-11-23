@@ -16,26 +16,26 @@ import {
   setMicrophoneRecoveryObserver,
   startMicrophoneCall,
   type MicrophoneRecoveryEvent
-} from '@voice-room/call/engine/ui/devices';
+} from '@voiceroom/call/engine/ui/devices';
 import { Room } from 'livekit-client';
 import { FakeMediaStream, FakeMediaStreamTrack } from '../helpers/fake-media';
-import type { MicrophoneCapture } from '@voice-room/call/engine/core/types';
-import { state } from '@voice-room/call/engine/core/room-runtime.store';
-import { createInitialRoomState } from '@voice-room/call/engine/model/room-state';
+import type { MicrophoneCapture } from '@voiceroom/call/engine/core/types';
+import { state } from '@voiceroom/call/engine/core/room-runtime.store';
+import { createInitialRoomState } from '@voiceroom/call/engine/model/room-state';
 import { clearLogBuffer, readLogBuffer } from '@/shared/log';
-import { noteMicSend } from '@voice-room/call/engine/room/mic-send';
+import { noteMicSend } from '@voiceroom/call/engine/room/mic-send';
 import {
   setLocalMicrophoneCapture,
   setMicrophoneCaptureEnabled
-} from '@voice-room/call/engine/services/microphone-service';
-import { ensureLocalMicrophonePublished } from '@voice-room/call/engine/services/livekit/local-publications';
+} from '@voiceroom/call/engine/services/microphone-service';
+import { ensureLocalMicrophonePublished } from '@voiceroom/call/engine/services/livekit/local-publications';
 import { defined } from '../helpers/assert';
 import { installWebCallPortsForTest } from '../helpers/call-ports';
 
 // Microphone ownership tests isolate the unrelated application realtime edge.
-vi.mock('@voice-room/call/engine/room/presence', () => ({ postState: vi.fn(async () => {}) }));
+vi.mock('@voiceroom/call/engine/room/presence', () => ({ postState: vi.fn(async () => {}) }));
 
-vi.mock('@voice-room/call/engine/media/livekit-runtime', () => ({
+vi.mock('@voiceroom/call/engine/media/livekit-runtime', () => ({
   TRACK_SOURCE: { Microphone: 'microphone' },
   loadLiveKitClient: async () => ({ Track: { Source: { Microphone: 'microphone' } } })
 }));
@@ -44,7 +44,7 @@ const captureWork = vi.hoisted(() => ({
   open: vi.fn<() => Promise<MicrophoneCapture>>(),
   stop: vi.fn()
 }));
-vi.mock('@voice-room/call/engine/services/microphone-service', async (original) => ({
+vi.mock('@voiceroom/call/engine/services/microphone-service', async (original) => ({
   ...(await original<object>()),
   openLocalMicrophone: captureWork.open,
   stopMicrophoneCapture: captureWork.stop
@@ -1077,7 +1077,7 @@ test('the microphone button says so when an earlier microphone operation still h
   expect(await joining).toBeNull();
   Object.assign(state, { joined: true, livekitRoom: { localParticipant: {} }, localStream: null });
 
-  const { useToastUiStore } = await import('@voice-room/call/engine/core/toast-ui.store');
+  const { useToastUiStore } = await import('@voiceroom/call/engine/core/toast-ui.store');
   expect(await attachMicrophoneOutcome()).toBe('busy');
   expect(useToastUiStore().items.map((item) => item.message)).toContain(
     'Микрофон ещё занят прошлой операцией: попробуйте через несколько секунд'

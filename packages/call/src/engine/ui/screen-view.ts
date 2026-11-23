@@ -1,5 +1,5 @@
 import { callPageState } from '../core/call-page.store';
-import { t } from '@voice-room/ui/i18n';
+import { t } from '@voiceroom/ui-kit/i18n';
 import { showToast } from './toast';
 import { state } from '../core/room-runtime.store';
 import { postState } from '../room/presence';
@@ -292,7 +292,7 @@ export {
   toggleScreenFullscreen,
   toggleScreenMute,
   updateScreenFullscreenState,
-  updateScreenVolumeFromSlider
+  setScreenVolume
 } from './screen-stage-controls';
 
 import { createLogger, errorContext } from '../diagnostics';

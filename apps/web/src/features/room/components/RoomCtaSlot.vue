@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { IconButton, Button } from '@voiceroom/ui-kit/components';
 import { t } from '@/shared/i18n';
 import { MonitorDown, UserPlus, X } from '@lucide/vue';
 import { computed, onMounted, ref } from 'vue';
@@ -8,11 +9,10 @@ import { useSessionStore } from '@/features/auth/session.store';
 import { getDesktopBoundaryPolicy } from '@/platform/desktop-boundary';
 import { readOpenInAppSignals, shouldOfferOpenInApp } from '@/platform/open-in-app';
 import AppBenefitsModal from '@/shared/components/AppBenefitsModal.vue';
-import { Button } from '@/shared/ui';
-import { iconMd, iconSm } from '@/shared/ui/icons';
-import { isRoomEmbedded } from '@voice-room/call/engine/core/embed';
-import { state as roomClientState } from '@voice-room/call/engine/core/room-runtime.store';
-import { rejoinRoomSignedIn } from '@voice-room/call/engine/room/room';
+import { iconMd } from '@voiceroom/ui-kit/icon-defaults';
+import { isRoomEmbedded } from '@voiceroom/call/engine/core/embed';
+import { state as roomClientState } from '@voiceroom/call/engine/core/room-runtime.store';
+import { rejoinRoomSignedIn } from '@voiceroom/call/engine/room/room';
 import { resolveRoomCta } from '../room-cta';
 
 const session = useSessionStore();
@@ -88,17 +88,18 @@ function accept(): void {
         <strong class="room-cta-slot__title">{{ copy.title }}</strong>
         <span class="room-cta-slot__text">{{ copy.text }}</span>
       </div>
-      <Button class="ui-button--compact room-cta-slot__action" variant="primary" type="button" @click="accept">{{
+      <Button size="sm" class="room-cta-slot__action" variant="primary" type="button" @click="accept">{{
         copy.action
       }}</Button>
-      <button
+      <IconButton
         class="room-cta-slot__close"
-        type="button"
-        :aria-label="t('Скрыть до следующего захода')"
+        :label="t('Скрыть до следующего захода')"
+        :size="28"
+        variant="filled"
         @click="dismissed = true"
       >
-        <X v-bind="iconSm" aria-hidden="true" />
-      </button>
+        <X aria-hidden="true" />
+      </IconButton>
     </aside>
     <!-- A mobile browser suspends the microphone when it leaves the foreground. -->
     <p v-if="mobile && roomClientState.joined" class="room-cta-slot__hint" role="note">

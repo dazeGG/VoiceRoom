@@ -33,7 +33,7 @@ test(
     assert.equal(
       result.status,
       0,
-      `schema.ts is stale; run "npm --workspace @voice-room/api run db:types" against a migrated database\n${result.stdout}\n${result.stderr}`
+      `schema.ts is stale; run "npm --workspace @voiceroom/api run db:types" against a migrated database\n${result.stdout}\n${result.stderr}`
     );
   }
 );

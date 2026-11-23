@@ -20,8 +20,7 @@ function tree(t: TestContext, files: Record<string, string>, sourceDir = 'apps/w
 test('a clean tree passes', (t) => {
   const { repo } = tree(t, {
     'styles/ui/_dialog.scss': ".dialog__tab[aria-selected='true'] { color: var(--vr-text); }\n",
-    'App.vue': '<script setup lang="ts">\nconst x = 1;\n</script>\n\n<template><p>{{ x }}</p></template>\n',
-    'shared/ui/Dialog.vue': '<script setup lang="ts">\nimport { DialogRoot } from \'reka-ui\';\n</script>\n'
+    'App.vue': '<script setup lang="ts">\nconst x = 1;\n</script>\n\n<template><p>{{ x }}</p></template>\n'
   });
   assert.deepEqual(checkWebStyles(repo), []);
 });
@@ -57,6 +56,13 @@ test('a comment may name a data-* selector', (t) => {
     'styles/home/_x.scss': "// was: [data-active='true']\n/* [data-x] */\n.x[aria-current] { color: red; }\n"
   });
   assert.deepEqual(checkWebStyles(repo), []);
+});
+
+test('the admin source follows the same style conventions', (t) => {
+  const { repo } = tree(t, { 'styles/legacy.css': '.panel { padding: 4px; }' }, 'apps/admin/src');
+  assert.deepEqual(checkWebStyles(repo), [
+    'apps/admin/src/styles/legacy.css:1 stylesheet must be a .scss partial under src/styles'
+  ]);
 });
 
 test('a <style> block in a .vue file fails unless the file is allowlisted with a comment', (t) => {
@@ -97,20 +103,20 @@ test('an allowlist entry whose file has no <style> block is reported', (t) => {
   assert.match(problems[0] ?? '', /allowlist entry without a <style> block/);
 });
 
-test('a reka-ui import fails outside shared/ui and passes inside it', (t) => {
+test('a reka-ui import fails anywhere in an app, shared/ui included', (t) => {
   const { repo } = tree(t, {
     'features/A.vue': '<script setup lang="ts">\nimport { DialogRoot } from \'reka-ui\';\n</script>\n',
     'features/b.ts': "export { SelectRoot } from 'reka-ui/select';\n",
     'features/c.ts': "const load = () => import('reka-ui');\n",
-    'features/d.ts': "// import { Dialog } from 'reka-ui' is only for shared/ui\nexport const d = 1;\n",
-    'shared/ui/Dialog.vue': '<script setup lang="ts">\nimport { DialogRoot } from \'reka-ui\';\n</script>\n',
-    'shared/ui/select.ts': "import { SelectRoot } from 'reka-ui/select';\nexport { SelectRoot };\n"
+    'features/d.ts': "// import { Dialog } from 'reka-ui' is only for the kit\nexport const d = 1;\n",
+    'shared/ui/Dialog.vue': '<script setup lang="ts">\nimport { DialogRoot } from \'reka-ui\';\n</script>\n'
   });
   const problems = checkWebStyles(repo).sort();
-  assert.equal(problems.length, 3);
+  assert.equal(problems.length, 4);
   assert.match(problems[0] ?? '', /^apps\/web\/src\/features\/A\.vue:2 reka-ui import/);
   assert.match(problems[1] ?? '', /^apps\/web\/src\/features\/b\.ts:1 reka-ui import/);
   assert.match(problems[2] ?? '', /^apps\/web\/src\/features\/c\.ts:1 reka-ui import/);
+  assert.match(problems[3] ?? '', /^apps\/web\/src\/shared\/ui\/Dialog\.vue:2 reka-ui import/);
 });
 
 test('portable components may wrap Reka and follow the shared style conventions', (t) => {
@@ -121,12 +127,23 @@ test('portable components may wrap Reka and follow the shared style conventions'
       'utils/popover.ts': "export { PopoverRoot } from 'reka-ui';\n",
       'styles/room/_tile.scss': '.tile[data-ready] { color: var(--vr-text); }\n'
     },
-    'packages/ui/src'
+    'packages/ui-kit/src'
   );
   const problems = checkWebStyles(repo).sort();
   assert.equal(problems.length, 2);
-  assert.match(problems[0] ?? '', /^packages\/ui\/src\/styles\/room\/_tile\.scss:1 \[data-\*\] selector/);
-  assert.match(problems[1] ?? '', /^packages\/ui\/src\/utils\/popover\.ts:1 reka-ui import/);
+  assert.match(problems[0] ?? '', /^packages\/ui-kit\/src\/styles\/room\/_tile\.scss:1 \[data-\*\] selector/);
+  assert.match(problems[1] ?? '', /^packages\/ui-kit\/src\/utils\/popover\.ts:1 reka-ui import/);
+});
+
+test('the UI helper package cannot wrap Reka', (t) => {
+  const { repo } = tree(
+    t,
+    { 'components/Popover.vue': '<script setup lang="ts">import { PopoverRoot } from \'reka-ui\';</script>' },
+    'packages/ui/src'
+  );
+  assert.deepEqual(checkWebStyles(repo), [
+    'packages/ui/src/components/Popover.vue:1 reka-ui import outside the kit; use or extend a packages/ui-kit component'
+  ]);
 });
 
 test('portable styles cannot depend on app modules', (t) => {
@@ -134,14 +151,14 @@ test('portable styles cannot depend on app modules', (t) => {
     t,
     {
       'styles/_a.scss': "@use '../../../../apps/web/src/styles/mixins';\n@forward './local';\n",
-      'styles/_b.scss': "// @use '@/styles/mixins';\n@forward 'pkg:@voice-room/site/styles/site';\n",
+      'styles/_b.scss': "// @use '@/styles/mixins';\n@forward 'pkg:@voiceroom/site/styles/site';\n",
       'styles/_local.scss': ''
     },
-    'packages/ui/src'
+    'packages/ui-kit/src'
   );
   assert.deepEqual(checkWebStyles(repo).sort(), [
-    'packages/ui/src/styles/_a.scss:1 portable UI cannot load styles from applications',
-    'packages/ui/src/styles/_b.scss:2 portable UI cannot load styles from applications'
+    'packages/ui-kit/src/styles/_a.scss:1 portable UI cannot load styles from applications',
+    'packages/ui-kit/src/styles/_b.scss:2 portable UI cannot load styles from applications'
   ]);
 });
 
@@ -150,13 +167,13 @@ test('call styles use portable Sass modules and call views use portable UI wrapp
     t,
     {
       'styles/_call.scss':
-        "@use 'pkg:@voice-room/ui/styles/mixins';\n@forward '../../../../apps/web/src/styles/mixins';\n",
+        "@use 'pkg:@voiceroom/ui-kit/styles/mixins';\n@forward '../../../../apps/web/src/styles/mixins';\n",
       'views/CallDock.vue': '<script setup lang="ts">import { DialogRoot } from \'reka-ui\';</script>\n'
     },
     'packages/call/src'
   );
   assert.deepEqual(checkWebStyles(repo).sort(), [
     'packages/call/src/styles/_call.scss:2 portable call cannot load styles from applications',
-    'packages/call/src/views/CallDock.vue:1 reka-ui import outside the primitive directories; use a UI wrapper'
+    'packages/call/src/views/CallDock.vue:1 reka-ui import outside the kit; use or extend a packages/ui-kit component'
   ]);
 });

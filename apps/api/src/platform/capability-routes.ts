@@ -4,7 +4,7 @@
 
 import type { TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
 import type { FastifyInstance } from 'fastify';
-import { Capabilities, PUBLIC_CAPABILITY_KEYS } from '@voice-room/shared/contracts/ops';
+import { Capabilities, PUBLIC_CAPABILITY_KEYS } from '@voiceroom/shared/contracts/ops';
 
 const EVERY_FEATURE_ON = Object.freeze(Object.fromEntries(PUBLIC_CAPABILITY_KEYS.map((key) => [key, true])));
 

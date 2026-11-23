@@ -61,7 +61,7 @@ test('removing the avatar shows the initials at once and deletes it only on save
 
 test('a file that is not an image never reaches the crop dialog', async () => {
   await renderSettings(null);
-  const input = instanceOf(document.querySelector('.room-avatar-field__input'), HTMLInputElement, 'avatar input');
+  const input = instanceOf(screen.getByLabelText('Аватар'), HTMLInputElement, 'avatar input');
   await userEvent.upload(input, new File(['x'], 'notes.txt', { type: 'text/plain' }), { applyAccept: false });
   expect((await screen.findByRole('alert')).textContent).toBe('Выберите изображение JPEG, PNG или WebP');
   expect(screen.queryByRole('dialog', { name: 'Аватар комнаты' })).toBeNull();

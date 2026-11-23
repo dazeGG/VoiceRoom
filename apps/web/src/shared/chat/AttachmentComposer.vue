@@ -1,8 +1,9 @@
 <script setup lang="ts">
+import { IconButton, Progress, Pressable } from '@voiceroom/ui-kit/components';
 import { t } from '@/shared/i18n';
-import { Image as ImageIcon, LoaderCircle, RotateCcw, X } from '@lucide/vue';
+import { Image as ImageIcon, RotateCcw, X } from '@lucide/vue';
 import { computed, ref } from 'vue';
-import { iconSm } from '@/shared/ui/icons';
+import { iconSm } from '@voiceroom/ui-kit/icon-defaults';
 import { attachmentVariantUrl } from '@/api/attachments';
 import AttachmentLightbox from './AttachmentLightbox.vue';
 import type { AttachmentComposeStore } from './attachment-compose';
@@ -43,52 +44,48 @@ function view(draft: Draft): void {
         class="attachment-composer__draft"
         :class="`attachment-composer__draft--${draft.error ? 'failed' : draft.state}`"
       >
-        <button
+        <Pressable
           v-if="draft.previewUrl || draft.state === 'ready'"
           class="attachment-composer__open"
-          type="button"
           :aria-label="t('Открыть изображение {p0}', { p0: index + 1 })"
           @click="view(draft)"
         >
           <img :src="draftSource(draft)" :alt="draft.file?.name || t('Изображение {p0}', { p0: index + 1 })" />
-        </button>
+        </Pressable>
         <span v-else class="attachment-composer__placeholder"><ImageIcon v-bind="iconSm" aria-hidden="true" /></span>
 
-        <span
-          v-if="draft.state !== 'ready' && !draft.error"
+        <Progress
+          v-if="draft.state !== 'ready'"
           class="attachment-composer__loading"
-          :style="{ '--attachment-progress': `${Math.round(draft.progress * 100)}%` }"
-          role="status"
-          :aria-label="
-            draft.state === 'processing'
-              ? t('Обработка изображения')
-              : t('Загрузка изображения {p0}%', { p0: Math.round(draft.progress * 100) })
-          "
-        >
-          <LoaderCircle v-bind="iconSm" aria-hidden="true" />
-        </span>
+          hide-label
+          :label="draft.state === 'processing' ? t('Обработка изображения') : t('Загрузка изображения')"
+          :value="draft.state === 'processing' ? null : Math.round(draft.progress * 100)"
+          :error="Boolean(draft.error) || draft.state === 'failed'"
+        />
 
-        <button
+        <IconButton
           v-if="draft.error || draft.state === 'failed'"
           class="attachment-composer__retry"
-          type="button"
-          :aria-label="t('Повторить загрузку')"
-          :title="draft.error || t('Не удалось обработать изображение')"
+          :label="t('Повторить загрузку')"
+          :aria-description="draft.error || t('Не удалось обработать изображение')"
           :disabled="disabled"
+          :size="28"
+          variant="filled"
           @click="void store.retry(draft)"
         >
-          <RotateCcw v-bind="iconSm" aria-hidden="true" />
-        </button>
+          <RotateCcw aria-hidden="true" />
+        </IconButton>
 
-        <button
+        <IconButton
           class="attachment-composer__remove"
-          type="button"
-          :aria-label="t('Удалить изображение {p0}', { p0: index + 1 })"
+          :label="t('Удалить изображение {p0}', { p0: index + 1 })"
           :disabled="disabled"
+          :size="24"
+          variant="filled"
           @click="remove(draft)"
         >
-          <X v-bind="iconSm" aria-hidden="true" />
-        </button>
+          <X aria-hidden="true" />
+        </IconButton>
       </li>
     </ol>
   </section>

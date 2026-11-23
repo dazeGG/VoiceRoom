@@ -1,15 +1,15 @@
 import type { CallRealtimeEvent, CallTransport, CallTransportFailure, LiveKitCredentials } from '../engine/transport';
 import { loadLiveKitClient } from '../livekit-runtime';
-import { isErrorCode, RETRYABLE_JOIN_CODES } from '@voice-room/shared/contracts/errors';
+import { isErrorCode, RETRYABLE_JOIN_CODES } from '@voiceroom/shared/contracts/errors';
 import {
   type ClientCommand,
   type ClientCommands,
   type MediaGrant,
   type ServerFrame,
   type VoiceTarget
-} from '@voice-room/shared/contracts/realtime';
-import type { RoomCapabilities } from '@voice-room/shared/contracts/rooms';
-import { parseServerFrame } from '@voice-room/shared/realtime';
+} from '@voiceroom/shared/contracts/realtime';
+import type { RoomCapabilities } from '@voiceroom/shared/contracts/rooms';
+import { parseServerFrame } from '@voiceroom/shared/realtime';
 import { shallowRef } from 'vue';
 
 type Socket = Pick<WebSocket, 'readyState' | 'send' | 'close'> & EventTarget;

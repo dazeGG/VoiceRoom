@@ -1,7 +1,7 @@
 // Deleting the account asks for the password and says what the grace period
 // keeps; a new sign-in asks "was it you?" and "no" leads to securing the account.
 
-import { screen } from '@testing-library/vue';
+import { screen, within } from '@testing-library/vue';
 import userEvent from '@testing-library/user-event';
 import { expect, test, vi } from 'vitest';
 import DeleteAccountDialog from '@/features/home/components/DeleteAccountDialog.vue';
@@ -38,6 +38,9 @@ test('deletion waits for the password and the acknowledgement, and names what ha
   expect(submit).toHaveProperty('disabled', true);
   await userEvent.click(screen.getByRole('checkbox'));
   await userEvent.click(submit);
+  const confirmation = await screen.findByRole('alertdialog', { name: 'Удалить аккаунт?' });
+  expect(calls.some(({ method }) => method === 'POST')).toBe(false);
+  await userEvent.click(within(confirmation).getByRole('button', { name: 'Удалить' }));
 
   await vi.waitFor(() =>
     expect(onToast).toHaveBeenCalledWith(expect.stringMatching(/Передумали — просто войдите снова/))
@@ -58,8 +61,10 @@ test('a wrong password keeps the dialog open with the reason', async () => {
   await userEvent.type(await screen.findByLabelText('Текущий пароль'), 'wrong');
   await userEvent.click(screen.getByRole('checkbox'));
   await userEvent.click(screen.getByRole('button', { name: 'Удалить аккаунт' }));
+  const confirmation = await screen.findByRole('alertdialog', { name: 'Удалить аккаунт?' });
+  await userEvent.click(within(confirmation).getByRole('button', { name: 'Удалить' }));
 
-  expect(await screen.findByRole('alert')).toBeTruthy();
+  expect(await within(confirmation).findByRole('alert')).toBeTruthy();
   expect(onToast).not.toHaveBeenCalled();
 });
 

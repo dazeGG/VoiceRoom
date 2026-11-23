@@ -11,7 +11,7 @@ test('joining with a stream that has no audio track fails with a message for the
     requestToken: async () => ({ token: 't', url: 'wss://lk.example' })
   });
   // The harness loads a fresh module graph; take the error class from it.
-  const { UserFacingError } = await import('@voice-room/call/engine/core/utils');
+  const { UserFacingError } = await import('@voiceroom/call/engine/core/utils');
   Object.assign(lk.state, {
     roomId: 'room-a',
     peerId: 'peer-1',

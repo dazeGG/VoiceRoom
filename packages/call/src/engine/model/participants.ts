@@ -1,5 +1,5 @@
 import type { RemoteParticipant } from 'livekit-client';
-import type { PublicPeer } from '@voice-room/shared/contracts/rooms';
+import type { PublicPeer } from '@voiceroom/shared/contracts/rooms';
 import type { VoiceMeter } from '../media/meters';
 
 /** A peer as the server sends it, any field but `id` possibly left out, plus client-only flags. */

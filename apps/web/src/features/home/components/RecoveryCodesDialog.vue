@@ -3,10 +3,10 @@ import { useLocalizedText, currentErrorMessage } from '@/shared/i18n/localized-t
 
 import { t } from '@/shared/i18n';
 import { Copy, Download } from '@lucide/vue';
-import { ref, watch } from 'vue';
+import { ref, useId, watch } from 'vue';
+import { Checkbox, Field, TextField, Button, Dialog } from '@voiceroom/ui-kit/components';
 import { generateRecoveryCodes, type RecoveryCodesStatus } from '@/api/auth';
-import { Button, Dialog } from '@/shared/ui';
-import { iconSm } from '@/shared/ui/icons';
+import { iconSm } from '@voiceroom/ui-kit/icon-defaults';
 import { recoveryCodesFileText } from '../model/account-security';
 import type { ToastOptions } from '../model/toasts.store';
 
@@ -21,6 +21,7 @@ const emit = defineEmits<{
 }>();
 
 const password = ref('');
+const formId = useId();
 const codes = ref<string[]>([]);
 const saved = ref(false);
 const generating = ref(false);
@@ -92,13 +93,18 @@ function downloadCodes(): void {
 <template>
   <!-- Opened from the settings modal, whose overlay sits at z-index 60 (_recovery-codes.scss lifts this one). -->
   <Dialog
+    layer="nested"
     :open="open"
     :title="codes.length > 0 ? t('Сохраните коды восстановления') : t('Коды восстановления')"
     :on-close="close"
-    :width="480"
     :initial-focus="codes.length > 0 ? '.recovery-dialog__codes' : '#recoveryPasswordInput'"
   >
-    <form v-if="codes.length === 0" class="recovery-dialog recovery-dialog__form" @submit.prevent="generate">
+    <form
+      v-if="codes.length === 0"
+      :id="formId"
+      class="recovery-dialog recovery-dialog__form"
+      @submit.prevent="generate"
+    >
       <p class="recovery-dialog__text">
         {{
           t(
@@ -109,24 +115,17 @@ function downloadCodes(): void {
       <p v-if="replacing" class="recovery-dialog__warning">
         {{ t('Новые коды заменят старые — старые сразу перестанут работать.') }}
       </p>
-      <div>
-        <label class="settings__field-label" for="recoveryPasswordInput">{{ t('Текущий пароль') }}</label>
-        <input
-          id="recoveryPasswordInput"
+      <Field id="recoveryPasswordInput" :label="t('Текущий пароль')">
+        <TextField
           v-model="password"
-          class="settings__input"
+          size="lg"
+          name="current-password"
           type="password"
           autocomplete="current-password"
           placeholder="••••••••"
         />
-      </div>
+      </Field>
       <p v-if="error" class="recovery-dialog__error" role="alert">{{ error }}</p>
-      <div class="home-dialog__actions">
-        <Button variant="ghost" type="button" @click="close">{{ t('Отмена') }}</Button>
-        <Button variant="primary" type="submit" :disabled="generating">
-          {{ generating ? t('Создаём…') : t('Создать коды') }}
-        </Button>
-      </div>
     </form>
     <div v-else class="recovery-dialog">
       <p class="recovery-dialog__text">
@@ -147,13 +146,18 @@ function downloadCodes(): void {
           <template #icon><Download v-bind="iconSm" aria-hidden="true" /></template> {{ t('Скачать .txt') }}
         </Button>
       </div>
-      <label class="recovery-dialog__confirm">
-        <input v-model="saved" type="checkbox" />
-        <span>{{ t('Я сохранил коды') }}</span>
-      </label>
-      <div class="home-dialog__actions">
-        <Button variant="primary" type="button" :disabled="!saved" @click="close">{{ t('Готово') }}</Button>
-      </div>
+      <Checkbox :model-value="saved" class="recovery-dialog__confirm" @update:model-value="saved = $event === true">
+        {{ t('Я сохранил коды') }}
+      </Checkbox>
     </div>
+    <template #footer>
+      <template v-if="codes.length === 0">
+        <Button variant="ghost" type="button" @click="close">{{ t('Отмена') }}</Button>
+        <Button variant="primary" type="submit" :form="formId" :disabled="generating">
+          {{ generating ? t('Создаём…') : t('Создать коды') }}
+        </Button>
+      </template>
+      <Button v-else variant="primary" type="button" :disabled="!saved" @click="close">{{ t('Готово') }}</Button>
+    </template>
   </Dialog>
 </template>

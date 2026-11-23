@@ -1,6 +1,6 @@
 import { test, vi } from 'vitest';
 import assert from 'node:assert/strict';
-import { normalizePeerId } from '@voice-room/shared/validation';
+import { normalizePeerId } from '@voiceroom/shared/validation';
 import { newId } from '../src/shared/new-id.ts';
 
 test('an id is a UUID where the browser can make one', () => {

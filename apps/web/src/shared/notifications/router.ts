@@ -4,8 +4,8 @@ import type {
   NotificationMessageBrief,
   NotificationRoomContext,
   ServerEvent
-} from '@voice-room/shared/contracts/realtime';
-import { isRecord } from '@voice-room/shared/guards';
+} from '@voiceroom/shared/contracts/realtime';
+import { isRecord } from '@voiceroom/shared/guards';
 import type { RealtimeEvent } from '../../api/realtime';
 import { getDesktopNotificationBridge } from '../../platform/desktop-notification-bridge';
 

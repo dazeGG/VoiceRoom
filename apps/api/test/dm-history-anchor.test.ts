@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test, { type TestContext } from 'node:test';
 import fastify from 'fastify';
-import { DirectHistoryPage } from '@voice-room/shared/contracts/messages';
+import { DirectHistoryPage } from '@voiceroom/shared/contracts/messages';
 import type { ApiContext } from '../src/app/context.ts';
 import { createDmHistoryRepository } from '../src/domains/messaging/dm-history.repository.ts';
 import { createDmHistoryService, type DmHistoryRepository } from '../src/domains/messaging/dm-history.service.ts';

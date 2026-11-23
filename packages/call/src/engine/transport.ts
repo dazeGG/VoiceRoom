@@ -1,6 +1,6 @@
-import type { LiveKitAdmission } from '@voice-room/shared/contracts/admission';
-import type { ErrorCode } from '@voice-room/shared/contracts/errors';
-import type { ClientCommands, MediaGrant, ServerEvent } from '@voice-room/shared/contracts/realtime';
+import type { LiveKitAdmission } from '@voiceroom/shared/contracts/admission';
+import type { ErrorCode } from '@voiceroom/shared/contracts/errors';
+import type { ClientCommands, MediaGrant, ServerEvent } from '@voiceroom/shared/contracts/realtime';
 import type { PeerSession, RoomLifecycleSummary } from './core/types';
 
 export type LiveKitCredentials = LiveKitAdmission & { urls: string[] };

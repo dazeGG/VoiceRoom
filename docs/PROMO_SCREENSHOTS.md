@@ -10,8 +10,8 @@ descriptive alternative text, a visible caption and intrinsic dimensions.
 
 | File | Pixels | Source / placement |
 | --- | --- | --- |
-| `screen-share-video.png` | 1600 × 1000 | Viewer receiving Big Buck Bunny from the desktop app's real «Плавное видео» picker; screen-sharing hero and mode card |
-| `screen-share-text.png` | 1600 × 1000 | Viewer receiving an isolated VS Code window in «Чёткая картинка» mode; screen-sharing hero and mode card |
+| `screen-share-video.png` | 1600 × 1000 | Viewer receiving Big Buck Bunny from the desktop app's real «Плавное видео» (Smooth video) picker; screen-sharing hero and mode card |
+| `screen-share-text.png` | 1600 × 1000 | Viewer receiving an isolated VS Code window in «Чёткая картинка» (Clear picture) mode; screen-sharing hero and mode card |
 | `voice-ptt.png` | 1280 × 800 | Desktop Sound settings: RNNoise, gate at −40 dB, push-to-talk on F9; games page |
 | `voice-mix.png` | 1280 × 800 | One participant's actual volume menu at 80%; home page |
 | `chat-features.png` | 1280 × 800 | Real pin, reply, mention, reaction and public-link preview; home page |

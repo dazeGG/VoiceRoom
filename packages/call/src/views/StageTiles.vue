@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { t } from '@voice-room/ui/i18n';
-import { fitTiles } from '@voice-room/ui/tile-grid';
+import { IconButton } from '@voiceroom/ui-kit/components';
+import { t } from '@voiceroom/ui-kit/i18n';
+import { fitTiles } from '@voiceroom/ui/tile-grid';
 import { ChevronDown, ChevronLeft, ChevronRight } from '@lucide/vue';
 import { computed, ref, watch } from 'vue';
 import type { Participant } from '../engine/core/types';
@@ -94,16 +95,18 @@ watch(
         <span id="stageStripKicker" class="stage-strip__kicker">{{ t('В комнате') }}</span>
         <strong id="stageStripSummary" class="stage-strip__summary">{{ t('0 участников') }}</strong>
       </div>
-      <button
+      <IconButton
         id="stripToggleButton"
+        :size="32"
+        variant="outline"
+        :tooltip="false"
         class="stage-strip__toggle"
-        type="button"
-        :aria-label="t('Свернуть пользователей')"
+        :label="t('Свернуть пользователей')"
         aria-pressed="false"
         hidden
       >
         <ChevronDown aria-hidden="true" />
-      </button>
+      </IconButton>
     </div>
 
     <div v-if="focusedParticipant" class="participant-focus">
@@ -111,59 +114,71 @@ watch(
         <slot name="participants" :participants="[focusedParticipant]" variant="grid" />
       </div>
       <div class="participant-carousel">
-        <button
+        <IconButton
+          :size="32"
+          variant="outline"
+          :tooltip="false"
+          pill
           :class="['participant-carousel__nav', { 'participant-carousel__nav--hidden': !canScrollLeft }]"
-          type="button"
-          :aria-label="t('Предыдущие участники')"
+          :label="t('Предыдущие участники')"
           :tabindex="canScrollLeft ? 0 : -1"
           @click="moveCarousel(-1)"
         >
           <ChevronLeft :size="18" />
-        </button>
+        </IconButton>
         <div ref="carousel" class="participant-carousel__viewport" @scroll="updateCarouselNav">
           <div class="participant-carousel__strip">
             <slot name="streams" />
             <slot name="participants" :participants="stripParticipants" variant="strip" />
           </div>
         </div>
-        <button
+        <IconButton
+          :size="32"
+          variant="outline"
+          :tooltip="false"
+          pill
           :class="['participant-carousel__nav', { 'participant-carousel__nav--hidden': !canScrollRight }]"
-          type="button"
-          :aria-label="t('Следующие участники')"
+          :label="t('Следующие участники')"
           :tabindex="canScrollRight ? 0 : -1"
           @click="moveCarousel(1)"
         >
           <ChevronRight :size="18" />
-        </button>
+        </IconButton>
       </div>
     </div>
     <!-- The focused stream itself is the sibling ScreenStage; the strip row
          below carries everyone else in the same spotlight carousel. -->
     <div v-else-if="screenFocused" class="participant-carousel">
-      <button
+      <IconButton
+        :size="32"
+        variant="outline"
+        :tooltip="false"
+        pill
         :class="['participant-carousel__nav', { 'participant-carousel__nav--hidden': !canScrollLeft }]"
-        type="button"
-        :aria-label="t('Предыдущие участники')"
+        :label="t('Предыдущие участники')"
         :tabindex="canScrollLeft ? 0 : -1"
         @click="moveCarousel(-1)"
       >
         <ChevronLeft :size="18" />
-      </button>
+      </IconButton>
       <div ref="carousel" class="participant-carousel__viewport" @scroll="updateCarouselNav">
         <div class="participant-carousel__strip">
           <slot name="streams" />
           <slot name="participants" :participants="participants" variant="strip" />
         </div>
       </div>
-      <button
+      <IconButton
+        :size="32"
+        variant="outline"
+        :tooltip="false"
+        pill
         :class="['participant-carousel__nav', { 'participant-carousel__nav--hidden': !canScrollRight }]"
-        type="button"
-        :aria-label="t('Следующие участники')"
+        :label="t('Следующие участники')"
         :tabindex="canScrollRight ? 0 : -1"
         @click="moveCarousel(1)"
       >
         <ChevronRight :size="18" />
-      </button>
+      </IconButton>
     </div>
     <div
       v-else

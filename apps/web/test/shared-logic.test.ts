@@ -2,7 +2,7 @@ import { expect, test } from 'vitest';
 import { frequentReactionKey, rankFrequentReactions } from '../src/shared/chat/frequent-reactions.ts';
 import { effectivePresenceStatus, presenceStatusLabel } from '../src/shared/presence.ts';
 import { parseChatLinks } from '../src/shared/utils/linkify.ts';
-import { clearScreenAttendance, setScreenAttendance } from '@voice-room/call/engine/model/screen-attendance';
+import { clearScreenAttendance, setScreenAttendance } from '@voiceroom/call/engine/model/screen-attendance';
 import { participant } from './fixtures/participant.ts';
 
 test('chat links keep hosts, paths and query strings, drop trailing punctuation, and never link scripts', () => {

@@ -29,10 +29,10 @@ import {
   SessionsRevoked,
   SignedIn,
   WhatsNewAnswer
-} from '@voice-room/shared/contracts/account';
-import { Done } from '@voice-room/shared/contracts/http';
-import { parseAndroidAppVersion } from '@voice-room/shared/client-version';
-import { cleanDisplayName, normalizeLogin } from '@voice-room/shared/validation';
+} from '@voiceroom/shared/contracts/account';
+import { Done } from '@voiceroom/shared/contracts/http';
+import { parseAndroidAppVersion } from '@voiceroom/shared/client-version';
+import { cleanDisplayName, normalizeLogin } from '@voiceroom/shared/validation';
 import type { ApiContext, ResolvedSession, SessionRecord, SessionUser } from '../../app/context.ts';
 import { selfUser } from './user-records.ts';
 import { failure, optionalJsonBody } from '../../platform/http/http-kit.ts';

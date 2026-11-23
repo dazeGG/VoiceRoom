@@ -4,11 +4,11 @@
 import { sql, type ExpressionBuilder, type Selectable } from 'kysely';
 import { type Database } from '../../platform/db/kysely.ts';
 import { lockKeys, lockXact } from '../../platform/db/locks.ts';
-import { cleanAvatarColorKey, cleanPresenceStatus } from '@voice-room/shared/validation';
-import { normalizeLinkPreview } from '@voice-room/shared/link-preview';
-import { isRecord } from '@voice-room/shared/guards';
-import { Nullable } from '@voice-room/shared/contracts/http';
-import { DirectMessage as DirectMessageView, ReplyPointer } from '@voice-room/shared/contracts/messages';
+import { cleanAvatarColorKey, cleanPresenceStatus } from '@voiceroom/shared/validation';
+import { normalizeLinkPreview } from '@voiceroom/shared/link-preview';
+import { isRecord } from '@voiceroom/shared/guards';
+import { Nullable } from '@voiceroom/shared/contracts/http';
+import { DirectMessage as DirectMessageView, ReplyPointer } from '@voiceroom/shared/contracts/messages';
 import { Type, type Static } from 'typebox';
 import { Value } from 'typebox/value';
 import type { DB, DirectMessages, Users } from '../../platform/db/schema.ts';

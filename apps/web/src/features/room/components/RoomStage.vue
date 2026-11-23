@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import { RoomStage } from '@voice-room/call/views';
+import { RoomStage } from '@voiceroom/call/views';
 import { computed, watchEffect } from 'vue';
-import { state as roomClientState } from '@voice-room/call/engine/core/room-runtime.store';
-import { useCallPageStore } from '@voice-room/call/engine/core/call-page.store';
-import { syncRemoteCameraDemand } from '@voice-room/call/engine/services/livekit/remote-participants';
+import { state as roomClientState } from '@voiceroom/call/engine/core/room-runtime.store';
+import { useCallPageStore } from '@voiceroom/call/engine/core/call-page.store';
+import { syncRemoteCameraDemand } from '@voiceroom/call/engine/services/livekit/remote-participants';
 import { useMobileCallUiStore } from '../mobile-call-ui.store';
-import { useParticipantsUiStore } from '@voice-room/call/engine/core/participants-ui.store';
+import { useParticipantsUiStore } from '@voiceroom/call/engine/core/participants-ui.store';
 import RoomChat from './RoomChat.vue';
 import RoomDock from './RoomDock.vue';
 import ScreenStage from './ScreenStage.vue';

@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import type { IncomingMessage } from 'node:http';
-import type { MediaGrant, ServerFrame } from '@voice-room/shared/contracts/realtime';
+import type { MediaGrant, ServerFrame } from '@voiceroom/shared/contracts/realtime';
 import { createWsHandler, type WsRoomRuntime } from '../src/realtime/ws-handler.ts';
 import type { ConnectionRegistry, WsConnection } from '../src/realtime/registry.ts';
 import { fake } from './fakes/index.ts';

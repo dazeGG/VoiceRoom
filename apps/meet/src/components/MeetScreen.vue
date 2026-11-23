@@ -1,28 +1,23 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-import { ScreenStage } from '@voice-room/call/views';
-import { useScreenUiStore } from '@voice-room/call/engine/core/screen-ui.store';
+import { ScreenStage } from '@voiceroom/call/views';
+import { useScreenUiStore } from '@voiceroom/call/engine/core/screen-ui.store';
 import {
   syncScreenVideoAudio,
   toggleScreenFullscreen,
   toggleScreenMute,
-  updateScreenVolumeFromSlider
-} from '@voice-room/call/engine/ui/screen-stage-controls';
-import { handleScreenStageClick } from '@voice-room/call/engine/ui/screen-view';
+  setScreenVolume
+} from '@voiceroom/call/engine/ui/screen-stage-controls';
+import { handleScreenStageClick } from '@voiceroom/call/engine/ui/screen-view';
 
 const screen = useScreenUiStore();
 const meta = computed(() => screen.getScreenMetaView());
 const volume = computed(() => screen.getStreamVolumeView());
 const fullscreen = computed(() => screen.getFullscreenView());
 
-function registerElements(
-  stage: HTMLElement | null,
-  video: HTMLVideoElement | null,
-  slider: HTMLInputElement | null
-): void {
+function registerElements(stage: HTMLElement | null, video: HTMLVideoElement | null): void {
   screen.registerScreenStage(stage);
   screen.registerScreenVideo(video);
-  screen.registerStreamVolumeSlider(slider);
 }
 </script>
 
@@ -41,7 +36,7 @@ function registerElements(
     @interact="handleScreenStageClick"
     @active-change="screen.uiActive = $event"
     @toggle-mute="toggleScreenMute"
-    @update-volume="updateScreenVolumeFromSlider()"
+    @update-volume="setScreenVolume"
     @toggle-fullscreen="toggleScreenFullscreen()"
   />
 </template>

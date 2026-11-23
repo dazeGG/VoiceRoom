@@ -1,8 +1,9 @@
 <script setup lang="ts">
+import { Separator, Toolbar, ToolbarButton } from '@voiceroom/ui-kit/components';
 import { t } from '@/shared/i18n';
 import { computed, ref } from 'vue';
-import { Copy, Ellipsis, Reply } from '@lucide/vue';
-import { iconSm } from '@/shared/ui/icons';
+import { Copy, Ellipsis, Reply, SmilePlus } from '@lucide/vue';
+import { iconSm } from '@voiceroom/ui-kit/icon-defaults';
 import ReactionPicker from './ReactionPicker.vue';
 import type { ReactionStore } from './reaction-store';
 
@@ -26,11 +27,10 @@ const pickerOpen = ref(false);
 </script>
 
 <template>
-  <div
+  <Toolbar
     class="message-hover-actions"
     :class="{ 'message-hover-actions--overlay-open': pickerOpen }"
-    role="toolbar"
-    :aria-label="t('Действия с сообщением')"
+    :label="t('Действия с сообщением')"
   >
     <ReactionPicker
       v-if="reactionStore && userId"
@@ -39,40 +39,28 @@ const pickerOpen = ref(false);
       :message-id="messageId"
       :user-id="userId"
       :show-quick-reactions="false"
-    />
-    <span
-      v-if="hasReactions"
-      class="message-hover-actions__divider"
-      role="separator"
-      aria-orientation="vertical"
-    ></span>
-    <button
-      v-if="onReply"
-      class="message-hover-actions__button"
-      type="button"
-      :aria-label="t('Ответить')"
-      :title="t('Ответить')"
-      @click="onReply"
     >
+      <template #trigger="{ toggle, panelId, open }">
+        <ToolbarButton
+          :label="t('Открыть выбор эмодзи')"
+          aria-haspopup="dialog"
+          :aria-expanded="open"
+          :aria-controls="panelId"
+          @click="toggle"
+        >
+          <SmilePlus v-bind="iconSm" aria-hidden="true" />
+        </ToolbarButton>
+      </template>
+    </ReactionPicker>
+    <Separator v-if="hasReactions" orientation="vertical" />
+    <ToolbarButton v-if="onReply" :label="t('Ответить')" @click="onReply">
       <Reply v-bind="iconSm" aria-hidden="true" />
-    </button>
-    <button
-      class="message-hover-actions__button"
-      type="button"
-      :aria-label="t('Копировать текст')"
-      :title="t('Копировать текст')"
-      @click="emit('copy')"
-    >
+    </ToolbarButton>
+    <ToolbarButton :label="t('Копировать текст')" @click="emit('copy')">
       <Copy v-bind="iconSm" aria-hidden="true" />
-    </button>
-    <button
-      class="message-hover-actions__button"
-      type="button"
-      :aria-label="t('Больше действий')"
-      :title="t('Больше действий')"
-      @click="emit('more', $event)"
-    >
+    </ToolbarButton>
+    <ToolbarButton :label="t('Больше действий')" @click="emit('more', $event)">
       <Ellipsis v-bind="iconSm" aria-hidden="true" />
-    </button>
-  </div>
+    </ToolbarButton>
+  </Toolbar>
 </template>

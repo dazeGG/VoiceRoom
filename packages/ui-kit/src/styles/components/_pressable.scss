@@ -1,0 +1,42 @@
+.ui-pressable {
+  display: block;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: inherit;
+  cursor: pointer;
+
+  &:focus-visible {
+    outline: 2px solid var(--vr-accent);
+    outline-offset: var(--space-2);
+  }
+
+  &--inset:focus-visible {
+    outline-offset: calc(-1 * var(--space-2));
+  }
+
+  &--hoverable:hover:not(:disabled, [aria-disabled='true']) {
+    background: var(--vr-hover);
+  }
+
+  &:disabled,
+  &[aria-disabled='true'] {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+
+  &--inline {
+    display: inline;
+  }
+  &--flex {
+    display: flex;
+  }
+  &--inline-flex {
+    display: inline-flex;
+  }
+  &--grid {
+    display: grid;
+  }
+}

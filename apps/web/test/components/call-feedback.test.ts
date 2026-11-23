@@ -6,7 +6,7 @@ import { nextTick } from 'vue';
 import userEvent from '@testing-library/user-event';
 import { createPinia, setActivePinia } from 'pinia';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
-import type { CallFeedbackCall } from '@voice-room/shared/contracts/feedback';
+import type { CallFeedbackCall } from '@voiceroom/shared/contracts/feedback';
 import {
   FEEDBACK_ASK_INTERVAL_MS,
   FEEDBACK_MAX_INTERVAL_MS,
@@ -22,7 +22,7 @@ import {
   recordPeerCount,
   recordPollCounts,
   startCallQuality
-} from '@voice-room/call/engine/room/call-quality';
+} from '@voiceroom/call/engine/room/call-quality';
 import { stubFetch } from '../fixtures/fetch';
 import { renderWithApp } from '../helpers/render';
 
@@ -196,7 +196,7 @@ test('a thumb opens what went wrong; the answer goes with the tags and the comme
   const echo = screen.getByRole('button', { name: 'Эхо или шум' });
   await userEvent.click(echo);
   expect(echo.getAttribute('aria-pressed')).toBe('true');
-  await userEvent.type(screen.getByLabelText('Комментарий'), 'слышал себя');
+  await userEvent.type(screen.getByRole('textbox', { name: 'Комментарий · необязательно' }), 'слышал себя');
   await userEvent.click(screen.getByRole('button', { name: 'Отправить' }));
 
   expect(screen.getByRole('status').textContent).toContain('Спасибо');
@@ -261,7 +261,9 @@ test('on the leave screen the question is the bottom of that window, not a secon
 
   // A thumb alone is a whole answer: nothing else needs filling in.
   await userEvent.click(within(window).getByRole('button', { name: 'Плохо' }));
-  expect(within(window).getByLabelText('Комментарий').getAttribute('placeholder')).not.toMatch(/необязательно/i);
+  expect(
+    within(window).getByRole('textbox', { name: 'Комментарий · необязательно' }).getAttribute('placeholder')
+  ).not.toMatch(/необязательно/i);
   await userEvent.click(within(window).getByRole('button', { name: 'Задержка' }));
   await userEvent.click(within(window).getByRole('button', { name: 'Отправить' }));
   expect(within(window).getByRole('status').textContent).toContain('Спасибо за отзыв');

@@ -2,7 +2,7 @@
 // the size of the log stream, and whatever they carry ends up in the same
 // storage as server records. Everything here is therefore a hard cap applied
 // before a record is emitted, never a best effort applied after.
-import { isArray, isRecord } from '@voice-room/shared/guards';
+import { isArray, isRecord } from '@voiceroom/shared/guards';
 
 const CLIENT_LOG_LIMITS = Object.freeze({
   maxEvents: 100,

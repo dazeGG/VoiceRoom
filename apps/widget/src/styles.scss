@@ -1,0 +1,15 @@
+@use 'sass:meta';
+@use 'pkg:@voiceroom/ui-kit/styles/tokens';
+@use 'pkg:@voiceroom/ui-kit/styles/typography';
+@use 'pkg:@voiceroom/ui-kit/styles/widget/shell';
+
+:where(#widget) {
+  @include meta.load-css('pkg:@voiceroom/ui-kit/styles/components/button');
+  @include meta.load-css('pkg:@voiceroom/ui-kit/styles/components/callout');
+  @include meta.load-css('pkg:@voiceroom/ui-kit/styles/components/field');
+  @include meta.load-css('pkg:@voiceroom/ui-kit/styles/components/icon-button');
+  @include meta.load-css('pkg:@voiceroom/ui-kit/styles/components/input');
+  @include meta.load-css('pkg:@voiceroom/ui-kit/styles/components/select');
+  @include meta.load-css('pkg:@voiceroom/ui-kit/styles/components/slider');
+  @include meta.load-css('pkg:@voiceroom/ui-kit/styles/components/tooltip');
+}

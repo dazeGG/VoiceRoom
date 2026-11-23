@@ -3,8 +3,8 @@
 // audio or video yet, and one way in.
 import { t } from '@/shared/i18n';
 import { LogIn, VolumeX } from '@lucide/vue';
-import { Button } from '@/shared/ui';
-import { iconMd, iconSm } from '@/shared/ui/icons';
+import { Button } from '@voiceroom/ui-kit/components';
+import { iconMd, iconSm } from '@voiceroom/ui-kit/icon-defaults';
 
 const emit = defineEmits<{ enter: [] }>();
 </script>

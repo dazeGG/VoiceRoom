@@ -4,7 +4,7 @@ import {
   CreateAttachmentBody,
   type AttachmentContext,
   type AttachmentDraft
-} from '@voice-room/shared/contracts/media';
+} from '@voiceroom/shared/contracts/media';
 import { api, ApiError, checkedAnswer, failureMessage, isJsonObject } from './client';
 
 export type { AttachmentContext, AttachmentDraft };

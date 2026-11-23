@@ -5,7 +5,7 @@
 
 import type { TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
 import type { FastifyInstance } from 'fastify';
-import { ClientPolicy } from '@voice-room/shared/contracts/client';
+import { ClientPolicy } from '@voiceroom/shared/contracts/client';
 
 export const CLIENT_POLICY_PATH = '/api/client/policy';
 

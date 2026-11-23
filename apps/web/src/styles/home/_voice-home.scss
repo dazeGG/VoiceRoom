@@ -10,9 +10,6 @@
 //   .lr-title                -> .voice-home__title
 //   .lv-home-actions         -> .voice-home__actions
 //   .lv-join                 -> .voice-home__join
-//   .lv-join-input           -> .voice-home__join-input
-//   .lv-join-btn             -> .voice-home__join-button
-//   .lv-sr-only              -> .voice-home__hint (visually hidden)
 //   .lr-callout              -> .voice-home__callout
 //   .lr-callout--request     -> .voice-home__callout--request
 //   .lr-callout-icon         -> .voice-home__callout-icon
@@ -21,7 +18,6 @@
 //   .lr-callout-copy         -> .voice-home__callout-copy
 //   .lr-callout-title        -> .voice-home__callout-title
 //   .lr-callout-sub          -> .voice-home__callout-sub
-//   .lr-callout-dismiss      -> .voice-home__callout-dismiss
 //   .lr-empty-state          -> .voice-home__empty
 //   .lr-empty-mark           -> .voice-home__empty-mark
 //   .lr-empty                -> .voice-home__empty-text
@@ -46,18 +42,18 @@
 //   none: the 1Password/LastPass/Bitwarden skip attributes on the code field are hooks for those
 //   tools, not styling.
 
-@use 'pkg:@voice-room/ui/styles/mixins';
+@use 'pkg:@voiceroom/ui-kit/styles/mixins';
 
 .voice-home {
   flex: 1;
   overflow: auto;
-  padding: 36px 44px;
+  padding: var(--space-32) var(--space-40);
 }
 
 .voice-home__content {
   display: flex;
   flex-direction: column;
-  gap: 28px;
+  gap: var(--space-24);
 }
 
 .voice-home__head {
@@ -65,7 +61,7 @@
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
+  gap: var(--space-16);
 }
 
 .voice-home__title {
@@ -79,76 +75,25 @@
 .voice-home__actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: var(--space-8);
 }
 
 .voice-home__join {
-  display: flex;
-  align-items: stretch;
-  height: 44px;
-  border: 1px solid var(--vr-line-strong);
-  border-radius: 12px;
-  background: var(--vr-surface-2);
-  overflow: hidden;
-
-  &:focus-within {
-    border-color: var(--vr-accent-line);
-  }
+  min-width: 0;
+  max-width: 100%;
 }
 
-.voice-home__join-input {
-  appearance: none;
-  width: 190px;
-  height: 100%;
-  padding: 0 14px;
-  border: none;
-  background: transparent;
-  outline: none;
-  color: var(--vr-text);
-  font-family: var(--font-mono);
-  font-size: 0.8125rem;
-  line-height: 1;
-
-  &::placeholder {
-    color: var(--vr-text-muted);
-  }
-
-  // The room code field is a search input (see VoiceHome.vue); it keeps the look of a plain text field.
-  &::-webkit-search-cancel-button,
-  &::-webkit-search-decoration {
-    appearance: none;
-  }
-}
-
-.voice-home__join-button {
-  padding: 0 16px;
-  border: none;
-  border-left: 1px solid var(--vr-line-strong);
-  background: transparent;
-  color: var(--vr-text);
-  font-family: var(--font-ui);
-  font-size: 0.875rem;
-  font-weight: 500;
-  line-height: 1;
-  cursor: pointer;
-  transition: background 0.13s ease;
-
-  &:hover {
-    background: var(--vr-hover);
-  }
-}
-
-.voice-home__hint {
-  @include mixins.visually-hidden;
+.voice-home__join-field {
+  width: min(100%, calc(var(--space-64) * 4 + var(--space-24)));
 }
 
 .voice-home__callout {
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding: 14px 14px 14px 16px;
+  gap: var(--space-12);
+  padding: var(--space-12) var(--space-12) var(--space-12) var(--space-16);
   border: 1px solid var(--vr-line-strong);
-  border-radius: 14px;
+  border-radius: var(--radius-12);
   background: var(--vr-surface-2);
 }
 
@@ -162,9 +107,9 @@
   flex: none;
   align-items: center;
   justify-content: center;
-  width: 38px;
-  height: 38px;
-  border-radius: 11px;
+  width: var(--size-40);
+  height: var(--size-40);
+  border-radius: var(--radius-10);
   background: var(--vr-accent);
   color: var(--vr-accent-ink);
 }
@@ -178,7 +123,7 @@
   display: flex;
   flex: 1;
   align-items: center;
-  gap: 14px;
+  gap: var(--space-12);
   min-width: 0;
   padding: 0;
   border: none;
@@ -193,13 +138,13 @@
   display: flex;
   flex: 1;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--space-2);
   min-width: 0;
 }
 
 .voice-home__callout-title {
   color: var(--vr-text);
-  font-size: 0.90625rem;
+  font-size: 15px;
   font-weight: 600;
 }
 
@@ -208,41 +153,22 @@
   font-size: 0.8125rem;
 }
 
-.voice-home__callout-dismiss {
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  border: none;
-  border-radius: 9px;
-  background: transparent;
-  color: var(--vr-text-2);
-  cursor: pointer;
-
-  &:hover {
-    background: var(--vr-hover);
-    color: var(--vr-text);
-  }
-}
-
 .voice-home__empty {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 16px;
-  padding: 56px 24px;
+  gap: var(--space-16);
+  padding: var(--space-48) var(--space-24);
   border: 1px dashed var(--vr-line-strong);
-  border-radius: 20px;
+  border-radius: var(--radius-20);
   text-align: center;
 }
 
 .voice-home__empty-mark {
   position: relative;
-  width: 56px;
-  height: 56px;
-  border-radius: 17px;
+  width: var(--size-56);
+  height: var(--size-56);
+  border-radius: var(--radius-16);
   background: var(--vr-surface-2);
 
   &::after {
@@ -258,28 +184,28 @@
   max-width: 340px;
   margin: 0;
   color: var(--vr-text-2);
-  font-size: 0.90625rem;
+  font-size: 15px;
   line-height: 1.5;
 }
 
 .voice-home__section {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--space-12);
 }
 
 .voice-home__section--quiet {
-  gap: 4px;
+  gap: var(--space-4);
 
   .voice-home__section-title {
-    padding-bottom: 8px;
+    padding-bottom: var(--space-8);
   }
 }
 
 .voice-home__section-title {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-8);
   margin: 0;
   color: var(--vr-text-2);
   font-size: 0.8125rem;
@@ -287,8 +213,8 @@
 }
 
 .voice-home__live-dot {
-  width: 6px;
-  height: 6px;
+  width: var(--space-6);
+  height: var(--space-6);
   flex: none;
   border-radius: 50%;
   background: var(--vr-accent);
@@ -298,7 +224,7 @@
 .voice-home__cards {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 12px;
+  gap: var(--space-12);
 
   @media (max-width: 980px) {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -308,16 +234,16 @@
 .voice-home__quiet-list {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--space-4);
 }
 
 .voice-home__card {
   display: flex;
   flex-direction: column;
-  gap: 18px;
-  padding: 18px;
+  gap: var(--space-16);
+  padding: var(--space-16);
   border: 1px solid var(--vr-line);
-  border-radius: 16px;
+  border-radius: var(--radius-16);
   background: var(--vr-surface-2);
   color: inherit;
   font: inherit;
@@ -331,8 +257,8 @@
   }
 
   &:focus-visible {
-    outline: 2px solid var(--vr-accent);
-    outline-offset: 2px;
+    outline: var(--space-2) solid var(--vr-accent);
+    outline-offset: var(--space-2);
   }
 
   .voice-home__room-name {
@@ -345,11 +271,11 @@
 .voice-home__card--quiet {
   flex-direction: row;
   align-items: center;
-  gap: 12px;
-  height: 50px;
-  padding: 0 12px;
+  gap: var(--space-12);
+  height: var(--size-48);
+  padding: 0 var(--space-12);
   border-color: transparent;
-  border-radius: 12px;
+  border-radius: var(--radius-12);
   background: transparent;
 
   &:hover,
@@ -366,15 +292,15 @@
 .voice-home__card-head {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--space-12);
   min-width: 0;
 }
 
 .voice-home__card-foot {
   display: flex;
   align-items: center;
-  gap: 8px;
-  min-height: 24px;
+  gap: var(--space-8);
+  min-height: var(--size-24);
 }
 
 .voice-home__spacer {
@@ -390,9 +316,9 @@
 }
 
 .voice-home__room-sub {
-  width: 56px;
+  width: var(--size-56);
   color: var(--vr-text-muted);
-  font-size: 0.78125rem;
+  font-size: 13px;
   text-align: right;
   white-space: nowrap;
 }

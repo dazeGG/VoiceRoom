@@ -3,8 +3,8 @@
 // a script (every button leads to the releases page); scripts/download.ts
 // sharpens it with this module.
 
-import type { DesktopRelease } from '@voice-room/shared/contracts/ops';
-import { isRecord } from '@voice-room/shared/guards';
+import type { DesktopRelease } from '@voiceroom/shared/contracts/ops';
+import { isRecord } from '@voiceroom/shared/guards';
 import { RELEASES_URL } from './site.ts';
 
 /** A platform the desktop app is built for; each has one asset in a release. */

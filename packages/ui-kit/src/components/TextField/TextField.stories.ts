@@ -1,0 +1,112 @@
+import type { Meta, StoryObj } from '@storybook/vue3-vite';
+import { ref } from 'vue';
+import StoryIcon from '../../../.storybook/StoryIcon.vue';
+import Button from '../Button/Button.vue';
+import Field from '../Field/Field.vue';
+import IconButton from '../IconButton/IconButton.vue';
+import TextField from './TextField.vue';
+import type { TextFieldProps } from './types';
+
+type Args = TextFieldProps & { modelValue?: string };
+
+const meta = {
+  title: 'Components/Inputs/TextField',
+  component: TextField,
+  tags: ['autodocs'],
+  parameters: {
+    docs: {
+      description: {
+        component: [
+          'Own single-line field on a Reka Label, with the label above the field.',
+          '',
+          '- Use sizes sm 32, md 40 and lg 44.',
+          '- Put the label above the field.',
+          '- Put «· необязательно» (· optional) in the label, not in the placeholder.',
+          '- Use the placeholder as an example of the value.',
+          '- Use `lg` in dialogs and on the sign-in screen.',
+          '- Use `md` in settings and forms.',
+          '- Use `sm` for search in panels and pickers.',
+          '- Show an error under the field as a caption in `--vr-danger` with an icon, and set `aria-invalid="true"` and `aria-describedby` on the field.',
+          '- Do not show a hint and an error at the same time.',
+          '- An icon may stand on the left, and an IconButton 24 or 28 may stand on the right.',
+          '- Put a form submit button in the action slot to share the field frame.'
+        ].join('\n')
+      }
+    }
+  },
+  args: { placeholder: 'Мира' },
+  render: (args: Args) => ({
+    components: { Field, TextField },
+    setup: () => ({ args, value: ref(args.modelValue ?? '') }),
+    template: '<Field label="Имя"><TextField v-bind="args" v-model="value" /></Field>'
+  })
+} satisfies Meta<typeof TextField>;
+
+export default meta;
+type Story = StoryObj<typeof meta>;
+
+export const Empty: Story = {};
+export const Filled: Story = { args: { modelValue: 'Мира' } };
+export const Small: Story = { args: { size: 'sm' } };
+export const Medium: Story = { args: { size: 'md' } };
+export const Large: Story = { args: { size: 'lg' } };
+export const Disabled: Story = { args: { disabled: true, modelValue: 'Мира' } };
+export const ReadOnly: Story = { args: { readonly: true, modelValue: 'Мира' } };
+
+export const Password: Story = {
+  args: { type: 'password', modelValue: 'voice-room', autocomplete: 'current-password', placeholder: '' },
+  render: (args: Args) => ({
+    components: { Field, TextField },
+    setup: () => ({ args, value: ref(args.modelValue) }),
+    template: '<Field label="Пароль"><TextField v-bind="args" v-model="value" /></Field>'
+  })
+};
+
+export const SearchWithClear: Story = {
+  args: { clearable: true, size: 'sm', placeholder: 'Имя или логин', modelValue: 'Мира' },
+  render: (args: Args) => ({
+    components: { StoryIcon, Field, TextField },
+    setup: () => ({ args, value: ref(args.modelValue) }),
+    template:
+      '<Field label="Поиск"><TextField v-bind="args" v-model="value"><template #leading><StoryIcon name="search" /></template></TextField></Field>'
+  })
+};
+
+export const Code: Story = {
+  args: { variant: 'mono', modelValue: 'A1BC-DE23', placeholder: 'ABCD-1234' },
+  render: (args: Args) => ({
+    components: { Field, IconButton, StoryIcon, TextField },
+    setup: () => ({ args, value: ref(args.modelValue) }),
+    template: `<Field label="Код восстановления" optional hint="Код действует один раз">
+      <TextField v-bind="args" v-model="value">
+        <template #trailing>
+          <IconButton label="Подставить код" :size="28" @click="value = 'ABCD-1234'"><StoryIcon name="key-round" /></IconButton>
+        </template>
+      </TextField>
+    </Field>`
+  })
+};
+
+export const AttachedAction: Story = {
+  args: { variant: 'mono', size: 'lg', type: 'search', placeholder: 'Код или ссылка' },
+  render: (args: Args) => ({
+    components: { Button, Field, TextField },
+    setup: () => ({ args, value: ref('') }),
+    template: `<form @submit.prevent>
+      <Field label="Код или ссылка на комнату" visually-hidden-label>
+        <TextField v-bind="args" v-model="value">
+          <template #action><Button variant="outline" size="lg" type="submit">Войти</Button></template>
+        </TextField>
+      </Field>
+    </form>`
+  })
+};
+
+export const Invalid: Story = {
+  args: { modelValue: 'mira@' },
+  render: (args: Args) => ({
+    components: { Field, TextField },
+    setup: () => ({ args, value: ref(args.modelValue) }),
+    template: '<Field label="Почта" error="Проверьте адрес почты"><TextField v-bind="args" v-model="value" /></Field>'
+  })
+};

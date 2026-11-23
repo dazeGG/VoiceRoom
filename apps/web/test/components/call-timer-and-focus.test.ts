@@ -5,7 +5,7 @@ import { createPinia, setActivePinia } from 'pinia';
 import { render, screen } from '@testing-library/vue';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import RoomCallTimer from '@/features/room/components/RoomCallTimer.vue';
-import { useVoiceSessionStore } from '@voice-room/call/engine/core/voice-session.store';
+import { useVoiceSessionStore } from '@voiceroom/call/engine/core/voice-session.store';
 
 beforeEach(() => {
   setActivePinia(createPinia());

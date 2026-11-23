@@ -2,9 +2,9 @@ import {
   memberPresenceStatus,
   type MemberPage,
   type MemberPresenceStatus
-} from '@voice-room/shared/contracts/membership';
-import type { PresenceStatus } from '@voice-room/shared/contracts/users';
-import { buildMembershipEnvelope, normalizeMembershipRequest } from '@voice-room/shared/membership';
+} from '@voiceroom/shared/contracts/membership';
+import type { PresenceStatus } from '@voiceroom/shared/contracts/users';
+import { buildMembershipEnvelope, normalizeMembershipRequest } from '@voiceroom/shared/membership';
 import type { DirectoryCursorTuple, MembershipRepository } from './membership.repository.ts';
 
 const CURSOR_PURPOSE = 'room-members-directory';

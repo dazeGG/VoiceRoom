@@ -6,7 +6,7 @@
 // short thanks.
 import { t } from '@/shared/i18n';
 import { computed, ref, watch } from 'vue';
-import { Dialog } from '@voice-room/ui/components';
+import { Dialog } from '@voiceroom/ui-kit/components';
 import CallFeedbackCard from './CallFeedbackCard.vue';
 import { useCallFeedbackStore } from './call-feedback.store';
 
@@ -41,8 +41,8 @@ function close(): void {
   <Dialog
     :open="!hidden && (call !== null || thanked)"
     :title="call ? t('Как прошёл звонок?') : t('Спасибо!')"
-    :width="420"
-    initial-focus=".call-feedback__thumb"
+    size="sm"
+    initial-focus=".call-feedback__thumbs button"
     :on-close="close"
   >
     <CallFeedbackCard v-if="call" :key="callKey" ref="card" :call="call" @answered="thanked = true" />

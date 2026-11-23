@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/vue';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, expect, test, vi } from 'vitest';
-import { Slider } from '@voice-room/ui/components';
+import { Slider } from '@voiceroom/ui-kit/components';
 
 beforeEach(() => {
   vi.stubGlobal(
@@ -23,8 +23,8 @@ test('arrow keys step the value and report it', async () => {
   const slider = await screen.findByRole('slider', { name: 'Громкость' });
   slider.focus();
   await userEvent.keyboard('{ArrowRight}');
-  expect(onUpdate).toHaveBeenLastCalledWith(51);
-  expect(onValueChange).toHaveBeenLastCalledWith(51);
+  expect(onUpdate).toHaveBeenLastCalledWith(55);
+  expect(onValueChange).toHaveBeenLastCalledWith(55);
 });
 
 test('Home and End jump to the limits and the value stays clamped', async () => {
@@ -62,7 +62,25 @@ test('a press within the snap threshold of the default value snaps to it', async
   if (!(root instanceof HTMLElement)) throw new Error('slider root not found');
   root.setPointerCapture = () => {};
   root.releasePointerCapture = () => {};
-  root.getBoundingClientRect = () => new DOMRect(0, 0, 100, 36);
+  root.getBoundingClientRect = () => new DOMRect(0, 0, 100, 32);
   await userEvent.pointer({ keys: '[MouseLeft>]', target: root, coords: { clientX: 52, clientY: 10 } });
   expect(onValueChange).toHaveBeenLastCalledWith(50);
+});
+
+test('Shift+Arrow moves by ten percent while a regular arrow honours an explicit step', async () => {
+  const onValueChange = vi.fn();
+  render(Slider, { props: { modelValue: 0.5, min: 0, max: 1, step: 0.01, onValueChange } });
+  const slider = await screen.findByRole('slider');
+  slider.focus();
+  await userEvent.keyboard('{ArrowRight}');
+  expect(onValueChange).toHaveBeenLastCalledWith(0.51);
+  await userEvent.keyboard('{Shift>}{ArrowLeft}{/Shift}');
+  expect(onValueChange).toHaveBeenLastCalledWith(0.41);
+});
+
+test('a live background stays present when the standard fill is hidden', async () => {
+  const view = render(Slider, { props: { showFill: false }, slots: { background: 'Уровень сигнала' } });
+  expect(await screen.findByRole('slider')).toBeTruthy();
+  expect(screen.getByText('Уровень сигнала')).toBeTruthy();
+  expect(view.container.querySelector('.vr-slider__fill')).toBeNull();
 });

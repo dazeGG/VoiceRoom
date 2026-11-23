@@ -1,6 +1,6 @@
 import { callPageState } from '../core/call-page.store';
 import { getInstalledCallPorts } from '../ports';
-import { t } from '@voice-room/ui/i18n';
+import { t } from '@voiceroom/ui-kit/i18n';
 import { state } from '../core/room-runtime.store';
 import { showToast } from './toast';
 import { clampStreamVolume, normalizeStoredStreamVolume, storeStreamVolume } from '../core/settings';
@@ -91,10 +91,9 @@ export function syncScreenVideoAudio(): void {
   const peer = useScreenUiStore().getActiveScreenPeer();
   const isLocalStream = Boolean(peer?.isLocal);
   const isRemoteStreamActive = Boolean(peer && !peer.isLocal && video?.srcObject);
-  const maxStreamVolume = MAX_STREAM_VOLUME;
-  const streamVolume = clampStreamVolume(state.screenVolume, maxStreamVolume);
+  const streamVolume = clampStreamVolume(state.screenVolume);
   if (state.screenVolume !== streamVolume) {
-    state.screenVolume = normalizeStoredStreamVolume(state.screenVolume, maxStreamVolume);
+    state.screenVolume = normalizeStoredStreamVolume(state.screenVolume);
   }
   const muted = isLocalStream || state.screenMuted || streamVolume <= 0 || isAppPlaybackMuted();
   if (video) {
@@ -111,12 +110,6 @@ export function syncScreenVideoAudio(): void {
       volume: streamVolume
     });
   }
-  const slider = useScreenUiStore().getStreamVolumeSlider();
-  if (!isLocalStream && slider) {
-    slider.max = String(maxStreamVolume * 100);
-    slider.value = String(Math.round(streamVolume * 100));
-  }
-  useScreenUiStore().bumpScreenUiRevision();
 }
 
 export function toggleScreenMute(): void {
@@ -130,11 +123,8 @@ export function toggleScreenMute(): void {
   syncScreenVideoAudio();
 }
 
-export function updateScreenVolumeFromSlider(): void {
-  const slider = useScreenUiStore().getStreamVolumeSlider();
-  if (!slider) return;
-  const nextVolume = Number(slider.value) / 100;
-  state.screenVolume = storeStreamVolume(nextVolume, MAX_STREAM_VOLUME);
+export function setScreenVolume(percent: number): void {
+  state.screenVolume = storeStreamVolume(percent / 100);
   state.screenMuted = state.screenVolume <= 0;
   syncScreenVideoAudio();
 }

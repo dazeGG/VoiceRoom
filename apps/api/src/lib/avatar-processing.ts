@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import sharp from 'sharp';
-import { deriveAvatarAccent, dominantAvatarColor } from '@voice-room/shared/avatar-accent';
+import { deriveAvatarAccent, dominantAvatarColor } from '@voiceroom/shared/avatar-accent';
 import { DomainError } from '../platform/http/domain-error.ts';
 import { detectImageFormat } from './image-signature.mts';
 

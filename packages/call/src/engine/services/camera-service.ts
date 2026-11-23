@@ -3,13 +3,13 @@ import { writeStorage, removeStorage } from '../core/storage';
 // The local camera: open the capture, show it in our own tile and publish it.
 // The camera is off on every join; it lives only as long as the call.
 
-import { t } from '@voice-room/ui/i18n';
+import { t } from '@voiceroom/ui-kit/i18n';
 import { markRaw } from 'vue';
 import { CAMERA_CAPTURE, CAMERA_DEVICE_STORAGE_KEY } from '../core/config';
 import { state } from '../core/room-runtime.store';
 import type { CameraFacing } from '../core/types';
 import { stopStream } from '../core/utils';
-import { isRecord } from '@voice-room/shared/guards';
+import { isRecord } from '@voiceroom/shared/guards';
 import { showToast } from '../ui/toast';
 import { publishLocalCamera, unpublishLocalCamera } from './livekit/local-publications';
 import { askForMedia, describeMediaRefusal } from './media-grant';

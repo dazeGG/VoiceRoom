@@ -1,6 +1,6 @@
 # A second VoiceRoom stack on a host whose own VoiceRoom Caddy already owns
 # 80/443: the dev stand on the production server (docs/SELF_HOSTING.md,
-# "Дев-стенд на хосте прода"). That stack's .env turns it on:
+# "Dev stand on the production host"). That stack's .env turns it on:
 #
 #   COMPOSE_PROJECT_NAME=voiceroom-dev
 #   COMPOSE_FILE=docker-compose.yml:docker-compose.behind-edge.yml

@@ -1,0 +1,38 @@
+.ui-spinner {
+  box-sizing: border-box;
+  display: inline-block;
+  flex: none;
+  width: var(--size-16);
+  height: var(--size-16);
+  border: var(--space-2) solid color-mix(in oklch, currentColor, transparent 75%);
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: ui-spin 0.7s linear infinite;
+
+  @media (prefers-reduced-motion: reduce) {
+    // Keep request progress visible through the host's global motion reset.
+    animation-duration: 3s !important;
+    animation-iteration-count: infinite !important;
+  }
+}
+
+.ui-spinner--size-12 {
+  width: var(--icon-12);
+  height: var(--icon-12);
+}
+
+.ui-spinner--size-20 {
+  width: var(--size-20);
+  height: var(--size-20);
+}
+
+.ui-spinner--size-24 {
+  width: var(--size-24);
+  height: var(--size-24);
+}
+
+@keyframes ui-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

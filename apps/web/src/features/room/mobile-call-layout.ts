@@ -1,1 +1,1 @@
-export * from '@voice-room/call/engine/core/mobile-call-layout';
+export * from '@voiceroom/call/engine/core/mobile-call-layout';

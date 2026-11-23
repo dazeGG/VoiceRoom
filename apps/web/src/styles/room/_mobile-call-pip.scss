@@ -27,7 +27,7 @@
   width: var(--pip-w);
   height: var(--pip-h);
   overflow: hidden;
-  border-radius: 14px;
+  border-radius: var(--radius-12);
   box-shadow:
     var(--vr-shadow-popover),
     0 0 0 1px var(--vr-line-strong);
@@ -44,7 +44,7 @@
 // Grown to turn the camera: twice the size, as far as the screen allows.
 .mobile-call-pip--expanded {
   --pip-long: 356px;
-  border-radius: 18px;
+  border-radius: var(--radius-16);
 }
 
 .mobile-call-pip--dragging {

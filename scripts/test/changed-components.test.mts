@@ -10,7 +10,7 @@ const everyLane = { app: true, site: true, docs: true };
 
 test('routes application, public site and documentation changes independently', () => {
   assert.deepEqual(
-    changedComponents(['apps/api/src/server.ts', 'apps/web/src/main.ts', 'apps/admin/src/main.tsx']),
+    changedComponents(['apps/api/src/server.ts', 'apps/web/src/main.ts', 'apps/admin/src/main.ts']),
     app
   );
   assert.deepEqual(changedComponents(['apps/meet/src/main.ts']), app);
@@ -41,7 +41,9 @@ test('routes shared dependencies and validation files to their consumers', () =>
 
 test('routes UI package changes to the web and site checks', () => {
   assert.deepEqual(changedComponents(['packages/ui/package.json']), appAndSite);
-  assert.deepEqual(changedComponents(['packages/ui/src/styles/_tokens.scss']), appAndSite);
+  assert.deepEqual(changedComponents(['packages/ui-kit/package.json']), appAndSite);
+  assert.deepEqual(changedComponents(['packages/ui-kit/src/styles/_tokens.scss']), appAndSite);
+  assert.deepEqual(changedComponents(['packages/ui-kit/.storybook/main.ts']), appAndSite);
   assert.deepEqual(changedComponents(['packages/ui/src/tile-grid.ts']), appAndSite);
 });
 
@@ -71,7 +73,8 @@ test('manifest and lock version bumps stay in their release lane', () => {
         'packages/shared': { version: appVersion },
         'packages/call': { version: appVersion },
         'packages/ui': { version: appVersion },
-        'apps/site': { name: '@voice-room/site', version: siteVersion, devDependencies: { astro: astroVersion } },
+        'packages/ui-kit': { version: appVersion },
+        'apps/site': { name: '@voiceroom/site', version: siteVersion, devDependencies: { astro: astroVersion } },
         'node_modules/astro': { version: astroVersion }
       }
     });

@@ -1,0 +1,114 @@
+@use 'pkg:@voiceroom/ui-kit/styles/mixins' as ui;
+
+.admin-account-card {
+  &__layout,
+  &__main,
+  &__side,
+  &__charts {
+    display: grid;
+    min-width: 0;
+    align-content: start;
+    gap: var(--space-16);
+  }
+
+  &__layout {
+    grid-template-columns: minmax(0, 1fr);
+
+    @media (width > #{ui.$bp-narrow}) {
+      grid-template-columns: minmax(0, 1fr) minmax(calc(var(--space-64) * 4), 29%);
+    }
+  }
+
+  &__charts {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, calc(var(--space-64) * 6)), 1fr));
+  }
+
+  &__identity,
+  &__name,
+  &__meta,
+  &__actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-8);
+  }
+
+  &__identity {
+    gap: var(--space-16);
+
+    & + .admin-account-card__notice {
+      margin-block-start: var(--space-12);
+    }
+  }
+
+  &__name h2 {
+    margin: 0;
+    overflow-wrap: anywhere;
+  }
+
+  &__names {
+    min-width: 0;
+  }
+
+  &__meta {
+    color: var(--vr-text-muted);
+    font-size: 0.8125rem;
+    overflow-wrap: anywhere;
+
+    > span:nth-child(-n + 2) {
+      font-family: var(--font-mono);
+    }
+  }
+
+  &__log,
+  &__list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  &__log li {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-8);
+    padding-block: var(--space-8);
+
+    & + li {
+      border-block-start: calc(var(--space-2) / 2) solid var(--vr-line);
+    }
+  }
+
+  &__log-dot {
+    width: var(--space-8);
+    height: var(--space-8);
+    flex: none;
+    border-radius: var(--radius-pill);
+    background: var(--admin-tone, var(--vr-text-muted));
+  }
+
+  &__log-body {
+    display: grid;
+    gap: var(--space-4);
+  }
+
+  &__log-body small,
+  &__quiet {
+    color: var(--vr-text-muted);
+  }
+
+  &__icon,
+  &__quiet svg {
+    width: var(--icon-16);
+    height: var(--icon-16);
+    flex: none;
+  }
+
+  &__quiet svg {
+    vertical-align: middle;
+  }
+
+  &__actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}

@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { ref } from 'vue';
-import { getDefaultHotkeyBinding, readHotkeyBinding, setDesktopGlobalHotkeysSuspended } from '@voice-room/call/engine';
-import type { HotkeyAction } from '@voice-room/call/engine';
-import { HotkeyRecorder } from '@/shared/ui';
-import type { HotkeyBinding } from '@/shared/ui/HotkeyRecorder/types';
+import { getDefaultHotkeyBinding, readHotkeyBinding, setDesktopGlobalHotkeysSuspended } from '@voiceroom/call/engine';
+import type { HotkeyAction } from '@voiceroom/call/engine';
+import { HotkeyField } from '@voiceroom/ui-kit/components';
+import type { HotkeyBinding } from '@voiceroom/ui-kit/hotkey';
 import { saveHotkey } from '../../model/hotkey-settings';
 
 const props = withDefaults(
@@ -35,7 +35,7 @@ function change(binding: HotkeyBinding | null): void {
       <span class="settings__hotkey-label">{{ label }}</span>
       <span class="settings__hotkey-description">{{ description }}</span>
     </div>
-    <HotkeyRecorder
+    <HotkeyField
       v-model="value"
       :default-value="getDefaultHotkeyBinding(action)"
       :disabled="disabled"

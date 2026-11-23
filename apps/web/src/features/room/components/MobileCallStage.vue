@@ -1,12 +1,13 @@
 <script setup lang="ts">
+import { Pressable } from '@voiceroom/ui-kit/components';
 // The call on a phone in portrait: it covers the room page with a full-screen
 // layout (grid, focus, or two people face to face) whose controls hide
 // themselves. Opening someone's screen hands the page back to the room stage.
 import { t } from '@/shared/i18n';
 import { MicOff } from '@lucide/vue';
 import { computed, onMounted, onUnmounted, watch } from 'vue';
-import { state as roomClientState } from '@voice-room/call/engine/core/room-runtime.store';
-import { isMicrophoneShownMuted } from '@voice-room/call/engine/core/microphone-mute';
+import { state as roomClientState } from '@voiceroom/call/engine/core/room-runtime.store';
+import { isMicrophoneShownMuted } from '@voiceroom/call/engine/core/microphone-mute';
 import { useMobileCallUiStore } from '@/features/room/mobile-call-ui.store';
 import { useRoomUiStore } from '@/features/room/room-ui.store';
 import { getDesktopBoundaryPolicy } from '@/platform/desktop-boundary';
@@ -87,15 +88,14 @@ onUnmounted(() => {
       <MobileCallDock />
     </div>
 
-    <button
+    <Pressable
       class="mobile-call__bubble"
-      type="button"
       :aria-label="t('Показать управление')"
       :inert="mobileCall.chromeVisible"
       @click="mobileCall.showChrome"
     >
       <RoomCallTimer variant="bubble" />
       <MicOff v-if="roomClientState.joined && isMicrophoneShownMuted()" :size="14" aria-hidden="true" />
-    </button>
+    </Pressable>
   </div>
 </template>

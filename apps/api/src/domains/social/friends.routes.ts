@@ -3,7 +3,7 @@
 
 import type { TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { Done, Failure, IdParams, RoomIdParams, UserIdParams } from '@voice-room/shared/contracts/http';
+import { Done, Failure, IdParams, RoomIdParams, UserIdParams } from '@voiceroom/shared/contracts/http';
 import {
   BlockApplied,
   BlockList,
@@ -15,8 +15,8 @@ import {
   FriendSearchQuery,
   RingBody,
   SendFriendRequestBody
-} from '@voice-room/shared/contracts/social';
-import { normalizeLogin, normalizeRoomId } from '@voice-room/shared/validation';
+} from '@voiceroom/shared/contracts/social';
+import { normalizeLogin, normalizeRoomId } from '@voiceroom/shared/validation';
 import type { ApiContext } from '../../app/context.ts';
 import { failure, optionalJsonBody } from '../../platform/http/http-kit.ts';
 import { cleanUuid } from '../messaging/message-input.ts';

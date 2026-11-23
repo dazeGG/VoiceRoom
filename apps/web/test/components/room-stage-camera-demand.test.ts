@@ -5,16 +5,16 @@ import { createPinia, setActivePinia } from 'pinia';
 import { render } from '@testing-library/vue';
 import { nextTick } from 'vue';
 import { beforeEach, expect, test, vi } from 'vitest';
-import { state } from '@voice-room/call/engine/core/room-runtime.store';
-import { createInitialRoomState } from '@voice-room/call/engine/model/room-state';
-import { createParticipant } from '@voice-room/call/engine/room/participants';
+import { state } from '@voiceroom/call/engine/core/room-runtime.store';
+import { createInitialRoomState } from '@voiceroom/call/engine/model/room-state';
+import { createParticipant } from '@voiceroom/call/engine/room/participants';
 import RoomStage from '@/features/room/components/RoomStage.vue';
-import { useParticipantsUiStore } from '@voice-room/call/engine/core/participants-ui.store';
+import { useParticipantsUiStore } from '@voiceroom/call/engine/core/participants-ui.store';
 
 const demand = vi.hoisted(() => ({ runs: 0, seen: '' }));
 
 // The real function reads per-peer fields (livekitParticipant, camera state); the stand-in reads one the same way.
-vi.mock('@voice-room/call/engine/services/livekit/remote-participants', () => ({
+vi.mock('@voiceroom/call/engine/services/livekit/remote-participants', () => ({
   syncRemoteCameraDemand: () => {
     demand.runs += 1;
     for (const peer of state.peers.values()) demand.seen = peer.statusLabel;

@@ -1,4 +1,4 @@
-@forward 'pkg:@voice-room/call/styles/stage';
+@forward 'pkg:@voiceroom/call/styles/stage';
 
 // The focused stream makes the full web shell a single viewport high.
 body.screen-view--open {
@@ -18,7 +18,7 @@ body.screen-view--open {
   .stage {
     height: 100%;
     grid-template-rows: minmax(0, 1fr) auto;
-    gap: var(--space-sm);
-    padding: 0 var(--space-xl) 104px;
+    gap: var(--space-12);
+    padding: 0 var(--space-32) calc(var(--space-64) + var(--space-40));
   }
 }

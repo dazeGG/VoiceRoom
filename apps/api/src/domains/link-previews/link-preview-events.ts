@@ -4,8 +4,8 @@
 
 import type { DirectMessage as StoredDirectMessage } from '../social/social-records.ts';
 import type { AccountMessage } from '../../realtime/account-events.ts';
-import type { RoomMessage } from '@voice-room/shared/contracts/messages';
-import { firstPreviewableUrl } from '@voice-room/shared/link-preview';
+import type { RoomMessage } from '@voiceroom/shared/contracts/messages';
+import { firstPreviewableUrl } from '@voiceroom/shared/link-preview';
 import type { MessageProjection } from '../messaging/message-projection.ts';
 
 export interface LinkPreviewEventsDeps {

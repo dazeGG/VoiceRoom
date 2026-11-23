@@ -17,7 +17,7 @@ const SURFACES = `:root {
 function app(t: TestContext, files: Record<string, string>, tokens = SURFACES) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'voice-room-web-palette-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
-  for (const [file, content] of Object.entries({ 'packages/ui/src/styles/_tokens.scss': tokens, ...files })) {
+  for (const [file, content] of Object.entries({ 'packages/ui-kit/src/styles/_tokens.scss': tokens, ...files })) {
     fs.mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
     fs.writeFileSync(path.join(root, file), content);
   }
@@ -57,11 +57,11 @@ test('a raw colour in a nested SCSS rule is reported with its resolved selector'
 
 test('a declaration after a nested rule still belongs to the parent', (t) => {
   const palette = app(t, {
-    'packages/ui/src/styles/components/_card.scss':
+    'packages/ui-kit/src/styles/components/_card.scss':
       '.card {\n  &__x {\n    color: red;\n  }\n  background: oklch(10% 0 0);\n}\n'
   });
   assert.deepEqual(paletteProblems(palette), [
-    'packages/ui/src/styles/components/_card.scss:5 .card -> oklch(10% 0 0)'
+    'packages/ui-kit/src/styles/components/_card.scss:5 .card -> oklch(10% 0 0)'
   ]);
 });
 
@@ -83,7 +83,14 @@ test('a surface token with a different value is reported', (t) => {
   ]);
 });
 
+test('admin backgrounds must use the shared palette', (t) => {
+  const palette = app(t, {
+    'apps/admin/src/styles/_card.scss': '.card { background: #123456; }'
+  });
+  assert.deepEqual(paletteProblems(palette), ['apps/admin/src/styles/_card.scss:1 .card -> #123456']);
+});
+
 test('a missing surface token is reported by name', (t) => {
   const palette = app(t, {}, SURFACES.replace(/ {2}--vr-bg:.*\n/, ''));
-  assert.deepEqual(paletteProblems(palette), ['packages/ui/src/styles/_tokens.scss does not declare --vr-bg']);
+  assert.deepEqual(paletteProblems(palette), ['packages/ui-kit/src/styles/_tokens.scss does not declare --vr-bg']);
 });

@@ -4,7 +4,7 @@ import type {
   ServerEventOf,
   ServerEvents,
   ServerEventType
-} from '@voice-room/shared/contracts/realtime';
+} from '@voiceroom/shared/contracts/realtime';
 import { getAppRealtime, type RealtimeEvent, type RoomSnapshot } from '@/api/realtime';
 import { useRoomPresenceStore } from './room-presence.store';
 import { guestBrowserId } from './guest-id';

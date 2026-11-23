@@ -1,8 +1,9 @@
 <script setup lang="ts">
+import { Pressable } from '@voiceroom/ui-kit/components';
 import { t } from '@/shared/i18n';
 import { computed } from 'vue';
 import type { RoomPeer } from '@/api/rooms';
-import { getAvatarPresentation } from '@/shared/ui/avatar-presentation';
+import { getAvatarPresentation } from '@voiceroom/ui/avatar-presentation';
 
 const props = defineProps<{ peer: RoomPeer }>();
 
@@ -22,9 +23,9 @@ const avatar = computed(() =>
 <template>
   <!-- Nothing is watched before joining: the tile only says so, and a click enters
        the room, where the stream can be opened. -->
-  <button
+  <Pressable
+    inset
     class="stream-tile stream-tile--preview lobby-stream-tile"
-    type="button"
     :aria-label="t('Войти и смотреть стрим {p0}', { p0: peer.name })"
     @click="$emit('enter')"
   >
@@ -41,5 +42,5 @@ const avatar = computed(() =>
         >{{ t('Стрим') }}
       </span>
     </span>
-  </button>
+  </Pressable>
 </template>

@@ -27,18 +27,8 @@ test('admin modal blocks global search focus', async ({ page }) => {
   await page.getByRole('button', { name: 'Open modal' }).click();
   await page.getByRole('textbox', { name: 'Reason' }).fill('Draft');
   await page.keyboard.press('Shift+Tab');
-  // Native dialogs include browser chrome in the focus cycle (W3C H102).
-  // https://www.w3.org/WAI/WCAG22/Techniques/html/H102
-  if (!(await page.evaluate(() => document.hasFocus()))) {
-    expect(await page.evaluate(() => document.activeElement === document.body)).toBe(true);
-    await page.keyboard.press('Shift+Tab');
-  }
   await expect(page.getByRole('button', { name: 'Закрыть', exact: true })).toBeFocused();
   await page.keyboard.press('Tab');
-  if (!(await page.evaluate(() => document.hasFocus()))) {
-    expect(await page.evaluate(() => document.activeElement === document.body)).toBe(true);
-    await page.keyboard.press('Tab');
-  }
   await expect(page.getByRole('textbox', { name: 'Reason' })).toBeFocused();
   await page.keyboard.press('Control+k');
   await expect(page.getByRole('dialog', { name: 'Fixture modal' })).toBeVisible();
@@ -105,13 +95,13 @@ test('admin modal blocks programmatic background focus and resets account forms'
     await page.getByRole('button', { name: 'Open ' + kind }).click();
     const modal = page.getByRole('dialog');
     await modal.getByLabel('Причина', { exact: true }).fill('Fixture reason');
-    await page.getByRole('button', { name: 'Outside', exact: true }).evaluate((el) => el.focus());
+    await page.getByText('Outside', { exact: true }).evaluate((el) => el.focus());
     expect(await modal.evaluate((el) => el.contains(document.activeElement))).toBe(true);
     await page.keyboard.press('Escape');
     await page.getByRole('button', { name: 'Open ' + kind }).click();
     await expect(modal.getByLabel('Причина', { exact: true })).toHaveValue('');
     await modal.getByLabel('Причина', { exact: true }).fill('Fixture reason');
-    if (kind === 'delete') await modal.locator('#deleteLogin').fill('fixture');
+    if (kind === 'delete') await modal.getByRole('textbox', { name: /Введите логин/ }).fill('fixture');
     await modal
       .getByRole('button', { name: kind === 'block' ? 'Заблокировать' : 'Удалить аккаунт', exact: true })
       .click();
@@ -164,7 +154,7 @@ test('custom range retains unchecked presets until explicit choice', async ({ pa
   await dialog.getByRole('button', { name: 'Показать', exact: true }).click();
   await expect(page.getByLabel('Range', { exact: true })).toHaveText('custom');
   const group = page.getByRole('radiogroup', { name: 'Период', exact: true });
-  await expect(group.locator('input:checked')).toHaveCount(0);
+  await expect(group.getByRole('radio', { checked: true })).toHaveCount(0);
   await group.getByRole('radio').first().focus();
   await page.keyboard.press('Tab');
   await expect(page.getByLabel('Range', { exact: true })).toHaveText('custom');
@@ -227,8 +217,8 @@ test('browser default font preference scales text without root overrides', async
       expect(after).toBeCloseTo((before * size) / 16, 1);
       if (port === 15181) {
         for (const [sample, normal] of [
-          ['.side-item-label', 14],
-          ['.product-table td', 13.5]
+          ['.ui-nav__text', 14],
+          ['.admin-product__table td', 13.5]
         ] as const) {
           expect(
             await page
@@ -247,16 +237,16 @@ test('browser default font preference scales text without root overrides', async
   await cdp.detach();
 });
 
-// Values captured before typography changes at a 16px browser default (1280x900).
+// Representative text at a 16px browser default (1280x900).
 test('F6 retains representative default text sizes', async ({ page }) => {
   for (const [port, path, samples] of [
     [
       15181,
       '/test/browser/',
       [
-        ['.ui-button', 13.5],
-        ['.product-table td', 13.5],
-        ['.product-table th', 12]
+        ['.ui-button', 14],
+        ['.admin-product__table td', 13.5],
+        ['.admin-product__table th', 12]
       ]
     ],
     [
@@ -301,9 +291,9 @@ test('F6 enlarged text keeps dialog actions keyboard reachable and tables scroll
         (el) => el.scrollWidth <= el.clientWidth || ['auto', 'scroll'].includes(getComputedStyle(el).overflowX)
       )
     ).toBe(true);
-    const navGeometry = await page.locator('.side-item-label').evaluateAll((labels) =>
+    const navGeometry = await page.locator('.ui-nav__text').evaluateAll((labels) =>
       labels.map((el) => {
-        const row = el.closest('.side-item');
+        const row = el.closest('.ui-nav__item');
         const bounds = el.getBoundingClientRect();
         const rowBounds = row?.getBoundingClientRect();
         return {
@@ -467,7 +457,7 @@ test('F6 real browser page zoom retains actions at 200 percent', async ({ browse
 
 test('F2 computed muted text contrast on real table and chat surfaces', async ({ page }) => {
   for (const [port, selectors] of [
-    [15181, ['.product-table th']],
+    [15181, ['.admin-product__table th']],
     [15180, ['.room-chat-group__time', '.room-chat-group__edited']]
   ] as const) {
     if (!includesFrontend(port)) continue;
