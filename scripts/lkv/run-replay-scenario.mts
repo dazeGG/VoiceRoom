@@ -4,7 +4,7 @@ import crypto from 'node:crypto';
 import { pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
 
-export const LIVEKIT_REPLAY_VERSION = 'v1.13.2';
+export const LIVEKIT_REPLAY_VERSION = 'v1.13.11';
 export const LIVEKIT_REPLAY_IMAGE = `livekit/livekit-server:${LIVEKIT_REPLAY_VERSION}`;
 
 const BASELINE_CASES = Object.freeze([

@@ -6,7 +6,7 @@ import { runAuthGateProof } from './run-auth-gate-proof.mts';
 import { runReplayScenario } from './run-replay-scenario.mts';
 
 const APPROVED_SHAPE = Object.freeze({
-  provider: 'livekit/livekit-server:v1.13.2',
+  provider: 'livekit/livekit-server:v1.13.11',
   topology: 'docker-compose.lkv.yml',
   credentialForm: 'standard-livekit-jwt',
   appAuthority: 'VoiceRoom API can mint future credentials and remove connected participants',

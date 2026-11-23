@@ -331,7 +331,7 @@ services:
 
   livekit:
     logging: *logging
-    image: ${LIVEKIT_IMAGE:-livekit/livekit-server:v1.13.2}
+    image: ${LIVEKIT_IMAGE:-livekit/livekit-server:v1.13.11}
     restart: unless-stopped
     # LiveKit takes about 2 MB per participant. With no cap, a host without swap
     # that runs out of memory stops answering altogether (API and database

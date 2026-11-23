@@ -15,7 +15,7 @@ export function buildReplayTopologyCommand(options: TopologyOptions = {}) {
     command: 'docker',
     args,
     env: {
-      LIVEKIT_REPLAY_IMAGE: 'livekit/livekit-server:v1.13.2'
+      LIVEKIT_REPLAY_IMAGE: 'livekit/livekit-server:v1.13.11'
     }
   };
 }
