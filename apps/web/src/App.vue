@@ -3,10 +3,11 @@
 // boundary, the deploy check and its update notice, the call feedback question,
 // and the app-wide listeners (theme, desktop system, emoji copy).
 import { t } from '@/shared/i18n';
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch, watchEffect } from 'vue';
 import { RouterView, useRoute, useRouter } from 'vue-router';
 import { Toast } from '@voiceroom/ui-kit/components';
 import { useToastUiStore } from '@voiceroom/call/engine/core/toast-ui.store';
+import { clientRoomName, useVoiceSessionStore } from '@voiceroom/call/engine';
 import { loadAccountBadges } from '@/api/badges';
 import { onContractViolation } from '@/api/contract-violations';
 import { useAppUpdateStore } from '@/features/app-update/app-update.store';
@@ -18,6 +19,7 @@ import CallFeedbackPrompt from '@/features/call-feedback/CallFeedbackPrompt.vue'
 import { useToastsStore } from '@/features/home/model/toasts.store';
 import { useLeaveScreenStore } from '@/features/room/leave-screen.store';
 import { applyDesktopBoundaryToDocument } from '@/platform/desktop-boundary';
+import { syncDesktopCallState } from '@/platform/desktop-call';
 import { bindDesktopSystem } from '@/platform/desktop-system';
 import { isMobileRoute } from '@/platform/mobile-routes';
 import { useCallActivityStore } from '@/shared/call-activity.store';
@@ -34,6 +36,7 @@ const leaveScreen = useLeaveScreenStore();
 const theme = useThemeStore();
 const toasts = useToastsStore();
 const roomToasts = useToastUiStore();
+const voiceSession = useVoiceSessionStore();
 roomToasts.useViewportTimers();
 
 const toastItems = computed(() => [...toasts.items, ...roomToasts.items]);
@@ -82,6 +85,17 @@ const stopBadges = watch(
   },
   { flush: 'sync' }
 );
+
+watchEffect(() => {
+  const roomId = voiceSession.roomId || '';
+  syncDesktopCallState({
+    active: Boolean(roomId),
+    micMuted: voiceSession.muted,
+    outputMuted: voiceSession.deafened,
+    roomId,
+    roomName: roomId ? clientRoomName(roomId) || roomId : ''
+  });
+});
 
 onMounted(() => {
   theme.initTheme();
@@ -132,6 +146,7 @@ onBeforeUnmount(() => {
   stopBadges();
   removeUpdateGuard();
   versionCheck.stop();
+  syncDesktopCallState({ active: false, micMuted: false, outputMuted: false, roomId: '', roomName: '' });
   for (const cleanup of cleanups.splice(0)) cleanup();
 });
 </script>

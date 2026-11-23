@@ -132,3 +132,80 @@ test('past the kept days a stay forgets whose and where from it was', { skip }, 
   });
   // The account and the device go with the daily roll-up (activity-rollup.test.ts).
 });
+
+test(
+  'the desktop join stores its shell version and modern polls store window, playout and relief telemetry',
+  { skip },
+  async (t) => {
+    const { socketPath, databaseUrl, beforeCleanup } = await startApiServer(t, { prefix: 'voice-telemetry-' });
+    const pool = new Pool({ connectionString: databaseUrl });
+    beforeCleanup(() => pool.end());
+    await pool.query(`INSERT INTO rooms (id, creator_ip, is_static, name) VALUES ('porch', '', false, 'Porch')`);
+
+    for (const desktop of [true, false]) {
+      const socket = openWs(socketPath, {
+        headers: { 'User-Agent': desktop ? `${WINDOWS_CHROME} Electron/34.1.0` : WINDOWS_CHROME }
+      });
+      await socket.ready;
+      const name = desktop ? 'desktop' : 'old-web';
+      const seat = { roomId: 'porch', peerId: `${name}-peer`, sessionToken: (desktop ? 'd' : 'b').repeat(32) };
+      const join = { ...seat, name, ...(desktop ? { desktopVersion: '2.3.4-beta.1' } : {}) };
+      await joinVoiceRoom(socket, join);
+      const poll = {
+        ...seat,
+        rttMs: null,
+        jitterBufferMs: null,
+        uplink: { packets: 0, lost: 0 },
+        transport: null,
+        heard: []
+      };
+      if (desktop) {
+        sendWs(socket.ws, 'room.voice.report', {
+          ...poll,
+          windowState: 'covered',
+          playout: { totalSeconds: 8, synthesizedSeconds: 1, events: 3 },
+          relief: [{ id: 'e2f04f3a-1fcc-4b2b-889c-09e4a9fa6970', kind: 'screen', outcome: 'failed' }]
+        });
+        sendWs(socket.ws, 'room.voice.report', {
+          ...poll,
+          windowState: 'covered'
+        });
+      } else {
+        sendWs(socket.ws, 'room.voice.report', poll);
+      }
+      sendWs(socket.ws, 'room.leave', seat);
+      await waitFor(
+        () => pool.query<{ id: string }>('SELECT id FROM voice_sessions WHERE guest_name = $1', [name]),
+        (result) => result.rowCount === 1
+      );
+      socket.ws.close();
+    }
+
+    const stays = await pool.query<{ guest_name: string; desktop_version: string | null }>(
+      `SELECT guest_name, desktop_version FROM voice_sessions ORDER BY guest_name`
+    );
+    assert.deepEqual(stays.rows, [
+      { guest_name: 'desktop', desktop_version: '2.3.4-beta.1' },
+      { guest_name: 'old-web', desktop_version: null }
+    ]);
+    const samples = await pool.query<{
+      guest_name: string;
+      visible: number | null;
+      hidden: number | null;
+      covered: number | null;
+      synthesized: number | null;
+      events: number | null;
+    }>(`SELECT guest_name, SUM(window_visible_polls)::int AS visible,
+      SUM(window_hidden_polls)::int AS hidden, SUM(window_covered_polls)::int AS covered,
+      MAX(playout_synthesized_pct) AS synthesized, SUM(playout_events)::int AS events
+    FROM voice_session_samples JOIN voice_sessions ON stay_id = id GROUP BY guest_name ORDER BY guest_name`);
+    assert.deepEqual(samples.rows, [
+      { guest_name: 'desktop', visible: 0, hidden: 0, covered: 2, synthesized: 12.5, events: 3 },
+      { guest_name: 'old-web', visible: null, hidden: null, covered: null, synthesized: null, events: null }
+    ]);
+    const events = await pool.query<{ kind: string; relief_kind: string | null; relief_outcome: string | null }>(
+      `SELECT kind, relief_kind, relief_outcome FROM voice_call_events`
+    );
+    assert.deepEqual(events.rows, [{ kind: 'relief', relief_kind: 'screen', relief_outcome: 'failed' }]);
+  }
+);

@@ -7,6 +7,8 @@ import { FakeWebSocket } from '../fixtures/fake-websocket';
 import type { RealtimeEvent } from '@/api/realtime';
 import { FakeMediaStream, FakeMediaStreamTrack } from '../helpers/fake-media';
 import type { MicrophoneCapture } from '@voiceroom/call/engine/core/types';
+import type * as CaptureDiagnostics from '@voiceroom/call/engine/room/capture-diagnostics';
+import type * as Devices from '@voiceroom/call/engine/ui/devices';
 
 function pendingCapture(): { capture: MicrophoneCapture; raw: FakeMediaStreamTrack; output: FakeMediaStreamTrack } {
   const raw = new FakeMediaStreamTrack('join-raw', 'audio');
@@ -31,7 +33,7 @@ const relief = vi.hoisted(() => ({
   callbacks: new Array<() => void>(),
   record: vi.fn(),
   note: vi.fn(),
-  noise: vi.fn(async () => false),
+  noise: vi.fn<() => Promise<boolean | null>>(async () => false),
   video: vi.fn(async () => {})
 }));
 vi.mock('@voiceroom/call/engine/room/call-strain', async (original) => ({
@@ -42,10 +44,10 @@ vi.mock('@voiceroom/call/engine/room/call-quality', async (original) => ({
   ...(await original<object>()),
   recordCpuRelief: relief.record
 }));
-vi.mock('@voiceroom/call/engine/room/capture-diagnostics', async (original) => ({
-  ...(await original<object>()),
-  noteProcessingRelief: relief.note
-}));
+vi.mock('@voiceroom/call/engine/room/capture-diagnostics', async (original) => {
+  const diagnostics = await original<typeof CaptureDiagnostics>();
+  return { ...diagnostics, noteProcessingRelief: relief.note.mockImplementation(diagnostics.noteProcessingRelief) };
+});
 vi.mock('@voiceroom/call/engine/services/video-relief', async (original) => ({
   ...(await original<object>()),
   relieveVideo: relief.video
@@ -284,4 +286,64 @@ test('old deferred relief completion cannot update a new call or its diagnostics
   expect(relief.record).not.toHaveBeenCalled();
   expect(relief.note).not.toHaveBeenCalled();
   room.leaveRoom();
+});
+
+test('leaving sends relief that completed after the last poll', async () => {
+  vi.resetModules();
+  setActivePinia(createPinia());
+  await installWebCallPortsForTest();
+  vi.stubGlobal('WebSocket', FakeWebSocket);
+  stubFetch({ '/api/rooms/abc123': { body: roomStatus({ roomId: 'abc123' }) } });
+  const room = await import('@voiceroom/call/engine/room/room');
+  const { state } = await import('@voiceroom/call/engine/core/room-runtime.store');
+  const ports = (await import('@voiceroom/call/engine/ports')).getCallPorts();
+  const leave = vi.spyOn(ports.transport.realtime, 'leave');
+  const report = vi.spyOn(ports.transport.realtime, 'reportPoll');
+  const { noteProcessingRelief } = await import('@voiceroom/call/engine/room/capture-diagnostics');
+  Object.assign(state, { roomId: 'abc123', peerId: 'peer-1', sessionToken: 'session-1' });
+  await room.joinRoom();
+  await vi.waitFor(() => expect(report).toHaveBeenCalled());
+  noteProcessingRelief({
+    generation: 1,
+    kind: 'screen',
+    outcome: 'applied',
+    requestedMode: null,
+    actualMode: null,
+    durationMs: 1
+  });
+  room.leaveRoom();
+  expect(report).toHaveBeenLastCalledWith(expect.objectContaining({ relief: [] }));
+  expect(leave).toHaveBeenCalledTimes(1);
+  const leavePayload = leave.mock.calls[0]?.[0];
+  expect(leavePayload).toMatchObject({
+    roomId: 'abc123',
+    peerId: 'peer-1',
+    sessionToken: 'session-1',
+    relief: [{ kind: 'screen', outcome: 'applied' }]
+  });
+  expect(typeof leavePayload?.relief?.[0]?.id).toBe('string');
+});
+
+test.each(['browser suppression', 'no microphone'])('call strain emits no noise event with %s', async (condition) => {
+  vi.resetModules();
+  setActivePinia(createPinia());
+  await installWebCallPortsForTest();
+  vi.stubGlobal('WebSocket', FakeWebSocket);
+  stubFetch({ '/api/rooms/abc123': { body: roomStatus({ roomId: 'abc123' }) } });
+  const room = await import('@voiceroom/call/engine/room/room');
+  const { state } = await import('@voiceroom/call/engine/core/room-runtime.store');
+  const { relieveNoiseSuppression } = await vi.importActual<typeof Devices>('@voiceroom/call/engine/ui/devices');
+  relief.noise.mockImplementationOnce(relieveNoiseSuppression);
+  relief.note.mockClear();
+  Object.assign(state, { roomId: 'abc123', peerId: 'peer-1', sessionToken: 'session-1' });
+  await room.joinRoom();
+  try {
+    state.noiseMode = condition === 'browser suppression' ? 'browser' : 'rnnoise';
+    state.localStream = condition === 'browser suppression' ? pendingCapture().capture.stream : null;
+    relief.callbacks.at(-1)?.();
+    await Promise.resolve();
+    expect(relief.note).not.toHaveBeenCalled();
+  } finally {
+    room.leaveRoom();
+  }
 });

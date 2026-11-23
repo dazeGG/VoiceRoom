@@ -18,6 +18,12 @@ const NETWORK_EVENT_TEXT: Record<string, string> = {
   bad: 'плохая связь'
 };
 
+const RELIEF_TARGET: Record<NonNullable<CallEvent['relief']>['kind'], string> = {
+  noise: 'шумоподавления',
+  video: 'камер',
+  screen: 'показа экрана'
+};
+
 // Names come in any form and gender is not known, so each line is put without declining or agreeing with one.
 function eventText(event: CallEvent, name: string): string {
   switch (event.kind) {
@@ -37,12 +43,19 @@ function eventText(event: CallEvent, name: string): string {
       return `${name} — система загружена: critical`;
     case 'relieved_ns':
       return `${name} — включён облегчённый шумодав`;
+    case 'relief': {
+      const { relief } = event;
+      if (!relief) return `${name} — снижение нагрузки`;
+      const result = relief.outcome === 'applied' ? 'снижена нагрузка' : 'не удалось снизить нагрузку';
+      return `${name} — ${result} ${RELIEF_TARGET[relief.kind]}`;
+    }
     case 'network':
       return `${name} — ${NETWORK_EVENT_TEXT[event.detail ?? ''] ?? 'связь изменилась'}`;
   }
 }
 
 function eventTone(event: CallEvent): string {
+  if (event.kind === 'relief') return event.relief?.outcome === 'failed' ? 'warning' : 'info';
   if (event.kind === 'network')
     return event.detail === 'bad' ? 'danger' : event.detail === 'unstable' ? 'warning' : 'plain';
   return EVENT_TONES[event.kind] ?? 'plain';

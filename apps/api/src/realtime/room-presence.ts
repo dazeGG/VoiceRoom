@@ -14,6 +14,7 @@ import type { ConnectionRegistry } from './registry.ts';
 import { clearViewedScreenPeerReferences } from './room-runtime.ts';
 
 export interface RosterPeer extends PresencePeer {
+  desktopVersion?: string | null;
   closed?: boolean;
   replaced?: boolean;
 }

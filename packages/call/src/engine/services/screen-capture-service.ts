@@ -519,19 +519,19 @@ async function applyDesktopCaptureProfile(profile: { fpsId: string; qualityId: s
   }
 }
 
-/** Limit capture work without changing the chosen mode, resolution, hint or audio. */
+/** Request a lower capture rate. Null means no change was needed or the track had already stopped. */
 export async function limitScreenCaptureFrameRate(
   stream: MediaStream,
   profile: ScreenProfile,
   maxFrameRate: number
-): Promise<void> {
+): Promise<boolean | null> {
   const [track] = stream.getVideoTracks();
-  if (!track || profile.frameRate <= maxFrameRate) return;
+  if (!track || profile.frameRate <= maxFrameRate) return null;
   // Native IPC controls the current capture globally, not an arbitrary track.
   const isCurrent = () => state.localScreenStream === stream && track.readyState !== 'ended';
-  if (!isCurrent()) return;
+  if (!isCurrent()) return null;
   const frameRate = track.getSettings().frameRate;
-  if (frameRate !== undefined && Number.isFinite(frameRate) && frameRate > 0 && frameRate <= maxFrameRate) return;
+  if (frameRate !== undefined && Number.isFinite(frameRate) && frameRate > 0 && frameRate <= maxFrameRate) return null;
 
   // The existing desktop bridge expands source-60's 1440p ceiling to 4K at
   // lower rates. Do not increase its capture work while trying to relieve it.
@@ -545,13 +545,15 @@ export async function limitScreenCaptureFrameRate(
     keepsNativeSize &&
     (await applyDesktopCaptureProfile({ fpsId: String(maxFrameRate), qualityId: profile.qualityId }))
   )
-    return;
-  if (!isCurrent()) return;
+    return isCurrent();
+  if (!isCurrent()) return false;
   try {
     // applyConstraints replaces the constraint set; retain the existing size
     // ceiling rather than accidentally increasing pixels as FPS comes down.
     await track.applyConstraints({ ...track.getConstraints(), frameRate: { max: maxFrameRate } });
+    return isCurrent();
   } catch (error) {
     log.info('screen frame rate kept', errorContext(error));
+    return false;
   }
 }

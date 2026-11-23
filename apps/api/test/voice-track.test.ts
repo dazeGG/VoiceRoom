@@ -23,6 +23,46 @@ interface Peer {
   voice?: PeerVoice | undefined;
 }
 
+test('modern voice polls sum window and playout observations and keep each relief result once', () => {
+  const peers = room('self');
+  const self = peer(peers, 'self');
+  const relief = [
+    { id: 'e2f04f3a-1fcc-4b2b-889c-09e4a9fa6970', kind: 'noise', outcome: 'applied' },
+    { id: 'e2f04f3a-1fcc-4b2b-889c-09e4a9fa6971', kind: 'video', outcome: 'failed' },
+    { id: 'e2f04f3a-1fcc-4b2b-889c-09e4a9fa6972', kind: 'screen', outcome: 'applied' }
+  ] as const;
+  noteVoiceReport(peers, self, { ...poll([]), windowState: 'visible', relief: [] }, 0);
+  noteVoiceReport(
+    peers,
+    self,
+    {
+      ...poll([]),
+      windowState: 'covered',
+      relief: [...relief],
+      cpu: { pressure: null, appPct: null, systemPct: null, relieved: true },
+      playout: { totalSeconds: 2, synthesizedSeconds: 0.5, events: 2 }
+    },
+    3000
+  );
+  noteVoiceReport(
+    peers,
+    self,
+    {
+      ...poll([]),
+      windowState: 'hidden',
+      relief: [...relief],
+      playout: { totalSeconds: 6, synthesizedSeconds: 0.5, events: 1 }
+    },
+    6000
+  );
+  assert.deepEqual(self.voice?.minutes[0]?.windowPolls, { visible: 1, hidden: 1, covered: 1 });
+  assert.deepEqual(self.voice?.minutes[0]?.playout, { totalSeconds: 8, synthesizedSeconds: 1, events: 3 });
+  assert.deepEqual(
+    self.voice?.events,
+    relief.map(({ kind, outcome }) => ({ at: 3000, kind: 'relief', reliefKind: kind, outcome }))
+  );
+});
+
 const room = (...ids: string[]) => new Map<string, Peer>(ids.map((id) => [id, { id }]));
 const peer = (peers: Map<string, Peer>, id: string) => {
   const found = peers.get(id);

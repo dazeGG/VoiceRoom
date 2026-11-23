@@ -24,7 +24,6 @@ import { loadLiveKitClient } from '../media/livekit-runtime';
 import {
   describeMicrophoneError,
   getLocalMicrophoneCapture,
-  getMicrophoneCaptureDiagnostics,
   stopMicrophoneCapture
 } from '../services/microphone-service';
 import { attachMeter, startMeters, stopMeters } from '../media/meters';
@@ -45,7 +44,6 @@ import {
   invalidateMicrophoneActions,
   startMicrophoneCall,
   setMicrophoneRecoveryObserver,
-  getMicrophoneCallGeneration,
   requestAutomaticMicrophoneConnectionReplacement,
   refreshMicrophoneLevelMeter,
   relieveNoiseSuppression,
@@ -57,7 +55,7 @@ import { noteCpuPressure, startCallStrainWatch, stopCallStrainWatch } from './ca
 import { canRecoverMic, startMicSendWatch, stopMicSendWatch } from './mic-send';
 import {
   noteCaptureRecovery,
-  noteProcessingRelief,
+  processingReliefForPoll,
   startCaptureDiagnostics,
   stopCaptureDiagnostics
 } from './capture-diagnostics';
@@ -65,13 +63,13 @@ import {
   finishCallQuality,
   type CallQualitySummary,
   recordCpuPressure,
-  recordCpuRelief,
   recordPeerCount,
   startCallQuality
 } from './call-quality';
 import { GATE_THRESHOLD_MIN_DB } from '../core/config';
 import { resolveRoomEntryName } from './room-entry';
 import { createVoiceEventHandler } from './voice-events';
+import { createProcessingReliefRecorder } from './processing-relief';
 import { isMicrophoneShownMuted } from '../core/microphone-mute';
 import type { MicrophoneCapture } from '../core/types';
 import {
@@ -341,7 +339,7 @@ async function performJoinRoom(generation: number): Promise<void> {
     if (isMicrophoneShownMuted() || state.outputMuted) postState().catch(() => {});
     startMeters();
     startPeerLatencyStats();
-    // Remote video pauses while the app cannot be seen (tray, minimized, background tab).
+    // Remote video pauses in the tray, minimized, covered or in a background tab.
     stopVideoVisibilitySync?.();
     stopVideoVisibilitySync = getCallPorts().platform.onVisibilityChange(() => syncRemoteVideoVisibility());
     syncRemoteVideoVisibility();
@@ -351,42 +349,12 @@ async function performJoinRoom(generation: number): Promise<void> {
     recordPeerCount(state.peers.size);
     // Relief comes from the call showing strain (call-strain.ts), not from a busy system alone.
     startCallStrainWatch(() => {
-      // The noise suppression and, silently, the video (video-relief.ts).
-      const reliefGeneration = getMicrophoneCallGeneration();
-      const reliefRoomId = state.roomId;
-      const reliefSessionToken = state.sessionToken;
-      const reliefCurrent = () =>
-        state.joined &&
-        getMicrophoneCallGeneration() === reliefGeneration &&
-        state.roomId === reliefRoomId &&
-        state.sessionToken === reliefSessionToken;
-      const noiseStarted = performance.now();
-      void relieveNoiseSuppression().then((switched) => {
-        if (!reliefCurrent()) return;
-        if (switched) recordCpuRelief();
-        const capture = getMicrophoneCaptureDiagnostics();
-        noteProcessingRelief({
-          generation: reliefGeneration,
-          kind: 'noise',
-          outcome: switched ? 'applied' : 'failed',
-          requestedMode: 'browser',
-          actualMode: capture.actualMode,
-          durationMs: performance.now() - noiseStarted
-        });
-      });
-      const videoStarted = performance.now();
-      void relieveVideo().then(() => {
-        if (!reliefCurrent()) return;
-        recordCpuRelief();
-        noteProcessingRelief({
-          generation: reliefGeneration,
-          kind: 'video',
-          outcome: state.videoRelieved ? 'applied' : 'not_applied',
-          requestedMode: null,
-          actualMode: getMicrophoneCaptureDiagnostics().actualMode,
-          durationMs: performance.now() - videoStarted
-        });
-      });
+      const recordNoise = createProcessingReliefRecorder();
+      const noteNoiseResult = (switched: boolean | null) => {
+        if (switched !== null) recordNoise({ kind: 'noise', outcome: switched ? 'applied' : 'failed' });
+      };
+      void relieveNoiseSuppression().then(noteNoiseResult, () => noteNoiseResult(false));
+      void relieveVideo(createProcessingReliefRecorder());
     });
     startMicSendWatch({
       reopen: reopenMicrophone,
@@ -395,9 +363,9 @@ async function performJoinRoom(generation: number): Promise<void> {
       canRecover: () => canRecoverMic() && canAdmitAutomaticMicrophoneAction()
     });
     startCpuPressureWatch({
-      onState: (pressure) => {
+      onState: (pressure, sampledAt) => {
         recordCpuPressure(pressure);
-        noteCpuPressure(pressure);
+        noteCpuPressure(pressure, sampledAt);
       }
     });
     playPeerCue('join');
@@ -458,6 +426,7 @@ async function openJoinMicrophone(isCurrent: () => boolean): Promise<MicrophoneC
 }
 
 export function leaveRoom(): void {
+  const relief = processingReliefForPoll();
   invalidateMicrophoneActions();
   setMicrophoneRecoveryObserver(null);
   stopCaptureDiagnostics();
@@ -488,7 +457,8 @@ export function leaveRoom(): void {
     getCallPorts().transport.realtime.leave({
       roomId: state.roomId,
       peerId: state.peerId,
-      sessionToken: state.sessionToken
+      sessionToken: state.sessionToken,
+      ...(relief.length ? { relief } : {})
     });
     voiceJoinSent = false;
   }

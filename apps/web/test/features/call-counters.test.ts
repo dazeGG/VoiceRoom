@@ -243,6 +243,8 @@ test("each poll tells the server what this tab heard of every speaker's micropho
     jitterBufferMs: 100,
     uplink: { packets: 150, lost: 3 },
     transport: null,
+    windowState: 'visible',
+    relief: [],
     heard: [{ peerId: 'peer-anna-1', packets: 150, lost: 10, concealedSamples: 9_600, gaps: 4 }]
   });
 });

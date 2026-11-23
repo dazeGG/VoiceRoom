@@ -15,6 +15,7 @@ import {
   AdminWidgets,
   BadgeBody,
   BlockBody,
+  CallDetailQuery,
   CallIdParams,
   DeleteAccountBody,
   LiveRooms,
@@ -157,11 +158,13 @@ export function registerAdminRoutes(root: FastifyInstance, ctx: ApiContext, deps
 
   app.get(
     '/api/admin/rooms/calls/:callId',
-    { schema: { params: CallIdParams, response: { 200: RoomCallDetail, '4xx': Failure } } },
+    {
+      schema: { params: CallIdParams, querystring: CallDetailQuery, response: { 200: RoomCallDetail, '4xx': Failure } }
+    },
     async (request, reply) => {
       const userId = await actor(request, reply);
       if (!userId) return reply;
-      const detail = await deps.rooms.call(userId, request.params.callId);
+      const detail = await deps.rooms.call(userId, request.params.callId, request.query.relief === '1');
       if (detail === null) return reply.code(403).send(ADMIN_REQUIRED);
       if (detail === undefined) return reply.code(404).send(CALL_NOT_FOUND);
       return { ok: true as const, ...detail };
@@ -170,11 +173,13 @@ export function registerAdminRoutes(root: FastifyInstance, ctx: ApiContext, deps
 
   app.get(
     '/api/admin/rooms/live/:roomId',
-    { schema: { params: RoomIdParams, response: { 200: RoomCallDetail, '4xx': Failure } } },
+    {
+      schema: { params: RoomIdParams, querystring: CallDetailQuery, response: { 200: RoomCallDetail, '4xx': Failure } }
+    },
     async (request, reply) => {
       const userId = await actor(request, reply);
       if (!userId) return reply;
-      const detail = await deps.rooms.liveCall(userId, request.params.roomId);
+      const detail = await deps.rooms.liveCall(userId, request.params.roomId, request.query.relief === '1');
       if (detail === null) return reply.code(403).send(ADMIN_REQUIRED);
       if (detail === undefined) return reply.code(404).send(CALL_NOT_FOUND);
       return { ok: true as const, ...detail };

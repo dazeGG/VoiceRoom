@@ -236,9 +236,6 @@ syncLobbyWithDesktop({
   get voiceRoomId() {
     return connectedVoiceRoomId.value || '';
   },
-  get voiceRoomName() {
-    return connectedVoiceRoomName.value;
-  },
   get friends() {
     return lobby.friends;
   },

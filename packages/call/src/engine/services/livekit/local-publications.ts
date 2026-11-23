@@ -12,7 +12,8 @@ import {
 } from '../../core/config';
 import { state } from '../../core/room-runtime.store';
 import { getPreferredCameraVideoCodec, getScreenProfile, getScreenPublishVideoOptions } from '../../media/profiles';
-import { applyVideoReliefToCamera, applyVideoReliefToScreen } from '../video-relief';
+import { createProcessingReliefRecorder } from '../../room/processing-relief';
+import { applyVideoReliefToCamera, applyVideoReliefToScreen, reportVideoRelief } from '../video-relief';
 import { loadLiveKitClient } from '../../media/livekit-runtime';
 import { prepareScreenStartBitrate } from '../../media/screen-start-bitrate';
 import { isMicrophoneShownMuted } from '../../core/microphone-mute';
@@ -174,11 +175,11 @@ export async function publishLocalCameraForRoom(
     void unpublishCameraTrack(room, track).catch(() => {});
     return null;
   }
-  try {
-    await applyVideoReliefToCamera(publication);
-  } catch (error) {
-    void unpublishCameraTrack(room, track).catch(() => {});
-    throw error;
+  if (state.videoRelieved) {
+    const record = createProcessingReliefRecorder();
+    await reportVideoRelief('video', applyVideoReliefToCamera(publication), (result) => {
+      if (isCurrent()) record(result);
+    });
   }
   return publication;
 }
@@ -254,6 +255,7 @@ export async function publishLocalScreenTracksForRoom(
   if (!stream || !isCurrent()) return publications;
   const profile = getScreenProfile(state.localScreenProfileId);
   const { Track } = await loadLiveKitClient();
+  let publishedVideo = false;
   for (const track of stream.getTracks().filter((candidate) => candidate.readyState !== 'ended')) {
     if (publications.has(track.id)) continue;
     const videoOptions = track.kind === 'video' ? await getScreenPublishVideoOptions(profile) : null;
@@ -282,9 +284,15 @@ export async function publishLocalScreenTracksForRoom(
     }
     publications.set(track.id, publication);
     created.set(track.id, publication);
+    if (track.kind === 'video') publishedVideo = true;
   }
   if (!isCurrent()) await disposeCandidatePublications(room, created);
-  else await applyVideoReliefToScreen(stream);
+  else if (publishedVideo && state.videoRelieved) {
+    const record = createProcessingReliefRecorder();
+    await reportVideoRelief('screen', applyVideoReliefToScreen(stream), (result) => {
+      if (isCurrent()) record(result);
+    });
+  }
   return publications;
 }
 

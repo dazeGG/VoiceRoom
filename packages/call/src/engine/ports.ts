@@ -1,5 +1,6 @@
 import { getActivePinia, type Pinia } from 'pinia';
 import type { CallFeedbackCall } from '@voiceroom/shared/contracts/feedback';
+import type { AppWindowState } from '@voiceroom/shared/contracts/realtime';
 import type { PlatformClass } from '@voiceroom/shared/platform-class';
 import type { Logger, LogLevel } from '@voiceroom/ui/log';
 import type { VoiceAssetUrls } from '../voice-assets';
@@ -84,6 +85,7 @@ export interface CallDiagnostics {
 export interface PlatformPort {
   policy(): Readonly<{ roomClientAllowed: boolean; desktopAllowed: boolean; platformClass: PlatformClass }>;
   isVisible(): boolean;
+  windowState?(): AppWindowState;
   onVisibilityChange(listener: (visible: boolean) => void): () => void;
   prepareRoomNavigation(): void;
   navigateToRoom(roomId: string, method?: 'assign'): void;

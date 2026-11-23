@@ -6,7 +6,7 @@
 // panel shows live, and every stay sums its polls into minutes, written with
 // the stay when it ends (voice_session_samples).
 
-import type { ClientCommands, CpuPoll, JoinTiming } from '@voiceroom/shared/contracts/realtime';
+import type { ClientCommands, CpuPoll, JoinTiming, ReliefPoll } from '@voiceroom/shared/contracts/realtime';
 import { CPU_PRESSURES, type CpuPressure } from '@voiceroom/shared/contracts/rooms';
 import {
   VOICE_WINDOW_POLLS,
@@ -67,6 +67,8 @@ export interface PeerVoice {
   cpuPressure: CpuPressure | null;
   /** Its call switched to the lighter noise suppression. */
   relieved: boolean;
+  /** Polls repeat modern relief results through a reconnect. */
+  reliefIds?: Set<string> | undefined;
   /** When its microphone last went on or off. */
   micChangedAt?: number | undefined;
 }
@@ -98,14 +100,14 @@ const emptyVoice = (): PeerVoice => ({
   relieved: false
 });
 
-const pushEvent = (voice: PeerVoice, kind: StayEventKind, at: number) => {
-  voice.events.push({ at, kind });
+const pushEvent = (voice: PeerVoice, event: StayEvent) => {
+  voice.events.push(event);
   if (voice.events.length > VOICE_EVENTS_MAX) voice.events.shift();
 };
 
 /** Keeps something a peer's seat did with its stay: a screen or a camera going on or off. */
 export function noteStayEvent(peer: VoicePeer, kind: StayEventKind, at: number): void {
-  pushEvent((peer.voice ??= emptyVoice()), kind, at);
+  pushEvent((peer.voice ??= emptyVoice()), { at, kind });
 }
 
 /** A peer's microphone went on or off: see micChanging. */
@@ -119,7 +121,7 @@ const higherPressure = (a: CpuPressure | null, b: CpuPressure | null): CpuPressu
 };
 
 /** Sums a poll's computer into the minute and marks where it first overloaded or got relief. */
-function noteCpu(voice: PeerVoice, minute: VoiceMinuteSample, poll: CpuPoll, at: number): void {
+function noteCpu(voice: PeerVoice, minute: VoiceMinuteSample, poll: CpuPoll, at: number, legacy: boolean): void {
   const cpu: MinuteCpu = (minute.cpu ??= {
     appPctSum: 0,
     systemPctSum: 0,
@@ -134,10 +136,21 @@ function noteCpu(voice: PeerVoice, minute: VoiceMinuteSample, poll: CpuPoll, at:
   }
   cpu.pressureMax = higherPressure(cpu.pressureMax, poll.pressure);
   cpu.relieved ||= poll.relieved;
-  if (poll.pressure === 'critical' && voice.cpuPressure !== 'critical') pushEvent(voice, 'cpu_critical', at);
-  if (poll.relieved && !voice.relieved) pushEvent(voice, 'relieved_ns', at);
+  if (poll.pressure === 'critical' && voice.cpuPressure !== 'critical') pushEvent(voice, { kind: 'cpu_critical', at });
+  if (legacy && poll.relieved && !voice.relieved) pushEvent(voice, { kind: 'relieved_ns', at });
   voice.cpuPressure = poll.pressure;
   voice.relieved ||= poll.relieved;
+}
+
+export function noteStayRelief(peer: VoicePeer, relief: ReliefPoll[], at: number): void {
+  if (relief.length === 0) return;
+  const voice = (peer.voice ??= emptyVoice());
+  const seen = (voice.reliefIds ??= new Set());
+  for (const { id, kind, outcome } of relief) {
+    if (seen.has(id) || seen.size >= VOICE_EVENTS_MAX) continue;
+    seen.add(id);
+    pushEvent(voice, { at, kind: 'relief', reliefKind: kind, outcome });
+  }
 }
 
 const sameVerdict = (a: VoiceVerdict | null | undefined, b: VoiceVerdict | null) =>
@@ -261,7 +274,18 @@ export function noteVoiceReport<Peer extends VoicePeer>(
   peer: Peer,
   poll: Pick<
     VoicePoll,
-    'rttMs' | 'rttUnchanged' | 'jitterBufferMs' | 'uplink' | 'transport' | 'heard' | 'mic' | 'cpu' | 'joinTiming'
+    | 'rttMs'
+    | 'rttUnchanged'
+    | 'jitterBufferMs'
+    | 'uplink'
+    | 'transport'
+    | 'heard'
+    | 'mic'
+    | 'cpu'
+    | 'joinTiming'
+    | 'windowState'
+    | 'playout'
+    | 'relief'
   >,
   at: number,
   collectStay = true
@@ -329,7 +353,18 @@ export function noteVoiceReport<Peer extends VoicePeer>(
       minute.mic.replacements += poll.mic.replacements;
     }
     minute.transport = poll.transport ?? minute.transport;
-    if (poll.cpu) noteCpu(voice, minute, poll.cpu, at);
+    if (poll.cpu) noteCpu(voice, minute, poll.cpu, at, poll.relief === undefined);
+    if (poll.windowState) {
+      const counts = (minute.windowPolls ??= { visible: 0, hidden: 0, covered: 0 });
+      counts[poll.windowState] += 1;
+    }
+    if (poll.playout) {
+      const playout = (minute.playout ??= { totalSeconds: 0, synthesizedSeconds: 0, events: 0 });
+      playout.totalSeconds += poll.playout.totalSeconds;
+      playout.synthesizedSeconds += Math.min(poll.playout.synthesizedSeconds, poll.playout.totalSeconds);
+      playout.events += poll.playout.events;
+    }
+    if (poll.relief) noteStayRelief(peer, poll.relief, at);
   }
 
   const changes = judgeRoom(peers, at);
