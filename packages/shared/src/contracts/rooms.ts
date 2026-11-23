@@ -172,6 +172,12 @@ export const CPU_PRESSURES = ['nominal', 'fair', 'serious', 'critical'] as const
 export const CpuPressure = Type.Enum(CPU_PRESSURES);
 export type CpuPressure = Static<typeof CpuPressure>;
 
+export const ProcessingRelief = Type.Object({
+  kind: Type.Enum(['noise', 'video', 'screen']),
+  outcome: Type.Enum(['applied', 'failed'])
+});
+export type ProcessingRelief = Static<typeof ProcessingRelief>;
+
 /** Whose side the voice trouble is on: the peer is heard badly, hears the others badly, or adds the delay. */
 export const VOICE_CAUSES = ['heard_badly', 'hears_badly', 'delay'] as const;
 export const VoiceCause = Type.Enum(VOICE_CAUSES);

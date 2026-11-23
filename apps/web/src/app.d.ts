@@ -89,6 +89,7 @@ declare global {
       platform?: string;
       version?: string;
     };
+    voiceRoomDesktop?: Window['voiceRoomRuntime'];
   }
 }
 

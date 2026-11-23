@@ -1,4 +1,6 @@
 import { getInstalledCallPorts } from '../ports';
+import { RELIEF_POLL_MAX, normalizeDesktopShellVersion, type ReliefPoll } from '@voiceroom/shared/contracts/realtime';
+import type { ProcessingRelief } from '@voiceroom/shared/contracts/rooms';
 /** Bounded, call-scoped diagnostic producer. The existing logger owns FIFO delivery. */
 import { createLogger, reportClientLogs, type LogContext } from '../diagnostics';
 import { state as roomState } from '../core/room-runtime.store';
@@ -55,16 +57,15 @@ export interface CaptureTransitionEvent {
   pollAgeMs: number | null;
 }
 
-export interface ProcessingReliefEvent {
+export interface ProcessingReliefEvent extends ProcessingRelief {
   generation: number;
-  kind: 'noise' | 'video';
-  outcome: 'applied' | 'failed' | 'not_applied';
   requestedMode: Mode;
   actualMode: Mode;
   durationMs: number;
 }
 
 let active = false;
+let reliefEvents: ReliefPoll[] = [];
 let nonterminalCount = 0;
 let terminalCount = 0;
 let dropped = 0;
@@ -117,6 +118,7 @@ function emit(family: string, context: LogContext, terminal = false, failure = f
 export function startCaptureDiagnostics(): void {
   if (active) return;
   active = true;
+  reliefEvents = [];
   nonterminalCount = 0;
   terminalCount = 0;
   dropped = 0;
@@ -129,10 +131,7 @@ export function startCaptureDiagnostics(): void {
   const webBuild = String(getInstalledCallPorts()?.diagnostics.buildVersion() || 'unknown').slice(0, 40);
   const desktop = getInstalledCallPorts()?.platform.desktop.runtime;
   const suppliedVersion = desktop?.isDesktop ? desktop.version : undefined;
-  const desktopVersion =
-    typeof suppliedVersion === 'string' && /^[0-9A-Za-z][0-9A-Za-z.+-]{0,39}$/.test(suppliedVersion)
-      ? suppliedVersion
-      : 'unknown';
+  const desktopVersion = normalizeDesktopShellVersion(suppliedVersion) ?? 'unknown';
   const runtimeFamily = /Firefox\//.test(navigator.userAgent)
     ? 'firefox'
     : /Chrome\//.test(navigator.userAgent)
@@ -151,6 +150,7 @@ export function startCaptureDiagnostics(): void {
 
 export function stopCaptureDiagnostics(): void {
   active = false;
+  reliefEvents = [];
   snapshots = [];
   terminalAttempts.clear();
   transitions.clear();
@@ -281,6 +281,15 @@ export function noteCaptureRecovery(event: CaptureRecoveryEvent): void {
 }
 
 export function noteProcessingRelief(event: ProcessingReliefEvent): void {
+  if (!active) return;
+  reliefEvents = [
+    ...reliefEvents.slice(1 - RELIEF_POLL_MAX),
+    {
+      id: crypto.randomUUID(),
+      kind: event.kind,
+      outcome: event.outcome
+    }
+  ];
   emit('processing_relief', {
     schemaVersion: 1,
     generation: bounded(event.generation),
@@ -290,4 +299,9 @@ export function noteProcessingRelief(event: ProcessingReliefEvent): void {
     actualMode: mode(event.actualMode),
     durationMs: bounded(event.durationMs)
   });
+}
+
+/** Repeat the call's bounded relief events so a dropped poll can be recovered. */
+export function processingReliefForPoll(): ReliefPoll[] {
+  return reliefEvents;
 }

@@ -671,6 +671,8 @@ export interface Users {
 export interface VoiceCallEvents {
   at: Timestamp;
   kind: string;
+  relief_kind: string | null;
+  relief_outcome: string | null;
   stay_id: string;
 }
 
@@ -685,6 +687,7 @@ export interface VoiceSessions {
   browser: string | null;
   client: string | null;
   client_id: string | null;
+  desktop_version: string | null;
   guest_id: string | null;
   guest_name: string | null;
   id: Generated<string>;
@@ -726,6 +729,8 @@ export interface VoiceSessionSamples {
   mic_expected_ms: Generated<number>;
   mic_reopens: Generated<number>;
   mic_replacements: Generated<number>;
+  playout_events: number | null;
+  playout_synthesized_pct: number | null;
   polls_bad: Generated<number>;
   polls_delay: Generated<number>;
   polls_good: Generated<number>;
@@ -738,6 +743,9 @@ export interface VoiceSessionSamples {
   transport: string | null;
   uplink_lost: Generated<number>;
   uplink_packets: Generated<number>;
+  window_covered_polls: number | null;
+  window_hidden_polls: number | null;
+  window_visible_polls: number | null;
 }
 
 export interface WidgetBoundaryActivation {

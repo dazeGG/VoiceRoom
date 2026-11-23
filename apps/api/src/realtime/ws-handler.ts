@@ -8,13 +8,7 @@ import type { JoinResult, JoinUser } from './voice-join.ts';
 import type { IncomingMessage } from 'node:http';
 import { clientKind, describeUserAgent } from '@voiceroom/shared/account-security';
 import type { ErrorCode } from '@voiceroom/shared/contracts/errors';
-import type {
-  ClientCommand,
-  ClientCommands,
-  MediaGrant,
-  TypingActivity,
-  VoiceTarget
-} from '@voiceroom/shared/contracts/realtime';
+import type { ClientCommand, ClientCommands, MediaGrant, TypingActivity } from '@voiceroom/shared/contracts/realtime';
 import { buildServerEnvelope, buildServerErrorEnvelope, parseInboundMessage } from './envelope.ts';
 import { createTypingThrottle } from './typing-throttle.ts';
 import type { MeetChat } from './meet-chat.ts';
@@ -40,7 +34,7 @@ export interface WsRoomRuntime {
     clientIp: string,
     requestId?: string
   ): Promise<JoinResult>;
-  leaveVoiceRoom(connection: WsConnection, target: VoiceTarget): Promise<unknown>;
+  leaveVoiceRoom(connection: WsConnection, target: ClientCommands['room.leave']): Promise<unknown>;
   updatePeerState(
     connection: WsConnection,
     payload: ClientCommands['room.peer.update']

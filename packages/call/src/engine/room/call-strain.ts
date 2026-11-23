@@ -15,7 +15,7 @@
 
 import { CONCEALMENT_THRESHOLDS, NETWORK_THRESHOLDS } from '@voiceroom/shared/network-quality';
 import { createLogger } from '../diagnostics';
-import type { CpuPressureState } from '../services/cpu-pressure';
+import { isCpuPressureFresh, type CpuPressureState } from '../services/cpu-pressure';
 import type { PollCounts } from './call-quality';
 import { CONCEALMENT_MIN_SAMPLES, LOSS_MIN_PACKETS, LOSS_WINDOW_POLLS, createRatioWindow } from './loss-window';
 
@@ -135,6 +135,7 @@ export function createStrainTracker() {
 // The call's watch: one tracker, the latest system pressure, and one relief a call.
 const tracker = createStrainTracker();
 let pressure: CpuPressureState | null = null;
+let pressureSampledAt = 0;
 let onStrain: ((strain: Strain) => void) | null = null;
 
 /** A new call is judged from nothing; `relieve` runs on its first strained window. */
@@ -151,13 +152,15 @@ export function stopCallStrainWatch(): void {
 }
 
 /** The system's latest pressure (cpu-pressure.ts); null where the browser has no API. */
-export function noteCpuPressure(state: CpuPressureState): void {
+export function noteCpuPressure(state: CpuPressureState, sampledAt = performance.now()): void {
   pressure = state;
+  pressureSampledAt = sampledAt;
 }
 
-/** The latest pressure the system reported; null where the browser has no API. */
-export function currentCpuPressure(): CpuPressureState | null {
-  return pressure;
+/** A fresh pressure sample for telemetry; undefined before the first sample and null when it expires. */
+export function currentCpuPressure(): CpuPressureState | null | undefined {
+  if (pressure === null) return undefined;
+  return isCpuPressureFresh(pressureSampledAt) ? pressure : null;
 }
 
 /** Whether other people's frames and sound are worth reading: they only count while the system is busy. */

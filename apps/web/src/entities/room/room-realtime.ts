@@ -1,11 +1,13 @@
-import type {
-  ClientCommands,
-  MediaGrant,
-  ServerEventOf,
-  ServerEvents,
-  ServerEventType
+import {
+  normalizeDesktopShellVersion,
+  type ClientCommands,
+  type MediaGrant,
+  type ServerEventOf,
+  type ServerEvents,
+  type ServerEventType
 } from '@voiceroom/shared/contracts/realtime';
 import { getAppRealtime, type RealtimeEvent, type RoomSnapshot } from '@/api/realtime';
+import { readDesktopRuntime } from '@/platform/desktop-system';
 import { useRoomPresenceStore } from './room-presence.store';
 import { guestBrowserId } from './guest-id';
 import type { OwnedRoom } from '@/api/auth';
@@ -346,12 +348,18 @@ export function subscribeRoomVoice(roomId: string, handler: RoomDetailHandler): 
 export function joinVoiceRoom(payload: { roomId: string; peerId: string; sessionToken: string; name: string }): void {
   ensureReconnectRestore();
   const guestId = guestBrowserId();
-  const join = guestId ? { ...payload, guestId, clientId: guestId } : payload;
+  const runtime = readDesktopRuntime();
+  const desktopVersion = normalizeDesktopShellVersion(runtime?.isDesktop ? runtime.version : undefined);
+  const join = {
+    ...payload,
+    ...(guestId ? { guestId, clientId: guestId } : {}),
+    ...(desktopVersion ? { desktopVersion } : {})
+  };
   activeVoiceJoin = join;
   getAppRealtime().send('room.join', join);
 }
 
-export function leaveVoiceRoom(payload: { roomId: string; peerId: string; sessionToken: string }): void {
+export function leaveVoiceRoom(payload: ClientCommands['room.leave']): void {
   if (activeVoiceJoin?.roomId === payload.roomId && activeVoiceJoin.peerId === payload.peerId) {
     activeVoiceJoin = null;
     lastActiveResyncKey = '';

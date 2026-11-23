@@ -53,10 +53,18 @@ export const fetchStaticRooms = (query: StaticRoomsQuery = {}) =>
   api.get(`/api/admin/rooms/static${search(query)}`, StaticRooms, 'Не удалось загрузить постоянные комнаты');
 
 export const fetchRoomCall = (callId: string) =>
-  api.get(`/api/admin/rooms/calls/${encodeURIComponent(callId)}`, RoomCallDetail, 'Не удалось загрузить звонок');
+  api.get(
+    `/api/admin/rooms/calls/${encodeURIComponent(callId)}?relief=1`,
+    RoomCallDetail,
+    'Не удалось загрузить звонок'
+  );
 
 export const fetchLiveCall = (roomId: string) =>
-  api.get(`/api/admin/rooms/live/${encodeURIComponent(roomId)}`, RoomCallDetail, 'Не удалось загрузить звонок');
+  api.get(
+    `/api/admin/rooms/live/${encodeURIComponent(roomId)}?relief=1`,
+    RoomCallDetail,
+    'Не удалось загрузить звонок'
+  );
 
 export const fetchAccounts = (query: AccountsQuery = {}) =>
   api.get(`/api/admin/accounts${search(query)}`, AccountsPage, 'Не удалось загрузить аккаунты');

@@ -5,6 +5,9 @@
 import { fireEvent, screen } from '@testing-library/vue';
 import { nextTick } from 'vue';
 import { beforeAll, expect, test, vi } from 'vitest';
+import { useVoiceSessionStore } from '@voiceroom/call/engine';
+import App from '@/App.vue';
+import * as desktopCall from '@/platform/desktop-call';
 import * as desktopBoundary from '../../src/platform/desktop-boundary';
 import * as openInApp from '../../src/platform/open-in-app';
 import { useLocaleStore } from '../../src/shared/i18n';
@@ -31,6 +34,40 @@ vi.mock('@voiceroom/call/engine/main', () => engine);
 // one-off cost out of the wait for the lobby to render.
 beforeAll(async () => {
   await import('../../src/features/home/LobbyPage.vue');
+});
+
+test.each([false, true])('the desktop call bridge follows join and leave (signed in: %s)', async (signedIn) => {
+  installFakeWebSocket();
+  stubMatchMedia();
+  stubOverlayDom();
+  const setState = vi.fn(async () => {});
+  vi.stubGlobal('voiceRoomDesktopCall', { setState });
+  const publisher = vi.spyOn(desktopCall, 'syncDesktopCallState');
+  const user = signedIn ? authUser({ id: 'ada', login: 'ada', displayName: 'Ада' }) : null;
+  stubFetch({
+    'GET /api/auth/me': { body: { ok: true, user } },
+    'GET /api/auth/rooms': { body: { ok: true, rooms: [] } },
+    'GET /api/friends': { body: { ok: true, incomingRequestCount: 0, friends: [] } },
+    'GET /api/friends/requests': { body: { ok: true, incoming: [], outgoing: [] } }
+  });
+  const { pinia } = await renderWithApp(App, {
+    route: '/r/room-1',
+    extraRoutes: [{ path: '/r/:roomId', component: RoomRoute, props: true }]
+  });
+  try {
+    if (signedIn) await screen.findByRole('button', { name: 'Создать комнату' }, { timeout: 5000 });
+    else await vi.waitFor(() => expect(engine.mountRoomClient).toHaveBeenCalled());
+    const voiceSession = useVoiceSessionStore(pinia);
+    voiceSession.setConnectedVoiceRoom('room-1');
+    await vi.waitFor(() =>
+      expect(setState).toHaveBeenLastCalledWith(expect.objectContaining({ active: true, roomId: 'room-1' }))
+    );
+    expect(publisher.mock.calls.filter(([state]) => state.active)).toHaveLength(1);
+    voiceSession.clearConnectedVoiceRoom('room-1');
+    await vi.waitFor(() => expect(setState).toHaveBeenLastCalledWith({ active: false }));
+  } finally {
+    publisher.mockRestore();
+  }
 });
 
 test('a signed-in room link opens exactly one profile card, and it stays open', async () => {

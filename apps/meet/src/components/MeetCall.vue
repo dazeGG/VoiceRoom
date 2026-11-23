@@ -35,7 +35,12 @@ onBeforeUnmount(() => {
   toast.items = [];
   toast.useViewportTimers(false);
 });
-watchEffect(() => syncRemoteCameraDemand(), { flush: 'post' });
+watchEffect(
+  () => {
+    void syncRemoteCameraDemand();
+  },
+  { flush: 'post' }
+);
 
 async function focusParticipant(peerId: string): Promise<void> {
   if (state.viewedScreenPeerId) await leaveScreenView({ keepPreview: false });

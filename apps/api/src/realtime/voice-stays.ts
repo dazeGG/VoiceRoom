@@ -25,6 +25,7 @@ export function createVoiceStays(deps: {
       guestId: userId ? null : peer.guestId || null,
       clientId: peer.clientId || null,
       client: peer.client ?? null,
+      ...(peer.desktopVersion ? { desktopVersion: peer.desktopVersion } : {}),
       os: peer.os ?? '',
       browser: peer.browser ?? '',
       ip: peer.ip ?? '',

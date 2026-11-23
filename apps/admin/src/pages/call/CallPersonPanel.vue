@@ -60,7 +60,11 @@ const facts = computed(() => {
   const app = seriesOf(samples.map((minute) => minute.cpuAppPct));
   const system = seriesOf(samples.map((minute) => minute.cpuSystemPct));
   const firstCritical = own.find((event) => event.kind === 'cpu_critical');
-  const firstRelief = own.find((event) => event.kind === 'relieved_ns');
+  const firstRelief = own.find(
+    (event) =>
+      event.kind === 'relieved_ns' ||
+      (event.kind === 'relief' && event.relief?.kind === 'noise' && event.relief.outcome === 'applied')
+  );
   const transport = samples.at(-1)?.transport ?? null;
   const screen = spansOf('screen_on', 'screen_off');
   const camera = spansOf('camera_on', 'camera_off');

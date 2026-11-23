@@ -40,7 +40,15 @@ export function callEvents(
     for (const { at, level } of levelChanges(stay)) {
       events.push({ at, kind: 'network', stayId: stay.id, detail: level });
     }
-    for (const { at, kind } of kept.get(stay.id) ?? []) events.push({ at, kind, stayId: stay.id });
+    for (const event of kept.get(stay.id) ?? []) {
+      const { at, kind } = event;
+      events.push({
+        at,
+        kind,
+        stayId: stay.id,
+        ...(event.kind === 'relief' ? { relief: { kind: event.reliefKind, outcome: event.outcome } } : {})
+      });
+    }
   }
   // A stable sort keeps a stay's own order among events of the same moment.
   return events.sort((a, b) => a.at - b.at);

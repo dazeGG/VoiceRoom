@@ -2,6 +2,7 @@
 import { t } from '@/shared/i18n';
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useVoiceSessionStore } from '@voiceroom/call/engine/core/voice-session.store';
+import { isAppVisible, onAppVisibilityChange } from '@/platform/app-visibility';
 
 const props = withDefaults(defineProps<{ variant?: 'sidebar' | 'topbar' | 'bubble'; separator?: boolean }>(), {
   variant: 'topbar',
@@ -12,14 +13,27 @@ const voiceSession = useVoiceSessionStore();
 
 const now = ref(Date.now());
 let timer: ReturnType<typeof setInterval> | undefined;
+let stopVisibility: (() => void) | undefined;
 
-onMounted(() => {
+function syncTimer(visible: boolean): void {
+  clearInterval(timer);
+  timer = undefined;
+  if (!visible) return;
+  now.value = Date.now();
   timer = setInterval(() => {
     now.value = Date.now();
   }, 1000);
+}
+
+onMounted(() => {
+  stopVisibility = onAppVisibilityChange(syncTimer);
+  syncTimer(isAppVisible());
 });
 
-onBeforeUnmount(() => clearInterval(timer));
+onBeforeUnmount(() => {
+  stopVisibility?.();
+  clearInterval(timer);
+});
 
 function formatElapsed(since: number | null): string {
   if (!since) return '';

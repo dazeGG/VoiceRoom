@@ -11,6 +11,7 @@ export type { CpuPressureState };
 const log = createLogger('room:cpu');
 
 const SAMPLE_INTERVAL_MS = 2_000;
+const MAX_SAMPLE_AGE_MS = 10_000;
 const PRESSURE_RANK: Record<CpuPressureState, number> = { nominal: 0, fair: 1, serious: 2, critical: 3 };
 
 interface PressureObserverLike {
@@ -19,12 +20,12 @@ interface PressureObserverLike {
 }
 
 export type PressureObserverConstructor = new (
-  callback: (records: Array<{ state: string }>) => void
+  callback: (records: Array<{ state: string; time?: number }>) => void
 ) => PressureObserverLike;
 
 export interface CpuPressureWatchOptions {
   /** Every reported state. */
-  onState: (state: CpuPressureState) => void;
+  onState: (state: CpuPressureState, sampledAt: number) => void;
   PressureObserver?: PressureObserverConstructor;
 }
 
@@ -37,6 +38,10 @@ function isPressureState(value: unknown): value is CpuPressureState {
 
 function getPressureObserver(): PressureObserverConstructor | undefined {
   return globalThis.PressureObserver;
+}
+
+export function isCpuPressureFresh(sampledAt: number): boolean {
+  return performance.now() - sampledAt <= MAX_SAMPLE_AGE_MS;
 }
 
 // The Compute Pressure API is not in lib.dom yet; browsers without it leave it undefined.
@@ -53,9 +58,9 @@ export function startCpuPressureWatch(options: CpuPressureWatchOptions): boolean
   try {
     observer = new Observer((records) => {
       if (current !== generation) return;
-      const latest = records[records.length - 1]?.state;
-      if (!isPressureState(latest)) return;
-      options.onState(latest);
+      const latest = records.at(-1);
+      if (!latest || !isPressureState(latest.state)) return;
+      options.onState(latest.state, latest.time ?? performance.now());
     });
     observer.observe('cpu', { sampleInterval: SAMPLE_INTERVAL_MS }).catch((error: unknown) => {
       log.info('cpu pressure unavailable', { reason: error instanceof Error ? error.name : 'unknown' });

@@ -1,5 +1,6 @@
 export {
   ConnectionState,
+  getBrowser,
   Room,
   RoomEvent,
   setLogLevel,

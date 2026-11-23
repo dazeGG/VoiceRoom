@@ -418,7 +418,7 @@ async function followDeviceChange(): Promise<void> {
   if (state.joined && !state.localStream && listedDevices(devices, 'audioinput').length > 0) {
     if (await attachMicrophone({ automatic: true })) await syncMicrophoneControlsSoon();
   } else if (shouldReopenMicrophone(devices)) {
-    await restartMicrophone({ refreshDeviceList: false });
+    await replaceMicrophoneCapture({ refreshDeviceList: false });
   }
 }
 
@@ -542,15 +542,6 @@ async function performMicrophoneSwitch(options: SwitchMicrophoneOptions): Promis
     currentAction = false;
     drainManualIntent();
   }
-}
-
-/**
- * Reopens the capture with the current device and processing settings. Runs
- * one at a time: two overlapping switches would both replace the same capture
- * and leave one of the new ones recording in the background.
- */
-function restartMicrophone(options: SwitchMicrophoneOptions = {}): Promise<boolean> {
-  return replaceMicrophoneCapture(options).then((outcome) => outcome === 'applied');
 }
 
 /**
@@ -1355,20 +1346,21 @@ export function requestAutomaticMicrophoneConnectionReplacement(
  * next to nothing. Only for this call: the saved choice stays RNNoise, so the
  * next call starts with it again.
  */
-export async function relieveNoiseSuppression(): Promise<boolean> {
-  if (!state.joined || !state.localStream || state.noiseMode !== 'rnnoise') return false;
+export async function relieveNoiseSuppression(): Promise<boolean | null> {
+  if (!state.joined || !state.localStream || state.noiseMode !== 'rnnoise') return null;
   state.noiseMode = 'browser';
   useRoomDeviceUiStore().noiseMode = 'browser';
-  const switched = await restartMicrophone({
+  const outcome = await replaceMicrophoneCapture({
     failureMessage: t('Не удалось включить облегчённый шумодав'),
     refreshDeviceList: false,
     successMessage: t('Компьютер перегружен: включён облегчённый шумодав')
   });
-  if (!switched && state.noiseMode === 'browser') {
+  if (outcome !== 'applied' && state.noiseMode === 'browser') {
     state.noiseMode = 'rnnoise';
     useRoomDeviceUiStore().noiseMode = 'rnnoise';
   }
-  return switched;
+  if (outcome === 'busy' || outcome === 'coalesced' || outcome === 'stale') return null;
+  return outcome === 'applied';
 }
 
 export async function switchNoiseMode(): Promise<void> {

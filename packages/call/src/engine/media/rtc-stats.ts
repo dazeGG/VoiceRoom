@@ -19,8 +19,11 @@ export interface RtcStat {
   readonly packetsDiscarded: number | undefined;
   /** outbound-rtp: the source a simulcast layer encodes; its layers share it. */
   readonly mediaSourceId: string | undefined;
-  /** media-source audio: seconds of sound handed to the encoder; silence counts, a capture that stopped does not. */
+  /** Audio duration in seconds, for media-source, inbound-rtp or media-playout. */
   readonly totalSamplesDuration: number | undefined;
+  /** media-playout audio: synthesized device playout duration and underrun events. */
+  readonly synthesizedSamplesDuration: number | undefined;
+  readonly synthesizedSamplesEvents: number | undefined;
   // inbound-rtp audio: samples played, those made up for missing packets, and the made-up ones that were silence
   readonly totalSamplesReceived: number | undefined;
   readonly concealedSamples: number | undefined;
@@ -158,7 +161,9 @@ function toRtcStat(value: unknown): RtcStat | null {
     packetsLost: number('packetsLost'),
     packetsReceived: number('packetsReceived'),
     packetsSent: number('packetsSent'),
-    totalSamplesDuration: number('totalSamplesDuration'),
+    totalSamplesDuration: nonnegative('totalSamplesDuration'),
+    synthesizedSamplesDuration: nonnegative('synthesizedSamplesDuration'),
+    synthesizedSamplesEvents: counter('synthesizedSamplesEvents'),
     totalSamplesReceived: number('totalSamplesReceived'),
     concealedSamples: number('concealedSamples'),
     silentConcealedSamples: number('silentConcealedSamples'),
