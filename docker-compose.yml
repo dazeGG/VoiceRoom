@@ -349,6 +349,12 @@ services:
           tcp_port: ${LIVEKIT_RTC_TCP_PORT:-7881}
           udp_port: ${LIVEKIT_RTC_UDP_PORT:-7882}
           use_external_ip: true
+          # Drain forwarding samples in the background and report a rolling p90.
+          # Set any duration to 0s to disable forwarding telemetry.
+          forward_stats:
+            summary_interval: ${LIVEKIT_FORWARD_STATS_SUMMARY_INTERVAL:-1s}
+            report_interval: ${LIVEKIT_FORWARD_STATS_REPORT_INTERVAL:-15s}
+            report_window: ${LIVEKIT_FORWARD_STATS_REPORT_WINDOW:-1m}
         # The API admits at most MAX_ROOM_PEERS; the SFU cap is a backstop with
         # room for a reconnecting peer's old and new session to overlap.
         room:
