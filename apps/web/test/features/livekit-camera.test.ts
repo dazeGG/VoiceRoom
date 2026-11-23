@@ -3,6 +3,7 @@
 
 import { afterEach, expect, test, vi } from 'vitest';
 import type { MediaGrant } from '@voiceroom/shared/contracts/realtime';
+import type * as ToastModule from '@voiceroom/call/engine/ui/toast';
 import { defined, instanceOf } from '../helpers/assert.ts';
 import { FakeMediaStream, FakeMediaStreamTrack } from '../helpers/fake-media.ts';
 import { fakeParticipant, fakePublication, flushMicrotasks, loadLiveKitHarness } from '../helpers/livekit-harness.ts';
@@ -91,6 +92,7 @@ function fakeCapture(settings: MediaTrackSettings = {}) {
     stopped: false,
     stop() {
       this.stopped = true;
+      this.readyState = 'ended';
     },
     addEventListener: (_event: string, listener: () => void) => ended.push(listener)
   };
@@ -129,24 +131,37 @@ async function loadLocalCamera(
       trackPublications: new Map<string, unknown>(),
       publishTrack: async (track: unknown, options: Record<string, unknown>) => {
         published.push({ track, options });
-        return { track, trackSid: 'camera-sid', source: options.source, videoTrack: { setPublishingQuality } };
+        return {
+          track: { mediaStreamTrack: track },
+          trackSid: 'camera-sid',
+          source: options.source,
+          videoTrack: { setPublishingQuality }
+        };
       },
       unpublishTrack: async (track: unknown) => {
-        unpublished.push(track);
+        unpublished.push(
+          typeof track === 'object' && track !== null && 'mediaStreamTrack' in track ? track.mediaStreamTrack : track
+        );
       }
     }
   };
   Object.assign(lk.state, {
     joined: true,
     livekitRoom: room,
-    self: { id: 'self' },
+    self: { id: 'self', camera: false, cameraStream: null },
+    localCameraStream: null,
+    localCameraPublication: null,
     cameraDeviceId: '',
     cameraFacing: 'user'
   });
-  const showToast = vi.fn();
+  const toast = await vi.importActual<typeof ToastModule>('@voiceroom/call/engine/ui/toast');
+  const showToast = vi.fn(toast.showToast);
   vi.doMock('@voiceroom/call/engine/ui/toast', () => ({ showToast }));
+  const { useToastUiStore } = await import('@voiceroom/call/engine/core/toast-ui.store');
+  const toasts = useToastUiStore();
+  toasts.useViewportTimers();
   const camera = await import('@voiceroom/call/engine/services/camera-service');
-  return { lk, camera, published, unpublished, showToast, presence, setPublishingQuality };
+  return { lk, camera, room, published, unpublished, showToast, toasts, presence, setPublishingQuality };
 }
 
 test('turning the camera on captures 540p at 24 fps and publishes it with lighter layers; off stops it', async () => {
@@ -224,16 +239,140 @@ test('leaving and rejoining while the camera prompt is pending never publishes t
   expect(lk.state.localCameraStream).toBeNull();
 });
 
+test('dismissing the camera permission prompt offers a single action that retries the start', async () => {
+  const capture = fakeCapture();
+  const getUserMedia = vi
+    .fn(async () => capture.stream)
+    .mockRejectedValueOnce(new DOMException('Permission dismissed', 'NotAllowedError'));
+  const { lk, camera, published, presence, toasts } = await loadLocalCamera(getUserMedia);
+
+  await camera.toggleCamera();
+  expect(getUserMedia).toHaveBeenCalledOnce();
+  expect(lk.state.localCameraStream).toBeNull();
+  expect(published).toEqual([]);
+  expect(presence).toEqual([]);
+  expect(toasts.items).toHaveLength(1);
+  const toast = defined(toasts.items[0], 'dismissal toast');
+  expect(toast.message).toBe('Запрос доступа к камере закрыт');
+  expect(toast.actions).toHaveLength(1);
+  const retry = defined(toast.actions?.[0], 'retry action');
+  expect(retry.label).toBe('Повторить');
+
+  retry.onClick(toast.id);
+  await vi.waitFor(() => expect(lk.state.self).toMatchObject({ camera: true, cameraStream: capture.stream }));
+  expect(getUserMedia).toHaveBeenCalledTimes(2);
+  expect(toasts.items).toEqual([]);
+  expect(published.map(({ track }) => track)).toEqual([capture.track]);
+  expect(lk.state.localCameraPublication).toMatchObject({ trackSid: 'camera-sid' });
+  expect(presence.map((patch) => patch.camera)).toEqual([true]);
+});
+
 test('a refused camera stays off and nothing is published', async () => {
-  const { lk, camera, published } = await loadLocalCamera(async () => {
-    throw Object.assign(new Error('denied'), { name: 'NotAllowedError' });
+  const { lk, camera, published, toasts } = await loadLocalCamera(async () => {
+    throw new DOMException('Permission denied', 'NotAllowedError');
   });
   await camera.toggleCamera();
   expect(published).toEqual([]);
   expect(lk.state.localCameraStream).toBeNull();
   expect(lk.state.cameraStarting).toBe(false);
-  expect(camera.describeCameraError({ name: 'NotAllowedError' })).toMatch(/Нет доступа к камере/);
+  expect(toasts.items).toMatchObject([
+    { message: 'Нет доступа к камере: разрешите её в браузере', actions: undefined }
+  ]);
   expect(camera.describeCameraError({ name: 'NotReadableError' })).toMatch(/занята/);
+});
+
+test('a camera whose publication rejects never appears on, even while publishing', async () => {
+  const capture = fakeCapture();
+  const { lk, camera, room, presence, showToast } = await loadLocalCamera(async () => capture.stream);
+  const { postState } = await import('@voiceroom/call/engine/room/presence');
+  const pending = Promise.withResolvers<never>();
+  const publish = vi.spyOn(room.localParticipant, 'publishTrack').mockReturnValueOnce(pending.promise);
+
+  const starting = camera.toggleCamera();
+  await vi.waitFor(() => expect(publish).toHaveBeenCalledOnce());
+  const streamWhilePublishing = lk.state.localCameraStream;
+  const cameraWhilePublishing = lk.state.self?.camera;
+  await postState();
+  pending.reject(new Error('publish failed'));
+  await starting;
+
+  expect(streamWhilePublishing).toBeNull();
+  expect(cameraWhilePublishing).not.toBe(true);
+  expect(capture.track.stopped).toBe(true);
+  expect(lk.state.localCameraStream).toBeNull();
+  expect(lk.state.self?.camera).not.toBe(true);
+  expect(lk.state.localCameraPublication).toBeNull();
+  expect(presence.map((patch) => patch.camera)).toEqual([false]);
+  expect(showToast).toHaveBeenCalledWith('Не удалось включить камеру');
+});
+
+test.each(['missing room', 'ended track'])(
+  'camera start cleans up when there is no publication: %s',
+  async (reason) => {
+    const capture = fakeCapture();
+    const { lk, camera, presence, published, showToast } = await loadLocalCamera(async () => capture.stream);
+    if (reason === 'missing room') lk.state.livekitRoom = null;
+    else capture.track.readyState = 'ended';
+
+    await camera.toggleCamera();
+
+    expect(capture.track.stopped).toBe(true);
+    expect(lk.state.localCameraStream).toBeNull();
+    expect(lk.state.self?.camera).not.toBe(true);
+    expect(lk.state.localCameraPublication).toBeNull();
+    expect(published).toEqual([]);
+    expect(presence).toEqual([]);
+    expect(showToast).toHaveBeenCalledWith('Не удалось включить камеру');
+  }
+);
+
+test('camera stop releases the capture before unpublish and leaves a quick restart alone', async () => {
+  const first = fakeCapture();
+  const second = fakeCapture();
+  const getUserMedia = vi.fn(async () => second.stream).mockResolvedValueOnce(first.stream);
+  const { lk, camera, room, published, presence } = await loadLocalCamera(getUserMedia);
+  const pending = Promise.withResolvers<void>();
+  const unpublish = vi.spyOn(room.localParticipant, 'unpublishTrack').mockReturnValueOnce(pending.promise);
+  await camera.toggleCamera();
+
+  const stopping = camera.toggleCamera();
+  const firstStoppedImmediately = first.track.stopped;
+  const presenceAtStop = presence.map((patch) => patch.camera);
+  await camera.toggleCamera();
+  const newPublication = lk.state.localCameraPublication;
+  pending.resolve();
+  await stopping;
+
+  expect(firstStoppedImmediately).toBe(true);
+  expect(presenceAtStop).toEqual([true, false]);
+  expect(unpublish).toHaveBeenCalledExactlyOnceWith({ mediaStreamTrack: first.track }, false);
+  expect(published.map(({ track }) => track)).toEqual([first.track, second.track]);
+  expect(second.track.stopped).toBe(false);
+  expect(lk.state.self).toMatchObject({ camera: true, cameraStream: second.stream });
+  expect(lk.state.localCameraStream).toBe(second.stream);
+  expect(newPublication).toMatchObject({ track: { mediaStreamTrack: second.track } });
+  expect(lk.state.localCameraPublication).toBe(newPublication);
+  expect(presence.map((patch) => patch.camera)).toEqual([true, false, true]);
+});
+
+test('a failed camera unpublish remains available for cleanup after a restart', async () => {
+  const first = fakeCapture();
+  const second = fakeCapture();
+  const getUserMedia = vi.fn(async () => second.stream).mockResolvedValueOnce(first.stream);
+  const { lk, camera, room, unpublished } = await loadLocalCamera(getUserMedia);
+  vi.spyOn(room.localParticipant, 'unpublishTrack').mockRejectedValueOnce(new Error('unpublish failed'));
+
+  await camera.toggleCamera();
+  await camera.toggleCamera();
+  await camera.toggleCamera();
+  expect(lk.state.localCameraStream).toBe(second.stream);
+  await camera.toggleCamera();
+
+  expect(first.track.stopped).toBe(true);
+  expect(second.track.stopped).toBe(true);
+  expect(unpublished).toEqual(expect.arrayContaining([first.track, second.track]));
+  expect(unpublished).toHaveLength(2);
+  expect(lk.state.localCameraPublication).toBeNull();
 });
 
 function videoOf(constraints: MediaStreamConstraints | undefined): MediaTrackConstraints {

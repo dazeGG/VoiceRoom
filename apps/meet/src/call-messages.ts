@@ -117,6 +117,10 @@ export const callMessages = new Map<string, { en: string; fr: string }>([
   ],
   ['Камера отключилась', { en: 'Camera turned off', fr: 'Caméra éteinte' }],
   [
+    'Запрос доступа к камере закрыт',
+    { en: 'Camera permission prompt dismissed', fr: 'La demande d’accès à la caméra a été fermée' }
+  ],
+  [
     'Канал событий комнаты восстанавливается',
     { en: 'Room event channel is being restored', fr: 'Le canal des événements du salon est en cours de restauration' }
   ],
@@ -222,6 +226,7 @@ export const callMessages = new Map<string, { en: string; fr: string }>([
   ['Открыть стрим на весь экран', { en: 'Open stream in full screen', fr: 'Ouvrir le flux en plein écran' }],
   ['Ошибка подключения', { en: 'Connection error', fr: 'Erreur de connexion' }],
   ['Перезапустить', { en: 'Restart', fr: 'Redémarrer' }],
+  ['Повторить', { en: 'Retry', fr: 'Réessayer' }],
   ['Переподключение голоса', { en: 'Voice reconnection', fr: 'Reconnexion vocale' }],
   ['Пинг до LiveKit {p0}', { en: 'Ping to LiveKit {p0}', fr: 'Ping vers LiveKit {p0}' }],
   ['Плитки комнаты', { en: 'Room Tiles', fr: 'Tuiles de salon' }],
