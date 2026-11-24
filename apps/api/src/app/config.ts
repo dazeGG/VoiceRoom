@@ -267,6 +267,7 @@ export function readApiConfig(env: Env = process.env) {
     RETENTION_KEEP_DELETED_MS: int('RETENTION_KEEP_DELETED_MS', 30 * 24 * 60 * 60 * 1000, 60000),
     // A link preview makes the API open a URL a user posted, so it is opt-in.
     LINK_PREVIEWS_ENABLED: readEnvBool('LINK_PREVIEWS_ENABLED', false, env),
+    VOICE_CALLS_ENABLED: readEnvBool('VOICE_CALLS_ENABLED', false, env),
     UPLOADS_DIR: readUploadsDir(env),
     MEDIA_STORAGE_DIR: readMediaStorageDir(env),
     MEDIA_MIN_FREE_BYTES: int('MEDIA_MIN_FREE_BYTES', 2 * 1024 * 1024 * 1024, 1),

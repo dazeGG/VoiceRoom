@@ -142,6 +142,8 @@ const SORT_COLUMNS: Record<AccountsSort, RawBuilder<unknown>> = {
 // One row per live account with every number the list shows. Each aggregate
 // is grouped once over its table, so the cost grows with the tables, not with
 // accounts times tables.
+const ordinaryVoiceStay = sql`NOT EXISTS (SELECT FROM rooms r WHERE r.id = s.room_id AND r.kind = 'call')`;
+
 function accountsWith(where: RawBuilder<unknown>) {
   return sql`
     WITH activity AS (
@@ -154,7 +156,7 @@ function accountsWith(where: RawBuilder<unknown>) {
     seen AS (SELECT user_id, max(last_seen_at) AS last_seen FROM sessions GROUP BY user_id),
     voice AS (
       SELECT user_id, sum(extract(epoch FROM left_at - joined_at)) / 60.0 AS minutes
-      FROM voice_sessions WHERE user_id IS NOT NULL GROUP BY user_id
+      FROM voice_sessions s WHERE user_id IS NOT NULL AND ${ordinaryVoiceStay} GROUP BY user_id
     ),
     room_sent AS (
       SELECT author_user_id AS user_id, count(*) AS sent
@@ -177,6 +179,7 @@ function accountsWith(where: RawBuilder<unknown>) {
       FROM voice_session_samples m JOIN voice_sessions s ON s.id = m.stay_id
       WHERE s.user_id IS NOT NULL AND s.joined_at > now() - interval '${RECENT_STAYS_DAYS} days'
         AND m.at > now() - interval '30 days'
+        AND ${ordinaryVoiceStay}
       GROUP BY s.user_id
     ),
     accounts AS (
@@ -364,8 +367,9 @@ export function createAdminAccountsRepository({ pool }: { pool: pg.Pool }) {
         ),
         voice AS (
           SELECT (joined_at AT TIME ZONE ${MSK})::date AS day, sum(extract(epoch FROM left_at - joined_at)) / 60.0 AS minutes
-          FROM voice_sessions
-          WHERE user_id = ${userId} AND joined_at >= (${since})::timestamp AT TIME ZONE ${MSK} GROUP BY 1
+          FROM voice_sessions s
+          WHERE user_id = ${userId} AND joined_at >= (${since})::timestamp AT TIME ZONE ${MSK}
+            AND ${ordinaryVoiceStay} GROUP BY 1
         )
         SELECT to_char(span.day, 'YYYY-MM-DD') AS day,
           EXISTS (SELECT 1 FROM user_activity_days a WHERE a.user_id = ${userId} AND a.day = span.day) AS active,
@@ -390,9 +394,11 @@ export function createAdminAccountsRepository({ pool }: { pool: pg.Pool }) {
         .orderBy('r.created_at')
         .execute(),
       db
-        .selectFrom('room_memberships')
+        .selectFrom('room_memberships as m')
+        .innerJoin('rooms as r', 'r.id', 'm.room_id')
         .select((eb) => eb.fn.countAll<string>().as('rooms'))
-        .where('user_id', '=', userId)
+        .where('m.user_id', '=', userId)
+        .where('r.kind', '!=', 'call')
         .executeTakeFirst(),
       db
         .selectFrom('sessions')
@@ -424,7 +430,7 @@ export function createAdminAccountsRepository({ pool }: { pool: pg.Pool }) {
           count(DISTINCT m.stay_id) FILTER (WHERE m.cpu_relieved) AS relieved_calls
         FROM voice_session_samples m JOIN voice_sessions s ON s.id = m.stay_id
         WHERE s.user_id = ${userId} AND s.joined_at > now() - interval '${RECENT_STAYS_DAYS} days'
-          AND m.at > now() - interval '30 days'`.execute(db)
+          AND m.at > now() - interval '30 days' AND ${ordinaryVoiceStay}`.execute(db)
     ]);
     const counted = reports.rows[0];
     return {

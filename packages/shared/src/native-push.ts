@@ -5,7 +5,7 @@
 // changes only when an old app could no longer read the map.
 
 import { isRecord } from './guards.ts';
-import type { PushPayload } from './notifications.ts';
+import { isCallPushType, type PushPayload } from './notifications.ts';
 
 export const NATIVE_PUSH_DATA_VERSION = '1';
 
@@ -44,7 +44,8 @@ const EXTRA_KEYS = [
   'ringState'
 ] as const;
 const NAME_KEYS: ReadonlySet<string> = new Set(['fromName', 'roomName']);
-const OPTIONAL_KEYS = ['notificationId', 'expiresAt', 'title', 'body', ...EXTRA_KEYS] as const;
+const CALL_KEYS = ['callId', 'attempt', 'revision', 'tag', 'contractVersion'] as const;
+const OPTIONAL_KEYS = ['notificationId', 'expiresAt', 'title', 'body'] as const;
 
 export type NativePushData = {
   v: string;
@@ -54,7 +55,7 @@ export type NativePushData = {
   url: string;
   /** A retried delivery can repeat a push; the app shows one per key. */
   dedupeKey: string;
-} & Partial<Record<(typeof OPTIONAL_KEYS)[number], string>>;
+} & Partial<Record<(typeof OPTIONAL_KEYS)[number] | (typeof CALL_KEYS)[number] | (typeof EXTRA_KEYS)[number], string>>;
 
 /** The text cut to `limit` characters, never inside a surrogate pair. */
 export function clipNativePushText(text: string, limit: number): string {
@@ -67,7 +68,7 @@ export function nativePushChannel(
   type: string,
   notificationChannels: readonly string[] = []
 ): NativePushChannel | null {
-  if (type === RING || type === 'ring.state') return null;
+  if (type === RING || type === 'ring.state' || isCallPushType(type)) return null;
   return type === 'notification' && notificationChannels.includes(NATIVE_PUSH_CHANNELS.mentions)
     ? NATIVE_PUSH_CHANNELS.mentions
     : NATIVE_PUSH_CHANNELS.messages;
@@ -82,8 +83,7 @@ function nativePushType(payload: PushPayload): string {
 /**
  * The data of a push. A data-only push (a ring) carries its title and body
  * here, since nothing else shows them; a notification push carries them in
- * its notification instead. `revision` and `contractVersion` stay out:
- * `dedupeKey` already names the revision.
+ * its notification instead. Calls also carry their explicit version and revision.
  */
 export function buildNativePushData(
   payload: PushPayload,
@@ -102,10 +102,17 @@ export function buildNativePushData(
     data.title = clipNativePushText(payload.title ?? '', NATIVE_PUSH_TEXT_LIMITS.title);
     data.body = clipNativePushText(payload.body ?? '', NATIVE_PUSH_TEXT_LIMITS.body);
   }
-  for (const key of EXTRA_KEYS) {
-    const value = extra[key];
-    if (value === undefined) continue;
-    data[key] = NAME_KEYS.has(key) ? clipNativePushText(value, NATIVE_PUSH_TEXT_LIMITS.name) : value;
+  if (isCallPushType(type)) {
+    for (const key of CALL_KEYS) {
+      const value = payload[key];
+      if (value !== undefined) data[key] = String(value);
+    }
+  } else {
+    for (const key of EXTRA_KEYS) {
+      const value = extra[key];
+      if (value === undefined) continue;
+      data[key] = NAME_KEYS.has(key) ? clipNativePushText(value, NATIVE_PUSH_TEXT_LIMITS.name) : value;
+    }
   }
   return data;
 }
@@ -125,7 +132,7 @@ export function parseNativePushData(map: unknown): NativePushData | null {
     url: text('url') ?? '',
     dedupeKey: text('dedupeKey') ?? ''
   };
-  for (const key of OPTIONAL_KEYS) {
+  for (const key of isCallPushType(type) ? [...OPTIONAL_KEYS, ...CALL_KEYS] : [...OPTIONAL_KEYS, ...EXTRA_KEYS]) {
     const value = text(key);
     if (value !== undefined) data[key] = value;
   }

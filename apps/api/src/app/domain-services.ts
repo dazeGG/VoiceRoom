@@ -13,7 +13,7 @@ import packageJson from '../../package.json' with { type: 'json' };
 import { createAccountService } from '../domains/account/account.service.ts';
 import { createAdminService } from '../domains/admin/admin.service.ts';
 import { createAdminAccountsService } from '../domains/admin/admin-accounts.service.ts';
-import { callSince, createAdminRoomsService } from '../domains/admin/admin-rooms.service.ts';
+import { callSince, createAdminRoomsService, isAdminPresenceRoom } from '../domains/admin/admin-rooms.service.ts';
 import { createAdminWidgetsService } from '../domains/admin/admin-widgets.service.ts';
 import { createSessionCookies } from '../domains/account/session-cookie.ts';
 import type { AdmissionService } from '../domains/admission/admission.service.ts';
@@ -271,12 +271,8 @@ export function createDomainServices(deps: DomainServiceDeps) {
     stays: (asks) => required(services.getAdminRoomsRepository()).lastStays(asks)
   });
 
-  const adminPresenceRooms = () =>
-    [...hub.presenceRooms.values()].filter(
-      (room): room is typeof room & { kind?: 'main' | 'widget' } => room.kind !== 'meet'
-    );
   const liveCalls = () =>
-    adminPresenceRooms().flatMap((room) => {
+    [...hub.presenceRooms.values()].filter(isAdminPresenceRoom).flatMap((room) => {
       const since = room.peers.size > 0 ? callSince(room) : null;
       return since === null ? [] : [{ roomId: room.id, since }];
     });
@@ -311,7 +307,7 @@ export function createDomainServices(deps: DomainServiceDeps) {
 
   const adminRooms = createAdminRoomsService({
     staff,
-    presenceRooms: adminPresenceRooms,
+    presenceRooms: () => hub.presenceRooms.values(),
     repository: () => required(services.getAdminRoomsRepository()),
     describeAddress: services.describeAddress,
     feedbackInRoom: async (roomId, from, until) =>

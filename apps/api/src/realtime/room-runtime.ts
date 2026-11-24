@@ -212,9 +212,8 @@ function createRoomRealtimeRuntime(deps: RoomRuntimeDeps) {
     mode: RoomSnapshot['mode'] = 'preview'
   ): Promise<RoomSnapshot | null> {
     const dbRoom = await getRoomStore().getRoom(roomId);
-    if (!dbRoom) return null;
-    const recentMessages =
-      readHistory && roomAllowsChat(dbRoom, dbRoom.kind ?? 'main') ? await readHistory(dbRoom) : [];
+    if (!dbRoom || dbRoom.kind === 'call') return null;
+    const recentMessages = readHistory && roomAllowsChat(dbRoom, 'main') ? await readHistory(dbRoom) : [];
     // Presence is the last synchronous read: no awaited work may let this
     // snapshot overwrite a newer peer update that was already broadcast.
     const presence = presenceRooms.get(roomId);

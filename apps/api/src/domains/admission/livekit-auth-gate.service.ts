@@ -287,7 +287,7 @@ function createLiveKitAuthGateService({
       const room = await pool.query<{ kind: string }>('SELECT kind FROM rooms WHERE id=$1 AND deleted_at IS NULL', [
         result.claims.room
       ]);
-      if (!room.rows[0]) return { ok: false, code: 'room_not_found', strippedPath };
+      if (!room.rows[0] || room.rows[0].kind === 'call') return { ok: false, code: 'room_not_found', strippedPath };
       if (room.rows[0].kind === 'widget') {
         const generation = await owner?.capture();
         if (generation === null || generation === undefined)

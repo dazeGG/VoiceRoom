@@ -18,6 +18,11 @@ const TEXT_KEYS = [
   'ringRoom',
   'ringJoin',
   'ringPrivate',
+  'callIncomingTitle',
+  'callIncomingBody',
+  'callMissedTitle',
+  'callMissedBody',
+  'callPrivateBody',
   'roomInvitation',
   'roomInvitationUnnamed'
 ] as const;
@@ -47,6 +52,11 @@ const texts: Record<AppLocale, Texts> = {
     ringRoom: ({ room = '' }) => `Комната «${room}»`,
     ringJoin: () => 'Присоединиться к комнате',
     ringPrivate: () => 'Вас зовут в голосовую комнату.',
+    callIncomingTitle: () => 'Входящий звонок',
+    callIncomingBody: ({ actor = '' }) => `${actor} звонит вам`,
+    callMissedTitle: () => 'Пропущенный звонок',
+    callMissedBody: ({ actor = '' }) => actor,
+    callPrivateBody: () => 'Откройте VoiceRoom, чтобы посмотреть звонок.',
     roomInvitation: ({ room = '' }) => `Приглашение в комнату «${room}»`,
     roomInvitationUnnamed: () => 'Приглашение в комнату'
   },
@@ -67,6 +77,11 @@ const texts: Record<AppLocale, Texts> = {
     ringRoom: ({ room = '' }) => `Room “${room}”`,
     ringJoin: () => 'Join the room',
     ringPrivate: () => 'You are invited to a voice room.',
+    callIncomingTitle: () => 'Incoming call',
+    callIncomingBody: ({ actor = '' }) => `${actor} is calling you`,
+    callMissedTitle: () => 'Missed call',
+    callMissedBody: ({ actor = '' }) => actor,
+    callPrivateBody: () => 'Open VoiceRoom to view the call.',
     roomInvitation: ({ room = '' }) => `Invitation to room “${room}”`,
     roomInvitationUnnamed: () => 'Room invitation'
   },
@@ -87,6 +102,11 @@ const texts: Record<AppLocale, Texts> = {
     ringRoom: ({ room = '' }) => `Salon « ${room} »`,
     ringJoin: () => 'Rejoindre le salon',
     ringPrivate: () => 'Vous êtes invité dans un salon vocal.',
+    callIncomingTitle: () => 'Appel entrant',
+    callIncomingBody: ({ actor = '' }) => `${actor} vous appelle`,
+    callMissedTitle: () => 'Appel manqué',
+    callMissedBody: ({ actor = '' }) => actor,
+    callPrivateBody: () => 'Ouvrez VoiceRoom pour voir l’appel.',
     roomInvitation: ({ room = '' }) => `Invitation au salon « ${room} »`,
     roomInvitationUnnamed: () => 'Invitation à un salon'
   }

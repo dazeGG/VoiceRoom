@@ -19,6 +19,7 @@ import { AdminReportsEvent } from './admin.ts';
 import { Nullable } from './http.ts';
 import { DirectMessage, DirectMessageInvite, PinnedMessage, ReactionSummary, RoomMessage } from './messages.ts';
 import { NotificationPreferences } from './notifications.ts';
+import { CallIncoming, CallMissedUpdated, CallSnapshot } from './rings.ts';
 import {
   CpuPressure,
   LobbyRoom,
@@ -455,6 +456,9 @@ export const ServerEventFrames = {
       expiresAt: Type.Number()
     })
   ),
+  'call.incoming': Frame('call.incoming', CallIncoming),
+  'call.state': Frame('call.state', Type.Object({ call: CallSnapshot })),
+  'call.missed.updated': Frame('call.missed.updated', CallMissedUpdated),
   'notification.settings.updated': Frame(
     'notification.settings.updated',
     Type.Object({ preferences: NotificationPreferences })

@@ -86,6 +86,7 @@ export function createPeerModerationService(deps: PeerModerationDeps) {
   // Microphone only; lifting the mute does not unmute the participant, they
   // decide when to speak again.
   async function setServerMute(room: LiveRoom, peerId: string, muted: boolean): Promise<ServerMuteOutcome> {
+    if (room.kind === 'call') return { status: 'peer_not_found' };
     const target = findTarget(room, peerId);
     if (target.status !== 'found') return target;
     const { peer } = target;

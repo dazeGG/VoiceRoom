@@ -406,12 +406,14 @@ export interface RetentionWeeks {
 }
 
 export interface RingDeliveryOutbox {
+  attempt: number | null;
   attempts: Generated<number>;
   available_at: Generated<Timestamp>;
   claim_token: string | null;
   claimed_until: Timestamp | null;
   deadline: Timestamp;
   kind: string;
+  purpose: Generated<string>;
   recipient_user_id: string;
   revision: number;
   ring_id: string;
@@ -520,18 +522,33 @@ export interface RoomPeerIdentities {
 }
 
 export interface RoomRings {
+  alone_deadline: Timestamp | null;
+  attempt: number | null;
+  attempt_inviter_user_id: string | null;
+  attempt_result: string | null;
+  call_phase: string | null;
+  call_revision: number | null;
   caller_user_id: string;
   client_request_id: string;
+  closed_at: Timestamp | null;
   created_at: Generated<Timestamp>;
+  end_reason: string | null;
   ended_at: Timestamp | null;
-  expires_at: Timestamp;
+  ended_by_user_id: string | null;
+  expires_at: Timestamp | null;
+  first_connected_at: Timestamp | null;
   id: string;
-  invite_message_id: string;
+  invite_message_id: string | null;
+  mutual_ms: Int8 | null;
+  mutual_since: Timestamp | null;
+  purpose: Generated<string>;
   reason: string | null;
   recipient_user_id: string;
-  revision: Generated<number>;
+  revision: Generated<number | null>;
+  ringing_expires_at: Timestamp | null;
   room_id: string;
-  state: Generated<string>;
+  started_at: Timestamp | null;
+  state: Generated<string | null>;
 }
 
 export interface Rooms {

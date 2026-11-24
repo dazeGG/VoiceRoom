@@ -41,6 +41,7 @@ import { registerRoomRoutes } from '../domains/rooms/rooms.routes.ts';
 import { createStaffActorResolver, registerStaffRoutes } from '../domains/staff/staff.routes.ts';
 import { registerFriendsRoutes } from '../domains/social/friends.routes.ts';
 import { registerRingRoutes } from '../domains/rings/rings.routes.ts';
+import { registerCallRingRoutes } from '../domains/rings/call-rings.routes.ts';
 import { registerCallWebSocket } from './call-ws.routes.ts';
 
 type RoomRouteDeps = Parameters<typeof registerRoomRoutes>[2];
@@ -59,6 +60,7 @@ export interface ApiRouteDeps {
     | 'ADMIN_ORIGIN'
     | 'SESSION_COOKIE_SECURE'
     | 'ANDROID_MIN_VERSION'
+    | 'VOICE_CALLS_ENABLED'
   >;
   services: ReturnType<typeof createServiceRegistry>;
   domain: {
@@ -147,6 +149,7 @@ export function registerApiRoutes(app: FastifyInstance, ctx: ApiContext, deps: A
   registerRoomChatRoutes(app, ctx, deps.domain.roomChat);
   registerFriendsRoutes(app, ctx, { friends: deps.domain.friends, requestLimiter: deps.limits.friendRequests });
   registerRingRoutes(app, ctx, deps.domain.rings);
+  registerCallRingRoutes(app, ctx, deps.config.VOICE_CALLS_ENABLED);
   registerDirectMessageRoutes(app, ctx, deps.domain.directMessages);
   registerNotificationSettingsRoutes(app, ctx, deps.domain.notificationSettings);
   registerDeviceTokenRoutes(app, ctx, deps.domain.deviceTokens);
