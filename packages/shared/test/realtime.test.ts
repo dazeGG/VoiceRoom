@@ -85,6 +85,50 @@ test('a leave frame accepts bounded relief outcomes and still accepts legacy lea
   );
 });
 
+test('native voice policy updates carry only revocation for a specific room generation', () => {
+  const frame = buildServerEnvelope('room.native_voice.updated', {
+    roomId: 'room-0001',
+    version: 1,
+    stage: 'off',
+    generation: 'a'.repeat(32)
+  });
+  assert.deepEqual(parseServerFrame(frame), { ok: true, frame });
+  assert.equal(parseServerFrame({ ...frame, payload: { ...frame.payload, stage: 'receive' } }).ok, false);
+});
+
+test('native voice preference and lifecycle telemetry extend legacy commands with bounded values', () => {
+  const target = { roomId: 'abcdefghij', peerId: 'peer-0001', sessionToken: 't'.repeat(32) };
+  const join = { ...target, name: 'Alice', nativeVoiceReceive: true };
+  for (const nativeVoicePreference of ['default', 'on', 'off']) {
+    assert.equal(validateClientCommand({ type: 'room.join', payload: { ...join, nativeVoicePreference } }).ok, true);
+  }
+  assert.equal(
+    validateClientCommand({ type: 'room.join', payload: { ...join, nativeVoicePreference: 'yes' } }).ok,
+    false
+  );
+  const telemetry = { started: true, handedOff: true, fallback: 'helper_fault' };
+  const leave = { type: 'room.leave', payload: { ...target, nativeVoice: telemetry } };
+  assert.deepEqual(validateClientCommand(leave), { ok: true, envelope: leave });
+  const poll = {
+    type: 'room.voice.report',
+    payload: {
+      ...target,
+      rttMs: null,
+      jitterBufferMs: null,
+      uplink: { packets: 0, lost: 0 },
+      transport: null,
+      heard: []
+    }
+  };
+  assert.equal(validateClientCommand(poll).ok, true);
+  const modern = { ...poll, payload: { ...poll.payload, nativeVoice: telemetry } };
+  assert.deepEqual(validateClientCommand(modern), { ok: true, envelope: modern });
+  for (const nativeVoice of [{ fallback: 'arbitrary-helper-message' }, { started: false }, { handedOff: 1 }]) {
+    assert.equal(validateClientCommand({ ...poll, payload: { ...poll.payload, nativeVoice } }).ok, false);
+    assert.equal(validateClientCommand({ ...leave, payload: { ...target, nativeVoice } }).ok, false);
+  }
+});
+
 test('voice joins accept a random installation UUID independently of the guest id', () => {
   const join = { roomId: 'abcdefghij', peerId: 'peer-0001', sessionToken: 't'.repeat(32), name: 'Alice' };
   const clientId = '123e4567-e89b-12d3-a456-426614174000';
