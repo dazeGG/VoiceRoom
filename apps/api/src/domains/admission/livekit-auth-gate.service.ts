@@ -275,10 +275,10 @@ function createLiveKitAuthGateService({
       if (!binding.ok) return { ok: false, code: binding.code, strippedPath };
     }
     if (result.claims.companion) {
-      const { cid, room, peer, exp } = result.claims;
-      const deadline = watchdog && isUuid(cid) ? await nativeVoice?.deadline(result.claims) : null;
-      if (deadline) {
-        const companion = { room, identity: nativeVoiceIdentity(peer, cid), deadline, expiresAt: exp };
+      const { cid, room, peer } = result.claims;
+      const window = watchdog && isUuid(cid) ? await nativeVoice?.window(result.claims) : null;
+      if (window) {
+        const companion = { room, identity: nativeVoiceIdentity(peer, cid), ...window };
         if (watchdog?.allows(companion)) return { ok: true, claims: result.claims, strippedPath, companion };
       }
       return { ok: false, code: 'companion_unavailable', strippedPath };
@@ -298,10 +298,10 @@ function createLiveKitAuthGateService({
     return { ok: true, claims: result.claims, strippedPath };
   }
 
-  async function refreshCompanion(credential: string): Promise<number | null> {
+  async function refreshCompanion(credential: string) {
     const authorization = await credentialBoundary.authorizeCredential(credential);
-    if (!authorization.ok) return null;
-    return (await nativeVoice?.deadline(authorization.claims)) ?? null;
+    if (!authorization.ok || !nativeVoice) return null;
+    return nativeVoice.window(authorization.claims);
   }
 
   function createServer(): http.Server {

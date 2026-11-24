@@ -8,6 +8,9 @@ import type { GatePrincipal } from './gate-principal.ts';
 import { liveKitPublishSources } from './livekit-publish.policy.ts';
 import { NATIVE_VOICE_LEASE_ATTRIBUTE } from './livekit-token-binding.mts';
 
+// Cover the SFU's five-minute refresh interval even before its first refresh arrives.
+const SLIDING_COMPANION_TOKEN_TTL_SECONDS = 600;
+
 export type LiveKitAdmission = {
   gateCredentialId: string;
   room: string;
@@ -81,33 +84,17 @@ function createLiveKitCredentialProvider({
     if (gate.status !== 'issued') return { status: gate.status, admission: null };
     const { credential } = gate;
 
-    const tokenTtl = companion ? Math.max(1, Math.ceil((companion.expiresAt - Date.now()) / 1000)) : ttlSeconds;
-    const token = new AccessToken(apiKey, apiSecret, {
-      identity: companion ? nativeVoiceIdentity(peerId, companion.id) : peerId,
-      metadata: JSON.stringify({ roomId }),
-      ...(companion && { attributes: { [NATIVE_VOICE_LEASE_ATTRIBUTE]: companion.id } }),
-      // Meet distributes display names through its in-memory API roster.
-      name: surface === 'meet' ? '' : name,
-      ttl: tokenTtl
-    });
-    const canPublishSources = companion
-      ? []
-      : liveKitPublishSources(surface, {
-          microphone: canPublishMicrophone,
-          screen: canPublishScreen
-        });
-    // Chat, reactions and presence travel over the API, never LiveKit data
-    // packets, and the client binds no data handler. Granting data would only
-    // let a modified client flood everyone in the room.
-    token.addGrant({
-      canPublish: canPublishSources.length > 0,
-      canPublishData: false,
-      canPublishSources,
-      canSubscribe: true,
-      ...(companion && { canUpdateOwnMetadata: false, hidden: true }),
-      room: livekitRoom,
-      roomJoin: true
-    });
+    const tokenTtl = companion
+      ? companion.sliding
+        ? SLIDING_COMPANION_TOKEN_TTL_SECONDS
+        : Math.max(1, Math.ceil((companion.expiresAt - Date.now()) / 1000))
+      : ttlSeconds;
+    const token = companion
+      ? await signCompanion(apiKey, apiSecret, { roomId, livekitRoom, peerId, id: companion.id }, tokenTtl)
+      : await signParticipant(
+          { apiKey, apiSecret, roomId, livekitRoom, peerId, name, surface, canPublishMicrophone, canPublishScreen },
+          tokenTtl
+        );
     const publicUrl = new URL(normalizeLiveKitServerUrl(gateUrl));
     publicUrl.searchParams.set('vr_gate_credential', credential.value);
     return {
@@ -115,14 +102,81 @@ function createLiveKitCredentialProvider({
       admission: {
         gateCredentialId: credential.id,
         room: livekitRoom,
-        token: await token.toJwt(),
+        token,
         ttlSeconds: tokenTtl,
         url: publicUrl.toString()
       }
     };
   }
 
-  return Object.freeze({ issueAdmission });
+  async function refreshCompanionToken(input: CompanionTokenInput): Promise<string | null> {
+    if (!apiKey || !apiSecret) return null;
+    return signCompanion(apiKey, apiSecret, input, SLIDING_COMPANION_TOKEN_TTL_SECONDS);
+  }
+
+  return Object.freeze({ issueAdmission, refreshCompanionToken });
+}
+
+type CompanionTokenInput = { roomId: string; livekitRoom: string; peerId: string; id: string };
+
+function signCompanion(apiKey: string, apiSecret: string, input: CompanionTokenInput, ttl: number): Promise<string> {
+  const { roomId, livekitRoom, peerId, id } = input;
+  const token = new AccessToken(apiKey, apiSecret, {
+    identity: nativeVoiceIdentity(peerId, id),
+    metadata: JSON.stringify({ roomId }),
+    attributes: { [NATIVE_VOICE_LEASE_ATTRIBUTE]: id },
+    ttl
+  });
+  token.addGrant({
+    canPublish: false,
+    canPublishData: false,
+    canPublishSources: [],
+    canSubscribe: true,
+    canUpdateOwnMetadata: false,
+    hidden: true,
+    room: livekitRoom,
+    roomJoin: true
+  });
+  return token.toJwt();
+}
+
+function signParticipant(
+  input: {
+    apiKey: string;
+    apiSecret: string;
+    roomId: string;
+    livekitRoom: string;
+    peerId: string;
+    name: string;
+    surface: RoomSurface;
+    canPublishMicrophone: boolean;
+    canPublishScreen: boolean;
+  },
+  ttl: number
+): Promise<string> {
+  const { apiKey, apiSecret, roomId, livekitRoom, peerId, name, surface, canPublishMicrophone, canPublishScreen } =
+    input;
+  const token = new AccessToken(apiKey, apiSecret, {
+    identity: peerId,
+    metadata: JSON.stringify({ roomId }),
+    // Meet distributes display names through its in-memory API roster.
+    name: surface === 'meet' ? '' : name,
+    ttl
+  });
+  const canPublishSources = liveKitPublishSources(surface, {
+    microphone: canPublishMicrophone,
+    screen: canPublishScreen
+  });
+  // Chat, reactions and presence travel over the API, never LiveKit data packets.
+  token.addGrant({
+    canPublish: canPublishSources.length > 0,
+    canPublishData: false,
+    canPublishSources,
+    canSubscribe: true,
+    room: livekitRoom,
+    roomJoin: true
+  });
+  return token.toJwt();
 }
 
 export type LiveKitCredentialProvider = ReturnType<typeof createLiveKitCredentialProvider>;

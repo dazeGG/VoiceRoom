@@ -8,10 +8,12 @@ export const MAX_NATIVE_VOICE_WATCHES = 256;
 const DRAIN_MS = 7_000;
 
 type Participant = { room: string; identity: string };
-type Window = {
+type Deadline = {
   deadline: number;
   expiresAt: number;
-  refresh(): Promise<number | null>;
+};
+type Window = Deadline & {
+  refresh(): Promise<Deadline | null>;
   nextCheck: number;
 };
 type Cleanup = {
@@ -28,7 +30,7 @@ type Watch = Participant & {
   tunnels: Set<() => void>;
 };
 
-export type CompanionWindow = Participant & Pick<Window, 'deadline' | 'expiresAt'>;
+export type CompanionWindow = Participant & Deadline;
 
 function key({ room, identity }: Participant): string {
   return JSON.stringify([room, identity]);
@@ -112,13 +114,16 @@ export function createNativeVoiceWatchdog({
   async function refresh(watch: Watch, window: Window): Promise<void> {
     window.nextCheck = Infinity;
     try {
-      const deadline = await window.refresh();
+      const refreshed = await window.refresh();
       const now = Date.now();
       if (watches.get(key(watch)) !== watch || watch.cleanup) return;
-      if (deadline === null || Math.min(deadline, window.deadline) <= now) {
+      if (!refreshed || Math.min(refreshed.deadline, window.deadline) <= now) {
         cut(watch, now);
         pump(now);
-      } else window.deadline = deadline;
+      } else {
+        window.deadline = refreshed.deadline;
+        window.expiresAt = refreshed.expiresAt;
+      }
     } catch {
       // A failed or hung database check cannot move the cached deadline.
     } finally {

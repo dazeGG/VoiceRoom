@@ -3,6 +3,7 @@
 // each reason is spelled for clients; unexpected failures throw, after the
 // credential that was already issued has been revoked.
 
+import type { NativeVoicePreference } from '@voiceroom/shared/contracts/admission';
 import type { RoomCapabilities } from '@voiceroom/shared/contracts/rooms';
 import { isLiveKitOnlyIdentity } from '@voiceroom/shared/validation';
 import { ROOM_SURFACE_CEILINGS, roomCapabilities, type RoomSurface } from '../rooms/room-surface.policy.ts';
@@ -76,6 +77,8 @@ export interface AdmissionPeer {
   readonly transportId: string;
   readonly authSessionHash?: string;
   readonly desktop?: boolean;
+  readonly nativeVoiceReceive?: true;
+  readonly nativeVoicePreference?: NativeVoicePreference;
 }
 
 export interface AdmissionDeps {

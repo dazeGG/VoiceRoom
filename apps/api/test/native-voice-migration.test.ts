@@ -33,8 +33,8 @@ test('the native lease migration rolls down and back up without touching existin
     account_id: 'account',
     expires_at: new Date(Date.now() + 60_000)
   };
-  assert.equal(await leases.reserve(lease, 2), true);
-  assert.equal(await leases.reserve({ ...lease, id: randomUUID() }, 2), false);
+  assert.equal(await leases.reserve(lease, 2, 2), true);
+  assert.equal(await leases.reserve({ ...lease, id: randomUUID() }, 2, 2), false);
   assert.equal((await leases.list()).length, 1);
   const rolledBack = await rollBackThrough(databaseUrl, MIGRATION);
   await assert.rejects(leases.list(), { code: '42P01' });
@@ -48,10 +48,10 @@ test('the native lease migration rolls down and back up without touching existin
     expectedMigrationCatalog().slice(-rolledBack)
   );
   assert.deepEqual(await leases.list(), []);
-  assert.equal(await leases.reserve(lease, 1), true);
+  assert.equal(await leases.reserve(lease, 1, 2), true);
 });
 
-test('native voice cannot reserve a missing room or revive a retired lease', async (t) => {
+test('native voice refuses missing admission state and cannot revive a retired lease', async (t) => {
   const { pool, cleanup } = await createTestDatabase(t);
   t.after(cleanup);
   const db = kyselyOn(pool);
@@ -67,12 +67,17 @@ test('native voice cannot reserve a missing room or revive a retired lease', asy
     retired_at: null,
     cleanup_exhausted_at: null
   };
-  assert.equal(await leases.reserve(lease, 1), false);
+  assert.equal(await leases.reserve(lease, 1, 2), false);
   assert.deepEqual(await leases.list(), []);
-  await db.insertInto('rooms').values({ id: lease.room_id }).execute();
-  assert.equal(await leases.reserve(lease, 1), true);
+  const nextExpiry = new Date(Date.now() + 60_000);
   const validUntil = new Date(Date.now() + 30_000);
+  assert.equal(await leases.extend(lease.id, validUntil), false);
+  assert.equal(await leases.renew(lease.id, nextExpiry, validUntil), null);
+  await db.insertInto('rooms').values({ id: lease.room_id }).execute();
+  assert.equal(await leases.reserve(lease, 1, 2), true);
   await leases.activate(lease.id, validUntil);
+  assert.equal(await leases.renew(lease.id, nextExpiry, validUntil), null, 'missing credential refuses the renewal');
+  assert.deepEqual(await leases.list(), [{ ...lease, valid_until: validUntil }]);
   const claims: GateClaims = {
     cid: lease.id,
     companion: true,
@@ -84,10 +89,10 @@ test('native voice cannot reserve a missing room or revive a retired lease', asy
     pType: 'account',
     room: lease.room_id
   };
-  assert.equal(await leases.deadline(claims), validUntil.getTime());
+  assert.deepEqual(await leases.window(claims), { deadline: validUntil.getTime(), expiresAt: claims.exp });
   const retiredAt = new Date();
   assert.equal(await leases.retire(lease, retiredAt), true);
   assert.equal(await leases.retire(lease, new Date(retiredAt.getTime() + 1_000)), false);
-  assert.equal(await leases.deadline(claims), null);
+  assert.equal(await leases.window(claims), null);
   assert.deepEqual(await leases.list(), [{ ...lease, retired_at: retiredAt }]);
 });

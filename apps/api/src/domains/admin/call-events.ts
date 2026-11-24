@@ -46,7 +46,8 @@ export function callEvents(
         at,
         kind,
         stayId: stay.id,
-        ...(event.kind === 'relief' ? { relief: { kind: event.reliefKind, outcome: event.outcome } } : {})
+        ...(event.kind === 'relief' && { relief: { kind: event.reliefKind, outcome: event.outcome } }),
+        ...(event.kind === 'native_fallback' && { nativeFallback: event.reason })
       });
     }
   }

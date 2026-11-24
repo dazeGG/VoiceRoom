@@ -1,5 +1,6 @@
 import type { DesktopCapabilities } from '@voiceroom/call/engine/desktop-capabilities';
 import { readDesktopRuntime } from '@/platform/desktop-system';
+import { readDesktopNativeVoiceConnectionPreference } from '@/platform/desktop-native-voice';
 
 declare global {
   interface Window {
@@ -24,6 +25,9 @@ export const webCallDesktop: DesktopCapabilities = {
   },
   get nativeVoice() {
     return window.voiceRoomDesktopNativeVoice;
+  },
+  get nativeVoicePreference() {
+    return readDesktopNativeVoiceConnectionPreference();
   },
   get hotkeys() {
     return window.voiceRoomDesktopHotkeys;

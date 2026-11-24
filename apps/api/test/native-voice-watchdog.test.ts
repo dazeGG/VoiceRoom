@@ -6,6 +6,37 @@ import {
   MAX_NATIVE_VOICE_WATCHES
 } from '../src/domains/admission/native-voice-watchdog.service.ts';
 
+test('the watchdog cuts a live tunnel when a refresh returns a deadline that has passed', async (t) => {
+  t.mock.timers.enable({ apis: ['Date', 'setInterval'], now: 1_000 });
+  const removed: string[] = [];
+  const watchdog = createNativeVoiceWatchdog({
+    async remove(_room, identity) {
+      removed.push(identity);
+    },
+    report(error) {
+      assert.fail(String(error));
+    }
+  });
+  watchdog.start();
+  t.after(() => watchdog.stop());
+  const window = { room: 'room', identity: 'native-peer#voice.lease', deadline: 6_000, expiresAt: 61_000 };
+  let closed = false;
+  assert.ok(
+    watchdog.track(
+      window,
+      async () => ({ deadline: 1_900, expiresAt: 61_000 }),
+      () => {
+        closed = true;
+      }
+    )
+  );
+  t.mock.timers.tick(1_000);
+  await setImmediate();
+  assert.ok(closed);
+  assert.deepEqual(removed, [window.identity]);
+  assert.equal(watchdog.allows(window), false);
+});
+
 test('the gate caps watch count, concurrent removals and time spent retrying', async (t) => {
   t.mock.timers.enable({ apis: ['Date', 'setInterval'], now: 1_000 });
   const pending: (() => void)[] = [];

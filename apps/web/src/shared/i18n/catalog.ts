@@ -747,6 +747,12 @@ export const english = {
   'Когда вы уже в голосе, VoiceRoom уточнит, прежде чем переключить звонок.':
     "When you're already on voice, VoiceRoom will clarify before transferring the call.",
   'Режим микрофона': 'Microphone mode',
+  'Нативный звук (бета)': 'Native audio (beta)',
+  'По умолчанию': 'Default',
+  Включён: 'On',
+  Выключен: 'Off',
+  'Воспроизводит голоса собеседников через системный звуковой движок. Если звук работает неправильно, выключите этот режим. Включение применяется при следующем подключении.':
+    'Plays other people’s voices through the system audio engine. Turn it off if the audio sounds wrong. Turning it on takes effect the next time you connect.',
   'В Push-to-talk микрофон открыт, пока вы удерживаете назначенную клавишу.':
     'In Push-to-talk, the microphone is open as long as you hold down the assigned key.',
   'Не удалось получить релиз — откроем страницу загрузок.': 'Failed to receive the release - open the downloads page.',
@@ -2447,6 +2453,12 @@ export const french: Record<MessageKey, string> = {
   'Когда вы уже в голосе, VoiceRoom уточнит, прежде чем переключить звонок.':
     "Lorsque vous êtes déjà en voix, VoiceRoom clarifiera avant de transférer l'appel.",
   'Режим микрофона': 'Mode microphone',
+  'Нативный звук (бета)': 'Audio natif (bêta)',
+  'По умолчанию': 'Par défaut',
+  Включён: 'Activé',
+  Выключен: 'Désactivé',
+  'Воспроизводит голоса собеседников через системный звуковой движок. Если звук работает неправильно, выключите этот режим. Включение применяется при следующем подключении.':
+    'Lit les voix des autres participants via le moteur audio du système. Désactivez ce mode si le son pose problème. L’activation prend effet à la prochaine connexion.',
   'В Push-to-talk микрофон открыт, пока вы удерживаете назначенную клавишу.':
     'En Push-to-talk, le microphone est ouvert tant que vous maintenez enfoncée la touche attribuée.',
   'Не удалось получить релиз — откроем страницу загрузок.':

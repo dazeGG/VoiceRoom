@@ -42,6 +42,8 @@ export const DEFAULT_REALTIME_RECONNECT_LEASE_MS = 30000;
 export function readNativeVoicePolicy(env: Env, maxRoomPeers: number) {
   const configured = env.NATIVE_VOICE_STAGE;
   const stage: NativeVoiceStage = configured === 'internal-join' || configured === 'receive' ? configured : 'off';
+  const defaultPercent = readEnvInt('NATIVE_VOICE_DEFAULT_PERCENT', 0, 0, env);
+  if (defaultPercent > 100) throw new Error('NATIVE_VOICE_DEFAULT_PERCENT must be at most 100');
   // Leave at least two reconnect slots within the configured SFU ceiling.
   const physicalSlots = readEnvInt('LIVEKIT_MAX_PARTICIPANTS', 24, 0, env) || 24;
   const cap =
@@ -54,6 +56,7 @@ export function readNativeVoicePolicy(env: Env, maxRoomPeers: number) {
   return {
     stage,
     cap,
+    defaultPercent,
     accounts: new Set(
       (env.NATIVE_VOICE_ACCOUNT_IDS ?? '')
         .split(',')

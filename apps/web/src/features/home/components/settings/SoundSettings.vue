@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import EmojiText from '@/shared/chat/EmojiText.vue';
 import { t } from '@/shared/i18n';
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, useId, watch } from 'vue';
+import type { NativeVoicePreference } from '@voiceroom/shared/contracts/admission';
 import {
   GATE_ON_DEFAULT_DB,
   playDirectMessageCue,
@@ -15,6 +16,7 @@ import {
   setMicrophoneVolume,
   setOutputDevice,
   syncAudioBusSettings,
+  syncNativeVoiceReceive,
   type MicrophoneMode
 } from '@voiceroom/call/engine';
 import { withSavedDeviceMissing } from '@/shared/audio/device-list';
@@ -49,6 +51,7 @@ import {
   type MicMeter
 } from '../../model/sound-settings';
 import { readRoomSwitchConfirmEnabled, writeRoomSwitchConfirmEnabled } from '../../model/room-switch-confirmation';
+import { readDesktopNativeVoicePreference, writeDesktopNativeVoicePreference } from '@/platform/desktop-native-voice';
 import type { ToastOptions } from '../../model/toasts.store';
 import HotkeyRow from './HotkeyRow.vue';
 
@@ -74,6 +77,19 @@ const microphoneMode = ref<MicrophoneMode>(saved.microphoneMode);
 const masterVolume = ref(saved.masterVolume);
 const notificationVolume = ref(saved.notificationVolume);
 const confirmRoomSwitch = ref(readRoomSwitchConfirmEnabled());
+const nativeVoicePreference = ref(readDesktopNativeVoicePreference());
+const nativeVoiceDescriptionId = useId();
+const nativeVoiceOptions = computed<SegmentOption<NativeVoicePreference>[]>(() => [
+  { value: 'default', label: t('По умолчанию') },
+  { value: 'on', label: t('Включён') },
+  { value: 'off', label: t('Выключен') }
+]);
+
+function changeNativeVoicePreference(preference: NativeVoicePreference): void {
+  nativeVoicePreference.value = preference;
+  writeDesktopNativeVoicePreference(preference);
+  syncNativeVoiceReceive();
+}
 const previewingSoundSet = ref(false);
 let confirmedSpeakerId = saved.outputDeviceId;
 let speakerChangeGeneration = 0;
@@ -427,6 +443,27 @@ function previewNotificationSound(): void {
     </SettingsGroup>
 
     <SettingsGroup v-if="desktopApp">
+      <SettingRow v-if="nativeVoicePreference" :label="t('Нативный звук (бета)')" stacked>
+        <template #description>
+          <span :id="nativeVoiceDescriptionId">{{
+            t(
+              'Воспроизводит голоса собеседников через системный звуковой движок. Если звук работает неправильно, выключите этот режим. Включение применяется при следующем подключении.'
+            )
+          }}</span>
+        </template>
+        <template #control>
+          <SegmentControl
+            layout="equal"
+            class="settings__segment"
+            :options="nativeVoiceOptions"
+            :value="nativeVoicePreference"
+            v-bind="{ ariaLabel: t('Нативный звук (бета)') }"
+            :aria-describedby="nativeVoiceDescriptionId"
+            @change="changeNativeVoicePreference"
+          />
+        </template>
+      </SettingRow>
+
       <SettingRow
         :label="t('Режим микрофона')"
         :description="t('В Push-to-talk микрофон открыт, пока вы удерживаете назначенную клавишу.')"

@@ -6,6 +6,8 @@ import { defined } from '../helpers/assert';
 import { FakeMediaStream, FakeMediaStreamTrack } from '../helpers/fake-media';
 
 const capability = { version: 1, stage: 'receive', generation: 'a'.repeat(32) } as const;
+const ROOM_ID = 'voice-room';
+const SESSION_TOKEN = 'session-token';
 const flush = () => vi.advanceTimersByTimeAsync(0);
 type UpdateResult = Awaited<ReturnType<NativeVoiceBridge['update']>>;
 
@@ -39,12 +41,12 @@ type BridgeEvent = NativeVoiceEvent extends infer Event
     : never
   : never;
 
-function desktopBridge() {
+function desktopBridge(minor: number) {
   const listeners = new Set<(event: NativeVoiceEvent) => void>();
   const bridge = {
     getCapability: vi.fn<NativeVoiceBridge['getCapability']>(async () => ({
       available: true,
-      protocol: { major: 1, minor: 0 }
+      protocol: { major: 1, minor }
     })),
     listOutputs: vi.fn<NativeVoiceBridge['listOutputs']>(async () => []),
     start: vi.fn<NativeVoiceBridge['start']>(async () => ({ ok: true })),
@@ -80,10 +82,10 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-async function loadReceive() {
+async function loadReceive(minor = 0) {
   vi.useFakeTimers();
   stubVoicePlayback();
-  const desktop = desktopBridge();
+  const desktop = desktopBridge(minor);
   const mediaStreamTrack = new FakeMediaStreamTrack('browser-mic', 'audio');
   const track = { mediaStreamTrack, mediaStream: new MediaStream([mediaStreamTrack]) };
   const microphone = fakePublication('microphone', { trackSid: 'mic-original', track, isSubscribed: true });
@@ -118,12 +120,12 @@ async function loadReceive() {
     url: 'wss://admission.invalid'
   };
   const admit = vi.spyOn(ports.transport, 'requestNativeVoiceAdmission').mockResolvedValue(admission);
-  const logger = { ...ports.diagnostics.logger('test'), warn: vi.fn() };
+  const logger = { ...ports.diagnostics.logger('test'), info: vi.fn(), warn: vi.fn() };
   vi.spyOn(ports.diagnostics, 'logger').mockReturnValue(logger);
   vi.stubGlobal('voiceRoomDesktopNativeVoice', desktop.bridge);
   Object.assign(lk.state, {
-    roomId: 'voice-room',
-    sessionToken: 'session-token',
+    roomId: ROOM_ID,
+    sessionToken: SESSION_TOKEN,
     outputDeviceId: '',
     localAppAudioSuppressed: false,
     viewedScreenPeerId: remote.identity,
@@ -569,6 +571,107 @@ test('expiry keeps the same call and restores browser audio even with healthy me
   expect(call.room.disconnected).toBe(false);
 });
 
+test('realtime policy revocation stops only the current helper and restores Chromium within its stop timeout', async () => {
+  const call = await loadReceive(2);
+  await call.activate();
+  call.bridge.stop.mockReturnValueOnce(new Promise(() => {}));
+  const { createVoiceEventHandler } = await import('@voiceroom/call/engine/room/voice-events');
+  const { mapWebCallEvent } = await import('@/features/room/adapters/web-call-transport');
+  const handle = createVoiceEventHandler({ leaveRoom: vi.fn(), showModeration: vi.fn(), showNotFound: vi.fn() });
+  const dispatch = async (roomId: string, generation: string) =>
+    handle(
+      defined(
+        mapWebCallEvent({
+          type: 'room.native_voice.updated',
+          payload: { roomId, version: 1, stage: 'off', generation }
+        }),
+        'mapped native voice policy update'
+      )
+    );
+
+  await dispatch('another-room', capability.generation);
+  await dispatch(ROOM_ID, 'b'.repeat(32));
+  expect(call.bridge.stop).not.toHaveBeenCalled();
+  await dispatch(ROOM_ID, capability.generation);
+  await flush();
+  expect(call.bridge.stop).toHaveBeenCalledExactlyOnceWith({ callId: call.bridge.start.mock.lastCall?.[0].callId });
+  await vi.advanceTimersByTimeAsync(1_000);
+  expect(call.microphone.calls.enabled).toEqual([false, true]);
+  expect(call.receiver.isNativeVoiceReceiving()).toBe(false);
+  expect(call.receiver.nativeVoiceTelemetryForReport()?.fallback).toBe('admission_revoked');
+  expect(call.room.disconnected).toBe(false);
+});
+
+test('renews each 20 seconds through the original expiry and falls back once renewal is refused', async () => {
+  const call = await loadReceive(2);
+  const leaseId = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+  call.admit.mockResolvedValue({ ...call.admission, leaseId });
+  const renew = vi.spyOn(call.ports.transport, 'renewNativeVoiceLease').mockImplementation(async () => ({
+    ok: true,
+    version: 1,
+    leaseId,
+    expiresAt: Date.now() + 60_000,
+    token: 'refreshed-companion-token'
+  }));
+  await call.activate();
+  let samples = 48_000;
+  const play = async (ms: number) => {
+    while (ms > 0) {
+      const elapsed = Math.min(ms, 1_000);
+      await vi.advanceTimersByTimeAsync(elapsed);
+      samples += elapsed * 48;
+      call.stats(samples);
+      ms -= elapsed;
+    }
+  };
+  await play(18_899);
+  expect(renew).not.toHaveBeenCalled();
+  await play(1);
+  expect(renew).toHaveBeenCalledExactlyOnceWith(
+    { ...defined(call.admit.mock.lastCall, 'original roster binding')[0], leaseId },
+    expect.any(AbortSignal)
+  );
+  await play(45_000);
+  expect(renew).toHaveBeenCalledTimes(3);
+  expect(call.receiver.isNativeVoiceReceiving()).toBe(true);
+  expect(call.bridge.start).toHaveBeenCalledTimes(1);
+  expect(call.bridge.update).toHaveBeenCalledExactlyOnceWith({
+    callId: call.bridge.start.mock.lastCall?.[0].callId,
+    muted: false
+  });
+
+  renew.mockRejectedValue(new Error('Forbidden'));
+  await play(15_000);
+  expect(call.logger.warn).toHaveBeenCalledWith('native receive fallback', { reason: 'admission_refused' });
+  expect(call.microphone.calls.enabled).toEqual([false, true]);
+  expect(call.screenAudio.calls.subscribed).toEqual([true]);
+  expect(call.bridge.stop).toHaveBeenCalledTimes(1);
+  expect(call.room.disconnected).toBe(false);
+  await vi.advanceTimersByTimeAsync(60_000);
+  expect(renew).toHaveBeenCalledTimes(4);
+});
+
+test('leaving cancels an in-flight renewal and ignores its late response', async () => {
+  const call = await loadReceive(2);
+  const leaseId = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+  call.admit.mockResolvedValue({ ...call.admission, leaseId });
+  const renew = vi.spyOn(call.ports.transport, 'renewNativeVoiceLease');
+  const response = Promise.withResolvers<Awaited<ReturnType<typeof renew>>>();
+  renew.mockReturnValue(response.promise);
+  await call.start();
+  // An empty native probe has no media stats timer, and still owns its admission.
+  call.microphone.publication.isMuted = true;
+  call.receiver.syncNativeVoiceReceive();
+  await vi.advanceTimersByTimeAsync(20_000);
+  const [, signal] = defined(renew.mock.lastCall, 'in-flight renewal');
+  call.receiver.resetNativeVoiceReceive();
+  expect(signal.aborted).toBe(true);
+  response.resolve({ ok: true, version: 1, leaseId, expiresAt: Date.now() + 60_000, token: 'renewed' });
+  await vi.advanceTimersByTimeAsync(60_000);
+  expect(renew).toHaveBeenCalledTimes(1);
+  expect(call.logger.warn).not.toHaveBeenCalledWith('native receive fallback', expect.anything());
+});
+
 test('a recovering helper can resume before the disconnect deadline', async () => {
   const call = await loadReceive();
   await call.activate();
@@ -641,6 +744,196 @@ test('explicit output selection maps the browser label to a WASAPI endpoint', as
   expect(call.bridge.start.mock.lastCall?.[0].outputDeviceId).toBe('wasapi-id');
 });
 
+test.each([2, 3])(
+  'bridge 1.%i applies start gains, zero, resets to unity and per-person mute independently',
+  async (minor) => {
+    const call = await loadReceive(minor);
+    call.settings.persistMasterVolume(200);
+    call.settings.storeParticipantAudioPreference('peer:peer-remote', { volume: 1.5 });
+    await call.activate();
+    expect(call.bridge.start.mock.lastCall?.[0]).toMatchObject({ volumes: { 'mic-original': 1.5 }, masterVolume: 2 });
+
+    call.settings.storeParticipantAudioPreference('peer:peer-remote', { volume: 0 });
+    call.settings.persistMasterVolume(0);
+    call.bus.syncAudioBusSettings();
+    await flush();
+    const callId = call.bridge.start.mock.lastCall?.[0].callId;
+    expect(call.bridge.update.mock.lastCall?.[0]).toEqual({ callId, volumes: { 'mic-original': 0 }, masterVolume: 0 });
+
+    call.settings.storeParticipantAudioPreference('peer:peer-remote', { muted: true });
+    call.receiver.syncNativeVoiceReceive();
+    await flush();
+    expect(call.bridge.update.mock.lastCall?.[0]).toEqual({ callId, tracks: [], volumes: {} });
+
+    call.settings.storeParticipantAudioPreference('peer:peer-remote', { muted: false, volume: 1 });
+    call.settings.persistMasterVolume(100);
+    call.bus.syncAudioBusSettings();
+    await flush();
+    expect(call.bridge.update.mock.lastCall?.[0]).toEqual({ callId, tracks: ['mic-original'], masterVolume: 1 });
+    expect(call.receiver.isNativeVoiceReceiving()).toBe(true);
+    expect(call.bridge.stop).not.toHaveBeenCalled();
+  }
+);
+
+test.each([0, 1])('bridge 1.%i only receives legacy fields and falls back for changed gains', async (minor) => {
+  const call = await loadReceive(minor);
+  await call.activate();
+  expect(call.bridge.start.mock.lastCall?.[0]).not.toHaveProperty('volumes');
+  expect(call.bridge.start.mock.lastCall?.[0]).not.toHaveProperty('masterVolume');
+  call.settings.persistMasterVolume(150);
+  call.bus.syncAudioBusSettings();
+  await flush();
+  expect(call.receiver.nativeVoiceTelemetryForReport()).toEqual({
+    started: true,
+    handedOff: true,
+    fallback: 'unsupported_volume'
+  });
+  expect(call.bridge.stop).toHaveBeenCalledOnce();
+});
+
+test('the 1.2 gain map respects its 128-SID limit without dropping any custom gains', async () => {
+  const call = await loadReceive(2);
+  call.settings.storeParticipantAudioPreference('peer:peer-remote', { volume: 1.5 });
+  function addMic(index: number): void {
+    const trackSid = `TR_test_${index}`;
+    call.remote.trackPublications.set(trackSid, fakePublication('microphone', { trackSid }).publication);
+  }
+  for (let index = 1; index < 128; index += 1) addMic(index);
+  await call.start();
+  expect(Object.keys(call.bridge.start.mock.lastCall?.[0].volumes ?? {})).toHaveLength(128);
+
+  addMic(128);
+  call.receiver.syncNativeVoiceReceive();
+  await flush();
+  expect(call.bridge.update).not.toHaveBeenCalled();
+  expect(call.bridge.stop).toHaveBeenCalledOnce();
+  expect(call.receiver.nativeVoiceTelemetryForReport()?.fallback).toBe('track_volume_limit');
+});
+
+test('bridge 1.2 keeps a preferred endpoint through unplug, the default change and restoration', async () => {
+  const call = await loadReceive(2);
+  const device = { kind: 'audiooutput', deviceId: 'browser-id', label: 'Headset' };
+  const endpoint = { id: 'wasapi-id', name: ' Headset ', isDefault: false };
+  const enumerateDevices = vi.fn(async () => [device]);
+  vi.stubGlobal('navigator', { mediaDevices: { enumerateDevices } });
+  call.bridge.listOutputs.mockResolvedValue([endpoint]);
+  call.state.outputDeviceId = device.deviceId;
+  await call.activate();
+  expect(call.bridge.start.mock.lastCall?.[0].outputDeviceId).toBe(endpoint.id);
+  call.logger.info.mockClear();
+  const deviceEvent = (effectiveOutputDeviceId: string, defaultOutputDeviceId: string, missing: boolean) =>
+    call.emit({
+      kind: 'device',
+      outputDeviceId: endpoint.id,
+      effectiveOutputDeviceId,
+      defaultOutputDeviceId,
+      muted: false,
+      fallback: missing ? 'selected-output-unavailable' : null
+    });
+
+  enumerateDevices.mockResolvedValue([]);
+  call.bridge.listOutputs.mockResolvedValue([]);
+  call.receiver.syncNativeVoiceReceive({ devicesChanged: true });
+  deviceEvent('default-1', 'default-1', true);
+  deviceEvent('default-2', 'default-2', true);
+  await flush();
+  expect(call.logger.info).toHaveBeenCalledExactlyOnceWith('native receive using default output', {
+    reason: 'selected-output-unavailable'
+  });
+  expect(call.bridge.update.mock.calls.every(([update]) => !Object.hasOwn(update, 'outputDeviceId'))).toBe(true);
+  expect(call.receiver.isNativeVoiceReceiving()).toBe(true);
+
+  enumerateDevices.mockResolvedValue([device]);
+  call.bridge.listOutputs.mockResolvedValue([endpoint]);
+  deviceEvent(endpoint.id, 'default-2', false);
+  call.receiver.syncNativeVoiceReceive({ devicesChanged: true });
+  await flush();
+  expect(call.bridge.update.mock.calls.every(([update]) => !Object.hasOwn(update, 'outputDeviceId'))).toBe(true);
+  expect(call.bridge.stop).not.toHaveBeenCalled();
+  expect(call.microphone.calls.enabled).toEqual([false]);
+  expect(call.receiver.nativeVoiceTelemetryForReport()).toEqual({ started: true, handedOff: true });
+});
+
+test('a saved output missing at start uses the default and maps the selected endpoint when it appears', async () => {
+  const call = await loadReceive(2);
+  const device = { kind: 'audiooutput', deviceId: 'browser-id', label: 'Headset' };
+  const enumerateDevices = vi.fn(async (): Promise<(typeof device)[]> => []);
+  vi.stubGlobal('navigator', { mediaDevices: { enumerateDevices } });
+  call.state.outputDeviceId = device.deviceId;
+  await call.activate();
+  expect(call.bridge.start.mock.lastCall?.[0].outputDeviceId).toBeNull();
+
+  enumerateDevices.mockResolvedValue([device]);
+  call.bridge.listOutputs.mockResolvedValue([{ id: 'wasapi-id', name: device.label, isDefault: false }]);
+  call.receiver.syncNativeVoiceReceive({ devicesChanged: true });
+  await flush();
+  expect(call.bridge.update.mock.lastCall?.[0].outputDeviceId).toBe('wasapi-id');
+  expect(call.bridge.stop).not.toHaveBeenCalled();
+});
+
+test('turning native receive off returns to Chromium even with an eligible server snapshot', async () => {
+  const call = await loadReceive(2);
+  await call.activate();
+  Object.defineProperty(call.ports.platform.desktop, 'nativeVoicePreference', { configurable: true, value: 'off' });
+  onTestFinished(() => {
+    Reflect.deleteProperty(call.ports.platform.desktop, 'nativeVoicePreference');
+  });
+  call.receiver.syncNativeVoiceReceive();
+  await flush();
+  expect(call.microphone.calls.enabled).toEqual([false, true]);
+  expect(call.bridge.stop).toHaveBeenCalledOnce();
+  expect(call.receiver.nativeVoiceTelemetryForReport()?.fallback).toBe('preference_disabled');
+});
+
+test.each(['on', 'default'] as const)('switching from off to %s waits for the next voice join', async (preference) => {
+  const call = await loadReceive(2);
+  const { writeDesktopNativeVoicePreference } = await import('@/platform/desktop-native-voice');
+  const { getAppRealtime } = await import('@/api/realtime');
+  const realtime = getAppRealtime();
+  const send = vi.spyOn(realtime, 'send').mockImplementation(() => {});
+  const restore = vi.spyOn(realtime, 'onRestore');
+  const member = { roomId: ROOM_ID, peerId: call.state.peerId, sessionToken: SESSION_TOKEN };
+  const join = () => call.ports.transport.realtime.join({ ...member, name: 'Local' });
+
+  writeDesktopNativeVoicePreference('off');
+  join();
+  expect(send.mock.lastCall?.[1]).toMatchObject({ nativeVoicePreference: 'off' });
+  await call.start();
+
+  writeDesktopNativeVoicePreference(preference);
+  call.receiver.syncNativeVoiceReceive();
+  await flush();
+  expect(call.admit).not.toHaveBeenCalled();
+  expect(call.bridge.start).not.toHaveBeenCalled();
+  expect(call.receiver.nativeVoiceTelemetryForReport()).toBeUndefined();
+
+  defined(restore.mock.lastCall, 'realtime restore handler')[0](1);
+  expect(send.mock.lastCall?.[1]).toMatchObject({ nativeVoicePreference: 'off' });
+  await call.start();
+  expect(call.admit).not.toHaveBeenCalled();
+
+  call.ports.transport.realtime.leave(member);
+  call.receiver.resetNativeVoiceReceive();
+  join();
+  expect(send.mock.lastCall?.[1]).toMatchObject({ nativeVoicePreference: preference });
+  await call.activate();
+  expect(call.admit).toHaveBeenCalledOnce();
+
+  const stop = Promise.withResolvers<void>();
+  call.bridge.stop.mockReturnValueOnce(stop.promise);
+  writeDesktopNativeVoicePreference('off');
+  call.receiver.syncNativeVoiceReceive();
+  expect(call.bridge.stop).toHaveBeenCalledOnce();
+  await vi.advanceTimersByTimeAsync(1_000);
+  expect(call.receiver.isNativeVoiceReceiving()).toBe(false);
+  expect(call.microphone.calls.enabled).toEqual([false, true]);
+  expect(call.receiver.nativeVoiceTelemetryForReport()?.fallback).toBe('preference_disabled');
+
+  writeDesktopNativeVoicePreference(preference);
+  defined(restore.mock.lastCall, 'realtime restore handler')[0](2);
+  expect(send.mock.lastCall?.[1]).toMatchObject({ nativeVoicePreference: 'off' });
+});
+
 test('voice poll counts a native reset followed by growth beyond the prior poll and preserves browser screen audio', async () => {
   const call = await loadReceive();
   const stats = await import('@voiceroom/call/engine/room/stats');
@@ -659,6 +952,7 @@ test('voice poll counts a native reset followed by growth beyond the prior poll 
   await vi.advanceTimersByTimeAsync(3000);
   expect(report.mock.lastCall?.[0]).toMatchObject({
     receiveEngine: 'native',
+    nativeVoice: { started: true, handedOff: true },
     jitterBufferMs: 20,
     nativeHeard: { concealedSamples: 200, gaps: 3 },
     heard: []

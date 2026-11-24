@@ -2,10 +2,12 @@
 // events to them, taking a peer out and keeping the durable active/empty
 // marker of each room in step with the roster.
 
+import type { NativeVoicePreference } from '@voiceroom/shared/contracts/admission';
 import type { PeerLeaveReason } from '@voiceroom/shared/contracts/realtime';
 import type { ServerEnvelope } from '@voiceroom/shared/realtime';
 import type { Logger } from 'pino';
 import type { AdmissionPeer } from '../domains/admission/admission.service.ts';
+import type { NativeVoiceAttempt } from '../domains/admission/native-voice.service.ts';
 import { LOG_EVENTS } from '../lib/log-events.ts';
 import type { RoomKind } from '../domains/rooms/room-surface.policy.ts';
 import { publicPeer, type PresencePeer } from '../domains/rooms/room-views.ts';
@@ -15,6 +17,10 @@ import { clearViewedScreenPeerReferences } from './room-runtime.ts';
 
 export interface RosterPeer extends PresencePeer {
   desktopVersion?: string | null;
+  nativeVoicePreference?: NativeVoicePreference;
+  nativeVoiceReceive?: true;
+  nativeVoicePolicyUpdates?: true;
+  nativeVoiceAttempt?: NativeVoiceAttempt;
   closed?: boolean;
   replaced?: boolean;
 }
@@ -235,7 +241,12 @@ export function createRoomPresence(deps: RoomPresenceDeps) {
       accountUserId: peer.accountUserId || null,
       gateGuestPrincipalId: peer.gateGuestPrincipalId || '',
       transportId: id,
-      ...(desktop && { desktop, authSessionHash: connection.authSessionHash })
+      ...(desktop && {
+        desktop,
+        authSessionHash: connection.authSessionHash,
+        ...(peer.nativeVoiceReceive && { nativeVoiceReceive: true }),
+        ...(peer.nativeVoicePreference && { nativeVoicePreference: peer.nativeVoicePreference })
+      })
     });
   }
 

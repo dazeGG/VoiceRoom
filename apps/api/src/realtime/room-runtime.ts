@@ -7,11 +7,12 @@ import { normalizePeerId, cleanGuestName, cleanStreamId, cleanScreenProfileId } 
 import { buildServerEnvelope } from './envelope.ts';
 import type { ServerEnvelope } from '@voiceroom/shared/realtime';
 import { LOG_EVENTS } from '../lib/log-events.ts';
+import { recordNativeVoiceReportDropped } from '../lib/metrics.ts';
 import { createLogger } from '../lib/logger.ts';
 import type { RoomSnapshot } from '@voiceroom/shared/contracts/realtime';
 import type { ActiveBanRecord } from '../domains/moderation/active-ban.repository.ts';
 import type { CredentialBoundaryService } from '../domains/admission/credential-boundary.service.ts';
-import type { NativeVoiceService } from '../domains/admission/native-voice.service.ts';
+import { NATIVE_VOICE_REPORT_GRACE_MS, type NativeVoiceService } from '../domains/admission/native-voice.service.ts';
 import type { ConnectionRegistry, WsConnection } from './registry.ts';
 import { createReconnectLeases } from './reconnect-leases.ts';
 import type { createRoomSummaries } from './room-summaries.ts';
@@ -19,7 +20,13 @@ import { createVoiceJoin, type JoinUser } from './voice-join.ts';
 import { claimMedia, decideMediaRequest, MEDIA_MIN_VIEWERS, type MediaLimits } from './media-budget.ts';
 import type { createMediaMinute } from './media-minute.ts';
 import { leaveReasonOf } from './runtime-types.ts';
-import { noteMicChange, noteStayRelief, noteVoiceReport, type noteStayEvent } from './voice-track.ts';
+import {
+  noteMicChange,
+  noteStayNativeVoice,
+  noteStayRelief,
+  noteVoiceReport,
+  type noteStayEvent
+} from './voice-track.ts';
 import { isRecord } from '@voiceroom/shared/guards';
 import type {
   FinalizeError,
@@ -297,6 +304,7 @@ function createRoomRealtimeRuntime(deps: RoomRuntimeDeps) {
       peer.transport?.id === activeVoice.transportId;
     if (ownsCurrentGeneration) {
       if (stayEvent && payload.relief) noteStayRelief(peer, payload.relief, now());
+      if (payload.nativeVoice && acceptNativeVoiceReport(peer)) noteStayNativeVoice(peer, payload.nativeVoice, now());
       await leases.finalize({
         roomId: payload.roomId,
         peerId: payload.peerId,
@@ -458,7 +466,11 @@ function createRoomRealtimeRuntime(deps: RoomRuntimeDeps) {
   function reportVoice(connection: WsConnection, payload: ClientCommands['room.voice.report']) {
     const active = activePeer(connection, payload);
     if (!active.ok) return active;
-    const { roomId, mic } = payload;
+    const { nativeVoice: nativeReport, nativeHeard, receiveEngine, ...poll } = payload;
+    const { roomId, mic } = poll;
+    const reportsNative = Boolean(nativeReport || nativeHeard || receiveEngine === 'native');
+    const accepted = reportsNative && acceptNativeVoiceReport(active.peer);
+    if (accepted && nativeReport) noteStayNativeVoice(active.peer, nativeReport, now());
     if (stayEvent && mic && (mic.reopens > 0 || mic.replacements > 0)) {
       logger.warn(
         {
@@ -474,7 +486,11 @@ function createRoomRealtimeRuntime(deps: RoomRuntimeDeps) {
     for (const { peer, verdict } of noteVoiceReport(
       active.room.peers,
       active.peer,
-      payload,
+      {
+        ...poll,
+        ...((accepted || receiveEngine === 'browser') && receiveEngine && { receiveEngine }),
+        ...(accepted && nativeHeard && { nativeHeard })
+      },
       now(),
       Boolean(stayEvent)
     )) {
@@ -491,6 +507,14 @@ function createRoomRealtimeRuntime(deps: RoomRuntimeDeps) {
       );
     }
     return { ok: true as const };
+  }
+
+  function acceptNativeVoiceReport(peer: Peer): boolean {
+    const attempt = peer.nativeVoiceAttempt;
+    if (attempt && (attempt.retiredAt === undefined || now() - attempt.retiredAt < NATIVE_VOICE_REPORT_GRACE_MS))
+      return true;
+    recordNativeVoiceReportDropped();
+    return false;
   }
 
   // Asked before a screen share or a camera starts. A grant holds its share of

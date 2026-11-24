@@ -50,6 +50,7 @@ export {
 } from './core/settings';
 export { clientRoomName } from './core/room-runtime.store';
 export { restoreOutputDevice, setOutputDevice, syncAudioBusSettings } from './services/audio-bus';
+export { syncNativeVoiceReceive } from './services/native-voice-receive';
 export { setMicrophoneVolume } from './services/microphone-service';
 export { setMicrophoneMode } from './ui/controls';
 export { syncLocalProfile } from './room/participants';

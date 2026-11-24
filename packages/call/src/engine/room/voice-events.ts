@@ -22,6 +22,7 @@ import { applyRoomDeleted, applyRoomUpdated } from './lifecycle';
 import { createParticipant, removePeer, syncPeers, updateParticipant } from './participants';
 import { postState } from './presence';
 import {
+  revokeNativeVoiceCapability,
   setNativeVoiceCapability,
   setNativeVoiceCompanions,
   syncNativeVoiceReceive
@@ -85,6 +86,12 @@ export function createVoiceEventHandler(room: {
 
     if (event.type === 'room.companions.updated') {
       if (event.payload.roomId === state.roomId) setNativeVoiceCompanions(event.payload);
+      return;
+    }
+
+    if (event.type === 'room.native_voice.updated') {
+      const { roomId, generation } = event.payload;
+      if (roomId === state.roomId) revokeNativeVoiceCapability(generation);
       return;
     }
 

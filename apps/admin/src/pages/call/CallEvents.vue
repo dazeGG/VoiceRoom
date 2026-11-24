@@ -9,7 +9,8 @@ const EVENT_TONES: Partial<Record<CallEvent['kind'], string>> = {
   screen_on: 'accent',
   camera_on: 'accent',
   cpu_critical: 'danger',
-  relieved_ns: 'info'
+  relieved_ns: 'info',
+  native_fallback: 'warning'
 };
 
 const NETWORK_EVENT_TEXT: Record<string, string> = {
@@ -51,6 +52,8 @@ function eventText(event: CallEvent, name: string): string {
     }
     case 'network':
       return `${name} — ${NETWORK_EVENT_TEXT[event.detail ?? ''] ?? 'связь изменилась'}`;
+    case 'native_fallback':
+      return `${name} — нативный звук переключился на Chromium${event.nativeFallback ? ` (${event.nativeFallback})` : ''}`;
   }
 }
 

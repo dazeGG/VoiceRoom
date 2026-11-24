@@ -491,10 +491,13 @@ test('over HTTP a call is for staff only, and an unknown one is not found', { sk
   const start = NOW - HOUR;
   await createVoiceSessionRepository({ pool }).recordSessions([
     {
-      ...stay('kitchen', start, start + MINUTE, { guestName: 'Петя' }, [minute(start, GOOD)]),
+      ...stay('kitchen', start, start + MINUTE, { guestName: 'Петя' }, [
+        { ...minute(start, GOOD), receiveEngine: 'native' }
+      ]),
       events: [
         { at: start + 1, kind: 'relieved_ns' },
-        { at: start + 2, kind: 'relief', reliefKind: 'screen', outcome: 'failed' }
+        { at: start + 2, kind: 'relief', reliefKind: 'screen', outcome: 'failed' },
+        { at: start + 3, kind: 'native_fallback', reason: 'helper_fault' }
       ]
     }
   ]);
@@ -517,6 +520,10 @@ test('over HTTP a call is for staff only, and an unknown one is not found', { sk
 
   const modern = await request(socketPath, { pathname: `${pathname}?relief=1`, cookie: admin }, RoomCallDetail);
   assert.equal(modern.status, 200);
+  assert.equal(
+    modern.body.events?.some((event) => event.kind === 'native_fallback'),
+    false
+  );
   assert.deepEqual(
     modern.body.events?.find((event) => event.kind === 'relief'),
     {
@@ -524,6 +531,22 @@ test('over HTTP a call is for staff only, and an unknown one is not found', { sk
       stayId: callId,
       kind: 'relief',
       relief: { kind: 'screen', outcome: 'failed' }
+    }
+  );
+  const native = await request(
+    socketPath,
+    { pathname: `${pathname}?relief=1&nativeVoice=1`, cookie: admin },
+    RoomCallDetail
+  );
+  assert.equal(native.status, 200);
+  assert.equal(native.body.call.stays[0]?.minutes?.[0]?.receiveEngine, 'native');
+  assert.deepEqual(
+    native.body.events?.find((event) => event.kind === 'native_fallback'),
+    {
+      at: start + 3,
+      stayId: callId,
+      kind: 'native_fallback',
+      nativeFallback: 'helper_fault'
     }
   );
 
@@ -544,6 +567,50 @@ test('over HTTP a call is for staff only, and an unknown one is not found', { sk
   assert.deepEqual(rooms.body.counts, { all: 0, active: 0, trouble: 0, quiet: 0 });
   assert.equal((await request(socketPath, { pathname: '/api/admin/rooms/static', cookie: alice })).status, 403);
 });
+
+test(
+  'native fallback migration rolls back and forward while preserving relief and other call events',
+  { skip },
+  async (t) => {
+    const { cleanup, databaseUrl, pool } = await createTestDatabase(t);
+    t.after(cleanup);
+    const migration = '20261124140000_keep_native_voice_fallbacks';
+    const at = NOW - HOUR;
+    await rollBackThrough(databaseUrl, migration);
+    await pool.query('INSERT INTO voice_sessions (joined_at, left_at) VALUES ($1, $1)', [new Date(at)]);
+    await pool.query(`INSERT INTO voice_call_events (stay_id, at, kind, relief_kind, relief_outcome)
+    SELECT id, joined_at, 'relief', 'screen', 'applied' FROM voice_sessions`);
+    await runMigrations({ databaseUrl, logger: SILENT });
+    await pool.query(`INSERT INTO voice_call_events (stay_id, at, kind, native_fallback_reason)
+    SELECT id, joined_at, 'native_fallback', 'helper_fault' FROM voice_sessions`);
+    const reason = () =>
+      pool.query<{ native_fallback_reason: string | null }>(
+        'SELECT native_fallback_reason FROM voice_call_events ORDER BY kind'
+      );
+    assert.deepEqual((await reason()).rows, [
+      { native_fallback_reason: 'helper_fault' },
+      { native_fallback_reason: null }
+    ]);
+    for (const invalid of [
+      "UPDATE voice_call_events SET native_fallback_reason = NULL WHERE kind = 'native_fallback'",
+      "UPDATE voice_call_events SET native_fallback_reason = 'helper_fault' WHERE kind = 'relief'",
+      "UPDATE voice_call_events SET native_fallback_reason = '' WHERE kind = 'native_fallback'"
+    ])
+      await assert.rejects(pool.query(invalid), /voice_call_events_native_fallback_check/);
+    await rollBackThrough(databaseUrl, migration);
+    await assert.rejects(reason(), /does not exist/);
+    await runMigrations({ databaseUrl, logger: SILENT });
+    const { rows } = await pool.query<{
+      kind: string;
+      relief_kind: string | null;
+      relief_outcome: string | null;
+      native_fallback_reason: string | null;
+    }>('SELECT kind, relief_kind, relief_outcome, native_fallback_reason FROM voice_call_events');
+    assert.deepEqual(rows, [
+      { kind: 'relief', relief_kind: 'screen', relief_outcome: 'applied', native_fallback_reason: null }
+    ]);
+  }
+);
 
 test('the call page data rolls back and forth cleanly', { skip }, async (t) => {
   const { cleanup, databaseUrl, pool } = await createTestDatabase(t);

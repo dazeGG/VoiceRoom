@@ -84,7 +84,7 @@ export function createNativeVoiceRecovery({
           const window = verified.get(identity);
           const tracked = watchdog.recover({ room, identity }, window && { ...window, room }, async () => {
             const [current] = await recoverWindows(room, [identity]);
-            return current?.deadline ?? null;
+            return current ?? null;
           });
           if (!tracked) {
             retryRooms.push({ name, after });

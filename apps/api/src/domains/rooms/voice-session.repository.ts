@@ -11,6 +11,7 @@ import crypto from 'node:crypto';
 import { sql } from 'kysely';
 import type pg from 'pg';
 import type { ClientKind } from '@voiceroom/shared/contracts/admin';
+import type { NativeVoiceFallbackReason } from '@voiceroom/shared/contracts/admission';
 import type { CpuPressure, ProcessingRelief, VoiceCause } from '@voiceroom/shared/contracts/rooms';
 import type {
   AppWindowState,
@@ -74,6 +75,7 @@ export type StayEventKind = 'screen_on' | 'screen_off' | 'camera_on' | 'camera_o
 export type StayEvent = { at: number } & (
   | { kind: StayEventKind }
   | { kind: 'relief'; reliefKind: ProcessingRelief['kind']; outcome: ProcessingRelief['outcome'] }
+  | { kind: 'native_fallback'; reason: NativeVoiceFallbackReason }
 );
 
 export type FinishedVoiceSession = {
@@ -161,7 +163,8 @@ export function createVoiceSessionRepository({
           at: new Date(event.at),
           kind: event.kind,
           relief_kind: event.kind === 'relief' ? event.reliefKind : null,
-          relief_outcome: event.kind === 'relief' ? event.outcome : null
+          relief_outcome: event.kind === 'relief' ? event.outcome : null,
+          native_fallback_reason: event.kind === 'native_fallback' ? event.reason : null
         }))
       );
       for (let start = 0; start < events.length; start += SAMPLE_BATCH) {

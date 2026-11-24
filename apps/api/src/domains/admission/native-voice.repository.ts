@@ -9,9 +9,12 @@ export type NativeVoiceLease = Selectable<NativeVoiceLeases>;
 export function createNativeVoiceRepository(db: Database) {
   async function reserve(
     lease: Pick<NativeVoiceLease, 'id' | 'room_id' | 'peer_id' | 'generation' | 'account_id' | 'expires_at'>,
-    cap: number
+    roomCap: number,
+    accountCap: number
   ) {
     return db.transaction().execute(async (trx) => {
+      // Serialize an account's reservations even when they target different rooms.
+      await sql`select pg_advisory_xact_lock(hashtextextended(${`native-voice:${lease.account_id}`}, 0))`.execute(trx);
       const room = await trx
         .selectFrom('rooms')
         .select('id')
@@ -26,9 +29,16 @@ export function createNativeVoiceRepository(db: Database) {
         .selectFrom('native_voice_leases')
         .select('peer_id')
         .where('room_id', '=', lease.room_id)
-        .limit(cap)
+        .limit(roomCap)
         .execute();
-      if (slots.length >= cap || slots.some((slot) => slot.peer_id === lease.peer_id)) return false;
+      if (slots.length >= roomCap || slots.some((slot) => slot.peer_id === lease.peer_id)) return false;
+      const accountSlots = await trx
+        .selectFrom('native_voice_leases')
+        .select('id')
+        .where('account_id', '=', lease.account_id)
+        .limit(accountCap)
+        .execute();
+      if (accountSlots.length >= accountCap) return false;
       await trx.insertInto('native_voice_leases').values(lease).execute();
       return true;
     });
@@ -45,30 +55,107 @@ export function createNativeVoiceRepository(db: Database) {
   }
 
   async function extend(id: string, validUntil: Date): Promise<boolean> {
-    const row = await db
-      .updateTable('native_voice_leases')
-      .set({ valid_until: validUntil })
-      .where('id', '=', id)
-      .where('retired_at', 'is', null)
-      .where('valid_until', '>', sql<Date>`clock_timestamp()`)
-      .where('expires_at', '>', sql<Date>`clock_timestamp()`)
-      .where((eb) =>
-        eb.exists(
-          eb.selectFrom('livekit_gate_credentials').select('id').where('id', '=', id).where('revoked_at', 'is', null)
+    return db.transaction().execute(async (trx) => {
+      const locked = await trx
+        .selectFrom('native_voice_leases')
+        .select('id')
+        .where('id', '=', id)
+        .forUpdate()
+        .executeTakeFirst();
+      if (!locked) return false;
+      const row = await trx
+        .updateTable('native_voice_leases')
+        .set((eb) => ({ valid_until: eb.fn('greatest', ['valid_until', eb.val(validUntil)]) }))
+        .where('id', '=', id)
+        .where('retired_at', 'is', null)
+        .where('valid_until', '>', sql<Date>`clock_timestamp()`)
+        .where('expires_at', '>', sql<Date>`clock_timestamp()`)
+        .where((eb) =>
+          eb.exists(
+            eb.selectFrom('livekit_gate_credentials').select('id').where('id', '=', id).where('revoked_at', 'is', null)
+          )
         )
-      )
-      .where((eb) =>
-        eb.exists(
-          eb
-            .selectFrom('rooms')
-            .select('id')
-            .whereRef('rooms.id', '=', 'native_voice_leases.room_id')
-            .where('deleted_at', 'is', null)
+        .where((eb) =>
+          eb.exists(
+            eb
+              .selectFrom('rooms')
+              .select('id')
+              .whereRef('rooms.id', '=', 'native_voice_leases.room_id')
+              .where('deleted_at', 'is', null)
+          )
         )
-      )
-      .returning('id')
-      .executeTakeFirst();
-    return Boolean(row);
+        .returning('id')
+        .executeTakeFirst();
+      return Boolean(row);
+    });
+  }
+
+  async function renew(id: string, expiresAt: Date, validUntil: Date): Promise<Date | null> {
+    return db.transaction().execute(async (trx) => {
+      // Use the same lock order as retirement. Either row can block long enough
+      // for the previous window to expire.
+      const lockedLease = await trx
+        .selectFrom('native_voice_leases')
+        .select('id')
+        .where('id', '=', id)
+        .forUpdate()
+        .executeTakeFirst();
+      if (!lockedLease) return null;
+      const lockedCredential = await trx
+        .selectFrom('livekit_gate_credentials')
+        .select('id')
+        .where('id', '=', id)
+        .forUpdate()
+        .executeTakeFirst();
+      if (!lockedCredential) return null;
+
+      // This statement starts after both locks are held and uses one database timestamp.
+      const at = sql<Date>`statement_timestamp()`;
+      const credential = await trx
+        .updateTable('livekit_gate_credentials as c')
+        .set((eb) => ({ expires_at: eb.fn('greatest', ['c.expires_at', eb.val(expiresAt)]) }))
+        .where('c.id', '=', id)
+        .where('c.revoked_at', 'is', null)
+        .where('c.expires_at', '>', at)
+        .where((eb) =>
+          eb.exists(
+            eb
+              .selectFrom('native_voice_leases as l')
+              .innerJoin('rooms as r', 'r.id', 'l.room_id')
+              .select('l.id')
+              .where('l.id', '=', id)
+              .where('l.retired_at', 'is', null)
+              .where('l.valid_until', '>', at)
+              .where('l.expires_at', '>', at)
+              .where('r.kind', '=', 'main')
+              .where('r.deleted_at', 'is', null)
+          )
+        )
+        .where((eb) =>
+          eb.exists(
+            eb
+              .selectFrom('livekit_gate_principal_epochs as e')
+              .select('e.epoch')
+              .whereRef('e.room_id', '=', 'c.room_id')
+              .whereRef('e.principal_type', '=', 'c.principal_type')
+              .whereRef('e.principal_id', '=', 'c.principal_id')
+              .whereRef('e.epoch', '=', 'c.principal_epoch')
+          )
+        )
+        .returning('c.expires_at')
+        .executeTakeFirst();
+      if (!credential) return null;
+
+      await trx
+        .updateTable('native_voice_leases')
+        .set((eb) => ({
+          expires_at: credential.expires_at,
+          valid_until: eb.fn('greatest', ['valid_until', eb.val(validUntil)])
+        }))
+        .where('id', '=', id)
+        .executeTakeFirstOrThrow();
+      return credential.expires_at;
+    });
   }
 
   async function retire(lease: NativeVoiceLease, at: Date): Promise<boolean> {
@@ -172,7 +259,7 @@ export function createNativeVoiceRepository(db: Database) {
     return db.selectFrom('native_voice_leases').selectAll().execute();
   }
 
-  async function deadline(claims: GateClaims): Promise<number | null> {
+  async function window(claims: GateClaims): Promise<{ deadline: number; expiresAt: number } | null> {
     const now = new Date();
     const row = await db
       .selectFrom('native_voice_leases as lease')
@@ -188,10 +275,12 @@ export function createNativeVoiceRepository(db: Database) {
       .where('lease.valid_until', '>', now)
       .where('lease.expires_at', '>', now)
       .executeTakeFirst();
-    return row?.valid_until ? Math.min(row.valid_until.getTime(), row.expires_at.getTime(), claims.exp) : null;
+    if (!row?.valid_until) return null;
+    const expiresAt = Math.min(row.expires_at.getTime(), claims.exp ?? Infinity);
+    return { deadline: Math.min(row.valid_until.getTime(), expiresAt), expiresAt };
   }
 
-  return { reserve, activate, extend, retire, finishCleanup, retired, recover, list, deadline };
+  return { reserve, activate, extend, renew, retire, finishCleanup, retired, recover, list, window };
 }
 
 export type NativeVoiceRepository = ReturnType<typeof createNativeVoiceRepository>;

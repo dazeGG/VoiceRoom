@@ -384,6 +384,16 @@ export function createVoiceJoin(deps: VoiceJoinDeps) {
         client: connection.client,
         desktopVersion:
           connection.client === 'desktop_app' ? (payload.desktopVersion ?? previous?.desktopVersion ?? null) : null,
+        ...(payload.nativeVoiceReceive && { nativeVoiceReceive: payload.nativeVoiceReceive }),
+        ...(payload.nativeVoicePolicyUpdates && { nativeVoicePolicyUpdates: payload.nativeVoicePolicyUpdates }),
+        ...(previous?.nativeVoiceAttempt &&
+          previous.accountUserId === sessionUser?.id && {
+            nativeVoiceAttempt: previous.nativeVoiceAttempt
+          }),
+        ...(connection.client === 'desktop_app' &&
+          sessionUser &&
+          payload.nativeVoiceReceive &&
+          payload.nativeVoicePreference && { nativeVoicePreference: payload.nativeVoicePreference }),
         os: connection.device?.os ?? '',
         browser: connection.device?.browser ?? '',
         guestId: sessionUser ? '' : normalizeGuestId(payload.guestId),

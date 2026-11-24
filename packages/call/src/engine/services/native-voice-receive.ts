@@ -1,5 +1,5 @@
-import type { RoomSnapshot, NativeVoiceCompanions } from '@voiceroom/shared/contracts/realtime';
-import type { NativeVoiceAdmission } from '@voiceroom/shared/contracts/admission';
+import type { RoomSnapshot, NativeVoiceCompanions, NativeVoiceTelemetry } from '@voiceroom/shared/contracts/realtime';
+import type { NativeVoiceAdmissionBody, NativeVoiceFallbackReason } from '@voiceroom/shared/contracts/admission';
 import { isLiveKitOnlyIdentity } from '@voiceroom/shared/validation';
 import { state } from '../core/room-runtime.store';
 import { nativeReceiveRoute } from '../core/native-receive-route';
@@ -17,6 +17,7 @@ import { isMicrophonePublication } from './livekit/publication-kinds';
 import { syncLiveKitVoiceSubscriptions } from './livekit/remote-participants';
 import { setBrowserVoiceHandoffMuted } from './audio-bus';
 import { counterGrowth, speechConcealment } from '../media/rtc-stats';
+import type { CallTransport } from '../transport';
 
 const log = createLogger('room:native-receive');
 const TRANSPORT_TIMEOUT_MS = 3001;
@@ -24,10 +25,13 @@ const STATS_TIMEOUT_MS = 4001;
 const COMMAND_TIMEOUT_MS = 10_000;
 const STOP_TIMEOUT_MS = 1_000;
 const HANDOFF_TIMEOUT_MS = 1_100;
+const RENEWAL_MS = 20_000;
+const MAX_TRACK_GAINS = 128;
 
 type Capability = NonNullable<RoomSnapshot['nativeVoice']>;
-type Settings = { tracks: string[]; outputDeviceId: string };
-type AppliedSettings = Omit<Settings, 'outputDeviceId'> & { outputDeviceId: string | null };
+type Gains = { volumes: Record<string, number>; masterVolume: number };
+type Settings = Gains & { tracks: string[]; outputDeviceId: string; customVolume: boolean };
+type AppliedSettings = Partial<Gains> & { tracks: string[]; outputDeviceId: string | null };
 type Timer = ReturnType<typeof setTimeout>;
 type TimerKey = 'statsTimer' | 'transportTimer' | 'expiryTimer';
 
@@ -44,8 +48,11 @@ interface ReceiveSession {
   bridge: NativeVoiceBridge;
   generation: string;
   settings: Settings;
+  supportsProtocol12?: boolean;
   applied?: AppliedSettings;
   selection?: { id: string; resolved: Promise<string | null | undefined> };
+  mappedOutput?: { browserId: string; endpointId: string };
+  unavailableOutputId?: string;
   unsubscribe?: () => void;
   startSent: boolean;
   connected: boolean;
@@ -62,6 +69,8 @@ interface ReceiveSession {
   statsTimer?: Timer;
   transportTimer?: Timer;
   expiryTimer?: Timer;
+  renewTimer?: Timer;
+  renewal?: AbortController;
 }
 
 let capability: Capability | undefined;
@@ -69,9 +78,14 @@ let companions: ReadonlyMap<string, string> = new Map();
 let session: ReceiveSession | undefined;
 let restoring: ReceiveSession | undefined;
 let fellBack = false;
+let telemetry: NativeVoiceTelemetry | undefined;
 
 export function isNativeVoiceReceiving(): boolean {
   return nativeReceiveRoute.active;
+}
+
+export function nativeVoiceTelemetryForReport(): NativeVoiceTelemetry | undefined {
+  return telemetry;
 }
 
 function emptyVoiceDeltas(): VoiceDeltas {
@@ -113,46 +127,63 @@ export function setNativeVoiceCapability(next: Capability | undefined): void {
   syncNativeVoiceReceive();
 }
 
-function readSettings(): Settings | undefined {
-  if (getStoredMasterVolume() !== 100) return undefined;
+export function revokeNativeVoiceCapability(generation: string): void {
+  if (capability?.generation !== generation) return;
+  setNativeVoiceCapability({ ...capability, stage: 'off' });
+}
+
+function readSettings(): Settings {
+  const masterVolume = getStoredMasterVolume() / 100;
+  let customVolume = masterVolume !== 1;
   const tracks: string[] = [];
+  const volumes: Record<string, number> = {};
   for (const [id, peer] of state.peers) {
     if (!id || peer.isLocal || id === state.peerId || isLiveKitOnlyIdentity(id)) continue;
     const { muted, volume } = getParticipantAudioPreference(getParticipantAudioPreferenceKey(peer.accountUserId, id));
-    if (volume !== 1) return undefined;
+    customVolume ||= volume !== 1;
     if (muted || (state.serverPeerSyncReady && !state.serverPeerIds.has(id))) continue;
     const participant = state.livekitRoom?.remoteParticipants.get(id);
     if (!participant || participant !== peer.livekitParticipant) continue;
     for (const publication of participant.trackPublications.values()) {
-      if (isMicrophonePublication(publication) && !publication.isMuted) tracks.push(publication.trackSid);
+      if (isMicrophonePublication(publication) && !publication.isMuted) {
+        const sid = publication.trackSid;
+        tracks.push(sid);
+        if (volume !== 1) volumes[sid] = volume;
+      }
     }
   }
   return {
     tracks: tracks.sort(),
-    outputDeviceId: state.outputDeviceId
+    outputDeviceId: state.outputDeviceId,
+    volumes,
+    masterVolume,
+    customVolume
   };
 }
 
 export function syncNativeVoiceReceive({ devicesChanged = false } = {}): void {
   if (fellBack || !state.joined || !state.livekitRoom || capability?.stage !== 'receive') return;
+  const ports = getInstalledCallPorts();
+  if (ports?.platform.desktop.nativeVoicePreference === 'off') {
+    if (session) fallback(session, 'preference_disabled');
+    return;
+  }
   if (session) {
     syncOutputMute(session);
     if (fellBack) return;
   }
-  const ports = getInstalledCallPorts();
   const bridge = ports?.platform.desktop.nativeVoice;
   const admit = ports?.transport.requestNativeVoiceAdmission;
   // Only the eligible main-room owner receives the personal capability. Also
   // require the signed-in renderer and the desktop preload.
   if (!bridge || !admit || ports.identity.current().kind !== 'account') return;
   const settings = readSettings();
-  if (!settings) {
-    if (session) fallback(session, 'unsupported_volume');
-    else noteFallback('unsupported_volume');
-    return;
-  }
   if (session) {
     const current = session;
+    if (current.supportsProtocol12 === false && settings.customVolume) {
+      fallback(current, 'unsupported_volume');
+      return;
+    }
     const wasEmpty = current.settings.tracks.length === 0;
     current.settings = settings;
     if (devicesChanged) delete current.selection;
@@ -179,7 +210,8 @@ export function syncNativeVoiceReceive({ devicesChanged = false } = {}): void {
   session = current;
   nativeReceiveRoute.settingsChanged = syncNativeVoiceReceive;
   const { roomId, peerId, sessionToken } = state;
-  void startReceive(current, () => admit({ version: 1, generation: current.generation, roomId, peerId, sessionToken }));
+  const member = { version: 1, generation: current.generation, roomId, peerId, sessionToken } as const;
+  void startReceive(current, member, admit, ports.transport.renewNativeVoiceLease);
 }
 
 async function within<T>(operation: () => Promise<T>, ms = COMMAND_TIMEOUT_MS): Promise<T> {
@@ -196,37 +228,60 @@ async function within<T>(operation: () => Promise<T>, ms = COMMAND_TIMEOUT_MS): 
   }
 }
 
-async function mapOutput(bridge: NativeVoiceBridge, id: string): Promise<string | null | undefined> {
+async function mapOutput(current: ReceiveSession, id: string): Promise<string | null | undefined> {
   if (!id || id === 'default') return null;
-  const [devices, outputs] = await within(() =>
-    Promise.all([navigator.mediaDevices?.enumerateDevices() ?? [], bridge.listOutputs()])
-  ).catch(() => [[], []] as const);
-  const label = devices
-    .find((device) => device.kind === 'audiooutput' && device.deviceId === id)
-    ?.label.trim()
-    .toLowerCase();
-  if (!label) return undefined;
-  const matches = outputs.filter((output) => output.name.trim().toLowerCase() === label);
-  return matches.length === 1 ? matches[0]?.id : undefined;
+  const known = current.mappedOutput?.browserId === id ? current.mappedOutput.endpointId : undefined;
+  const result = await within(() =>
+    Promise.all([navigator.mediaDevices?.enumerateDevices() ?? [], current.bridge.listOutputs()])
+  ).catch(() => undefined);
+  if (!result) return known;
+  const [devices, outputs] = result;
+  const device = devices.find((device) => device.kind === 'audiooutput' && device.deviceId === id);
+  const label = device?.label.trim().toLowerCase();
+  const matches = label ? outputs.filter((output) => output.name.trim().toLowerCase() === label) : [];
+  if (matches.length === 1) return matches[0]?.id;
+  if (current.supportsProtocol12) {
+    // Keep the native request for a known endpoint so the helper can restore it after unplug.
+    if (known) return known;
+    if (!device || (label && matches.length === 0)) return null;
+  }
+  return undefined;
 }
 
 async function selectedSettings(current: ReceiveSession): Promise<AppliedSettings | undefined> {
   while (session === current) {
+    if (!current.supportsProtocol12 && current.settings.customVolume) {
+      fallback(current, 'unsupported_volume');
+      return undefined;
+    }
     const id = current.settings.outputDeviceId;
     const selection =
-      current.selection?.id === id
-        ? current.selection
-        : (current.selection = { id, resolved: mapOutput(current.bridge, id) });
+      current.selection?.id === id ? current.selection : (current.selection = { id, resolved: mapOutput(current, id) });
     const outputDeviceId = await selection.resolved;
     if (session !== current) return undefined;
     if (current.selection !== selection || current.settings.outputDeviceId !== id) continue;
-    if (outputDeviceId !== undefined) return { ...current.settings, outputDeviceId };
+    if (outputDeviceId !== undefined) {
+      if (outputDeviceId !== null && current.supportsProtocol12) {
+        current.mappedOutput = { browserId: id, endpointId: outputDeviceId };
+      }
+      const { tracks, volumes, masterVolume } = current.settings;
+      if (current.supportsProtocol12 && Object.keys(volumes).length > MAX_TRACK_GAINS) {
+        fallback(current, 'track_volume_limit');
+        return undefined;
+      }
+      return { tracks, outputDeviceId, ...(current.supportsProtocol12 && { volumes, masterVolume }) };
+    }
     fallback(current, 'unsupported_output');
   }
   return undefined;
 }
 
-async function startReceive(current: ReceiveSession, admit: () => Promise<NativeVoiceAdmission>): Promise<void> {
+async function startReceive(
+  current: ReceiveSession,
+  member: NativeVoiceAdmissionBody,
+  admit: NonNullable<CallTransport['requestNativeVoiceAdmission']>,
+  renew: CallTransport['renewNativeVoiceLease']
+): Promise<void> {
   const { bridge, callId } = current;
   try {
     const status = await within(() => bridge.getCapability());
@@ -237,12 +292,13 @@ async function startReceive(current: ReceiveSession, admit: () => Promise<Native
       fellBack = true;
       return;
     }
+    current.supportsProtocol12 = status.protocol.minor >= 2;
     if (!(await selectedSettings(current))) return;
   } catch {
     fallback(current, 'capability_failed');
     return;
   }
-  const admission = await within(admit).catch(() => null);
+  const admission = await within(() => admit(member)).catch(() => null);
   if (session !== current) return;
   if (!admission || admission.generation !== current.generation) {
     fallback(current, 'admission_refused');
@@ -253,6 +309,7 @@ async function startReceive(current: ReceiveSession, admit: () => Promise<Native
     return;
   }
   armTimer(current, 'expiryTimer', admission.expiresAt - Date.now(), 'admission_expired');
+  if (admission.leaseId && renew) scheduleRenewal(current, member, admission.leaseId, admission.expiresAt, renew);
   const settings = await selectedSettings(current);
   if (!settings || session !== current) return;
   try {
@@ -274,10 +331,50 @@ async function startReceive(current: ReceiveSession, admit: () => Promise<Native
       fallback(current, 'start_refused');
       return;
     }
+    telemetry = { ...telemetry, started: true };
     current.applied = settings;
     await reconcile(current);
   } catch {
     fallback(current, 'start_failed');
+  }
+}
+
+function scheduleRenewal(
+  current: ReceiveSession,
+  member: NativeVoiceAdmissionBody,
+  leaseId: string,
+  expiresAt: number,
+  renew: NonNullable<CallTransport['renewNativeVoiceLease']>
+): void {
+  current.renewTimer = setTimeout(() => {
+    void renewLease();
+  }, RENEWAL_MS);
+
+  async function renewLease(): Promise<void> {
+    if (Date.now() >= expiresAt) {
+      fallback(current, 'admission_expired');
+      return;
+    }
+    const controller = new AbortController();
+    current.renewal = controller;
+    try {
+      const renewal = await renew({ ...member, leaseId }, controller.signal);
+      if (session !== current) return;
+      if (Date.now() >= expiresAt) {
+        fallback(current, 'admission_expired');
+        return;
+      }
+      if (renewal.leaseId !== leaseId || renewal.expiresAt <= expiresAt) {
+        fallback(current, 'admission_refused');
+        return;
+      }
+      armTimer(current, 'expiryTimer', renewal.expiresAt - Date.now(), 'admission_expired');
+      scheduleRenewal(current, member, leaseId, renewal.expiresAt, renew);
+    } catch {
+      fallback(current, 'admission_refused');
+    } finally {
+      delete current.renewal;
+    }
   }
 }
 
@@ -294,7 +391,10 @@ async function reconcile(current: ReceiveSession): Promise<void> {
       const before = current.applied;
       const tracksChanged = !sameTracks(settings.tracks, before.tracks);
       const outputChanged = settings.outputDeviceId !== before.outputDeviceId;
-      if (!tracksChanged && !outputChanged) {
+      const { volumes, masterVolume } = settings;
+      const volumesChanged = volumes !== undefined && !sameVolumes(volumes, before.volumes);
+      const masterChanged = masterVolume !== undefined && masterVolume !== before.masterVolume;
+      if (!tracksChanged && !outputChanged && !volumesChanged && !masterChanged) {
         if (
           !current.dirty &&
           current.phase === 'probe' &&
@@ -313,7 +413,9 @@ async function reconcile(current: ReceiveSession): Promise<void> {
         current.bridge.update({
           callId: current.callId,
           ...(tracksChanged && { tracks: settings.tracks }),
-          ...(outputChanged && { outputDeviceId: settings.outputDeviceId })
+          ...(outputChanged && { outputDeviceId: settings.outputDeviceId }),
+          ...(volumesChanged && { volumes }),
+          ...(masterChanged && { masterVolume })
         })
       );
       if (session !== current) return;
@@ -381,6 +483,7 @@ async function beginHandoff(current: ReceiveSession): Promise<void> {
     current.phase = 'active';
     try {
       suspendBrowserVoice();
+      telemetry = { ...telemetry, handedOff: true };
     } catch {
       fallback(current, 'handoff_failed');
     } finally {
@@ -391,6 +494,11 @@ async function beginHandoff(current: ReceiveSession): Promise<void> {
 
 function sameTracks(a: string[], b: string[]): boolean {
   return a.length === b.length && a.every((sid, i) => sid === b[i]);
+}
+
+function sameVolumes(next: Record<string, number>, previous: Record<string, number> = {}): boolean {
+  const entries = Object.entries(next);
+  return entries.length === Object.keys(previous).length && entries.every(([sid, gain]) => gain === previous[sid]);
 }
 
 function onEvent(current: ReceiveSession, event: NativeVoiceEvent): void {
@@ -445,8 +553,19 @@ function onEvent(current: ReceiveSession, event: NativeVoiceEvent): void {
       fallback(current, 'helper_stopped');
       break;
     case 'device':
-      if (event.outputDeviceId !== null && event.outputDeviceId !== event.effectiveOutputDeviceId) {
+      if (
+        current.supportsProtocol12 &&
+        event.fallback === 'selected-output-unavailable' &&
+        event.outputDeviceId !== null
+      ) {
+        if (current.unavailableOutputId !== event.outputDeviceId) {
+          current.unavailableOutputId = event.outputDeviceId;
+          log.info('native receive using default output', { reason: event.fallback });
+        }
+      } else if (event.outputDeviceId !== null && event.outputDeviceId !== event.effectiveOutputDeviceId) {
         fallback(current, 'unsupported_output');
+      } else {
+        delete current.unavailableOutputId;
       }
       break;
   }
@@ -470,7 +589,7 @@ function accumulateVoiceDeltas(deltas: VoiceDeltas, now: NativeVoiceStats, befor
   deltas.gaps += counterGrowth(now.concealmentEvents, before.concealmentEvents);
 }
 
-function armTimer(current: ReceiveSession, key: TimerKey, ms: number, reason: string): void {
+function armTimer(current: ReceiveSession, key: TimerKey, ms: number, reason: NativeVoiceFallbackReason): void {
   clearTimeout(current[key]);
   current[key] = setTimeout(() => fallback(current, reason), ms);
 }
@@ -495,8 +614,9 @@ function suspendBrowserVoice(): void {
   syncNativeVoiceSpeakers();
 }
 
-function noteFallback(reason: string, code?: string): void {
+function noteFallback(reason: NativeVoiceFallbackReason, code?: string): void {
   fellBack = true;
+  telemetry = { ...telemetry, fallback: reason };
   log.warn('native receive fallback', { reason, ...(code && /^[\w-]{1,64}$/.test(code) ? { code } : {}) });
 }
 
@@ -506,6 +626,8 @@ function dispose(current: ReceiveSession): void {
   clearTimeout(current.statsTimer);
   clearTimeout(current.transportTimer);
   clearTimeout(current.expiryTimer);
+  clearTimeout(current.renewTimer);
+  current.renewal?.abort();
   clearTimeout(current.confirmationTimer);
   current.unsubscribe?.();
 }
@@ -518,7 +640,7 @@ async function stop(current: ReceiveSession): Promise<void> {
   }
 }
 
-function fallback(current: ReceiveSession, reason: string, code?: string): void {
+function fallback(current: ReceiveSession, reason: NativeVoiceFallbackReason, code?: string): void {
   if (session !== current) return;
   noteFallback(reason, code);
   dispose(current);
@@ -537,6 +659,7 @@ export function resetNativeVoiceReceive(): void {
   capability = undefined;
   setNativeVoiceCompanions(undefined);
   fellBack = false;
+  telemetry = undefined;
   restoring = undefined;
   nativeReceiveRoute.active = false;
   setBrowserVoiceHandoffMuted(false);

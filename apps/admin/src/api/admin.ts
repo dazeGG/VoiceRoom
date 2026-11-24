@@ -54,14 +54,14 @@ export const fetchStaticRooms = (query: StaticRoomsQuery = {}) =>
 
 export const fetchRoomCall = (callId: string) =>
   api.get(
-    `/api/admin/rooms/calls/${encodeURIComponent(callId)}?relief=1`,
+    `/api/admin/rooms/calls/${encodeURIComponent(callId)}?relief=1&nativeVoice=1`,
     RoomCallDetail,
     'Не удалось загрузить звонок'
   );
 
 export const fetchLiveCall = (roomId: string) =>
   api.get(
-    `/api/admin/rooms/live/${encodeURIComponent(roomId)}?relief=1`,
+    `/api/admin/rooms/live/${encodeURIComponent(roomId)}?relief=1&nativeVoice=1`,
     RoomCallDetail,
     'Не удалось загрузить звонок'
   );
