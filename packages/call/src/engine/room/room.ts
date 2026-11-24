@@ -28,7 +28,7 @@ import {
 } from '../services/microphone-service';
 import { attachMeter, startMeters, stopMeters } from '../media/meters';
 import { startPeerLatencyStats, stopPeerLatencyStats } from './stats';
-import { syncNativeVoiceReceive } from '../services/native-voice-receive';
+import { nativeVoiceTelemetryForReport, syncNativeVoiceReceive } from '../services/native-voice-receive';
 import { relieveVideo } from '../services/video-relief';
 import { clearAllPeerJoinCues, clearStreamViewerCues, playPeerCue } from '../media/cues';
 import { cancelScreenSourcePicker } from '../ui/screen-source-picker';
@@ -429,6 +429,7 @@ async function openJoinMicrophone(isCurrent: () => boolean): Promise<MicrophoneC
 
 export function leaveRoom(): void {
   const relief = processingReliefForPoll();
+  const nativeVoice = nativeVoiceTelemetryForReport();
   invalidateMicrophoneActions();
   setMicrophoneRecoveryObserver(null);
   stopCaptureDiagnostics();
@@ -460,7 +461,8 @@ export function leaveRoom(): void {
       roomId: state.roomId,
       peerId: state.peerId,
       sessionToken: state.sessionToken,
-      ...(relief.length ? { relief } : {})
+      ...(relief.length ? { relief } : {}),
+      ...(nativeVoice && { nativeVoice })
     });
     voiceJoinSent = false;
   }

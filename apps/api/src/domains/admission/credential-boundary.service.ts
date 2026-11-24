@@ -25,7 +25,7 @@ export type CredentialIssue =
   | { status: 'issued'; credential: IssuedCredential }
   | { status: Exclude<StoredCredential['status'], 'created'> | 'unavailable'; credential: null };
 export type CredentialAuthorization = { ok: true; claims: GateClaims } | { ok: false; code: string };
-export type CompanionCredential = { id: string; expiresAt: number };
+export type CompanionCredential = { id: string; expiresAt: number; sliding?: boolean };
 
 function createCredentialBoundaryService({
   roomStore,
@@ -85,7 +85,9 @@ function createCredentialBoundaryService({
     const value = signer.sign({
       credentialId,
       companion: companion ? true : undefined,
-      expiresAt,
+      // A sliding companion keeps the same URL. The credential row and the
+      // gate's companion watchdog enforce its current expiry on every use.
+      expiresAt: companion?.sliding ? null : expiresAt,
       issuedAt,
       peerId,
       principalEpoch: epoch.epoch,

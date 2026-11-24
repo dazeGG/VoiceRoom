@@ -164,7 +164,12 @@ export function registerAdminRoutes(root: FastifyInstance, ctx: ApiContext, deps
     async (request, reply) => {
       const userId = await actor(request, reply);
       if (!userId) return reply;
-      const detail = await deps.rooms.call(userId, request.params.callId, request.query.relief === '1');
+      const detail = await deps.rooms.call(
+        userId,
+        request.params.callId,
+        request.query.relief === '1',
+        request.query.nativeVoice === '1'
+      );
       if (detail === null) return reply.code(403).send(ADMIN_REQUIRED);
       if (detail === undefined) return reply.code(404).send(CALL_NOT_FOUND);
       return { ok: true as const, ...detail };
@@ -179,7 +184,12 @@ export function registerAdminRoutes(root: FastifyInstance, ctx: ApiContext, deps
     async (request, reply) => {
       const userId = await actor(request, reply);
       if (!userId) return reply;
-      const detail = await deps.rooms.liveCall(userId, request.params.roomId, request.query.relief === '1');
+      const detail = await deps.rooms.liveCall(
+        userId,
+        request.params.roomId,
+        request.query.relief === '1',
+        request.query.nativeVoice === '1'
+      );
       if (detail === null) return reply.code(403).send(ADMIN_REQUIRED);
       if (detail === undefined) return reply.code(404).send(CALL_NOT_FOUND);
       return { ok: true as const, ...detail };

@@ -1,3 +1,6 @@
+import type { NativeVoiceFallbackReason } from '@voiceroom/shared/contracts/admission';
+import type { NativeVoiceTelemetry } from '@voiceroom/shared/contracts/realtime';
+
 type HttpRequestStat = { method: string; route: string; status: string; count: number; durationSecondsSum: number };
 type MaintenanceStat = { task: string; count: number; durationSecondsSum: number; lastDurationSeconds: number };
 export type MediaPressureSnapshot = { freeBytes?: unknown; healthy?: unknown; reason?: unknown };
@@ -21,6 +24,10 @@ let notificationOldestPendingSeconds = 0;
 let mediaOldestPendingSeconds = 0;
 let mediaAuthorizationInvariantFailures = 0;
 let credentialRevokeCleanupFailures = 0;
+let nativeVoiceStarted = 0;
+let nativeVoiceReportsDropped = 0;
+let nativeVoiceHandedOff = 0;
+const nativeVoiceFallbacks = new Map<NativeVoiceFallbackReason, number>();
 
 function labelValue(value: unknown): string {
   return String(value).replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n');
@@ -146,6 +153,16 @@ function recordCredentialRevokeCleanupFailure(): void {
   credentialRevokeCleanupFailures += 1;
 }
 
+export function recordNativeVoiceReportDropped(): void {
+  nativeVoiceReportsDropped += 1;
+}
+
+export function recordNativeVoice({ started, handedOff, fallback }: NativeVoiceTelemetry): void {
+  if (started) nativeVoiceStarted += 1;
+  if (handedOff) nativeVoiceHandedOff += 1;
+  if (fallback) nativeVoiceFallbacks.set(fallback, (nativeVoiceFallbacks.get(fallback) ?? 0) + 1);
+}
+
 async function observeMaintenance<T>(task: string, callback: () => T | Promise<T>): Promise<T> {
   const startedAt = process.hrtime.bigint();
   try {
@@ -237,6 +254,20 @@ function renderPrometheus({
     '# HELP voice_room_api_native_voice_slots Companion slots reserved for pending, active and retiring leases.',
     '# TYPE voice_room_api_native_voice_slots gauge',
     `voice_room_api_native_voice_slots ${nativeVoiceSlots}`,
+    '# HELP voice_room_api_native_voice_started_total Native receive sessions acknowledged by the desktop bridge.',
+    '# TYPE voice_room_api_native_voice_started_total counter',
+    `voice_room_api_native_voice_started_total ${nativeVoiceStarted}`,
+    '# HELP voice_room_api_native_voice_handed_off_total Native receive sessions that took over voice playback.',
+    '# TYPE voice_room_api_native_voice_handed_off_total counter',
+    `voice_room_api_native_voice_handed_off_total ${nativeVoiceHandedOff}`,
+    '# HELP voice_room_api_native_voice_reports_dropped_total Native voice reports from seats without a qualifying lease.',
+    '# TYPE voice_room_api_native_voice_reports_dropped_total counter',
+    `voice_room_api_native_voice_reports_dropped_total ${nativeVoiceReportsDropped}`,
+    '# HELP voice_room_api_native_voice_fallbacks_total Native receive attempts that returned to Chromium by reason.',
+    '# TYPE voice_room_api_native_voice_fallbacks_total counter',
+    ...Array.from(nativeVoiceFallbacks, ([reason, count]) =>
+      metricLine('voice_room_api_native_voice_fallbacks_total', { reason }, count)
+    ),
     '# HELP voice_room_api_pg_pool_errors_total Unexpected PostgreSQL pool errors.',
     '# TYPE voice_room_api_pg_pool_errors_total counter',
     `voice_room_api_pg_pool_errors_total ${pgPoolErrors}`,
@@ -317,6 +348,10 @@ function resetMetricsForTest(): void {
   mediaOldestPendingSeconds = 0;
   mediaAuthorizationInvariantFailures = 0;
   credentialRevokeCleanupFailures = 0;
+  nativeVoiceStarted = 0;
+  nativeVoiceReportsDropped = 0;
+  nativeVoiceHandedOff = 0;
+  nativeVoiceFallbacks.clear();
 }
 
 export {

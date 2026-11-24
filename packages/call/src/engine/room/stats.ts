@@ -31,7 +31,11 @@ import {
   isMicrophoneProcessingIdle
 } from '../services/microphone-service';
 import { noteCaptureHealth, processingReliefForPoll } from './capture-diagnostics';
-import { isNativeVoiceReceiving, takeNativeVoiceDeltas } from '../services/native-voice-receive';
+import {
+  isNativeVoiceReceiving,
+  nativeVoiceTelemetryForReport,
+  takeNativeVoiceDeltas
+} from '../services/native-voice-receive';
 
 import { createLogger, errorContext } from '../diagnostics';
 
@@ -159,6 +163,7 @@ function postVoicePoll(inbound: InboundCounts, outbound: OutboundCounts, load: L
   });
   const joinTiming = takeJoinTiming();
   const cpu = cpuPoll(load);
+  const nativeVoice = nativeVoiceTelemetryForReport();
   const { platform, transport } = getCallPorts();
   transport.realtime.reportPoll({
     roomId: state.roomId,
@@ -169,6 +174,7 @@ function postVoicePoll(inbound: InboundCounts, outbound: OutboundCounts, load: L
     jitterBufferMs: report(inbound.jitterBufferMs),
     receiveEngine: inbound.receiveEngine,
     ...(inbound.nativeHeard ? { nativeHeard: inbound.nativeHeard } : {}),
+    ...(nativeVoice && { nativeVoice }),
     uplink: { packets: outbound.outboundPackets, lost: outbound.outboundLost },
     transport: state.localNetwork.transport,
     heard: inbound.heard,

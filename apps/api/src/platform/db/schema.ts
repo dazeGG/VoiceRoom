@@ -683,6 +683,7 @@ export interface Users {
 export interface VoiceCallEvents {
   at: Timestamp;
   kind: string;
+  native_fallback_reason: string | null;
   relief_kind: string | null;
   relief_outcome: string | null;
   stay_id: string;

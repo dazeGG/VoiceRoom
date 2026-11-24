@@ -6,7 +6,13 @@
 // panel shows live, and every stay sums its polls into minutes, written with
 // the stay when it ends (voice_session_samples).
 
-import type { ClientCommands, CpuPoll, JoinTiming, ReliefPoll } from '@voiceroom/shared/contracts/realtime';
+import type {
+  ClientCommands,
+  CpuPoll,
+  JoinTiming,
+  NativeVoiceTelemetry,
+  ReliefPoll
+} from '@voiceroom/shared/contracts/realtime';
 import { CPU_PRESSURES, type CpuPressure } from '@voiceroom/shared/contracts/rooms';
 import {
   VOICE_WINDOW_POLLS,
@@ -24,6 +30,7 @@ import type {
   VoiceMinuteSample,
   WorstWindow
 } from '../domains/rooms/voice-session.repository.ts';
+import { recordNativeVoice } from '../lib/metrics.ts';
 
 type VoicePoll = ClientCommands['room.voice.report'];
 type Uplink = VoiceMinuteSample['uplink'];
@@ -69,6 +76,7 @@ export interface PeerVoice {
   relieved: boolean;
   /** Polls repeat modern relief results through a reconnect. */
   reliefIds?: Set<string> | undefined;
+  nativeVoice?: NativeVoiceTelemetry;
   /** When its microphone last went on or off. */
   micChangedAt?: number | undefined;
 }
@@ -102,7 +110,11 @@ const emptyVoice = (): PeerVoice => ({
 
 const pushEvent = (voice: PeerVoice, event: StayEvent) => {
   voice.events.push(event);
-  if (voice.events.length > VOICE_EVENTS_MAX) voice.events.shift();
+  // Keep the one terminal fallback until this stay is written, even in a long call.
+  if (voice.events.length > VOICE_EVENTS_MAX) {
+    const oldest = voice.events[0]?.kind === 'native_fallback' ? 1 : 0;
+    voice.events.splice(oldest, 1);
+  }
 };
 
 /** Keeps something a peer's seat did with its stay: a screen or a camera going on or off. */
@@ -151,6 +163,21 @@ export function noteStayRelief(peer: VoicePeer, relief: ReliefPoll[], at: number
     seen.add(id);
     pushEvent(voice, { at, kind: 'relief', reliefKind: kind, outcome });
   }
+}
+
+export function noteStayNativeVoice(peer: VoicePeer, report: NativeVoiceTelemetry, at: number): void {
+  const voice = (peer.voice ??= emptyVoice());
+  const seen = (voice.nativeVoice ??= {});
+  const started = !seen.started && (report.started || report.handedOff);
+  const handedOff = !seen.handedOff && report.handedOff;
+  const fallback = seen.fallback ? undefined : report.fallback;
+  if (started) seen.started = true;
+  if (handedOff) seen.handedOff = true;
+  if (fallback) {
+    seen.fallback = fallback;
+    pushEvent(voice, { at, kind: 'native_fallback', reason: fallback });
+  }
+  recordNativeVoice({ ...(started && { started }), ...(handedOff && { handedOff }), ...(fallback && { fallback }) });
 }
 
 const sameVerdict = (a: VoiceVerdict | null | undefined, b: VoiceVerdict | null) =>

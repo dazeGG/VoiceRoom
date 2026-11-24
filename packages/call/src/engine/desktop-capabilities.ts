@@ -1,3 +1,4 @@
+import type { NativeVoicePreference } from '@voiceroom/shared/contracts/admission';
 import type { HotkeyBinding } from '@voiceroom/ui-kit/hotkey';
 import type { DesktopCaptureSource, DesktopPickerSelection } from './core/types';
 
@@ -16,7 +17,14 @@ export interface NativeVoiceStats {
 export type NativeVoiceEvent = { callId: string } & (
   | { kind: 'media-ready' }
   | { kind: 'transport'; state: 'connected' | 'reconnecting' | 'disconnected' }
-  | { kind: 'device'; outputDeviceId: string | null; effectiveOutputDeviceId: string | null; muted: boolean }
+  | {
+      kind: 'device';
+      outputDeviceId: string | null;
+      effectiveOutputDeviceId: string | null;
+      muted: boolean;
+      defaultOutputDeviceId?: string | null;
+      fallback?: 'selected-output-unavailable' | null;
+    }
   | ({ kind: 'stats' } & NativeVoiceStats)
   | { kind: 'fault'; code: string }
   | { kind: 'stopped' }
@@ -34,12 +42,16 @@ export interface NativeVoiceBridge {
     tracks: string[];
     outputDeviceId: string | null;
     muted: boolean;
+    volumes?: Record<string, number>;
+    masterVolume?: number;
   }): Promise<NativeVoiceResult>;
   update(input: {
     callId: string;
     tracks?: string[];
     muted?: boolean;
     outputDeviceId?: string | null;
+    volumes?: Record<string, number>;
+    masterVolume?: number;
   }): Promise<NativeVoiceResult>;
   stop(input: { callId: string }): Promise<void>;
   onEvent(handler: (event: NativeVoiceEvent) => void): () => void;
@@ -61,6 +73,7 @@ interface DesktopAudioFormatEvent {
 
 export interface DesktopCapabilities {
   nativeVoice?: NativeVoiceBridge | undefined;
+  nativeVoicePreference?: NativeVoicePreference | undefined;
   capture?:
     | {
         applyProfile?: (options: { fpsId?: string; qualityId?: string }) => Promise<{

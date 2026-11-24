@@ -103,9 +103,10 @@ const overloaded = stay('s-artem', {
       cpuAppPct: 30,
       cpuSystemPct: 97,
       cpuPressure: 'critical',
+      receiveEngine: 'native',
       heardBy: { concealedPct: 20, gapsPerMin: 8 }
     }),
-    minute(1)
+    minute(1, { receiveEngine: 'browser' })
   ]
 });
 const guest = stay('s-kostya', {
@@ -118,6 +119,7 @@ const events: CallEvent[] = [
   { at: START, kind: 'join', stayId: 's-artem' },
   { at: START + MINUTE, kind: 'screen_on', stayId: 's-artem' },
   { at: START + 2 * MINUTE, kind: 'cpu_critical', stayId: 's-artem' },
+  { at: START + 3 * MINUTE, kind: 'native_fallback', stayId: 's-artem', nativeFallback: 'helper_fault' },
   { at: START + 30 * MINUTE, kind: 'network', stayId: 's-kostya', detail: 'bad' }
 ];
 const detail: RoomCallDetail = {
@@ -160,6 +162,8 @@ test('a finished call shows its numbers, what each one looked like, what went on
 
   // The first person is shown first: their bad minute falls on the overload with a normal network.
   expect(screen.getByText('Похоже, перегружен процессор')).toBeTruthy();
+  const person = screen.getByRole('complementary', { name: 'Участник: Артём' });
+  expect(within(person).getByText('Нативный звук 1 мин · браузер 1 мин')).toBeTruthy();
   expect(screen.getByRole('img', { name: /^Задержка \(RTT\): в среднем 40 мс, пик 40 мс/ })).toBeTruthy();
 
   // A row picks another person.
@@ -176,6 +180,7 @@ test('a finished call shows its numbers, what each one looked like, what went on
   const feed = screen.getByRole('region', { name: 'Что происходило' });
   expect(within(feed).getByText('Артём — показ экрана включён')).toBeTruthy();
   expect(within(feed).getByText('Артём — система загружена: critical')).toBeTruthy();
+  expect(within(feed).getByText('Артём — нативный звук переключился на Chromium (helper_fault)')).toBeTruthy();
   expect(within(feed).getByText('Звонок завершён')).toBeTruthy();
   expect(within(feed).getByText('Костя — плохая связь')).toBeTruthy();
 

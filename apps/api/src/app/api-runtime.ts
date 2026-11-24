@@ -130,6 +130,20 @@ export function createApiRuntime({ env = process.env }: { env?: NodeJS.ProcessEn
     removeParticipant: liveKit.removeNativeVoiceParticipant,
     publish: (roomId, mapping) =>
       hub.presence.publish(roomId, buildServerEnvelope('room.companions.updated', { roomId, ...mapping })),
+    noteIssued: (roomId, peerId, generation, attempt) => {
+      const peer = hub.presenceRooms.get(roomId)?.peers.get(peerId);
+      if (peer?.transport?.id === generation) peer.nativeVoiceAttempt = attempt;
+    },
+    publishRevocation: (roomId, peerId, generation) => {
+      const peer = hub.presenceRooms.get(roomId)?.peers.get(peerId);
+      const socket = peer?.transport?.connection;
+      if (socket && peer.nativeVoicePolicyUpdates && peer.transport?.id === generation) {
+        hub.registry.sendToConnection(
+          socket,
+          buildServerEnvelope('room.native_voice.updated', { roomId, version: 1, stage: 'off', generation })
+        );
+      }
+    },
     logger: getProcessLogger,
     recordFailure: recordCredentialRevokeCleanupFailure
   });

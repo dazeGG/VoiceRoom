@@ -31,7 +31,43 @@ export const NativeVoiceStage = Type.Union([
 ]);
 export type NativeVoiceStage = Static<typeof NativeVoiceStage>;
 
+export const NativeVoicePreference = Type.Union([Type.Literal('default'), Type.Literal('on'), Type.Literal('off')]);
+export type NativeVoicePreference = Static<typeof NativeVoicePreference>;
+
+export const VoiceReceiveEngine = Type.Union([Type.Literal('browser'), Type.Literal('native')]);
+export type VoiceReceiveEngine = Static<typeof VoiceReceiveEngine>;
+
+/** Stable renderer reasons; raw helper errors are kept in local logs. */
+export const NativeVoiceFallbackReason = Type.Union([
+  Type.Literal('admission_expired'),
+  Type.Literal('admission_refused'),
+  Type.Literal('admission_revoked'),
+  Type.Literal('capability_failed'),
+  Type.Literal('deafened_during_unmute'),
+  Type.Literal('handoff_disconnected'),
+  Type.Literal('handoff_failed'),
+  Type.Literal('handoff_stalled'),
+  Type.Literal('helper_fault'),
+  Type.Literal('helper_stopped'),
+  Type.Literal('mute_failed'),
+  Type.Literal('mute_refused'),
+  Type.Literal('preference_disabled'),
+  Type.Literal('start_failed'),
+  Type.Literal('start_refused'),
+  Type.Literal('stats_stalled'),
+  Type.Literal('transport_disconnected'),
+  Type.Literal('track_volume_limit'),
+  Type.Literal('unmute_failed'),
+  Type.Literal('unmute_refused'),
+  Type.Literal('unsupported_output'),
+  Type.Literal('unsupported_volume'),
+  Type.Literal('update_failed'),
+  Type.Literal('update_refused')
+]);
+export type NativeVoiceFallbackReason = Static<typeof NativeVoiceFallbackReason>;
+
 export const NativeVoiceGeneration = Type.String({ pattern: '^[0-9a-f]{32}$' });
+const NativeVoiceLeaseId = Type.String({ pattern: '^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$' });
 
 export const NativeVoiceAdmissionBody = Type.Object({
   version: Type.Literal(1),
@@ -42,10 +78,17 @@ export const NativeVoiceAdmissionBody = Type.Object({
 });
 export type NativeVoiceAdmissionBody = Static<typeof NativeVoiceAdmissionBody>;
 
+export const NativeVoiceRenewalBody = Type.Object({
+  ...NativeVoiceAdmissionBody.properties,
+  leaseId: NativeVoiceLeaseId
+});
+export type NativeVoiceRenewalBody = Static<typeof NativeVoiceRenewalBody>;
+
 export const NativeVoiceAdmission = Ok({
   version: Type.Literal(1),
   identity: Type.String(),
   generation: NativeVoiceGeneration,
+  leaseId: Type.Optional(NativeVoiceLeaseId),
   expiresAt: Type.Integer(),
   room: Type.String(),
   token: Type.String(),
@@ -53,3 +96,11 @@ export const NativeVoiceAdmission = Ok({
   url: Type.String()
 });
 export type NativeVoiceAdmission = Static<typeof NativeVoiceAdmission>;
+
+export const NativeVoiceRenewal = Ok({
+  version: Type.Literal(1),
+  leaseId: NativeVoiceLeaseId,
+  expiresAt: Type.Integer(),
+  token: Type.String()
+});
+export type NativeVoiceRenewal = Static<typeof NativeVoiceRenewal>;

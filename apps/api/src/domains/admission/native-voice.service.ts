@@ -1,7 +1,10 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import type {
   NativeVoiceAdmission,
   NativeVoiceAdmissionBody,
+  NativeVoicePreference,
+  NativeVoiceRenewal,
+  NativeVoiceRenewalBody,
   NativeVoiceStage
 } from '@voiceroom/shared/contracts/admission';
 import type { NativeVoiceCompanions, RoomSnapshot } from '@voiceroom/shared/contracts/realtime';
@@ -16,13 +19,34 @@ const LEASE_MS = 60_000;
 const SWEEP_MS = 1_000;
 // Losing the API heartbeat fails closed at the gate even before restart cleanup.
 const HEARTBEAT_MS = 5_000;
+const COMPANIONS_PER_ACCOUNT = 2;
+// A renderer can report its fallback on the first poll or leave after revocation.
+export const NATIVE_VOICE_REPORT_GRACE_MS = 60_000;
+export type NativeVoiceAttempt = { retiredAt?: number };
 
-type Decision =
-  | { status: 'issued'; admission: NativeVoiceAdmission }
+type Decision<T> =
+  | { status: 'issued'; admission: T }
   | { status: 'off' | 'ineligible' | 'wrong_room' | 'stale' | 'banned' | 'capacity' | 'unavailable' };
+type Caller = { accountId: string; authSessionHash: string; ip: string };
+type LiveLease = NativeVoiceLease & {
+  authSessionHash: string;
+  sliding: boolean;
+  attempt: NativeVoiceAttempt;
+  policyRevoked?: true;
+};
+
+function owns(peer: AdmissionPeer | null, body: NativeVoiceAdmissionBody, { accountId, authSessionHash }: Caller) {
+  return (
+    peer?.desktop === true &&
+    peer.accountUserId === accountId &&
+    peer.transportId === body.generation &&
+    tokensMatch(peer.authSessionHash, authSessionHash) &&
+    tokensMatch(peer.sessionToken, body.sessionToken)
+  );
+}
 
 export function createNativeVoiceService(deps: {
-  policy(): { stage: NativeVoiceStage; accounts: ReadonlySet<string>; cap: number };
+  policy(): { stage: NativeVoiceStage; accounts: ReadonlySet<string>; cap: number; defaultPercent: number };
   repository(): NativeVoiceRepository | null;
   provider(): LiveKitCredentialProvider | null;
   rosterPeer(roomId: string, peerId: string): AdmissionPeer | null;
@@ -31,37 +55,51 @@ export function createNativeVoiceService(deps: {
   roomName(roomId: string): string;
   removeParticipant(roomId: string, identity: string): Promise<void>;
   publish(roomId: string, mapping: NativeVoiceCompanions): void;
+  noteIssued?(roomId: string, peerId: string, generation: string, attempt: NativeVoiceAttempt): void;
+  publishRevocation?(roomId: string, peerId: string, generation: string): void;
   logger(): Pick<Logger, 'error'>;
   recordFailure(): void;
 }) {
   const issuing = new Set<string>();
   const cleaning = new Map<string, Promise<void>>();
-  const live = new Map<string, NativeVoiceLease>();
+  const live = new Map<string, LiveLease>();
   let slots = 0;
   let timer: ReturnType<typeof setInterval> | undefined;
   let running: Promise<void> | undefined;
   let stopping = false;
 
-  const stageFor = (account: string): NativeVoiceStage => {
-    const { stage, accounts, cap } = deps.policy();
-    return !stopping && cap > 0 && accounts.has(account) ? stage : 'off';
+  const stageFor = (account: string, peer: AdmissionPeer | null): NativeVoiceStage => {
+    const { stage, accounts, cap, defaultPercent } = deps.policy();
+    if (stopping || cap <= 0 || stage === 'off') return 'off';
+    if (accounts.has(account)) return stage;
+    const preference: NativeVoicePreference = peer?.nativeVoicePreference ?? 'default';
+    if (stage === 'internal-join' || !peer?.nativeVoiceReceive || preference === 'off') return 'off';
+    if (preference === 'on') return stage;
+    const bucket = createHash('sha256').update(account).digest().readUInt32BE() % 100;
+    return bucket < defaultPercent ? stage : 'off';
   };
-  const allowed = (account: string) => stageFor(account) !== 'off';
 
   function capability(roomId: string, peerId: string): RoomSnapshot['nativeVoice'] {
     const peer = deps.rosterPeer(roomId, peerId);
     if (!peer?.desktop || !peer.accountUserId || !peer.authSessionHash) return undefined;
-    return { version: 1, stage: stageFor(peer.accountUserId), generation: peer.transportId };
+    return {
+      version: 1,
+      stage: stageFor(peer.accountUserId, peer),
+      generation: peer.transportId
+    };
   }
 
-  function current(lease: NativeVoiceLease): boolean {
+  function current(lease: LiveLease): boolean {
     const peer = deps.rosterPeer(lease.room_id, lease.peer_id);
+    const stage = stageFor(lease.account_id, peer);
     return (
-      allowed(lease.account_id) &&
+      !lease.policyRevoked &&
       lease.expires_at.getTime() > Date.now() &&
       peer?.desktop === true &&
       peer.accountUserId === lease.account_id &&
-      peer.transportId === lease.generation
+      peer.transportId === lease.generation &&
+      tokensMatch(peer.authSessionHash, lease.authSessionHash) &&
+      (lease.sliding ? stage === 'receive' : stage !== 'off')
     );
   }
 
@@ -75,7 +113,12 @@ export function createNativeVoiceService(deps: {
   async function retire(repo: NativeVoiceRepository, lease: NativeVoiceLease): Promise<void> {
     const { id, room_id: roomId, peer_id: peerId } = lease;
     const retired = await repo.retire(lease, new Date());
-    if (live.delete(id)) deps.publish(roomId, mapping(roomId));
+    const active = live.get(id);
+    if (active) {
+      active.attempt.retiredAt = Date.now();
+      live.delete(id);
+      deps.publish(roomId, mapping(roomId));
+    }
     if (retired) await deps.removeParticipant(roomId, nativeVoiceIdentity(peerId, id));
   }
 
@@ -106,16 +149,25 @@ export function createNativeVoiceService(deps: {
   }
 
   async function checkLease(repo: NativeVoiceRepository, lease: NativeVoiceLease): Promise<void> {
-    const now = Date.now();
-    const validUntil = new Date(now + HEARTBEAT_MS);
-    if (live.has(lease.id) && current(lease) && (await repo.extend(lease.id, validUntil)) && current(lease)) {
-      live.set(lease.id, { ...lease, valid_until: validUntil });
+    const active = live.get(lease.id);
+    const validUntil = new Date(Date.now() + HEARTBEAT_MS);
+    if (active && current(active) && (await repo.extend(lease.id, validUntil)) && current(active)) {
+      if (!active.valid_until || active.valid_until < validUntil) active.valid_until = validUntil;
       return;
     }
     scheduleRetirement(repo, lease);
   }
 
   function reconcile(): Promise<void> {
+    // Push policy revocation to the owning renderer even while the DB or SFU is blocked.
+    for (const lease of live.values()) {
+      if (!lease.sliding || lease.policyRevoked) continue;
+      const peer = deps.rosterPeer(lease.room_id, lease.peer_id);
+      if (peer?.transportId !== lease.generation) continue;
+      if (stageFor(lease.account_id, peer) === 'receive' && peer.nativeVoicePreference !== 'off') continue;
+      lease.policyRevoked = true;
+      deps.publishRevocation?.(lease.room_id, lease.peer_id, lease.generation);
+    }
     running ??= sweep()
       .catch(report)
       .finally(() => {
@@ -141,31 +193,23 @@ export function createNativeVoiceService(deps: {
     await Promise.all(cleaning.values());
   }
 
-  async function admit(
-    body: NativeVoiceAdmissionBody,
-    { accountId, authSessionHash, ip }: { accountId: string; authSessionHash: string; ip: string }
-  ): Promise<Decision> {
-    const { roomId, peerId, generation, sessionToken } = body;
+  async function admit(body: NativeVoiceAdmissionBody, caller: Caller): Promise<Decision<NativeVoiceAdmission>> {
+    const { accountId, authSessionHash, ip } = caller;
+    const { roomId, peerId, generation } = body;
     if (deps.policy().stage === 'off' || stopping) return { status: 'off' };
-    if (!allowed(accountId) || isReservedPeerId(peerId)) return { status: 'ineligible' };
+    const roster = () => deps.rosterPeer(roomId, peerId);
+    const stage = (peer: AdmissionPeer | null) => stageFor(accountId, peer?.accountUserId === accountId ? peer : null);
+    const initialStage = stage(roster());
+    if (initialStage === 'off' || isReservedPeerId(peerId)) return { status: 'ineligible' };
     if (!(await deps.mainRoom(roomId))) return { status: 'wrong_room' };
-    const owns = () => {
-      const peer = deps.rosterPeer(roomId, peerId);
-      return (
-        peer?.desktop &&
-        peer.accountUserId === accountId &&
-        peer.transportId === generation &&
-        tokensMatch(peer.authSessionHash, authSessionHash) &&
-        tokensMatch(peer.sessionToken, sessionToken)
-      );
-    };
-    if (!owns()) return { status: 'stale' };
+    if (!owns(roster(), body, caller)) return { status: 'stale' };
     if (await deps.banned(roomId, accountId, ip)) return { status: 'banned' };
     const repo = deps.repository();
     const provider = deps.provider();
     if (!repo || !provider) return { status: 'unavailable' };
 
     const id = randomUUID();
+    const sliding = initialStage === 'receive';
     const expiresAt = Date.now() + LEASE_MS;
     const lease = {
       id,
@@ -176,13 +220,16 @@ export function createNativeVoiceService(deps: {
       expires_at: new Date(expiresAt),
       cleanup_exhausted_at: null
     };
-    const eligible = () => owns() && allowed(accountId) && Date.now() < expiresAt;
+    const eligible = () => {
+      const peer = roster();
+      return owns(peer, body, caller) && stage(peer) === initialStage && Date.now() < expiresAt;
+    };
     if (!eligible()) return { status: 'stale' };
     issuing.add(id);
     let reserved = false;
     let issued = false;
     try {
-      reserved = await repo.reserve(lease, deps.policy().cap);
+      reserved = await repo.reserve(lease, deps.policy().cap, COMPANIONS_PER_ACCOUNT);
       if (!reserved) return { status: 'capacity' };
       slots += 1;
       if (!eligible()) return { status: 'stale' };
@@ -191,7 +238,7 @@ export function createNativeVoiceService(deps: {
         livekitRoom: deps.roomName(roomId),
         peerId,
         principal: { principalType: 'account', principalId: accountId },
-        companion: { id, expiresAt }
+        companion: { id, expiresAt, sliding }
       });
       if (result.status !== 'issued') return { status: 'unavailable' };
       if (await deps.banned(roomId, accountId, ip)) return { status: 'banned' };
@@ -200,10 +247,12 @@ export function createNativeVoiceService(deps: {
       await repo.activate(id, validUntil);
       if (!eligible()) return { status: 'stale' };
       const { room, token, ttlSeconds, url } = result.admission;
-      live.set(id, { ...lease, valid_until: validUntil, retired_at: null });
+      const attempt: NativeVoiceAttempt = {};
+      live.set(id, { ...lease, authSessionHash, sliding, attempt, valid_until: validUntil, retired_at: null });
       deps.publish(roomId, mapping(roomId));
       if (!eligible()) return { status: 'stale' };
       issued = true;
+      deps.noteIssued?.(roomId, peerId, generation, attempt);
       return {
         status: 'issued',
         admission: {
@@ -211,6 +260,7 @@ export function createNativeVoiceService(deps: {
           version: 1,
           identity: nativeVoiceIdentity(peerId, id),
           generation,
+          ...(sliding && { leaseId: id }),
           expiresAt,
           room,
           token,
@@ -224,8 +274,66 @@ export function createNativeVoiceService(deps: {
     }
   }
 
+  async function renew(body: NativeVoiceRenewalBody, caller: Caller): Promise<Decision<NativeVoiceRenewal>> {
+    const { roomId, peerId, generation, leaseId } = body;
+    const { accountId, authSessionHash, ip } = caller;
+    if (deps.policy().stage !== 'receive' || stopping) return { status: 'off' };
+    const lease = live.get(leaseId);
+    if (
+      !lease?.sliding ||
+      lease.room_id !== roomId ||
+      lease.peer_id !== peerId ||
+      lease.generation !== generation ||
+      lease.account_id !== accountId ||
+      !tokensMatch(lease.authSessionHash, authSessionHash)
+    )
+      return { status: 'stale' };
+
+    const roster = () => deps.rosterPeer(roomId, peerId);
+    const eligible = (peer: AdmissionPeer | null) =>
+      peer?.nativeVoicePreference !== 'off' && stageFor(accountId, peer) === 'receive';
+    if (!owns(roster(), body, caller)) return { status: 'stale' };
+    if (!eligible(roster())) return { status: 'ineligible' };
+    if (!(await deps.mainRoom(roomId))) return { status: 'wrong_room' };
+    if (await deps.banned(roomId, accountId, ip)) return { status: 'banned' };
+    const repo = deps.repository();
+    const provider = deps.provider();
+    if (!repo || !provider) return { status: 'unavailable' };
+    const token = await provider.refreshCompanionToken({
+      roomId,
+      livekitRoom: deps.roomName(roomId),
+      peerId,
+      id: leaseId
+    });
+    if (!token) return { status: 'unavailable' };
+
+    const stillOwned = () => {
+      const peer = roster();
+      return (
+        live.get(leaseId) === lease &&
+        !lease.policyRevoked &&
+        !cleaning.has(leaseId) &&
+        owns(peer, body, caller) &&
+        eligible(peer)
+      );
+    };
+    if (!stillOwned()) return { status: 'stale' };
+    const now = Date.now();
+    const validUntil = new Date(now + HEARTBEAT_MS);
+    const expiresAt = await repo.renew(leaseId, new Date(now + LEASE_MS), validUntil);
+    if (!expiresAt) return { status: 'stale' };
+    if (!stillOwned()) {
+      scheduleRetirement(repo, lease);
+      return { status: 'stale' };
+    }
+    if (lease.expires_at < expiresAt) lease.expires_at = expiresAt;
+    if (!lease.valid_until || lease.valid_until < validUntil) lease.valid_until = validUntil;
+    return { status: 'issued', admission: { ok: true, version: 1, leaseId, expiresAt: expiresAt.getTime(), token } };
+  }
+
   return {
     admit,
+    renew,
     capability,
     mapping,
     start,
