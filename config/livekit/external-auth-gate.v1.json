@@ -10,7 +10,7 @@
     "fallbackAllowed": false
   },
   "internalLiveKit": {
-    "image": "livekit/livekit-server:v1.13.2",
+    "image": "livekit/livekit-server:v1.13.11",
     "port": 7880,
     "productionHostBindAllowed": false
   },

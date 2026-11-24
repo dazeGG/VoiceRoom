@@ -13,16 +13,16 @@ const ReplayReport = Type.Object({
 
 const repositoryRoot = path.resolve(import.meta.dirname, '../../..');
 
-test('G04-A01 replay harness pins LiveKit v1.13.2 and records same-token baseline reconnects', async () => {
+test('G04-A01 replay harness pins LiveKit v1.13.11 and records same-token baseline reconnects', async () => {
   const compose = fs.readFileSync(path.join(repositoryRoot, 'docker-compose.lkv.yml'), 'utf8');
-  assert.match(compose, /livekit\/livekit-server:v1\.13\.2/);
+  assert.match(compose, /livekit\/livekit-server:v1\.13\.11/);
   assert.match(compose, /partition-proxy/);
 
   const { LIVEKIT_REPLAY_IMAGE, runReplayScenario } = await import('../../../scripts/lkv/run-replay-scenario.mts');
   const report = runReplayScenario();
 
-  assert.equal(LIVEKIT_REPLAY_IMAGE, 'livekit/livekit-server:v1.13.2');
-  assert.equal(report.livekit.version, 'v1.13.2');
+  assert.equal(LIVEKIT_REPLAY_IMAGE, 'livekit/livekit-server:v1.13.11');
+  assert.equal(report.livekit.version, 'v1.13.11');
   assert.equal(report.token.claims.video.roomJoin, true);
   assert.equal(report.summary.sameTokenReconnectAccepted, true);
   assert.equal(report.summary.strictInvalidationProven, false);
@@ -44,7 +44,7 @@ test('G04-A02 replay harness covers restart, partition and clock skew fixtures',
 
   const command = buildReplayTopologyCommand({ detach: true });
   assert.deepEqual(command.args, ['compose', '-f', 'docker-compose.lkv.yml', 'up', '-d']);
-  assert.equal(command.env.LIVEKIT_REPLAY_IMAGE, 'livekit/livekit-server:v1.13.2');
+  assert.equal(command.env.LIVEKIT_REPLAY_IMAGE, 'livekit/livekit-server:v1.13.11');
 
   const proxy = createPartitionProxy({ listenPort: 0, targetHost: '127.0.0.1', targetPort: 9 });
   proxy.setMode('partitioned');

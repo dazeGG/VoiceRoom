@@ -222,7 +222,7 @@ test(
     assert.match(await upgrade(gatePort, pathFor(tabA)), /^HTTP\/1\.1 403/);
     assert.match(
       fs.readFileSync(path.resolve(import.meta.dirname, '../../../docker-compose.dev.yml'), 'utf8'),
-      /livekit\/livekit-server:v1\.13\.2/
+      /livekit\/livekit-server:v1\.13\.11/
     );
   }
 );

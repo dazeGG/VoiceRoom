@@ -98,7 +98,7 @@ services:
       retries: 30
 
   livekit:
-    image: livekit/livekit-server:v1.13.2
+    image: livekit/livekit-server:v1.13.11
     restart: unless-stopped
     logging: *logging
     environment:
