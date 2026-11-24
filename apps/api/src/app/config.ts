@@ -137,9 +137,9 @@ export function readRuStorePushConfig(env: Env = process.env): RuStorePushConfig
 // The oldest Android app version the server still serves (`x.y.z`); empty sets
 // no bound. A malformed value stops the process at start instead of silently
 // refusing nothing.
-function readAndroidMinVersion(env: Env): string {
-  const value = String(env.ANDROID_MIN_VERSION || '').trim();
-  if (value && !normalizeReleaseVersion(value)) throw new Error('ANDROID_MIN_VERSION must be a version like 1.2.0');
+function readAndroidMinVersion(env: Env, key = 'ANDROID_MIN_VERSION'): string {
+  const value = String(env[key] || '').trim();
+  if (value && !normalizeReleaseVersion(value)) throw new Error(`${key} must be a version like 1.2.0`);
   return value;
 }
 
@@ -277,6 +277,7 @@ export function readApiConfig(env: Env = process.env) {
     PUSH: readPushConfig(env),
     RUSTORE_PUSH: readRuStorePushConfig(env),
     ANDROID_MIN_VERSION: readAndroidMinVersion(env),
+    ANDROID_CALL_PUSH_MIN_VERSION: readAndroidMinVersion(env, 'ANDROID_CALL_PUSH_MIN_VERSION'),
     LIVEKIT_METRICS_URL: readLiveKitMetricsUrl(env),
     // Desktop downloads come from the latest GitHub release; the metadata is
     // cached so visitors never hit GitHub's per-IP rate limit.

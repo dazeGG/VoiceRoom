@@ -7,6 +7,7 @@ import type {
   ReplyPointer,
   ReplyPreview
 } from '@voiceroom/shared/contracts/messages';
+import { callMetadataOf } from '@voiceroom/shared/contracts/messages';
 import { normalizeHistoryRequest } from '@voiceroom/shared/messaging-history';
 import { normalizeLinkPreview } from '@voiceroom/shared/link-preview';
 import type { CursorCodec, CursorTuple } from '../../platform/cursor-codec.ts';
@@ -41,14 +42,15 @@ function text(value: unknown): string | undefined {
 
 const INVITE_STATUSES: readonly InviteStatus[] = ['pending', 'accepted', 'declined', 'expired'];
 
-// Only what a client may read from the metadata: the room invitation and the
-// link preview. Everything else in it stays server-side.
+// Keep storage-only fields such as the missed watermark out of history.
 function publicMetadata(metadata: JsonObject | null | undefined): Exclude<DirectHistoryMessage['metadata'], undefined> {
   if (!metadata) return null;
   const roomId = text(metadata.roomId);
   const roomName = text(metadata.roomName);
   const status = INVITE_STATUSES.find((value) => value === metadata.status);
   const linkPreview = normalizeLinkPreview(metadata.linkPreview);
+  const call = callMetadataOf(metadata);
+  if (call) return { kind: 'voice-call', call, ...(linkPreview ? { linkPreview } : {}) };
   return {
     ...(metadata.kind === 'room-invite' ? { kind: 'room-invite' as const } : {}),
     ...(roomId === undefined ? {} : { roomId }),

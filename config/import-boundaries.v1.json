@@ -25,7 +25,7 @@
         "apps/api/src/domains/rooms/room.repository.ts"
       ],
       "room_rings": ["apps/api/src/domains/rings/ring.repository.ts", "apps/api/src/domains/rings/call-rings.repository.ts"],
-      "ring_delivery_outbox": ["apps/api/src/domains/rings/ring.repository.ts"],
+      "ring_delivery_outbox": ["apps/api/src/domains/rings/ring.repository.ts", "apps/api/src/domains/rings/call-push.repository.ts"],
       "room_memberships": [
         "apps/api/src/domains/membership/membership.repository.ts",
         "apps/api/src/domains/rooms/room-access.repository.ts",
@@ -80,6 +80,7 @@
       ],
       "direct_messages": [
         "apps/api/src/domains/messaging/dm-thread.repository.ts",
+        "apps/api/src/domains/messaging/call-history.repository.ts",
         "apps/api/src/domains/social/user-block.repository.ts",
         "apps/api/src/domains/messaging/message-read.repository.ts",
         "apps/api/src/domains/messaging/reply.repository.ts",

@@ -5,7 +5,7 @@
 // changes only when an old app could no longer read the map.
 
 import { isRecord } from './guards.ts';
-import { isCallPushType, type PushPayload } from './notifications.ts';
+import { isCallPushType, parseCallPushPayload, type PushPayload } from './notifications.ts';
 
 export const NATIVE_PUSH_DATA_VERSION = '1';
 
@@ -44,7 +44,7 @@ const EXTRA_KEYS = [
   'ringState'
 ] as const;
 const NAME_KEYS: ReadonlySet<string> = new Set(['fromName', 'roomName']);
-const CALL_KEYS = ['callId', 'attempt', 'revision', 'tag', 'contractVersion'] as const;
+const CALL_KEYS = ['callId', 'attempt', 'revision', 'tag', 'contractVersion', 'dismissMissed'] as const;
 const OPTIONAL_KEYS = ['notificationId', 'expiresAt', 'title', 'body'] as const;
 
 export type NativePushData = {
@@ -126,6 +126,21 @@ export function parseNativePushData(map: unknown): NativePushData | null {
   };
   const type = text('type');
   if (text('v') !== NATIVE_PUSH_DATA_VERSION || !type) return null;
+  if (isCallPushType(type)) {
+    const call = parseCallPushPayload({
+      type,
+      contractVersion: Number(text('contractVersion')),
+      callId: text('callId'),
+      attempt: Number(text('attempt')),
+      revision: Number(text('revision')),
+      expiresAt: Number(text('expiresAt')),
+      url: text('url'),
+      dedupeKey: text('dedupeKey'),
+      tag: text('tag')
+    });
+    const dismiss = text('dismissMissed');
+    if (!call || (dismiss !== undefined && dismiss !== 'true' && dismiss !== 'false')) return null;
+  }
   const data: NativePushData = {
     v: NATIVE_PUSH_DATA_VERSION,
     type,

@@ -152,6 +152,7 @@ export const CallIncoming = Type.Object({
 });
 export type CallIncoming = Static<typeof CallIncoming>;
 
+export const CallMissedPeerParams = Type.Object({ peerUserId: Id });
 const CallMissedWatermark = Type.Object({ missedAt: Timestamp, messageId: Id });
 export const CallMissedSeenBody = Type.Object({ watermark: CallMissedWatermark });
 export type CallMissedSeenBody = Static<typeof CallMissedSeenBody>;
@@ -166,7 +167,9 @@ export const CallMissedUpdated = Type.Object({
   revision: CallRevision,
   serverNow: Timestamp
 });
+export type CallMissedUpdated = Static<typeof CallMissedUpdated>;
 export const CallMissedSeenAnswer = Ok(CallMissedUpdated.properties);
+export const CallNotificationTarget = Ok({ peerUserId: Id });
 export const CallBootstrap = Ok({
   enabled: Type.Boolean(),
   activeCalls: Type.Array(CallSnapshot),

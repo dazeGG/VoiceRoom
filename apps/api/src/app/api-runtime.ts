@@ -11,6 +11,7 @@ import type { FastifyBaseLogger } from 'fastify';
 import { startMaintenanceTimers } from '../platform/maintenance.ts';
 import { createRingDeliveryRuntime } from '../domains/rings/ring-delivery.ts';
 import { createCallRingService } from '../domains/rings/call-rings.service.ts';
+import { createCallPushService } from '../domains/rings/call-push.service.ts';
 import { createCallVoiceAdmission } from '../domains/admission/call-voice-admission.service.ts';
 import { apiMaintenanceTasks } from './maintenance-tasks.ts';
 import { createRealtimeHub } from './realtime-hub.ts';
@@ -179,6 +180,7 @@ export function createApiRuntime({
     logger: () => getProcessLogger(),
     admission: admissionService,
     invalidateCalls: (userId, peerId) => callRings?.invalidate(userId, peerId),
+    refreshCallMisses: (recipientId, senderId) => callRings?.refreshMissed(recipientId, senderId),
     liveNumbers,
     liveAccountIds: () => [...new Set(liveAccountIds())]
   });
@@ -358,6 +360,17 @@ export function createApiRuntime({
     const ringDelivery = createRingDeliveryRuntime({
       rings: domain.rings,
       callMaintenance: calls.maintenance,
+      callPush: createCallPushService({
+        pool: services.getPool,
+        clock: realtimeNow,
+        preferences: (userId) => services.getNotificationPreferences().getPreferences(userId),
+        displayName: async (userId) => {
+          const user = await services.getUserStore().getUserById(userId);
+          return user?.displayName || user?.login || '';
+        },
+        webPush: (userId, payload, context) => services.getPushService().sendToUser(userId, payload, context),
+        nativePush: (userId, payload, context) => services.getNativePushService().sendToUser(userId, payload, context)
+      }),
       enabled: () => services.getPool() !== null,
       onError: (error) => appLogger.warn({ err: error }, 'ring delivery failed')
     });

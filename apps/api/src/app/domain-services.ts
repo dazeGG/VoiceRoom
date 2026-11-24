@@ -50,6 +50,7 @@ export interface DomainServiceDeps {
   logger: () => FastifyBaseLogger;
   admission: Pick<AdmissionService, 'revokeForServerMute'>;
   invalidateCalls?(userId: string, peerId?: string): void;
+  refreshCallMisses?(this: void, recipientId: string, senderId: string): void;
   /** What the realtime layer holds right now: the admin panel shows it. */
   liveNumbers: () => LiveNumbers;
   /** The accounts with a socket open right now. */
@@ -183,6 +184,7 @@ export function createDomainServices(deps: DomainServiceDeps) {
     isOnline: (userId) => hub.isUserOnline(userId),
     notifyUser: (userId, event) => hub.broadcastToUser(userId, event),
     invalidateCalls: (userId, peerId) => deps.invalidateCalls?.(userId, peerId),
+    ...(deps.refreshCallMisses ? { refreshCallMisses: deps.refreshCallMisses } : {}),
     queuePush: (userId, payload, context) => hub.notifications.queuePush(userId, payload, context)
   });
   const directMessages = createDirectMessagesService({
@@ -201,6 +203,7 @@ export function createDomainServices(deps: DomainServiceDeps) {
     projectReply: hub.projection.projectReply,
     directEmit: config.MESSAGE_DIRECT_EMIT_ENABLED,
     notifyUser: (userId, event) => hub.broadcastToUser(userId, event),
+    ...(deps.refreshCallMisses ? { callMessageDeleted: deps.refreshCallMisses } : {}),
     notifyRecipient: (recipientId, sender, message) =>
       hub.notifications.broadcastDmNotification(recipientId, sender, message),
     scheduleLinkPreview: hub.linkPreviews.scheduleDirectLinkPreview

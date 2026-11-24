@@ -4,10 +4,19 @@ import fs from 'node:fs/promises';
 import test, { type TestContext } from 'node:test';
 import { Me } from '@voiceroom/shared/contracts/account';
 import { LiveKitAdmission } from '@voiceroom/shared/contracts/admission';
-import { DirectThread } from '@voiceroom/shared/contracts/messages';
-import { CallAnswer, CallBootstrap, CallDetails, type CallActionBody } from '@voiceroom/shared/contracts/rings';
+import { DirectHistoryPage, DirectThread } from '@voiceroom/shared/contracts/messages';
+import {
+  CallAnswer,
+  CallBootstrap,
+  CallDetails,
+  CallMissedSeenAnswer,
+  CallNotificationTarget,
+  type CallActionBody
+} from '@voiceroom/shared/contracts/rings';
 import { createApiRuntime } from '../src/app/api-runtime.ts';
 import { createLiveKitAuthGateService } from '../src/domains/admission/livekit-auth-gate.service.ts';
+import { updateCallMessage } from '../src/domains/messaging/call-history.repository.ts';
+import { kyselyOn } from '../src/platform/db/kysely.ts';
 import { createLogger } from '../src/lib/logger.ts';
 import { createTestDatabase } from './db-harness.ts';
 import {
@@ -183,6 +192,24 @@ async function details(api: Running, a: Account, id: string) {
   return (await request(api.socketPath, { pathname: `${basePath}/${id}`, cookie: a.cookie }, CallDetails)).body.call;
 }
 
+async function callEntry(api: Running, viewer: Account, peer: Account, messageId: string) {
+  const { body } = await request(
+    api.socketPath,
+    {
+      pathname: `/api/dm/${peer.id}/history?mode=around&messageId=${messageId}`,
+      cookie: viewer.cookie
+    },
+    DirectHistoryPage
+  );
+  const row = body.messages.find(({ id }) => id === messageId);
+  assert.ok(row && row.metadata?.kind === 'voice-call');
+  return { row, call: row.metadata.call };
+}
+
+async function missedCounts(api: Running, account: Account) {
+  return (await request(api.socketPath, { pathname: basePath, cookie: account.cookie }, CallBootstrap)).body.missed;
+}
+
 async function enter(socket: WsSession, answer: CallAnswer) {
   const { call, voiceAdmission } = answer;
   assert.ok(voiceAdmission);
@@ -304,7 +331,7 @@ test('cross-dial coalesces, an accepting participant switches rooms, and late ac
   const { rows } = await lab.pool.query<{ id: string }>('SELECT id FROM direct_messages');
   assert.equal(rows.length, 1);
   const thread = await request(api.socketPath, { pathname: `/api/dm/${b.id}`, cookie: a.cookie }, DirectThread);
-  assert.deepEqual(thread.body.messages, []);
+  assert.equal(thread.body.messages[0]?.call?.callId, id);
 
   const active = await details(api, a, id);
   const moved = await action(api, a, id, 'join', 1, undefined, active.revision);
@@ -315,6 +342,28 @@ test('cross-dial coalesces, an accepting participant switches rooms, and late ac
   assert.equal((await action(api, a, id, 'leave', 1, aSeat.seatToken)).disposition, 'stale');
   assert.equal((await lab.gate.authorize(new URL(token.url).search)).ok, false);
   assert.equal((await details(api, a, id)).phase, 'connected');
+
+  const [otherCall, ownCall] = await Promise.all([
+    callEntry(api, b, a, active.messageId),
+    callEntry(api, a, b, active.messageId)
+  ]);
+  assert.deepEqual(otherCall.call, ownCall.call);
+  assert.equal(ownCall.row.author.userId, a.id);
+  assert.equal(ownCall.row.recipientId, b.id);
+  lab.advance(750);
+  const resumed = await details(api, a, id);
+  const ended = await action(api, a, id, 'leave', 1, moved.voiceAdmission?.seatToken, resumed.revision);
+  assert.equal(ended.call.phase, 'alone');
+  const bCurrent = await details(api, b, id);
+  assert.equal(
+    (await action(api, b, id, 'leave', 1, rejoined.voiceAdmission?.seatToken, bCurrent.revision)).call.phase,
+    'closed'
+  );
+  const completed = await callEntry(api, b, a, active.messageId);
+  assert.equal(completed.call.outcome, 'completed');
+  assert.equal(completed.call.durationMs, 2_000);
+  assert.equal(completed.row.createdAt, ownCall.row.createdAt);
+  assert.equal(completed.row.editedAt, null);
 });
 
 test('two friends can ring the same account and a decline only closes its own attempt', async (t) => {
@@ -335,6 +384,8 @@ test('two friends can ring the same account and a decline only closes its own at
   const declined = await action(api, b, first.call.id, 'decline');
   assert.equal(declined.call.endReason, 'declined');
   assert.equal(declined.call.endedByUserId, b.id);
+  assert.equal((await callEntry(api, b, a, first.call.messageId)).call.outcome, 'declined');
+  assert.deepEqual(await missedCounts(api, b), []);
   assert.ok(lab.evicted.some(({ roomId, peerId }) => roomId === aSeat.roomId && peerId === aSeat.peerId));
   const accepted = await action(api, b, second.call.id, 'accept');
   await enter(bWs, accepted);
@@ -358,6 +409,9 @@ test('the sweeper expires at 45 seconds, re-ring resets both clocks, and five mi
   const alone = (await state(aWs, id, 'alone')).payload.call;
   assert.equal(alone.serverNow, startedAt + 45_000);
   assert.equal(alone.attemptResult, 'no_answer');
+  const missedWhileOpen = await callEntry(api, b, a, alone.messageId);
+  assert.equal(missedWhileOpen.call.outcome, 'live');
+  assert.equal(missedWhileOpen.call.missedAt, call.call.ringingExpiresAt);
   assert.equal(alone.aloneDeadline, startedAt + 300_000);
   assert.equal((await action(api, b, id, 'accept')).disposition, 'stale');
 
@@ -375,6 +429,8 @@ test('the sweeper expires at 45 seconds, re-ring resets both clocks, and five mi
   const closed = (await state(aWs, id, 'closed')).payload.call;
   assert.equal(closed.endedAt, startedAt + 345_000);
   assert.equal(closed.endReason, 'alone_timeout');
+  assert.equal((await callEntry(api, b, a, closed.messageId)).call.outcome, 'no_answer');
+  assert.equal((await missedCounts(api, b))[0]?.count, 1);
   assert.equal(closed.endedByUserId, a.id);
   assert.equal((await lab.gate.authorize(new URL(token.url).search)).ok, false);
   await waitForWsType(aWs.frames, 'room.left', ({ payload }) => payload.roomId === seat.roomId);
@@ -539,6 +595,9 @@ test('the start quota ignores replays and the caller can cancel a ringing attemp
   const cancelled = await action(api, a, call.call.id, 'leave', 1, seat.seatToken);
   assert.equal(cancelled.call.endReason, 'cancelled');
   assert.equal(cancelled.call.attemptResult, 'cancelled');
+  const missed = await callEntry(api, b, a, call.call.messageId);
+  assert.equal(missed.call.outcome, 'cancelled');
+  assert.ok(missed.call.missedAt);
   assert.equal((await start(api, a, b, requestId)).call.id, call.call.id);
   assert.equal((await tryStart(stranger, requestId)).body.code, 'call_request_conflict');
   const limited = await tryStart(b);
@@ -548,4 +607,179 @@ test('the start quota ignores replays and the caller can cancel a ringing attemp
   lab.advance(30_000);
   assert.equal((await start(api, a, b, coalescedRequestId)).call.id, call.call.id);
   assert.notEqual((await start(api, a, b)).call.id, call.call.id);
+});
+
+test('misses acknowledge only through an issued watermark on both devices and clear on connection', async (t) => {
+  const lab = await setup(t);
+  const api = await lab.boot();
+  const [a, b, outsider] = await Promise.all([api.account('alice'), api.account('bob'), api.account('outsider')]);
+  await befriend(api, a, b);
+  const aWs = await api.socket(a.cookie);
+  const bWs = await api.socket(b.cookie);
+  const anotherDevice = await api.socket(b.cookie);
+
+  const first = await start(api, a, b);
+  const firstSeat = await enter(aWs, first);
+  await action(api, a, first.call.id, 'leave', 1, firstSeat.seatToken);
+  const [one] = await missedCounts(api, b);
+  assert.ok(one?.watermark);
+  assert.equal(one.count, 1);
+  assert.equal(one.peerUserId, a.id);
+  const firstEvent = await waitForWsType(bWs.frames, 'call.missed.updated', (frame) => frame.payload.count === 1);
+  assert.deepEqual(firstEvent.payload.watermark, one.watermark);
+
+  // A later committed miss can have the same timestamp as the previous mark.
+  const second = await start(api, a, b);
+  const secondSeat = await enter(aWs, second);
+  await action(api, a, second.call.id, 'leave', 1, secondSeat.seatToken);
+  const [two] = await missedCounts(api, b);
+  assert.equal(two?.count, 2);
+  assert.equal(two.watermark?.missedAt, one.watermark.missedAt);
+  assert.equal(two.watermark?.messageId, second.call.messageId);
+  assert.deepEqual(await missedCounts(api, a), []);
+
+  const see = (viewer: Account, peer: Account, watermark: NonNullable<typeof one.watermark>) =>
+    request(
+      api.socketPath,
+      {
+        method: 'POST',
+        pathname: `${basePath}/missed/${peer.id}/seen`,
+        cookie: viewer.cookie,
+        body: { watermark }
+      },
+      CallMissedSeenAnswer
+    );
+  assert.equal((await see(outsider, a, one.watermark)).body.count, 0);
+  const ack = await see(b, a, one.watermark);
+  assert.equal(ack.body.count, 1);
+  assert.deepEqual(ack.body.watermark, two.watermark);
+  for (const socket of [bWs, anotherDevice]) {
+    const { payload } = await waitForWsType(
+      socket.frames,
+      'call.missed.updated',
+      (f) => f.payload.revision === ack.body.revision
+    );
+    assert.equal(payload.count, 1);
+  }
+  assert.equal((await see(b, a, one.watermark)).body.count, 1);
+  assert.ok(two.watermark);
+  assert.equal((await see(b, a, two.watermark)).body.count, 0);
+
+  const live = await start(api, a, b);
+  await enter(aWs, live);
+  const newMessage = await waitForWsType(bWs.frames, 'dm.message', (f) => f.payload.message.id === live.call.messageId);
+  assert.equal(newMessage.payload.message.call?.revision, 1);
+  lab.advance(44_999);
+  assert.deepEqual(await missedCounts(api, b), []);
+  lab.advance(1);
+  const whileWaiting = await waitForWsType(
+    bWs.frames,
+    'dm.message.edited',
+    (f) =>
+      f.payload.message.call?.missedAt === live.call.ringingExpiresAt && f.payload.message.id === live.call.messageId
+  );
+  assert.equal((await missedCounts(api, b))[0]?.count, 1);
+  const receiver = await action(api, b, live.call.id, 'join');
+  await enter(anotherDevice, receiver);
+  await state(aWs, live.call.id, 'connected');
+  const latest = (await callEntry(api, b, a, live.call.messageId)).call;
+  const stale = whileWaiting.payload.message.call;
+  assert.ok(stale);
+  assert.ok(latest.revision > stale.revision);
+  assert.equal(latest.missedAt, null);
+  assert.equal(await updateCallMessage(kyselyOn(lab.pool), live.call.messageId, stale), null);
+  assert.deepEqual((await callEntry(api, b, a, live.call.messageId)).call, latest);
+  assert.deepEqual(await missedCounts(api, b), []);
+  const frames = aWs.frames.flatMap((frame) =>
+    (frame.type === 'dm.message' || frame.type === 'dm.message.edited') &&
+    frame.payload.message.id === live.call.messageId &&
+    frame.payload.message.call
+      ? [frame.payload.message.call.revision]
+      : []
+  );
+  assert.ok(frames.length >= 3);
+  assert.deepEqual(
+    frames,
+    [...new Set(frames)].sort((a, b) => a - b)
+  );
+});
+
+test('voice call history cannot be edited, quoted or reacted to and supports deletion', async (t) => {
+  const lab = await setup(t);
+  const api = await lab.boot();
+  const [a, b, outsider] = await Promise.all([api.account('alice'), api.account('bob'), api.account('outsider')]);
+  await befriend(api, a, b);
+  const aWs = await api.socket(a.cookie);
+  const bWs = await api.socket(b.cookie);
+  const started = await start(api, a, b);
+  const seat = await enter(aWs, started);
+  const { id, messageId } = started.call;
+  const path = `/api/dm/${b.id}`;
+  const edit = await request(api.socketPath, {
+    method: 'PATCH',
+    pathname: `${path}/messages/${messageId}`,
+    cookie: a.cookie,
+    body: { text: 'Changed' }
+  });
+  assert.equal(edit.body.code, 'message_edit_forbidden');
+  const reply = await request(api.socketPath, {
+    method: 'POST',
+    pathname: path,
+    cookie: a.cookie,
+    body: { text: 'Reply', replyTo: { messageId } }
+  });
+  assert.equal(reply.body.code, 'reply_unavailable');
+  const reaction = await request(api.socketPath, {
+    method: 'PUT',
+    pathname: `/api/reactions/dm/${b.id}/${messageId}`,
+    cookie: a.cookie,
+    body: { active: true, emoji: '👍' }
+  });
+  assert.equal(reaction.status, 404);
+  const target = `${basePath}/notification/${id}`;
+  assert.equal((await request(api.socketPath, { pathname: target, cookie: outsider.cookie })).status, 404);
+  assert.equal(
+    (await request(api.socketPath, { pathname: target, cookie: b.cookie }, CallNotificationTarget)).body.peerUserId,
+    a.id
+  );
+  await action(api, a, id, 'leave', 1, seat.seatToken);
+  const mark = await waitForWsType(bWs.frames, 'call.missed.updated', (frame) => frame.payload.count === 1);
+  assert.equal(
+    (
+      await request(api.socketPath, {
+        method: 'DELETE',
+        pathname: `/api/friends/${b.id}`,
+        cookie: a.cookie
+      })
+    ).status,
+    200
+  );
+  const hidden = await waitForWsType(
+    bWs.frames,
+    'call.missed.updated',
+    (frame) => frame.payload.revision > mark.payload.revision && frame.payload.count === 0
+  );
+  await befriend(api, a, b);
+  const restored = await waitForWsType(
+    bWs.frames,
+    'call.missed.updated',
+    (frame) => frame.payload.revision > hidden.payload.revision && frame.payload.count === 1
+  );
+  assert.equal(
+    (
+      await request(api.socketPath, {
+        method: 'DELETE',
+        pathname: `${path}/messages/${messageId}`,
+        cookie: a.cookie
+      })
+    ).status,
+    200
+  );
+  await waitForWsType(
+    bWs.frames,
+    'call.missed.updated',
+    (frame) => frame.payload.revision > restored.payload.revision && frame.payload.count === 0
+  );
+  assert.deepEqual(await missedCounts(api, b), []);
+  assert.equal((await request(api.socketPath, { pathname: target, cookie: b.cookie })).status, 404);
 });

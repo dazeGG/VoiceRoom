@@ -5,6 +5,8 @@ import type {
   CallAnswer,
   CallBootstrap,
   CallIncoming,
+  CallMissedSeenBody,
+  CallMissedUpdated,
   CallSnapshot
 } from '@voiceroom/shared/contracts/rings';
 import type { ResolvedSession, SessionUser } from '../../app/context.ts';
@@ -15,6 +17,7 @@ import type { AccountMessage } from '../../realtime/account-events.ts';
 import type { WsConnection } from '../../realtime/registry.ts';
 import type { JoinResult } from '../../realtime/voice-join.ts';
 import type { LiveKitAdmission } from '../admission/livekit-credential-provider.ts';
+import type { DirectMessage } from '../social/social-records.ts';
 import {
   advanceCall,
   allowedCallActions,
@@ -41,7 +44,13 @@ type SeatIntent = {
   leaveSinceRevision?: number;
 };
 type Admission = NonNullable<CallAnswer['voiceAdmission']>;
-type Transition = { call: VoiceCall; changed: boolean; now: number };
+type Transition = {
+  call: VoiceCall;
+  changed: boolean;
+  now: number;
+  message?: DirectMessage;
+  missed?: CallMissedUpdated;
+};
 type Answer = CallAnswer | { retryAfterSeconds: number };
 type ActionResult =
   'stale' | 'accept' | 'open' | 'resume' | 'leave' | 'ring' | 'transfer' | { retryAfterSeconds: number };
@@ -206,7 +215,7 @@ export function createCallRingService({
   }
 
   async function publish(repository: NonNullable<ReturnType<typeof repo>>, change: Transition, ring = false) {
-    const { call, now } = change;
+    const { call, now, message, missed } = change;
     if (call.phase === 'closed' && !scheduledClosedEvictions.has(call.id)) {
       for (const userId of users(call)) {
         intents.delete(key(call, userId));
@@ -215,6 +224,11 @@ export function createCallRingService({
       scheduledClosedEvictions.add(call.id);
     }
     if (!change.changed) return;
+    if (message) {
+      const event: AccountMessage = { type: call.revision === 1 ? 'dm-message' : 'dm.message.edited', message };
+      for (const userId of users(call)) notify(userId, event);
+    }
+    if (missed) notify(call.recipientId, { type: 'call.missed.updated', ...missed });
     const state = await snapshot(repository, call, call.callerId, now);
     const recipientActions = allowedCallActions(call, call.recipientId, state.seats ?? []);
     notify(call.callerId, { type: 'call.state', call: state });
@@ -464,8 +478,29 @@ export function createCallRingService({
         activeCalls.push(state);
         if (state.phase === 'ringing' && state.attemptInviterUserId !== viewer) incomingCalls.push(incoming(state));
       }
-      return { ok: true, enabled, activeCalls, incoming: incomingCalls, missed: [], serverNow };
+      const missed = (await repository?.listMissed(viewer)) ?? [];
+      return { ok: true, enabled, activeCalls, incoming: incomingCalls, missed, serverNow };
     });
+  }
+
+  function markMissedSeen(viewer: string, peerId: string, body: CallMissedSeenBody) {
+    return serialize(async () => {
+      const missed = await requireRepo().acknowledgeMissed(viewer, peerId, body.watermark);
+      notify(viewer, { type: 'call.missed.updated', ...missed });
+      return { ok: true as const, ...missed };
+    });
+  }
+
+  function refreshMissed(recipientId: string, peerId: string) {
+    void serialize(async () => {
+      const missed = await requireRepo().acknowledgeMissed(recipientId, peerId);
+      notify(recipientId, { type: 'call.missed.updated', ...missed });
+    }).catch(report);
+  }
+
+  async function notificationTarget(viewer: string, id: string) {
+    const peerUserId = await requireRepo().messagePeer(viewer, id);
+    return peerUserId ? { ok: true as const, peerUserId } : notFound();
   }
 
   async function authorizeVoice(viewer: Viewer, id: string, proof: string) {
@@ -589,6 +624,9 @@ export function createCallRingService({
 
   return {
     bootstrap,
+    markMissedSeen,
+    refreshMissed,
+    notificationTarget,
     details,
     start,
     joinVoice,

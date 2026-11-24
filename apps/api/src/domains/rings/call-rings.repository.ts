@@ -1,16 +1,31 @@
 import { randomUUID } from 'node:crypto';
 import { sql, type Selectable, type Updateable } from 'kysely';
 import type pg from 'pg';
-import { CallEndReason, CallSnapshot, type DirectMessageCall } from '@voiceroom/shared/contracts/rings';
+import {
+  CallEndReason,
+  CallSnapshot,
+  type CallMissedSeenBody,
+  type CallMissedUpdated,
+  type DirectMessageCall
+} from '@voiceroom/shared/contracts/rings';
 import { Value } from 'typebox/value';
 import { kyselyOn, withTransaction, type Database } from '../../platform/db/kysely.ts';
 import { lockKeys, lockXact } from '../../platform/db/locks.ts';
 import type { RoomRings } from '../../platform/db/schema.ts';
 import { DomainError } from '../../platform/http/domain-error.ts';
-import { createDmThreadRepository, updateCallMessage } from '../messaging/dm-thread.repository.ts';
+import { createDmThreadRepository } from '../messaging/dm-thread.repository.ts';
+import {
+  findCallMessagePeer,
+  listMissedCalls,
+  lockCallMessage,
+  markCallMissesSeen,
+  nextMissedRevision,
+  updateCallMessage
+} from '../messaging/call-history.repository.ts';
 import { createCallRoom, deleteCallRoom } from '../rooms/room.repository.ts';
 import { ringPairRefusal } from '../social/pair-eligibility.repository.ts';
-import { lockUserPair, mapPublicUser } from '../social/social-records.ts';
+import { lockUserPair, mapPublicUser, type DirectMessage } from '../social/social-records.ts';
+import { CALL_DISMISSAL_TTL_MS, CALL_MISSED_TTL_MS, enqueueCallPush } from './call-push.repository.ts';
 
 export const RING_WINDOW_MS = 45_000;
 export const ALONE_WINDOW_MS = 300_000;
@@ -85,7 +100,7 @@ function toCall(row: Selectable<RoomRings>): VoiceCall | null {
   };
 }
 
-function callMetadata(call: VoiceCall): { kind: 'voice-call'; call: DirectMessageCall } {
+function callMetadata(call: VoiceCall, prior?: DirectMessageCall): { kind: 'voice-call'; call: DirectMessageCall } {
   return {
     kind: 'voice-call',
     call: {
@@ -96,9 +111,9 @@ function callMetadata(call: VoiceCall): { kind: 'voice-call'; call: DirectMessag
           ? 'live'
           : call.firstConnectedAt !== null
             ? 'completed'
-            : call.attemptResult === 'declined'
+            : call.endReason === 'declined'
               ? 'declined'
-              : call.attemptResult === 'no_answer'
+              : call.attemptResult === 'no_answer' || (prior?.missedAt != null && call.endReason !== 'cancelled')
                 ? 'no_answer'
                 : 'cancelled',
       startedAt: call.startedAt,
@@ -107,9 +122,9 @@ function callMetadata(call: VoiceCall): { kind: 'voice-call'; call: DirectMessag
       endReason: call.endReason,
       endedByUserId: call.endedByUserId,
       durationMs: call.mutualMs,
-      missedAt: null,
-      missedRevision: null,
-      missedSeenRevision: null
+      missedAt: call.firstConnectedAt === null ? (prior?.missedAt ?? null) : null,
+      missedRevision: call.firstConnectedAt === null ? (prior?.missedRevision ?? null) : null,
+      missedSeenRevision: call.firstConnectedAt === null ? (prior?.missedSeenRevision ?? null) : null
     }
   };
 }
@@ -137,8 +152,17 @@ function stateColumns(call: VoiceCall) {
 }
 
 type StartResult =
-  | { status: 'created' | 'open' | 'replay'; call: VoiceCall; now: number }
+  | { status: 'created'; call: VoiceCall; now: number; message: DirectMessage }
+  | { status: 'open' | 'replay'; call: VoiceCall; now: number }
   | { status: 'rate_limited'; retryAfterSeconds: number };
+
+function firstAttemptExpired(prior: VoiceCall, current: VoiceCall, now: number): boolean {
+  return (
+    prior.attempt === 1 &&
+    prior.ringingExpiresAt <= now &&
+    (prior.attemptResult === 'no_answer' || (prior.phase === 'ringing' && current.attemptResult === 'no_answer'))
+  );
+}
 
 export function createCallRingRepository(pool: pg.Pool, clock?: () => number) {
   const db = kyselyOn(pool);
@@ -151,6 +175,72 @@ export function createCallRingRepository(pool: pg.Pool, clock?: () => number) {
   async function now(query = db): Promise<number> {
     if (clock) return clock();
     return (await query.selectNoFrom(sql<Date>`clock_timestamp()`.as('now')).executeTakeFirstOrThrow()).now.getTime();
+  }
+
+  async function missedUpdate(
+    trx: Database,
+    recipientId: string,
+    peerId: string,
+    stamp: number,
+    revision?: number
+  ): Promise<CallMissedUpdated> {
+    const [missed] = await listMissedCalls(trx, recipientId, peerId);
+    return {
+      ...(missed ?? { peerUserId: peerId, count: 0, watermark: null }),
+      revision: revision ?? (await nextMissedRevision(trx)),
+      serverNow: stamp
+    };
+  }
+
+  async function acknowledgeMissed(recipientId: string, peerId: string, watermark?: CallMissedSeenBody['watermark']) {
+    return withTransaction(db, async (trx) => {
+      await lockUserPair(trx, recipientId, peerId);
+      if (watermark) await markCallMissesSeen(trx, recipientId, peerId, watermark);
+      return missedUpdate(trx, recipientId, peerId, await now(trx));
+    });
+  }
+
+  async function messagePeer(viewer: string, callId: string) {
+    const peer = await findCallMessagePeer(db, viewer, callId);
+    return peer && !(await ringPairRefusal(db, viewer, peer)) ? peer : null;
+  }
+
+  async function updateHistory(
+    trx: Database,
+    prior: VoiceCall,
+    call: VoiceCall,
+    stamp: number,
+    message: DirectMessage | null
+  ) {
+    if (!message?.call) return {};
+    const projection = callMetadata(call, message.call).call;
+    let watermark: { order: number; missedAt: number } | undefined;
+    if (prior.firstConnectedAt === null && call.firstConnectedAt === null && message.call.missedAt === null) {
+      const expired = firstAttemptExpired(prior, call, stamp) && call.endReason !== 'unavailable';
+      const cancelled =
+        prior.phase === 'ringing' && call.endReason === 'cancelled' && call.endedByUserId === call.callerId;
+      if (expired || cancelled) {
+        projection.missedAt = expired ? prior.ringingExpiresAt : stamp;
+        projection.missedRevision = call.revision;
+        watermark = { order: await nextMissedRevision(trx), missedAt: projection.missedAt };
+      }
+    }
+    const edited = await updateCallMessage(trx, call.messageId, projection, watermark);
+    if (!edited) return {};
+    if (watermark) {
+      await enqueueCallPush(trx, 'call-missed', call, call.recipientId, stamp, stamp + CALL_MISSED_TTL_MS);
+      return {
+        message: edited,
+        missed: await missedUpdate(trx, call.recipientId, call.callerId, stamp, watermark.order)
+      };
+    }
+    if (message.call.missedAt !== null && projection.missedAt === null) {
+      await enqueueCallPush(trx, 'call-dismissal', call, call.recipientId, stamp, stamp + CALL_MISSED_TTL_MS);
+      if (message.call.missedSeenRevision === null) {
+        return { message: edited, missed: await missedUpdate(trx, call.recipientId, call.callerId, stamp) };
+      }
+    }
+    return { message: edited };
   }
 
   async function start(
@@ -265,12 +355,20 @@ export function createCallRingRepository(pool: pg.Pool, clock?: () => number) {
             started_at: new Date(provisioned.startedAt)
           })
           .execute();
+        await enqueueCallPush(
+          trx,
+          'call-incoming',
+          provisioned,
+          recipientId,
+          provisioned.startedAt,
+          provisioned.ringingExpiresAt
+        );
       }
     });
     if ('status' in outcome) return outcome;
     if (!provisioned) throw new Error('Call was not stored');
     const call: VoiceCall = provisioned;
-    return { status: 'created', call, now: call.startedAt };
+    return { status: 'created', call, now: call.startedAt, message: outcome };
   }
 
   async function update<T>(
@@ -289,12 +387,34 @@ export function createCallRingRepository(pool: pg.Pool, clock?: () => number) {
       const stamp = await now(trx);
       const eligible = call.phase !== 'closed' && !(await ringPairRefusal(trx, call.callerId, call.recipientId));
       const next = transition(call, stamp, eligible);
+      const recoveredExpiry =
+        eligible &&
+        next.call === call &&
+        call.phase === 'alone' &&
+        call.firstConnectedAt === null &&
+        firstAttemptExpired(call, call, stamp);
+      const message = next.call !== call || recoveredExpiry ? await lockCallMessage(trx, call.messageId) : null;
+      if (recoveredExpiry && message?.call?.missedAt === null) next.call = { ...call };
       if (next.call !== call) {
         next.call.revision = call.revision + 1;
         await trx.updateTable('room_rings').set(stateColumns(next.call)).where('id', '=', id).execute();
-        if (next.call.phase === 'closed') {
-          await updateCallMessage(trx, call.messageId, callMetadata(next.call).call);
+        const updated = next.call;
+        if (call.phase === 'ringing' && (updated.phase !== 'ringing' || call.attempt !== updated.attempt)) {
+          const target = call.attemptInviterUserId === call.callerId ? call.recipientId : call.callerId;
+          await enqueueCallPush(
+            trx,
+            'call-dismissal',
+            { ...updated, attempt: call.attempt },
+            target,
+            stamp,
+            stamp + CALL_DISMISSAL_TTL_MS
+          );
         }
+        if (updated.phase === 'ringing' && updated.attempt !== call.attempt) {
+          const target = updated.attemptInviterUserId === updated.callerId ? updated.recipientId : updated.callerId;
+          await enqueueCallPush(trx, 'call-incoming', updated, target, stamp, updated.ringingExpiresAt);
+        }
+        return { ...next, changed: true, now: stamp, ...(await updateHistory(trx, call, updated, stamp, message)) };
       }
       return { ...next, changed: next.call !== call, now: stamp };
     });
@@ -353,7 +473,19 @@ export function createCallRingRepository(pool: pg.Pool, clock?: () => number) {
     return true;
   }
 
-  return { start, update, list, listClosed, fromRoom, profiles, now, prune };
+  return {
+    start,
+    update,
+    list,
+    listClosed,
+    fromRoom,
+    profiles,
+    now,
+    prune,
+    acknowledgeMissed,
+    messagePeer,
+    listMissed: (recipientId: string) => listMissedCalls(db, recipientId)
+  };
 }
 
 export type CallRingRepository = ReturnType<typeof createCallRingRepository>;

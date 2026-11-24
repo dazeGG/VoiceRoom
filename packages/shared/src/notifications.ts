@@ -28,6 +28,7 @@ export type PushPayload = {
   notificationId?: string | undefined;
   revision?: number | undefined;
   type?: string | undefined;
+  dismissMissed?: boolean | undefined;
   contractVersion?: number | undefined;
   callId?: string | undefined;
   attempt?: number | undefined;
@@ -42,7 +43,7 @@ export function isCallPushType(type: unknown): type is (typeof CALL_PUSH_TYPES)[
 
 const CallPushPayload = Type.Object({
   contractVersion: Type.Literal(NOTIFICATION_CONTRACT_VERSION),
-  type: Type.Union(CALL_PUSH_TYPES.map((type) => Type.Literal(type))),
+  type: Type.Union([Type.Literal('call.incoming'), Type.Literal('call.state'), Type.Literal('call.missed')]),
   callId: Type.String({ format: 'uuid' }),
   attempt: Type.Integer({ minimum: 1 }),
   revision: Type.Integer({ minimum: 1 }),
@@ -50,10 +51,51 @@ const CallPushPayload = Type.Object({
   tag: Type.String({ minLength: 1 }),
   dedupeKey: Type.String({ minLength: 1 }),
   url: Type.String({ pattern: '^/(?![/\\\\])[^\\\\\\s]*$' }),
+  dismissMissed: Type.Optional(Type.Boolean()),
   title: Type.Optional(Type.String()),
   body: Type.Optional(Type.String())
 });
 export type CallPushPayload = Static<typeof CallPushPayload> & Pick<PushPayload, 'copy' | 'notificationPrivate'>;
+
+export function callNotificationRoute(callId: string, peerUserId?: string): string {
+  return peerUserId === undefined ? `/?call=${encodeURIComponent(callId)}` : `/?dm=${encodeURIComponent(peerUserId)}`;
+}
+
+export function callPushTag(callId: string, kind: number | 'missed'): string {
+  return `call:${callId}:${kind}`;
+}
+
+export function parseCallPushPayload(input: unknown): CallPushPayload | null {
+  if (!Value.Check(CallPushPayload, input)) return null;
+  const {
+    contractVersion,
+    type,
+    callId,
+    attempt,
+    revision,
+    expiresAt,
+    tag,
+    dedupeKey,
+    url,
+    title,
+    body,
+    dismissMissed
+  } = input;
+  return {
+    contractVersion,
+    type,
+    callId,
+    attempt,
+    revision,
+    expiresAt,
+    tag,
+    dedupeKey,
+    url,
+    ...(title === undefined ? {} : { title }),
+    ...(body === undefined ? {} : { body }),
+    ...(dismissMissed === undefined ? {} : { dismissMissed })
+  };
+}
 /** The mention/reply push the notification outbox queues. */
 export type ProviderPayload = Required<
   Pick<PushPayload, 'notificationId' | 'revision' | 'dedupeKey' | 'title' | 'body' | 'url'>
@@ -191,12 +233,5 @@ export function parsePushPayload(input: unknown): PushPayload {
     expiresAt: finite('expiresAt')
   };
   if (!isCallPushType(payload.type)) return payload;
-  const call = {
-    ...payload,
-    type: payload.type,
-    contractVersion: finite('contractVersion'),
-    callId: text('callId'),
-    attempt: finite('attempt')
-  };
-  return Value.Check(CallPushPayload, call) ? call : {};
+  return parseCallPushPayload(input) ?? {};
 }

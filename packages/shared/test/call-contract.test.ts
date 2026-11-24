@@ -187,6 +187,12 @@ test('call pushes preserve the attempt and revision on web and native without ch
   }
   assert.deepEqual(parsePushPayload({ ...payload, type: 'call.incoming', url: '//other.example' }), {});
   assert.deepEqual(parsePushPayload({ ...payload, type: 'call.missed', attempt: '2' }), {});
+  const dismissal = { ...payload, type: 'call.state', dismissMissed: true };
+  assert.equal(parsePushPayload(dismissal).dismissMissed, true);
+  const nativeDismissal = buildNativePushData(parsePushPayload(dismissal));
+  assert.equal(parseNativePushData(nativeDismissal)?.dismissMissed, 'true');
+  assert.equal(parseNativePushData({ ...nativeDismissal, revision: '0' }), null);
+  assert.equal(parseNativePushData({ ...nativeDismissal, contractVersion: '2' }), null);
   assert.equal(parsePushPayload({ type: 'ring.state', route: '/?room=team', revision: 2 }).url, '/?room=team');
 });
 

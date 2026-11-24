@@ -4,7 +4,6 @@
 import crypto from 'node:crypto';
 import { sql } from 'kysely';
 import type pg from 'pg';
-import type { DirectMessageCall } from '@voiceroom/shared/contracts/rings';
 import { transaction } from '../../platform/db/pool.ts';
 import { kyselyOn, type Database } from '../../platform/db/kysely.ts';
 import {
@@ -29,16 +28,6 @@ export async function unreadCountsFor(q: Database, userId: string): Promise<Reco
   return Object.fromEntries(rows.map((row) => [row.sender_id, row.count]));
 }
 
-export async function updateCallMessage(db: Database, messageId: string, call: DirectMessageCall): Promise<void> {
-  await db
-    .updateTable('direct_messages')
-    .set({ metadata: JSON.stringify({ kind: 'voice-call', call }) })
-    .where('id', '=', messageId)
-    .where('deleted_at', 'is', null)
-    .where(inviteKind, '=', 'voice-call')
-    .execute();
-}
-
 export function createDmThreadRepository({ pool }: { pool: pg.Pool }) {
   const db = kyselyOn(pool);
   const getUnreadCounts = (userId: string) => unreadCountsFor(db, userId);
@@ -50,7 +39,6 @@ export function createDmThreadRepository({ pool }: { pool: pg.Pool }) {
       .selectAll()
       .where(between(userId, peerId))
       .where('deleted_at', 'is', null)
-      .where(sql<boolean>`metadata->>'kind' IS DISTINCT FROM 'voice-call'`)
       .orderBy('created_at', 'asc')
       .orderBy('id', 'asc')
       .limit(limit)
@@ -65,7 +53,6 @@ export function createDmThreadRepository({ pool }: { pool: pg.Pool }) {
       .where('id', '=', messageId)
       .where(between(userId, peerId))
       .where('deleted_at', 'is', null)
-      .where(sql<boolean>`metadata->>'kind' IS DISTINCT FROM 'voice-call'`)
       .limit(1)
       .executeTakeFirst();
     return mapMessage(row);
@@ -108,6 +95,7 @@ export function createDmThreadRepository({ pool }: { pool: pg.Pool }) {
       .where('sender_id', '=', senderId)
       .where('recipient_id', '=', recipientId)
       .where('deleted_at', 'is', null)
+      .where(sql<boolean>`metadata->>'kind' IS DISTINCT FROM 'voice-call'`)
       .returningAll()
       .executeTakeFirst();
     return mapMessage(row);

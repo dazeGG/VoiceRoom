@@ -2,6 +2,7 @@
 // mark read), their paginated history, and the parts every message carries.
 
 import { Type, type Static } from 'typebox';
+import { Value } from 'typebox/value';
 import { Failure, Nullable, Ok } from './http.ts';
 import { AttachmentContext, AttachmentState } from './media.ts';
 import { DirectMessageCall } from './rings.ts';
@@ -277,11 +278,18 @@ const DirectMessageLegacyMetadata = Type.Object({
   linkPreview: Type.Optional(LinkPreview)
 });
 
-export const DirectMessageMetadata = Type.Union([
-  DirectMessageLegacyMetadata,
-  Type.Object({ kind: Type.Literal('voice-call'), call: DirectMessageCall, linkPreview: Type.Optional(LinkPreview) })
-]);
+const DirectMessageCallMetadata = Type.Object({
+  kind: Type.Literal('voice-call'),
+  call: DirectMessageCall,
+  linkPreview: Type.Optional(LinkPreview)
+});
+export const DirectMessageMetadata = Type.Union([DirectMessageLegacyMetadata, DirectMessageCallMetadata]);
 export type DirectMessageMetadata = Static<typeof DirectMessageMetadata>;
+
+export function callMetadataOf(metadata: unknown): DirectMessageCall | undefined {
+  if (!Value.Check(DirectMessageCallMetadata, metadata)) return undefined;
+  return metadata.call;
+}
 
 export const DirectHistoryMessage = Type.Object({
   ...HistoryMessageFields,

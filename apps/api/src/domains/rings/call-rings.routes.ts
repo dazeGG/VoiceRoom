@@ -8,6 +8,10 @@ import {
   CallBootstrap,
   CallDetails,
   CallIdParams,
+  CallMissedPeerParams,
+  CallMissedSeenAnswer,
+  CallMissedSeenBody,
+  CallNotificationTarget,
   CallStartBody,
   CallVoiceProof
 } from '@voiceroom/shared/contracts/rings';
@@ -24,6 +28,30 @@ export function registerCallRingRoutes(root: FastifyInstance, ctx: ApiContext, c
       reply.header('Cache-Control', 'no-store');
       const { user } = await requireSession(ctx, request);
       return calls.bootstrap(user.id);
+    }
+  );
+  app.get(
+    '/api/call-rings/notification/:callId',
+    { schema: { params: CallIdParams, response: { 200: CallNotificationTarget, '4xx': Failure } } },
+    async (request, reply) => {
+      reply.header('Cache-Control', 'no-store');
+      const { user } = await requireSession(ctx, request);
+      return calls.notificationTarget(user.id, request.params.callId);
+    }
+  );
+  app.post(
+    '/api/call-rings/missed/:peerUserId/seen',
+    {
+      schema: {
+        params: CallMissedPeerParams,
+        body: CallMissedSeenBody,
+        response: { 200: CallMissedSeenAnswer, '4xx': Failure }
+      }
+    },
+    async (request, reply) => {
+      reply.header('Cache-Control', 'no-store');
+      const { user } = await requireSession(ctx, request);
+      return calls.markMissedSeen(user.id, request.params.peerUserId, request.body);
     }
   );
   app.get(

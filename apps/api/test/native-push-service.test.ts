@@ -43,12 +43,14 @@ function harness({
   targets = [target('phone')],
   outcomes = {},
   minVersion = '',
+  callMinVersion = '',
   loadFails = false
 }: {
   config?: typeof ON;
   targets?: DeviceTokenTarget[];
   outcomes?: Record<string, RuStoreSendOutcome>;
   minVersion?: string;
+  callMinVersion?: string;
   loadFails?: boolean;
 } = {}) {
   const calls: { listed: Array<[string, number]>; removed: string[]; sent: RuStoreMessage[] } = {
@@ -60,6 +62,7 @@ function harness({
   const service = createNativePushService({
     config,
     minVersion,
+    callMinVersion,
     now: () => NOW,
     logger,
     tokens: () => ({
@@ -102,6 +105,40 @@ test('a push goes to every live token of the account', async () => {
   assert.equal(first?.data.peerUserId, 'bob');
   assert.equal(first?.data.messageId, 'm1');
   assert.equal(first?.data.type, 'dm.message');
+});
+
+test('call pushes are data-only and reach only apps at the call minimum version', async () => {
+  const id = '5acc9260-4005-4551-84ef-006e7d7f848b';
+  const call = {
+    type: 'call.incoming',
+    contractVersion: 1,
+    callId: id,
+    attempt: 1,
+    revision: 2,
+    expiresAt: NOW + 45_000,
+    tag: `call:${id}:1`,
+    dedupeKey: `call:${id}:1:2`,
+    url: `/?call=${id}`,
+    notificationPrivate: true,
+    copy: { title: { key: 'callIncomingTitle' }, privateBody: { key: 'callPrivateBody' } }
+  };
+  const targets = [target('old', '2.0.0'), target('ready', '2.1.0'), target('unknown', null)];
+  const { calls, service } = harness({ minVersion: '1.0.0', callMinVersion: '2.1.0', targets });
+  await service.sendToUser('ada', call, {
+    expiresAt: call.expiresAt,
+    nativeData: { fromName: 'Alice', peerUserId: 'alice' }
+  });
+  const [sent] = calls.sent;
+  assert.equal(calls.sent.length, 1);
+  assert.equal(sent?.token, 'ready');
+  assert.equal(sent.notification, undefined);
+  assert.equal(sent.data.callId, id);
+  assert.equal(sent.data.attempt, '1');
+  assert.equal(sent.data.revision, '2');
+  assert.equal(sent.data.fromName, undefined);
+  assert.equal(sent.data.peerUserId, undefined);
+  const off = harness({ targets });
+  assert.equal((await off.service.sendToUser('ada', call)).sent, 0);
 });
 
 test('only a token RuStore no longer knows is forgotten', async () => {

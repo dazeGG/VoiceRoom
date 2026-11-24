@@ -320,6 +320,7 @@ function createReactionRepository({ client }: { client?: ReactionPool | null } =
       .where('id', 'in', messageIds)
       .where(between(userId, peerId))
       .where('deleted_at', 'is', null)
+      .where(sql<boolean>`metadata->>'kind' IS DISTINCT FROM 'voice-call'`)
       .execute();
     return rows.map((row) => row.id);
   }

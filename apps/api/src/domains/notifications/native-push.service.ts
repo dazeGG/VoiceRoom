@@ -5,7 +5,7 @@
 
 import type { DevicePushProvider } from '@voiceroom/shared/contracts/devices';
 import { isVersionBelow } from '@voiceroom/shared/client-version';
-import type { PushPayload } from '@voiceroom/shared/notifications';
+import { isCallPushType, parsePushPayload } from '@voiceroom/shared/notifications';
 import { isRecord } from '@voiceroom/shared/guards';
 import { LOG_EVENTS } from '../../lib/log-events.ts';
 import { createLogger } from '../../lib/logger.ts';
@@ -25,25 +25,6 @@ type NativePushLogger = {
 
 const PROVIDER: DevicePushProvider = 'rustore';
 
-// The payload as the dispatch or the outbox handed it over, read field by field.
-function pushPayloadOf(value: unknown): PushPayload {
-  if (!isRecord(value)) return {};
-  const text = (key: string): string | undefined => {
-    const field = value[key];
-    return typeof field === 'string' ? field : undefined;
-  };
-  const payload: PushPayload = {
-    title: text('title'),
-    body: text('body'),
-    url: text('url'),
-    dedupeKey: text('dedupeKey'),
-    notificationId: text('notificationId'),
-    type: text('type')
-  };
-  if (typeof value.expiresAt === 'number') payload.expiresAt = value.expiresAt;
-  return payload;
-}
-
 // The context's extra data keys; anything that is not a string is left out.
 function nativeDataOf(value: unknown): Record<string, string> {
   if (!isRecord(value)) return {};
@@ -58,7 +39,8 @@ export function createNativePushService({
   client,
   logger = createLogger({ name: 'api' }),
   now = Date.now,
-  minVersion = ''
+  minVersion = '',
+  callMinVersion = ''
 }: {
   config: RuStorePushConfig;
   tokens: () => Pick<DeviceTokenRepository, 'listByUserId' | 'removeToken'>;
@@ -67,6 +49,8 @@ export function createNativePushService({
   now?: () => number;
   /** Rings skip apps below this version, or of an unknown one; empty sets no bound. */
   minVersion?: string;
+  /** No clients receive call pushes until a supporting Android version is configured. */
+  callMinVersion?: string;
 }) {
   async function sendToUser(userId: string, payload: unknown, context: PushContext = {}): Promise<SendResult> {
     if (!config.enabled || !userId || context.skipNative === true) {
@@ -74,7 +58,9 @@ export function createNativePushService({
     }
     const ttl = resolvePushTtl(context, now());
     if (ttl === null) return { enabled: true, sent: 0, removed: 0 };
-    const push = pushPayloadOf(payload);
+    const call = isRecord(payload) && isCallPushType(payload.type);
+    const push = parsePushPayload(payload);
+    if (call && (!callMinVersion || !isCallPushType(push.type))) return { enabled: true, sent: 0, removed: 0 };
     const nativeData = nativeDataOf(context.nativeData);
     let targets: Awaited<ReturnType<DeviceTokenRepository['listByUserId']>>;
     try {
@@ -90,10 +76,12 @@ export function createNativePushService({
     }
     // An outdated app cannot join the room a ring leads to; every other push
     // still reaches it, since its version refreshes only when it next starts.
+    const requiresRingVersion = call || push.type === 'ring' || push.type === 'ring.state';
     const live = targets.filter(
       (target) =>
         target.provider === PROVIDER &&
-        (!['ring', 'ring.state'].includes(push.type ?? '') || !isVersionBelow(target.appVersion, minVersion))
+        (!call || !isVersionBelow(target.appVersion, callMinVersion)) &&
+        (!requiresRingVersion || !isVersionBelow(target.appVersion, minVersion))
     );
     let sent = 0;
     let removed = 0;
@@ -103,7 +91,7 @@ export function createNativePushService({
       live.map(async ({ token, notificationChannels, locale }) => {
         const message = buildRuStoreMessage({
           token,
-          payload: pushPayloadOf(localizeNotificationPayload(payload, locale)),
+          payload: parsePushPayload(localizeNotificationPayload(payload, locale)),
           nativeData,
           ttlSeconds: ttl,
           notificationChannels: notificationChannels ?? []
