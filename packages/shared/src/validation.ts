@@ -65,7 +65,20 @@ export function accountPeerIdFor(userId: unknown): string {
 }
 
 export function isReservedPeerId(value: unknown): boolean {
-  return typeof value === 'string' && value.trim().toLowerCase().startsWith(ACCOUNT_PEER_ID_PREFIX);
+  return (
+    typeof value === 'string' &&
+    (isLiveKitOnlyIdentity(value) || value.trim().toLowerCase().startsWith(ACCOUNT_PEER_ID_PREFIX))
+  );
+}
+
+/** SFU identities in this namespace never represent separate VoiceRoom peers. */
+export function isLiveKitOnlyIdentity(identity: string): boolean {
+  return identity.includes('#');
+}
+
+export function nativeVoiceIdentity(peerId: string, leaseId: string): string {
+  // Compact the UUID without truncating any of the lease identity.
+  return `${peerId}#voice.${leaseId.replaceAll('-', '')}`;
 }
 
 export function normalizeSessionToken(value: unknown): string {

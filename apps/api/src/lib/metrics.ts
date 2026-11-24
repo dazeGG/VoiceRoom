@@ -160,12 +160,14 @@ function renderPrometheus({
   activeWs = 0,
   activeGuestWs = 0,
   presenceRooms = 0,
-  presencePeers = 0
+  presencePeers = 0,
+  nativeVoiceSlots = 0
 }: {
   activeWs?: number;
   activeGuestWs?: number;
   presenceRooms?: number;
   presencePeers?: number;
+  nativeVoiceSlots?: number;
 } = {}): string {
   const lines = [
     '# HELP voice_room_api_http_requests_total Total HTTP requests handled by the API.',
@@ -232,6 +234,9 @@ function renderPrometheus({
     '# HELP voice_room_api_presence_peers Active in-memory presence peers.',
     '# TYPE voice_room_api_presence_peers gauge',
     `voice_room_api_presence_peers ${Math.max(0, Number(presencePeers) || 0)}`,
+    '# HELP voice_room_api_native_voice_slots Companion slots reserved for pending, active and retiring leases.',
+    '# TYPE voice_room_api_native_voice_slots gauge',
+    `voice_room_api_native_voice_slots ${nativeVoiceSlots}`,
     '# HELP voice_room_api_pg_pool_errors_total Unexpected PostgreSQL pool errors.',
     '# TYPE voice_room_api_pg_pool_errors_total counter',
     `voice_room_api_pg_pool_errors_total ${pgPoolErrors}`,

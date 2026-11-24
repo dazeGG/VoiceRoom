@@ -55,6 +55,7 @@ export interface VoiceJoinDeps {
   leases: ReconnectLeases;
   summaries?: Pick<ReturnType<typeof createRoomSummaries>, 'invalidateRecipients' | 'schedule'> | undefined;
   buildRoomSnapshot: (roomId: string, mode: RoomSnapshot['mode']) => Promise<RoomSnapshot | null>;
+  nativeVoiceCapability?: ((roomId: string, peerId: string) => RoomSnapshot['nativeVoice']) | undefined;
   leaveVoiceRoom: (
     connection: WsConnection,
     payload: LeavePayload,
@@ -82,6 +83,7 @@ export function createVoiceJoin(deps: VoiceJoinDeps) {
     leases,
     summaries,
     buildRoomSnapshot,
+    nativeVoiceCapability,
     leaveVoiceRoom
   } = deps;
 
@@ -481,7 +483,11 @@ export function createVoiceJoin(deps: VoiceJoinDeps) {
         return supersededVoiceJoin(connection, roomId, transport.id);
       }
       if (snapshot) {
-        wsRegistry.sendToConnection(connection, buildServerEnvelope('room.snapshot', snapshot, requestId));
+        const nativeVoice = (room.kind ?? 'main') === 'main' ? nativeVoiceCapability?.(roomId, peerId) : undefined;
+        wsRegistry.sendToConnection(
+          connection,
+          buildServerEnvelope('room.snapshot', { ...snapshot, ...(nativeVoice && { nativeVoice }) }, requestId)
+        );
       }
 
       return { ok: true, reconnecting };

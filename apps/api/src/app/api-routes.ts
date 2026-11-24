@@ -19,6 +19,7 @@ import type { PresencePeer } from '../domains/rooms/room-views.ts';
 import type { createSessionCookies } from '../domains/account/session-cookie.ts';
 import { registerAccountRoutes } from '../domains/account/account.routes.ts';
 import { registerAdmissionRoutes } from '../domains/admission/admission.routes.ts';
+import { registerNativeVoiceRoutes } from '../domains/admission/native-voice.routes.ts';
 import { registerAvatarRoutes } from '../domains/media/avatars.routes.ts';
 import { registerMediaRoutes } from '../domains/media/media.routes.ts';
 import { registerMembershipRoutes } from '../domains/membership/membership.routes.ts';
@@ -62,6 +63,7 @@ export interface ApiRouteDeps {
   services: ReturnType<typeof createServiceRegistry>;
   domain: {
     admission: Parameters<typeof registerAdmissionRoutes>[2];
+    nativeVoice: Parameters<typeof registerNativeVoiceRoutes>[2];
     rooms: RoomRouteDeps['rooms'];
     peerModeration: Parameters<typeof registerPeerModerationRoutes>[2]['moderation'];
     roomChat: Parameters<typeof registerRoomChatRoutes>[2];
@@ -98,6 +100,7 @@ export interface ApiRouteDeps {
 
 export function registerApiRoutes(app: FastifyInstance, ctx: ApiContext, deps: ApiRouteDeps): void {
   registerAdmissionRoutes(app, ctx, deps.domain.admission);
+  registerNativeVoiceRoutes(app, ctx, deps.domain.nativeVoice);
   app.register(async (widget) => {
     widget.addHook('preHandler', async (_request, reply) => {
       if (!(await deps.widgetCanAdmit()))

@@ -23,3 +23,30 @@ export const LiveKitAdmission = Ok({
   url: Type.String()
 });
 export type LiveKitAdmission = Static<typeof LiveKitAdmission>;
+
+// Later stages (receive and duplex-*) use a separate capability revision.
+export const NativeVoiceStage = Type.Union([Type.Literal('off'), Type.Literal('internal-join')]);
+export type NativeVoiceStage = Static<typeof NativeVoiceStage>;
+
+export const NativeVoiceGeneration = Type.String({ pattern: '^[0-9a-f]{32}$' });
+
+export const NativeVoiceAdmissionBody = Type.Object({
+  version: Type.Literal(1),
+  roomId: Type.String({ pattern: '^[A-Za-z0-9_-]{3,48}$' }),
+  peerId: Type.String({ pattern: '^[A-Za-z0-9_-]{8,80}$' }),
+  sessionToken: Type.String({ pattern: '^[A-Za-z0-9_-]{32,128}$' }),
+  generation: NativeVoiceGeneration
+});
+export type NativeVoiceAdmissionBody = Static<typeof NativeVoiceAdmissionBody>;
+
+export const NativeVoiceAdmission = Ok({
+  version: Type.Literal(1),
+  identity: Type.String(),
+  generation: NativeVoiceGeneration,
+  expiresAt: Type.Integer(),
+  room: Type.String(),
+  token: Type.String(),
+  ttlSeconds: Type.Integer(),
+  url: Type.String()
+});
+export type NativeVoiceAdmission = Static<typeof NativeVoiceAdmission>;

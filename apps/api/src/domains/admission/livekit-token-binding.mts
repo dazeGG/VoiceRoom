@@ -8,15 +8,25 @@
 
 import type { IncomingHttpHeaders } from 'node:http';
 import { isArray } from '@voiceroom/shared/guards';
+import {
+  isLiveKitOnlyIdentity,
+  isReservedPeerId,
+  nativeVoiceIdentity,
+  normalizePeerId
+} from '@voiceroom/shared/validation';
+import { isRecord } from '../../platform/record.ts';
 
 export const DEFAULT_ROOM_PREFIX = 'voice-room-';
 // A JWT minted for this admission is signed moments after the gate credential;
 // allow a little clock skew between the two (both come from the same API
 // process, the skew is really only integer-second rounding of `nbf`).
 export const TOKEN_ISSUE_SKEW_MS = 5_000;
+export const NATIVE_VOICE_LEASE_ATTRIBUTE = 'vr_native_voice_lease';
 
 /** The part of a verified gate credential the binding compares against. */
 export interface GateClaims {
+  cid?: string;
+  companion?: true;
   iat: number;
   peer: string;
   room: string;
@@ -33,6 +43,7 @@ export type BindingResult =
         | 'malformed_authorization'
         | 'malformed_token'
         | 'identity_mismatch'
+        | 'companion_mismatch'
         | 'room_mismatch'
         | 'stale_token';
     };
@@ -42,9 +53,11 @@ export type TokenExtraction =
 
 /** The JWT claims the binding reads; LiveKit puts the room in `video.room`. */
 interface LiveKitJwtPayload {
+  attributes: unknown;
   sub: unknown;
   nbf: unknown;
   room: unknown;
+  video: unknown;
 }
 
 export function normalizeLiveKitRoomPrefix(value: string | null | undefined): string {
@@ -68,9 +81,11 @@ export function decodeJwtPayload(token: string): LiveKitJwtPayload | null {
   if (!payload || typeof payload !== 'object' || isArray(payload)) return null;
   const video = 'video' in payload ? payload.video : undefined;
   return {
+    attributes: 'attributes' in payload ? payload.attributes : undefined,
     sub: 'sub' in payload ? payload.sub : undefined,
     nbf: 'nbf' in payload ? payload.nbf : undefined,
-    room: video && typeof video === 'object' && 'room' in video ? video.room : undefined
+    room: isRecord(video) ? video.room : undefined,
+    video
   };
 }
 
@@ -114,7 +129,11 @@ export function verifyAccessTokenBinding({
   if (!extracted.ok) return extracted;
   const payload = decodeJwtPayload(extracted.token);
   if (!payload) return { ok: false, code: 'malformed_token' };
-  if (typeof payload.sub !== 'string' || payload.sub !== claims.peer) return { ok: false, code: 'identity_mismatch' };
+  const canonicalPeer = claims.peer;
+  const subject = claims.companion && claims.cid ? nativeVoiceIdentity(canonicalPeer, claims.cid) : canonicalPeer;
+  if (isLiveKitOnlyIdentity(canonicalPeer) || payload.sub !== subject) {
+    return { ok: false, code: 'identity_mismatch' };
+  }
   const { room } = payload;
   if (typeof room !== 'string' || room !== getLiveKitRoomName(claims.room, roomPrefix)) {
     return { ok: false, code: 'room_mismatch' };
@@ -125,6 +144,32 @@ export function verifyAccessTokenBinding({
   const notBefore = Number(payload.nbf);
   if (!Number.isFinite(notBefore) || notBefore * 1000 < Number(claims.iat) - TOKEN_ISSUE_SKEW_MS) {
     return { ok: false, code: 'stale_token' };
+  }
+  if (claims.companion) {
+    const { attributes, video } = payload;
+    if (
+      !claims.cid ||
+      normalizePeerId(canonicalPeer) !== canonicalPeer ||
+      isReservedPeerId(canonicalPeer) ||
+      !isRecord(attributes) ||
+      attributes[NATIVE_VOICE_LEASE_ATTRIBUTE] !== claims.cid ||
+      !isRecord(video) ||
+      video.roomJoin !== true ||
+      video.canSubscribe !== true ||
+      video.canPublish !== false ||
+      video.canPublishData !== false ||
+      video.hidden !== true ||
+      (video.canPublishSources !== undefined &&
+        (!isArray(video.canPublishSources) || video.canPublishSources.length > 0)) ||
+      video.canUpdateOwnMetadata ||
+      video.roomAdmin ||
+      video.roomCreate ||
+      video.roomList ||
+      video.roomRecord ||
+      video.ingressAdmin ||
+      video.destinationRoom
+    )
+      return { ok: false, code: 'companion_mismatch' };
   }
   return { ok: true };
 }

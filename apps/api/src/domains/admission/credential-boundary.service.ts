@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { isLiveKitOnlyIdentity, nativeVoiceIdentity } from '@voiceroom/shared/validation';
 import type { GatePrincipal } from './gate-principal.ts';
 import { createGateCredentialSigner, type GateClaims, type GateCredentialSigner } from './gate-credential-signer.ts';
 import type { GateCredentialRepository } from './gate-credential.repository.ts';
@@ -24,6 +25,7 @@ export type CredentialIssue =
   | { status: 'issued'; credential: IssuedCredential }
   | { status: Exclude<StoredCredential['status'], 'created'> | 'unavailable'; credential: null };
 export type CredentialAuthorization = { ok: true; claims: GateClaims } | { ok: false; code: string };
+export type CompanionCredential = { id: string; expiresAt: number };
 
 function createCredentialBoundaryService({
   roomStore,
@@ -57,21 +59,32 @@ function createCredentialBoundaryService({
   async function issueCredential({
     roomId,
     peerId,
-    principal
+    principal,
+    companion
   }: {
     roomId?: string;
     peerId?: string;
     principal?: GatePrincipal | null;
+    companion?: CompanionCredential | undefined;
   } = {}): Promise<CredentialIssue> {
-    if (!roomId || !peerId || !principal) return { status: 'invalid', credential: null };
+    if (
+      !roomId ||
+      !peerId ||
+      isLiveKitOnlyIdentity(peerId) ||
+      !principal ||
+      (companion && principal.principalType !== 'account')
+    )
+      return { status: 'invalid', credential: null };
     const issuedAt = clock();
-    const expiresAt = issuedAt + ttlMs;
+    const expiresAt = companion?.expiresAt ?? issuedAt + ttlMs;
+    if (expiresAt <= issuedAt) return { status: 'invalid', credential: null };
     const epoch = await store.getLiveKitGatePrincipalEpoch({ principal, roomId, now: issuedAt });
     if (epoch.status !== 'ready') return { status: 'unavailable', credential: null };
 
-    const credentialId = crypto.randomUUID();
+    const credentialId = companion?.id ?? crypto.randomUUID();
     const value = signer.sign({
       credentialId,
+      companion: companion ? true : undefined,
       expiresAt,
       issuedAt,
       peerId,
@@ -85,7 +98,7 @@ function createCredentialBoundaryService({
       credentialId,
       expiresAt,
       now: issuedAt,
-      peerId,
+      peerId: companion ? nativeVoiceIdentity(peerId, credentialId) : peerId,
       principal,
       principalEpoch: epoch.epoch,
       roomId
@@ -107,10 +120,12 @@ function createCredentialBoundaryService({
     const verified = signer.verify(value);
     if (!verified.ok) return { ok: false, code: verified.code };
     const claims = verified.claims;
+    if (isLiveKitOnlyIdentity(claims.peer) || (claims.companion && claims.pType !== 'account'))
+      return { ok: false, code: 'identity_mismatch' };
     const decision = await store.verifyLiveKitGateCredential({
       credentialHash: signer.hash(value),
       now: clock(),
-      peerId: claims.peer,
+      peerId: claims.companion ? nativeVoiceIdentity(claims.peer, claims.cid) : claims.peer,
       principalEpoch: claims.pEpoch,
       principalId: claims.pId,
       principalType: claims.pType,

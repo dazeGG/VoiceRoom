@@ -222,11 +222,20 @@ export function createRoomPresence(deps: RoomPresenceDeps) {
       peer.transport.connection.closed
     )
       return null;
+    const { connection, id } = peer.transport;
+    const active = connection.activeVoice;
+    const desktop =
+      connection.client === 'desktop_app' &&
+      peer.os === 'Windows' &&
+      active?.roomId === roomId &&
+      active.peerId === peerId &&
+      active.transportId === id;
     return Object.freeze({
       sessionToken: peer.sessionToken || '',
       accountUserId: peer.accountUserId || null,
       gateGuestPrincipalId: peer.gateGuestPrincipalId || '',
-      transportId: peer.transport.id
+      transportId: id,
+      ...(desktop && { desktop, authSessionHash: connection.authSessionHash })
     });
   }
 

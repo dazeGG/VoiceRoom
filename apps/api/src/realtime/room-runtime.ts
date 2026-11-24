@@ -11,6 +11,7 @@ import { createLogger } from '../lib/logger.ts';
 import type { RoomSnapshot } from '@voiceroom/shared/contracts/realtime';
 import type { ActiveBanRecord } from '../domains/moderation/active-ban.repository.ts';
 import type { CredentialBoundaryService } from '../domains/admission/credential-boundary.service.ts';
+import type { NativeVoiceService } from '../domains/admission/native-voice.service.ts';
 import type { ConnectionRegistry, WsConnection } from './registry.ts';
 import { createReconnectLeases } from './reconnect-leases.ts';
 import type { createRoomSummaries } from './room-summaries.ts';
@@ -43,6 +44,7 @@ export type RoomRuntimeDeps = {
   publicPeer: (peer: Peer) => PublicPeer;
   publicLobbyRoom: (room: StoredRoom) => LobbyRoom;
   readHistory?: ((room: StoredRoom) => Promise<RoomSnapshot['recentMessages']>) | undefined;
+  nativeVoice?: Pick<NativeVoiceService, 'capability' | 'mapping'>;
   summaries?: Pick<ReturnType<typeof createRoomSummaries>, 'invalidateRecipients' | 'schedule'> | undefined;
   mediaMinute?: Pick<ReturnType<typeof createMediaMinute>, 'note' | 'noteDecision'> | undefined;
   stayEvent?: typeof noteStayEvent | undefined;
@@ -103,6 +105,7 @@ function createRoomRealtimeRuntime(deps: RoomRuntimeDeps) {
     publicPeer,
     publicLobbyRoom,
     readHistory,
+    nativeVoice,
     summaries,
     mediaMinute,
     stayEvent,
@@ -154,6 +157,7 @@ function createRoomRealtimeRuntime(deps: RoomRuntimeDeps) {
     logger,
     leases,
     summaries,
+    nativeVoiceCapability: nativeVoice?.capability,
     buildRoomSnapshot: (roomId, mode) => buildRoomSnapshot(roomId, mode),
     leaveVoiceRoom: (connection, payload, options) => leaveVoiceRoom(connection, payload, options)
   });
@@ -208,11 +212,13 @@ function createRoomRealtimeRuntime(deps: RoomRuntimeDeps) {
     // snapshot overwrite a newer peer update that was already broadcast.
     const presence = presenceRooms.get(roomId);
     const peers = presence ? Array.from(presence.peers.values()).map(publicPeer) : [];
+    const nativeVoiceCompanions = roomAllowsSurface(dbRoom, 'main') ? nativeVoice?.mapping(roomId) : undefined;
     return {
       roomId,
       room: publicLobbyRoom(dbRoom),
       peers,
       recentMessages,
+      ...(nativeVoiceCompanions?.companions.length && { nativeVoiceCompanions }),
       voiceActiveSince: presence?.voiceActiveSince || null,
       mode
     };

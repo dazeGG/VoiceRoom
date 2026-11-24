@@ -54,6 +54,9 @@ services:
       LIVEKIT_URL: ${LIVEKIT_PUBLIC_URL:-ws://localhost:7880}
       LIVEKIT_INTERNAL_URL: ws://livekit:7880
       LIVEKIT_GATE_PUBLIC_URL: ${LIVEKIT_PUBLIC_URL:-ws://localhost:7880}
+      NATIVE_VOICE_STAGE: ${NATIVE_VOICE_STAGE:-off}
+      NATIVE_VOICE_ACCOUNT_IDS: ${NATIVE_VOICE_ACCOUNT_IDS:-}
+      NATIVE_VOICE_MAX_COMPANIONS_PER_ROOM: ${NATIVE_VOICE_MAX_COMPANIONS_PER_ROOM:-2}
       LIVEKIT_GATE_SECRET: ${LIVEKIT_GATE_SECRET:-voice-room-dev-livekit-gate-secret-32-bytes}
       LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:-devkey}
       LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:-devsecret}
@@ -167,6 +170,8 @@ services:
       NODE_ENV: development
       DATABASE_URL: ${DATABASE_URL:-postgres://${POSTGRES_USER:-voice_room}:${POSTGRES_PASSWORD:-voice_room_dev}@postgres:5432/${POSTGRES_DB:-voice_room_dev}}
       LIVEKIT_GATE_SECRET: ${LIVEKIT_GATE_SECRET:-voice-room-dev-livekit-gate-secret-32-bytes}
+      LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:-devkey}
+      LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:-devsecret}
       LIVEKIT_INTERNAL_URL: ws://livekit:7880
     ports:
       - "${LIVEKIT_HTTP_PORT:-7880}:3080"

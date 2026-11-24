@@ -274,6 +274,18 @@ export const ERROR_TEXTS: Record<ErrorCode, string> = {
   get livekit_gate_principal_missing() {
     return t(VOICE_UNAVAILABLE);
   },
+  get native_voice_off() {
+    return t(VOICE_UNAVAILABLE);
+  },
+  get native_voice_ineligible() {
+    return t(VOICE_UNAVAILABLE);
+  },
+  get native_voice_stale() {
+    return t('Сессия участника недействительна');
+  },
+  get native_voice_capacity() {
+    return t(VOICE_UNAVAILABLE);
+  },
 
   get message_not_found() {
     return t('Сообщение не найдено');

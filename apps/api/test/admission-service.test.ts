@@ -4,7 +4,7 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { TrackSource } from 'livekit-server-sdk';
+import { ServerError, TrackSource } from 'livekit-server-sdk';
 
 import {
   createAdmissionService,
@@ -21,6 +21,9 @@ import {
   createLiveKitAdmin,
   type LiveKitAdminClient,
   isLiveKitParticipantAlreadyGone,
+  isNativeVoiceParticipantAbsent,
+  NATIVE_VOICE_ADMIN_TIMEOUT_SECONDS,
+  removeNativeVoiceParticipant,
   resolveServerMutePermission
 } from '../src/domains/admission/livekit-admin.ts';
 import { liveKitHttpUrl, readLiveKitConfig, type LiveKitConfig } from '../src/domains/admission/livekit-config.ts';
@@ -150,6 +153,14 @@ test('a roster peer with a matching token is admitted with the microphone', asyn
   assert.equal(calls.issued[0]?.canPublishMicrophone, true);
   assert.equal(calls.issued[0].livekitRoom, 'voice-room-room-1');
   assert.deepEqual(calls.revokedCredentials, []);
+});
+
+test('a canonical admission never takes an SFU-only identity', async () => {
+  const { service, calls } = setup();
+  for (const peerId of ['peer-1#voice.0123456789abcdef', 'peer-1#anything']) {
+    assert.deepEqual(await service.admit(request({ peerId })), { status: 'refused', reason: 'invalid_request' });
+  }
+  assert.deepEqual(calls.issued, []);
 });
 
 test('refusals before anything is issued', async () => {
@@ -475,6 +486,89 @@ test('LiveKit admin removes participants and treats "already gone" as success', 
   });
   await disabled.removeParticipant('room-1', 'peer-1');
   assert.equal(await disabled.setParticipantMuted('room-1', 'peer-1', true), undefined);
+});
+
+test('only RoomService not-found answers confirm that a native voice companion is absent', () => {
+  const twirp = (message: string, status = 404, code = 'not_found') => new ServerError('twirp', message, status, code);
+  assert.equal(isNativeVoiceParticipantAbsent(twirp('participant does not exist')), true);
+  assert.equal(isNativeVoiceParticipantAbsent(twirp('requested room does not exist')), true);
+  assert.equal(isNativeVoiceParticipantAbsent(twirp('page not found')), false);
+  assert.equal(isNativeVoiceParticipantAbsent(twirp('participant does not exist', 404, 'bad_route')), false);
+  assert.equal(isNativeVoiceParticipantAbsent(twirp('participant does not exist', 500)), false);
+  assert.equal(
+    isNativeVoiceParticipantAbsent(Object.assign(new Error('participant does not exist'), { status: 404 })),
+    false
+  );
+});
+
+test('a native voice companion removal is confirmed, bounded in time and fails closed', async () => {
+  const gone = new ServerError('twirp', 'participant does not exist', 404, 'not_found');
+  let removeError: Error | null = null;
+  let stillThere = false;
+  const timeouts: Array<number | undefined> = [];
+  const client = fake<LiveKitAdminClient>({
+    async removeParticipant() {
+      if (removeError) throw removeError;
+    },
+    async getParticipant() {
+      if (stillThere) return { tracks: [] };
+      throw gone;
+    }
+  });
+
+  await removeNativeVoiceParticipant(client, 'vr-room-1', 'peer-1#voice.lease');
+  stillThere = true;
+  await assert.rejects(removeNativeVoiceParticipant(client, 'vr-room-1', 'peer-1#voice.lease'), /still present/);
+  stillThere = false;
+  removeError = gone;
+  await removeNativeVoiceParticipant(client, 'vr-room-1', 'peer-1#voice.lease');
+
+  const admin = createLiveKitAdmin({
+    config: () => ENABLED,
+    roomName: (id) => `vr-${id}`,
+    logger: recordingLogger,
+    clientFactory: (_livekit, requestTimeout) => {
+      timeouts.push(requestTimeout);
+      return client;
+    }
+  });
+  await admin.removeNativeVoiceParticipant('room-1', 'peer-1#voice.lease');
+  removeError = new Error('connection refused');
+  await assert.rejects(admin.removeNativeVoiceParticipant('room-1', 'peer-1#voice.lease'), /connection refused/);
+  removeError = null;
+  await admin.removeNativeVoiceParticipant('room-1', 'peer-1#voice.lease');
+  assert.deepEqual(timeouts, [
+    NATIVE_VOICE_ADMIN_TIMEOUT_SECONDS,
+    NATIVE_VOICE_ADMIN_TIMEOUT_SECONDS,
+    NATIVE_VOICE_ADMIN_TIMEOUT_SECONDS
+  ]);
+
+  const disabled = createLiveKitAdmin({
+    config: () => ({ ...ENABLED, enabled: false }),
+    roomName: String,
+    logger: recordingLogger,
+    clientFactory: () => {
+      throw new Error('must not connect');
+    }
+  });
+  await assert.rejects(disabled.removeNativeVoiceParticipant('room-1', 'peer-1#voice.lease'), /unavailable/);
+});
+
+test('the default LiveKit admin client gives companion removal a short timeout', async () => {
+  const admin = createLiveKitAdmin({
+    config: () => ({ ...ENABLED, adminUrl: 'http://127.0.0.1:1' }),
+    roomName: String,
+    logger: recordingLogger
+  });
+  await assert.rejects(admin.removeNativeVoiceParticipant('room-1', 'peer-1#voice.lease'));
+  const logger = recordingLogger();
+  const moderated = createLiveKitAdmin({
+    config: () => ({ ...ENABLED, adminUrl: 'http://127.0.0.1:1' }),
+    roomName: String,
+    logger: () => logger
+  });
+  await moderated.removeParticipant('room-1', 'peer-1');
+  assert.equal(logger.records[0]?.evt, 'livekit.participant_remove_failed');
 });
 
 test('LiveKit admin server mute narrows the grant, mutes the mic and falls back to a disconnect', async () => {

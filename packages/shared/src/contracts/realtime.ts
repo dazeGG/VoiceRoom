@@ -8,6 +8,7 @@
 
 import { Type, type Static, type TSchema } from 'typebox';
 import { LoginAlert } from './account.ts';
+import { NativeVoiceGeneration, NativeVoiceStage } from './admission.ts';
 import { AdminReportsEvent } from './admin.ts';
 import { Nullable } from './http.ts';
 import { DirectMessage, DirectMessageInvite, PinnedMessage, ReactionSummary, RoomMessage } from './messages.ts';
@@ -335,6 +336,12 @@ export const NotificationRoomContext = Type.Object({
 export type NotificationRoomContext = Static<typeof NotificationRoomContext>;
 
 /** A room as a preview or the room screen first sees it. */
+const NativeVoiceCompanions = Type.Object({
+  version: Type.Literal(1),
+  companions: Type.Array(Type.Object({ identity: Type.String(), peerId: PeerId }))
+});
+export type NativeVoiceCompanions = Static<typeof NativeVoiceCompanions>;
+
 export const RoomSnapshot = Type.Object({
   roomId: Type.String(),
   room: LobbyRoom,
@@ -342,7 +349,12 @@ export const RoomSnapshot = Type.Object({
   recentMessages: Type.Array(RoomMessage),
   /** When the current voice session started (first live peer), null while the room is empty. */
   voiceActiveSince: Nullable(Type.Number()),
-  mode: Type.Union([Type.Literal('preview'), Type.Literal('active')])
+  mode: Type.Union([Type.Literal('preview'), Type.Literal('active')]),
+  nativeVoiceCompanions: Type.Optional(NativeVoiceCompanions),
+  /** Personal capability, sent only to the peer that owns this generation. */
+  nativeVoice: Type.Optional(
+    Type.Object({ version: Type.Literal(1), stage: NativeVoiceStage, generation: NativeVoiceGeneration })
+  )
 });
 export type RoomSnapshot = Static<typeof RoomSnapshot>;
 
@@ -462,6 +474,10 @@ export const ServerEventFrames = {
   // Rooms: the lobby summary, the preview/detail stream and voice
   'room.summary': Frame('room.summary', Type.Object({ room: RoomRealtimeSummary })),
   'room.snapshot': Frame('room.snapshot', RoomSnapshot),
+  'room.companions.updated': Frame(
+    'room.companions.updated',
+    Type.Object({ ...RoomRef, ...NativeVoiceCompanions.properties })
+  ),
   'room.updated': Frame('room.updated', Type.Object({ room: LobbyRoom })),
   'room.deleted': Frame('room.deleted', Type.Object(RoomRef)),
   'room.not_found': Frame('room.not_found', Type.Object(RoomRef)),

@@ -7,6 +7,7 @@ export type GatePrincipalType = 'account' | 'guest';
 
 export type GateClaims = {
   cid: string;
+  companion?: true;
   exp: number;
   iat: number;
   peer: string;
@@ -23,6 +24,7 @@ export type GateVerification =
 
 export type GateSignInput = {
   credentialId?: string | undefined;
+  companion?: true | undefined;
   expiresAt?: number;
   issuedAt?: number | undefined;
   peerId?: string;
@@ -81,6 +83,7 @@ function createGateCredentialSigner({
 
   function sign({
     credentialId = crypto.randomUUID(),
+    companion,
     expiresAt,
     issuedAt = nowMs(),
     peerId,
@@ -91,6 +94,7 @@ function createGateCredentialSigner({
   }: GateSignInput = {}): string {
     const body = {
       cid: credentialId || '',
+      companion,
       exp: Number(expiresAt),
       iat: Number(issuedAt),
       peer: peerId || '',
@@ -136,11 +140,12 @@ function createGateCredentialSigner({
     }
     // Only this signer writes payloads, so a signed one is always an object.
     if (!isRecord(claims)) return { ok: false, code: 'malformed_payload' };
-    const { cid, room, peer, pId, pType, iat, exp } = claims;
+    const { cid, companion, room, peer, pId, pType, iat, exp } = claims;
     const pEpoch = Number(claims.pEpoch);
     if (
       typeof cid !== 'string' ||
       !cid ||
+      (companion !== undefined && companion !== true) ||
       typeof room !== 'string' ||
       !room ||
       typeof peer !== 'string' ||
@@ -162,7 +167,7 @@ function createGateCredentialSigner({
       return { ok: false, code: 'issued_in_future', claims };
     }
     if (exp <= nowMs()) return { ok: false, code: 'expired', claims };
-    return { ok: true, claims: { cid, exp, iat, peer, pEpoch, pId, pType, room } };
+    return { ok: true, claims: { cid, ...(companion && { companion }), exp, iat, peer, pEpoch, pId, pType, room } };
   }
 
   return {

@@ -15,6 +15,41 @@ import {
 } from '../src/realtime.ts';
 import { defined } from './helpers/assert-defined.ts';
 
+test('native voice snapshots add a versioned capability and mapping to the existing roster', () => {
+  const roomId = 'room-0001';
+  const peerId = 'peer-0001';
+  const legacy = {
+    roomId,
+    room: { roomId, avatarUrl: null, createdAt: 1, isStatic: true, name: 'Room', peers: 0, relationship: 'member' },
+    peers: [],
+    recentMessages: [],
+    voiceActiveSince: null,
+    mode: 'active'
+  };
+  assert.equal(parseServerFrame({ type: 'room.snapshot', payload: legacy }).ok, true);
+  const nativeVoice = { version: 1, stage: 'internal-join', generation: 'a'.repeat(32) };
+  const nativeVoiceCompanions = { version: 1, companions: [{ peerId, identity: `${peerId}#voice.${'c'.repeat(32)}` }] };
+  const active = { ...legacy, nativeVoice, nativeVoiceCompanions };
+  const decoded = parseServerFrame({ type: 'room.snapshot', payload: active });
+  assert.ok(decoded.ok && decoded.frame.type === 'room.snapshot');
+  assert.deepEqual(decoded.frame.payload.nativeVoice, nativeVoice);
+  assert.deepEqual(decoded.frame.payload.nativeVoiceCompanions, nativeVoiceCompanions);
+  assert.equal(
+    parseServerFrame({
+      type: 'room.snapshot',
+      payload: { ...active, nativeVoice: { ...nativeVoice, version: 2 } }
+    }).ok,
+    false
+  );
+  assert.equal(
+    parseServerFrame({
+      type: 'room.companions.updated',
+      payload: { roomId, ...nativeVoiceCompanions }
+    }).ok,
+    true
+  );
+});
+
 test('a leave frame accepts bounded relief outcomes and still accepts legacy leave', () => {
   const target = { roomId: 'abcdefghij', peerId: 'peer-0001', sessionToken: 't'.repeat(32) };
   const legacy = { type: 'room.leave', payload: target };

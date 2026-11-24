@@ -101,6 +101,10 @@ export const ERROR_CODES = [
   'livekit_gate_credential_unavailable',
   'livekit_gate_revoke_unavailable',
   'livekit_gate_principal_missing',
+  'native_voice_off',
+  'native_voice_ineligible',
+  'native_voice_stale',
+  'native_voice_capacity',
 
   // Messages, history, reactions and pins
   'message_not_found',

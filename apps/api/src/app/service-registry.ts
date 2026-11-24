@@ -12,6 +12,7 @@ import pg from 'pg';
 import { createDbPool } from '../platform/db/pool.ts';
 import { kyselyOn } from '../platform/db/kysely.ts';
 import { revokePrincipalInTransaction } from '../domains/admission/gate-credential.repository.ts';
+import { createNativeVoiceRepository } from '../domains/admission/native-voice.repository.ts';
 import { LOG_EVENTS } from '../lib/log-events.ts';
 import { createRoomStore } from './room-store.ts';
 import { createUserStore } from './user-store.ts';
@@ -322,6 +323,7 @@ export function createServiceRegistry(config: ServiceRegistryConfig, deps: Servi
   );
 
   const accountDeletions = pooled((pool) => createAccountDeletionRepository({ pool }));
+  const nativeVoice = pooled((pool) => createNativeVoiceRepository(kyselyOn(pool)));
   const reportRepository = pooled((pool) => createReportRepository({ pool }));
   const callFeedback = pooled((pool) => createCallFeedbackRepository({ pool }));
   const voiceSessions = pooled((pool) => createVoiceSessionRepository({ pool, describeAddress }));
@@ -519,6 +521,7 @@ export function createServiceRegistry(config: ServiceRegistryConfig, deps: Servi
     getActiveBanService: () => activeBans.get(),
     getMediaServices: () => media.get(),
     getCredentialBoundary: () => credentialBoundary.get(),
+    getNativeVoiceRepository: () => nativeVoice.get(),
     getLiveKitCredentialProvider: () => liveKitCredentials.get(),
     getMembershipServices: () => memberships.get(),
     getLinkPreviewService: () => (LINK_PREVIEWS_ENABLED ? linkPreviews.get() : null),

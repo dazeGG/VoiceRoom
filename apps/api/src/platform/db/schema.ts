@@ -285,6 +285,18 @@ export interface MessageSendIdempotency {
   state: Generated<string>;
 }
 
+export interface NativeVoiceLeases {
+  account_id: string;
+  cleanup_exhausted_at: Timestamp | null;
+  expires_at: Timestamp;
+  generation: string;
+  id: string;
+  peer_id: string;
+  retired_at: Timestamp | null;
+  room_id: string;
+  valid_until: Timestamp | null;
+}
+
 export interface NotificationDeliveryLeases {
   expires_at: Generated<Timestamp>;
   fencing_token: Generated<Int8>;
@@ -783,6 +795,7 @@ export interface DB {
   message_delivery_leases: MessageDeliveryLeases;
   message_delivery_outbox: MessageDeliveryOutbox;
   message_send_idempotency: MessageSendIdempotency;
+  native_voice_leases: NativeVoiceLeases;
   notification_delivery_leases: NotificationDeliveryLeases;
   notification_dm_mutes: NotificationDmMutes;
   notification_outbox: NotificationOutbox;

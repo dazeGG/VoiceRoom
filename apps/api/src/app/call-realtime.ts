@@ -79,7 +79,10 @@ export function createCallRealtime(deps: {
 
   function start(
     options: CallRealtimeStartOptions,
-    effects?: Pick<RoomRuntimeDeps, 'summaries' | 'readHistory' | 'mediaMinute' | 'stayEvent' | 'sessionAvatarColorKey'>
+    effects?: Pick<
+      RoomRuntimeDeps,
+      'summaries' | 'readHistory' | 'mediaMinute' | 'stayEvent' | 'sessionAvatarColorKey' | 'nativeVoice'
+    >
   ): RoomRealtimeRuntime {
     roomRuntime = createRoomRealtimeRuntime({
       ...effects,

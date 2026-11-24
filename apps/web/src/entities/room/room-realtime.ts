@@ -82,6 +82,7 @@ const ROOM_OF: { [Type in ServerEventType]: ((payload: ServerEvents[Type]) => st
   'notification.friend.accepted': null,
   'room.summary': (payload) => payload.room.roomId,
   'room.snapshot': (payload) => payload.roomId,
+  'room.companions.updated': (payload) => payload.roomId,
   'room.updated': (payload) => payload.room.roomId,
   'room.deleted': (payload) => payload.roomId,
   'room.not_found': (payload) => payload.roomId,

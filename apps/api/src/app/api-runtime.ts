@@ -4,7 +4,7 @@
 // through module scope.
 
 import { createWidgetRuntimeOwner, type WidgetRuntimeOwner } from '../domains/rooms/widget-runtime-owner.repository.ts';
-import { roomAllowsAdmission } from '../domains/rooms/room-surface.policy.ts';
+import { roomAllowsAdmission, roomAllowsSurface } from '../domains/rooms/room-surface.policy.ts';
 import type http from 'node:http';
 import type { IncomingMessage } from 'node:http';
 import type { FastifyBaseLogger } from 'fastify';
@@ -17,7 +17,7 @@ import { createSessionResolver } from './session.ts';
 import { createServiceRegistry, type StoreOverrides } from './service-registry.ts';
 import { createRequestLog } from '../platform/http/request-log.ts';
 import { liveKitConnectSources, securityHeaders } from '../platform/http/security-headers.ts';
-import { readApiConfig, resolveCursorHmacKeys as resolveCursorHmacKeysFor } from './config.ts';
+import { readApiConfig, readNativeVoicePolicy, resolveCursorHmacKeys as resolveCursorHmacKeysFor } from './config.ts';
 import { registerApiRoutes } from './api-routes.ts';
 import { createLogger, hashIp } from '../lib/logger.ts';
 import { getClientIp } from '../lib/rate-limit.ts';
@@ -38,6 +38,8 @@ import type { Timer } from '../platform/types.ts';
 export type { ApiServer };
 
 import { createAdmissionService } from '../domains/admission/admission.service.ts';
+import { createNativeVoiceService } from '../domains/admission/native-voice.service.ts';
+import { buildServerEnvelope } from '../realtime/envelope.ts';
 import { createActivityTracker } from '../domains/account/activity.service.ts';
 import { createProductSampler } from '../domains/ops/product-snapshot.service.ts';
 import { createSystemSampler } from '../domains/ops/system-snapshot.service.ts';
@@ -72,6 +74,7 @@ export function createApiRuntime({ env = process.env }: { env?: NodeJS.ProcessEn
     services,
     liveKit,
     logger: () => getProcessLogger(),
+    onVoiceRosterChange: () => nativeVoice.rosterChanged(),
     removeAvatar: (key, log) => domain.avatars.removeFile(key, log)
   });
 
@@ -116,6 +119,20 @@ export function createApiRuntime({ env = process.env }: { env?: NodeJS.ProcessEn
   const widgetCanAdmit = async () =>
     config.WIDGET_ENABLED && widgetOwner !== null && (await widgetOwner.capture()) !== null;
   const limits = createRateLimits(config);
+  const nativeVoice = createNativeVoiceService({
+    policy: () => readNativeVoicePolicy(env, config.MAX_ROOM_PEERS),
+    repository: services.getNativeVoiceRepository,
+    provider: services.getLiveKitCredentialProvider,
+    rosterPeer: hub.presence.currentRosterPeer,
+    mainRoom: async (roomId) => roomAllowsSurface(await services.getRoomStore().getRoom(roomId), 'main'),
+    banned: hub.findRoomBan,
+    roomName: liveKit.roomName,
+    removeParticipant: liveKit.removeNativeVoiceParticipant,
+    publish: (roomId, mapping) =>
+      hub.presence.publish(roomId, buildServerEnvelope('room.companions.updated', { roomId, ...mapping })),
+    logger: getProcessLogger,
+    recordFailure: recordCredentialRevokeCleanupFailure
+  });
   const admissionService = createAdmissionService({
     maxRoomPeers: config.MAX_ROOM_PEERS,
     livekitConfig: liveKit.config,
@@ -284,6 +301,8 @@ export function createApiRuntime({ env = process.env }: { env?: NodeJS.ProcessEn
 
     app.addHook('onReady', hub.deliveryRelay.start);
     app.addHook('onClose', hub.deliveryRelay.stop);
+    app.addHook('onReady', async () => nativeVoice.start());
+    app.addHook('onClose', nativeVoice.stop);
     const ringDelivery = createRingDeliveryRuntime({
       rings: domain.rings,
       enabled: () => services.getPool() !== null,
@@ -294,6 +313,7 @@ export function createApiRuntime({ env = process.env }: { env?: NodeJS.ProcessEn
 
     const { roomRuntime, wsHandler, widgetWsHandler } = hub.start({
       logger: appLogger,
+      nativeVoice,
       reconnectLeaseMs: realtimeReconnectLeaseMs,
       now: realtimeNow,
       setTimeout: realtimeSetTimeout,
@@ -340,13 +360,14 @@ export function createApiRuntime({ env = process.env }: { env?: NodeJS.ProcessEn
         activeWs: hub.registry.stats().sockets,
         activeGuestWs: hub.registry.stats().guests,
         presenceRooms: hub.presenceRooms.size,
-        presencePeers: hub.presence.peerCount()
+        presencePeers: hub.presence.peerCount(),
+        nativeVoiceSlots: nativeVoice.slotCount()
       });
 
     registerApiRoutes(app, apiContext, {
       config,
       services,
-      domain: { ...domain, admission: admissionService },
+      domain: { ...domain, admission: admissionService, nativeVoice },
       limits,
       sessionCookies,
       sessionToken: getSessionToken,

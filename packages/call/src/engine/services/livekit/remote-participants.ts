@@ -4,6 +4,7 @@ import { getCallPorts, getInstalledCallPorts } from '../../ports';
 // Screens get a grace period through reconnects before they count as gone.
 
 import { t } from '@voiceroom/ui-kit/i18n';
+import { isLiveKitOnlyIdentity } from '@voiceroom/shared/validation';
 import { markRaw } from 'vue';
 import type { Room, RemoteParticipant, RemoteTrack, RemoteTrackPublication, TrackPublication } from 'livekit-client';
 import { state } from '../../core/room-runtime.store';
@@ -111,6 +112,7 @@ export function createLiveKitParticipant(participant: RemoteParticipant): Partic
 }
 
 function isServerKnownRemotePeer(peerId: string): boolean {
+  if (isLiveKitOnlyIdentity(peerId)) return false;
   if (!peerId || peerId === state.peerId) return true;
   return !state.serverPeerSyncReady || state.serverPeerIds.has(peerId);
 }
