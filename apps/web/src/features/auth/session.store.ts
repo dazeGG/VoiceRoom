@@ -103,7 +103,8 @@ export const useSessionStore = defineStore('session', () => {
 
   function commitProfile(captured: AuthContext, next: AuthUser): boolean {
     if (!captured.userId || !isCurrent(captured) || next.id !== captured.userId) return false;
-    applyUser(next, false);
+    const nativeVoice = next.nativeVoice ?? user.value?.nativeVoice;
+    applyUser(nativeVoice ? { ...next, nativeVoice } : next, false);
     return true;
   }
 

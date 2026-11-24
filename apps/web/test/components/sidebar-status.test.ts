@@ -16,10 +16,10 @@ stubOverlayDom();
 
 const user = authUser({ id: 'ada', login: 'ada', displayName: 'Ада' });
 
-async function renderSidebar() {
+async function renderSidebar(adminUrl?: string) {
   const onToast = vi.fn();
   const { pinia } = await renderWithApp(
-    lobbyHost(Sidebar, { user, onGoHome: vi.fn(), onOpenPeople: vi.fn(), onOpenSettings: vi.fn(), onToast })
+    lobbyHost(Sidebar, { user, adminUrl, onGoHome: vi.fn(), onOpenPeople: vi.fn(), onOpenSettings: vi.fn(), onToast })
   );
   const preferences = useNotificationPreferencesStore(pinia);
   preferences.prepareNotificationPreferences(user.id, false, 'online');
@@ -27,6 +27,18 @@ async function renderSidebar() {
 }
 
 const focusedLabel = () => document.activeElement?.getAttribute('aria-label');
+
+test('the sidebar header tooltips open below the logo and admin button', async () => {
+  stubFetch({});
+  await renderSidebar('https://admin.example.test');
+
+  const keyboard = userEvent.setup();
+  for (const label of ['Главная', 'Открыть админку']) {
+    await keyboard.tab();
+    const tooltip = await screen.findByRole('tooltip', { name: label });
+    await vi.waitFor(() => expect(tooltip.closest('[data-side]')?.getAttribute('data-side')).toBe('bottom'));
+  }
+});
 
 test('the status list opens on the current status and moves with arrows, Home, End and typing', async () => {
   stubFetch({});

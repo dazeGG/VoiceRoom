@@ -364,6 +364,7 @@ function roomDeleted(): void {
           :aria-expanded="sidebarVisible"
           neutral-expanded
           :label="sidebarToggleLabel"
+          tooltip-side="bottom"
           :size="32"
           @click="sidebar.toggle"
         >

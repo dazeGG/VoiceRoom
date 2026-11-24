@@ -4,6 +4,7 @@ import { NavList, NavListGroup, NavListItem, Dialog } from '@voiceroom/ui-kit/co
 // what is saved; only the profile edits live here, so they survive a look at
 // another tab before saving.
 import { t } from '@/shared/i18n';
+import { readDesktopRuntime } from '@/platform/desktop-system';
 import { Bell, Keyboard, LogOut, Mic, Monitor, Palette, ShieldCheck, User } from '@lucide/vue';
 import { onBeforeUnmount, onMounted, reactive, type Component } from 'vue';
 import type { AuthUser, OwnedRoom } from '@/api/auth';
@@ -42,7 +43,7 @@ const emit = defineEmits<{
 
 const support = readSettingsSupport();
 // On the web the tab offers the desktop builds; in the app, its own settings.
-const appTab = support.desktopApp ? support.autostart || support.overlay : true;
+const appTab = !support.desktopApp || support.autostart || support.overlay || Boolean(readDesktopRuntime()?.version);
 // The dialog remounts for another account, so the first user is the one.
 const profile = reactive(useProfileDraft(props.user));
 
@@ -162,7 +163,12 @@ onBeforeUnmount(profile.dispose);
           :highlight-password="securityHighlight === 'password'"
           @toast="toast"
         />
-        <SoundSettings v-else-if="tab === 'sound'" :desktop-app="support.desktopApp" @toast="toast" />
+        <SoundSettings
+          v-else-if="tab === 'sound'"
+          :desktop-app="support.desktopApp"
+          :native-voice-default-enabled="user?.nativeVoice?.defaultEnabled"
+          @toast="toast"
+        />
         <AppearanceSettings v-else-if="tab === 'appearance'" />
         <HotkeySettings
           v-else-if="tab === 'hotkeys' && support.desktopApp"
