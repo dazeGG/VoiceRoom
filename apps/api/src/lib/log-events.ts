@@ -70,6 +70,9 @@ const LOG_EVENTS = Object.freeze({
   LIVEKIT_GATE_UPSTREAM_FAILED: 'livekit.gate_upstream_failed',
   LIVEKIT_GATE_AUTHORIZATION_FAILED: 'livekit.gate_authorization_failed',
   LIVEKIT_GATE_DENIED: 'livekit.gate_denied',
+  NATIVE_VOICE_GATE_CLEANUP_FAILED: 'livekit.native_voice_gate_cleanup_failed',
+  NATIVE_VOICE_GATE_CLEANUP_EXHAUSTED: 'livekit.native_voice_gate_cleanup_exhausted',
+  NATIVE_VOICE_GATE_DISCOVERY_FAILED: 'livekit.native_voice_gate_discovery_failed',
 
   // Messaging and delivery.
   MESSAGE_EVENT_DISPATCH_FAILED: 'msg.event_dispatch_failed',

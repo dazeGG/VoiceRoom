@@ -17,6 +17,7 @@ import { createNotificationDispatch } from '../domains/notifications/notificatio
 import { createAccountLifecycle } from '../domains/account/account-lifecycle.ts';
 import { gatePrincipalForPeer, type GatePrincipalPeer } from '../domains/admission/gate-principal.ts';
 import type { ActiveBanRecord } from '../domains/moderation/active-ban.repository.ts';
+import type { NativeVoiceService } from '../domains/admission/native-voice.service.ts';
 import { avatarColorForPeerId } from '../domains/rooms/avatar-color.ts';
 import { createRoomLifecycle } from '../domains/rooms/room-lifecycle.ts';
 import { publicPeer } from '../domains/rooms/room-views.ts';
@@ -34,6 +35,7 @@ export interface RealtimeHubDeps {
   services: ReturnType<typeof createServiceRegistry>;
   liveKit: Pick<LiveKit, 'removeParticipant'>;
   logger(this: void): FastifyBaseLogger;
+  onVoiceRosterChange?(): void;
   /** Removes a stored avatar file (the avatars service, built after the hub). */
   removeAvatar(key: string | null | undefined, log: Pick<FastifyBaseLogger, 'error'> | undefined): Promise<void>;
 }
@@ -44,6 +46,7 @@ interface RealtimeStartOptions extends CallRealtimeStartOptions {
   clientIp: (req: IncomingMessage) => string;
   widgetCanAdmit?: () => Promise<boolean>;
   widgetLocalAllowed?: () => boolean;
+  nativeVoice?: NativeVoiceService;
 }
 
 export function createRealtimeHub(deps: RealtimeHubDeps) {
@@ -70,7 +73,10 @@ export function createRealtimeHub(deps: RealtimeHubDeps) {
     },
     presenceEffects: {
       previewSubscribers: (roomId) => wsRegistry.roomDetailSubscribers(roomId),
-      onRosterChange: (roomId) => roomRuntime?.scheduleSummaryBroadcast(roomId),
+      onRosterChange: (roomId) => {
+        roomRuntime?.scheduleSummaryBroadcast(roomId);
+        deps.onVoiceRosterChange?.();
+      },
       onPeerLeft: (room, peer) => voiceStays.recordPeerLeft(room, peer)
     }
   });
@@ -195,7 +201,11 @@ export function createRealtimeHub(deps: RealtimeHubDeps) {
       logger: options.logger
     });
     const startedRuntime = {
-      ...call.start(options, { ...product.callEffects, sessionAvatarColorKey }),
+      ...call.start(options, {
+        ...product.callEffects,
+        sessionAvatarColorKey,
+        ...(options.nativeVoice && { nativeVoice: options.nativeVoice })
+      }),
       ...product.handlers
     };
     roomRuntime = startedRuntime;

@@ -1,7 +1,7 @@
 // Server-side actions on the SFU: removing a participant (kick, ban, leave)
 // and the microphone server mute.
 
-import { RoomServiceClient, TrackSource } from 'livekit-server-sdk';
+import { RoomServiceClient, ServerError, TrackSource } from 'livekit-server-sdk';
 import type { Logger } from 'pino';
 import { LOG_EVENTS } from '../../lib/log-events.ts';
 import type { RoomSurface } from '../rooms/room-surface.policy.ts';
@@ -51,6 +51,31 @@ export function isLiveKitParticipantAlreadyGone(error: unknown): boolean {
   return /not.?found/i.test(text) || /does not exist/i.test(text);
 }
 
+export const NATIVE_VOICE_ADMIN_TIMEOUT_SECONDS = 3;
+
+export function isNativeVoiceParticipantAbsent(error: unknown): boolean {
+  // A route or proxy 404 does not confirm absence. Match RoomService's Twirp response.
+  return (
+    error instanceof ServerError &&
+    error.status === 404 &&
+    error.code === 'not_found' &&
+    (error.message === 'participant does not exist' || error.message === 'requested room does not exist')
+  );
+}
+
+export async function removeNativeVoiceParticipant(
+  client: Pick<LiveKitAdminClient, 'getParticipant' | 'removeParticipant'>,
+  room: string,
+  identity: string
+): Promise<void> {
+  try {
+    await client.removeParticipant(room, identity);
+    if (await client.getParticipant(room, identity)) throw new Error('Native voice participant is still present');
+  } catch (error) {
+    if (!isNativeVoiceParticipantAbsent(error)) throw error;
+  }
+}
+
 // Server mute is enforced at the SFU, not just in the client: microphone is
 // removed from the participant's allowed sources, and the live microphone track
 // is muted immediately. Other media grants stay within the surface ceiling.
@@ -81,13 +106,30 @@ export function createLiveKitAdmin({
   config,
   roomName,
   logger,
-  clientFactory = (livekit) => new RoomServiceClient(livekit.adminUrl, livekit.apiKey, livekit.apiSecret)
+  clientFactory = (livekit, requestTimeout) =>
+    new RoomServiceClient(
+      livekit.adminUrl,
+      livekit.apiKey,
+      livekit.apiSecret,
+      requestTimeout === undefined ? undefined : { requestTimeout, failover: false }
+    )
 }: {
   config: () => LiveKitConfig;
   roomName: (roomId: string) => string;
   logger: () => Pick<Logger, 'error'>;
-  clientFactory?: (livekit: LiveKitConfig) => LiveKitAdminClient;
+  clientFactory?: (livekit: LiveKitConfig, requestTimeout?: number) => LiveKitAdminClient;
 }) {
+  async function removeCompanion(roomId: string, identity: string): Promise<void> {
+    const livekit = config();
+    if (!livekit.enabled) throw new Error('LiveKit admin is unavailable');
+    const client = clientFactory(livekit, NATIVE_VOICE_ADMIN_TIMEOUT_SECONDS);
+    try {
+      await client.removeParticipant(roomName(roomId), identity);
+    } catch (error) {
+      if (!isNativeVoiceParticipantAbsent(error)) throw error;
+    }
+  }
+
   async function removeParticipant(roomId: string, peerId: string): Promise<void> {
     const livekit = config();
     if (!livekit.enabled) return;
@@ -153,7 +195,7 @@ export function createLiveKitAdmin({
     return { status: 'applied' };
   }
 
-  return { removeParticipant, setParticipantMuted };
+  return { removeParticipant, removeNativeVoiceParticipant: removeCompanion, setParticipantMuted };
 }
 
 export type LiveKitAdmin = ReturnType<typeof createLiveKitAdmin>;

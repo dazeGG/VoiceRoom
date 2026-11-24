@@ -457,6 +457,7 @@ import /etc/caddy/domains.d/*.caddy
 }
 
 {$SITE_SCHEME}{$LIVEKIT_DOMAIN} {
+  respond /metrics 404
   # Signaling is a WebSocket tunnel; compressing it only adds latency.
   reverse_proxy livekit-gate:3080 {
     import /etc/caddy/proxy.d/*.caddy

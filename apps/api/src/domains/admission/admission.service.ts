@@ -4,6 +4,7 @@
 // credential that was already issued has been revoked.
 
 import type { RoomCapabilities } from '@voiceroom/shared/contracts/rooms';
+import { isLiveKitOnlyIdentity } from '@voiceroom/shared/validation';
 import { ROOM_SURFACE_CEILINGS, roomCapabilities, type RoomSurface } from '../rooms/room-surface.policy.ts';
 import type { Logger } from 'pino';
 import { LOG_EVENTS } from '../../lib/log-events.ts';
@@ -73,6 +74,8 @@ export interface AdmissionPeer {
   readonly accountUserId: string | null;
   readonly gateGuestPrincipalId: string;
   readonly transportId: string;
+  readonly authSessionHash?: string;
+  readonly desktop?: boolean;
 }
 
 export interface AdmissionDeps {
@@ -200,6 +203,7 @@ export function createAdmissionService(deps: AdmissionDeps) {
 
   async function admit(request: AdmissionRequest): Promise<AdmissionResult> {
     const { roomId, peerId, sessionToken, name, user, clientIp, log, surface = 'main' } = request;
+    if (isLiveKitOnlyIdentity(peerId)) return refuse('invalid_request');
     const ceiling = ROOM_SURFACE_CEILINGS[surface];
     const livekit = deps.livekitConfig();
 
