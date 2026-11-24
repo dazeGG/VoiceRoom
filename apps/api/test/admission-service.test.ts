@@ -152,6 +152,14 @@ test('a roster peer with a matching token is admitted with the microphone', asyn
   assert.deepEqual(calls.revokedCredentials, []);
 });
 
+test('a canonical admission never takes an SFU-only identity', async () => {
+  const { service, calls } = setup();
+  for (const peerId of ['peer-1#voice.0123456789abcdef', 'peer-1#anything']) {
+    assert.deepEqual(await service.admit(request({ peerId })), { status: 'refused', reason: 'invalid_request' });
+  }
+  assert.deepEqual(calls.issued, []);
+});
+
 test('refusals before anything is issued', async () => {
   const cases: Array<[Partial<AdmissionDeps>, RefusalReason]> = [
     [{ roomExists: async () => false }, 'room_not_found'],
