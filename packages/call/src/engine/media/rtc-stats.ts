@@ -4,6 +4,9 @@
 
 import { isRecord } from '@voiceroom/shared/guards';
 
+export const counterGrowth = (now: number, before: number) => (now >= before ? now - before : now);
+export const speechConcealment = (concealed = 0, silent = 0) => Math.max(0, concealed - silent);
+
 export interface RtcStat {
   readonly id: string;
   readonly type: string;

@@ -4,10 +4,12 @@ import { getCallPorts, getInstalledCallPorts } from '../../ports';
 // Screens get a grace period through reconnects before they count as gone.
 
 import { t } from '@voiceroom/ui-kit/i18n';
+import { isLiveKitOnlyIdentity } from '@voiceroom/shared/validation';
 import { markRaw } from 'vue';
 import type { Room, RemoteParticipant, RemoteTrack, RemoteTrackPublication, TrackPublication } from 'livekit-client';
 import { state } from '../../core/room-runtime.store';
 import { clearPeerJoinCue } from '../../media/cues';
+import { attachMeter } from '../../media/meters';
 import { loadLiveKitClient } from '../../media/livekit-runtime';
 import { getCameraReceiverDemand } from '../../media/camera-receiver-demand';
 import { getScreenReceiverDemand } from '../../media/screen-receiver-demand';
@@ -42,9 +44,11 @@ import {
   isScreenVideoPublication
 } from './publication-kinds';
 import { logLiveKitTransition } from './transport';
+import { nativeReceiveRoute } from '../../core/native-receive-route';
 
 const screenSubscriptionRetryController = createScreenSubscriptionRetryController();
 const screenRecoveryGrace = new ScreenRecoveryGraceController();
+const nativePausedMicrophones = new WeakSet<RemoteTrackPublication>();
 
 subscribeRoomRecoveryTransitions((event) => {
   const { epoch, phase } = event;
@@ -64,6 +68,7 @@ export function syncLiveKitParticipants(room: Room | null): void {
   room.remoteParticipants.forEach((participant) => {
     syncLiveKitParticipant(participant);
   });
+  nativeReceiveRoute.settingsChanged?.();
 }
 
 export function syncLiveKitParticipant(participant: RemoteParticipant | null | undefined): Participant | null {
@@ -111,6 +116,7 @@ export function createLiveKitParticipant(participant: RemoteParticipant): Partic
 }
 
 function isServerKnownRemotePeer(peerId: string): boolean {
+  if (isLiveKitOnlyIdentity(peerId)) return false;
   if (!peerId || peerId === state.peerId) return true;
   return !state.serverPeerSyncReady || state.serverPeerIds.has(peerId);
 }
@@ -161,7 +167,16 @@ export function syncLiveKitPublicationSubscription(peer: Participant, publicatio
   if (typeof publication.setSubscribed !== 'function') return;
 
   if (isMicrophonePublication(publication)) {
-    setRemotePublicationSubscribed(publication, !state.outputMuted);
+    const native = nativeReceiveRoute.active;
+    setRemotePublicationSubscribed(publication, native || !state.outputMuted);
+    // LiveKit scopes speaker updates to subscribers. Disable RTP forwarding
+    // while preserving the subscription that carries the speaker signaling.
+    if (native) {
+      nativePausedMicrophones.add(publication);
+      publication.setEnabled(false);
+    } else if (!state.outputMuted && nativePausedMicrophones.delete(publication)) {
+      publication.setEnabled(true);
+    }
     return;
   }
 
@@ -358,8 +373,9 @@ export function syncLiveKitVoiceSubscriptions(): void {
 
     participant.trackPublications.forEach((publication) => {
       if (!isMicrophonePublication(publication)) return;
+      const restoreMeter = nativePausedMicrophones.has(publication);
       syncLiveKitPublicationSubscription(peer, publication);
-      ensureRemoteMicrophonePlayback(peer, publication);
+      ensureRemoteMicrophonePlayback(peer, publication, restoreMeter);
     });
   });
 }
@@ -382,9 +398,13 @@ export function retryDemandedScreenSubscriptions(room: Room): void {
   });
 }
 
-function ensureRemoteMicrophonePlayback(peer: Participant, publication: RemoteTrackPublication): void {
+function ensureRemoteMicrophonePlayback(
+  peer: Participant,
+  publication: RemoteTrackPublication,
+  restoreMeter: boolean
+): void {
   if (!isMicrophonePublication(publication)) return;
-  if (state.outputMuted) return;
+  if (state.outputMuted || nativeReceiveRoute.active) return;
 
   const track = publication.track;
   const mediaTrack = track?.mediaStreamTrack;
@@ -396,6 +416,7 @@ function ensureRemoteMicrophonePlayback(peer: Participant, publication: RemoteTr
   peer.stream = markRaw(stream);
   peer.micReceiver = track.receiver ? markRaw(track.receiver) : peer.micReceiver;
   ensureRemoteAudioElement(peer, mediaTrack, track.receiver);
+  if (restoreMeter && peer.meter?.track !== mediaTrack) attachMeter(peer, new MediaStream([mediaTrack]));
   updatePeerStatus(peer);
 }
 
@@ -452,6 +473,7 @@ export function handleLiveKitTrackSubscribed(
   }
 
   if (isMicrophonePublication(publication)) {
+    if (nativeReceiveRoute.active) return;
     peer.voiceIssue = '';
     attachRemoteTrack(peer, mediaTrack, stream, track.receiver);
     updatePeerStatus(peer);

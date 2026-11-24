@@ -9,8 +9,9 @@ import { installWebCallPortsForTest } from './call-ports';
 import type { Participant } from '@voiceroom/call/engine/core/types';
 import type * as LiveKitServiceModule from '@voiceroom/call/engine/services/livekit-service';
 import type * as ScreenProfilesModule from '@voiceroom/call/engine/media/profiles';
+import type * as ParticipantsModule from '@voiceroom/call/engine/room/participants';
 
-type Peer = Record<string, unknown> & { id: string };
+type Peer = Record<string, unknown> & { id: string; audioElements?: Map<string, HTMLAudioElement> };
 
 export interface LiveKitHarness {
   service: typeof LiveKitServiceModule;
@@ -56,6 +57,7 @@ export interface LiveKitHarness {
     unpublished: unknown[];
     localParticipant: { trackPublications: Map<string, unknown> };
     remoteParticipants: Map<string, unknown>;
+    activeSpeakers: Array<{ identity: string }>;
     /** Calls the handlers bound to a RoomEvent, as LiveKit does. */
     emit(event: string, ...args: unknown[]): void;
     /** The server ends the session: unless told otherwise, LiveKit stops the tracks the room published. */
@@ -83,6 +85,8 @@ export async function loadLiveKitHarness(
     onUnpublish?: (track: unknown) => Promise<void>;
     /** Isolate control-sync presence in media-only tests without an app realtime fake. */
     stubPresence?: boolean;
+    /** Exercise real microphone elements, meters and output controls. */
+    realVoicePlayback?: boolean;
     /** What the raw-microphone silence check answers. */
     inputSilent?: () => Promise<boolean>;
     /** Whether a recovery epoch is still current. */
@@ -122,6 +126,7 @@ export async function loadLiveKitHarness(
   class FakeRoom {
     readonly listeners = new Map<string, Array<(...args: unknown[]) => void>>();
     readonly remoteParticipants = new Map<string, unknown>();
+    activeSpeakers: Array<{ identity: string }> = [];
     connectedUrl = '';
     connectOptions: Record<string, unknown> = {};
     disconnected = false;
@@ -224,13 +229,15 @@ export async function loadLiveKitHarness(
   vi.doMock(`${P}/net/api`, () => ({
     requestLiveKitToken: options.requestToken ?? (async () => ({}))
   }));
-  vi.doMock(`${P}/services/media-playback-service`, () => ({
-    queueAudioUnlock: () => {},
-    syncRemoteAudioPlayback: () => {
-      audio.playbackSyncs += 1;
-    }
-  }));
-  vi.doMock(`${P}/media/cues`, () => ({ clearPeerJoinCue: () => {} }));
+  if (options.realVoicePlayback) vi.doUnmock(`${P}/services/media-playback-service`);
+  else
+    vi.doMock(`${P}/services/media-playback-service`, () => ({
+      queueAudioUnlock: () => {},
+      syncRemoteAudioPlayback: () => {
+        audio.playbackSyncs += 1;
+      }
+    }));
+  vi.doMock(`${P}/media/cues`, () => ({ clearPeerJoinCue: () => {}, playOutputCue: () => {} }));
   vi.doMock(`${P}/media/profiles`, async () => {
     const actual = await vi.importActual<typeof ScreenProfilesModule>(`${P}/media/profiles`);
     return {
@@ -266,50 +273,73 @@ export async function loadLiveKitHarness(
       }
     })
   }));
-  vi.doMock(`${P}/room/participants`, () => ({
-    createParticipant: (peerInfo: Peer) => {
-      const existing = state.peers.get(peerInfo.id);
-      if (existing) {
-        if (Object.hasOwn(peerInfo, 'screen') && existing.screenAuthoritative !== false)
-          existing.screen = Boolean(peerInfo.screen);
-        if (Object.hasOwn(peerInfo, 'screenAudio') && existing.screenAuthoritative !== false)
-          existing.screenAudio = Boolean(peerInfo.screenAudio);
-        return existing;
-      }
-      const peer = { ...peerInfo, screen: Boolean(peerInfo.screen), screenAudio: Boolean(peerInfo.screenAudio) };
-      state.peers.set(peer.id, peer);
-      return peer;
-    },
-    applyRemoteScreenCue: () => {},
-    attachRemoteScreenStream: (peer: Peer, stream: unknown) => {
-      screenAttachments.push({ peer, stream });
-      peer.screen = true;
-      peer.screenStream = stream;
-    },
-    attachRemoteTrack: () => {},
-    ensureRemoteAudioElement: (peer: Peer) => {
-      audio.ensured.push({ peerId: peer.id });
-      return null;
-    },
-    detachLiveKitParticipant: () => {},
-    detachRemoteAudioTrack: () => {},
-    detachRemoteScreen: (peer: Peer) => {
-      detachedScreens.push(peer.id);
-      peer.screen = false;
-      peer.screenAudio = false;
-      peer.screenStream = null;
-    },
-    detachRemoteScreenAudioTrack: () => {},
-    detachRemoteScreenVideoTrack: () => {},
-    detachRemoteScreenVideoTracks: () => {},
-    removePeer: () => {},
-    setParticipantSpeaking: () => {},
-    updateParticipant: () => {},
-    updatePeerStatus: () => {}
-  }));
+  vi.doMock(`${P}/room/participants`, async () => {
+    const actual = options.realVoicePlayback
+      ? await vi.importActual<typeof ParticipantsModule>(`${P}/room/participants`)
+      : undefined;
+    return {
+      createParticipant: (peerInfo: Peer) => {
+        const existing = state.peers.get(peerInfo.id);
+        if (existing) {
+          if (Object.hasOwn(peerInfo, 'screen') && existing.screenAuthoritative !== false)
+            existing.screen = Boolean(peerInfo.screen);
+          if (Object.hasOwn(peerInfo, 'screenAudio') && existing.screenAuthoritative !== false)
+            existing.screenAudio = Boolean(peerInfo.screenAudio);
+          return existing;
+        }
+        const peer = {
+          ...peerInfo,
+          screen: Boolean(peerInfo.screen),
+          screenAudio: Boolean(peerInfo.screenAudio),
+          ...(actual && { audioElements: new Map<string, HTMLAudioElement>() })
+        };
+        state.peers.set(peer.id, peer);
+        return peer;
+      },
+      applyRemoteScreenCue: () => {},
+      attachRemoteScreenStream: (peer: Peer, stream: unknown) => {
+        screenAttachments.push({ peer, stream });
+        peer.screen = true;
+        peer.screenStream = stream;
+      },
+      attachRemoteTrack: actual?.attachRemoteTrack ?? (() => {}),
+      ensureRemoteAudioElement:
+        actual?.ensureRemoteAudioElement ??
+        ((peer: Peer) => {
+          audio.ensured.push({ peerId: peer.id });
+          return null;
+        }),
+      detachLiveKitParticipant: (peer: Peer) => {
+        peer.livekitParticipant = null;
+      },
+      detachRemoteAudioTrack: () => {},
+      detachRemoteScreen: (peer: Peer) => {
+        detachedScreens.push(peer.id);
+        peer.screen = false;
+        peer.screenAudio = false;
+        peer.screenStream = null;
+      },
+      detachRemoteScreenAudioTrack: () => {},
+      detachRemoteScreenVideoTrack: () => {},
+      detachRemoteScreenVideoTracks: () => {},
+      removePeer: () => {},
+      removeAudioElements:
+        actual?.removeAudioElements ??
+        ((peer: Peer) => {
+          peer.audioElements?.clear();
+        }),
+      clearAllSpeaking: actual?.clearAllSpeaking,
+      setParticipantSpeaking: (peer: Peer, speaking: boolean) => {
+        peer.speaking = speaking;
+      },
+      updateParticipant: () => {},
+      updatePeerStatus: () => {}
+    };
+  });
   vi.doMock(`${P}/ui/screen-view`, () => ({
     refreshScreenStage: () => {},
-    refreshScreenTiles: () => {}
+    refreshScreenTiles: () => {},
+    syncScreenVideoAudio: () => {}
   }));
   vi.doMock(`${P}/recovery/room-recovery`, () => ({
     isCurrentRoomRecoveryEpoch: (epoch: number) => options.recoveryEpochCurrent?.(epoch) ?? true,
@@ -377,16 +407,26 @@ export function fakePublication(
   source: 'camera' | 'microphone' | 'screen-video' | 'screen-audio',
   extra: Record<string, unknown> = {}
 ) {
-  const calls: { subscribed: boolean[]; quality: unknown[] } = { subscribed: [], quality: [] };
+  const calls: { subscribed: boolean[]; enabled: boolean[]; quality: unknown[] } = {
+    subscribed: [],
+    enabled: [],
+    quality: []
+  };
   const publication = {
     source,
     trackSid: `${source}-sid`,
     isMuted: false,
     isDesired: false,
     isSubscribed: false,
+    isEnabled: true,
     setSubscribed(subscribed: boolean) {
       calls.subscribed.push(subscribed);
       this.isDesired = subscribed;
+    },
+    setEnabled(enabled: boolean) {
+      if (this.isEnabled === enabled) return;
+      this.isEnabled = enabled;
+      calls.enabled.push(enabled);
     },
     setVideoQuality(quality: unknown) {
       calls.quality.push(quality);

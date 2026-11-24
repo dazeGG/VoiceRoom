@@ -3,6 +3,7 @@ import { createWidgetRuntimeOwner, type WidgetRuntimeOwner } from '../rooms/widg
 import net from 'node:net';
 import type { Duplex } from 'node:stream';
 import { URL } from 'node:url';
+import { RoomServiceClient } from 'livekit-server-sdk';
 import type pg from 'pg';
 import { createDbPool } from '../../platform/db/pool.ts';
 import { readDatabaseConfig } from '../../lib/config.ts';
@@ -16,9 +17,15 @@ import { kyselyOn } from '../../platform/db/kysely.ts';
 import { createGateCredentialRepository } from './gate-credential.repository.ts';
 import { LOG_EVENTS } from '../../lib/log-events.ts';
 import { createLogger } from '../../lib/logger.ts';
-import { DEFAULT_ROOM_PREFIX, verifyAccessTokenBinding } from './livekit-token-binding.mts';
+import { DEFAULT_ROOM_PREFIX, getLiveKitRoomName, verifyAccessTokenBinding } from './livekit-token-binding.mts';
 import { readLiveKitGateConfig } from '../../app/config.ts';
 import { createPersonalLogger } from '../../platform/personal-logger.ts';
+import { createNativeVoiceRepository } from './native-voice.repository.ts';
+import { createNativeVoiceRecovery } from './native-voice-recovery.service.ts';
+import { isUuid, nativeVoiceIdentity } from '@voiceroom/shared/validation';
+import { NATIVE_VOICE_ADMIN_TIMEOUT_SECONDS, removeNativeVoiceParticipant } from './livekit-admin.ts';
+import { liveKitHttpUrl } from './livekit-config.ts';
+import { createNativeVoiceWatchdog, type CompanionWindow } from './native-voice-watchdog.service.ts';
 
 const DEFAULT_GATE_PATH = '/rtc';
 const VALIDATE_TIMEOUT_MS = 5_000;
@@ -26,7 +33,14 @@ const VALIDATE_TIMEOUT_MS = 5_000;
 type GateLogger = { warn(...args: unknown[]): void; error(...args: unknown[]): void };
 type GateSocket = Duplex & { writable?: boolean; writableEnded?: boolean };
 type GateDecision =
-  | { ok: true; claims: unknown; strippedPath: string; widget?: boolean; generation?: string }
+  | {
+      ok: true;
+      claims: unknown;
+      strippedPath: string;
+      widget?: boolean;
+      generation?: string;
+      companion?: CompanionWindow;
+    }
   | { ok: false; code: string; strippedPath: string };
 
 function normalizeGatePath(value: string): string {
@@ -107,6 +121,8 @@ function buildUpstreamUpgradeRequest({
 }
 
 function createLiveKitAuthGateService({
+  apiKey,
+  apiSecret,
   boundary,
   gatePath = DEFAULT_GATE_PATH,
   logger = createLogger({ name: 'api' }),
@@ -117,6 +133,8 @@ function createLiveKitAuthGateService({
   superviseWidgets = true,
   upstreamUrl = process.env.LIVEKIT_INTERNAL_URL || process.env.LIVEKIT_URL || 'ws://127.0.0.1:7880'
 }: {
+  apiKey?: string;
+  apiSecret?: string;
   boundary?: Pick<CredentialBoundaryService, 'authorizeCredential' | 'assertReady'>;
   gatePath?: string;
   logger?: GateLogger;
@@ -138,8 +156,50 @@ function createLiveKitAuthGateService({
       roomStore: store,
       signer: createGateCredentialSigner({ secret })
     });
+  const nativeVoice = pool ? createNativeVoiceRepository(kyselyOn(pool)) : null;
+  const admin =
+    apiKey && apiSecret
+      ? new RoomServiceClient(liveKitHttpUrl(upstream.origin), apiKey, apiSecret, {
+          requestTimeout: NATIVE_VOICE_ADMIN_TIMEOUT_SECONDS,
+          failover: false
+        })
+      : null;
+  const watchdog = admin
+    ? createNativeVoiceWatchdog({
+        remove: (room, identity) => removeNativeVoiceParticipant(admin, getLiveKitRoomName(room, roomPrefix), identity),
+        report: (err, { room: roomId, identity }, final) =>
+          logger.error(
+            {
+              evt: final ? LOG_EVENTS.NATIVE_VOICE_GATE_CLEANUP_EXHAUSTED : LOG_EVENTS.NATIVE_VOICE_GATE_CLEANUP_FAILED,
+              roomId,
+              identity,
+              err
+            },
+            'native voice gate cleanup failed'
+          )
+      })
+    : null;
+  const recovery =
+    admin && watchdog
+      ? createNativeVoiceRecovery({
+          admin,
+          repository: nativeVoice,
+          roomPrefix,
+          watchdog,
+          report: (err) =>
+            logger.error(
+              { evt: LOG_EVENTS.NATIVE_VOICE_GATE_DISCOVERY_FAILED, err },
+              'native voice gate discovery failed'
+            )
+        })
+      : null;
 
-  type Pending = { kind: 'unknown' | 'main' | 'widget'; cancelled: boolean; client: GateSocket; upstream?: net.Socket };
+  type Pending = {
+    kind: 'unknown' | 'main' | 'widget' | 'companion';
+    cancelled: boolean;
+    client: GateSocket;
+    upstream?: net.Socket;
+  };
   const pending = new Set<Pending>();
   function cancel(token: Pending): void {
     token.cancelled = true;
@@ -179,14 +239,19 @@ function createLiveKitAuthGateService({
     return sweep;
   }
   async function start(): Promise<void> {
-    if (started || !owner) return;
+    if (started) return;
     started = true;
+    watchdog?.start();
+    recovery?.start();
+    if (!owner) return;
     timer = setInterval(() => void sweepOwner(), 250);
     timer.unref();
     await sweepOwner();
   }
   async function stop(): Promise<void> {
     if (timer) clearInterval(timer);
+    recovery?.stop();
+    watchdog?.stop();
     await sweep;
     for (const token of pending) cancel(token);
     await owner?.stop();
@@ -200,9 +265,23 @@ function createLiveKitAuthGateService({
     const { credential, strippedPath } = extractCredential(requestUrl);
     const result = await credentialBoundary.authorizeCredential(credential);
     if (!result.ok) return { ok: false, code: result.code, strippedPath };
-    if (headers !== undefined) {
-      const binding = verifyAccessTokenBinding({ claims: result.claims, requestUrl, headers, roomPrefix });
+    if (headers !== undefined || result.claims.companion) {
+      const binding = verifyAccessTokenBinding({
+        claims: result.claims,
+        requestUrl,
+        headers: headers ?? {},
+        roomPrefix
+      });
       if (!binding.ok) return { ok: false, code: binding.code, strippedPath };
+    }
+    if (result.claims.companion) {
+      const { cid, room, peer } = result.claims;
+      const window = watchdog && isUuid(cid) ? await nativeVoice?.window(result.claims) : null;
+      if (window) {
+        const companion = { room, identity: nativeVoiceIdentity(peer, cid), ...window };
+        if (watchdog?.allows(companion)) return { ok: true, claims: result.claims, strippedPath, companion };
+      }
+      return { ok: false, code: 'companion_unavailable', strippedPath };
     }
     if (pool) {
       const room = await pool.query<{ kind: string }>('SELECT kind FROM rooms WHERE id=$1 AND deleted_at IS NULL', [
@@ -219,8 +298,29 @@ function createLiveKitAuthGateService({
     return { ok: true, claims: result.claims, strippedPath };
   }
 
+  async function refreshCompanion(credential: string) {
+    const authorization = await credentialBoundary.authorizeCredential(credential);
+    if (!authorization.ok || !nativeVoice) return null;
+    return nativeVoice.window(authorization.claims);
+  }
+
   function createServer(): http.Server {
     const server = http.createServer((req, res) => {
+      if (req.method === 'GET' && req.url === '/metrics' && watchdog) {
+        const { watches, exhausted } = watchdog.metrics();
+        res
+          .writeHead(200, { 'content-type': 'text/plain; version=0.0.4; charset=utf-8' })
+          .end(
+            [
+              '# TYPE voice_room_livekit_gate_native_voice_watches gauge',
+              `voice_room_livekit_gate_native_voice_watches ${watches}`,
+              '# TYPE voice_room_livekit_gate_native_voice_cleanup_exhausted_total counter',
+              `voice_room_livekit_gate_native_voice_cleanup_exhausted_total ${exhausted}`,
+              ''
+            ].join('\n')
+          );
+        return;
+      }
       if (req.url === '/readyz') {
         credentialBoundary
           .assertReady()
@@ -269,7 +369,7 @@ function createLiveKitAuthGateService({
             deny(socket, 403, 'Forbidden');
             return;
           }
-          token.kind = decision.widget ? 'widget' : 'main';
+          token.kind = decision.companion ? 'companion' : decision.widget ? 'widget' : 'main';
           if (token.kind === 'main') pending.delete(token);
           if (!isSocketWritable(socket) || token.cancelled) return;
           const upstreamSocket = net.connect({
@@ -289,6 +389,24 @@ function createLiveKitAuthGateService({
                 return;
               }
               try {
+                if (decision.companion) {
+                  const fresh = await authorize(request.url, request.headers);
+                  if (!fresh.ok || fresh.companion?.identity !== decision.companion.identity || token.cancelled) {
+                    cancel(token);
+                    return;
+                  }
+                  const { credential } = extractCredential(request.url);
+                  const untrack = watchdog?.track(
+                    fresh.companion,
+                    () => refreshCompanion(credential),
+                    () => cancel(token)
+                  );
+                  if (!untrack) {
+                    cancel(token);
+                    return;
+                  }
+                  socket.once('close', untrack);
+                }
                 if (decision.widget) {
                   if (
                     !owner ||

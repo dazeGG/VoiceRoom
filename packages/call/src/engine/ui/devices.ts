@@ -15,6 +15,7 @@ import { removeStorage, writeStorage } from '../core/storage';
 import { useRoomDeviceUiStore } from '../core/room-device-ui.store';
 import { state } from '../core/room-runtime.store';
 import { clampGateThresholdDb, getDbMeterPosition, getNoiseModeLabel } from '../core/settings';
+import { nativeReceiveRoute } from '../core/native-receive-route';
 import { showToast } from './toast';
 import {
   describeMicrophoneError,
@@ -415,6 +416,7 @@ export function handleDeviceChange(): void {
 
 async function followDeviceChange(): Promise<void> {
   const devices = await refreshDevices();
+  nativeReceiveRoute.settingsChanged?.({ devicesChanged: true });
   if (state.joined && !state.localStream && listedDevices(devices, 'audioinput').length > 0) {
     if (await attachMicrophone({ automatic: true })) await syncMicrophoneControlsSoon();
   } else if (shouldReopenMicrophone(devices)) {

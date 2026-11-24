@@ -15,6 +15,63 @@ import {
 } from '../src/realtime.ts';
 import { defined } from './helpers/assert-defined.ts';
 
+test('native voice snapshots add a versioned capability and mapping to the existing roster', () => {
+  const roomId = 'room-0001';
+  const peerId = 'peer-0001';
+  const legacy = {
+    roomId,
+    room: { roomId, avatarUrl: null, createdAt: 1, isStatic: true, name: 'Room', peers: 0, relationship: 'member' },
+    peers: [],
+    recentMessages: [],
+    voiceActiveSince: null,
+    mode: 'active'
+  };
+  assert.equal(parseServerFrame({ type: 'room.snapshot', payload: legacy }).ok, true);
+  const nativeVoice = { version: 1, stage: 'internal-join', generation: 'a'.repeat(32) };
+  const nativeVoiceCompanions = { version: 1, companions: [{ peerId, identity: `${peerId}#voice.${'c'.repeat(32)}` }] };
+  const active = { ...legacy, nativeVoice, nativeVoiceCompanions };
+  const decoded = parseServerFrame({ type: 'room.snapshot', payload: active });
+  assert.ok(decoded.ok && decoded.frame.type === 'room.snapshot');
+  assert.deepEqual(decoded.frame.payload.nativeVoice, nativeVoice);
+  const receive = { ...nativeVoice, stage: 'receive' };
+  const receiveSnapshot = parseServerFrame({
+    type: 'room.snapshot',
+    payload: { ...active, nativeVoice: receive }
+  });
+  assert.ok(receiveSnapshot.ok && receiveSnapshot.frame.type === 'room.snapshot');
+  assert.deepEqual(receiveSnapshot.frame.payload.nativeVoice, receive);
+  const future = { ...receive, stage: 'duplex-default' };
+  const futureSnapshot = parseServerFrame({
+    type: 'room.snapshot',
+    id: 'recovery-ack',
+    payload: { ...active, nativeVoice: future }
+  });
+  assert.deepEqual(futureSnapshot, {
+    ok: true,
+    frame: {
+      type: 'room.snapshot',
+      id: 'recovery-ack',
+      payload: { ...active, nativeVoice: { ...future, stage: 'off' } }
+    }
+  });
+  assert.equal(future.stage, 'duplex-default');
+  assert.deepEqual(decoded.frame.payload.nativeVoiceCompanions, nativeVoiceCompanions);
+  assert.equal(
+    parseServerFrame({
+      type: 'room.snapshot',
+      payload: { ...active, nativeVoice: { ...nativeVoice, version: 2 } }
+    }).ok,
+    false
+  );
+  assert.equal(
+    parseServerFrame({
+      type: 'room.companions.updated',
+      payload: { roomId, ...nativeVoiceCompanions }
+    }).ok,
+    true
+  );
+});
+
 test('a leave frame accepts bounded relief outcomes and still accepts legacy leave', () => {
   const target = { roomId: 'abcdefghij', peerId: 'peer-0001', sessionToken: 't'.repeat(32) };
   const legacy = { type: 'room.leave', payload: target };
@@ -26,6 +83,50 @@ test('a leave frame accepts bounded relief outcomes and still accepts legacy lea
     validateClientCommand({ ...modern, payload: { ...target, relief: [{ ...outcome, id: 'bad' }] } }).ok,
     false
   );
+});
+
+test('native voice policy updates carry only revocation for a specific room generation', () => {
+  const frame = buildServerEnvelope('room.native_voice.updated', {
+    roomId: 'room-0001',
+    version: 1,
+    stage: 'off',
+    generation: 'a'.repeat(32)
+  });
+  assert.deepEqual(parseServerFrame(frame), { ok: true, frame });
+  assert.equal(parseServerFrame({ ...frame, payload: { ...frame.payload, stage: 'receive' } }).ok, false);
+});
+
+test('native voice preference and lifecycle telemetry extend legacy commands with bounded values', () => {
+  const target = { roomId: 'abcdefghij', peerId: 'peer-0001', sessionToken: 't'.repeat(32) };
+  const join = { ...target, name: 'Alice', nativeVoiceReceive: true };
+  for (const nativeVoicePreference of ['default', 'on', 'off']) {
+    assert.equal(validateClientCommand({ type: 'room.join', payload: { ...join, nativeVoicePreference } }).ok, true);
+  }
+  assert.equal(
+    validateClientCommand({ type: 'room.join', payload: { ...join, nativeVoicePreference: 'yes' } }).ok,
+    false
+  );
+  const telemetry = { started: true, handedOff: true, fallback: 'helper_fault' };
+  const leave = { type: 'room.leave', payload: { ...target, nativeVoice: telemetry } };
+  assert.deepEqual(validateClientCommand(leave), { ok: true, envelope: leave });
+  const poll = {
+    type: 'room.voice.report',
+    payload: {
+      ...target,
+      rttMs: null,
+      jitterBufferMs: null,
+      uplink: { packets: 0, lost: 0 },
+      transport: null,
+      heard: []
+    }
+  };
+  assert.equal(validateClientCommand(poll).ok, true);
+  const modern = { ...poll, payload: { ...poll.payload, nativeVoice: telemetry } };
+  assert.deepEqual(validateClientCommand(modern), { ok: true, envelope: modern });
+  for (const nativeVoice of [{ fallback: 'arbitrary-helper-message' }, { started: false }, { handedOff: 1 }]) {
+    assert.equal(validateClientCommand({ ...poll, payload: { ...poll.payload, nativeVoice } }).ok, false);
+    assert.equal(validateClientCommand({ ...leave, payload: { ...target, nativeVoice } }).ok, false);
+  }
 });
 
 test('voice joins accept a random installation UUID independently of the guest id', () => {
@@ -124,6 +225,17 @@ test('a stats poll names the voice session and carries counts only; its verdict 
       }
     });
   assert.equal(poll().ok, true);
+  for (const receiveEngine of ['browser', 'native'] as const) {
+    const received = poll({ receiveEngine });
+    assert.ok(received.ok && received.envelope.type === 'room.voice.report');
+    assert.equal(received.envelope.payload.receiveEngine, receiveEngine);
+  }
+  assert.equal(poll({ receiveEngine: 'unknown' }).ok, false);
+  const nativeHeard = { concealedSamples: 960, gaps: 1 };
+  const native = poll({ receiveEngine: 'native', heard: [], nativeHeard });
+  assert.ok(native.ok && native.envelope.type === 'room.voice.report');
+  assert.deepEqual(native.envelope.payload.nativeHeard, nativeHeard);
+  assert.equal(poll({ receiveEngine: 'native', nativeHeard: { ...nativeHeard, gaps: -1 } }).ok, false);
   assert.equal(poll({ rttMs: null, transport: null, heard: [] }).ok, true, 'alone in the room, before ICE settles');
   assert.equal(poll({ rttMs: null, rttUnchanged: true }).ok, true, 'new clients can skip an unchanged sample');
   assert.equal(poll({ rttMs: null, rttUnchanged: false }).ok, false);

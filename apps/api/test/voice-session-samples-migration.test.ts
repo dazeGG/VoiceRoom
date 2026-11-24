@@ -152,6 +152,67 @@ test('a minute one trouble passed through is good, and the panel and the SQL rea
 });
 
 test(
+  'receive engine and aggregate native concealment persist; rollback retains existing minutes',
+  { skip },
+  async (t) => {
+    const { cleanup, databaseUrl, pool } = await createTestDatabase(t);
+    t.after(cleanup);
+    const migration = '20261124130000_keep_voice_receive_engine';
+    const oldStay = 'a5acab6c-f24d-42bf-801c-1fa590f108c9';
+    const at = Date.UTC(2026, 9, 31, 12, 0);
+    await rollBackThrough(databaseUrl, migration);
+    await pool.query('INSERT INTO voice_sessions (id, joined_at, left_at) VALUES ($1, $2, $2)', [
+      oldStay,
+      new Date(at)
+    ]);
+    await pool.query('INSERT INTO voice_session_samples (stay_id, at, heard_packets) VALUES ($1, $2, 10)', [
+      oldStay,
+      new Date(at)
+    ]);
+    await runMigrations({ databaseUrl, logger: SILENT });
+
+    const readSamples = async () =>
+      (
+        await pool.query<{
+          receive_engine: string | null;
+          native_heard_concealed: number | null;
+          native_heard_gaps: number | null;
+          heard_packets: number;
+        }>(`SELECT receive_engine, native_heard_concealed, native_heard_gaps, heard_packets
+        FROM voice_session_samples ORDER BY at`)
+      ).rows;
+    const legacy = { receive_engine: null, native_heard_concealed: null, native_heard_gaps: null, heard_packets: 10 };
+    assert.deepEqual(await readSamples(), [legacy]);
+    await createVoiceSessionRepository({ pool }).recordSessions([
+      stay('kitchen', at + MINUTE, [
+        { ...minute(at + MINUTE, { good: 0, unstable: 0, bad: 0 }), receiveEngine: 'browser' },
+        {
+          ...minute(at + 2 * MINUTE, { good: 0, unstable: 0, bad: 0 }),
+          receiveEngine: 'native',
+          nativeHeard: { concealedSamples: 960, gaps: 2 }
+        }
+      ])
+    ]);
+    assert.deepEqual(await readSamples(), [
+      legacy,
+      { ...legacy, receive_engine: 'browser', heard_packets: 3000 },
+      { receive_engine: 'native', native_heard_concealed: 960, native_heard_gaps: 2, heard_packets: 3000 }
+    ]);
+    await assert.rejects(pool.query("UPDATE voice_session_samples SET receive_engine = 'unknown'"), /check constraint/);
+
+    await rollBackThrough(databaseUrl, migration);
+    await assert.rejects(readSamples(), /does not exist/);
+    assert.equal(await count(pool), 3);
+    await runMigrations({ databaseUrl, logger: SILENT });
+    assert.deepEqual(await readSamples(), [
+      legacy,
+      { ...legacy, heard_packets: 3000 },
+      { ...legacy, heard_packets: 3000 }
+    ]);
+  }
+);
+
+test(
   "the minutes go with the room's history and with the stay, and the table rolls back cleanly",
   { skip },
   async (t) => {

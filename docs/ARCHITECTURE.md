@@ -308,3 +308,28 @@ region-aware admission.
   preference at publish, 30/60 FPS; screen audio stereo without RED.
 - Network: UDP 7882, TCP 7881, and opt-in TURN/TLS on the shared :443
   (`TURN_ENABLED`), plus TURN/UDP 3478.
+
+### Native voice receive
+
+An authenticated main-room seat can obtain a hidden, subscribe-only LiveKit
+companion. The Windows Desktop User-Agent and renderer capability and
+preference are client-supplied rollout signals. A client can emulate them and
+obtain the same receive access it already has in the room. Admission and
+renewal bind the companion to the owning account, session and seat generation.
+The configured room cap and the two-slot account cap include pending and
+retiring leases. In a 60-second window, admission allows 10 requests per
+session and 20 per account, and renewal allows 10 per session and 24 per
+account.
+
+On effective stage shutdown or loss of rollout eligibility, the API checks
+active receive leases on its one-second sweep and sends a personal realtime
+revocation to supporting renderers. On receipt, Chromium resumes voice within
+the renderer's one-second helper stop timeout. The gate independently closes
+signaling by the lease's five-second heartbeat deadline and requests SFU
+participant removal through LiveKit RoomService. Established media on a
+non-cooperating client can continue during a RoomService outage.
+
+Native telemetry is correlated with an issued companion on the same stay,
+with a 60-second reporting grace after retirement. The terminal fallback
+occupies a reserved slot in the stay's event buffer and is written with the
+finished stay.

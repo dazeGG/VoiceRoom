@@ -7,7 +7,8 @@ export type GatePrincipalType = 'account' | 'guest';
 
 export type GateClaims = {
   cid: string;
-  exp: number;
+  companion?: true;
+  exp: number | null;
   iat: number;
   peer: string;
   pEpoch: number;
@@ -23,7 +24,8 @@ export type GateVerification =
 
 export type GateSignInput = {
   credentialId?: string | undefined;
-  expiresAt?: number;
+  companion?: true | undefined;
+  expiresAt?: number | null;
   issuedAt?: number | undefined;
   peerId?: string;
   principalEpoch?: number;
@@ -49,6 +51,10 @@ function parseBase64urlJson(value: string): unknown {
 
 function isPrincipalType(value: unknown): value is GatePrincipalType {
   return value === 'account' || value === 'guest';
+}
+
+function validExpiry(exp: unknown, iat: number, companion: unknown): exp is number | null {
+  return exp === null ? companion === true : typeof exp === 'number' && Number.isFinite(exp) && exp > iat;
 }
 
 function hashGateCredential(credential: string): string {
@@ -81,6 +87,7 @@ function createGateCredentialSigner({
 
   function sign({
     credentialId = crypto.randomUUID(),
+    companion,
     expiresAt,
     issuedAt = nowMs(),
     peerId,
@@ -91,7 +98,8 @@ function createGateCredentialSigner({
   }: GateSignInput = {}): string {
     const body = {
       cid: credentialId || '',
-      exp: Number(expiresAt),
+      companion,
+      exp: expiresAt === null ? null : Number(expiresAt),
       iat: Number(issuedAt),
       peer: peerId || '',
       pEpoch: Number(principalEpoch),
@@ -106,8 +114,7 @@ function createGateCredentialSigner({
       !Number.isSafeInteger(body.pEpoch) ||
       body.pEpoch < 0 ||
       !Number.isFinite(body.iat) ||
-      !Number.isFinite(body.exp) ||
-      body.exp <= body.iat
+      !validExpiry(body.exp, body.iat, companion)
     ) {
       throw new Error('Invalid gate credential epoch or time claims');
     }
@@ -136,11 +143,12 @@ function createGateCredentialSigner({
     }
     // Only this signer writes payloads, so a signed one is always an object.
     if (!isRecord(claims)) return { ok: false, code: 'malformed_payload' };
-    const { cid, room, peer, pId, pType, iat, exp } = claims;
+    const { cid, companion, room, peer, pId, pType, iat, exp } = claims;
     const pEpoch = Number(claims.pEpoch);
     if (
       typeof cid !== 'string' ||
       !cid ||
+      (companion !== undefined && companion !== true) ||
       typeof room !== 'string' ||
       !room ||
       typeof peer !== 'string' ||
@@ -150,19 +158,17 @@ function createGateCredentialSigner({
       !isPrincipalType(pType) ||
       typeof iat !== 'number' ||
       !Number.isFinite(iat) ||
-      typeof exp !== 'number' ||
-      !Number.isFinite(exp) ||
+      !validExpiry(exp, iat, companion) ||
       !Number.isSafeInteger(pEpoch) ||
-      pEpoch < 0 ||
-      exp <= iat
+      pEpoch < 0
     ) {
       return { ok: false, code: 'invalid_claims', claims };
     }
     if (iat > nowMs() + Math.max(0, maxFutureSkewMs || 0)) {
       return { ok: false, code: 'issued_in_future', claims };
     }
-    if (exp <= nowMs()) return { ok: false, code: 'expired', claims };
-    return { ok: true, claims: { cid, exp, iat, peer, pEpoch, pId, pType, room } };
+    if (exp !== null && exp <= nowMs()) return { ok: false, code: 'expired', claims };
+    return { ok: true, claims: { cid, ...(companion && { companion }), exp, iat, peer, pEpoch, pId, pType, room } };
   }
 
   return {

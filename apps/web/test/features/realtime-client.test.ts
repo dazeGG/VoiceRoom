@@ -63,6 +63,39 @@ test('a frame outside the realtime contract is dropped and the next good one sti
   warn.mockRestore();
 });
 
+test('an active snapshot with a future native voice stage still reaches realtime subscribers', async () => {
+  const realtime = await load();
+  const { joinVoiceRoom } = await import('@/entities/room/room-realtime');
+  const subscriber = vi.fn();
+  const unsubscribe = realtime.getAppRealtime().subscribe(subscriber);
+  const socket = FakeWebSocket.latest();
+  socket.open();
+  const roomId = 'room-0001';
+  joinVoiceRoom({ roomId, peerId: 'peer-0001', sessionToken: 's'.repeat(32), name: 'Local' });
+  expect(socket.sent.find(({ type }) => type === 'room.join')).toMatchObject({
+    payload: { nativeVoiceReceive: true }
+  });
+  const frame = {
+    type: 'room.snapshot',
+    id: 'recovery-ack',
+    payload: {
+      roomId,
+      room: { roomId, avatarUrl: null, createdAt: 1, isStatic: true, name: 'Room', peers: 0, relationship: 'member' },
+      peers: [],
+      recentMessages: [],
+      voiceActiveSince: null,
+      mode: 'active',
+      nativeVoice: { version: 1, stage: 'duplex-default', generation: 'a'.repeat(32) }
+    }
+  };
+  socket.receive(frame);
+  expect(subscriber).toHaveBeenCalledWith({
+    ...frame,
+    payload: { ...frame.payload, nativeVoice: { ...frame.payload.nativeVoice, stage: 'off' } }
+  });
+  unsubscribe();
+});
+
 test('frames outside the contract ask for a version check at most once a minute', async () => {
   const realtime = await load();
   const { onContractViolation } = await import('../../src/api/contract-violations.ts');

@@ -232,7 +232,8 @@ export function createAdminRoomsService(deps: AdminRoomsServiceDeps) {
     kept: ReadonlyMap<string, readonly StayEvent[]>,
     live: ReadonlySet<string>,
     feedbackUntil: number,
-    includeRelief: boolean
+    includeRelief: boolean,
+    includeNativeVoice: boolean
   ): Promise<Payload<RoomCallDetail>> {
     const [origin, readsFeedback, rooms] = await Promise.all([
       seesOrigin(userId),
@@ -258,7 +259,9 @@ export function createAdminRoomsService(deps: AdminRoomsServiceDeps) {
     return {
       call: origin ? allowedCall : { ...allowedCall, stays: allowedCall.stays.map(withoutOrigin) },
       owner: rooms[0]?.owner ?? null,
-      events: includeRelief ? events : events.filter((event) => event.kind !== 'relief'),
+      events: events.filter(
+        ({ kind }) => (includeRelief || kind !== 'relief') && (includeNativeVoice || kind !== 'native_fallback')
+      ),
       ...(feedback ? { feedback } : {})
     };
   }
@@ -267,7 +270,8 @@ export function createAdminRoomsService(deps: AdminRoomsServiceDeps) {
   async function call(
     userId: string,
     callId: string,
-    includeRelief = false
+    includeRelief = false,
+    includeNativeVoice = false
   ): Promise<Payload<RoomCallDetail> | null | undefined> {
     if (!(await allowed(userId))) return null;
     const stored = (await deps.repository().calls({ callId })).calls[0];
@@ -280,7 +284,8 @@ export function createAdminRoomsService(deps: AdminRoomsServiceDeps) {
       kept,
       new Set(),
       feedbackUntil ?? found.endedAt + FEEDBACK_AFTER_CALL_MS,
-      includeRelief
+      includeRelief,
+      includeNativeVoice
     );
   }
 
@@ -288,7 +293,8 @@ export function createAdminRoomsService(deps: AdminRoomsServiceDeps) {
   async function liveCall(
     userId: string,
     roomId: string,
-    includeRelief = false
+    includeRelief = false,
+    includeNativeVoice = false
   ): Promise<Payload<RoomCallDetail> | null | undefined> {
     if (!(await allowed(userId))) return null;
     const room = [...deps.presenceRooms()].find((candidate) => candidate.id === roomId);
@@ -342,7 +348,15 @@ export function createAdminRoomsService(deps: AdminRoomsServiceDeps) {
       stays,
       kind: row?.kind ?? room.kind ?? 'main'
     };
-    return detailOf(userId, liveCallRow, kept, new Set(peers.map((peer) => peer.id)), at + 1, includeRelief);
+    return detailOf(
+      userId,
+      liveCallRow,
+      kept,
+      new Set(peers.map((peer) => peer.id)),
+      at + 1,
+      includeRelief,
+      includeNativeVoice
+    );
   }
 
   return Object.freeze({ live, history, calls, staticRooms, call, liveCall });

@@ -165,6 +165,39 @@ test('a credential that is not a string is malformed and never reaches the signe
   assert.equal(verified, 0);
 });
 
+test('credential boundary refuses a native voice lease whose issuance window has closed', async () => {
+  const boundary = createCredentialBoundaryService({
+    roomStore: store({
+      async getLiveKitGatePrincipalEpoch() {
+        assert.fail('An expired lease must not look up the principal epoch');
+      }
+    }),
+    signer: createSigner(),
+    now: () => 1_000
+  });
+  assert.deepEqual(
+    await boundary.issueCredential({
+      roomId: CLAIMS.room,
+      peerId: CLAIMS.peer,
+      principal: { principalType: 'account', principalId: 'account' },
+      companion: { id: CLAIMS.cid, expiresAt: 1_000 }
+    }),
+    { status: 'invalid', credential: null }
+  );
+});
+
+test('credential boundary refuses a companion credential for a guest before querying the store', async () => {
+  const boundary = createCredentialBoundaryService({
+    roomStore: store({
+      async verifyLiveKitGateCredential() {
+        assert.fail('A guest companion must not reach the store');
+      }
+    }),
+    signer: createSigner({ ok: true, claims: { ...CLAIMS, companion: true } })
+  });
+  assert.deepEqual(await boundary.authorizeCredential('credential'), { ok: false, code: 'identity_mismatch' });
+});
+
 test('credential boundary preserves store refusal when credential persistence fails', async () => {
   // Statuses the port does not know: the boundary passes them on or fails closed.
   let storedResult: unknown = { status: 'revoked', credential: null };

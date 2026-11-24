@@ -55,6 +55,7 @@ export interface VoiceJoinDeps {
   leases: ReconnectLeases;
   summaries?: Pick<ReturnType<typeof createRoomSummaries>, 'invalidateRecipients' | 'schedule'> | undefined;
   buildRoomSnapshot: (roomId: string, mode: RoomSnapshot['mode']) => Promise<RoomSnapshot | null>;
+  nativeVoiceCapability?: ((roomId: string, peerId: string) => RoomSnapshot['nativeVoice']) | undefined;
   leaveVoiceRoom: (
     connection: WsConnection,
     payload: LeavePayload,
@@ -82,6 +83,7 @@ export function createVoiceJoin(deps: VoiceJoinDeps) {
     leases,
     summaries,
     buildRoomSnapshot,
+    nativeVoiceCapability,
     leaveVoiceRoom
   } = deps;
 
@@ -382,6 +384,16 @@ export function createVoiceJoin(deps: VoiceJoinDeps) {
         client: connection.client,
         desktopVersion:
           connection.client === 'desktop_app' ? (payload.desktopVersion ?? previous?.desktopVersion ?? null) : null,
+        ...(payload.nativeVoiceReceive && { nativeVoiceReceive: payload.nativeVoiceReceive }),
+        ...(payload.nativeVoicePolicyUpdates && { nativeVoicePolicyUpdates: payload.nativeVoicePolicyUpdates }),
+        ...(previous?.nativeVoiceAttempt &&
+          previous.accountUserId === sessionUser?.id && {
+            nativeVoiceAttempt: previous.nativeVoiceAttempt
+          }),
+        ...(connection.client === 'desktop_app' &&
+          sessionUser &&
+          payload.nativeVoiceReceive &&
+          payload.nativeVoicePreference && { nativeVoicePreference: payload.nativeVoicePreference }),
         os: connection.device?.os ?? '',
         browser: connection.device?.browser ?? '',
         guestId: sessionUser ? '' : normalizeGuestId(payload.guestId),
@@ -481,7 +493,15 @@ export function createVoiceJoin(deps: VoiceJoinDeps) {
         return supersededVoiceJoin(connection, roomId, transport.id);
       }
       if (snapshot) {
-        wsRegistry.sendToConnection(connection, buildServerEnvelope('room.snapshot', snapshot, requestId));
+        const capability = (room.kind ?? 'main') === 'main' ? nativeVoiceCapability?.(roomId, peerId) : undefined;
+        const nativeVoice =
+          capability?.stage === 'receive' && !payload.nativeVoiceReceive
+            ? { ...capability, stage: 'internal-join' as const }
+            : capability;
+        wsRegistry.sendToConnection(
+          connection,
+          buildServerEnvelope('room.snapshot', { ...snapshot, ...(nativeVoice && { nativeVoice }) }, requestId)
+        );
       }
 
       return { ok: true, reconnecting };

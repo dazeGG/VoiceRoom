@@ -285,6 +285,18 @@ export interface MessageSendIdempotency {
   state: Generated<string>;
 }
 
+export interface NativeVoiceLeases {
+  account_id: string;
+  cleanup_exhausted_at: Timestamp | null;
+  expires_at: Timestamp;
+  generation: string;
+  id: string;
+  peer_id: string;
+  retired_at: Timestamp | null;
+  room_id: string;
+  valid_until: Timestamp | null;
+}
+
 export interface NotificationDeliveryLeases {
   expires_at: Generated<Timestamp>;
   fencing_token: Generated<Int8>;
@@ -671,6 +683,7 @@ export interface Users {
 export interface VoiceCallEvents {
   at: Timestamp;
   kind: string;
+  native_fallback_reason: string | null;
   relief_kind: string | null;
   relief_outcome: string | null;
   stay_id: string;
@@ -729,6 +742,8 @@ export interface VoiceSessionSamples {
   mic_expected_ms: Generated<number>;
   mic_reopens: Generated<number>;
   mic_replacements: Generated<number>;
+  native_heard_concealed: number | null;
+  native_heard_gaps: number | null;
   playout_events: number | null;
   playout_synthesized_pct: number | null;
   polls_bad: Generated<number>;
@@ -737,6 +752,7 @@ export interface VoiceSessionSamples {
   polls_heard_badly: Generated<number>;
   polls_hears_badly: Generated<number>;
   polls_unstable: Generated<number>;
+  receive_engine: string | null;
   rtt_ms_sum: Generated<number>;
   rtt_polls: Generated<number>;
   stay_id: string;
@@ -783,6 +799,7 @@ export interface DB {
   message_delivery_leases: MessageDeliveryLeases;
   message_delivery_outbox: MessageDeliveryOutbox;
   message_send_idempotency: MessageSendIdempotency;
+  native_voice_leases: NativeVoiceLeases;
   notification_delivery_leases: NotificationDeliveryLeases;
   notification_dm_mutes: NotificationDmMutes;
   notification_outbox: NotificationOutbox;

@@ -4,6 +4,7 @@
 
 import crypto from 'node:crypto';
 import { normalizeReleaseVersion } from '@voiceroom/shared/account-security';
+import type { NativeVoiceStage } from '@voiceroom/shared/contracts/admission';
 import { SESSION_ENDED_CLOSE_CODE } from '@voiceroom/shared/realtime';
 import { cleanLiveKitUrl } from '@voiceroom/shared/validation';
 import { normalizeLiveKitRoomPrefix } from '../domains/admission/livekit-token-binding.mts';
@@ -38,8 +39,37 @@ function cleanOrigin(value: string | undefined): string {
 
 export const DEFAULT_REALTIME_RECONNECT_LEASE_MS = 30000;
 
+export function readNativeVoicePolicy(env: Env, maxRoomPeers: number) {
+  const configured = env.NATIVE_VOICE_STAGE;
+  const stage: NativeVoiceStage = configured === 'internal-join' || configured === 'receive' ? configured : 'off';
+  const defaultPercent = readEnvInt('NATIVE_VOICE_DEFAULT_PERCENT', 0, 0, env);
+  if (defaultPercent > 100) throw new Error('NATIVE_VOICE_DEFAULT_PERCENT must be at most 100');
+  // Leave at least two reconnect slots within the configured SFU ceiling.
+  const physicalSlots = readEnvInt('LIVEKIT_MAX_PARTICIPANTS', 24, 0, env) || 24;
+  const cap =
+    stage === 'off'
+      ? 0
+      : Math.min(
+          readEnvInt('NATIVE_VOICE_MAX_COMPANIONS_PER_ROOM', 2, 0, env),
+          Math.max(0, physicalSlots - maxRoomPeers - 2)
+        );
+  return {
+    stage,
+    cap,
+    defaultPercent,
+    accounts: new Set(
+      (env.NATIVE_VOICE_ACCOUNT_IDS ?? '')
+        .split(',')
+        .map((id) => id.trim())
+        .filter(Boolean)
+    )
+  } as const;
+}
+
 export function readLiveKitGateConfig(env: Env = process.env) {
   return {
+    apiKey: (env.LIVEKIT_API_KEY || '').trim(),
+    apiSecret: (env.LIVEKIT_API_SECRET || '').trim(),
     gatePath: env.LIVEKIT_GATE_PATH || '/rtc',
     roomPrefix: normalizeLiveKitRoomPrefix(env.LIVEKIT_ROOM_PREFIX),
     secret: env.LIVEKIT_GATE_SECRET,

@@ -3,7 +3,14 @@ import { PEER_LATENCY_INTERVAL_MS } from '../core/config';
 import { state } from '../core/room-runtime.store';
 import { findFirstLocalPublication, findLocalMicrophonePublication } from '../services/livekit-service';
 import { isMicrophonePublication } from '../services/livekit/publication-kinds';
-import { isActiveCandidatePair, readRtcStats, type RtcStat, type RtcStatsSource } from '../media/rtc-stats';
+import {
+  counterGrowth,
+  isActiveCandidatePair,
+  readRtcStats,
+  speechConcealment,
+  type RtcStat,
+  type RtcStatsSource
+} from '../media/rtc-stats';
 import { isRecord } from '@voiceroom/shared/guards';
 import type { CpuPoll, HeardPoll, PlayoutPoll } from '@voiceroom/shared/contracts/realtime';
 import { takeJoinTiming } from './join-timing';
@@ -24,6 +31,11 @@ import {
   isMicrophoneProcessingIdle
 } from '../services/microphone-service';
 import { noteCaptureHealth, processingReliefForPoll } from './capture-diagnostics';
+import {
+  isNativeVoiceReceiving,
+  nativeVoiceTelemetryForReport,
+  takeNativeVoiceDeltas
+} from '../services/native-voice-receive';
 
 import { createLogger, errorContext } from '../diagnostics';
 
@@ -151,6 +163,7 @@ function postVoicePoll(inbound: InboundCounts, outbound: OutboundCounts, load: L
   });
   const joinTiming = takeJoinTiming();
   const cpu = cpuPoll(load);
+  const nativeVoice = nativeVoiceTelemetryForReport();
   const { platform, transport } = getCallPorts();
   transport.realtime.reportPoll({
     roomId: state.roomId,
@@ -159,6 +172,9 @@ function postVoicePoll(inbound: InboundCounts, outbound: OutboundCounts, load: L
     rttMs: report(reportedRttMs),
     ...(rttUnchanged ? { rttUnchanged: true } : {}),
     jitterBufferMs: report(inbound.jitterBufferMs),
+    receiveEngine: inbound.receiveEngine,
+    ...(inbound.nativeHeard ? { nativeHeard: inbound.nativeHeard } : {}),
+    ...(nativeVoice && { nativeVoice }),
     uplink: { packets: outbound.outboundPackets, lost: outbound.outboundLost },
     transport: state.localNetwork.transport,
     heard: inbound.heard,
@@ -228,11 +244,21 @@ type InboundCounts = Pick<
   /** How long a played sample of the microphones waited in the jitter buffer, on average; null without any. */
   jitterBufferMs: number | null;
   playout: PlayoutPoll | null;
+  receiveEngine: 'browser' | 'native';
+  nativeHeard?: { concealedSamples: number; gaps: number };
 };
 type OutboundCounts = Pick<PollCounts, 'outboundPackets' | 'outboundLost' | 'rttSeconds' | 'rttChecks'>;
 
 /** The growth of a counter since the last reading; a counter that went back (a new stream) starts over from zero. */
-const growth = (now: number, before: number) => (now >= before ? now - before : now);
+function readNativeInbound(counts: InboundCounts): [bufferSeconds: number, bufferSamples: number] {
+  const deltas = takeNativeVoiceDeltas();
+  if (!deltas) return [0, 0];
+  const { playedSamples, concealedSamples, gaps, bufferSeconds, bufferSamples } = deltas;
+  counts.playedSamples += playedSamples;
+  counts.concealedSamples += concealedSamples;
+  counts.nativeHeard = { concealedSamples, gaps };
+  return [bufferSeconds, bufferSamples];
+}
 
 function playoutDelta(readings: Map<string, PlayoutReading>): PlayoutPoll | null {
   const room = state.livekitRoom;
@@ -258,6 +284,7 @@ function playoutDelta(readings: Map<string, PlayoutReading>): PlayoutPoll | null
 }
 
 async function updateInboundAudioStats(isCurrent: () => boolean): Promise<InboundCounts> {
+  const native = isNativeVoiceReceiving();
   const counts: InboundCounts = {
     inboundPackets: 0,
     inboundLost: 0,
@@ -267,18 +294,19 @@ async function updateInboundAudioStats(isCurrent: () => boolean): Promise<Inboun
     jitterMs: null,
     heard: [],
     jitterBufferMs: null,
-    playout: null
+    playout: null,
+    receiveEngine: native ? 'native' : 'browser'
   };
   const playout = new Map<string, PlayoutReading>();
   let jitterSum = 0;
   let jitterCount = 0;
-  let bufferSeconds = 0;
-  let bufferSamples = 0;
+  let [bufferSeconds, bufferSamples] = native ? readNativeInbound(counts) : [0, 0];
   for (const [peerId, peer] of state.peers) {
     // Screen audio is not the voice the status speaks of.
     let heard: HeardPoll | null = null;
     for (const publication of peer.livekitParticipant?.audioTrackPublications?.values() || []) {
       const voice = isMicrophonePublication(publication);
+      if (voice && native) continue;
       const track = publication.track;
       const receiver = track?.receiver;
       const stats = readRtcStats(await track?.getRTCStatsReport?.().catch(() => undefined));
@@ -311,7 +339,7 @@ async function updateInboundAudioStats(isCurrent: () => boolean): Promise<Inboun
           discarded: report.packetsDiscarded || 0,
           played: report.totalSamplesReceived || 0,
           // Made-up sound that was silence anyway is not heard as a gap.
-          concealed: Math.max(0, (report.concealedSamples || 0) - (report.silentConcealedSamples || 0)),
+          concealed: speechConcealment(report.concealedSamples, report.silentConcealedSamples),
           gaps: report.concealmentEvents || 0,
           bufferSeconds: report.jitterBufferDelay || 0,
           bufferSamples: report.jitterBufferEmittedCount || 0
@@ -327,24 +355,24 @@ async function updateInboundAudioStats(isCurrent: () => boolean): Promise<Inboun
           bufferSamples: 0
         };
         previousInbound.set(report.id, reading);
-        const lost = growth(reading.lost, before.lost);
+        const lost = counterGrowth(reading.lost, before.lost);
         counts.inboundLost += lost;
-        counts.inboundPackets += lost + growth(reading.received, before.received);
-        counts.inboundDiscarded += growth(reading.discarded, before.discarded);
-        counts.playedSamples += growth(reading.played, before.played);
-        counts.concealedSamples += growth(reading.concealed, before.concealed);
+        counts.inboundPackets += lost + counterGrowth(reading.received, before.received);
+        counts.inboundDiscarded += counterGrowth(reading.discarded, before.discarded);
+        counts.playedSamples += counterGrowth(reading.played, before.played);
+        counts.concealedSamples += counterGrowth(reading.concealed, before.concealed);
         if (report.jitter !== undefined) {
           jitterSum += report.jitter * 1000;
           jitterCount += 1;
         }
         if (!voice) continue;
         heard ??= { peerId, packets: 0, lost: 0, concealedSamples: 0, gaps: 0 };
-        heard.packets += lost + growth(reading.received, before.received);
+        heard.packets += lost + counterGrowth(reading.received, before.received);
         heard.lost += lost;
-        heard.concealedSamples += growth(reading.concealed, before.concealed);
-        heard.gaps += growth(reading.gaps, before.gaps);
-        bufferSeconds += growth(reading.bufferSeconds, before.bufferSeconds);
-        bufferSamples += growth(reading.bufferSamples, before.bufferSamples);
+        heard.concealedSamples += counterGrowth(reading.concealed, before.concealed);
+        heard.gaps += counterGrowth(reading.gaps, before.gaps);
+        bufferSeconds += counterGrowth(reading.bufferSeconds, before.bufferSeconds);
+        bufferSamples += counterGrowth(reading.bufferSamples, before.bufferSamples);
       }
     }
     if (heard) counts.heard.push(heard);
@@ -421,16 +449,16 @@ async function readVideoStrain(isCurrent: () => boolean): Promise<VideoCounts> {
       if (report.type === 'outbound-rtp') {
         const source = report.mediaSourceId ?? report.id;
         const encoded = encodedBySource.get(source) ?? { seconds: 0, cpuSeconds: 0 };
-        encoded.seconds = Math.max(encoded.seconds, growth(reading.seconds, before.seconds));
-        encoded.cpuSeconds = Math.max(encoded.cpuSeconds, growth(reading.cpuSeconds, before.cpuSeconds));
+        encoded.seconds = Math.max(encoded.seconds, counterGrowth(reading.seconds, before.seconds));
+        encoded.cpuSeconds = Math.max(encoded.cpuSeconds, counterGrowth(reading.cpuSeconds, before.cpuSeconds));
         encodedBySource.set(source, encoded);
         continue;
       }
-      const lost = growth(reading.lost, before.lost);
-      counts.framesReceived += growth(reading.received, before.received);
-      counts.framesDropped += growth(reading.dropped, before.dropped);
+      const lost = counterGrowth(reading.lost, before.lost);
+      counts.framesReceived += counterGrowth(reading.received, before.received);
+      counts.framesDropped += counterGrowth(reading.dropped, before.dropped);
       counts.videoLost += lost;
-      counts.videoPackets += lost + growth(reading.packets, before.packets);
+      counts.videoPackets += lost + counterGrowth(reading.packets, before.packets);
     }
   }
   for (const encoded of encodedBySource.values()) {

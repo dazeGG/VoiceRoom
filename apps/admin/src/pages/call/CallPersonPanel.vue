@@ -84,6 +84,14 @@ const facts = computed(() => {
   if (clientLine) facts.push({ label: 'Клиент', value: clientLine });
   if (person.seat.location) facts.push({ label: 'Откуда', value: person.seat.location });
   if (transport) facts.push({ label: 'Транспорт', value: TRANSPORTS[transport] ?? transport });
+  const nativeMinutes = samples.filter((minute) => minute.receiveEngine === 'native').length;
+  const browserMinutes = samples.filter((minute) => minute.receiveEngine === 'browser').length;
+  if (nativeMinutes || browserMinutes) {
+    facts.push({
+      label: 'Приём голоса',
+      value: `Нативный звук ${formatCount(nativeMinutes)} мин · браузер ${formatCount(browserMinutes)} мин`
+    });
+  }
   if (screen) facts.push({ label: 'Показ экрана', value: screen });
   if (camera) facts.push({ label: 'Камера', value: camera });
   if (rtt.avg !== null) {

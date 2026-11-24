@@ -1,4 +1,11 @@
-import { LiveKitAdmission, LiveKitTokenBody } from '@voiceroom/shared/contracts/admission';
+import {
+  LiveKitAdmission,
+  LiveKitTokenBody,
+  NativeVoiceAdmission,
+  NativeVoiceAdmissionBody,
+  NativeVoiceRenewal,
+  NativeVoiceRenewalBody
+} from '@voiceroom/shared/contracts/admission';
 import { api, ApiError } from '@/api/client';
 import { ERROR_TEXTS } from '@/api/error-texts';
 import { fetchRoomStatus } from '@/api/rooms';
@@ -54,6 +61,8 @@ export function mapWebCallEvent(event: RealtimeEvent): CallRealtimeEvent | undef
     case 'room.peer.joined':
     case 'room.peer.left':
     case 'room.peer.updated':
+    case 'room.companions.updated':
+    case 'room.native_voice.updated':
     case 'room.voice.quality':
     case 'room.full':
     case 'server.full':
@@ -68,6 +77,16 @@ export function mapWebCallEvent(event: RealtimeEvent): CallRealtimeEvent | undef
 export const webCallTransport: CallTransport = {
   roomStatus: fetchRoomStatus,
   requestLiveKitToken,
+  requestNativeVoiceAdmission: (input) =>
+    api.post('/api/native-voice/admission', NativeVoiceAdmission, input, {
+      bodySchema: NativeVoiceAdmissionBody,
+      signal: AbortSignal.timeout(10_000)
+    }),
+  renewNativeVoiceLease: (input, signal) =>
+    api.post('/api/native-voice/renewal', NativeVoiceRenewal, input, {
+      bodySchema: NativeVoiceRenewalBody,
+      signal: AbortSignal.any([signal, AbortSignal.timeout(10_000)])
+    }),
   failure: (error) =>
     error instanceof ApiError ? { code: error.code, status: error.status, message: error.message } : null,
   realtime: {

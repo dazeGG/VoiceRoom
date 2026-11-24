@@ -8,6 +8,13 @@
 
 import { Type, type Static, type TSchema } from 'typebox';
 import { LoginAlert } from './account.ts';
+import {
+  NativeVoiceFallbackReason,
+  NativeVoiceGeneration,
+  NativeVoicePreference,
+  NativeVoiceStage,
+  VoiceReceiveEngine
+} from './admission.ts';
 import { AdminReportsEvent } from './admin.ts';
 import { Nullable } from './http.ts';
 import { DirectMessage, DirectMessageInvite, PinnedMessage, ReactionSummary, RoomMessage } from './messages.ts';
@@ -118,6 +125,20 @@ export const HeardPoll = Type.Object({
 });
 export type HeardPoll = Static<typeof HeardPoll>;
 
+export { VoiceReceiveEngine } from './admission.ts';
+
+/** Cumulative for the stay, repeated so a missed poll can be recovered. */
+export const NativeVoiceTelemetry = Type.Object({
+  started: Type.Optional(Type.Literal(true)),
+  handedOff: Type.Optional(Type.Literal(true)),
+  fallback: Type.Optional(NativeVoiceFallbackReason)
+});
+export type NativeVoiceTelemetry = Static<typeof NativeVoiceTelemetry>;
+
+/** Native receive counts cover all selected microphones without per-speaker attribution. */
+export const NativeHeardPoll = Type.Pick(HeardPoll, ['concealedSamples', 'gaps']);
+export type NativeHeardPoll = Static<typeof NativeHeardPoll>;
+
 /** How the media reaches the server: UDP, TCP, or through a TURN relay. */
 export const VoiceTransport = Type.Union([Type.Literal('udp'), Type.Literal('tcp'), Type.Literal('relay')]);
 export type VoiceTransport = Static<typeof VoiceTransport>;
@@ -215,6 +236,9 @@ export const VoicePoll = Type.Object({
   uplink: Type.Object({ packets: PollCount, lost: PollCount }),
   transport: Nullable(VoiceTransport),
   heard: Type.Array(HeardPoll, { maxItems: 64 }),
+  receiveEngine: Type.Optional(VoiceReceiveEngine),
+  nativeHeard: Type.Optional(NativeHeardPoll),
+  nativeVoice: Type.Optional(NativeVoiceTelemetry),
   mic: Type.Optional(MicPoll),
   cpu: Type.Optional(CpuPoll),
   windowState: Type.Optional(AppWindowState),
@@ -274,13 +298,21 @@ export const ClientCommandFrames = {
       guestId: Type.Optional(Type.String()),
       /** The desktop shell's own version, available before the first stats poll. */
       desktopVersion: Type.Optional(Type.String({ pattern: DESKTOP_VERSION_PATTERN })),
+      /** This renderer understands the native voice receive stage. */
+      nativeVoiceReceive: Type.Optional(Type.Literal(true)),
+      /** This renderer also handles policy revocations during an active stay. */
+      nativeVoicePolicyUpdates: Type.Optional(Type.Literal(true)),
+      nativeVoicePreference: Type.Optional(NativeVoicePreference),
       /** Random browser/application installation id, independent of the signed-in account. */
       clientId: Type.Optional(
         Type.String({ pattern: '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$' })
       )
     })
   ),
-  'room.leave': Frame('room.leave', Type.Object({ ...VoiceTarget.properties, relief: ReliefResults })),
+  'room.leave': Frame(
+    'room.leave',
+    Type.Object({ ...VoiceTarget.properties, relief: ReliefResults, nativeVoice: Type.Optional(NativeVoiceTelemetry) })
+  ),
   'room.peer.update': Frame('room.peer.update', Type.Object({ ...VoiceTarget.properties, patch: PeerPatch })),
   /** Every stats poll while in voice; never answered on its own. */
   'room.voice.report': Frame('room.voice.report', VoicePoll),
@@ -335,6 +367,18 @@ export const NotificationRoomContext = Type.Object({
 export type NotificationRoomContext = Static<typeof NotificationRoomContext>;
 
 /** A room as a preview or the room screen first sees it. */
+const NativeVoiceCompanions = Type.Object({
+  version: Type.Literal(1),
+  companions: Type.Array(Type.Object({ identity: Type.String(), peerId: PeerId }))
+});
+export type NativeVoiceCompanions = Static<typeof NativeVoiceCompanions>;
+
+const NativeVoiceCapability = Type.Object({
+  version: Type.Literal(1),
+  stage: NativeVoiceStage,
+  generation: NativeVoiceGeneration
+});
+
 export const RoomSnapshot = Type.Object({
   roomId: Type.String(),
   room: LobbyRoom,
@@ -342,7 +386,10 @@ export const RoomSnapshot = Type.Object({
   recentMessages: Type.Array(RoomMessage),
   /** When the current voice session started (first live peer), null while the room is empty. */
   voiceActiveSince: Nullable(Type.Number()),
-  mode: Type.Union([Type.Literal('preview'), Type.Literal('active')])
+  mode: Type.Union([Type.Literal('preview'), Type.Literal('active')]),
+  nativeVoiceCompanions: Type.Optional(NativeVoiceCompanions),
+  /** Personal capability, sent only to the peer that owns this generation. */
+  nativeVoice: Type.Optional(NativeVoiceCapability)
 });
 export type RoomSnapshot = Static<typeof RoomSnapshot>;
 
@@ -462,6 +509,14 @@ export const ServerEventFrames = {
   // Rooms: the lobby summary, the preview/detail stream and voice
   'room.summary': Frame('room.summary', Type.Object({ room: RoomRealtimeSummary })),
   'room.snapshot': Frame('room.snapshot', RoomSnapshot),
+  'room.companions.updated': Frame(
+    'room.companions.updated',
+    Type.Object({ ...RoomRef, ...NativeVoiceCompanions.properties })
+  ),
+  'room.native_voice.updated': Frame(
+    'room.native_voice.updated',
+    Type.Object({ ...RoomRef, ...NativeVoiceCapability.properties, stage: Type.Literal('off') })
+  ),
   'room.updated': Frame('room.updated', Type.Object({ room: LobbyRoom })),
   'room.deleted': Frame('room.deleted', Type.Object(RoomRef)),
   'room.not_found': Frame('room.not_found', Type.Object(RoomRef)),

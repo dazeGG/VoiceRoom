@@ -7,6 +7,7 @@ import {
 } from './audio-output-transition';
 
 import { createLogger, errorContext } from '../diagnostics';
+import { nativeReceiveRoute } from '../core/native-receive-route';
 
 const log = createLogger('room:audio-bus');
 
@@ -40,6 +41,7 @@ const routedSources = new WeakMap<HTMLMediaElement, RoutedSource>();
 // takes (direct element playback or the Web Audio mix) is re-decided whenever
 // the master volume, mute or output device changes.
 const voiceElements = new Map<HTMLMediaElement, VoicePlayback>();
+let voiceHandoffMuted = false;
 let graph: AudioBusGraph | null = null;
 let sinkDestination: MediaStreamAudioDestinationNode | null = null;
 let sinkElement: HTMLAudioElement | null = null;
@@ -100,6 +102,7 @@ export function getAudioBusInput(kind: AudioBusKind): AudioNode {
 }
 
 export function syncAudioBusSettings(options: { muteDelayMs?: number } = {}): void {
+  nativeReceiveRoute.settingsChanged?.();
   syncVoiceElements(options.muteDelayMs || 0);
   if (!graph) return;
   graph.sfx.gain.value = getNotificationVolumeMultiplier();
@@ -188,6 +191,7 @@ async function applyAudioBusOutput(sinkId: string): Promise<boolean> {
 }
 
 export function syncAudioBusOutput(requestedId = state.outputDeviceId || ''): Promise<boolean> {
+  nativeReceiveRoute.settingsChanged?.();
   const applyRequestedOutput = async () => {
     const selected = await applyAudioBusOutput(requestedId);
     if (selected) onSystemFallback = false;
@@ -259,9 +263,15 @@ export function playVoiceElement(element: HTMLMediaElement, playback: VoicePlayb
   return applyVoicePlayback(element, playback);
 }
 
+export function setBrowserVoiceHandoffMuted(muted: boolean): void {
+  if (voiceHandoffMuted === muted) return;
+  voiceHandoffMuted = muted;
+  syncVoiceElements(0);
+}
+
 function applyVoicePlayback(element: HTMLMediaElement, playback: VoicePlayback): VoicePlaybackPath {
   const requested = Number.isFinite(playback.volume) ? Math.min(2, Math.max(0, playback.volume)) : 1;
-  const level = playback.muted ? 0 : requested * outputGain();
+  const level = voiceHandoffMuted || playback.muted ? 0 : requested * outputGain();
   if (level > 1) {
     return routeMediaStreamElement(element, 'voice', { muted: playback.muted, volume: requested }) ? 'mixed' : 'none';
   }

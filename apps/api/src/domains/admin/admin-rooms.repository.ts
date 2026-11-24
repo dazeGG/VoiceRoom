@@ -7,6 +7,7 @@ import { sql } from 'kysely';
 import type pg from 'pg';
 import { Type } from 'typebox';
 import { Value } from 'typebox/value';
+import { NativeVoiceFallbackReason, VoiceReceiveEngine } from '@voiceroom/shared/contracts/admission';
 import {
   ROOM_CALLS_PAGE_SIZE,
   ROOM_HISTORY_PAGE_SIZE,
@@ -236,6 +237,7 @@ export function minuteOfSample(sample: VoiceMinuteSample): VoiceMinute {
     rttMs: averageOf(sample.rttMsSum, sample.rttPolls),
     jitterBufferMs: averageOf(sample.jitterBufferMsSum, sample.jitterBufferPolls),
     transport: sample.transport,
+    ...(sample.receiveEngine && { receiveEngine: sample.receiveEngine }),
     // Most clients say nothing of their computer, and a minute then carries nothing of it.
     ...(cpu && (cpu.polls > 0 || cpu.pressureMax || cpu.relieved)
       ? {
@@ -434,6 +436,7 @@ export function createAdminRoomsRepository({ pool }: { pool: pg.Pool }) {
           replacements: row.mic_replacements
         },
         transport: voiceTransportOf(row.transport),
+        ...(Value.Check(VoiceReceiveEngine, row.receive_engine) && { receiveEngine: row.receive_engine }),
         cpu: {
           appPctSum: row.cpu_app_pct_sum,
           systemPctSum: row.cpu_system_pct_sum,
@@ -717,7 +720,7 @@ export function createAdminRoomsRepository({ pool }: { pool: pg.Pool }) {
     if (stayIds.length === 0) return byStay;
     const rows = await db
       .selectFrom('voice_call_events')
-      .select(['stay_id', 'at', 'kind', 'relief_kind', 'relief_outcome'])
+      .select(['stay_id', 'at', 'kind', 'relief_kind', 'relief_outcome', 'native_fallback_reason'])
       .where('stay_id', 'in', [...stayIds])
       .orderBy('at')
       .execute();
@@ -728,6 +731,10 @@ export function createAdminRoomsRepository({ pool }: { pool: pg.Pool }) {
         const relief = { kind: row.relief_kind, outcome: row.relief_outcome };
         if (!Value.Check(ProcessingRelief, relief)) continue;
         event = { at, kind: 'relief', reliefKind: relief.kind, outcome: relief.outcome };
+      } else if (row.kind === 'native_fallback') {
+        const reason = row.native_fallback_reason;
+        if (!Value.Check(NativeVoiceFallbackReason, reason)) continue;
+        event = { at, kind: 'native_fallback', reason };
       } else {
         const kind = stayEventKind(row.kind);
         if (!kind) continue;

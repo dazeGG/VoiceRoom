@@ -11,8 +11,16 @@ import crypto from 'node:crypto';
 import { sql } from 'kysely';
 import type pg from 'pg';
 import type { ClientKind } from '@voiceroom/shared/contracts/admin';
+import type { NativeVoiceFallbackReason } from '@voiceroom/shared/contracts/admission';
 import type { CpuPressure, ProcessingRelief, VoiceCause } from '@voiceroom/shared/contracts/rooms';
-import type { AppWindowState, JoinTiming, PlayoutPoll, VoiceTransport } from '@voiceroom/shared/contracts/realtime';
+import type {
+  AppWindowState,
+  JoinTiming,
+  NativeHeardPoll,
+  PlayoutPoll,
+  VoiceReceiveEngine,
+  VoiceTransport
+} from '@voiceroom/shared/contracts/realtime';
 import type { HeardCounts } from '@voiceroom/shared/voice-quality';
 import { kyselyOn } from '../../platform/db/kysely.ts';
 
@@ -39,6 +47,9 @@ export type VoiceMinuteSample = {
   mic: { expectedMs: number; deliveredMs: number; contextMs: number; reopens: number; replacements: number };
   /** The latest the minute saw. */
   transport: VoiceTransport | null;
+  /** The latest explicit receive engine within the minute. */
+  receiveEngine?: VoiceReceiveEngine | undefined;
+  nativeHeard?: NativeHeardPoll | undefined;
   /** How its computer did, summed like the rest; absent while its client said nothing of it. */
   cpu?: MinuteCpu | undefined;
   windowPolls?: Record<AppWindowState, number> | undefined;
@@ -64,6 +75,7 @@ export type StayEventKind = 'screen_on' | 'screen_off' | 'camera_on' | 'camera_o
 export type StayEvent = { at: number } & (
   | { kind: StayEventKind }
   | { kind: 'relief'; reliefKind: ProcessingRelief['kind']; outcome: ProcessingRelief['outcome'] }
+  | { kind: 'native_fallback'; reason: NativeVoiceFallbackReason }
 );
 
 export type FinishedVoiceSession = {
@@ -151,7 +163,8 @@ export function createVoiceSessionRepository({
           at: new Date(event.at),
           kind: event.kind,
           relief_kind: event.kind === 'relief' ? event.reliefKind : null,
-          relief_outcome: event.kind === 'relief' ? event.outcome : null
+          relief_outcome: event.kind === 'relief' ? event.outcome : null,
+          native_fallback_reason: event.kind === 'native_fallback' ? event.reason : null
         }))
       );
       for (let start = 0; start < events.length; start += SAMPLE_BATCH) {
@@ -269,6 +282,9 @@ function sampleRow(stayId: string, minute: VoiceMinuteSample) {
     mic_reopens: int(minute.mic.reopens),
     mic_replacements: int(minute.mic.replacements),
     transport: minute.transport,
+    receive_engine: minute.receiveEngine ?? null,
+    native_heard_concealed: minute.nativeHeard ? int(minute.nativeHeard.concealedSamples) : null,
+    native_heard_gaps: minute.nativeHeard ? int(minute.nativeHeard.gaps) : null,
     cpu_app_pct_sum: minute.cpu?.appPctSum ?? 0,
     cpu_system_pct_sum: minute.cpu?.systemPctSum ?? 0,
     cpu_polls: int(minute.cpu?.polls ?? 0),

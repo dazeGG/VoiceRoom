@@ -4,6 +4,7 @@
 // ('YYYY-MM-DD'), as the activity marks are.
 
 import { Type, type Static } from 'typebox';
+import { NativeVoiceFallbackReason, VoiceReceiveEngine } from './admission.ts';
 import { Nullable, Ok } from './http.ts';
 import { ReportReasonSchema } from './reports.ts';
 import { CpuPressure, NetworkLevel, NetworkPoint, ProcessingRelief, VoiceCause } from './rooms.ts';
@@ -659,6 +660,7 @@ export const VoiceMinute = Type.Object({
   rttMs: Nullable(Type.Number()),
   jitterBufferMs: Nullable(Type.Number()),
   transport: Nullable(Type.String()),
+  receiveEngine: Type.Optional(VoiceReceiveEngine),
   /**
    * How its computer did over the minute: VoiceRoom's share and the system's on
    * average (the desktop app only), the highest pressure, and whether the
@@ -768,7 +770,8 @@ export const CallEventKind = Type.Union([
   Type.Literal('network'),
   Type.Literal('cpu_critical'),
   Type.Literal('relieved_ns'),
-  Type.Literal('relief')
+  Type.Literal('relief'),
+  Type.Literal('native_fallback')
 ]);
 export type CallEventKind = Static<typeof CallEventKind>;
 
@@ -779,7 +782,8 @@ export const CallEvent = Type.Object({
   stayId: Nullable(Type.String()),
   /** For a network change, the level it went to. */
   detail: Type.Optional(Type.String()),
-  relief: Type.Optional(ProcessingRelief)
+  relief: Type.Optional(ProcessingRelief),
+  nativeFallback: Type.Optional(NativeVoiceFallbackReason)
 });
 export type CallEvent = Static<typeof CallEvent>;
 
@@ -787,7 +791,10 @@ export type CallEvent = Static<typeof CallEvent>;
 export const CallIdParams = Type.Object({ callId: Type.String({ pattern: '^[0-9a-f-]{36}$' }) });
 export const RoomIdParams = Type.Object({ roomId: Type.String({ minLength: 1, maxLength: 64 }) });
 /** Legacy admin tabs reject event kinds they do not recognize. */
-export const CallDetailQuery = Type.Object({ relief: Type.Optional(Type.Literal('1')) });
+export const CallDetailQuery = Type.Object({
+  relief: Type.Optional(Type.Literal('1')),
+  nativeVoice: Type.Optional(Type.Literal('1'))
+});
 
 export const RoomCalls = Ok({
   calls: Type.Array(RoomCall),

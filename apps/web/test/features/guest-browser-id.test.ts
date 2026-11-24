@@ -58,6 +58,19 @@ test('a desktop voice join sends the preload shell version and a browser join om
   expect(join(realtime)).not.toHaveProperty('desktopVersion');
 });
 
+test('voice joins announce the saved beta choice only when a desktop bridge exists', async () => {
+  const realtime = await loadRoomRealtime();
+  const { writeDesktopNativeVoicePreference } = await import('@/platform/desktop-native-voice');
+  vi.stubGlobal('voiceRoomDesktopNativeVoice', {});
+  expect(join(realtime)).toMatchObject({ nativeVoiceReceive: true, nativeVoicePreference: 'default' });
+  writeDesktopNativeVoicePreference('on');
+  expect(join(realtime)).toMatchObject({ nativeVoicePreference: 'on' });
+  writeDesktopNativeVoicePreference('off');
+  expect(join(realtime)).toMatchObject({ nativeVoicePreference: 'off' });
+  vi.unstubAllGlobals();
+  expect(join(realtime)).not.toHaveProperty('nativeVoicePreference');
+});
+
 test('a voice join carries one lasting guest id, kept across joins and reloads', async () => {
   const first = guestIdOf(join(await loadRoomRealtime()));
   expect(first).not.toBe('');
@@ -84,6 +97,8 @@ test('account and guest joins share the existing profile id without changing cre
       peerId: 'account-peer',
       sessionToken: 'a'.repeat(32),
       name: 'Аня',
+      nativeVoiceReceive: true,
+      nativeVoicePolicyUpdates: true,
       guestId: id,
       clientId: id
     }
@@ -98,7 +113,14 @@ test('unavailable storage does not block a voice join or fabricate a stable id',
   });
   try {
     const payload = join(await loadRoomRealtime());
-    expect(payload).toEqual({ roomId: 'porch', peerId: 'peer-guest-1', sessionToken: 'g'.repeat(32), name: 'Петя' });
+    expect(payload).toEqual({
+      roomId: 'porch',
+      peerId: 'peer-guest-1',
+      sessionToken: 'g'.repeat(32),
+      name: 'Петя',
+      nativeVoiceReceive: true,
+      nativeVoicePolicyUpdates: true
+    });
   } finally {
     get.mockRestore();
   }

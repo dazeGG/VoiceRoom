@@ -8,6 +8,11 @@ import {
 } from '@voiceroom/shared/contracts/realtime';
 import { getAppRealtime, type RealtimeEvent, type RoomSnapshot } from '@/api/realtime';
 import { readDesktopRuntime } from '@/platform/desktop-system';
+import {
+  beginDesktopNativeVoiceConnection,
+  endDesktopNativeVoiceConnection,
+  readDesktopNativeVoiceConnectionPreference
+} from '@/platform/desktop-native-voice';
 import { useRoomPresenceStore } from './room-presence.store';
 import { guestBrowserId } from './guest-id';
 import type { OwnedRoom } from '@/api/auth';
@@ -82,6 +87,8 @@ const ROOM_OF: { [Type in ServerEventType]: ((payload: ServerEvents[Type]) => st
   'notification.friend.accepted': null,
   'room.summary': (payload) => payload.room.roomId,
   'room.snapshot': (payload) => payload.roomId,
+  'room.companions.updated': (payload) => payload.roomId,
+  'room.native_voice.updated': (payload) => payload.roomId,
   'room.updated': (payload) => payload.room.roomId,
   'room.deleted': (payload) => payload.roomId,
   'room.not_found': (payload) => payload.roomId,
@@ -181,7 +188,7 @@ function sendActiveResyncAttempt(): void {
   pending.attempts += 1;
   pending.currentRequestId = `${pending.requestId}-attempt-${pending.attempts}`;
   pending.requestIds.add(pending.currentRequestId);
-  getAppRealtime().send('room.join', activeVoiceJoin, pending.currentRequestId);
+  sendVoiceJoin(activeVoiceJoin, pending.currentRequestId);
   pending.timer = setTimeout(
     () => {
       if (activeResync !== pending) return;
@@ -245,7 +252,7 @@ function ensureReconnectRestore(): void {
     clearActiveResync();
     for (const roomId of previewSubscriptions.keys()) sendPreviewSubscribe(roomId);
     if (activeVoiceJoin) {
-      getAppRealtime().send('room.join', activeVoiceJoin);
+      sendVoiceJoin(activeVoiceJoin);
     }
   });
 }
@@ -350,18 +357,27 @@ export function joinVoiceRoom(payload: { roomId: string; peerId: string; session
   const guestId = guestBrowserId();
   const runtime = readDesktopRuntime();
   const desktopVersion = normalizeDesktopShellVersion(runtime?.isDesktop ? runtime.version : undefined);
-  const join = {
+  const join: ClientCommands['room.join'] = {
     ...payload,
+    nativeVoiceReceive: true,
+    nativeVoicePolicyUpdates: true,
     ...(guestId ? { guestId, clientId: guestId } : {}),
     ...(desktopVersion ? { desktopVersion } : {})
   };
   activeVoiceJoin = join;
-  getAppRealtime().send('room.join', join);
+  beginDesktopNativeVoiceConnection();
+  sendVoiceJoin(join);
+}
+
+function sendVoiceJoin(join: ClientCommands['room.join'], requestId?: string): void {
+  const nativeVoicePreference = readDesktopNativeVoiceConnectionPreference();
+  getAppRealtime().send('room.join', { ...join, ...(nativeVoicePreference && { nativeVoicePreference }) }, requestId);
 }
 
 export function leaveVoiceRoom(payload: ClientCommands['room.leave']): void {
   if (activeVoiceJoin?.roomId === payload.roomId && activeVoiceJoin.peerId === payload.peerId) {
     activeVoiceJoin = null;
+    endDesktopNativeVoiceConnection();
     lastActiveResyncKey = '';
     clearActiveResync();
   }
