@@ -16,7 +16,7 @@ const emit = defineEmits<{ click: [event: MouseEvent] }>();
 </script>
 
 <template>
-  <Tooltip v-if="tooltip" :text="label" :shortcut="shortcut" :portal-target="tooltipTarget">
+  <Tooltip v-if="tooltip" :text="label" :side="tooltipSide" :shortcut="shortcut" :portal-target="tooltipTarget">
     <component
       :is="href ? 'a' : 'button'"
       v-bind="$attrs"

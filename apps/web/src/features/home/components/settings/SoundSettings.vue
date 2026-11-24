@@ -2,7 +2,6 @@
 import EmojiText from '@/shared/chat/EmojiText.vue';
 import { t } from '@/shared/i18n';
 import { computed, onBeforeUnmount, onMounted, ref, useId, watch } from 'vue';
-import type { NativeVoicePreference } from '@voiceroom/shared/contracts/admission';
 import {
   GATE_ON_DEFAULT_DB,
   playDirectMessageCue,
@@ -55,7 +54,7 @@ import { readDesktopNativeVoicePreference, writeDesktopNativeVoicePreference } f
 import type { ToastOptions } from '../../model/toasts.store';
 import HotkeyRow from './HotkeyRow.vue';
 
-defineProps<{ desktopApp: boolean }>();
+const props = defineProps<{ desktopApp: boolean; nativeVoiceDefaultEnabled?: boolean | undefined }>();
 
 const emit = defineEmits<{ toast: [message: string, options?: ToastOptions] }>();
 
@@ -79,16 +78,17 @@ const notificationVolume = ref(saved.notificationVolume);
 const confirmRoomSwitch = ref(readRoomSwitchConfirmEnabled());
 const nativeVoicePreference = ref(readDesktopNativeVoicePreference());
 const nativeVoiceDescriptionId = useId();
-const nativeVoiceOptions = computed<SegmentOption<NativeVoicePreference>[]>(() => [
-  { value: 'default', label: t('По умолчанию') },
-  { value: 'on', label: t('Включён') },
-  { value: 'off', label: t('Выключен') }
-]);
+const nativeVoiceEnabled = computed(
+  () =>
+    nativeVoicePreference.value === 'on' ||
+    (nativeVoicePreference.value === 'default' && props.nativeVoiceDefaultEnabled === true)
+);
 
-function changeNativeVoicePreference(preference: NativeVoicePreference): void {
+function toggleNativeVoice(enabled: boolean): void {
+  const preference = enabled ? 'on' : 'off';
   nativeVoicePreference.value = preference;
   writeDesktopNativeVoicePreference(preference);
-  syncNativeVoiceReceive();
+  if (!enabled) syncNativeVoiceReceive();
 }
 const previewingSoundSet = ref(false);
 let confirmedSpeakerId = saved.outputDeviceId;
@@ -443,7 +443,7 @@ function previewNotificationSound(): void {
     </SettingsGroup>
 
     <SettingsGroup v-if="desktopApp">
-      <SettingRow v-if="nativeVoicePreference" :label="t('Нативный звук (бета)')" stacked>
+      <SettingRow v-if="nativeVoicePreference" :label="t('Нативный звук (beta)')">
         <template #description>
           <span :id="nativeVoiceDescriptionId">{{
             t(
@@ -452,14 +452,11 @@ function previewNotificationSound(): void {
           }}</span>
         </template>
         <template #control>
-          <SegmentControl
-            layout="equal"
-            class="settings__segment"
-            :options="nativeVoiceOptions"
-            :value="nativeVoicePreference"
-            v-bind="{ ariaLabel: t('Нативный звук (бета)') }"
+          <Switch
+            :model-value="nativeVoiceEnabled"
+            v-bind="{ ariaLabel: t('Нативный звук (beta)') }"
             :aria-describedby="nativeVoiceDescriptionId"
-            @change="changeNativeVoicePreference"
+            @update:model-value="toggleNativeVoice"
           />
         </template>
       </SettingRow>

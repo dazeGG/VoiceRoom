@@ -176,6 +176,7 @@ function selectPanel(panel: Panel): void {
           <IconButton
             class="room-panel-switches__button"
             :label="t('Чат')"
+            tooltip-side="bottom"
             :aria-pressed="activePanel === 'chat'"
             :size="32"
             :dot="roomUnreadCount > 0"
@@ -186,6 +187,7 @@ function selectPanel(panel: Panel): void {
           <IconButton
             class="room-panel-switches__button"
             :label="t('Участники')"
+            tooltip-side="bottom"
             :aria-pressed="activePanel === 'participants'"
             :size="32"
             @click="selectPanel('participants')"

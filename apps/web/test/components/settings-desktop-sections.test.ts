@@ -19,6 +19,7 @@ beforeEach(() => {
 });
 afterEach(() => {
   delete window.voiceRoomRuntime;
+  delete window.voiceRoomDesktop;
   delete window.voiceRoomDesktopAutostart;
 });
 
@@ -63,4 +64,12 @@ test('the desktop app adds hotkeys, the app section and the microphone mode', as
   expect(nav.getByRole('button', { name: 'Горячие клавиши' })).toBeTruthy();
   expect(nav.getByRole('button', { name: 'Приложение' })).toBeTruthy();
   expect(await screen.findByRole('radiogroup', { name: 'Режим микрофона' })).toBeTruthy();
+});
+
+test('a desktop build with no optional settings still has an application section', async () => {
+  window.voiceRoomDesktop = { isDesktop: true, version: '1.8.0', buildHash: '41c913b0' };
+  const nav = await renderSettings();
+
+  await userEvent.click(nav.getByRole('button', { name: 'Приложение' }));
+  expect(screen.getByText('Сборка 1.8.0 · 41c913b0')).toBeTruthy();
 });

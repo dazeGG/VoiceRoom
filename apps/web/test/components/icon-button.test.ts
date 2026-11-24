@@ -43,6 +43,13 @@ test('tooltip false keeps the labelled button and click handler without a toolti
   expect(onclick).toHaveBeenCalledTimes(1);
 });
 
+test('a header icon button can open its tooltip below the trigger', async () => {
+  render(IconButton, { props: { label: 'Свернуть боковую панель', tooltipSide: 'bottom' } });
+  await userEvent.tab();
+  const tooltip = await screen.findByRole('tooltip', { name: 'Свернуть боковую панель' });
+  await vi.waitFor(() => expect(tooltip.closest('[data-side]')?.getAttribute('data-side')).toBe('bottom'));
+});
+
 test('pressed and expanded states reach the actual button', () => {
   render(IconButton, {
     props: { label: 'Открыть меню' },

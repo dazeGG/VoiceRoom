@@ -25,6 +25,7 @@ import {
   type OverlayAvatarSize
 } from '@/platform/desktop-overlay';
 import { copyDesktopDiagnostics, openDesktopLogsFolder } from '@/platform/desktop-diagnostics';
+import { readDesktopRuntime } from '@/platform/desktop-system';
 import { useNotificationPreferencesStore } from '@/shared/notifications/preferences.store';
 import type { SettingsSupport } from '../../model/settings-support';
 import type { ToastOptions } from '../../model/toasts.store';
@@ -37,6 +38,13 @@ const FOREGROUND_POLL_MS = 1000;
 
 const preferences = useNotificationPreferencesStore();
 const { notificationPreferences } = preferences;
+const desktopRuntime = readDesktopRuntime();
+const buildLabel = computed(() => {
+  const version = desktopRuntime?.version;
+  if (!props.support.desktopApp || !version) return '';
+  const hash = desktopRuntime.buildHash?.slice(0, 8);
+  return hash ? t('Сборка {version} · {hash}', { version, hash }) : t('Сборка {version}', { version });
+});
 
 const autostartSupported = ref(false);
 const openAtLogin = ref(false);
@@ -383,5 +391,6 @@ async function toggleSystemNotifications(): Promise<void> {
         </Button>
       </div>
     </SettingsGroup>
+    <SettingRow v-if="buildLabel" :description="buildLabel" />
   </div>
 </template>

@@ -1,10 +1,15 @@
 // The sound plays on the system device while the saved speaker is gone, so the
 // settings say so, and choosing the system entry makes the move final.
 
-import { screen, waitFor, within } from '@testing-library/vue';
+import { screen, waitFor } from '@testing-library/vue';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { restoreOutputDevice, setOutputDevice } from '@voiceroom/call/engine';
+import {
+  beginDesktopNativeVoiceConnection,
+  endDesktopNativeVoiceConnection,
+  readDesktopNativeVoiceConnectionPreference
+} from '@/platform/desktop-native-voice';
 import SoundSettings from '@/features/home/components/settings/SoundSettings.vue';
 import { stubOverlayDom } from '../helpers/overlay-dom';
 import { renderWithApp } from '../helpers/render';
@@ -40,6 +45,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  endDesktopNativeVoiceConnection();
   Reflect.deleteProperty(navigator, 'mediaDevices');
   vi.unstubAllGlobals();
 });
@@ -95,36 +101,46 @@ test('a saved speaker that is still there shows by its name', async () => {
 test('native audio is hidden without the desktop bridge', async () => {
   stubDevices([]);
   await renderWithApp(SoundSettings, { props: { desktopApp: true } });
-  expect(screen.queryByRole('radiogroup', { name: 'Нативный звук (бета)' })).toBeNull();
+  expect(screen.queryByRole('switch', { name: 'Нативный звук (beta)' })).toBeNull();
 });
 
-test('native audio exposes three labeled choices and restores the selection after reopening', async () => {
+const nativeVoiceSwitch = () => screen.getByRole('switch', { name: 'Нативный звук (beta)' });
+
+test.each([undefined, false, true])('untouched native audio reflects server default %s', async (enabled) => {
+  stubDevices([]);
+  vi.stubGlobal('voiceRoomDesktopNativeVoice', {});
+  await renderWithApp(SoundSettings, { props: { desktopApp: true, nativeVoiceDefaultEnabled: enabled } });
+  expect(nativeVoiceSwitch().getAttribute('aria-checked')).toBe(String(enabled === true));
+  expect(localStorage.getItem('voice-room:native-voice-preference')).toBeNull();
+});
+
+test('native audio persists explicit choices and turns off the active connection immediately', async () => {
   stubDevices([]);
   vi.stubGlobal('voiceRoomDesktopNativeVoice', {});
   const browser = await renderWithApp(SoundSettings, { props: { desktopApp: false } });
-  expect(screen.queryByRole('radiogroup', { name: 'Нативный звук (бета)' })).toBeNull();
+  expect(screen.queryByRole('switch', { name: 'Нативный звук (beta)' })).toBeNull();
   browser.unmount();
 
-  const first = await renderWithApp(SoundSettings, { props: { desktopApp: true } });
-  const group = () => screen.getByRole('radiogroup', { name: 'Нативный звук (бета)' });
-  const selected = (name: string) => within(group()).getByRole('radio', { name, checked: true });
-  const description = group().getAttribute('aria-describedby');
+  beginDesktopNativeVoiceConnection();
+  const first = await renderWithApp(SoundSettings, { props: { desktopApp: true, nativeVoiceDefaultEnabled: true } });
+  const description = nativeVoiceSwitch().getAttribute('aria-describedby');
   expect(description && document.getElementById(description)?.textContent).toContain('системный звуковой движок');
   const user = userEvent.setup();
-  selected('По умолчанию').focus();
-  await user.keyboard('{ArrowRight}');
-  expect(selected('Включён')).toBeTruthy();
-  expect(localStorage.getItem('voice-room:native-voice-preference')).toBe('on');
-  await user.click(within(group()).getByRole('radio', { name: 'Выключен' }));
-  expect(selected('Выключен')).toBeTruthy();
+  await user.click(nativeVoiceSwitch());
+  expect(nativeVoiceSwitch().getAttribute('aria-checked')).toBe('false');
   expect(localStorage.getItem('voice-room:native-voice-preference')).toBe('off');
+  expect(readDesktopNativeVoiceConnectionPreference()).toBe('off');
   first.unmount();
 
-  const second = await renderWithApp(SoundSettings, { props: { desktopApp: true } });
-  expect(selected('Выключен')).toBeTruthy();
-  await user.click(within(group()).getByRole('radio', { name: 'По умолчанию' }));
-  expect(localStorage.getItem('voice-room:native-voice-preference')).toBeNull();
+  const second = await renderWithApp(SoundSettings, { props: { desktopApp: true, nativeVoiceDefaultEnabled: true } });
+  expect(nativeVoiceSwitch().getAttribute('aria-checked')).toBe('false');
+  nativeVoiceSwitch().focus();
+  await user.keyboard(' ');
+  expect(localStorage.getItem('voice-room:native-voice-preference')).toBe('on');
+  expect(readDesktopNativeVoiceConnectionPreference()).toBe('off');
+  beginDesktopNativeVoiceConnection();
+  expect(readDesktopNativeVoiceConnectionPreference()).toBe('on');
   second.unmount();
-  await renderWithApp(SoundSettings, { props: { desktopApp: true } });
-  expect(selected('По умолчанию')).toBeTruthy();
+  await renderWithApp(SoundSettings, { props: { desktopApp: true, nativeVoiceDefaultEnabled: false } });
+  expect(nativeVoiceSwitch().getAttribute('aria-checked')).toBe('true');
 });

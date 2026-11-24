@@ -157,6 +157,7 @@ export function registerApiRoutes(app: FastifyInstance, ctx: ApiContext, deps: A
   });
   registerAccountRoutes(app, ctx, {
     account: deps.domain.account,
+    nativeVoiceCapability: deps.domain.nativeVoice.accountCapability,
     limiter: deps.limits.auth,
     sessionCookie: deps.sessionCookies.issue,
     clearedSessionCookie: deps.sessionCookies.clear,

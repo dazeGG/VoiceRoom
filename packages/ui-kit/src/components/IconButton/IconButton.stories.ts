@@ -22,6 +22,7 @@ const meta = {
           '- Offer a transparent variant as the default, plus `filled` (`--vr-surface-3`), `outline`, `soft`, `primary` and `danger`.',
           '- Set `aria-pressed` when it is pressed, and `aria-expanded` when its menu is open.',
           '- Require `aria-label`, and make it match the Tooltip text.',
+          '- Set `tooltipSide="bottom"` when a header sits under native window chrome.',
           '- Do not use the `title` attribute.'
         ].join('\n')
       }
@@ -55,6 +56,7 @@ export const Size40: Story = { args: { size: 40 } };
 export const Size44: Story = { args: { size: 44 } };
 export const Disabled: Story = { args: { disabled: true } };
 export const WithShortcut: Story = { args: { shortcut: ['Ctrl', 'M'] } };
+export const WithBottomTooltip: Story = { args: { tooltipSide: 'bottom' } };
 export const WithoutTooltip: Story = { args: { tooltip: false } };
 export const Pressed: Story = {
   render: (args) => ({

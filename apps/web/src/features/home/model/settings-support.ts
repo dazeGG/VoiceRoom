@@ -5,6 +5,7 @@ import { desktopGlobalHotkeysAvailable } from '@voiceroom/call/engine';
 import { desktopAutostartAvailable } from '@/platform/desktop-autostart';
 import { desktopDiagnosticsAvailable } from '@/platform/desktop-diagnostics';
 import { desktopOverlayAvailable } from '@/platform/desktop-overlay';
+import { readDesktopRuntime } from '@/platform/desktop-system';
 
 export type SettingsSupport = {
   /** Running inside the desktop app rather than a browser tab. */
@@ -17,10 +18,11 @@ export type SettingsSupport = {
 };
 
 export function readSettingsSupport(): SettingsSupport {
-  const desktopApp = Boolean(window.voiceRoomRuntime?.isDesktop);
+  const runtime = readDesktopRuntime();
+  const desktopApp = Boolean(runtime?.isDesktop);
   return {
     desktopApp,
-    mac: desktopApp && window.voiceRoomRuntime?.platform === 'darwin',
+    mac: desktopApp && runtime?.platform === 'darwin',
     globalHotkeys: desktopApp && desktopGlobalHotkeysAvailable(),
     autostart: desktopApp && desktopAutostartAvailable(),
     overlay: desktopApp && desktopOverlayAvailable(),

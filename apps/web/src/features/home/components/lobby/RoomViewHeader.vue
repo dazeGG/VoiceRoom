@@ -27,7 +27,7 @@ const name = computed(() => roomDisplayName(props.room));
 
 <template>
   <div class="room-view-header">
-    <IconButton :label="t('Назад')" :size="40" variant="filled" @click="$emit('back')">
+    <IconButton :label="t('Назад')" :size="40" variant="filled" tooltip-side="bottom" @click="$emit('back')">
       <ChevronLeft aria-hidden="true" />
     </IconButton>
 

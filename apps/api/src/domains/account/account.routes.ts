@@ -28,6 +28,7 @@ import {
   Sessions,
   SessionsRevoked,
   SignedIn,
+  type SelfUser,
   WhatsNewAnswer
 } from '@voiceroom/shared/contracts/account';
 import { Done } from '@voiceroom/shared/contracts/http';
@@ -52,6 +53,7 @@ const DELETION_UNAVAILABLE = failure('Удаление аккаунта сейч
 
 export interface AccountRoutesDeps {
   account: AccountService;
+  nativeVoiceCapability(accountId: string): NonNullable<SelfUser['nativeVoice']>;
   limiter: RateCheck;
   /** The session cookie that signs a browser in for the session's lifetime. */
   sessionCookie(token: string): string;
@@ -88,6 +90,10 @@ export function registerAccountRoutes(root: FastifyInstance, ctx: ApiContext, de
     return null;
   }
 
+  function withNativeVoice(user: SelfUser): SelfUser {
+    return { ...user, nativeVoice: deps.nativeVoiceCapability(user.id) };
+  }
+
   function openSession(
     reply: FastifyReply,
     status: 200 | 201,
@@ -97,7 +103,7 @@ export function registerAccountRoutes(root: FastifyInstance, ctx: ApiContext, de
     return reply
       .code(status)
       .header('Set-Cookie', deps.sessionCookie(opened.token))
-      .send({ ok: true as const, user: opened.user, ...extra });
+      .send({ ok: true as const, user: withNativeVoice(opened.user), ...extra });
   }
 
   const device = (request: FastifyRequest) => () => deps.device(request.raw);
@@ -191,8 +197,8 @@ export function registerAccountRoutes(root: FastifyInstance, ctx: ApiContext, de
   });
 
   app.get('/api/auth/me', { schema: { response: answers(Me) } }, async (request) => {
-    const resolved = await ctx.resolveSession(request.raw);
-    return { ok: true as const, user: resolved ? selfUser(resolved.user) : null };
+    const user = selfUser((await ctx.resolveSession(request.raw))?.user);
+    return { ok: true as const, user: user ? withNativeVoice(user) : null };
   });
 
   app.post(
@@ -256,7 +262,7 @@ export function registerAccountRoutes(root: FastifyInstance, ctx: ApiContext, de
       const result = await account.updateProfile(me.user.id, cleanDisplayName(request.body.displayName), request.log);
       if (result.status === 'not_found') return reply.code(404).send(ACCOUNT_NOT_FOUND);
       if (result.status === 'reserved_name') return reply.code(400).send(RESERVED_NAME);
-      return { ok: true as const, user: result.user };
+      return { ok: true as const, user: withNativeVoice(result.user) };
     }
   );
 
