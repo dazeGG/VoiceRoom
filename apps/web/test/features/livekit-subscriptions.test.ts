@@ -13,6 +13,22 @@ function liveAudioTrack() {
   };
 }
 
+test('a native voice companion does not become a duplicate participant before or after roster sync', async () => {
+  const lk = await loadLiveKitHarness({ autoResolveClient: true });
+  const canonical = fakeParticipant('peer-canonical', []);
+  const identity = `peer-canonical#voice.${'c'.repeat(32)}`;
+  const mic = fakePublication('microphone');
+  const companion = fakeParticipant(identity, [mic.publication]);
+
+  expect(lk.syncParticipant(companion)).toBeNull();
+  expect(lk.syncParticipant(canonical)?.id).toBe(canonical.identity);
+  lk.state.serverPeerIds.add(canonical.identity);
+  lk.state.serverPeerSyncReady = true;
+  expect(lk.syncParticipant(companion)).toBeNull();
+  expect([...lk.state.peers.keys()]).toEqual([canonical.identity]);
+  expect(mic.calls.subscribed).toEqual([]);
+});
+
 test('remote voices are subscribed while the output is on and unsubscribed while deafened', async () => {
   const lk = await loadLiveKitHarness({ autoResolveClient: true });
   const mic = fakePublication('microphone', { isSubscribed: true, track: liveAudioTrack() });
