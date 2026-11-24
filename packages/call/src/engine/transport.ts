@@ -1,4 +1,8 @@
-import type { LiveKitAdmission } from '@voiceroom/shared/contracts/admission';
+import type {
+  LiveKitAdmission,
+  NativeVoiceAdmission,
+  NativeVoiceAdmissionBody
+} from '@voiceroom/shared/contracts/admission';
 import type { ErrorCode } from '@voiceroom/shared/contracts/errors';
 import type { ClientCommands, MediaGrant, ServerEvent } from '@voiceroom/shared/contracts/realtime';
 import type { PeerSession, RoomLifecycleSummary } from './core/types';
@@ -24,6 +28,7 @@ export type CallRealtimeEvent =
           | 'room.peer.joined'
           | 'room.peer.left'
           | 'room.peer.updated'
+          | 'room.companions.updated'
           | 'room.voice.quality'
           | 'room.full'
           | 'server.full'
@@ -38,6 +43,7 @@ type Member = PeerSession & { roomId: string };
 export interface CallTransport {
   roomStatus(roomId: string): Promise<Pick<RoomLifecycleSummary, 'name' | 'avatarUrl' | 'isStatic'> | null>;
   requestLiveKitToken(input: Member & { name: string }): Promise<LiveKitCredentials>;
+  requestNativeVoiceAdmission?: (input: NativeVoiceAdmissionBody) => Promise<NativeVoiceAdmission>;
   failure(error: unknown): CallTransportFailure | null;
   realtime: {
     ensureConnected(): void;

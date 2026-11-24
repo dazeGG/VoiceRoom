@@ -119,6 +119,13 @@ export const HeardPoll = Type.Object({
 });
 export type HeardPoll = Static<typeof HeardPoll>;
 
+export const VoiceReceiveEngine = Type.Union([Type.Literal('browser'), Type.Literal('native')]);
+export type VoiceReceiveEngine = Static<typeof VoiceReceiveEngine>;
+
+/** Native receive counts cover all selected microphones without per-speaker attribution. */
+export const NativeHeardPoll = Type.Pick(HeardPoll, ['concealedSamples', 'gaps']);
+export type NativeHeardPoll = Static<typeof NativeHeardPoll>;
+
 /** How the media reaches the server: UDP, TCP, or through a TURN relay. */
 export const VoiceTransport = Type.Union([Type.Literal('udp'), Type.Literal('tcp'), Type.Literal('relay')]);
 export type VoiceTransport = Static<typeof VoiceTransport>;
@@ -216,6 +223,8 @@ export const VoicePoll = Type.Object({
   uplink: Type.Object({ packets: PollCount, lost: PollCount }),
   transport: Nullable(VoiceTransport),
   heard: Type.Array(HeardPoll, { maxItems: 64 }),
+  receiveEngine: Type.Optional(VoiceReceiveEngine),
+  nativeHeard: Type.Optional(NativeHeardPoll),
   mic: Type.Optional(MicPoll),
   cpu: Type.Optional(CpuPoll),
   windowState: Type.Optional(AppWindowState),
@@ -275,6 +284,8 @@ export const ClientCommandFrames = {
       guestId: Type.Optional(Type.String()),
       /** The desktop shell's own version, available before the first stats poll. */
       desktopVersion: Type.Optional(Type.String({ pattern: DESKTOP_VERSION_PATTERN })),
+      /** This renderer understands the native voice receive stage. */
+      nativeVoiceReceive: Type.Optional(Type.Literal(true)),
       /** Random browser/application installation id, independent of the signed-in account. */
       clientId: Type.Optional(
         Type.String({ pattern: '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$' })

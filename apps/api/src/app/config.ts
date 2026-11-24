@@ -4,6 +4,7 @@
 
 import crypto from 'node:crypto';
 import { normalizeReleaseVersion } from '@voiceroom/shared/account-security';
+import type { NativeVoiceStage } from '@voiceroom/shared/contracts/admission';
 import { SESSION_ENDED_CLOSE_CODE } from '@voiceroom/shared/realtime';
 import { cleanLiveKitUrl } from '@voiceroom/shared/validation';
 import { normalizeLiveKitRoomPrefix } from '../domains/admission/livekit-token-binding.mts';
@@ -39,7 +40,8 @@ function cleanOrigin(value: string | undefined): string {
 export const DEFAULT_REALTIME_RECONNECT_LEASE_MS = 30000;
 
 export function readNativeVoicePolicy(env: Env, maxRoomPeers: number) {
-  const stage = env.NATIVE_VOICE_STAGE === 'internal-join' ? 'internal-join' : 'off';
+  const configured = env.NATIVE_VOICE_STAGE;
+  const stage: NativeVoiceStage = configured === 'internal-join' || configured === 'receive' ? configured : 'off';
   // Leave at least two reconnect slots within the configured SFU ceiling.
   const physicalSlots = readEnvInt('LIVEKIT_MAX_PARTICIPANTS', 24, 0, env) || 24;
   const cap =

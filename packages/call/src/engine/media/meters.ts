@@ -12,6 +12,7 @@ import { amplitudeToDb } from '../core/settings';
 import { isRecord } from '@voiceroom/shared/guards';
 import { getSharedAudioContext } from '../services/media-playback-service';
 import { isGateDisabled } from '../services/microphone-service';
+import { nativeReceiveRoute } from '../core/native-receive-route';
 import type { Participant } from '../core/types';
 
 import { createLogger, errorContext } from '../diagnostics';
@@ -85,6 +86,7 @@ function canUseDetector(context: AudioContext): boolean {
 
 export function attachMeter(participant: Participant | null, stream: MediaStream | null): void {
   if (!participant || !stream) return;
+  if (!participant.isLocal && nativeReceiveRoute.active) return;
   detachMeter(participant);
 
   let context: AudioContext;

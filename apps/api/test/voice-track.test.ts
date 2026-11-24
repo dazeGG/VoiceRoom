@@ -91,6 +91,34 @@ const told = (changes: { peer: Peer; verdict: unknown }[]) =>
 
 const T = Date.UTC(2026, 9, 31, 12, 0, 10);
 
+test('engine transitions and aggregate native concealment stay distinct from per-speaker browser counts', () => {
+  const peers = room('listener', 'speaker');
+  const listener = peer(peers, 'listener');
+  const speaker = peer(peers, 'speaker');
+  const browserHeard = heard('speaker', 5);
+  const nativeHeard = { concealedSamples: 960, gaps: 9 };
+  noteVoiceReport(peers, listener, { ...poll([browserHeard]), receiveEngine: 'browser', nativeHeard }, T);
+  assert.equal(listener.voice?.minutes[0]?.receiveEngine, 'browser');
+  assert.equal(listener.voice?.minutes[0]?.nativeHeard, undefined);
+  noteVoiceReport(peers, listener, { ...poll([]), receiveEngine: 'native', nativeHeard }, T + 3_000);
+  noteVoiceReport(
+    peers,
+    listener,
+    { ...poll([]), receiveEngine: 'native', nativeHeard: { concealedSamples: 0, gaps: 2 } },
+    T + 6_000
+  );
+  noteVoiceReport(peers, listener, poll([]), T + 9_000);
+  const minute = listener.voice?.minutes[0];
+  assert.equal(minute?.receiveEngine, 'native');
+  assert.deepEqual(minute?.nativeHeard, { concealedSamples: 960, gaps: 2 });
+  assert.equal(minute?.heard.concealedSamples, browserHeard.concealedSamples);
+  assert.equal(speaker.voice?.minutes[0]?.heardBy.concealedSamples, browserHeard.concealedSamples);
+  noteVoiceReport(peers, listener, { ...poll([]), receiveEngine: 'browser' }, T + 12_000);
+  assert.equal(minute?.receiveEngine, 'browser', 'the latest engine marks a mixed minute');
+  noteVoiceReport(peers, listener, poll([]), T + 60_000);
+  assert.equal(listener.voice?.minutes[1]?.receiveEngine, undefined, 'legacy poll leaves engine unknown');
+});
+
 test('a peer is told its verdict when it changes, and only then', () => {
   const peers = room('a', 'b', 'c');
   assert.deepEqual(told(noteVoiceReport(peers, peer(peers, 'a'), poll([heard('b'), heard('c')]), T)), {

@@ -483,7 +483,11 @@ export function createVoiceJoin(deps: VoiceJoinDeps) {
         return supersededVoiceJoin(connection, roomId, transport.id);
       }
       if (snapshot) {
-        const nativeVoice = (room.kind ?? 'main') === 'main' ? nativeVoiceCapability?.(roomId, peerId) : undefined;
+        const capability = (room.kind ?? 'main') === 'main' ? nativeVoiceCapability?.(roomId, peerId) : undefined;
+        const nativeVoice =
+          capability?.stage === 'receive' && !payload.nativeVoiceReceive
+            ? { ...capability, stage: 'internal-join' as const }
+            : capability;
         wsRegistry.sendToConnection(
           connection,
           buildServerEnvelope('room.snapshot', { ...snapshot, ...(nativeVoice && { nativeVoice }) }, requestId)

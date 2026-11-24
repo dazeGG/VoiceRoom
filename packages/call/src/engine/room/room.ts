@@ -28,6 +28,7 @@ import {
 } from '../services/microphone-service';
 import { attachMeter, startMeters, stopMeters } from '../media/meters';
 import { startPeerLatencyStats, stopPeerLatencyStats } from './stats';
+import { syncNativeVoiceReceive } from '../services/native-voice-receive';
 import { relieveVideo } from '../services/video-relief';
 import { clearAllPeerJoinCues, clearStreamViewerCues, playPeerCue } from '../media/cues';
 import { cancelScreenSourcePicker } from '../ui/screen-source-picker';
@@ -327,6 +328,7 @@ async function performJoinRoom(generation: number): Promise<void> {
     attachMeter(state.self, state.localStream);
     notifyLiveKitReconciled();
     state.joined = true;
+    syncNativeVoiceReceive();
     startMicrophoneCall();
     startCaptureDiagnostics();
     setMicrophoneRecoveryObserver(noteCaptureRecovery);

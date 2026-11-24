@@ -1,6 +1,50 @@
 import type { HotkeyBinding } from '@voiceroom/ui-kit/hotkey';
 import type { DesktopCaptureSource, DesktopPickerSelection } from './core/types';
 
+export interface NativeVoiceStats {
+  jitterBufferDelaySeconds: number;
+  jitterBufferEmittedCount: number;
+  concealedSamples: number;
+  silentConcealedSamples?: number;
+  concealmentEvents: number;
+  totalSamplesReceived?: number;
+  packetsLost: number;
+  rttSeconds: number | null;
+  at: number;
+}
+
+export type NativeVoiceEvent = { callId: string } & (
+  | { kind: 'media-ready' }
+  | { kind: 'transport'; state: 'connected' | 'reconnecting' | 'disconnected' }
+  | { kind: 'device'; outputDeviceId: string | null; effectiveOutputDeviceId: string | null; muted: boolean }
+  | ({ kind: 'stats' } & NativeVoiceStats)
+  | { kind: 'fault'; code: string }
+  | { kind: 'stopped' }
+);
+
+type NativeVoiceResult = { ok: true } | { ok: false; code: string };
+
+export interface NativeVoiceBridge {
+  getCapability(): Promise<{ available: boolean; protocol: { major: 1; minor: number }; reason?: string }>;
+  listOutputs(): Promise<Array<{ id: string; name: string; isDefault: boolean }>>;
+  start(input: {
+    callId: string;
+    url: string;
+    token: string;
+    tracks: string[];
+    outputDeviceId: string | null;
+    muted: boolean;
+  }): Promise<NativeVoiceResult>;
+  update(input: {
+    callId: string;
+    tracks?: string[];
+    muted?: boolean;
+    outputDeviceId?: string | null;
+  }): Promise<NativeVoiceResult>;
+  stop(input: { callId: string }): Promise<void>;
+  onEvent(handler: (event: NativeVoiceEvent) => void): () => void;
+}
+
 // Events from the desktop app's stream-audio helper. Desktop 1.4.4+ restarts a
 // crashed helper under the same session ('restarting') and sends 'exit' only when
 // it gives up.
@@ -16,6 +60,7 @@ interface DesktopAudioFormatEvent {
 }
 
 export interface DesktopCapabilities {
+  nativeVoice?: NativeVoiceBridge | undefined;
   capture?:
     | {
         applyProfile?: (options: { fpsId?: string; qualityId?: string }) => Promise<{

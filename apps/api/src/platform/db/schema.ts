@@ -741,6 +741,8 @@ export interface VoiceSessionSamples {
   mic_expected_ms: Generated<number>;
   mic_reopens: Generated<number>;
   mic_replacements: Generated<number>;
+  native_heard_concealed: number | null;
+  native_heard_gaps: number | null;
   playout_events: number | null;
   playout_synthesized_pct: number | null;
   polls_bad: Generated<number>;
@@ -749,6 +751,7 @@ export interface VoiceSessionSamples {
   polls_heard_badly: Generated<number>;
   polls_hears_badly: Generated<number>;
   polls_unstable: Generated<number>;
+  receive_engine: string | null;
   rtt_ms_sum: Generated<number>;
   rtt_polls: Generated<number>;
   stay_id: string;

@@ -3,7 +3,7 @@ import test from 'node:test';
 import { randomUUID } from 'node:crypto';
 import type { GateClaims } from '../src/domains/admission/gate-credential-signer.ts';
 import { createNativeVoiceRepository } from '../src/domains/admission/native-voice.repository.ts';
-import { runMigrations } from '../src/lib/migrate.ts';
+import { expectedMigrationCatalog, runMigrations } from '../src/lib/migrate.ts';
 import { kyselyOn } from '../src/platform/db/kysely.ts';
 import { createTestDatabase } from './db-harness.ts';
 import { rollBackThrough } from './migration-steps.ts';
@@ -36,7 +36,7 @@ test('the native lease migration rolls down and back up without touching existin
   assert.equal(await leases.reserve(lease, 2), true);
   assert.equal(await leases.reserve({ ...lease, id: randomUUID() }, 2), false);
   assert.equal((await leases.list()).length, 1);
-  await rollBackThrough(databaseUrl, MIGRATION);
+  const rolledBack = await rollBackThrough(databaseUrl, MIGRATION);
   await assert.rejects(leases.list(), { code: '42P01' });
   assert.equal(
     (await pool.query("SELECT id FROM livekit_gate_credentials WHERE id = 'ordinary-credential'")).rowCount,
@@ -45,7 +45,7 @@ test('the native lease migration rolls down and back up without touching existin
   const applied = await runMigrations({ databaseUrl, logger: SILENT });
   assert.deepEqual(
     applied.map((migration) => migration.name),
-    [MIGRATION]
+    expectedMigrationCatalog().slice(-rolledBack)
   );
   assert.deepEqual(await leases.list(), []);
   assert.equal(await leases.reserve(lease, 1), true);
