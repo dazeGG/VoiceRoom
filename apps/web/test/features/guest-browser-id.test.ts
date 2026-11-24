@@ -84,6 +84,7 @@ test('account and guest joins share the existing profile id without changing cre
       peerId: 'account-peer',
       sessionToken: 'a'.repeat(32),
       name: 'Аня',
+      nativeVoiceReceive: true,
       guestId: id,
       clientId: id
     }
@@ -98,7 +99,13 @@ test('unavailable storage does not block a voice join or fabricate a stable id',
   });
   try {
     const payload = join(await loadRoomRealtime());
-    expect(payload).toEqual({ roomId: 'porch', peerId: 'peer-guest-1', sessionToken: 'g'.repeat(32), name: 'Петя' });
+    expect(payload).toEqual({
+      roomId: 'porch',
+      peerId: 'peer-guest-1',
+      sessionToken: 'g'.repeat(32),
+      name: 'Петя',
+      nativeVoiceReceive: true
+    });
   } finally {
     get.mockRestore();
   }

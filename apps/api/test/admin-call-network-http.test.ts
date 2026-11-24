@@ -160,6 +160,17 @@ test('a live call counts from its call clock, and a stay keeps how its voice wen
   // Alice hears the guest break up, and the guest's own uplink lost as much: the guest is the one heard badly.
   const guestFramesBefore = guestWs.frames.length;
   reportVoice(guestWs, guestAgain, [heard(aliceAgain.peerId)], 40);
+  // The two sockets have independent message queues. Wait for the guest's
+  // next queued command so its first poll precedes Alice's verdict-changing poll.
+  sendWs(guestWs.ws, 'room.preview.subscribe', { roomId: guestAgain.roomId });
+  await waitForWsType(
+    guestWs.frames,
+    'room.snapshot',
+    (frame) => frame.payload.mode === 'preview',
+    5000,
+    guestFramesBefore
+  );
+  sendWs(guestWs.ws, 'room.preview.unsubscribe', { roomId: guestAgain.roomId });
   reportVoice(aliceWs, aliceAgain, [heard(guestAgain.peerId, 25, 40)]);
   const told = await waitForWsType(
     guestWs.frames,

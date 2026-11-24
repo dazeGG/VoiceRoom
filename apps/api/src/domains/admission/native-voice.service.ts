@@ -1,5 +1,9 @@
 import { randomUUID } from 'node:crypto';
-import type { NativeVoiceAdmission, NativeVoiceAdmissionBody } from '@voiceroom/shared/contracts/admission';
+import type {
+  NativeVoiceAdmission,
+  NativeVoiceAdmissionBody,
+  NativeVoiceStage
+} from '@voiceroom/shared/contracts/admission';
 import type { NativeVoiceCompanions, RoomSnapshot } from '@voiceroom/shared/contracts/realtime';
 import { isReservedPeerId, nativeVoiceIdentity } from '@voiceroom/shared/validation';
 import type { Logger } from 'pino';
@@ -18,7 +22,7 @@ type Decision =
   | { status: 'off' | 'ineligible' | 'wrong_room' | 'stale' | 'banned' | 'capacity' | 'unavailable' };
 
 export function createNativeVoiceService(deps: {
-  policy(): { stage: 'off' | 'internal-join'; accounts: ReadonlySet<string>; cap: number };
+  policy(): { stage: NativeVoiceStage; accounts: ReadonlySet<string>; cap: number };
   repository(): NativeVoiceRepository | null;
   provider(): LiveKitCredentialProvider | null;
   rosterPeer(roomId: string, peerId: string): AdmissionPeer | null;
@@ -38,15 +42,16 @@ export function createNativeVoiceService(deps: {
   let running: Promise<void> | undefined;
   let stopping = false;
 
-  const allowed = (account: string) => {
+  const stageFor = (account: string): NativeVoiceStage => {
     const { stage, accounts, cap } = deps.policy();
-    return !stopping && stage === 'internal-join' && cap > 0 && accounts.has(account);
+    return !stopping && cap > 0 && accounts.has(account) ? stage : 'off';
   };
+  const allowed = (account: string) => stageFor(account) !== 'off';
 
   function capability(roomId: string, peerId: string): RoomSnapshot['nativeVoice'] {
     const peer = deps.rosterPeer(roomId, peerId);
     if (!peer?.desktop || !peer.accountUserId || !peer.authSessionHash) return undefined;
-    return { version: 1, stage: allowed(peer.accountUserId) ? 'internal-join' : 'off', generation: peer.transportId };
+    return { version: 1, stage: stageFor(peer.accountUserId), generation: peer.transportId };
   }
 
   function current(lease: NativeVoiceLease): boolean {

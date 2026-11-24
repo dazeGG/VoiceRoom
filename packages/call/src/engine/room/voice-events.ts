@@ -21,6 +21,11 @@ import { showToast } from '../ui/toast';
 import { applyRoomDeleted, applyRoomUpdated } from './lifecycle';
 import { createParticipant, removePeer, syncPeers, updateParticipant } from './participants';
 import { postState } from './presence';
+import {
+  setNativeVoiceCapability,
+  setNativeVoiceCompanions,
+  syncNativeVoiceReceive
+} from '../services/native-voice-receive';
 
 export function createVoiceEventHandler(room: {
   leaveRoom: () => void;
@@ -67,12 +72,19 @@ export function createVoiceEventHandler(room: {
         createParticipant({ ...peer, screenAuthoritative: true });
       }
       syncLiveKitParticipants(state.livekitRoom);
+      setNativeVoiceCompanions(snapshot.nativeVoiceCompanions);
+      if (snapshot.mode === 'active') setNativeVoiceCapability(localPeer ? snapshot.nativeVoice : undefined);
       notifyRoomSnapshotApplied({
         appEpoch: getCallPorts().transport.realtime.getConnectionEpoch(),
         active: snapshot.mode === 'active',
         hasLocalPeer: Boolean(localPeer)
       });
       if (state.joined) postState().catch(() => {});
+      return;
+    }
+
+    if (event.type === 'room.companions.updated') {
+      if (event.payload.roomId === state.roomId) setNativeVoiceCompanions(event.payload);
       return;
     }
 
@@ -109,6 +121,7 @@ export function createVoiceEventHandler(room: {
       if (event.payload.peer?.id) state.serverPeerIds.add(event.payload.peer.id);
       createParticipant({ ...event.payload.peer, screenAuthoritative: true });
       syncLiveKitParticipantById(event.payload.peer?.id);
+      syncNativeVoiceReceive();
       playPeerJoinCue(event.payload.peer?.id);
       return;
     }
@@ -117,6 +130,7 @@ export function createVoiceEventHandler(room: {
       const hadPeer = state.peers.has(event.payload.peerId);
       state.serverPeerIds.delete(event.payload.peerId);
       removePeer(event.payload.peerId);
+      syncNativeVoiceReceive();
       clearPeerJoinCue(event.payload.peerId);
       if (hadPeer) playPeerCue('leave');
       return;
@@ -132,6 +146,7 @@ export function createVoiceEventHandler(room: {
     if (event.type === 'room.peer.updated') {
       syncAuthoritativeScreenPresence(event.payload.peer.id, Boolean(event.payload.peer.screen));
       updateParticipant({ ...event.payload.peer, screenAuthoritative: Object.hasOwn(event.payload.peer, 'screen') });
+      syncNativeVoiceReceive();
       return;
     }
 

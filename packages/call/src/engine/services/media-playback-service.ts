@@ -18,6 +18,7 @@ import {
 } from './audio-bus';
 
 import { createLogger, errorContext } from '../diagnostics';
+import { nativeReceiveRoute } from '../core/native-receive-route';
 
 const log = createLogger('room:playback');
 
@@ -46,13 +47,15 @@ export function syncRemoteAudioPlayback(): void {
 }
 
 export function applyRemoteParticipantAudioPreferences(peer: Participant): void {
+  nativeReceiveRoute.settingsChanged?.();
+  if (nativeReceiveRoute.active) return;
   const preferenceKey = getParticipantAudioPreferenceKey(peer.accountUserId, peer.id);
   const preference = getParticipantAudioPreference(preferenceKey);
-  const muted = isAppPlaybackMuted() || preference.muted || preference.volume <= 0;
+  const muted = preference.muted || preference.volume <= 0;
   for (const audio of peer.audioElements.values()) {
     try {
       const path = playVoiceElement(audio, { muted, volume: preference.volume });
-      if (path === 'mixed' && !muted && getSharedAudioContext().state !== 'running') {
+      if (path === 'mixed' && !muted && !isAppPlaybackMuted() && getSharedAudioContext().state !== 'running') {
         queueAudioUnlock({ showFallback: true });
       }
     } catch (error) {

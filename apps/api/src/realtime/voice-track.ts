@@ -280,6 +280,8 @@ export function noteVoiceReport<Peer extends VoicePeer>(
     | 'uplink'
     | 'transport'
     | 'heard'
+    | 'receiveEngine'
+    | 'nativeHeard'
     | 'mic'
     | 'cpu'
     | 'joinTiming'
@@ -353,6 +355,12 @@ export function noteVoiceReport<Peer extends VoicePeer>(
       minute.mic.replacements += poll.mic.replacements;
     }
     minute.transport = poll.transport ?? minute.transport;
+    if (poll.receiveEngine) minute.receiveEngine = poll.receiveEngine;
+    if (poll.receiveEngine === 'native' && poll.nativeHeard) {
+      const counts = (minute.nativeHeard ??= { concealedSamples: 0, gaps: 0 });
+      counts.concealedSamples += poll.nativeHeard.concealedSamples;
+      counts.gaps += heardGaps(poll.nativeHeard);
+    }
     if (poll.cpu) noteCpu(voice, minute, poll.cpu, at, poll.relief === undefined);
     if (poll.windowState) {
       const counts = (minute.windowPolls ??= { visible: 0, hidden: 0, covered: 0 });

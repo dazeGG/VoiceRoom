@@ -7,12 +7,16 @@ import test, { type TestContext } from 'node:test';
 import { setTimeout } from 'node:timers/promises';
 import { AccessToken, TokenVerifier } from 'livekit-server-sdk';
 import WebSocket, { WebSocketServer } from 'ws';
+import { Type } from 'typebox';
+import { Value } from 'typebox/value';
 import { SignedIn } from '@voiceroom/shared/contracts/account';
 import {
   LiveKitAdmission,
   NativeVoiceAdmission,
+  NativeVoiceGeneration,
   type NativeVoiceAdmissionBody
 } from '@voiceroom/shared/contracts/admission';
+import { RoomSnapshot } from '@voiceroom/shared/contracts/realtime';
 import { isRecord } from '@voiceroom/shared/guards';
 import { createApiRuntime } from '../src/app/api-runtime.ts';
 import { createLiveKitAuthGateService } from '../src/domains/admission/livekit-auth-gate.service.ts';
@@ -221,9 +225,13 @@ async function harness(t: TestContext) {
     return session;
   }
 
-  async function join(cookie = account.cookie, target = TARGET) {
+  async function join(cookie = account.cookie, target = TARGET, supportsReceive = true) {
     const session = await socket(cookie);
-    const snapshot = await joinVoiceRoom(session, { ...target, name: 'Native Peer' });
+    const snapshot = await joinVoiceRoom(session, {
+      ...target,
+      name: 'Native Peer',
+      ...(supportsReceive && { nativeVoiceReceive: true })
+    });
     const capability = snapshot.payload.nativeVoice;
     assert.ok(capability);
     const body = { ...target, version: 1, generation: capability.generation } as const;
@@ -286,6 +294,31 @@ async function validate(admission: { url: string; token: string }, path = '/rtc/
 const skip = !process.env.TEST_DATABASE_URL;
 
 test(
+  'receive rollout keeps active snapshots readable by a P0 renderer that did not announce support',
+  { skip },
+  async (t) => {
+    const h = await harness(t);
+    h.env.NATIVE_VOICE_STAGE = 'receive';
+    const p0 = await h.join(h.account.cookie, TARGET, false);
+    const p0Snapshot = Type.Object({
+      ...RoomSnapshot.properties,
+      nativeVoice: Type.Optional(
+        Type.Object({
+          version: Type.Literal(1),
+          stage: Type.Union([Type.Literal('off'), Type.Literal('internal-join')]),
+          generation: NativeVoiceGeneration
+        })
+      )
+    });
+    assert.ok(Value.Check(p0Snapshot, p0.snapshot));
+    assert.equal(p0.capability.stage, 'internal-join');
+    const p1 = await h.join();
+    assert.equal(p1.capability.stage, 'receive');
+    assert.equal(Value.Check(p0Snapshot, p1.snapshot), false);
+  }
+);
+
+test(
   'P0 admission is limited to the allowlisted Windows desktop voice generation and both session credentials',
   { skip },
   async (t) => {
@@ -328,9 +361,11 @@ test(
   }
 );
 
-test('the real gate recognizes the companion lease, exact JWT pair and subscribe-only grants', { skip }, async (t) => {
+test('receive-stage leases use the exact JWT pair and subscribe-only grants', { skip }, async (t) => {
   const h = await harness(t);
-  const { session, body } = await h.join();
+  h.env.NATIVE_VOICE_STAGE = 'receive';
+  const { session, body, capability } = await h.join();
+  assert.equal(capability.stage, 'receive');
   const canonicalReply = await h.post('/api/livekit-token', { ...TARGET, name: 'Native Peer' }, h.account.cookie);
   assert.equal(canonicalReply.statusCode, 200, canonicalReply.body);
   const canonical = checked(LiveKitAdmission, canonicalReply.json<unknown>(), 'canonical admission');
@@ -380,6 +415,7 @@ test('the real gate recognizes the companion lease, exact JWT pair and subscribe
   assert.deepEqual(mapping.payload.companions, [{ identity, peerId: TARGET.peerId }]);
   const otherTarget = { ...TARGET, peerId: 'native-other', sessionToken: 'o'.repeat(32) };
   const other = await h.join(h.account.cookie, otherTarget);
+  assert.equal(other.capability.stage, 'receive');
   assert.equal(other.snapshot.peers.length, 2, 'a companion leaves a canonical room and voice seat free');
   assert.deepEqual(other.snapshot.nativeVoiceCompanions?.companions, mapping.payload.companions);
   const overCapacity = await h.admit(other.body);

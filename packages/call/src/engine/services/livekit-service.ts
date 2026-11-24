@@ -1,6 +1,6 @@
 import { getCallPorts } from '../ports';
 import { t } from '@voiceroom/ui-kit/i18n';
-import type { LocalTrackPublication, Room } from 'livekit-client';
+import type { LocalTrackPublication, Room, TrackPublication } from 'livekit-client';
 import type { MicrophoneCapture } from '../core/types';
 import {
   getLocalMicrophoneCapture,
@@ -41,6 +41,12 @@ import { recordReconnect } from '../room/call-quality';
 
 import { markJoinStage } from '../room/join-timing';
 import { isMicrophonePublication } from './livekit/publication-kinds';
+import {
+  isNativeVoiceReceiving,
+  resetNativeVoiceReceive,
+  syncNativeVoiceReceive,
+  syncNativeVoiceSpeakers
+} from './native-voice-receive';
 
 // The LiveKit side of a call. Other room modules import from here; the files
 // under ./livekit are its parts.
@@ -384,11 +390,13 @@ async function bindLiveKitRoomEvents(room: Room, isCurrent: () => boolean): Prom
   room.on(RoomEvent.ParticipantConnected, (participant) => {
     if (!current()) return;
     syncLiveKitParticipant(participant);
+    syncNativeVoiceReceive();
   });
   room.on(RoomEvent.ParticipantDisconnected, (participant) => {
     if (!current()) return;
     const peer = state.peers.get(participant.identity);
     if (peer) detachLiveKitParticipant(peer, t('голос переподключается'));
+    syncNativeVoiceReceive();
   });
   room.on(RoomEvent.SignalReconnecting, () => {
     if (!current()) return;
@@ -445,11 +453,18 @@ async function bindLiveKitRoomEvents(room: Room, isCurrent: () => boolean): Prom
     if (!peer) return;
     updateLiveKitPublicationState(peer, publication);
     syncLiveKitPublicationSubscription(peer, publication);
+    if (isMicrophonePublication(publication)) syncNativeVoiceReceive();
   });
   room.on(RoomEvent.TrackUnpublished, (publication, participant) => {
     if (!current()) return;
     handleLiveKitTrackUnpublished(publication, participant);
+    if (isMicrophonePublication(publication)) syncNativeVoiceReceive();
   });
+  const onTrackMuteChanged = (publication: TrackPublication) => {
+    if (current() && isMicrophonePublication(publication)) syncNativeVoiceReceive();
+  };
+  room.on(RoomEvent.TrackMuted, onTrackMuteChanged);
+  room.on(RoomEvent.TrackUnmuted, onTrackMuteChanged);
   room.on(RoomEvent.TrackSubscribed, (track, publication, participant) => {
     if (!current()) return;
     handleLiveKitTrackSubscribed(track, publication, participant);
@@ -460,8 +475,13 @@ async function bindLiveKitRoomEvents(room: Room, isCurrent: () => boolean): Prom
   });
   room.on(RoomEvent.ActiveSpeakersChanged, (speakers) => {
     if (!current()) return;
-    const activeIds = new Set(speakers.map((participant) => participant.identity));
+    if (isNativeVoiceReceiving()) {
+      syncNativeVoiceSpeakers(speakers);
+      return;
+    }
+    const activeIds = new Set(speakers.map(({ identity }) => identity));
     for (const peer of state.peers.values()) {
+      if (peer.isLocal || peer.id === state.peerId) continue;
       // Fallback only: this tab's own speaking detector (media/meters) owns the
       // ring once it hears the decoded voice; the server's list is sampled on an
       // interval and lags audible speech.
@@ -490,6 +510,7 @@ async function bindLiveKitRoomEvents(room: Room, isCurrent: () => boolean): Prom
 }
 
 export async function disconnectLiveKitRoom(): Promise<void> {
+  resetNativeVoiceReceive();
   const room = state.livekitRoom;
   if (!room) {
     state.localMicPublication = null;

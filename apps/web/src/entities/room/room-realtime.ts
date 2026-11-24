@@ -351,8 +351,9 @@ export function joinVoiceRoom(payload: { roomId: string; peerId: string; session
   const guestId = guestBrowserId();
   const runtime = readDesktopRuntime();
   const desktopVersion = normalizeDesktopShellVersion(runtime?.isDesktop ? runtime.version : undefined);
-  const join = {
+  const join: ClientCommands['room.join'] = {
     ...payload,
+    nativeVoiceReceive: true,
     ...(guestId ? { guestId, clientId: guestId } : {}),
     ...(desktopVersion ? { desktopVersion } : {})
   };

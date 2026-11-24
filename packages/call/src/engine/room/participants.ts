@@ -508,6 +508,7 @@ function attachRemoteAudioTrack(
   track.addEventListener(
     'ended',
     () => {
+      if (peer.audioElements.get(track.id) !== audio) return;
       disposeAudioElement(audio);
       peer.audioElements.delete(track.id);
       if (peer.micReceiver === receiver) peer.micReceiver = null;

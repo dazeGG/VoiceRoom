@@ -6,6 +6,7 @@ declare global {
     voiceRoomDesktopCapture?: NonNullable<DesktopCapabilities['capture']>;
     __voiceRoomNativeCaptureStats?: NonNullable<DesktopCapabilities['captureStats']>;
     voiceRoomDesktopAudio?: NonNullable<DesktopCapabilities['audio']>;
+    voiceRoomDesktopNativeVoice?: NonNullable<DesktopCapabilities['nativeVoice']>;
     voiceRoomDesktopHotkeys?: NonNullable<DesktopCapabilities['hotkeys']>;
     voiceRoomWindow?: NonNullable<DesktopCapabilities['window']>;
   }
@@ -20,6 +21,9 @@ export const webCallDesktop: DesktopCapabilities = {
   },
   get audio() {
     return window.voiceRoomDesktopAudio;
+  },
+  get nativeVoice() {
+    return window.voiceRoomDesktopNativeVoice;
   },
   get hotkeys() {
     return window.voiceRoomDesktopHotkeys;

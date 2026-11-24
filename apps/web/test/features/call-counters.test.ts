@@ -241,6 +241,7 @@ test("each poll tells the server what this tab heard of every speaker's micropho
     rttMs: 80,
     // 14 400 s of waiting summed over 144 000 samples: 100 ms a sample.
     jitterBufferMs: 100,
+    receiveEngine: 'browser',
     uplink: { packets: 150, lost: 3 },
     transport: null,
     windowState: 'visible',
