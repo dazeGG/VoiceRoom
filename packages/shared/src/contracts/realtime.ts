@@ -376,7 +376,8 @@ export type NativeVoiceCompanions = Static<typeof NativeVoiceCompanions>;
 const NativeVoiceCapability = Type.Object({
   version: Type.Literal(1),
   stage: NativeVoiceStage,
-  generation: NativeVoiceGeneration
+  generation: NativeVoiceGeneration,
+  defaultEnabled: Type.Optional(Type.Boolean())
 });
 
 export const RoomSnapshot = Type.Object({

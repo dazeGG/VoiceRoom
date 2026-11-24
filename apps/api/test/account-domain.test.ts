@@ -453,6 +453,7 @@ function routeApp(
     },
     {
       account,
+      nativeVoiceCapability: (accountId) => ({ defaultEnabled: accountId === 'user-1' }),
       limiter: {
         check: (key) =>
           limited.some((prefix) => key.startsWith(prefix))
@@ -471,7 +472,10 @@ function routeApp(
 
 const SIGNED_IN = { user: storedUser(), session: { publicId: 'pub-1', tokenHash: 'hash-1' } };
 
-type Body = { ok?: boolean; error?: string; user?: { id: string } } & Record<string, unknown>;
+type Body = { ok?: boolean; error?: string; user?: { id: string; nativeVoice?: { defaultEnabled: boolean } } } & Record<
+  string,
+  unknown
+>;
 
 type Method = 'GET' | 'POST' | 'DELETE';
 
@@ -590,6 +594,7 @@ test('me answers null without a session', async (t) => {
     '/api/auth/me'
   );
   assert.equal(me.body.user?.id, 'user-1');
+  assert.deepEqual(me.body.user?.nativeVoice, { defaultEnabled: true });
 });
 
 const ACCOUNT_ROUTES: Array<[Method, string, object?]> = [

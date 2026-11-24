@@ -139,13 +139,13 @@ async function selectStatus(value: string | undefined, close: () => void): Promi
 <template>
   <aside class="sidebar">
     <div class="sidebar__top">
-      <Tooltip :text="t('Главная')"
+      <Tooltip :text="t('Главная')" side="bottom"
         ><Pressable class="sidebar__head" @click="emit('goHome')">
           <span class="sidebar__brand-mark" role="img" aria-label="VoiceRoom"></span>
           <span class="sidebar__brand-name">VoiceRoom</span>
           <BetaMark /></Pressable
       ></Tooltip>
-      <IconButton v-if="adminUrl" :label="t('Открыть админку')" :size="32" @click="openAdmin">
+      <IconButton v-if="adminUrl" :label="t('Открыть админку')" :size="32" tooltip-side="bottom" @click="openAdmin">
         <LayoutDashboard aria-hidden="true" />
         <span
           v-if="adminBadge > 0"

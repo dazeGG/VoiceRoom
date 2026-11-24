@@ -747,7 +747,9 @@ export const english = {
   'Когда вы уже в голосе, VoiceRoom уточнит, прежде чем переключить звонок.':
     "When you're already on voice, VoiceRoom will clarify before transferring the call.",
   'Режим микрофона': 'Microphone mode',
-  'Нативный звук (бета)': 'Native audio (beta)',
+  'Нативный звук (beta)': 'Native audio (beta)',
+  'Сборка {version}': 'Build {version}',
+  'Сборка {version} · {hash}': 'Build {version} · {hash}',
   'По умолчанию': 'Default',
   Включён: 'On',
   Выключен: 'Off',
@@ -2453,7 +2455,9 @@ export const french: Record<MessageKey, string> = {
   'Когда вы уже в голосе, VoiceRoom уточнит, прежде чем переключить звонок.':
     "Lorsque vous êtes déjà en voix, VoiceRoom clarifiera avant de transférer l'appel.",
   'Режим микрофона': 'Mode microphone',
-  'Нативный звук (бета)': 'Audio natif (bêta)',
+  'Нативный звук (beta)': 'Audio natif (bêta)',
+  'Сборка {version}': 'Version {version}',
+  'Сборка {version} · {hash}': 'Version {version} · {hash}',
   'По умолчанию': 'Par défaut',
   Включён: 'Activé',
   Выключен: 'Désactivé',

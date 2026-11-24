@@ -113,7 +113,7 @@ function notifyRoomsChanged(): void {
         <RoomCallTimer />
         <DropdownMenu :aria-label="t('Пригласить в комнату')">
           <template #trigger>
-            <Tooltip :text="t('Пригласить')"
+            <Tooltip :text="t('Пригласить')" side="bottom"
               ><Button variant="outline" :aria-label="t('Пригласить')" size="sm" class="room-topbar__invite-button">
                 <template #icon><UserPlus v-bind="iconSm" aria-hidden="true" /></template>
                 <span class="room-topbar__invite-label">{{ t('Пригласить') }}</span>
@@ -144,6 +144,7 @@ function notifyRoomsChanged(): void {
           <IconButton
             class="room-panel-switches__button"
             :label="t('Чат')"
+            tooltip-side="bottom"
             :aria-pressed="chatActive"
             :dot="roomUnreadCount > 0"
             :size="32"
@@ -154,6 +155,7 @@ function notifyRoomsChanged(): void {
           <IconButton
             class="room-panel-switches__button"
             :label="t('Участники')"
+            tooltip-side="bottom"
             :aria-pressed="participantsActive"
             :size="32"
             @click="panelToggle.toggleRoomPanel('participants')"

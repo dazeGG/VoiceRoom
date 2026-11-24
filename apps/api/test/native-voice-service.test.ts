@@ -94,6 +94,7 @@ for (const [failure, expected, reserves, issues] of [
     assert.deepEqual(service.capability(body.roomId, body.peerId), {
       version: 1,
       stage: 'internal-join',
+      defaultEnabled: false,
       generation: body.generation
     });
     assert.deepEqual(await service.admit(body, auth), { status: expected });
@@ -152,6 +153,9 @@ test('native voice stage, allowlist, preference and percent agree at capability 
             mode !== 'off' &&
             (listed || (mode === 'receive' && (choice === 'on' || (choice === 'default' && percent === 100))));
           assert.equal(service.capability(body.roomId, body.peerId)?.stage, eligible ? mode : 'off');
+          const defaultEnabled = mode === 'receive' && (listed || percent === 100);
+          assert.deepEqual(service.accountCapability(auth.accountId), { defaultEnabled });
+          assert.equal(service.capability(body.roomId, body.peerId)?.defaultEnabled, defaultEnabled);
           assert.equal(
             (await service.admit(body, auth)).status,
             eligible ? 'unavailable' : mode === 'off' ? 'off' : 'ineligible'
@@ -166,15 +170,17 @@ test('native voice stage, allowlist, preference and percent agree at capability 
   // SHA-256("account") places it in bucket 78.
   defaultPercent = 78;
   assert.equal(service.capability(body.roomId, body.peerId)?.stage, 'off');
+  assert.equal(service.accountCapability(auth.accountId).defaultEnabled, false);
   defaultPercent = 79;
   assert.equal(service.capability(body.roomId, body.peerId)?.stage, 'receive');
-  assert.equal(service.capability(body.roomId, body.peerId)?.stage, 'receive');
+  assert.equal(service.accountCapability(auth.accountId).defaultEnabled, true);
   account = null;
   assert.equal(service.capability(body.roomId, body.peerId), undefined);
   assert.equal((await service.admit(body, auth)).status, 'ineligible');
   account = auth.accountId;
   cap = 0;
   assert.equal(service.capability(body.roomId, body.peerId)?.stage, 'off');
+  assert.equal(service.accountCapability(auth.accountId).defaultEnabled, false);
 });
 
 test('renewal rechecks the roster around the durable write and retires a lease that lost its seat', async () => {
