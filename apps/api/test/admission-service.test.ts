@@ -503,7 +503,7 @@ test('only RoomService not-found answers confirm that a native voice companion i
 
 test('a native voice companion removal is confirmed, bounded in time and fails closed', async () => {
   const gone = new ServerError('twirp', 'participant does not exist', 404, 'not_found');
-  let removeError: unknown = null;
+  let removeError: Error | null = null;
   let stillThere = false;
   const timeouts: Array<number | undefined> = [];
   const client = fake<LiveKitAdminClient>({

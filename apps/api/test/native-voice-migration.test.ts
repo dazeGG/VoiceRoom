@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { randomUUID } from 'node:crypto';
+import type { GateClaims } from '../src/domains/admission/gate-credential-signer.ts';
 import { createNativeVoiceRepository } from '../src/domains/admission/native-voice.repository.ts';
 import { runMigrations } from '../src/lib/migrate.ts';
 import { kyselyOn } from '../src/platform/db/kysely.ts';
@@ -48,4 +49,45 @@ test('the native lease migration rolls down and back up without touching existin
   );
   assert.deepEqual(await leases.list(), []);
   assert.equal(await leases.reserve(lease, 1), true);
+});
+
+test('native voice cannot reserve a missing room or revive a retired lease', async (t) => {
+  const { pool, cleanup } = await createTestDatabase(t);
+  t.after(cleanup);
+  const db = kyselyOn(pool);
+  const leases = createNativeVoiceRepository(db);
+  const lease = {
+    id: randomUUID(),
+    room_id: 'native-room',
+    peer_id: 'native-peer',
+    generation: 'a'.repeat(32),
+    account_id: 'account',
+    expires_at: new Date(Date.now() + 60_000),
+    valid_until: null,
+    retired_at: null,
+    cleanup_exhausted_at: null
+  };
+  assert.equal(await leases.reserve(lease, 1), false);
+  assert.deepEqual(await leases.list(), []);
+  await db.insertInto('rooms').values({ id: lease.room_id }).execute();
+  assert.equal(await leases.reserve(lease, 1), true);
+  const validUntil = new Date(Date.now() + 30_000);
+  await leases.activate(lease.id, validUntil);
+  const claims: GateClaims = {
+    cid: lease.id,
+    companion: true,
+    exp: lease.expires_at.getTime(),
+    iat: Date.now(),
+    peer: lease.peer_id,
+    pEpoch: 0,
+    pId: lease.account_id,
+    pType: 'account',
+    room: lease.room_id
+  };
+  assert.equal(await leases.deadline(claims), validUntil.getTime());
+  const retiredAt = new Date();
+  assert.equal(await leases.retire(lease, retiredAt), true);
+  assert.equal(await leases.retire(lease, new Date(retiredAt.getTime() + 1_000)), false);
+  assert.equal(await leases.deadline(claims), null);
+  assert.deepEqual(await leases.list(), [{ ...lease, retired_at: retiredAt }]);
 });
