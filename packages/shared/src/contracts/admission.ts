@@ -24,8 +24,11 @@ export const LiveKitAdmission = Ok({
 });
 export type LiveKitAdmission = Static<typeof LiveKitAdmission>;
 
-// Later stages (receive and duplex-*) use a separate capability revision.
-export const NativeVoiceStage = Type.Union([Type.Literal('off'), Type.Literal('internal-join')]);
+export const NativeVoiceStage = Type.Union([
+  Type.Literal('off'),
+  Type.Literal('internal-join'),
+  Type.Literal('receive')
+]);
 export type NativeVoiceStage = Static<typeof NativeVoiceStage>;
 
 export const NativeVoiceGeneration = Type.String({ pattern: '^[0-9a-f]{32}$' });

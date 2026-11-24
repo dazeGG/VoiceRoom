@@ -24,6 +24,7 @@ import type { LobbyRoom, PublicPeer } from './contracts/rooms.ts';
 import { cleanName } from './validation.ts';
 import { isRecord } from './guards.ts';
 import { firstMismatch } from './contracts/http.ts';
+import { NativeVoiceStage } from './contracts/admission.ts';
 
 export const MAX_VISIBLE_ROOM_PEERS = 5 as const;
 export const SUMMARY_COALESCE_MS = 75 as const;
@@ -225,6 +226,16 @@ export function parseServerFrame(
       : { ok: false, type, reason: firstMismatch(ServerErrorFrame, frame) };
   }
   if (!isServerEventType(type)) return { ok: false, type, reason: 'unknown event type' };
+  // A new rollout stage must leave the canonical roster usable by this client.
+  const decoded =
+    type === 'room.snapshot' &&
+    isRecord(frame.payload) &&
+    isRecord(frame.payload.nativeVoice) &&
+    !Value.Check(NativeVoiceStage, frame.payload.nativeVoice.stage)
+      ? { ...frame, payload: { ...frame.payload, nativeVoice: { ...frame.payload.nativeVoice, stage: 'off' } } }
+      : frame;
   const schema = ServerEventFrames[type];
-  return Value.Check(schema, frame) ? { ok: true, frame } : { ok: false, type, reason: firstMismatch(schema, frame) };
+  return Value.Check(schema, decoded)
+    ? { ok: true, frame: decoded }
+    : { ok: false, type, reason: firstMismatch(schema, decoded) };
 }

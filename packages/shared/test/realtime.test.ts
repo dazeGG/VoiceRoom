@@ -33,6 +33,28 @@ test('native voice snapshots add a versioned capability and mapping to the exist
   const decoded = parseServerFrame({ type: 'room.snapshot', payload: active });
   assert.ok(decoded.ok && decoded.frame.type === 'room.snapshot');
   assert.deepEqual(decoded.frame.payload.nativeVoice, nativeVoice);
+  const receive = { ...nativeVoice, stage: 'receive' };
+  const receiveSnapshot = parseServerFrame({
+    type: 'room.snapshot',
+    payload: { ...active, nativeVoice: receive }
+  });
+  assert.ok(receiveSnapshot.ok && receiveSnapshot.frame.type === 'room.snapshot');
+  assert.deepEqual(receiveSnapshot.frame.payload.nativeVoice, receive);
+  const future = { ...receive, stage: 'duplex-default' };
+  const futureSnapshot = parseServerFrame({
+    type: 'room.snapshot',
+    id: 'recovery-ack',
+    payload: { ...active, nativeVoice: future }
+  });
+  assert.deepEqual(futureSnapshot, {
+    ok: true,
+    frame: {
+      type: 'room.snapshot',
+      id: 'recovery-ack',
+      payload: { ...active, nativeVoice: { ...future, stage: 'off' } }
+    }
+  });
+  assert.equal(future.stage, 'duplex-default');
   assert.deepEqual(decoded.frame.payload.nativeVoiceCompanions, nativeVoiceCompanions);
   assert.equal(
     parseServerFrame({
@@ -159,6 +181,17 @@ test('a stats poll names the voice session and carries counts only; its verdict 
       }
     });
   assert.equal(poll().ok, true);
+  for (const receiveEngine of ['browser', 'native'] as const) {
+    const received = poll({ receiveEngine });
+    assert.ok(received.ok && received.envelope.type === 'room.voice.report');
+    assert.equal(received.envelope.payload.receiveEngine, receiveEngine);
+  }
+  assert.equal(poll({ receiveEngine: 'unknown' }).ok, false);
+  const nativeHeard = { concealedSamples: 960, gaps: 1 };
+  const native = poll({ receiveEngine: 'native', heard: [], nativeHeard });
+  assert.ok(native.ok && native.envelope.type === 'room.voice.report');
+  assert.deepEqual(native.envelope.payload.nativeHeard, nativeHeard);
+  assert.equal(poll({ receiveEngine: 'native', nativeHeard: { ...nativeHeard, gaps: -1 } }).ok, false);
   assert.equal(poll({ rttMs: null, transport: null, heard: [] }).ok, true, 'alone in the room, before ICE settles');
   assert.equal(poll({ rttMs: null, rttUnchanged: true }).ok, true, 'new clients can skip an unchanged sample');
   assert.equal(poll({ rttMs: null, rttUnchanged: false }).ok, false);
