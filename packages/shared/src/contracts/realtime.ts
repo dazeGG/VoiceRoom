@@ -19,7 +19,7 @@ import { AdminReportsEvent } from './admin.ts';
 import { Nullable } from './http.ts';
 import { DirectMessage, DirectMessageInvite, PinnedMessage, ReactionSummary, RoomMessage } from './messages.ts';
 import { NotificationPreferences } from './notifications.ts';
-import { CallIncoming, CallMissedUpdated, CallSnapshot } from './rings.ts';
+import { CallIncoming, CallMissedUpdated, CallSnapshot, CallVoiceJoin } from './rings.ts';
 import {
   CpuPressure,
   LobbyRoom,
@@ -290,6 +290,7 @@ export const ClientCommandFrames = {
   ping: Frame('ping', Type.Object({ at: Type.Number() })),
   'room.preview.subscribe': Frame('room.preview.subscribe', Type.Object({ roomId: RoomId })),
   'room.preview.unsubscribe': Frame('room.preview.unsubscribe', Type.Object({ roomId: RoomId })),
+  'call.voice.join': Frame('call.voice.join', CallVoiceJoin),
   /** `guestId` is the browser's lasting guest id (see normalizeGuestId); the API keeps it only for guests. */
   'room.join': Frame(
     'room.join',

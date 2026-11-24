@@ -148,7 +148,7 @@ test('private call rooms stay hidden from room, socket, token and staff endpoint
   });
   assert.equal(
     (await request(full.socketPath, { method: 'POST', pathname: bootstrapPath, cookie: alice, body: {} })).status,
-    404
+    400
   );
 
   for (const [socketPath, pathname, path, cookie] of [

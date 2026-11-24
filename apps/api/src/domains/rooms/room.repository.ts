@@ -154,6 +154,10 @@ export async function createCallRoom(db: Database, now = Date.now()): Promise<St
   );
 }
 
+export async function deleteCallRoom(db: Database, roomId: string): Promise<void> {
+  await db.deleteFrom('rooms').where('id', '=', roomId).where('kind', '=', 'call').execute();
+}
+
 export function createRoomRepository({ db, roomIdleTtlMs = 15 * 60 * 1000 }: { db: Database; roomIdleTtlMs?: number }) {
   async function createRoom({
     roomId = createRoomId(),

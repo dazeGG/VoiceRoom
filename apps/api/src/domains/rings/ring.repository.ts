@@ -5,6 +5,7 @@ import type { RingSnapshot, RingState } from '@voiceroom/shared/contracts/rings'
 import { createDmThreadRepository } from '../messaging/dm-thread.repository.ts';
 import type { DirectMessage } from '../social/social-records.ts';
 import { isStoredDirectMessage, lockUserPair } from '../social/social-records.ts';
+import { ringPairRefusal } from '../social/pair-eligibility.repository.ts';
 import { kyselyOn } from '../../platform/db/kysely.ts';
 import { lockKeys, lockXact } from '../../platform/db/locks.ts';
 import { transaction } from '../../platform/db/pool.ts';
@@ -75,22 +76,8 @@ class CreationRejected extends Error {
 export function createRingRepository({ pool, isBanned }: { pool: pg.Pool; isBanned: RingBanCheck }) {
   const messages = createDmThreadRepository({ pool });
   async function available(client: pg.PoolClient, caller: string, recipient: string, roomId: string) {
-    const active = await client.query<{ count: number }>(
-      `SELECT count(*)::int AS count FROM users WHERE id=ANY($1::varchar[]) AND deleted_at IS NULL AND deletion_requested_at IS NULL AND (blocked_at IS NULL OR (blocked_until IS NOT NULL AND blocked_until <= clock_timestamp()))`,
-      [[caller, recipient]]
-    );
-    if (active.rows[0]?.count !== 2) return 'account_deleted' as const;
-    const [low, high] = [caller, recipient].sort();
-    const friendship = await client.query<{ one: number }>(
-      `SELECT 1 AS one FROM friendships WHERE user_a_id=$1 AND user_b_id=$2`,
-      [low, high]
-    );
-    const block = await client.query<{ one: number }>(
-      `SELECT 1 AS one FROM user_blocks WHERE (blocker_id=$1 AND blocked_id=$2) OR (blocker_id=$2 AND blocked_id=$1)`,
-      [caller, recipient]
-    );
-    if (!friendship.rowCount) return 'not_friends' as const;
-    if (block.rowCount) return 'blocked' as const;
+    const refusal = await ringPairRefusal(kyselyOn(client), caller, recipient);
+    if (refusal) return refusal;
     const room = await client.query<{ name: string; emoji: string }>(
       `SELECT name,emoji FROM rooms WHERE id=$1 AND deleted_at IS NULL AND kind='main'`,
       [roomId]

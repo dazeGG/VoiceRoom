@@ -3,10 +3,12 @@
 import type { RingService } from './ring.service.ts';
 export function createRingDeliveryRuntime({
   rings,
+  callMaintenance,
   enabled,
   onError
 }: {
   rings: RingService;
+  callMaintenance?: () => Promise<void>;
   enabled: () => boolean;
   onError: (error: unknown) => void;
 }) {
@@ -17,6 +19,7 @@ export function createRingDeliveryRuntime({
     try {
       if (enabled()) {
         await rings.maintenance();
+        await callMaintenance?.();
         for (let n = 0; n < 20 && !stopped; n++) if (!(await rings.drainOnce())) break;
       }
     } catch (error) {

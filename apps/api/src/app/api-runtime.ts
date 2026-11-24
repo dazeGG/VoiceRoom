@@ -10,9 +10,11 @@ import type { IncomingMessage } from 'node:http';
 import type { FastifyBaseLogger } from 'fastify';
 import { startMaintenanceTimers } from '../platform/maintenance.ts';
 import { createRingDeliveryRuntime } from '../domains/rings/ring-delivery.ts';
+import { createCallRingService } from '../domains/rings/call-rings.service.ts';
+import { createCallVoiceAdmission } from '../domains/admission/call-voice-admission.service.ts';
 import { apiMaintenanceTasks } from './maintenance-tasks.ts';
 import { createRealtimeHub } from './realtime-hub.ts';
-import { createLiveKit } from './livekit.ts';
+import { createLiveKit, type LiveKit } from './livekit.ts';
 import { createSessionResolver } from './session.ts';
 import { createServiceRegistry, type StoreOverrides } from './service-registry.ts';
 import { createRequestLog } from '../platform/http/request-log.ts';
@@ -45,12 +47,17 @@ import { createProductSampler } from '../domains/ops/product-snapshot.service.ts
 import { createSystemSampler } from '../domains/ops/system-snapshot.service.ts';
 import { staffToken } from '../domains/staff/staff.routes.ts';
 import { MAX_UPLOAD_BYTES } from '../domains/media/media.service.ts';
+import { DomainError } from '../platform/http/domain-error.ts';
 
 // The process logger is pino until an app hands over its Fastify logger.
 type Logger = FastifyBaseLogger;
 
-export function createApiRuntime({ env = process.env }: { env?: NodeJS.ProcessEnv } = {}) {
+export function createApiRuntime({
+  env = process.env,
+  callLiveKitAdmin
+}: { env?: NodeJS.ProcessEnv; callLiveKitAdmin?: Pick<LiveKit, 'removeCallParticipant'> } = {}) {
   const config = readApiConfig(env);
+  let callRings: ReturnType<typeof createCallRingService> | undefined;
 
   const services = createServiceRegistry(config, {
     roomRuntime: () => hub.runtime(),
@@ -72,9 +79,10 @@ export function createApiRuntime({ env = process.env }: { env?: NodeJS.ProcessEn
   const hub = createRealtimeHub({
     config,
     services,
-    liveKit,
+    liveKit: { ...liveKit, ...callLiveKitAdmin },
     logger: () => getProcessLogger(),
     onVoiceRosterChange: () => nativeVoice.rosterChanged(),
+    onCallVoiceChange: (roomId, userId, departed) => callRings?.rosterChanged(roomId, userId, departed),
     removeAvatar: (key, log) => domain.avatars.removeFile(key, log)
   });
 
@@ -170,6 +178,7 @@ export function createApiRuntime({ env = process.env }: { env?: NodeJS.ProcessEn
     limits,
     logger: () => getProcessLogger(),
     admission: admissionService,
+    invalidateCalls: (userId, peerId) => callRings?.invalidate(userId, peerId),
     liveNumbers,
     liveAccountIds: () => [...new Set(liveAccountIds())]
   });
@@ -255,7 +264,7 @@ export function createApiRuntime({ env = process.env }: { env?: NodeJS.ProcessEn
     liveKitCredentials = null,
     membershipServicesOverride = null,
     realtimeReconnectLeaseMs = config.REALTIME_RECONNECT_LEASE_MS,
-    realtimeNow = Date.now,
+    realtimeNow,
     realtimeSetTimeout = globalThis.setTimeout,
     realtimeClearTimeout = globalThis.clearTimeout,
     // A test that asserts a failure was observed rather than swallowed needs
@@ -313,23 +322,57 @@ export function createApiRuntime({ env = process.env }: { env?: NodeJS.ProcessEn
       hashIp
     };
 
+    const calls = createCallRingService({
+      pool: services.getPool,
+      enabled: config.VOICE_CALLS_ENABLED,
+      clock: realtimeNow,
+      graceMs: realtimeReconnectLeaseMs,
+      limits: { count: config.RING_RATE_LIMIT, windowMs: config.RING_RATE_WINDOW_MS },
+      notify: hub.broadcastToUser,
+      report: (err) => appLogger.warn({ err }, 'call reconciliation failed'),
+      voice: {
+        seat: (roomId, peerId) => hub.runtime().callSeat(roomId, peerId),
+        join: (connection, target, user, ip, requestId) =>
+          hub.runtime().joinCallVoice(connection, target, user, ip, requestId),
+        revoke: (roomId, userId, peerId) => hub.runtime().revokeCallSeat(roomId, userId, peerId),
+        evict: async (roomId, userId, peerId) => {
+          const result = await hub.runtime().disconnectAccountFromRoom({ roomId, userId }, peerId);
+          if (!result.ok) throw new DomainError(result.code, 503, 'Call eviction failed');
+        },
+        token: createCallVoiceAdmission({
+          currentPeer: hub.presence.currentRosterPeer,
+          store: services.getRoomStore,
+          provider: services.getLiveKitCredentialProvider,
+          boundary: services.getCredentialBoundary,
+          roomName: liveKit.roomName,
+          logger: appLogger,
+          recordRevokeFailure: recordCredentialRevokeCleanupFailure
+        })
+      }
+    });
+    callRings = calls;
     app.addHook('onReady', hub.deliveryRelay.start);
     app.addHook('onClose', hub.deliveryRelay.stop);
     app.addHook('onReady', async () => nativeVoice.start());
     app.addHook('onClose', nativeVoice.stop);
     const ringDelivery = createRingDeliveryRuntime({
       rings: domain.rings,
+      callMaintenance: calls.maintenance,
       enabled: () => services.getPool() !== null,
       onError: (error) => appLogger.warn({ err: error }, 'ring delivery failed')
     });
-    app.addHook('onReady', async () => ringDelivery.start());
+    app.addHook('onReady', async () => {
+      await calls.recover();
+      ringDelivery.start();
+    });
     app.addHook('onClose', ringDelivery.stop);
 
     const { roomRuntime, wsHandler, widgetWsHandler } = hub.start({
       logger: appLogger,
       nativeVoice,
+      joinCallVoice: calls.joinVoice,
       reconnectLeaseMs: realtimeReconnectLeaseMs,
-      now: realtimeNow,
+      now: realtimeNow ?? Date.now,
       setTimeout: realtimeSetTimeout,
       clearTimeout: realtimeClearTimeout,
       resolveSession: resolveSessionUser,
@@ -381,7 +424,7 @@ export function createApiRuntime({ env = process.env }: { env?: NodeJS.ProcessEn
     registerApiRoutes(app, apiContext, {
       config,
       services,
-      domain: { ...domain, admission: admissionService, nativeVoice },
+      domain: { ...domain, admission: admissionService, nativeVoice, callRings: calls },
       limits,
       sessionCookies,
       sessionToken: getSessionToken,

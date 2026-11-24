@@ -130,13 +130,14 @@ export function createLiveKitAdmin({
     }
   }
 
-  async function removeParticipant(roomId: string, peerId: string): Promise<void> {
+  async function removeParticipant(roomId: string, peerId: string, strict = false): Promise<void> {
     const livekit = config();
     if (!livekit.enabled) return;
     try {
       await clientFactory(livekit).removeParticipant(roomName(roomId), peerId);
     } catch (error) {
       if (!isLiveKitParticipantAlreadyGone(error)) {
+        if (strict) throw error;
         logger().error(
           { evt: LOG_EVENTS.LIVEKIT_PARTICIPANT_REMOVE_FAILED, roomId, peerId, err: error },
           'failed to remove a moderated LiveKit participant'

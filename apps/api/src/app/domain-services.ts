@@ -49,6 +49,7 @@ export interface DomainServiceDeps {
   limits: RateLimits;
   logger: () => FastifyBaseLogger;
   admission: Pick<AdmissionService, 'revokeForServerMute'>;
+  invalidateCalls?(userId: string, peerId?: string): void;
   /** What the realtime layer holds right now: the admin panel shows it. */
   liveNumbers: () => LiveNumbers;
   /** The accounts with a socket open right now. */
@@ -153,6 +154,7 @@ export function createDomainServices(deps: DomainServiceDeps) {
     deletions: services.getAccountDeletionRepository,
     loginFailures: limits.loginFailures,
     endSessionConnections: (input) => hub.accountLifecycle.endSessionConnections(input),
+    invalidateCalls: (userId) => deps.invalidateCalls?.(userId),
     notifyUser: (userId, event) => hub.broadcastToUser(userId, event),
     queuePush: (userId, payload, options) => hub.notifications.queuePush(userId, payload, options),
     refreshActiveProfile: (user) => hub.roomLifecycle.refreshActiveProfile(user),
@@ -180,6 +182,7 @@ export function createDomainServices(deps: DomainServiceDeps) {
     ringInvitation: rings.create,
     isOnline: (userId) => hub.isUserOnline(userId),
     notifyUser: (userId, event) => hub.broadcastToUser(userId, event),
+    invalidateCalls: (userId, peerId) => deps.invalidateCalls?.(userId, peerId),
     queuePush: (userId, payload, context) => hub.notifications.queuePush(userId, payload, context)
   });
   const directMessages = createDirectMessagesService({

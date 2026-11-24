@@ -38,6 +38,7 @@ function createLiveKitCredentialProvider({
       peerId: string;
       principal: GatePrincipal;
       companion?: CompanionCredential | undefined;
+      call?: true | undefined;
     }): Promise<CredentialIssue>;
   };
   gateUrl?: string;
@@ -55,7 +56,8 @@ function createLiveKitCredentialProvider({
     surface = 'main',
     canPublishMicrophone = true,
     canPublishScreen = true,
-    companion
+    companion,
+    call
   }: {
     roomId?: string;
     livekitRoom?: string;
@@ -66,6 +68,7 @@ function createLiveKitCredentialProvider({
     canPublishMicrophone?: boolean;
     canPublishScreen?: boolean;
     companion?: CompanionCredential;
+    call?: true;
   } = {}): Promise<AdmissionIssue> {
     if (
       !apiKey ||
@@ -76,11 +79,18 @@ function createLiveKitCredentialProvider({
       !peerId ||
       !principal ||
       isLiveKitOnlyIdentity(peerId) ||
-      (companion && (surface !== 'main' || principal.principalType !== 'account'))
+      (companion && (surface !== 'main' || principal.principalType !== 'account')) ||
+      (call && (surface !== 'main' || companion || principal.principalType !== 'account'))
     ) {
       return { status: 'unavailable', admission: null };
     }
-    const gate = await credentials.issueCredential({ roomId, peerId, principal, ...(companion && { companion }) });
+    const gate = await credentials.issueCredential({
+      roomId,
+      peerId,
+      principal,
+      ...(companion && { companion }),
+      ...(call && { call })
+    });
     if (gate.status !== 'issued') return { status: gate.status, admission: null };
     const { credential } = gate;
 

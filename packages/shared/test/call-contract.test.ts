@@ -14,7 +14,7 @@ import {
 import { buildNativePushData, nativePushChannel, parseNativePushData } from '../src/native-push.ts';
 import { localizeNotificationPayload } from '../src/notification-text.ts';
 import { parsePushPayload, type CallPushPayload } from '../src/notifications.ts';
-import { parseServerFrame } from '../src/realtime.ts';
+import { parseServerFrame, validateClientCommand } from '../src/realtime.ts';
 
 const callId = 'a3f9bdb7-2264-499a-928d-75e26606a817';
 const clientRequestId = 'a3f9bdb7-2264-499a-928d-75e26606a818';
@@ -102,6 +102,22 @@ test('call events validate without changing legacy or unknown event handling', (
     type: 'call.future',
     reason: 'unknown event type'
   });
+});
+
+test('voice handoffs accept a fenced leave and a call-only socket command', () => {
+  assert.ok(
+    Value.Check(CallAnswer, {
+      ok: true,
+      call,
+      disposition: 'accept',
+      voiceAdmission: { roomId: 'call-room', peerId: 'call-seat', seatToken: clientRequestId }
+    })
+  );
+  assert.ok(Value.Check(CallActionBody, { action: 'leave', clientRequestId, expectedAttempt: 2, seatToken: callId }));
+  assert.ok(Value.Check(CallActionBody, { action: 'join', clientRequestId, expectedAttempt: 2, expectedRevision: 5 }));
+  const command = { type: 'call.voice.join', payload: { callId, seatToken: clientRequestId } };
+  assert.equal(validateClientCommand(command).ok, true);
+  assert.equal(validateClientCommand({ ...command, payload: { callId, seatToken: 'invalid' } }).ok, false);
 });
 
 test('a call is an optional validated projection without changing room invitations', () => {

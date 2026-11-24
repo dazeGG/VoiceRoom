@@ -45,7 +45,7 @@ export function createCallRealtime(deps: {
   config: CallConfig;
   getRoomStore(this: void): CallRoomStore & OccupancyStore;
   getCredentialBoundary(): RuntimeCredentialBoundary | null;
-  liveKit: Pick<LiveKit, 'removeParticipant'>;
+  liveKit: Pick<LiveKit, 'removeParticipant' | 'removeCallParticipant'>;
   logger(this: void): FastifyBaseLogger;
   findRoomBan?: RoomRuntimeDeps['findRoomBan'];
   maxGuestConnections?: number;
@@ -82,35 +82,42 @@ export function createCallRealtime(deps: {
     effects?: Pick<
       RoomRuntimeDeps,
       'summaries' | 'readHistory' | 'mediaMinute' | 'stayEvent' | 'sessionAvatarColorKey' | 'nativeVoice'
-    >
+    >,
+    callReconnecting?: (roomId: string, userId: string) => void
   ): RoomRealtimeRuntime {
-    roomRuntime = createRoomRealtimeRuntime({
-      ...effects,
-      presenceRooms: presence.rooms,
-      wsRegistry: registry,
-      getRoomStore,
-      getRoom,
-      publicPeer,
-      publicLobbyRoom: (room) => publicLobbyRoom(room, presence.rooms.get(room.id)?.peers.size ?? 0),
-      publishRoomEvent: presence.publish,
-      closePeer: presence.closePeer,
-      avatarColorForPeerId,
-      MAX_ROOM_PEERS: config.MAX_ROOM_PEERS,
-      MAX_VOICE_PEERS: config.MAX_VOICE_PEERS,
-      MEDIA_BUDGET_MBPS: config.MEDIA_BUDGET_MBPS,
-      MEDIA_BUDGET_VOICE_PEERS: config.MEDIA_BUDGET_VOICE_PEERS,
-      MAX_ROOM_SCREENS: config.MAX_ROOM_SCREENS,
-      tokensMatch,
-      queueRoomOccupancyTransition: presence.queueOccupancy,
-      findRoomBan: deps.findRoomBan ?? (async () => null),
-      credentialBoundary: deps.getCredentialBoundary(),
-      removeLiveKitParticipant: deps.liveKit.removeParticipant,
-      logger: options.logger,
-      reconnectLeaseMs: options.reconnectLeaseMs,
-      now: options.now,
-      setTimeout: options.setTimeout,
-      clearTimeout: options.clearTimeout
-    });
+    roomRuntime = createRoomRealtimeRuntime(
+      {
+        ...effects,
+        presenceRooms: presence.rooms,
+        wsRegistry: registry,
+        getRoomStore,
+        getRoom,
+        publicPeer,
+        publicLobbyRoom: (room) => publicLobbyRoom(room, presence.rooms.get(room.id)?.peers.size ?? 0),
+        publishRoomEvent: presence.publish,
+        closePeer: presence.closePeer,
+        avatarColorForPeerId,
+        MAX_ROOM_PEERS: config.MAX_ROOM_PEERS,
+        MAX_VOICE_PEERS: config.MAX_VOICE_PEERS,
+        MEDIA_BUDGET_MBPS: config.MEDIA_BUDGET_MBPS,
+        MEDIA_BUDGET_VOICE_PEERS: config.MEDIA_BUDGET_VOICE_PEERS,
+        MAX_ROOM_SCREENS: config.MAX_ROOM_SCREENS,
+        tokensMatch,
+        queueRoomOccupancyTransition: presence.queueOccupancy,
+        findRoomBan: deps.findRoomBan ?? (async () => null),
+        credentialBoundary: deps.getCredentialBoundary(),
+        removeLiveKitParticipant: deps.liveKit.removeParticipant,
+        logger: options.logger,
+        reconnectLeaseMs: options.reconnectLeaseMs,
+        now: options.now,
+        setTimeout: options.setTimeout,
+        clearTimeout: options.clearTimeout
+      },
+      {
+        reconnecting: (roomId, userId) => callReconnecting?.(roomId, userId),
+        removeParticipant: deps.liveKit.removeCallParticipant
+      }
+    );
     return roomRuntime;
   }
 

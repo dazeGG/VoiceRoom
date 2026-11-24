@@ -79,6 +79,7 @@ export function createFriendshipRepository({ pool }: { pool: pg.Pool }) {
           ])
           .where((w) => w.or([w('sender_id', '=', userId), w('recipient_id', '=', userId)]))
           .where('deleted_at', 'is', null)
+          .where(sql<boolean>`metadata->>'kind' IS DISTINCT FROM 'voice-call'`)
           .as('t')
       )
       .distinctOn('peer')

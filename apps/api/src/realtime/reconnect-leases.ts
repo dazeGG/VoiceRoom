@@ -471,6 +471,11 @@ export function createReconnectLeases(deps: ReconnectLeaseDeps) {
   }
 
   return {
+    deadline(roomId: string, peer: Peer): number | null {
+      if (!peer.sessionToken) return null;
+      const record = reconnectLeases.get(reconnectLeaseKey(roomId, peer.id, peer.sessionToken));
+      return record?.disconnected && currentLeasePeer(record) === peer ? record.deadline : null;
+    },
     isCurrent: (record: LeaseRecord) => reconnectLeases.get(record.key) === record,
     currentPeer: currentLeasePeer,
     create: createReconnectLease,

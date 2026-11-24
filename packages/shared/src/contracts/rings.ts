@@ -39,6 +39,7 @@ export const RingAnswer = Ok({ ring: RingSnapshot });
 export type RingAnswer = Static<typeof RingAnswer>;
 
 const CallId = Type.String({ format: 'uuid' });
+export const CallIdParams = Type.Object({ callId: CallId });
 const CallAttempt = Type.Integer({ minimum: 1 });
 const CallRevision = Type.Integer({ minimum: 1 });
 const Timestamp = Type.Integer({ minimum: 0 });
@@ -93,6 +94,16 @@ export const CallSnapshot = Type.Object({
   ringingExpiresAt: Timestamp,
   aloneDeadline: Nullable(Timestamp),
   ...CallTiming,
+  seats: Type.Optional(
+    Type.Array(
+      Type.Object({
+        userId: Id,
+        status: Type.Union([Type.Literal('present'), Type.Literal('reconnecting'), Type.Literal('absent')]),
+        reconnectUntil: Nullable(Timestamp)
+      }),
+      { minItems: 2, maxItems: 2 }
+    )
+  ),
   allowedActions: Type.Array(CallAction, { uniqueItems: true }),
   serverNow: Timestamp,
   messageId: Id
@@ -105,13 +116,19 @@ const CallActionFields = { clientRequestId: CallId, expectedAttempt: CallAttempt
 export const CallActionBody = Type.Union([
   Type.Object({ action: Type.Literal('accept'), ...CallActionFields }),
   Type.Object({ action: Type.Literal('decline'), ...CallActionFields }),
-  Type.Object({ action: Type.Literal('leave'), ...CallActionFields }),
-  Type.Object({ action: Type.Literal('join'), ...CallActionFields }),
+  Type.Object({
+    action: Type.Literal('leave'),
+    ...CallActionFields,
+    seatToken: Type.Optional(CallId),
+    expectedRevision: Type.Optional(CallRevision)
+  }),
+  Type.Object({ action: Type.Literal('join'), ...CallActionFields, expectedRevision: Type.Optional(CallRevision) }),
   Type.Object({ action: Type.Literal('re-ring'), ...CallActionFields })
 ]);
 export type CallActionBody = Static<typeof CallActionBody>;
 export const CallAnswer = Ok({
   call: CallSnapshot,
+  voiceAdmission: Type.Optional(Type.Object({ roomId: Id, peerId: Id, seatToken: CallId })),
   disposition: Type.Union([
     Type.Literal('start'),
     Type.Literal('accept'),
@@ -121,6 +138,9 @@ export const CallAnswer = Ok({
   ])
 });
 export type CallAnswer = Static<typeof CallAnswer>;
+export const CallDetails = Ok({ call: CallSnapshot });
+export const CallVoiceProof = Type.Object({ seatToken: CallId });
+export const CallVoiceJoin = Type.Object({ callId: CallId, ...CallVoiceProof.properties });
 
 export const CallIncoming = Type.Object({
   callId: CallId,

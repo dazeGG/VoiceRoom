@@ -60,19 +60,22 @@ function createCredentialBoundaryService({
     roomId,
     peerId,
     principal,
-    companion
+    companion,
+    call
   }: {
     roomId?: string;
     peerId?: string;
     principal?: GatePrincipal | null;
     companion?: CompanionCredential | undefined;
+    call?: true | undefined;
   } = {}): Promise<CredentialIssue> {
     if (
       !roomId ||
       !peerId ||
       isLiveKitOnlyIdentity(peerId) ||
       !principal ||
-      (companion && principal.principalType !== 'account')
+      (companion && principal.principalType !== 'account') ||
+      (call && (companion || principal.principalType !== 'account'))
     )
       return { status: 'invalid', credential: null };
     const issuedAt = clock();
@@ -84,6 +87,7 @@ function createCredentialBoundaryService({
     const credentialId = companion?.id ?? crypto.randomUUID();
     const value = signer.sign({
       credentialId,
+      call,
       companion: companion ? true : undefined,
       // A sliding companion keeps the same URL. The credential row and the
       // gate's companion watchdog enforce its current expiry on every use.

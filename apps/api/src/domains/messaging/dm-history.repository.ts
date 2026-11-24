@@ -66,7 +66,8 @@ async function threadPage(
       .selectAll('m')
       .where('m.sender_id', '=', from)
       .where('m.recipient_id', '=', to)
-      .where('m.deleted_at', 'is', null);
+      .where('m.deleted_at', 'is', null)
+      .where(sql<boolean>`m.metadata->>'kind' IS DISTINCT FROM 'voice-call'`);
     if (anchor) {
       query = query.where(
         sql<boolean>`(m.created_at, m.id) ${sql.raw(COMPARE[anchor.direction])} (${fromMicros(anchor.anchor.createdAtMicros)}, ${anchor.anchor.id})`
@@ -142,6 +143,7 @@ function createDmHistoryRepository({ pool }: { pool: pg.Pool }) {
       .selectFrom('direct_messages')
       .select(['id', microsOf('created_at').as('created_at_micros')])
       .where('id', '=', messageId)
+      .where(sql<boolean>`metadata->>'kind' IS DISTINCT FROM 'voice-call'`)
       .where((eb) =>
         eb.or([
           eb.and([eb('sender_id', '=', userId), eb('recipient_id', '=', peerId)]),

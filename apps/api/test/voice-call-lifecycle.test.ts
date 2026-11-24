@@ -1,0 +1,551 @@
+import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
+import fs from 'node:fs/promises';
+import test, { type TestContext } from 'node:test';
+import { Me } from '@voiceroom/shared/contracts/account';
+import { LiveKitAdmission } from '@voiceroom/shared/contracts/admission';
+import { DirectThread } from '@voiceroom/shared/contracts/messages';
+import { CallAnswer, CallBootstrap, CallDetails, type CallActionBody } from '@voiceroom/shared/contracts/rings';
+import { createApiRuntime } from '../src/app/api-runtime.ts';
+import { createLiveKitAuthGateService } from '../src/domains/admission/livekit-auth-gate.service.ts';
+import { createLogger } from '../src/lib/logger.ts';
+import { createTestDatabase } from './db-harness.ts';
+import {
+  acceptFirstFriendRequest,
+  registerAccount,
+  request,
+  sendFriendRequest,
+  socketDir
+} from './fakes/server-process.ts';
+import { joinVoiceRoom, openWs, sendRawWs, waitForWsType, type WsSession } from './ws-harness.ts';
+
+const basePath = '/api/call-rings';
+const grace = 30_000;
+const gateSecret = 'call-test-secret-for-credential-signing';
+
+async function setup(t: TestContext, envOverrides: Record<string, string> = {}) {
+  const { pool, databaseUrl, cleanup } = await createTestDatabase(t);
+  const logger = createLogger({ name: 'api' });
+  const env = {
+    NODE_ENV: 'test',
+    VOICE_CALLS_ENABLED: 'true',
+    RING_RATE_LIMIT: '0',
+    AUTH_RATE_LIMIT: '0',
+    LIVEKIT_INTERNAL_URL: 'ws://localhost:7880',
+    LIVEKIT_GATE_PUBLIC_URL: 'wss://gate.example.test',
+    LIVEKIT_API_KEY: 'call-test-key',
+    LIVEKIT_API_SECRET: 'call-test-livekit-key-secret',
+    LIVEKIT_GATE_SECRET: gateSecret,
+    ...envOverrides
+  };
+  const evicted: { roomId: string; peerId: string }[] = [];
+  let fakeRemoveFailures = 0;
+  let now = Date.now();
+  let nextTimer = 0;
+  const timers = new Map<number, { due: number; callback: () => void }>();
+  const children: (() => Promise<void>)[] = [];
+  t.after(async () => {
+    for (const close of children.reverse()) await close();
+    await cleanup();
+  });
+  const gate = createLiveKitAuthGateService({ pool, secret: gateSecret, superviseWidgets: false });
+  async function boot(enabled = env.VOICE_CALLS_ENABLED) {
+    const { dir, socketPath } = socketDir('call-lifecycle-');
+    const sockets: WsSession[] = [];
+    const runtime = createApiRuntime({
+      env: { ...env, VOICE_CALLS_ENABLED: enabled },
+      callLiveKitAdmin: {
+        async removeCallParticipant(roomId, peerId) {
+          if (fakeRemoveFailures > 0) {
+            fakeRemoveFailures -= 1;
+            throw new Error('Temporary LiveKit admin failure');
+          }
+          evicted.push({ roomId, peerId });
+        }
+      }
+    });
+    runtime.services.connect({ databaseUrl, logger });
+    const server = runtime.createServer({
+      realtimeNow: () => now,
+      realtimeReconnectLeaseMs: grace,
+      realtimeSetTimeout(callback, delay) {
+        const id = ++nextTimer;
+        timers.set(id, { due: now + delay, callback });
+        return id;
+      },
+      realtimeClearTimeout(timer) {
+        if (typeof timer === 'number') timers.delete(timer);
+      }
+    });
+    let stopped = false;
+    const close = async () => {
+      if (stopped) return;
+      stopped = true;
+      for (const socket of sockets) socket.ws.terminate();
+      await server.app.close();
+      timers.clear();
+      await runtime.closeStores(logger);
+      await fs.rm(dir, { force: true, recursive: true });
+    };
+    children.push(close);
+    await new Promise<void>((resolve, reject) =>
+      server.listen(socketPath, (error?: Error) => {
+        if (error) reject(error);
+        else resolve();
+      })
+    );
+    return {
+      close,
+      socketPath,
+      async socket(cookie: string) {
+        const socket = openWs(socketPath, { cookie });
+        sockets.push(socket);
+        await socket.ready;
+        return socket;
+      },
+      async account(login: string) {
+        const cookie = await registerAccount(socketPath, login);
+        const { user } = (await request(socketPath, { pathname: '/api/auth/me', cookie }, Me)).body;
+        assert.ok(user);
+        return { cookie, id: user.id, login };
+      }
+    };
+  }
+  function advance(ms: number) {
+    now += ms;
+    for (const [id, timer] of timers) {
+      if (timer.due <= now) {
+        timers.delete(id);
+        timer.callback();
+      }
+    }
+    return now;
+  }
+  return {
+    pool,
+    boot,
+    evicted,
+    gate,
+    advance,
+    failRemoval: (attempts: number) => {
+      fakeRemoveFailures = attempts;
+    }
+  };
+}
+
+type Account = { id: string; cookie: string; login: string };
+type Running = Awaited<ReturnType<Awaited<ReturnType<typeof setup>>['boot']>>;
+
+async function befriend(api: Running, a: Account, b: Account) {
+  await sendFriendRequest(api.socketPath, a.cookie, b.login);
+  await acceptFirstFriendRequest(api.socketPath, b.cookie);
+}
+
+async function start(api: Running, a: Account, b: Account, clientRequestId = randomUUID()) {
+  return (
+    await request(
+      api.socketPath,
+      {
+        method: 'POST',
+        pathname: basePath,
+        cookie: a.cookie,
+        body: { peerUserId: b.id, clientRequestId }
+      },
+      CallAnswer
+    )
+  ).body;
+}
+
+async function action(
+  api: Running,
+  a: Account,
+  id: string,
+  command: CallActionBody['action'],
+  expectedAttempt = 1,
+  seatToken?: string,
+  expectedRevision?: number
+) {
+  return (
+    await request(
+      api.socketPath,
+      {
+        method: 'POST',
+        pathname: `${basePath}/${id}/actions`,
+        cookie: a.cookie,
+        body: { action: command, expectedAttempt, clientRequestId: randomUUID(), seatToken, expectedRevision }
+      },
+      CallAnswer
+    )
+  ).body;
+}
+
+async function details(api: Running, a: Account, id: string) {
+  return (await request(api.socketPath, { pathname: `${basePath}/${id}`, cookie: a.cookie }, CallDetails)).body.call;
+}
+
+async function enter(socket: WsSession, answer: CallAnswer) {
+  const { call, voiceAdmission } = answer;
+  assert.ok(voiceAdmission);
+  const id = randomUUID();
+  sendRawWs(socket.ws, {
+    id,
+    type: 'call.voice.join',
+    payload: { callId: call.id, seatToken: voiceAdmission.seatToken }
+  });
+  const frame = await waitForWsType(socket.frames, 'room.snapshot', (frame) => frame.id === id);
+  assert.equal(frame.payload.roomId, voiceAdmission.roomId);
+  assert.deepEqual(frame.payload.recentMessages, []);
+  return voiceAdmission;
+}
+
+function state(socket: WsSession, id: string, phase: CallAnswer['call']['phase'], afterRevision = 0) {
+  return waitForWsType(
+    socket.frames,
+    'call.state',
+    ({ payload }) => payload.call.id === id && payload.call.phase === phase && payload.call.revision > afterRevision
+  );
+}
+
+async function issue(api: Running, account: Account, id: string, seatToken: string) {
+  return (
+    await request(
+      api.socketPath,
+      {
+        method: 'POST',
+        pathname: `${basePath}/${id}/livekit-token`,
+        cookie: account.cookie,
+        body: { seatToken }
+      },
+      LiveKitAdmission
+    )
+  ).body;
+}
+
+test('cross-dial coalesces, an accepting participant switches rooms, and late actions keep both seats', async (t) => {
+  const lab = await setup(t);
+  const api = await lab.boot();
+  const [a, b, outsider] = await Promise.all([api.account('alice'), api.account('bob'), api.account('eve')]);
+  await befriend(api, a, b);
+  const [aWs, bWs, outsiderWs] = await Promise.all([
+    api.socket(a.cookie),
+    api.socket(b.cookie),
+    api.socket(outsider.cookie)
+  ]);
+  await lab.pool.query("INSERT INTO rooms(id,name) VALUES('ordinary','Team')");
+  const watcher = await api.socket(outsider.cookie);
+  await joinVoiceRoom(watcher, {
+    roomId: 'ordinary',
+    peerId: 'watcher-peer',
+    sessionToken: 'a'.repeat(32),
+    name: 'Watcher'
+  });
+  await joinVoiceRoom(bWs, { roomId: 'ordinary', peerId: 'bob-peer', sessionToken: 'b'.repeat(32), name: 'Bob' });
+
+  const requestId = randomUUID();
+  const outgoing = await start(api, a, b, requestId);
+  const { id, startedAt } = outgoing.call;
+  const aSeat = await enter(aWs, outgoing);
+  assert.equal(outgoing.disposition, 'start');
+  assert.equal(outgoing.call.ringingExpiresAt, startedAt + 45_000);
+  const incoming = await waitForWsType(bWs.frames, 'call.incoming');
+  assert.equal(incoming.payload.callId, id);
+  assert.equal((await start(api, a, b, requestId)).disposition, 'open');
+  const accepted = await start(api, b, a);
+  assert.equal(accepted.disposition, 'accept');
+  assert.equal(accepted.call.id, id);
+  const bSeat = await enter(bWs, accepted);
+  await waitForWsType(watcher.frames, 'room.peer.left', ({ payload }) => payload.peerId === 'bob-peer');
+  const connected = (await state(aWs, id, 'connected')).payload.call;
+  assert.equal(connected.firstConnectedAt, startedAt);
+  const token = await issue(api, a, id, aSeat.seatToken);
+  assert.equal((await lab.gate.authorize(new URL(token.url).search)).ok, true);
+  assert.equal((await action(api, b, id, 'accept')).disposition, 'stale');
+  assert.equal((await action(api, b, id, 'decline')).disposition, 'stale');
+  assert.equal((await details(api, a, id)).phase, 'connected');
+
+  assert.equal((await request(api.socketPath, { pathname: `${basePath}/${id}`, cookie: outsider.cookie })).status, 404);
+  assert.equal(
+    (
+      await request(api.socketPath, {
+        method: 'POST',
+        pathname: `${basePath}/${id}/livekit-token`,
+        cookie: outsider.cookie,
+        body: { seatToken: aSeat.seatToken }
+      })
+    ).status,
+    404
+  );
+  sendRawWs(outsiderWs.ws, {
+    id: 'third',
+    type: 'call.voice.join',
+    payload: { callId: id, seatToken: aSeat.seatToken }
+  });
+  assert.equal(
+    (await waitForWsType(outsiderWs.frames, 'error', ({ id: requestId }) => requestId === 'third')).error.code,
+    'call_not_found'
+  );
+  assert.equal(
+    outsiderWs.frames.filter((frame) => frame.type === 'call.state' || frame.type === 'call.incoming').length,
+    0
+  );
+
+  lab.advance(1_250);
+  const left = await action(api, b, id, 'leave', 1, bSeat.seatToken);
+  assert.equal(left.call.durationMs, 1_250);
+  assert.equal(left.call.phase, 'alone');
+  assert.equal(left.call.aloneDeadline, startedAt + 1_250 + 300_000);
+  assert.equal((await action(api, b, id, 'leave', 1, bSeat.seatToken)).disposition, 'stale');
+  const rejoined = await action(api, b, id, 'join');
+  assert.equal(rejoined.disposition, 'resume');
+  await enter(bWs, rejoined);
+  await state(aWs, id, 'connected', left.call.revision);
+  assert.equal((await action(api, b, id, 'leave', 1, bSeat.seatToken)).disposition, 'stale');
+  assert.equal((await details(api, a, id)).phase, 'connected');
+  const { rows } = await lab.pool.query<{ id: string }>('SELECT id FROM direct_messages');
+  assert.equal(rows.length, 1);
+  const thread = await request(api.socketPath, { pathname: `/api/dm/${b.id}`, cookie: a.cookie }, DirectThread);
+  assert.deepEqual(thread.body.messages, []);
+
+  const active = await details(api, a, id);
+  const moved = await action(api, a, id, 'join', 1, undefined, active.revision);
+  assert.equal(moved.disposition, 'resume');
+  const newTab = await api.socket(a.cookie);
+  await enter(newTab, moved);
+  assert.equal((await action(api, a, id, 'join', 1, undefined, active.revision)).disposition, 'stale');
+  assert.equal((await action(api, a, id, 'leave', 1, aSeat.seatToken)).disposition, 'stale');
+  assert.equal((await lab.gate.authorize(new URL(token.url).search)).ok, false);
+  assert.equal((await details(api, a, id)).phase, 'connected');
+});
+
+test('two friends can ring the same account and a decline only closes its own attempt', async (t) => {
+  const lab = await setup(t);
+  const api = await lab.boot();
+  const [a, b, c] = await Promise.all([api.account('alice'), api.account('bob'), api.account('carol')]);
+  await befriend(api, a, b);
+  await befriend(api, c, b);
+  const [aWs, bWs, cWs] = await Promise.all([api.socket(a.cookie), api.socket(b.cookie), api.socket(c.cookie)]);
+  const [first, second] = await Promise.all([start(api, a, b), start(api, c, b)]);
+  const aSeat = await enter(aWs, first);
+  await enter(cWs, second);
+  const bootstrap = (await request(api.socketPath, { pathname: basePath, cookie: b.cookie }, CallBootstrap)).body;
+  assert.deepEqual(
+    new Set(bootstrap.incoming.map((incoming) => incoming.callId)),
+    new Set([first.call.id, second.call.id])
+  );
+  const declined = await action(api, b, first.call.id, 'decline');
+  assert.equal(declined.call.endReason, 'declined');
+  assert.equal(declined.call.endedByUserId, b.id);
+  assert.ok(lab.evicted.some(({ roomId, peerId }) => roomId === aSeat.roomId && peerId === aSeat.peerId));
+  const accepted = await action(api, b, second.call.id, 'accept');
+  await enter(bWs, accepted);
+  await state(cWs, second.call.id, 'connected');
+  assert.equal((await details(api, a, first.call.id)).phase, 'closed');
+});
+
+test('the sweeper expires at 45 seconds, re-ring resets both clocks, and five minutes evicts only that call', async (t) => {
+  const lab = await setup(t);
+  const api = await lab.boot();
+  const [a, b] = await Promise.all([api.account('alice'), api.account('bob')]);
+  await befriend(api, a, b);
+  const aWs = await api.socket(a.cookie);
+  const call = await start(api, a, b);
+  const { id, startedAt } = call.call;
+  const seat = await enter(aWs, call);
+  const token = await issue(api, a, id, seat.seatToken);
+  lab.advance(44_999);
+  assert.equal((await details(api, a, id)).phase, 'ringing');
+  lab.advance(1);
+  const alone = (await state(aWs, id, 'alone')).payload.call;
+  assert.equal(alone.serverNow, startedAt + 45_000);
+  assert.equal(alone.attemptResult, 'no_answer');
+  assert.equal(alone.aloneDeadline, startedAt + 300_000);
+  assert.equal((await action(api, b, id, 'accept')).disposition, 'stale');
+
+  const ring = await action(api, a, id, 're-ring');
+  assert.equal(ring.call.attempt, 2);
+  assert.equal(ring.call.ringingExpiresAt, startedAt + 90_000);
+  assert.equal(ring.call.aloneDeadline, startedAt + 345_000);
+  assert.equal((await action(api, a, id, 're-ring')).disposition, 'stale');
+  assert.equal((await action(api, b, id, 'decline')).disposition, 'stale');
+  lab.advance(299_999);
+  assert.equal((await details(api, a, id)).phase, 'alone');
+  assert.equal(lab.evicted.length, 0);
+  lab.failRemoval(2);
+  lab.advance(1);
+  const closed = (await state(aWs, id, 'closed')).payload.call;
+  assert.equal(closed.endedAt, startedAt + 345_000);
+  assert.equal(closed.endReason, 'alone_timeout');
+  assert.equal(closed.endedByUserId, a.id);
+  assert.equal((await lab.gate.authorize(new URL(token.url).search)).ok, false);
+  await waitForWsType(aWs.frames, 'room.left', ({ payload }) => payload.roomId === seat.roomId);
+  assert.ok(lab.evicted.some(({ peerId }) => peerId === seat.peerId));
+
+  lab.advance(86_399_999);
+  assert.equal((await details(api, a, id)).phase, 'closed');
+  lab.advance(1);
+  const deadline = Date.now() + 5_000;
+  while ((await request(api.socketPath, { pathname: `${basePath}/${id}`, cookie: a.cookie })).status === 200) {
+    assert.ok(Date.now() < deadline, 'closed call should be pruned');
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+  assert.equal((await lab.pool.query('SELECT id FROM rooms WHERE id=$1', [seat.roomId])).rowCount, 0);
+  const { rows } = await lab.pool.query<{ outcome: string }>(
+    "SELECT metadata->'call'->>'outcome' AS outcome FROM direct_messages"
+  );
+  assert.deepEqual(rows, [{ outcome: 'no_answer' }]);
+});
+
+test('a leased seat reconnects, stops counting mutual time during the gap, then expires to a new solo clock', async (t) => {
+  const lab = await setup(t);
+  const api = await lab.boot();
+  const [a, b] = await Promise.all([api.account('alice'), api.account('bob')]);
+  await befriend(api, a, b);
+  const [aWs, bWs] = await Promise.all([api.socket(a.cookie), api.socket(b.cookie)]);
+  const call = await start(api, a, b);
+  const { id, startedAt } = call.call;
+  await enter(aWs, call);
+  const accepted = await action(api, b, id, 'accept');
+  const bSeat = await enter(bWs, accepted);
+  const oldToken = await issue(api, b, id, bSeat.seatToken);
+  const connected = (await state(aWs, id, 'connected')).payload.call;
+  lab.advance(2_000);
+  bWs.ws.terminate();
+  const reconnect = (await state(aWs, id, 'connecting', connected.revision)).payload.call;
+  assert.equal(reconnect.seats?.find((seat) => seat.userId === b.id)?.reconnectUntil, startedAt + 2_000 + grace);
+  assert.equal(reconnect.durationMs, 2_000);
+  lab.advance(grace - 1);
+  const replacement = await api.socket(b.cookie);
+  await enter(replacement, accepted);
+  const resumed = (await state(aWs, id, 'connected', reconnect.revision)).payload.call;
+  assert.equal(resumed.durationMs, 2_000);
+  assert.equal((await action(api, b, id, 'leave', 1, bSeat.seatToken, connected.revision)).disposition, 'stale');
+  assert.equal((await lab.gate.authorize(new URL(oldToken.url).search)).ok, false);
+  lab.advance(3_000);
+  replacement.ws.terminate();
+  const gap = (await state(aWs, id, 'connecting', resumed.revision)).payload.call;
+  assert.equal(gap.durationMs, 5_000);
+  const expiredAt = lab.advance(grace);
+  const alone = (await state(aWs, id, 'alone', gap.revision)).payload.call;
+  assert.equal(alone.aloneDeadline, expiredAt + 300_000);
+  assert.equal(alone.seats?.find((seat) => seat.userId === b.id)?.status, 'absent');
+  assert.equal(alone.durationMs, 5_000);
+
+  aWs.ws.terminate();
+  const peer = await api.socket(b.cookie);
+  const soloGap = await details(api, b, id);
+  assert.equal(soloGap.aloneDeadline, alone.aloneDeadline);
+  lab.advance(10);
+  const aReplacement = await api.socket(a.cookie);
+  await enter(aReplacement, call);
+  assert.equal((await details(api, b, id)).aloneDeadline, alone.aloneDeadline);
+  await enter(peer, await action(api, b, id, 'join'));
+  await state(aReplacement, id, 'connected');
+});
+
+test('block, unfriend, and account deletion close a call as unavailable', async (t) => {
+  const lab = await setup(t);
+  const api = await lab.boot();
+  const a = await api.account('alice');
+  for (const change of ['block', 'unfriend', 'delete'] as const) {
+    const b = await api.account(change);
+    await befriend(api, a, b);
+    const [aWs, bWs] = await Promise.all([api.socket(a.cookie), api.socket(b.cookie)]);
+    const live = await start(api, a, b);
+    const seat = await enter(aWs, live);
+    await enter(bWs, await action(api, b, live.call.id, 'accept'));
+    await state(aWs, live.call.id, 'connected');
+    const token = await issue(api, a, live.call.id, seat.seatToken);
+    const update =
+      change === 'delete'
+        ? {
+            method: 'POST',
+            pathname: '/api/auth/account/deletion',
+            cookie: b.cookie,
+            body: { currentPassword: 'password123' }
+          }
+        : change === 'unfriend'
+          ? { method: 'DELETE', pathname: `/api/friends/${b.id}`, cookie: a.cookie }
+          : { method: 'PUT', pathname: `/api/blocks/${b.id}`, cookie: a.cookie };
+    const response = await request(api.socketPath, update);
+    assert.ok(response.status >= 200 && response.status < 300, JSON.stringify(response.body));
+    assert.equal((await lab.gate.authorize(new URL(token.url).search)).ok, false);
+    assert.equal((await state(aWs, live.call.id, 'closed')).payload.call.endReason, 'unavailable');
+    aWs.ws.terminate();
+    bWs.ws.terminate();
+  }
+});
+
+test('restart gives an empty call one lease of grace and disabling calls preserves existing actions', async (t) => {
+  const lab = await setup(t);
+  const original = await lab.boot();
+  const [a, b, c] = await Promise.all([original.account('alice'), original.account('bob'), original.account('carol')]);
+  await befriend(original, a, b);
+  await befriend(original, a, c);
+  const open = await start(original, a, b);
+  const abandoned = await start(original, a, c);
+  await original.close();
+  const restartAt = lab.advance(15_000);
+  const api = await lab.boot('false');
+  const restart = await details(api, a, open.call.id);
+  assert.equal(restart.phase, 'alone');
+  assert.equal(restart.aloneDeadline, restartAt + grace);
+  assert.equal(
+    (
+      await request(api.socketPath, {
+        method: 'POST',
+        pathname: basePath,
+        cookie: a.cookie,
+        body: { peerUserId: b.id, clientRequestId: randomUUID() }
+      })
+    ).body.code,
+    'call_disabled'
+  );
+  const aWs = await api.socket(a.cookie);
+  const resumed = await action(api, a, open.call.id, 'join');
+  const seat = await enter(aWs, resumed);
+  const refused = await request(api.socketPath, {
+    method: 'POST',
+    pathname: `${basePath}/${open.call.id}/actions`,
+    cookie: a.cookie,
+    body: { action: 're-ring', expectedAttempt: 1, clientRequestId: randomUUID() }
+  });
+  assert.equal(refused.body.code, 'call_disabled');
+  assert.equal((await action(api, a, open.call.id, 'leave', 1, seat.seatToken)).call.phase, 'closed');
+  lab.advance(grace - 1);
+  assert.equal((await details(api, a, abandoned.call.id)).phase, 'alone');
+  lab.advance(1);
+  assert.equal((await state(aWs, abandoned.call.id, 'closed')).payload.call.endReason, 'no_answer');
+});
+
+test('the start quota ignores replays and the caller can cancel a ringing attempt', async (t) => {
+  const lab = await setup(t, { RING_RATE_LIMIT: '1', RING_RATE_WINDOW_MS: '30000' });
+  const api = await lab.boot();
+  const [a, b, stranger] = await Promise.all([api.account('alice'), api.account('bob'), api.account('stranger')]);
+  const tryStart = (peer: Account, clientRequestId = randomUUID()) =>
+    request(api.socketPath, {
+      method: 'POST',
+      pathname: basePath,
+      cookie: a.cookie,
+      body: { peerUserId: peer.id, clientRequestId }
+    });
+  assert.equal((await tryStart(stranger)).body.code, 'not_friends');
+  await befriend(api, a, b);
+  const aWs = await api.socket(a.cookie);
+  const requestId = randomUUID();
+  const call = await start(api, a, b, requestId);
+  const seat = await enter(aWs, call);
+  const coalescedRequestId = randomUUID();
+  assert.equal((await start(api, a, b, coalescedRequestId)).call.id, call.call.id);
+  const cancelled = await action(api, a, call.call.id, 'leave', 1, seat.seatToken);
+  assert.equal(cancelled.call.endReason, 'cancelled');
+  assert.equal(cancelled.call.attemptResult, 'cancelled');
+  assert.equal((await start(api, a, b, requestId)).call.id, call.call.id);
+  assert.equal((await tryStart(stranger, requestId)).body.code, 'call_request_conflict');
+  const limited = await tryStart(b);
+  assert.equal(limited.status, 429);
+  assert.equal(limited.headers['retry-after'], '30');
+  assert.equal(limited.body.code, 'call_rate_limited');
+  lab.advance(30_000);
+  assert.equal((await start(api, a, b, coalescedRequestId)).call.id, call.call.id);
+  assert.notEqual((await start(api, a, b)).call.id, call.call.id);
+});

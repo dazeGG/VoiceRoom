@@ -202,6 +202,7 @@ export function createRoomPresence(deps: RoomPresenceDeps) {
     if (target.peers.size === 0) {
       // The call ended: reset the in-memory call clock (never persisted).
       target.voiceActiveSince = null;
+      if (target.kind === 'call') return;
       void queueOccupancy(roomId).catch((error: unknown) => {
         deps.logger().error(
           {
