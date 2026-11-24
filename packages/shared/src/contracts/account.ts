@@ -11,7 +11,9 @@ export const SelfUser = Type.Object({
   /** The account has signed in from the desktop app at least once. */
   hasUsedDesktopApp: Type.Boolean(),
   /** The one-time post-registration app prompt was already shown or dismissed. */
-  appPromptSeen: Type.Boolean()
+  appPromptSeen: Type.Boolean(),
+  /** Native receive rollout for this account before applying the device preference. */
+  nativeVoice: Type.Optional(Type.Object({ defaultEnabled: Type.Boolean() }))
 });
 export type SelfUser = Static<typeof SelfUser>;
 

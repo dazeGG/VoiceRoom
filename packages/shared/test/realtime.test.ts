@@ -40,6 +40,17 @@ test('native voice snapshots add a versioned capability and mapping to the exist
   });
   assert.ok(receiveSnapshot.ok && receiveSnapshot.frame.type === 'room.snapshot');
   assert.deepEqual(receiveSnapshot.frame.payload.nativeVoice, receive);
+  for (const defaultEnabled of [true, false]) {
+    const frame = { type: 'room.snapshot', payload: { ...active, nativeVoice: { ...receive, defaultEnabled } } };
+    assert.deepEqual(parseServerFrame(frame), { ok: true, frame });
+  }
+  assert.equal(
+    parseServerFrame({
+      type: 'room.snapshot',
+      payload: { ...active, nativeVoice: { ...receive, defaultEnabled: 'true' } }
+    }).ok,
+    false
+  );
   const future = { ...receive, stage: 'duplex-default' };
   const futureSnapshot = parseServerFrame({
     type: 'room.snapshot',

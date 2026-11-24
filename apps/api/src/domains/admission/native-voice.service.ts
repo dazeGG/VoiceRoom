@@ -68,6 +68,22 @@ export function createNativeVoiceService(deps: {
   let running: Promise<void> | undefined;
   let stopping = false;
 
+  function inDefaultCohort(account: string, defaultPercent: number): boolean {
+    const bucket = createHash('sha256').update(account).digest().readUInt32BE() % 100;
+    return bucket < defaultPercent;
+  }
+
+  function accountCapability(account: string): { defaultEnabled: boolean } {
+    const { stage, accounts, cap, defaultPercent } = deps.policy();
+    return {
+      defaultEnabled:
+        !stopping &&
+        cap > 0 &&
+        stage === 'receive' &&
+        (accounts.has(account) || inDefaultCohort(account, defaultPercent))
+    };
+  }
+
   const stageFor = (account: string, peer: AdmissionPeer | null): NativeVoiceStage => {
     const { stage, accounts, cap, defaultPercent } = deps.policy();
     if (stopping || cap <= 0 || stage === 'off') return 'off';
@@ -75,8 +91,7 @@ export function createNativeVoiceService(deps: {
     const preference: NativeVoicePreference = peer?.nativeVoicePreference ?? 'default';
     if (stage === 'internal-join' || !peer?.nativeVoiceReceive || preference === 'off') return 'off';
     if (preference === 'on') return stage;
-    const bucket = createHash('sha256').update(account).digest().readUInt32BE() % 100;
-    return bucket < defaultPercent ? stage : 'off';
+    return inDefaultCohort(account, defaultPercent) ? stage : 'off';
   };
 
   function capability(roomId: string, peerId: string): RoomSnapshot['nativeVoice'] {
@@ -85,7 +100,8 @@ export function createNativeVoiceService(deps: {
     return {
       version: 1,
       stage: stageFor(peer.accountUserId, peer),
-      generation: peer.transportId
+      generation: peer.transportId,
+      ...accountCapability(peer.accountUserId)
     };
   }
 
@@ -335,6 +351,7 @@ export function createNativeVoiceService(deps: {
     admit,
     renew,
     capability,
+    accountCapability,
     mapping,
     start,
     stop,
