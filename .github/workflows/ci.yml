@@ -126,11 +126,16 @@ jobs:
             esac
           done
 
-  check:
-    name: Lint, typecheck & build
+  # The lanes run in parallel; together they are `npm run check:app` plus the build.
+  check-lane:
+    name: Check ${{ matrix.lane }}
     needs: changes
     if: needs.changes.outputs.app == 'true' && needs.changes.outputs.verified != 'true'
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        lane: [types, conventions, lint, build]
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
@@ -138,14 +143,32 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci
-      - run: npm run check:app
+      - if: matrix.lane != 'build'
+        run: npm run check:app:${{ matrix.lane }}
       - name: Build the app and verify its deployment artifacts
+        if: matrix.lane == 'build'
         env:
           LIVEKIT_DOMAIN: "lk$&x$'y.example.com"
         run: |
           npm run build:app
           WEB_DEPLOY_CONTRACT=built npm --workspace @voiceroom/web run test -- \
             test/deploy-contract.test.ts -t 'a production (web|widget) build keeps the deployment contract'
+
+  # Branch protection on main requires this name.
+  check:
+    name: Lint, typecheck & build
+    needs: [changes, check-lane]
+    if: ${{ !cancelled() && needs.changes.outputs.app == 'true' && needs.changes.outputs.verified != 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every check lane
+        env:
+          LANES_RESULT: ${{ needs.check-lane.result }}
+        run: |
+          if [[ "$LANES_RESULT" != success ]]; then
+            echo "::error::Check lanes finished with: $LANES_RESULT"
+            exit 1
+          fi
 
   # API and web tests run as separate jobs so neither waits for the other.
   test:
@@ -437,7 +460,14 @@ jobs:
   record-app-checks:
     name: Record verified application tree
     needs: [changes, policy, check, test, test-web, voice-join, widget-smoke, goal-g05]
-    if: github.event_name == 'pull_request' && github.base_ref == 'develop' && needs.changes.outputs.app == 'true'
+    # Policy follows jobs that skip for unaffected components, and the implicit
+    # success() would skip this job after them. Require each check by name.
+    if: >-
+      !cancelled() && github.event_name == 'pull_request' && github.base_ref == 'develop' &&
+      needs.changes.result == 'success' && needs.changes.outputs.app == 'true' &&
+      needs.policy.result == 'success' && needs.check.result == 'success' && needs.test.result == 'success' &&
+      needs.test-web.result == 'success' && needs.voice-join.result == 'success' &&
+      needs.widget-smoke.result == 'success' && needs.goal-g05.result == 'success'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -461,8 +491,8 @@ jobs:
 
   images:
     name: Publish images
-    needs: [changes, check, test, test-web, voice-join, widget-smoke, goal-g05, personal-smoke, installer]
-    if: >-
+    needs: &app-checks [changes, check, test, test-web, voice-join, widget-smoke, goal-g05, personal-smoke, installer]
+    if: &publish-app >-
       !cancelled() && github.event_name == 'push' && needs.changes.result == 'success' &&
       needs.changes.outputs.app == 'true' &&
       (needs.changes.outputs.installer == 'false' || needs.installer.result == 'success') &&
@@ -475,9 +505,10 @@ jobs:
       packages: write
     uses: ./.github/workflows/images.yml
 
+  # Client builds need only the sources, so they run beside the image builds.
   client-artifacts:
-    needs: images
-    if: ${{ !cancelled() && github.event_name == 'push' && needs.images.result == 'success' }}
+    needs: *app-checks
+    if: *publish-app
     uses: ./.github/workflows/build-client.yml
     with:
       component: all
