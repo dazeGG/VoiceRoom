@@ -170,9 +170,54 @@ jobs:
             exit 1
           fi
 
-  # API and web tests run as separate jobs so neither waits for the other.
-  test:
-    name: API tests
+  # Both fixture jobs start after routing. Only integration provisions PostgreSQL.
+  api-unit:
+    name: API without PostgreSQL
+    needs: changes
+    if: needs.changes.outputs.app == 'true' && needs.changes.outputs.verified != 'true'
+    runs-on: ubuntu-latest
+    env:
+      FIXTURE: unit
+    steps: &api-lane
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - name: Run assigned tests without coverage on push
+        if: github.event_name == 'push'
+        run: node scripts/coverage/run-g08.mts --fixture "$FIXTURE" --without-coverage
+      - name: Collect raw V8 coverage for assigned tests
+        if: github.event_name == 'pull_request'
+        run: node scripts/coverage/run-g08.mts --fixture "$FIXTURE"
+      - name: Upload fixture coverage and assignment
+        if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v5
+        with:
+          name: g08-raw-${{ env.FIXTURE }}
+          path: coverage/g08-${{ env.FIXTURE }}/
+          if-no-files-found: error
+          overwrite: true
+          retention-days: 7
+      - name: Script tests and real Caddy log-redaction regression
+        if: env.FIXTURE == 'unit'
+        env:
+          CADDY_TEST_IMAGE: caddy:2.11.4-alpine
+        run: |
+          docker pull "$CADDY_TEST_IMAGE"
+          tests=()
+          for test in scripts/test/*.test.mts; do
+            # Routing runs in changes; coverage-gate runs with PostgreSQL on both events.
+            case "$test" in
+              scripts/test/changed-components.test.mts|scripts/test/coverage-gate.test.mts) continue ;;
+            esac
+            tests+=("$test")
+          done
+          node --test --test-concurrency=4 "${tests[@]}"
+
+  api-integration:
+    name: API with PostgreSQL
     needs: changes
     if: needs.changes.outputs.app == 'true' && needs.changes.outputs.verified != 'true'
     runs-on: ubuntu-latest
@@ -191,40 +236,52 @@ jobs:
           --health-timeout 5s
           --health-retries 5
     env:
+      FIXTURE: integration
       # Admin-capable URL: the API test harness creates and drops a temporary
       # database per integration test, so it needs CREATE DATABASE privileges.
       TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres
+    steps: *api-lane
+
+  # Stable required check: a selected but skipped or failed producer is not evidence.
+  test:
+    name: API tests
+    needs: [changes, api-unit, api-integration]
+    if: ${{ !cancelled() && needs.changes.outputs.app == 'true' && needs.changes.outputs.verified != 'true' }}
+    runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - name: Require both API fixture jobs
+        env:
+          UNIT_RESULT: ${{ needs.api-unit.result }}
+          INTEGRATION_RESULT: ${{ needs.api-integration.result }}
+        run: |
+          if [[ "$UNIT_RESULT:$INTEGRATION_RESULT" != success:success ]]; then
+            echo "::error::API fixture results: unit=$UNIT_RESULT integration=$INTEGRATION_RESULT"
+            exit 1
+          fi
+      - if: github.event_name == 'pull_request'
+        uses: actions/checkout@v5
         with:
-          fetch-depth: ${{ github.event_name == 'pull_request' && '0' || '1' }}
-      - uses: actions/setup-node@v5
+          fetch-depth: 0
+      - if: github.event_name == 'pull_request'
+        uses: actions/setup-node@v5
         with:
           node-version-file: .nvmrc
           cache: npm
-      - run: npm ci
-      - name: Run shared and API tests without coverage on push
-        if: github.event_name == 'push'
-        run: |
-          npm --workspace @voiceroom/shared run test
-          npm --workspace @voiceroom/api run test
-      - name: Script tests and real Caddy log-redaction regression
-        env:
-          CADDY_TEST_IMAGE: caddy:2.11.4-alpine
-        run: |
-          docker pull "$CADDY_TEST_IMAGE"
-          tests=()
-          for test in scripts/test/*.test.mts; do
-            # The routing job already runs its regression tests.
-            if [[ "$test" == scripts/test/changed-components.test.mts ]]; then
-              continue
-            fi
-            if [[ "$GITHUB_EVENT_NAME" == pull_request && "$test" == scripts/test/coverage-gate.test.mts ]]; then
-              continue
-            fi
-            tests+=("$test")
-          done
-          node --test "${tests[@]}"
+      - if: github.event_name == 'pull_request'
+        run: npm ci
+      - if: github.event_name == 'pull_request'
+        uses: actions/download-artifact@v5
+        with:
+          name: g08-raw-unit
+          path: coverage/g08-unit
+      - if: github.event_name == 'pull_request'
+        uses: actions/download-artifact@v5
+        with:
+          name: g08-raw-integration
+          path: coverage/g08-integration
+      - name: Validate assignments and collect merged G08 coverage
+        if: github.event_name == 'pull_request'
+        run: node scripts/coverage/run-g08.mts --merge
       - name: Capture protected-base coverage policy and changed files
         if: github.event_name == 'pull_request'
         shell: bash
@@ -235,9 +292,6 @@ jobs:
           set -euo pipefail
           baseline_args=$(node scripts/coverage/g08-inputs.mts --base "$BASE" --head "$PR_HEAD" --tested HEAD --out coverage)
           echo "G08_BASELINE_ARGS=$baseline_args" >> "$GITHUB_ENV"
-      - name: Run shared and API tests with G08 coverage
-        if: github.event_name == 'pull_request'
-        run: npm run coverage:g08
       - name: Enforce G08 coverage and protected-base ratchet
         if: github.event_name == 'pull_request'
         shell: bash
@@ -453,13 +507,14 @@ jobs:
 
   record-app-checks:
     name: Record verified application tree
-    needs: [changes, policy, check, test, test-web, voice-join, widget-smoke, goal-g05]
+    needs: [changes, policy, check, api-unit, api-integration, test, test-web, voice-join, widget-smoke, goal-g05]
     # Policy follows jobs that skip for unaffected components, and the implicit
     # success() would skip this job after them. Require each check by name.
     if: >-
       !cancelled() && github.event_name == 'pull_request' && github.base_ref == 'develop' &&
       needs.changes.result == 'success' && needs.changes.outputs.app == 'true' &&
       needs.policy.result == 'success' && needs.check.result == 'success' && needs.test.result == 'success' &&
+      needs.api-unit.result == 'success' && needs.api-integration.result == 'success' &&
       needs.test-web.result == 'success' && needs.voice-join.result == 'success' &&
       needs.widget-smoke.result == 'success' && needs.goal-g05.result == 'success'
     runs-on: ubuntu-latest
@@ -485,13 +540,14 @@ jobs:
 
   images:
     name: Publish images
-    needs: &app-checks [changes, check, test, test-web, voice-join, widget-smoke, goal-g05, personal-smoke, installer]
+    needs: &app-checks [changes, check, api-unit, api-integration, test, test-web, voice-join, widget-smoke, goal-g05, personal-smoke, installer]
     if: &publish-app >-
       !cancelled() && github.event_name == 'push' && needs.changes.result == 'success' &&
       needs.changes.outputs.app == 'true' &&
       (needs.changes.outputs.installer == 'false' || needs.installer.result == 'success') &&
       (needs.changes.outputs.verified == 'true' ||
       (needs.check.result == 'success' && needs.test.result == 'success' &&
+      needs.api-unit.result == 'success' && needs.api-integration.result == 'success' &&
       needs.test-web.result == 'success' && needs.voice-join.result == 'success' && needs.widget-smoke.result == 'success' &&
       needs.goal-g05.result == 'success' && needs.personal-smoke.result == 'success'))
     permissions:
