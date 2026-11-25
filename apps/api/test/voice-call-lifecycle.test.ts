@@ -645,6 +645,26 @@ test('a re-ring invalidates the recipient’s unconsumed handoff and keeps the i
   await state(aWs, id, 'connected');
 });
 
+test('a friend who answered and left can be rung again at once despite the Ring rate window', async (t) => {
+  const lab = await setup(t, { RING_RATE_LIMIT: '1', RING_RATE_WINDOW_MS: '30000' });
+  const api = await lab.boot();
+  const [a, b] = await Promise.all([api.account('alice'), api.account('bob')]);
+  await befriend(api, a, b);
+  const [aWs, bWs] = await Promise.all([api.socket(a.cookie), api.socket(b.cookie)]);
+  const call = await start(api, a, b);
+  const { id } = call.call;
+  await enter(aWs, call);
+  const accepted = await action(api, b, id, 'accept');
+  const bSeat = await enter(bWs, accepted);
+  await state(aWs, id, 'connected');
+
+  lab.advance(5_000);
+  assert.equal((await action(api, b, id, 'leave', 1, bSeat.seatToken)).call.phase, 'alone');
+  const rerung = await action(api, a, id, 're-ring');
+  assert.equal(rerung.call.attempt, 2);
+  assert.equal(rerung.call.phase, 'ringing');
+});
+
 test('transferring the solo seat preserves a never-answered call’s history outcome', async (t) => {
   const lab = await setup(t);
   const api = await lab.boot();

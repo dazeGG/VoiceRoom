@@ -361,8 +361,10 @@ export function createCallRingService({
         other?.status === 'absent'
       ) {
         // One current attempt per call and the Ring window bound limit rapid re-rings.
+        // A friend who answered and then left consented to this call, so the window
+        // only applies after an unanswered attempt.
         const nextRingAt = call.ringingExpiresAt - RING_WINDOW_MS + limits.windowMs;
-        if (limits.count > 0 && now < nextRingAt) {
+        if (limits.count > 0 && call.attemptResult !== 'accepted' && now < nextRingAt) {
           return { call, result: { retryAfterSeconds: Math.ceil((nextRingAt - now) / 1_000) } };
         }
         return {
