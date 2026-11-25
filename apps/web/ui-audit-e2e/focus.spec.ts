@@ -113,8 +113,11 @@ test('popover outside click keeps destination focus', async ({ page }) => {
   await page.goto('http://127.0.0.1:15181/test/browser/');
   await page.getByRole('button', { name: 'Dates', exact: true }).click();
   await page.getByLabel('Date', { exact: true }).focus();
-  await page.getByRole('button', { name: 'Outside', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Outside', exact: true })).toBeFocused();
+  // Unlike buttons in WebKit, a text input receives focus on pointer activation in every project.
+  const destination = page.getByRole('combobox', { name: 'Поиск по аккаунтам и комнатам' });
+  await destination.click();
+  await expect(page.getByLabel('Date', { exact: true })).toBeHidden();
+  await expect(destination).toBeFocused();
 });
 test('story hands focus to appearance dialog', async ({ page }) => {
   await page.goto('http://127.0.0.1:15180/test/browser/');
@@ -179,8 +182,10 @@ test('dialog content and drag do not dismiss but backdrop does', async ({ page }
   await page.mouse.click(5, 5);
   await expect(dialog).toHaveCount(0);
   for (let i = 0; i < 3; i++) {
-    await opener.click();
+    await opener.press('Enter');
+    await expect(dialog).toBeVisible();
     await page.keyboard.press('Escape');
+    await expect(dialog).toBeHidden();
     await expect(opener).toBeFocused();
   }
 });
