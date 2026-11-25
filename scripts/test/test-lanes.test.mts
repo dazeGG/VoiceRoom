@@ -315,14 +315,14 @@ test('G08 follows transitive import, re-export and dynamic import edges, not nei
   const auth = 'apps/web/src/api/auth.ts';
   const runtime = 'apps/web/src/shared/i18n/runtime.ts';
   const catalog = 'apps/web/src/shared/i18n/catalog';
-  const dirs = ['apps/web', 'packages/ui-kit', 'packages/shared'];
+  const dirs = ['apps/web', 'apps/api', 'apps/admin', 'packages/ui-kit', 'packages/shared'];
   put('package.json', JSON.stringify({ workspaces: dirs }));
   for (const dir of dirs) {
     put(
       dir + '/package.json',
       JSON.stringify({
         name: '@voiceroom/' + dir.slice(dir.lastIndexOf('/') + 1),
-        scripts: dir === 'apps/web' ? { test: 'vitest run' } : {},
+        scripts: dir.startsWith('apps/') ? { test: 'test' } : {},
         ...(dir === 'apps/web' ? { dependencies: { '@voiceroom/ui-kit': '*', '@voiceroom/shared': '*' } } : {}),
         ...(dir === 'packages/ui-kit' ? { exports: { './i18n': './src/i18n.ts' } } : {})
       })
@@ -331,7 +331,13 @@ test('G08 follows transitive import, re-export and dynamic import edges, not nei
   put(
     'config/coverage/release-250-thresholds.json',
     JSON.stringify({
+      schemaVersion: 2,
       businessPathPatterns: [auth],
+      pooledBusinessCode: {
+        pathPatterns: ['apps/api/src/', 'packages/shared/src/', 'apps/admin/src/pooled/'],
+        line: 90,
+        branch: 85
+      },
       strictBranchGroups: []
     })
   );
@@ -341,6 +347,10 @@ test('G08 follows transitive import, re-export and dynamic import edges, not nei
   put(catalog + '/Labels.vue', `<script setup lang="ts">import { labels } from './labels.js';</script>`);
   put(catalog + '/labels.js', "export const labels = ['hi'];");
   put('packages/ui-kit/src/i18n.ts', 'export const locale = "en";');
+  // Unlike API/shared, Admin is not intrinsically an API route. A transitive
+  // input of a pooled source must reach both API producers through the policy.
+  put('apps/admin/src/pooled/metric.ts', "export { score } from '../score.ts';");
+  put('apps/admin/src/score.ts', 'export const score = 1;');
   const base = git('write-tree');
   const edit = (file: string, content: string) => {
     git('read-tree', base);
@@ -352,6 +362,17 @@ test('G08 follows transitive import, re-export and dynamic import edges, not nei
     assert.notDeepEqual(selection, FULL_SELECTION, reason);
     for (const id of ['api-unit', 'api-integration', 'test', 'goal-g05']) assert.ok(selection.lanes.includes(id), id);
   };
+  api(base, edit('apps/api/src/domains/rooms/new-room.mts', 'export const limit = 4;'));
+  api(base, edit('apps/admin/src/score.ts', 'export const score = 2;'));
+  assert.deepEqual(
+    routeTrees(base, edit('packages/shared/src/room-limit.ts', 'export const limit = 4;'), cwd).selection,
+    FULL_SELECTION
+  );
+  assert.deepEqual(routeTrees(base, edit('apps/admin/src/limit.ts', 'export const limit = 4;'), cwd).selection, {
+    lanes: ['check', 'check-lane', 'test-web'],
+    workspaces: ['admin'],
+    groups: []
+  });
   api(base, edit(catalog + '/labels.js', "export const labels = ['bye'];"));
   api(base, edit('packages/ui-kit/src/other.ts', 'export const other = 1;'));
   const chat = routeTrees(base, edit('apps/web/src/shared/chat/EmojiPickerPanel.vue', '<template/>'), cwd);

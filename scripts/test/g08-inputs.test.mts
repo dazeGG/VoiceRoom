@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test, { type TestContext } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { collectV8Coverage } from '../coverage/check-release-250-coverage.mts';
+import { collectV8Coverage, type CoverageThresholds } from '../coverage/check-release-250-coverage.mts';
 
 const helper = fileURLToPath(new URL('../coverage/g08-inputs.mts', import.meta.url));
 const evaluator = fileURLToPath(new URL('../coverage/check-release-250-coverage.mts', import.meta.url));
@@ -64,10 +64,10 @@ function repository(t: TestContext) {
         }
       }
     );
-  const measure = (module = source) => {
+  const measure = (module = source, thresholds: CoverageThresholds = policy) => {
     const v8Dir = path.join(cwd, 'coverage/raw');
     execFileSync(process.execPath, [module], { cwd, env: { ...process.env, NODE_V8_COVERAGE: v8Dir } });
-    const measured = collectV8Coverage({ v8Dir, thresholds: policy, root: cwd });
+    const measured = collectV8Coverage({ v8Dir, thresholds, root: cwd });
     write(summary, JSON.stringify(measured));
     return measured;
   };
@@ -231,6 +231,44 @@ test('a pure extension change cannot hide a newly eligible uncovered file', (t) 
   const verdict = r.verdict(inputs.stdout);
   assert.equal(verdict.status, 1);
   assert.match(verdict.stderr, /src\/feature\.mjs changed line coverage 0\.00%/);
+});
+
+test('unchanged pooled code cannot offset an untested addition via a pure rename or mode change', (t) => {
+  const r = repository(t);
+  const before = 'apps/api/src/before.mjs';
+  const after = 'apps/api/src/after.mjs';
+  const modeOnly = 'apps/api/src/mode.mjs';
+  const newFile = 'apps/api/src/never-loaded.mts';
+  const v2 = {
+    ...policy,
+    schemaVersion: 2,
+    pooledBusinessCode: { line: 90, branch: 85, pathPatterns: ['apps/api/src/', 'packages/shared/src/'] },
+    baseline: { artifact: summary, measuredAt: policy.baseline.measuredAt }
+  };
+  r.write(before, "import './mode.mjs';\n" + covered);
+  r.write(modeOnly, Array.from({ length: 20 }, (_, i) => `export const value${i} = 1;\n`).join(''));
+  r.write(config, JSON.stringify(v2));
+  const base = r.commit('Add two exercised modules');
+  r.git('mv', before, after);
+  r.write(newFile, uncovered);
+  r.git('add', '-A');
+  r.git('update-index', '--chmod=+x', modeOnly);
+  r.git('commit', '-m', 'Rename, change file mode and add untested code');
+  const inputs = r.capture(base);
+  assert.equal(inputs.status, 0, inputs.stderr);
+  r.measure(after, v2);
+  const verdict = r.verdict(inputs.stdout);
+  assert.ok(verdict.stdout, verdict.stderr);
+  assert.equal(verdict.status, 1, verdict.stdout);
+  const report: unknown = JSON.parse(verdict.stdout);
+  assert.partialDeepStrictEqual(report, {
+    pooled: { files: 1, verdict: 'fail', lines: { covered: 0, total: 1 } },
+    patch: [
+      { path: newFile, lines: { covered: 0, total: 1 } },
+      { path: after, lines: { covered: 0, total: 0 } },
+      { path: modeOnly, lines: { covered: 0, total: 0 } }
+    ]
+  });
 });
 
 test('a comment-only hunk with no measurable statements passes despite uncovered existing code', (t) => {

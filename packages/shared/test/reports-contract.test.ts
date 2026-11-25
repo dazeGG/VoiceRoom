@@ -4,6 +4,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Value } from 'typebox/value';
+import { describeFiledReport } from '../src/report-labels.ts';
 import { AdminReportsEvent } from '../src/contracts/admin.ts';
 import { AdminReportPage, REPORT_COMMENT_MAX_LENGTH, REPORT_REASONS, ReportBody } from '../src/contracts/reports.ts';
 
@@ -54,4 +55,19 @@ test('an account report is accepted without widening the legacy message-review r
     false
   );
   assert.equal(Value.Check(AdminReportsEvent, { openReports: 1, filed: null }), true);
+});
+
+test('the filed-report notice distinguishes a named room, a temporary room and a direct conversation', () => {
+  assert.equal(
+    describeFiledReport({ reason: 'abuse', targetKind: 'room_message', roomName: 'Garden' }),
+    'Оскорбления или угрозы · комната «Garden»'
+  );
+  assert.equal(
+    describeFiledReport({ reason: 'spam', targetKind: 'room_message', roomName: null }),
+    'Спам или реклама · временная комната'
+  );
+  assert.equal(
+    describeFiledReport({ reason: 'illegal', targetKind: 'direct_message', roomName: null }),
+    'Запрещённый контент · личное сообщение'
+  );
 });

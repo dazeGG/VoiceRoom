@@ -7,7 +7,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Value } from 'typebox/value';
-import { CallFeedbackBody } from '../src/contracts/feedback.ts';
+import { CALL_FEEDBACK_TAGS, CallFeedbackBody } from '../src/contracts/feedback.ts';
+import { CALL_FEEDBACK_TAG_LABELS } from '../src/feedback-labels.ts';
 import { validateClientCommand } from '../src/realtime.ts';
 import { NETWORK_THRESHOLDS, networkLevelOf, networkLevelOfValue, worseNetworkLevel } from '../src/network-quality.ts';
 
@@ -77,4 +78,12 @@ test('one set of thresholds: a number past unstable is unstable, past bad is bad
   assert.equal(networkLevelOf({ rttMs: null, inboundLossPct: null, outboundLossPct: null, jitterMs: null }), null);
   assert.equal(worseNetworkLevel(null, 'good'), 'good');
   assert.equal(worseNetworkLevel('bad', 'unstable'), 'bad');
+});
+
+test('every accepted feedback tag has a distinct readable label for staff reviewing the call', () => {
+  const labels = CALL_FEEDBACK_TAGS.map((tag) => CALL_FEEDBACK_TAG_LABELS[tag]);
+  for (const label of labels) assert.match(label, /\p{Script=Cyrillic}/u);
+  assert.equal(new Set(labels).size, labels.length);
+  assert.equal(CALL_FEEDBACK_TAG_LABELS.sound, 'Чистый звук');
+  assert.equal(CALL_FEEDBACK_TAG_LABELS.poor_sound, 'Плохой звук');
 });

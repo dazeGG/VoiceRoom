@@ -8,7 +8,9 @@ import { Me, SignedIn } from '@voiceroom/shared/contracts/account';
 import { AdminCallFeedbackPage, type CallFeedbackBody } from '@voiceroom/shared/contracts/feedback';
 import { Failure } from '@voiceroom/shared/contracts/http';
 import { Type } from 'typebox';
+import { createCallRoom } from '../src/domains/rooms/room.repository.ts';
 import { hashPassword } from '../src/lib/password.ts';
+import { kyselyOn } from '../src/platform/db/kysely.ts';
 import { cookieFrom, registerAccount, request, startApiServer } from './fakes/server-process.ts';
 import { defined } from './helpers/assert-defined.ts';
 import { staffCookie } from './staff-session.ts';
@@ -121,6 +123,38 @@ test('accounts and guests answer, and only the administrator reads the answers',
     assert.equal(page.status, 200);
     return page.body;
   };
+
+  await t.test('private calls reject new feedback and keep historical answers out of staff statistics', async () => {
+    const db = kyselyOn(pool);
+    const { id } = await createCallRoom(db);
+    const rejected = await answer(undefined, { rating: 'bad', tags: ['drops'], call: { ...call, roomId: id } });
+    assert.equal(rejected.status, 404);
+    assert.equal(rejected.body.code, 'room_not_found');
+    assert.equal(
+      await db.selectFrom('call_feedback').select('id').where('room_id', '=', id).executeTakeFirst(),
+      undefined
+    );
+
+    // Filtering the write is not sufficient: old rows must not leak in any staff projection.
+    await db
+      .insertInto('call_feedback')
+      .values({
+        rating: 'bad',
+        tags: ['drops'],
+        room_id: id,
+        duration_s: 60,
+        peers: 2,
+        platform: 'browser'
+      })
+      .execute();
+    const page = await read('?rating=bad');
+    assert.deepEqual(
+      page.entries.map((entry) => entry.roomId),
+      ['gone-room']
+    );
+    assert.equal(page.summary.bad, 1);
+    assert.ok(!page.summary.tags.some(({ tag }) => tag === 'drops'));
+  });
 
   const recent = await read();
   assert.equal(recent.days, 30);

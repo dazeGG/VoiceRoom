@@ -155,13 +155,34 @@ function collect(raw: string) {
 
 async function main(args: string[]) {
   const root = process.cwd();
-  if (!args.length) {
+  if (!args.length || (args.length === 2 && args[0] === '--base' && args[1])) {
     await requireTestDatabase();
     const raw = path.join(root, 'coverage', '.gate-v8');
     resetDirectory(raw);
     runTestFiles(fullInventory(root), 'integration', { ...process.env, COVERAGE_V8_DIR: raw, NODE_V8_COVERAGE: raw });
     collect(raw);
-    run(['scripts/coverage/check-release-250-coverage.mts', '--coverage', SUMMARY, '--base-thresholds-absent']);
+    // Without an explicit base this is a local full-suite measurement, not PR evidence.
+    const base = args[1] ?? 'HEAD';
+    const sha = execFileSync('git', ['rev-parse', '--verify', '--end-of-options', base + '^{commit}'], {
+      encoding: 'utf8'
+    }).trim();
+    const trust = execFileSync(
+      process.execPath,
+      ['scripts/coverage/g08-inputs.mts', '--base', sha, '--tested', 'HEAD', '--out', 'coverage'],
+      { encoding: 'utf8' }
+    ).trim();
+    run([
+      'scripts/coverage/check-release-250-coverage.mts',
+      '--coverage',
+      SUMMARY,
+      '--report',
+      'coverage/release-250-patch.json',
+      '--changed-files',
+      'coverage/release-250-changed-files.txt',
+      '--changed-diff',
+      'coverage/release-250-changed.diff',
+      ...trust.split(' ')
+    ]);
   } else if (args.length === 1 && args[0] === '--merge') {
     collect(mergeG08Bundles(root, tree(), fullInventory(root)));
   } else if (
@@ -171,7 +192,9 @@ async function main(args: string[]) {
   ) {
     await produce(root, args[1], args.length === 2);
   } else {
-    throw new Error('Usage: run-g08.mts [--fixture unit|integration [--without-coverage] | --merge]');
+    throw new Error(
+      'Usage: run-g08.mts [--base <revision> | --fixture unit|integration [--without-coverage] | --merge]'
+    );
   }
 }
 

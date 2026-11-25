@@ -105,6 +105,10 @@ function policyPaths(value: unknown) {
 export function measuredInputs(policy: unknown) {
   if (!isRecord(policy) || !isArray(policy.strictBranchGroups)) throw new Error('Invalid G08 policy');
   const prefixes = policyPaths(policy.businessPathPatterns);
+  if (policy.schemaVersion === 2) {
+    if (!isRecord(policy.pooledBusinessCode)) throw new Error('Invalid G08 pool');
+    prefixes.push(...policyPaths(policy.pooledBusinessCode.pathPatterns));
+  }
   const exact = policyPaths(policy.strictBranchPaths ?? []);
   if (!prefixes.length) throw new Error('Empty G08 measurement policy');
   const fragments: string[] = [];
