@@ -81,12 +81,30 @@ npm run dev
 
 ```bash
 npm run check   # tsc, vue-tsc, ESLint и Prettier
-TEST_DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55432/postgres npm test
+npm run test:api -- --fixture unit  # no PostgreSQL or database URL needed
+docker compose -f docker-compose.dev.yml up -d postgres
+export TEST_DATABASE_URL=postgres://voice_room:voice_room_dev@127.0.0.1:5432/voice_room_dev
+npm run test:api -- --fixture integration
+npm test        # both API groups and the other workspaces
 npm run build
 npm run e2e     # Playwright, нужен запущенный dev-стек
 ```
 
-API-тестам нужна PostgreSQL в `TEST_DATABASE_URL`: на каждый тест создаётся отдельная временная база.
+`npm run test:api` runs both groups. Integration needs a reachable PostgreSQL
+server and permission to create test databases. New API tests default to integration.
+Before adding a file to `apps/api/test/no-db-files.json`, run the same candidates
+(one repository-relative path per line) on the same checkout in both environments:
+
+```bash
+# With TEST_DATABASE_URL pointing at a real test PostgreSQL:
+node scripts/ci/api-tests.mts report --files candidates.txt --out db.json
+# On an isolated runner without PostgreSQL, reachable sockets or either database URL:
+node scripts/ci/api-tests.mts report --files candidates.txt --out no-db.json
+node scripts/ci/api-tests.mts compare-fixtures db.json no-db.json
+```
+
+Admit only files with identical passing cases, no skips or conditional cases,
+and no database connection attempts.
 
 API, Web, Admin, Widget и Meet выпускаются отдельными сериями. Ветки, коммиты и теги описаны в [`docs/GIT_FLOW.md`](./docs/GIT_FLOW.md). Изменения по версиям — в [GitHub Releases](https://github.com/dazeGG/VoiceRoom/releases).
 
