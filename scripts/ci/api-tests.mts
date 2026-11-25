@@ -28,11 +28,16 @@ function checkedFiles(list: unknown, full: string[]): string[] {
   return list.toSorted();
 }
 
-export function apiLanes(root = ROOT): Record<Fixture, string[]> {
-  const full = apiFiles(root);
-  const unit = checkedFiles(JSON.parse(readFileSync(join(root, API, 'no-db-files.json'), 'utf8')), full);
-  const accepted = new Set(unit);
-  return { unit, integration: full.filter((file) => !accepted.has(file)) };
+export function apiLanes(root = ROOT, domain?: string): Record<Fixture, string[]> {
+  const lanes: Record<Fixture, string[]> = { unit: [], integration: [] };
+  for (const file of apiFiles(root)) {
+    const [owner, fixture, name, ...rest] = file.slice(API.length + 1).split('/');
+    if (!owner || !name || rest.length || (fixture !== 'unit' && fixture !== 'integration'))
+      throw new Error(`Expected API test under <domain>/{unit,integration}: ${file}`);
+    if (!domain || domain === owner) lanes[fixture].push(file);
+  }
+  if (!lanes.unit.length && !lanes.integration.length) throw new Error(`No API tests for ${domain ?? 'any domain'}`);
+  return lanes;
 }
 
 const FileResult = Type.Object({
@@ -160,15 +165,20 @@ async function main(args: string[]) {
     console.log(JSON.stringify(compareFixtures(readReport(first), readReport(second)), null, 2));
     return;
   }
+  const domain = command && !command.startsWith('-') ? command : undefined;
+  const options = domain ? args.slice(1) : args;
+  const requested = options[1];
   if (
-    args.length &&
-    !(args.length === 2 && args[0] === '--fixture' && (args[1] === 'unit' || args[1] === 'integration'))
+    options.length &&
+    !(options.length === 2 && options[0] === '--fixture' && (requested === 'unit' || requested === 'integration'))
   )
-    throw new Error('Expected --fixture unit or --fixture integration (omit to run both)');
+    throw new Error('Expected --fixture unit or --fixture integration after the optional API domain');
+  const lanes = apiLanes(ROOT, domain);
   const fixtures: Fixture[] =
-    args[1] === 'unit' ? ['unit'] : args[1] === 'integration' ? ['integration'] : ['unit', 'integration'];
-  if (fixtures.includes('integration')) await requireTestDatabase();
-  const lanes = apiLanes();
+    requested === 'unit' || requested === 'integration'
+      ? [requested]
+      : (['unit', 'integration'] as const).filter((fixture) => !domain || lanes[fixture].length);
+  if (fixtures.includes('integration') && lanes.integration.length) await requireTestDatabase();
   for (const fixture of fixtures) runTestFiles(lanes[fixture], fixture);
 }
 

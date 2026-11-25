@@ -162,7 +162,8 @@ jobs:
         run: |
           docker pull "$CADDY_TEST_IMAGE"
           tests=()
-          for test in scripts/test/*.test.mts; do
+          shopt -s globstar
+          for test in scripts/test/**/*.test.mts; do
             # Routing runs in changes; coverage-gate runs with PostgreSQL on both events.
             case "$test" in
               scripts/test/changed-components.test.mts|scripts/test/test-lanes.test.mts|scripts/test/verification-policy.test.mts|scripts/test/coverage-gate.test.mts) continue ;;
@@ -332,6 +333,16 @@ jobs:
           npm --workspace "@voiceroom/$WORKSPACE" test -- --reporter=default --reporter=json --outputFile.json="$report"
           node scripts/ci/completed-tests.mts workspace "$report"
           echo "$WORKSPACE" >> "$RUNNER_TEMP/completed-workspaces"
+      - name: Test @voiceroom/ui-kit workspace
+        if: contains(fromJSON(needs.changes.outputs.schedule).workspaces, 'ui-kit')
+        env:
+          WORKSPACE: ui-kit
+        run: *test-workspace
+      - name: Test @voiceroom/call workspace
+        if: contains(fromJSON(needs.changes.outputs.schedule).workspaces, 'call')
+        env:
+          WORKSPACE: call
+        run: *test-workspace
       - name: Test Admin workspace
         if: contains(fromJSON(needs.changes.outputs.schedule).workspaces, 'admin')
         env:

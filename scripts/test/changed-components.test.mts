@@ -189,3 +189,11 @@ test('a stale PR payload base routes against the tested merge first parent; a no
   assert.throws(() => routingBase(base, merge, head, cwd), /checkout/);
   assert.throws(() => routingBase(base, head, head, cwd), /parents/);
 });
+
+test("this repository's own tree routes: every workspace with tests has a step in the full policy", () => {
+  const root = join(import.meta.dirname, '../..');
+  const head = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim();
+  const route = routeTrees(head, head, root);
+  assert.deepEqual(route.selection.workspaces, []);
+  assert.ok(FULL_SELECTION.workspaces.includes('call') && FULL_SELECTION.workspaces.includes('ui-kit'));
+});

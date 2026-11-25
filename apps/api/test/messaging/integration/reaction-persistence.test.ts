@@ -1,0 +1,188 @@
+import assert from 'node:assert/strict';
+import { Pool } from 'pg';
+import test, { type TestContext } from 'node:test';
+import { runMigrations } from '../../../src/lib/migrate.ts';
+import { createReactionRepository } from '../../../src/domains/messaging/reaction.repository.ts';
+import { Type } from 'typebox';
+import { createTestDatabase } from '../../db-harness.ts';
+import { CountRow, queryRow, queryRows } from '../../helpers/checked.ts';
+
+async function fixture(t: TestContext) {
+  const db = await createTestDatabase(t);
+  await runMigrations({
+    databaseUrl: db.databaseUrl,
+    logger: { log() {}, info() {}, warn() {}, error() {} },
+    noLock: true
+  });
+  const pool = new Pool({ connectionString: db.databaseUrl, max: 12 });
+  t.after(async () => {
+    await pool.end();
+    await db.cleanup();
+  });
+  await pool.query(`
+    INSERT INTO users(id, login, display_name, password_hash)
+    VALUES ('actor', 'actor-reactions', 'Actor', 'x'), ('peer', 'peer-reactions', 'Peer', 'x');
+    INSERT INTO rooms(id, creator_ip) VALUES ('reaction-room', '');
+    INSERT INTO room_messages(id, room_id, text) VALUES ('reaction-message', 'reaction-room', 'hello');
+  `);
+  return { pool, repository: createReactionRepository({ client: pool }) };
+}
+
+test(
+  'G68-A01 desired-state rows are unique, idempotent, monotonic and application-rollback safe',
+  { skip: !process.env.TEST_DATABASE_URL, timeout: 120000 },
+  async (t) => {
+    const { pool, repository } = await fixture(t);
+    const set = (active: boolean, userId = 'actor') =>
+      repository.transaction((client) =>
+        repository.setDesiredState({
+          type: 'room',
+          messageId: 'reaction-message',
+          emoji: '😀',
+          userId,
+          active,
+          client
+        })
+      );
+    const first = await set(true);
+    const duplicate = await set(true);
+    assert.deepEqual([first.changed, duplicate.changed], [true, false]);
+    assert.equal(first.revision, duplicate.revision);
+
+    await Promise.all(Array.from({ length: 20 }, (_, index) => set(index % 2 === 0)));
+    const state = await queryRow(
+      pool,
+      CountRow,
+      `SELECT count(*)::int AS count FROM room_message_reactions WHERE message_id = 'reaction-message' AND emoji = '😀' AND user_id = 'actor'`
+    );
+    const revision = await queryRow(
+      pool,
+      Type.Object({ revision: Type.String() }),
+      `SELECT revision FROM room_message_reaction_revisions WHERE message_id = 'reaction-message' AND emoji = '😀'`
+    );
+    assert.ok(state.count === 0 || state.count === 1);
+    assert.ok(BigInt(revision.revision) >= 1n);
+
+    await assert.rejects(
+      repository.transaction(async (client) => {
+        await repository.setDesiredState({
+          type: 'room',
+          messageId: 'reaction-message',
+          emoji: '👩🏽‍💻',
+          userId: 'actor',
+          active: true,
+          client
+        });
+        throw new Error('rollback');
+      }),
+      /rollback/
+    );
+    assert.equal(
+      (await queryRow(pool, CountRow, `SELECT count(*)::int AS count FROM room_message_reactions WHERE emoji = '👩🏽‍💻'`))
+        .count,
+      0
+    );
+  }
+);
+
+test(
+  'G68-A02 same-microsecond 10k reactor pagination is stable and index-backed',
+  { skip: !process.env.TEST_DATABASE_URL, timeout: 120000 },
+  async (t) => {
+    const { pool, repository } = await fixture(t);
+    await pool.query(`
+    INSERT INTO users(id, login, display_name, password_hash)
+    SELECT 'reactor-' || lpad(gs::text, 20, '0'), 'reactor-login-' || gs, 'Reactor ' || gs, 'x'
+    FROM generate_series(1, 10000) gs;
+    INSERT INTO room_message_reaction_revisions(message_id, emoji, revision)
+    VALUES ('reaction-message', '😀', 10000)
+    ON CONFLICT (message_id, emoji) DO UPDATE SET revision = EXCLUDED.revision;
+    INSERT INTO room_message_reactions(message_id, emoji, user_id, revision, created_at)
+    SELECT 'reaction-message', '😀', 'reactor-' || lpad(gs::text, 20, '0'), gs, '2026-08-06T10:00:00.123456Z'::timestamptz
+    FROM generate_series(1, 10000) gs;
+  `);
+    const seen = new Set();
+    let after: { createdAtMicros: string; id: string } | null = null;
+    while (seen.size < 10000) {
+      const page = await repository.listReactors({
+        type: 'room',
+        messageId: 'reaction-message',
+        emoji: '😀',
+        limit: 100,
+        after
+      });
+      assert.ok(page.length > 0);
+      for (const reactor of page) {
+        assert.equal(seen.has(reactor.userId), false);
+        seen.add(reactor.userId);
+      }
+      after = page.at(-1)?.cursorTuple ?? null;
+    }
+    assert.equal(seen.size, 10000);
+    const indexes = (
+      await queryRows(
+        pool,
+        Type.Object({ indexdef: Type.String() }),
+        `SELECT indexdef FROM pg_indexes WHERE tablename = 'room_message_reactions'`
+      )
+    )
+      .map((row) => row.indexdef)
+      .join('\n');
+    assert.match(indexes, /message_id, emoji, created_at, user_id/);
+  }
+);
+
+test(
+  'G68-A03 summaries count each emoji once per user, mark your own, and keep room and DM apart',
+  { skip: !process.env.TEST_DATABASE_URL, timeout: 120000 },
+  async (t) => {
+    const { pool, repository } = await fixture(t);
+    await pool.query(
+      `INSERT INTO direct_messages (id, sender_id, recipient_id, body) VALUES ('dm-1', 'actor', 'peer', 'hi')`
+    );
+    const toggle = (type: string, messageId: string, emoji: string, userId: string, active = true) =>
+      repository.transaction((client) =>
+        repository.setDesiredState({ type, messageId, emoji, userId, active, client })
+      );
+    await toggle('room', 'reaction-message', '😀', 'actor');
+    await toggle('room', 'reaction-message', '😀', 'peer');
+    await toggle('room', 'reaction-message', '🎉', 'peer');
+    await toggle('dm', 'dm-1', '😀', 'peer');
+
+    const summaries = await repository.listSummaries({ type: 'room', messageId: 'reaction-message', userId: 'actor' });
+    assert.deepEqual(
+      summaries.map(({ emoji, count, reactedByMe }) => [emoji, count, reactedByMe]),
+      [
+        ['😀', 2, true],
+        ['🎉', 1, false]
+      ]
+    );
+    const one = await repository.getSummary({
+      type: 'room',
+      messageId: 'reaction-message',
+      emoji: '😀',
+      userId: 'peer'
+    });
+    assert.deepEqual([one.count, one.reactedByMe], [2, true]);
+    assert.deepEqual(await repository.getSummary({ type: 'room', messageId: 'reaction-message', emoji: '👀' }), {
+      emoji: '👀',
+      count: 0,
+      reactedByMe: false,
+      revision: '0'
+    });
+    const direct = await repository.listSummaries({ type: 'dm', messageId: 'dm-1', userId: 'actor' });
+    assert.deepEqual(
+      direct.map(({ emoji, count, reactedByMe }) => [emoji, count, reactedByMe]),
+      [['😀', 1, false]]
+    );
+    assert.equal(await repository.getActive({ type: 'dm', messageId: 'dm-1', emoji: '😀', userId: 'peer' }), true);
+
+    await toggle('room', 'reaction-message', '🎉', 'peer', false);
+    assert.deepEqual(
+      (await repository.listSummaries({ type: 'room', messageId: 'reaction-message' })).map((summary) => summary.emoji),
+      ['😀'],
+      'an emoji nobody uses any more drops out'
+    );
+    await assert.rejects(() => repository.getSummary({ type: 'channel', messageId: 'x', emoji: '😀' }), /room or dm/);
+  }
+);

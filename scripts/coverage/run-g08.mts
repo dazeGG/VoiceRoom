@@ -18,9 +18,9 @@ const SUMMARY = 'coverage/release-250-summary.json';
 function sharedFiles(root: string) {
   const dir = 'packages/shared/test';
   return fs
-    .readdirSync(path.join(root, dir), { withFileTypes: true })
+    .readdirSync(path.join(root, dir), { withFileTypes: true, recursive: true })
     .filter((entry) => entry.isFile() && entry.name.endsWith('.test.ts'))
-    .map((entry) => `${dir}/${entry.name}`)
+    .map((entry) => path.relative(root, path.join(entry.parentPath, entry.name)).split(path.sep).join('/'))
     .sort();
 }
 

@@ -221,7 +221,9 @@ export function routeTrees(base: string, tested: string, cwd = process.cwd()) {
       w.dir === 'apps/api' ||
       w.dir === 'apps/site' ||
       w.dir === 'packages/shared' ||
-      FULL_SELECTION.workspaces.some((name) => w.name === '@voiceroom/' + name && w.dir === 'apps/' + name);
+      FULL_SELECTION.workspaces.some(
+        (name) => w.name === '@voiceroom/' + name && (w.dir === 'apps/' + name || w.dir === 'packages/' + name)
+      );
     if (!runnable) throw new Error('ALL cannot execute unassigned test workspace: ' + w.dir);
   }
   return { ...intent, ...route, digest: selectionDigest(route.selection) };

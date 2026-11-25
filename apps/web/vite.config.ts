@@ -1,7 +1,8 @@
 import { NodePackageImporter } from 'sass';
 import { fileURLToPath } from 'node:url';
 import vue from '@vitejs/plugin-vue';
-import { configDefaults, defineConfig } from 'vitest/config';
+import { defineConfig } from 'vitest/config';
+import { testProjects } from './scripts/vitest-projects.ts';
 import { voiceAssetUrls } from '@voiceroom/call/voice-assets';
 
 import {
@@ -36,45 +37,35 @@ const APP_VERSION = buildVersion();
 
 // Suites that can run in Node. The other suites use the browser setup.
 const nodeTestFiles = [
-  'test/audio-gate-worklet.test.ts',
-  'test/avatar-initial.test.ts',
   'test/caddy-admin-gate.test.ts',
   'test/caddy-assetlinks.test.ts',
   'test/caddy-behind-edge.test.ts',
   'test/caddy-csp.test.ts',
   'test/caddy-extra-sites.test.ts',
   'test/caddy-static-cache.test.ts',
-  'test/chat-drafts.test.ts',
-  'test/chat-typing.test.ts',
-  'test/composer-emoji.test.ts',
-  'test/composer-markdown.test.ts',
-  'test/date-format.test.ts',
   'test/deploy-contract.test.ts',
-  'test/desktop-audio-source-worklet.test.ts',
-  'test/desktop-autostart.test.ts',
-  'test/desktop-hotkey-service.test.ts',
-  'test/display-name.test.ts',
-  'test/dm-pagination.test.ts',
-  'test/emoji-artwork.test.ts',
-  'test/emoji-text.test.ts',
+  'test/features/chat/chat-drafts.test.ts',
+  'test/features/chat/chat-typing.test.ts',
+  'test/features/chat/composer-emoji.test.ts',
+  'test/features/chat/composer-markdown.test.ts',
+  'test/features/chat/dm-pagination.test.ts',
+  'test/features/chat/emoji-artwork.test.ts',
+  'test/features/chat/emoji-text.test.ts',
+  'test/features/chat/reaction-reconciliation.test.ts',
+  'test/features/chat/read-reconciliation.test.ts',
+  'test/features/chat/room-pagination.test.ts',
   'test/features/contract-violations.test.ts',
+  'test/features/desktop/desktop-autostart.test.ts',
   'test/features/dm-invite-view.test.ts',
   'test/features/error-texts.test.ts',
   'test/features/friend-presence.test.ts',
-  'test/features/join-timing.test.ts',
-  'test/features/loss-window.test.ts',
+  'test/features/i18n/date-format.test.ts',
+  'test/features/i18n/display-name.test.ts',
+  'test/features/i18n/push-localization.test.ts',
   'test/features/notification-inbox.test.ts',
-  'test/features/rnnoise-worklet.test.ts',
   'test/features/room-cta.test.ts',
-  'test/features/screen-profiles.test.ts',
+  'test/features/shared/new-id.test.ts',
   'test/features/trailing-task.test.ts',
-  'test/network-stats.test.ts',
-  'test/new-id.test.ts',
-  'test/popover-placement.test.ts',
-  'test/push-localization.test.ts',
-  'test/reaction-reconciliation.test.ts',
-  'test/read-reconciliation.test.ts',
-  'test/room-pagination.test.ts',
   'test/runtime-config.test.ts',
   'test/turn-edge.test.ts',
   'test/widget-edge.test.ts'
@@ -110,25 +101,7 @@ export default defineConfig({
     // chunks there for open tabs (Caddyfile, config/caddy/archive-assets.sh).
     assetsDir: '_app/immutable'
   },
-  test: {
-    testTimeout: 20000,
-    // vi.stubGlobal() is undone after every test.
-    unstubGlobals: true,
-    projects: [
-      {
-        test: { name: 'node', environment: 'node', include: nodeTestFiles }
-      },
-      {
-        test: {
-          name: 'jsdom',
-          environment: 'jsdom',
-          include: ['test/**/*.test.ts'],
-          exclude: [...configDefaults.exclude, ...nodeTestFiles],
-          setupFiles: ['test/setup.ts']
-        }
-      }
-    ]
-  },
+  test: testProjects(nodeTestFiles),
   preview: {
     host: DEV_HOST,
     port: DEV_PORT,

@@ -3,7 +3,7 @@
 * text=auto eol=lf
 
 # Byte-pinned history: migration bytes are asserted by
-# apps/api/test/migration-history-integrity.test.ts and the emoji corpus by
+# apps/api/test/platform/unit/migration-history-integrity.test.ts and the emoji corpus by
 # its G07 content hash. Never convert them.
 apps/api/src/migrations/** -text
 packages/shared/src/emoji.ts -text

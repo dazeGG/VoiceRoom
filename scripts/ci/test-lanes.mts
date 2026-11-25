@@ -210,6 +210,9 @@ export function selectTests(paths: string[], trees: TreeInputs[], intent: Compon
       if (!owner.tests) return allTests('unresolved test workspace: ' + owner.dir);
       if (owner.dir === 'apps/api') apiLanes.forEach((lane) => lanes.add(lane));
       else if (owner.dir === 'apps/site') lanes.add('site');
+      // Run package tests and the suites that consume their package; a named
+      // test alone is not a changed browser runtime input.
+      else if (owner.dir === 'packages/ui-kit' || owner.dir === 'packages/call') owners.add(owner.name);
       else {
         const name = owner.name.replace(/^@voiceroom\//, '');
         if (!FULL_SELECTION.workspaces.includes(name)) return allTests('unresolved test workspace: ' + owner.dir);
@@ -223,8 +226,13 @@ export function selectTests(paths: string[], trees: TreeInputs[], intent: Compon
       case 'apps/api':
         apiLanes.forEach((id) => lanes.add(id));
         for (const g of ['voice-core', ...smokeJourneys, ...featureGroups(path), 'widget', 'personal']) groups.add(g);
-        // Web imports the client log intake normalizer across the workspace boundary.
+        // Keep the previous Web edge and its moved call diagnostics consumer.
         if (path.startsWith('apps/api/src/lib/')) owners.add('@voiceroom/web');
+        if (
+          path === 'apps/api/src/lib/client-log-intake.ts' &&
+          inputs.some((w) => w.dir === 'packages/call' && w.tests)
+        )
+          workspaces.add('call');
         break;
       case 'packages/ui-kit':
       case 'packages/ui':
@@ -233,6 +241,16 @@ export function selectTests(paths: string[], trees: TreeInputs[], intent: Compon
         break;
       case 'apps/web':
         if (!/^apps\/web\/(?:src|test|e2e|public)\//.test(path)) return allTests('unknown Web input: ' + path);
+        // The package suites reuse Web's test setup and helpers; call engine
+        // cases also install real Web adapters (including lazy imports).
+        // Select those tests, not their consumers: no package runtime changed.
+        for (const name of ['call', 'ui-kit']) {
+          if (
+            inputs.some((w) => w.dir === 'packages/' + name && w.tests) &&
+            (path.startsWith('apps/web/test/') || (name === 'call' && path.startsWith('apps/web/src/')))
+          )
+            workspaces.add(name);
+        }
         for (const g of voiceGroups(path)) groups.add(g);
         if (/^apps\/web\/e2e\/(?![^/]+\.spec\.ts$)|embed|widget/i.test(path)) groups.add('widget');
         break;

@@ -14,7 +14,8 @@
     "./voice-assets": "./src/voice-assets.ts"
   },
   "scripts": {
-    "check": "vue-tsc --noEmit"
+    "check": "vue-tsc --noEmit && vue-tsc -p tsconfig.test.json --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
     "@lucide/vue": "^1.61.0",

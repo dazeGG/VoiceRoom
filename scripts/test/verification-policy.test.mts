@@ -43,7 +43,7 @@ test('main and an unverified push require the fixed full inventory, not even a s
     assert.throws(() => verify(ctx.event, ctx.branch, evidence(empty, empty)), /expected success/);
     assert.equal(verify(ctx.event, ctx.branch, evidence(empty, FULL_SELECTION)).length, FULL_SELECTION.lanes.length);
     const missingWorkspace = evidence(empty, FULL_SELECTION);
-    missingWorkspace['test-web'] = { result: 'success', outputs: { completed: '["admin"]' } };
+    missingWorkspace['test-web'] = { result: 'success', outputs: { completed: '["admin","meet","web","widget"]' } };
     assert.throws(() => verify(ctx.event, ctx.branch, missingWorkspace), /missing completed/);
   }
 });

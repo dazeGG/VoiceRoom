@@ -26,7 +26,7 @@ const workspaceFixture = [
 const inventory = workspaceFixture.map(([dir, deps]) =>
   workspace(dir, {
     name: '@voiceroom/' + dir.slice(dir.indexOf('/') + 1),
-    scripts: dir.startsWith('apps/') ? { test: 'test' } : {},
+    scripts: dir.startsWith('apps/') || dir === 'packages/ui-kit' || dir === 'packages/call' ? { test: 'test' } : {},
     devDependencies: Object.fromEntries(deps.map((dep) => ['@voiceroom/' + dep, '*']))
   })
 );
@@ -52,7 +52,7 @@ test('independent UI leaves retain checks and run only their owning unit workspa
     groups: []
   });
   const web = route(['apps/web/src/features/legal/terms.ts']).selection;
-  assert.deepEqual(web.workspaces, ['web']);
+  assert.deepEqual(web.workspaces, ['call', 'web']);
   assert.ok(web.groups.includes('voice-core'));
   assert.ok(!web.lanes.includes('test'));
 });
@@ -75,7 +75,7 @@ test('G08 path policy accepts exact paths, prefixes and group fragments', () => 
 
 test('kit change reaches both chat and the embedding consumer through transitive manifest edges', () => {
   const kit = route(['packages/ui-kit/src/components/Message/Message.vue']).selection;
-  assert.deepEqual(kit.workspaces, ['admin', 'meet', 'web', 'widget']);
+  assert.deepEqual(kit.workspaces, ['admin', 'call', 'meet', 'ui-kit', 'web', 'widget']);
   assert.ok(kit.lanes.includes('site'));
   for (const group of ['voice-chat', 'widget']) assert.ok(kit.groups.includes(group));
   assert.ok(!kit.lanes.includes('api-unit'));
@@ -126,6 +126,7 @@ test('changed tests retain their owner and correct fixture; portable runtime and
 });
 
 test('relative cross-workspace test imports retain Web on API log or Site download changes', () => {
+  assert.ok(route(['apps/api/src/lib/client-log-intake.ts']).selection.workspaces.includes('call'));
   for (const path of [
     'apps/api/src/lib/client-log-intake.ts',
     'apps/site/src/scripts/download.ts',
@@ -260,6 +261,7 @@ test('exclusive production surfaces retain their journey; test helpers remain sh
     ['apps/web/src/features/room/components/MobileCallGrid.vue', ['voice-core', 'voice-guest']]
   ] as const)
     assert.deepEqual(route([path]).selection.groups, groups, path);
+  assert.deepEqual(route(['apps/web/test/helpers/assert.ts']).selection.workspaces, ['call', 'ui-kit', 'web']);
   assert.deepEqual(
     route(['apps/web/test/helpers/assert.ts']).selection.groups,
     FULL_SELECTION.groups.filter((group) => group.startsWith('voice-'))
@@ -279,12 +281,20 @@ test('named unit tests run their owning workspace without starting browser fixtu
       groups: []
     });
   }
+  for (const [name, expected] of [
+    ['call', ['call', 'meet', 'web']],
+    ['ui-kit', ['admin', 'call', 'meet', 'ui-kit', 'web', 'widget']]
+  ] as const) {
+    const selected = route([`packages/${name}/test/changed.test.ts`]).selection;
+    assert.deepEqual(selected.workspaces, expected);
+    assert.deepEqual(selected.groups, []);
+  }
   assert.deepEqual(route(['apps/site/test/desktop-download.test.ts']).selection, {
     lanes: ['site', 'static-publication'],
     workspaces: [],
     groups: []
   });
-  assert.deepEqual(route(['apps/api/test/voice-call-lifecycle.test.ts']).selection, {
+  assert.deepEqual(route(['apps/api/test/rings/integration/voice-call-lifecycle.test.ts']).selection, {
     lanes: ['api-integration', 'api-unit', 'check', 'check-lane', 'goal-g05', 'test'],
     workspaces: [],
     groups: []
@@ -294,7 +304,8 @@ test('named unit tests run their owning workspace without starting browser fixtu
 
 test('a unit test cannot add a browser group to its component change or mask one', () => {
   const component = 'apps/web/src/shared/chat/EmojiPickerPanel.vue';
-  const unit = 'apps/web/test/composer-emoji.test.ts';
+  const unit = 'apps/web/test/features/chat/composer-emoji.test.ts';
+  assert.ok(!route([component]).selection.workspaces.includes('ui-kit'));
   assert.deepEqual(route([component, unit]).selection, route([component]).selection);
   assert.deepEqual(route([unit, component]).selection.groups, ['voice-chat', 'voice-core', 'voice-reactions']);
 });
