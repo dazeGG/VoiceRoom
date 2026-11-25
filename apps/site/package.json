@@ -8,7 +8,7 @@
     "build": "astro build",
     "preview": "astro preview --port 5182",
     "check": "astro check",
-    "test": "node --test test/*.test.ts"
+    "test": "node --test \"test/**/*.test.ts\""
   },
   "dependencies": {
     "@voiceroom/shared": "file:../../packages/shared",

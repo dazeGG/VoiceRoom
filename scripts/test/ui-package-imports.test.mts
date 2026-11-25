@@ -46,6 +46,14 @@ for (const [filePath, relativePath] of [
   });
 
   test(`${filePath} accepts internal modules and package exports`, async () => {
+    if (filePath === vuePath) {
+      const harness = 'packages/ui-kit/test/jsdom/fixture.test.ts';
+      for (const form of forms) {
+        assert.deepEqual(await boundaryRuleIds(harness, form.source('../../../../apps/web/test/helpers/render')), []);
+        for (const target of ['@/shared/log', '@voiceroom/call/engine', '../../../../apps/web/src/api/rooms.ts'])
+          assert.deepEqual(await boundaryRuleIds(harness, form.source(target)), [form.rule]);
+      }
+    }
     for (const target of ['./local', '../utils/tile-grid.ts', 'vue', 'pinia', '@voiceroom/shared/contracts/rooms']) {
       for (const form of forms) {
         const source = form.source(target);

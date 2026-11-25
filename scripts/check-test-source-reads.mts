@@ -8,7 +8,7 @@
 // above its baseline fails; `--update` lowers the baseline after a cleanup.
 
 import { readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
-import { relative, resolve } from 'node:path';
+import { dirname, relative, resolve } from 'node:path';
 import { Type } from 'typebox';
 import { Value } from 'typebox/value';
 
@@ -21,7 +21,9 @@ const TREES = [
   'apps/site/test',
   'apps/web/test',
   'apps/widget/test',
+  'packages/call/test',
   'packages/shared/test',
+  'packages/ui-kit/test',
   'scripts/test'
 ];
 
@@ -57,7 +59,11 @@ function sourceReads(tree: string): string[] {
       for (const match of line.matchAll(CODE_PATH)) {
         const target = match[2] ?? '';
         if (/\.\w+$/.test(target) && !CODE_EXTENSION.test(target)) continue;
-        if (ALLOWED.some((pattern) => pattern.test(target))) continue;
+        const anchored = '${import.meta.dirname}/';
+        const location = target.startsWith(anchored)
+          ? '/' + relative(repoRoot, resolve(dirname(file), target.slice(anchored.length))).replaceAll('\\', '/')
+          : target;
+        if (ALLOWED.some((pattern) => pattern.test(location))) continue;
         if (!READ_CALL.test(line) || line.includes('import(')) continue;
         found.push(`${relative(repoRoot, file).split('\\').join('/')}:${index + 1} ${target}`);
       }

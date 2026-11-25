@@ -82,6 +82,13 @@ for (const [filePath, relativePath] of [
 
 test('web call adapters may import host dependencies and call ports', async () => {
   const filePath = 'apps/web/src/features/room/adapters/web-call-ports.ts';
+  const harness = 'packages/call/test/jsdom/fixture.test.ts';
+  for (const form of forms) {
+    for (const target of ['@/shared/log', '../../../../apps/web/test/helpers/fresh-module'])
+      assert.deepEqual(await boundaryRuleIds(harness, form.source(target)), []);
+    for (const target of ['../../../../apps/web/src/shared/log.ts', '@voiceroom/admin'])
+      assert.deepEqual(await boundaryRuleIds(harness, form.source(target)), [form.rule]);
+  }
   for (const target of [...webAliases, '@voiceroom/call/engine/ports']) {
     for (const form of forms) {
       const source = form.source(target);

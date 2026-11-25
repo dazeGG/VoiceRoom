@@ -32,6 +32,33 @@ const KIT_IMPORTS = `${PORTABLE_APP_IMPORTS}|^@voiceroom/(?:ui|call)(?:/|$)`;
 const KIT_IMPORT_MESSAGE =
   'The UI kit imports only @voiceroom/shared of our packages; move what it needs into the kit.';
 
+function importBoundary(pattern, message) {
+  return {
+    'no-restricted-imports': ['error', { patterns: [{ regex: pattern, message: message }] }],
+    'no-restricted-syntax': [
+      'error',
+      ...OVERLOAD_CAST,
+      ...[
+        'ImportExpression[source.value',
+        'ImportExpression[source.quasis.0.value.cooked',
+        'TSImportType[source.value'
+      ].map((selector) => ({
+        selector: `${selector}=/${pattern.replaceAll('/', '\\/')}/]`,
+        message: message
+      }))
+    ]
+  };
+}
+
+// The package suites use Web-owned helpers and fixtures, and call tests exercise
+// the Web host via its @/ alias. Keep other app imports (and upward kit imports)
+// forbidden in tests too. Both runners share the single Web Vitest factory.
+const webHarness = String.raw`(?:\.\./)+apps/web/test/(?:helpers|fixtures)/[\w.-]+`;
+const vitestFactory = String.raw`(?:\.\./)+apps/web/scripts/vitest-projects\.ts`;
+function exceptImports(forbidden, permitted) {
+  return `^(?!(?:${permitted})$).*(?:${forbidden})`;
+}
+
 export default tseslint.config(
   {
     ignores: [
@@ -76,7 +103,9 @@ export default tseslint.config(
           './packages/shared/tsconfig.test.json',
           './packages/ui/tsconfig.json',
           './packages/ui-kit/tsconfig.json',
+          './packages/ui-kit/tsconfig.test.json',
           './packages/call/tsconfig.json',
+          './packages/call/tsconfig.test.json',
           './scripts/tsconfig.json'
         ],
         tsconfigRootDir: import.meta.dirname,
@@ -173,46 +202,30 @@ export default tseslint.config(
   },
   {
     files: ['packages/{call,ui,ui-kit}/**/*.{ts,tsx,mts,js,jsx,mjs,vue}'],
-    rules: {
-      'no-restricted-imports': [
-        'error',
-        { patterns: [{ regex: PORTABLE_APP_IMPORTS, message: PORTABLE_IMPORT_MESSAGE }] }
-      ],
-      'no-restricted-syntax': [
-        'error',
-        ...OVERLOAD_CAST,
-        ...[
-          'ImportExpression[source.value',
-          'ImportExpression[source.quasis.0.value.cooked',
-          'TSImportType[source.value'
-        ].map((selector) => ({
-          selector: `${selector}=/${PORTABLE_APP_IMPORTS.replaceAll('/', '\\/')}/]`,
-          message: PORTABLE_IMPORT_MESSAGE
-        }))
-      ]
-    }
+    rules: importBoundary(PORTABLE_APP_IMPORTS, PORTABLE_IMPORT_MESSAGE)
   },
   {
     // The kit is the bottom UI layer (DESIGN.md, "Kit only"): everything else
     // depends on it, so it may not depend on @voiceroom/ui or @voiceroom/call.
     files: ['packages/ui-kit/**/*.{ts,tsx,mts,js,jsx,mjs,vue}'],
     ignores: ['packages/ui-kit/.storybook/**'],
-    rules: {
-      'no-restricted-imports': ['error', { patterns: [{ regex: KIT_IMPORTS, message: KIT_IMPORT_MESSAGE }] }],
-      'no-restricted-syntax': [
-        'error',
-        ...OVERLOAD_CAST,
-        ...[
-          'ImportExpression[source.value',
-          'ImportExpression[source.quasis.0.value.cooked',
-          'TSImportType[source.value'
-        ].map((selector) => ({
-          selector: `${selector}=/${KIT_IMPORTS.replaceAll('/', '\\/')}/]`,
-          message: KIT_IMPORT_MESSAGE
-        }))
-      ]
-    }
+    rules: importBoundary(KIT_IMPORTS, KIT_IMPORT_MESSAGE)
   },
+  {
+    files: ['packages/ui-kit/test/**'],
+    rules: importBoundary(exceptImports(KIT_IMPORTS, webHarness), KIT_IMPORT_MESSAGE)
+  },
+  {
+    files: ['packages/call/test/**'],
+    rules: importBoundary(exceptImports(PORTABLE_APP_IMPORTS, `${webHarness}|@/[\\w/.-]+`), PORTABLE_IMPORT_MESSAGE)
+  },
+  ...['call', 'ui-kit'].map((name) => ({
+    files: [`packages/${name}/vitest.config.ts`],
+    rules: importBoundary(
+      exceptImports(name === 'call' ? PORTABLE_APP_IMPORTS : KIT_IMPORTS, vitestFactory),
+      PORTABLE_IMPORT_MESSAGE
+    )
+  })),
   {
     // docs/ARCHITECTURE.md section 5: the lobby shows rooms, never the other way
     // round. What both need lives in @/entities; what a room needs from the

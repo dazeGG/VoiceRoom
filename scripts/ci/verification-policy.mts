@@ -8,7 +8,7 @@ export interface Selection {
 }
 
 // Bump when changing the meaning of a lane, graph edge, group, or proof.
-export const SELECTOR_VERSION = 'pr4-2';
+export const SELECTOR_VERSION = 'pr5-1';
 const voiceSmokeSpecs = {
   'voice-core': ['room-voice'],
   'voice-chat': ['chat-typing', 'manual-chat-polish', 'chat-drafts', 'chat-image-paste'],
@@ -61,7 +61,7 @@ export const FULL_SELECTION: Selection = {
     'ui-audit',
     ...alwaysFresh
   ].sort(),
-  workspaces: ['admin', 'meet', 'web', 'widget'],
+  workspaces: ['admin', 'call', 'meet', 'ui-kit', 'web', 'widget'],
   groups: [...Object.keys(VOICE_SPECS), 'widget', 'personal', 'ui-audit'].sort()
 };
 
