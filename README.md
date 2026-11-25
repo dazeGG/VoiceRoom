@@ -106,6 +106,28 @@ node scripts/ci/api-tests.mts compare-fixtures db.json no-db.json
 Admit only files with identical passing cases, no skips or conditional cases,
 and no database connection attempts.
 
+### CI verification and reuse
+
+On a PR into `develop`, CI compares the base tree with the tested merge tree. An
+Admin leaf keeps repository checks and the Admin workspace test step; an API edit
+runs both API fixtures, the coverage verdict and G05. Shared configuration,
+unknown paths and unresolved inputs select the full inventory. The changes job
+reports the reason, selected workspaces and browser groups. Reproduce a decision
+locally with `node scripts/ci/changed-components.mts <base-sha> <tested-sha>`.
+
+The final **Git Flow policy** checks actual job results and completed test groups.
+PRs into `main` and unverified pushes to `develop` require a fixed full suite.
+A matching same-repository PR marker binds the parent, tested tree, successful
+attempt and versioned selection digest; a hit still runs applicable installer,
+Site and Docs checks. Publication requires a successful push policy **and** a
+changed component. A full verification does not request a full deployment.
+
+For review only, run `node scripts/ci/replay-test-routing.mts --repo dazeGG/VoiceRoom --base develop --last-merged 20`.
+Its timing estimates are not hosted measurements. Compare the first real UI-only
+PR against #345 (8:07); if it is not faster, route all changes to the full
+inventory and bump the selector version before investigating. Keep policy and
+publication guards in place.
+
 API, Web, Admin, Widget и Meet выпускаются отдельными сериями. Ветки, коммиты и теги описаны в [`docs/GIT_FLOW.md`](./docs/GIT_FLOW.md). Изменения по версиям — в [GitHub Releases](https://github.com/dazeGG/VoiceRoom/releases).
 
 ## Self-hosting
