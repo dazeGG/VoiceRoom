@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import fs from 'node:fs/promises';
-import test, { type TestContext } from 'node:test';
+import { EventEmitter } from 'node:events';
+import net from 'node:net';
+import test, { mock, type TestContext } from 'node:test';
 import { Me } from '@voiceroom/shared/contracts/account';
 import { LiveKitAdmission } from '@voiceroom/shared/contracts/admission';
 import { DirectHistoryPage, DirectThread } from '@voiceroom/shared/contracts/messages';
@@ -506,6 +508,60 @@ test('the sweeper expires at 45 seconds, re-ring resets both clocks, and five mi
     "SELECT metadata->'call'->>'outcome' AS outcome FROM direct_messages"
   );
   assert.deepEqual(rows, [{ outcome: 'no_answer' }]);
+});
+
+class GateSocket extends EventEmitter {
+  destroyed = false;
+  writable = true;
+  writableEnded = false;
+  writes: string[] = [];
+  write(data: string | Buffer) {
+    this.writes.push(data.toString());
+    return true;
+  }
+  end(data?: string | Buffer) {
+    if (data !== undefined) this.writes.push(data.toString());
+    this.writableEnded = true;
+  }
+  destroy() {
+    this.destroyed = true;
+  }
+  pipe<T>(destination: T): T {
+    return destination;
+  }
+}
+
+test('the gate tunnels a seated call credential and drops it when the seat leaves before upstream', async (t) => {
+  const lab = await setup(t);
+  const api = await lab.boot();
+  const [a, b] = await Promise.all([api.account('alice'), api.account('bob')]);
+  await befriend(api, a, b);
+  const aWs = await api.socket(a.cookie);
+  const call = await start(api, a, b);
+  const seat = await enter(aWs, call);
+  const token = await issue(api, a, call.call.id, seat.seatToken);
+  const url = `/rtc${new URL(token.url).search}&access_token=${token.token}`;
+  const server = lab.gate.createServer();
+  async function upgrade(beforeUpstream?: () => Promise<unknown>) {
+    const client = new GateSocket();
+    const upstream = new GateSocket();
+    const connect = mock.method(net, 'connect', () => upstream);
+    try {
+      server.emit('upgrade', { url, headers: {} }, client, Buffer.alloc(0));
+      await until(() => connect.mock.callCount() > 0, 'the gate opened its upstream');
+      await beforeUpstream?.();
+      upstream.emit('connect');
+      await until(() => upstream.writes.length > 0 || upstream.destroyed, 'the gate decided the upgrade');
+    } finally {
+      connect.mock.restore();
+    }
+    return upstream;
+  }
+
+  assert.match((await upgrade()).writes[0] ?? '', /^GET \/rtc/);
+  const late = await upgrade(() => action(api, a, call.call.id, 'leave', 1, seat.seatToken));
+  assert.deepEqual(late.writes, []);
+  assert.equal(late.destroyed, true);
 });
 
 test('websocket leave fences token issuance and anonymizes diagnostics during a held LiveKit removal', async (t) => {
