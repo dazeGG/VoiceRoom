@@ -6,6 +6,7 @@ import { publicLobbyRoom, publicPeer } from '../domains/rooms/room-views.ts';
 import { tokensMatch } from '../platform/crypto/tokens-match.ts';
 import type { Timer } from '../platform/types.ts';
 import type { MeetChat } from '../realtime/meet-chat.ts';
+import { createCallSeatCleanup } from '../realtime/call-seat-cleanup.ts';
 import { createConnectionRegistry } from '../realtime/registry.ts';
 import { createRoomPresence, type OccupancyStore, type RoomPresenceDeps } from '../realtime/room-presence.ts';
 import {
@@ -49,11 +50,17 @@ export function createCallRealtime(deps: {
   logger(this: void): FastifyBaseLogger;
   findRoomBan?: RoomRuntimeDeps['findRoomBan'];
   maxGuestConnections?: number;
+  onCallDeparture?(roomId: string, userId: string): void;
   accountPresence?: Pick<Parameters<typeof createConnectionRegistry>[0], 'getFriendIds' | 'onPresenceChange'>;
   presenceEffects?: Pick<RoomPresenceDeps, 'previewSubscribers' | 'onPeerLeft' | 'onRosterChange'>;
 }) {
   const { config, getRoomStore } = deps;
   let roomRuntime: RoomRealtimeRuntime | null = null;
+  const seatCleanup = createCallSeatCleanup({
+    revoke: (roomId, userId, peerId) => runtime().revokeCallSeat(roomId, userId, peerId),
+    remove: deps.liveKit.removeCallParticipant,
+    reportFailure: () => deps.logger().warn('call seat cleanup failed')
+  });
 
   const registry = createConnectionRegistry({
     ...deps.accountPresence,
@@ -65,6 +72,14 @@ export function createCallRealtime(deps: {
   });
   const presence = createRoomPresence({
     ...deps.presenceEffects,
+    onPeerLeft(room, peer) {
+      if (room.kind !== 'call') {
+        deps.presenceEffects?.onPeerLeft?.(room, peer);
+      } else if (peer.accountUserId && !seatCleanup.has(room.id, peer.id)) {
+        seatCleanup.schedule(room.id, peer.accountUserId, peer.id, true);
+        deps.onCallDeparture?.(room.id, peer.accountUserId);
+      }
+    },
     store: getRoomStore,
     sockets: registry,
     logger: deps.logger,
@@ -115,7 +130,7 @@ export function createCallRealtime(deps: {
       },
       {
         reconnecting: (roomId, userId) => callReconnecting?.(roomId, userId),
-        removeParticipant: deps.liveKit.removeCallParticipant
+        scheduleRemoval: (roomId, userId, peerId, liveSeat) => seatCleanup.schedule(roomId, userId, peerId, liveSeat)
       }
     );
     return roomRuntime;
@@ -155,5 +170,5 @@ export function createCallRealtime(deps: {
     });
   }
 
-  return { registry, presence, presenceRooms: presence.rooms, getRoom, runtime, start, guestHandler };
+  return { registry, presence, presenceRooms: presence.rooms, getRoom, runtime, start, guestHandler, seatCleanup };
 }

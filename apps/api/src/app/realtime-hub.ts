@@ -67,6 +67,7 @@ export function createRealtimeHub(deps: RealtimeHubDeps) {
     liveKit: deps.liveKit,
     logger: deps.logger,
     findRoomBan,
+    onCallDeparture: (roomId, userId) => deps.onCallVoiceChange?.(roomId, userId, true),
     accountPresence: {
       onPresenceChange: (friendId, userId, online) => {
         broadcastToUser(friendId, { type: 'presence', userId, online });
@@ -79,10 +80,7 @@ export function createRealtimeHub(deps: RealtimeHubDeps) {
         roomRuntime?.scheduleSummaryBroadcast(roomId);
         deps.onVoiceRosterChange?.();
       },
-      onPeerLeft: (room, peer) => {
-        if (room.kind !== 'call') voiceStays.recordPeerLeft(room, peer);
-        else if (peer.accountUserId) deps.onCallVoiceChange?.(room.id, peer.accountUserId, true);
-      }
+      onPeerLeft: (room, peer) => voiceStays.recordPeerLeft(room, peer)
     }
   });
   const { getRoom, registry: wsRegistry, presence: roomPresence, presenceRooms } = call;
@@ -276,6 +274,7 @@ export function createRealtimeHub(deps: RealtimeHubDeps) {
     registry: wsRegistry,
     runtime,
     presence: roomPresence,
+    callSeatCleanup: call.seatCleanup,
     recordOpenSessions: voiceStays.recordOpenSessions,
     resetPresence: () => {
       roomPresence.reset();

@@ -26,6 +26,7 @@ type InboundEnvelope = ClientCommand;
 /** What the socket reads of the signed-in account: what a join reads, and its presence. */
 type WsUser = NonNullable<JoinUser> & Partial<Pick<SessionUser, 'presenceStatus'>>;
 export interface WsRoomRuntime {
+  isCallRoom?(roomId: string): boolean;
   subscribePreview(connection: WsConnection, roomId: string): Promise<unknown>;
   unsubscribePreview(connection: WsConnection, roomId: string): unknown;
   joinVoiceRoom(
@@ -221,9 +222,20 @@ function createWsHandler({
       active.roomId === envelope.payload.roomId &&
       active.peerId === envelope.payload.peerId &&
       active.sessionToken === envelope.payload.sessionToken;
-    if ('roomId' in envelope.payload && getBoundary) {
+    const callLeave =
+      envelope.type === 'room.leave' &&
+      existingSeatCommand &&
+      roomRuntime.isCallRoom?.(envelope.payload.roomId) === true;
+    if ('roomId' in envelope.payload && getBoundary && !callLeave) {
       const boundary = await getBoundary(envelope.payload.roomId);
       if (!roomAllowsSurface(boundary, surface) && !(boundary?.kind === 'call' && existingSeatCommand)) {
+        if (
+          envelope.type === 'room.leave' &&
+          surface === 'main' &&
+          !connection.guest &&
+          (!boundary || boundary.kind === 'call')
+        )
+          return;
         registry.sendToConnection(
           connection,
           buildServerErrorEnvelope('room_not_found', 'Room not found', envelope.id)
@@ -356,9 +368,9 @@ function createWsHandler({
         logger.info(
           {
             evt: LOG_EVENTS.ROOM_LEFT,
-            connId: connection.id,
-            userId: connection.userId || undefined,
-            roomId: ceiling.guestOnly ? undefined : envelope.payload.roomId
+            connId: callLeave ? undefined : connection.id,
+            userId: callLeave ? undefined : connection.userId || undefined,
+            roomId: callLeave || ceiling.guestOnly ? undefined : envelope.payload.roomId
           },
           'room left'
         );

@@ -40,6 +40,7 @@ type SeatIntent = {
   seatToken: string;
   sessionHash: string;
   expiresAt: number;
+  attempt: number;
   joined: boolean;
   leaveSinceRevision?: number;
 };
@@ -64,7 +65,12 @@ type VoicePort = {
     requestId?: string
   ): Promise<JoinResult>;
   revoke(roomId: string, userId: string, peerId: string): Promise<void>;
-  evict(roomId: string, userId: string, peerId: string): Promise<void>;
+  fence(roomId: string, userId: string, peerId: string): void;
+  cleanup: {
+    wait(roomId: string, peerId: string): Promise<boolean> | null;
+    pendingInRoom(roomId: string): boolean;
+    retry(): void;
+  };
   token(roomId: string, peerId: string, user: SessionUser): Promise<LiveKitAdmission>;
 };
 
@@ -109,8 +115,6 @@ export function createCallRingService({
     string,
     { peerId: string; callId: string; expiresAt: number; accepting: boolean }
   >(1024);
-  const evictions = new Map<string, { callId: string; roomId: string; userId: string }>();
-  const evictingSeats = new Set<string>();
   const scheduledClosedEvictions = new Set<string>();
   const key = (call: VoiceCall, id: string) => `${call.id}:${id}`;
   const users = (call: VoiceCall) => [call.callerId, call.recipientId];
@@ -135,8 +139,7 @@ export function createCallRingService({
 
   function seats(call: VoiceCall): CallSeat[] {
     return users(call).map((userId) => {
-      const seat =
-        call.phase === 'closed' || evictions.has(key(call, userId)) ? null : voice.seat(call.roomId, seatId(userId));
+      const seat = call.phase === 'closed' ? null : voice.seat(call.roomId, seatId(userId));
       return {
         userId,
         status: !seat ? 'absent' : seat.connection ? 'present' : 'reconnecting',
@@ -148,7 +151,7 @@ export function createCallRingService({
   function waiting(call: VoiceCall, now: number): boolean {
     return users(call).some((userId) => {
       const intent = intents.get(key(call, userId));
-      return intent !== undefined && !intent.joined && intent.expiresAt > now;
+      return intent !== undefined && !intent.joined && intent.attempt === call.attempt && intent.expiresAt > now;
     });
   }
 
@@ -193,25 +196,9 @@ export function createCallRingService({
     };
   }
 
-  function queueEviction(call: VoiceCall, userId: string) {
+  function fenceSeat(call: VoiceCall, userId: string) {
     intents.delete(key(call, userId));
-    evictions.set(key(call, userId), { roomId: call.roomId, userId, callId: call.id });
-  }
-
-  async function flushEvictions(callId?: string) {
-    for (const [id, target] of evictions) {
-      if (callId !== undefined && target.callId !== callId) continue;
-      const seat = `${target.roomId}:${target.userId}`;
-      evictingSeats.add(seat);
-      try {
-        await voice.evict(target.roomId, target.userId, seatId(target.userId));
-        evictions.delete(id);
-      } catch (error) {
-        report(error);
-      } finally {
-        evictingSeats.delete(seat);
-      }
-    }
+    voice.fence(call.roomId, userId, seatId(userId));
   }
 
   async function publish(repository: NonNullable<ReturnType<typeof repo>>, change: Transition, ring = false) {
@@ -219,7 +206,7 @@ export function createCallRingService({
     if (call.phase === 'closed' && !scheduledClosedEvictions.has(call.id)) {
       for (const userId of users(call)) {
         intents.delete(key(call, userId));
-        if (!change.changed || voice.seat(call.roomId, seatId(userId))) queueEviction(call, userId);
+        if (!change.changed || voice.seat(call.roomId, seatId(userId))) fenceSeat(call, userId);
       }
       scheduledClosedEvictions.add(call.id);
     }
@@ -241,18 +228,24 @@ export function createCallRingService({
 
   function admission(call: VoiceCall, viewer: Viewer, now: number, create: boolean): Admission | undefined {
     const id = key(call, viewer.userId);
-    if (evictions.has(id)) return undefined;
     let intent = intents.get(id);
-    if (intent && !intent.joined && intent.expiresAt <= now) {
+    if (
+      intent &&
+      (intent.joined
+        ? !voice.seat(call.roomId, intent.peerId)
+        : intent.expiresAt <= now || intent.attempt !== call.attempt)
+    ) {
       intents.delete(id);
       intent = undefined;
     }
+    if (call.phase === 'ringing' && call.attemptInviterUserId !== viewer.userId) return undefined;
     if (!intent && create) {
       intent = {
         peerId: seatId(viewer.userId),
         seatToken: randomUUID(),
         sessionHash: viewer.sessionHash,
         expiresAt: now + graceMs,
+        attempt: call.attempt,
         joined: false
       };
       intents.set(id, intent);
@@ -284,7 +277,7 @@ export function createCallRingService({
     if (event?.departed && !voice.seat(fresh.call.roomId, seatId(event.userId))) {
       intents.delete(key(fresh.call, event.userId));
     }
-    for (const seat of fresh.result) queueEviction(fresh.call, seat.userId);
+    for (const seat of fresh.result) fenceSeat(fresh.call, seat.userId);
     await publish(repository, fresh);
     return fresh;
   }
@@ -326,8 +319,7 @@ export function createCallRingService({
         return {
           call: {
             ...call,
-            phase: 'connecting',
-            attemptResult: 'accepted',
+            phase: call.attemptResult === 'accepted' ? 'connecting' : 'alone',
             mutualSince: null,
             mutualMs: callDuration(call, now),
             aloneDeadline: call.aloneDeadline ?? now + ALONE_WINDOW_MS
@@ -344,7 +336,7 @@ export function createCallRingService({
       if (inbound && body.action === 'decline') {
         return { call: closeCall(call, now, 'declined', viewer.userId), result: 'open' as const };
       }
-      if (body.action === 'join' && own?.status === 'absent' && !evictions.has(key(call, viewer.userId))) {
+      if (body.action === 'join' && own?.status === 'absent') {
         if (intent && !intent.joined && intent.expiresAt > now) return { call, result: 'stale' as const };
         return { call: { ...call }, result: 'resume' as const };
       }
@@ -355,8 +347,7 @@ export function createCallRingService({
         (intent.leaveSinceRevision === undefined ||
           (body.expectedRevision !== undefined &&
             body.expectedRevision >= intent.leaveSinceRevision &&
-            body.expectedRevision <= call.revision)) &&
-        !evictions.has(key(call, viewer.userId))
+            body.expectedRevision <= call.revision))
       ) {
         return {
           call: advanceCall(call, now, eligible, remaining, { departing: viewer.userId }),
@@ -391,10 +382,10 @@ export function createCallRingService({
     });
     if (!change) return notFound();
     const { call, result, now } = change;
-    if (result === 'transfer' || (result === 'leave' && call.phase !== 'closed')) queueEviction(call, viewer.userId);
+    if (result === 'transfer' || (result === 'leave' && call.phase !== 'closed')) fenceSeat(call, viewer.userId);
+    if (result === 'ring') intents.delete(key(call, otherParticipant(call, viewer.userId)));
     const handoff = result === 'accept' || result === 'resume' ? admission(call, viewer, now, true) : undefined;
     await publish(repository, change, result === 'ring');
-    await flushEvictions(call.id);
     if (typeof result === 'object') return result;
     if (result === 'transfer') {
       const transfer = admission(call, viewer, now, true);
@@ -511,32 +502,47 @@ export function createCallRingService({
     return { call, handoff };
   }
 
-  function joinVoice(
+  async function joinVoice(
     connection: WsConnection,
     auth: ResolvedSession,
     id: string,
     proof: string,
     ip: string,
     requestId?: string
-  ) {
-    return serialize(async (): Promise<JoinResult> => {
-      const { user, session } = auth;
-      if (!user || !session || connection.userId !== user.id || connection.authSessionHash !== session.tokenHash)
-        return { ok: false, code: 'call_not_found' };
-      const viewer = { userId: user.id, sessionHash: session.tokenHash };
-      const { call, handoff } = await authorizeVoice(viewer, id, proof);
-      const existing = voice.seat(call.roomId, handoff.peerId);
-      if (existing?.connection && existing.connection !== connection) return { ok: false, code: 'superseded_join' };
-      if (existing) await voice.revoke(call.roomId, user.id, handoff.peerId);
-      const result = await voice.join(connection, handoff, user, ip, requestId);
-      if (result.ok) {
-        const intent = intents.get(key(call, user.id));
-        if (intent) intent.joined = true;
-        const current = await settle(call.id, user.id, { userId: user.id, departed: false });
-        if (intent && result.reconnecting) intent.leaveSinceRevision = current.call.revision;
-      }
-      return result;
-    });
+  ): Promise<JoinResult> {
+    const { user, session } = auth;
+    if (!user || !session || connection.userId !== user.id || connection.authSessionHash !== session.tokenHash)
+      return { ok: false, code: 'call_not_found' };
+    const viewer = { userId: user.id, sessionHash: session.tokenHash };
+    const tryJoin = () =>
+      serialize(async (): Promise<JoinResult | { cleanup: Promise<boolean> }> => {
+        const { call, handoff } = await authorizeVoice(viewer, id, proof);
+        const cleanup = voice.cleanup.wait(call.roomId, handoff.peerId);
+        if (cleanup) return { cleanup };
+        const existing = voice.seat(call.roomId, handoff.peerId);
+        if (existing?.connection && existing.connection !== connection) return { ok: false, code: 'superseded_join' };
+        if (existing) {
+          await voice.revoke(call.roomId, user.id, handoff.peerId);
+          if (!admission(call, viewer, (clock ?? Date.now)(), false)) return { ok: false, code: 'call_not_found' };
+        }
+        const result = await voice.join(connection, handoff, user, ip, requestId);
+        if (result.ok) {
+          const intent = intents.get(key(call, user.id));
+          if (intent) intent.joined = true;
+          const current = await settle(call.id, user.id, { userId: user.id, departed: false });
+          if (intent && result.reconnecting) intent.leaveSinceRevision = current.call.revision;
+        }
+        return result;
+      });
+    const first = await tryJoin();
+    if (!('cleanup' in first)) return first;
+    // A transfer reuses its LiveKit identity. Wait for the old seat outside
+    // the call queue, then authorize the handoff again against current state.
+    if (await first.cleanup) {
+      const retry = await tryJoin();
+      if (!('cleanup' in retry)) return retry;
+    }
+    return { ok: false, code: 'reconnect_finalize_failed' };
   }
 
   function token(user: SessionUser, sessionHash: string, id: string, proof: string) {
@@ -554,13 +560,11 @@ export function createCallRingService({
   }
 
   function rosterChanged(roomId: string, userId: string, departed: boolean): void {
-    if (evictingSeats.has(`${roomId}:${userId}`)) return;
     void serialize(async () => {
       const repository = repo();
       const call = await repository?.fromRoom(roomId);
-      if (!call || call.phase === 'closed' || evictions.has(key(call, userId))) return;
+      if (!call || call.phase === 'closed') return;
       await settle(call.id, null, { userId, departed });
-      await flushEvictions(call.id);
     }).catch(report);
   }
 
@@ -571,7 +575,6 @@ export function createCallRingService({
       for (const call of await repository.list(userId)) {
         if (peerId !== undefined && otherParticipant(call, userId) !== peerId) continue;
         await settle(call.id, userId);
-        await flushEvictions(call.id);
       }
     }).catch(report);
   }
@@ -580,13 +583,15 @@ export function createCallRingService({
     return serialize(async () => {
       const repository = repo();
       if (!repository) return;
+      voice.cleanup.retry();
       const now = await repository.now();
       for (const [id, intent] of intents) if (!intent.joined && intent.expiresAt <= now) intents.delete(id);
       for (const call of await repository.list()) await settle(call.id, null);
-      await flushEvictions();
-      const pending = new Set([...evictions.values()].map((target) => target.callId));
+      await repository.checkpointConnected(now);
       for (const call of await repository.listClosed(now - CALL_RETENTION_MS)) {
-        if (!pending.has(call.id) && (await repository.prune(call, now))) scheduledClosedEvictions.delete(call.id);
+        if (!voice.cleanup.pendingInRoom(call.roomId) && (await repository.prune(call, now))) {
+          scheduledClosedEvictions.delete(call.id);
+        }
       }
     });
   }
@@ -610,15 +615,14 @@ export function createCallRingService({
                 aloneDeadline: now + graceMs,
                 mutualSince: null
               }
-            : closeCall(record, now, 'unavailable', null),
+            : closeCall({ ...record, mutualSince: null }, now, 'unavailable', null),
           result: null
         }));
         if (change) {
-          for (const userId of users(call)) queueEviction(change.call, userId);
+          for (const userId of users(call)) fenceSeat(change.call, userId);
           await publish(repository, change);
         }
       }
-      await flushEvictions();
     });
   }
 

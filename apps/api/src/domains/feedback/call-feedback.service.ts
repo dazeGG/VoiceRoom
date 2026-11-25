@@ -15,6 +15,7 @@ import {
 } from '@voiceroom/shared/contracts/feedback';
 import type { RoomStay } from '@voiceroom/shared/contracts/admin';
 import { normalizeGuestId } from '@voiceroom/shared/validation';
+import { DomainError } from '../../platform/http/domain-error.ts';
 import type { StaffCheck } from '../staff/staff-check.ts';
 import type { StayAsk } from '../admin/admin-rooms.repository.ts';
 import type { CallFeedbackRepository } from './call-feedback.repository.ts';
@@ -50,7 +51,7 @@ export function createCallFeedbackService(deps: CallFeedbackServiceDeps) {
 
   async function submit(userId: string | null, body: CallFeedbackBody): Promise<void> {
     const { guestId, ...call } = body.call;
-    await deps.repository().insert({
+    const saved = await deps.repository().insert({
       userId,
       guestId: userId ? null : normalizeGuestId(guestId) || null,
       rating: body.rating,
@@ -58,6 +59,7 @@ export function createCallFeedbackService(deps: CallFeedbackServiceDeps) {
       comment: cleanText(body.comment ?? '', CALL_FEEDBACK_COMMENT_MAX_LENGTH, true),
       call: { ...call, roomId: cleanText(call.roomId, 64, false) }
     });
+    if (!saved) throw new DomainError('room_not_found', 404, 'Room not found');
   }
 
   /** Null when the actor may not see the numbers. */

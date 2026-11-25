@@ -11,13 +11,17 @@ import {
   CallDetails,
   CallMissedSeenAnswer,
   CallNotificationTarget,
+  RingAnswer,
   type CallActionBody
 } from '@voiceroom/shared/contracts/rings';
 import { createApiRuntime } from '../src/app/api-runtime.ts';
 import { createLiveKitAuthGateService } from '../src/domains/admission/livekit-auth-gate.service.ts';
+import { createCredentialBoundaryService } from '../src/domains/admission/credential-boundary.service.ts';
+import { createGateCredentialRepository } from '../src/domains/admission/gate-credential.repository.ts';
 import { updateCallMessage } from '../src/domains/messaging/call-history.repository.ts';
 import { kyselyOn } from '../src/platform/db/kysely.ts';
 import { createLogger } from '../src/lib/logger.ts';
+import { LOG_EVENTS } from '../src/lib/log-events.ts';
 import { createTestDatabase } from './db-harness.ts';
 import {
   acceptFirstFriendRequest,
@@ -48,7 +52,9 @@ async function setup(t: TestContext, envOverrides: Record<string, string> = {}) 
     ...envOverrides
   };
   const evicted: { roomId: string; peerId: string }[] = [];
+  const logs: string[] = [];
   let fakeRemoveFailures = 0;
+  let removalHold: { started: PromiseWithResolvers<void>; release: PromiseWithResolvers<void> } | null = null;
   let now = Date.now();
   let nextTimer = 0;
   const timers = new Map<number, { due: number; callback: () => void }>();
@@ -65,6 +71,10 @@ async function setup(t: TestContext, envOverrides: Record<string, string> = {}) 
       env: { ...env, VOICE_CALLS_ENABLED: enabled },
       callLiveKitAdmin: {
         async removeCallParticipant(roomId, peerId) {
+          if (removalHold) {
+            removalHold.started.resolve();
+            await removalHold.release.promise;
+          }
           if (fakeRemoveFailures > 0) {
             fakeRemoveFailures -= 1;
             throw new Error('Temporary LiveKit admin failure');
@@ -75,6 +85,10 @@ async function setup(t: TestContext, envOverrides: Record<string, string> = {}) 
     });
     runtime.services.connect({ databaseUrl, logger });
     const server = runtime.createServer({
+      logger: createLogger({
+        env: { LOG_LEVEL: 'info' },
+        destination: { write: (line) => logs.push(line) }
+      }),
       realtimeNow: () => now,
       realtimeReconnectLeaseMs: grace,
       realtimeSetTimeout(callback, delay) {
@@ -134,10 +148,22 @@ async function setup(t: TestContext, envOverrides: Record<string, string> = {}) 
     pool,
     boot,
     evicted,
+    logs,
     gate,
     advance,
     failRemoval: (attempts: number) => {
       fakeRemoveFailures = attempts;
+    },
+    holdRemoval() {
+      const started = Promise.withResolvers<void>();
+      const release = Promise.withResolvers<void>();
+      removalHold = { started, release };
+      const unblock = () => {
+        removalHold = null;
+        release.resolve();
+      };
+      t.after(unblock);
+      return { started: started.promise, unblock };
     }
   };
 }
@@ -247,6 +273,33 @@ async function issue(api: Running, account: Account, id: string, seatToken: stri
     )
   ).body;
 }
+
+async function until(check: () => boolean | Promise<boolean>, message: string) {
+  const deadline = Date.now() + 5_000;
+  while (!(await check())) {
+    assert.ok(Date.now() < deadline, message);
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+}
+
+async function promptly<T>(result: Promise<T>): Promise<T> {
+  const timeout = Promise.withResolvers<never>();
+  const timer = setTimeout(() => timeout.reject(new Error('Operation stalled behind LiveKit removal')), 4_000);
+  try {
+    return await Promise.race([result, timeout.promise]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+const micRecovery = {
+  heard: [],
+  rttMs: 40,
+  jitterBufferMs: 30,
+  uplink: { packets: 150, lost: 0 },
+  transport: 'udp',
+  mic: { expectedMs: 3_000, deliveredMs: 2_000, contextMs: 3_000, reopens: 1, replacements: 0 }
+};
 
 test('cross-dial coalesces, an accepting participant switches rooms, and late actions keep both seats', async (t) => {
   const lab = await setup(t);
@@ -434,7 +487,7 @@ test('the sweeper expires at 45 seconds, re-ring resets both clocks, and five mi
   assert.equal(closed.endedByUserId, a.id);
   assert.equal((await lab.gate.authorize(new URL(token.url).search)).ok, false);
   await waitForWsType(aWs.frames, 'room.left', ({ payload }) => payload.roomId === seat.roomId);
-  assert.ok(lab.evicted.some(({ peerId }) => peerId === seat.peerId));
+  await until(() => lab.evicted.some(({ peerId }) => peerId === seat.peerId), 'the failed removal was retried');
 
   lab.advance(86_399_999);
   assert.equal((await details(api, a, id)).phase, 'closed');
@@ -449,6 +502,207 @@ test('the sweeper expires at 45 seconds, re-ring resets both clocks, and five mi
     "SELECT metadata->'call'->>'outcome' AS outcome FROM direct_messages"
   );
   assert.deepEqual(rows, [{ outcome: 'no_answer' }]);
+});
+
+test('websocket leave fences token issuance and anonymizes diagnostics during a held LiveKit removal', async (t) => {
+  const lab = await setup(t);
+  const api = await lab.boot();
+  const [a, b] = await Promise.all([api.account('alice'), api.account('bob')]);
+  await befriend(api, a, b);
+  const [aWs, bWs] = await Promise.all([api.socket(a.cookie), api.socket(b.cookie)]);
+  const call = await start(api, a, b);
+  const { id } = call.call;
+  await enter(aWs, call);
+  const seat = await enter(bWs, await action(api, b, id, 'accept'));
+  await state(aWs, id, 'connected');
+  const credential = await issue(api, b, id, seat.seatToken);
+  const gateUrl = new URL(credential.url).search;
+  assert.equal((await lab.gate.authorize(gateUrl)).ok, true);
+  const boundary = createCredentialBoundaryService({
+    roomStore: createGateCredentialRepository({ db: kyselyOn(lab.pool) }),
+    secret: gateSecret
+  });
+  const verified = Promise.withResolvers<void>();
+  const continueGate = Promise.withResolvers<void>();
+  const racingGate = createLiveKitAuthGateService({
+    pool: lab.pool,
+    superviseWidgets: false,
+    boundary: {
+      assertReady: boundary.assertReady,
+      async authorizeCredential(value) {
+        const result = await boundary.authorizeCredential(value);
+        verified.resolve();
+        await continueGate.promise;
+        return result;
+      }
+    }
+  });
+  const racingDecision = racingGate.authorize(gateUrl);
+  const target = { roomId: seat.roomId, peerId: seat.peerId, sessionToken: seat.seatToken };
+  sendRawWs(bWs.ws, {
+    type: 'room.voice.report',
+    payload: { ...target, ...micRecovery }
+  });
+  const hold = lab.holdRemoval();
+  try {
+    await promptly(verified.promise);
+    sendRawWs(bWs.ws, { type: 'room.leave', payload: target });
+    await promptly(hold.started);
+    const duringRemoval = await promptly(
+      request(api.socketPath, {
+        method: 'POST',
+        pathname: `${basePath}/${id}/livekit-token`,
+        cookie: b.cookie,
+        body: { seatToken: seat.seatToken }
+      })
+    );
+    assert.equal(duringRemoval.status, 404);
+    assert.equal((await lab.gate.authorize(gateUrl)).ok, false);
+    continueGate.resolve();
+    assert.equal((await racingDecision).ok, false);
+  } finally {
+    continueGate.resolve();
+    hold.unblock();
+  }
+  await until(() => lab.evicted.some(({ peerId }) => peerId === seat.peerId), 'the departed seat was removed');
+  assert.equal((await lab.gate.authorize(gateUrl)).ok, false);
+  assert.equal((await details(api, a, id)).phase, 'alone');
+  for (const event of [LOG_EVENTS.ROOM_LEFT, LOG_EVENTS.ROOM_MIC_STALL_RECOVERY]) {
+    const record = lab.logs.find((line) => line.includes(`"evt":"${event}"`));
+    assert.ok(record, event);
+    assert.doesNotMatch(record, /"(roomId|userId|connId)":/);
+  }
+});
+
+test('closing a call fences socket commands even when LiveKit removal fails and is retried', async (t) => {
+  const lab = await setup(t);
+  const api = await lab.boot();
+  const [a, b] = await Promise.all([api.account('alice'), api.account('bob')]);
+  await befriend(api, a, b);
+  const socket = await api.socket(a.cookie);
+  const call = await start(api, a, b);
+  const seat = await enter(socket, call);
+  const target = { roomId: seat.roomId, peerId: seat.peerId, sessionToken: seat.seatToken };
+  lab.failRemoval(1);
+  const hold = lab.holdRemoval();
+  try {
+    lab.advance(300_000);
+    await state(socket, call.call.id, 'closed');
+    await promptly(hold.started);
+    sendRawWs(socket.ws, { id: 'closed-leave', type: 'room.leave', payload: target });
+    sendRawWs(socket.ws, {
+      type: 'room.voice.report',
+      payload: { ...target, ...micRecovery }
+    });
+    sendRawWs(socket.ws, { id: 'closed-media', type: 'room.media.request', payload: { ...target, kind: 'camera' } });
+    sendRawWs(socket.ws, {
+      id: 'closed-update',
+      type: 'room.peer.update',
+      payload: { ...target, patch: { camera: true } }
+    });
+    await waitForWsType(socket.frames, 'error', ({ id }) => id === 'closed-media');
+    await waitForWsType(socket.frames, 'error', ({ id }) => id === 'closed-update');
+    assert.ok(!socket.frames.some((frame) => frame.id === 'closed-leave' || frame.type === 'room.media.grant'));
+    assert.ok(!lab.logs.some((line) => line.includes(LOG_EVENTS.ROOM_MIC_STALL_RECOVERY)));
+  } finally {
+    hold.unblock();
+  }
+  await until(() => lab.evicted.some(({ peerId }) => peerId === seat.peerId), 'the failed removal was retried');
+});
+
+test('a re-ring invalidates the recipient’s unconsumed handoff and keeps the inviter seated', async (t) => {
+  const lab = await setup(t);
+  const api = await lab.boot();
+  const [a, b] = await Promise.all([api.account('alice'), api.account('bob')]);
+  await befriend(api, a, b);
+  const [aWs, bWs] = await Promise.all([api.socket(a.cookie), api.socket(b.cookie)]);
+  const call = await start(api, a, b);
+  const { id } = call.call;
+  const inviter = await enter(aWs, call);
+  lab.advance(45_000);
+  const old = await action(api, b, id, 'join');
+  assert.ok(old.voiceAdmission);
+
+  const rerung = await action(api, a, id, 're-ring');
+  assert.equal(rerung.call.attempt, 2);
+  sendRawWs(bWs.ws, {
+    id: 'old-handoff',
+    type: 'call.voice.join',
+    payload: { callId: id, seatToken: old.voiceAdmission.seatToken }
+  });
+  assert.equal(
+    (await waitForWsType(bWs.frames, 'error', (frame) => frame.id === 'old-handoff')).error.code,
+    'call_not_found'
+  );
+  await issue(api, a, id, inviter.seatToken);
+  const accepted = await action(api, b, id, 'accept', 2);
+  assert.notEqual(accepted.voiceAdmission?.seatToken, old.voiceAdmission.seatToken);
+  await enter(bWs, accepted);
+  await state(aWs, id, 'connected');
+});
+
+test('transferring the solo seat preserves a never-answered call’s history outcome', async (t) => {
+  const lab = await setup(t);
+  const api = await lab.boot();
+  const [a, b] = await Promise.all([api.account('alice'), api.account('bob')]);
+  await befriend(api, a, b);
+  const [first, second] = await Promise.all([api.socket(a.cookie), api.socket(a.cookie)]);
+  const call = await start(api, a, b);
+  const { id, messageId } = call.call;
+  await enter(first, call);
+  lab.advance(45_000);
+  const alone = await details(api, a, id);
+  const transfer = await action(api, a, id, 'join', 1, undefined, alone.revision);
+  assert.equal(transfer.call.phase, 'alone');
+  assert.equal(transfer.call.attemptResult, 'no_answer');
+  const seat = await enter(second, transfer);
+  const closed = await action(api, a, id, 'leave', 1, seat.seatToken);
+  assert.equal(closed.call.endReason, 'no_answer');
+  assert.equal((await callEntry(api, a, b, messageId)).call.outcome, 'no_answer');
+});
+
+test('a held LiveKit removal leaves another pair’s accept and legacy Ring delivery free to finish', async (t) => {
+  const lab = await setup(t);
+  const api = await lab.boot();
+  const [a, b, c, d] = await Promise.all([
+    api.account('alice'),
+    api.account('bob'),
+    api.account('carol'),
+    api.account('dave')
+  ]);
+  await Promise.all([befriend(api, a, b), befriend(api, c, d)]);
+  const socket = await api.socket(a.cookie);
+  const expiring = await start(api, a, b);
+  await enter(socket, expiring);
+  lab.advance(295_000);
+  const separate = await start(api, c, d);
+  await lab.pool.query("INSERT INTO rooms(id,name) VALUES('ordinary','Team')");
+  const held = lab.holdRemoval();
+  try {
+    lab.advance(5_000);
+    await promptly(held.started);
+    const accept = await promptly(action(api, d, separate.call.id, 'accept'));
+    assert.equal(accept.disposition, 'accept');
+    const invitation = await request(
+      api.socketPath,
+      {
+        method: 'POST',
+        pathname: '/api/rings',
+        body: { roomId: 'ordinary', userId: b.id, clientRequestId: randomUUID() },
+        cookie: a.cookie
+      },
+      RingAnswer
+    );
+    assert.equal(invitation.status, 200);
+    await until(
+      async () =>
+        (await lab.pool.query('SELECT 1 FROM ring_delivery_outbox WHERE ring_id=$1', [invitation.body.ring.id]))
+          .rowCount === 0,
+      'the ordinary Ring worker finished the invite delivery'
+    );
+  } finally {
+    held.unblock();
+  }
 });
 
 test('a leased seat reconnects, stops counting mutual time during the gap, then expires to a new solo clock', async (t) => {
@@ -571,6 +825,44 @@ test('restart gives an empty call one lease of grace and disabling calls preserv
   assert.equal((await details(api, a, abandoned.call.id)).phase, 'alone');
   lab.advance(1);
   assert.equal((await state(aWs, abandoned.call.id, 'closed')).payload.call.endReason, 'no_answer');
+});
+
+test('restart preserves the last mutual checkpoint and starts without waiting for old LiveKit seats', async (t) => {
+  const lab = await setup(t);
+  const original = await lab.boot();
+  const [a, b] = await Promise.all([original.account('alice'), original.account('bob')]);
+  await befriend(original, a, b);
+  const [aWs, bWs] = await Promise.all([original.socket(a.cookie), original.socket(b.cookie)]);
+  const call = await start(original, a, b);
+  const { id, messageId } = call.call;
+  await enter(aWs, call);
+  await enter(bWs, await action(original, b, id, 'accept'));
+  await state(aWs, id, 'connected');
+  lab.advance(4_000);
+  await until(async () => {
+    const { rows } = await lab.pool.query<{ mutual_ms: string }>(
+      "SELECT mutual_ms FROM room_rings WHERE id=$1 AND call_phase='connected'",
+      [id]
+    );
+    return Number(rows[0]?.mutual_ms) === 4_000;
+  }, 'the sweeper checkpointed the connected interval');
+  await original.close();
+
+  const restartAt = lab.advance(90_000);
+  const held = lab.holdRemoval();
+  try {
+    const api = await promptly(lab.boot());
+    await promptly(held.started);
+    const recovered = await details(api, a, id);
+    assert.equal(recovered.phase, 'alone');
+    assert.equal(recovered.aloneDeadline, restartAt + grace);
+    assert.equal(recovered.durationMs, 4_000);
+    lab.advance(grace);
+    assert.equal((await details(api, a, id)).phase, 'closed');
+    assert.equal((await callEntry(api, b, a, messageId)).call.durationMs, 4_000);
+  } finally {
+    held.unblock();
+  }
 });
 
 test('the start quota ignores replays and the caller can cancel a ringing attempt', async (t) => {

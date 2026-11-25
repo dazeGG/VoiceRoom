@@ -52,6 +52,7 @@ export function isLiveKitParticipantAlreadyGone(error: unknown): boolean {
 }
 
 export const NATIVE_VOICE_ADMIN_TIMEOUT_SECONDS = 3;
+const CALL_ADMIN_TIMEOUT_SECONDS = 3;
 
 export function isNativeVoiceParticipantAbsent(error: unknown): boolean {
   // A route or proxy 404 does not confirm absence. Match RoomService's Twirp response.
@@ -134,7 +135,10 @@ export function createLiveKitAdmin({
     const livekit = config();
     if (!livekit.enabled) return;
     try {
-      await clientFactory(livekit).removeParticipant(roomName(roomId), peerId);
+      await clientFactory(livekit, strict ? CALL_ADMIN_TIMEOUT_SECONDS : undefined).removeParticipant(
+        roomName(roomId),
+        peerId
+      );
     } catch (error) {
       if (!isLiveKitParticipantAlreadyGone(error)) {
         if (strict) throw error;

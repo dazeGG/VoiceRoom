@@ -13,6 +13,7 @@ import { kyselyOn, withTransaction, type Database } from '../../platform/db/kyse
 import { lockKeys, lockXact } from '../../platform/db/locks.ts';
 import type { RoomRings } from '../../platform/db/schema.ts';
 import { DomainError } from '../../platform/http/domain-error.ts';
+import { deletePrivateRoomFeedback } from '../feedback/call-feedback.repository.ts';
 import { createDmThreadRepository } from '../messaging/dm-thread.repository.ts';
 import {
   findCallMessagePeer,
@@ -426,6 +427,20 @@ export function createCallRingRepository(pool: pg.Pool, clock?: () => number) {
     return rows.flatMap((row) => toCall(row) ?? []);
   }
 
+  async function checkpointConnected(now: number): Promise<void> {
+    const stamp = new Date(now);
+    await db
+      .updateTable('room_rings')
+      .set({
+        mutual_ms: sql`mutual_ms + (extract(epoch from (${stamp}::timestamptz - mutual_since)) * 1000)::bigint`,
+        mutual_since: stamp
+      })
+      .where('purpose', '=', 'voice-call')
+      .where('call_phase', '=', 'connected')
+      .where('mutual_since', '<', stamp)
+      .execute();
+  }
+
   async function listClosed(closedBefore?: number) {
     let query = calls(db).where('call_phase', '=', 'closed');
     if (closedBefore !== undefined) query = query.where('closed_at', '<=', new Date(closedBefore));
@@ -468,6 +483,7 @@ export function createCallRingRepository(pool: pg.Pool, clock?: () => number) {
     if (call.endedAt === null || call.endedAt + CALL_RETENTION_MS > now) return false;
     await withTransaction(db, async (trx) => {
       await trx.deleteFrom('room_rings').where('id', '=', call.id).execute();
+      await deletePrivateRoomFeedback(trx, call.roomId);
       await deleteCallRoom(trx, call.roomId);
     });
     return true;
@@ -477,6 +493,7 @@ export function createCallRingRepository(pool: pg.Pool, clock?: () => number) {
     start,
     update,
     list,
+    checkpointConnected,
     listClosed,
     fromRoom,
     profiles,

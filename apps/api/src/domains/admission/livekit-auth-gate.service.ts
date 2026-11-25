@@ -295,7 +295,7 @@ function createLiveKitAuthGateService({
           room.rows[0].kind !== 'call' ||
           !result.claims.call ||
           result.claims.pType !== 'account' ||
-          !(await callGateAllows(kyselyOn(pool), result.claims.room, result.claims.pId))
+          !(await callGateAllows(kyselyOn(pool), result.claims))
         )
           return { ok: false, code: 'room_not_found', strippedPath };
         return { ok: true, claims: result.claims, strippedPath, call: true };

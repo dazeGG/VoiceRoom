@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import type { DirectMessageCall } from '@voiceroom/shared/contracts/rings';
 import { createRingRepository } from '../src/domains/rings/ring.repository.ts';
 import { createRoomRepository } from '../src/domains/rooms/room.repository.ts';
 import { runMigrations } from '../src/lib/migrate.ts';
@@ -11,6 +12,7 @@ import { rollBackThrough, rollbackCountThrough } from './migration-steps.ts';
 const SILENT = { log() {}, info() {}, warn() {}, error() {} };
 const ROOM_MIGRATION = '20261125120000_add_call_room_kind';
 const MISSED_MIGRATION = '20261125122000_index_missed_voice_calls';
+const MISSED_ORDER_MIGRATION = '20261125123000_order_missed_voice_calls';
 const inviteId = 'a3f9bdb7-2264-499a-928d-75e26606a817';
 const requestId = 'a3f9bdb7-2264-499a-928d-75e26606a818';
 
@@ -94,11 +96,44 @@ test('the call migrations preserve legacy rows and refuse rollback while call st
   assert.equal((await pool.query('SELECT id FROM room_rings WHERE id=$1', [callId])).rowCount, 1);
   assert.equal((await pool.query('SELECT kind FROM ring_delivery_outbox WHERE ring_id=$1', [callId])).rowCount, 3);
 
-  const missed = { kind: 'voice-call', callId, missedAt: 123, missedRevision: 2 };
+  const missed = {
+    kind: 'voice-call',
+    call: {
+      callId,
+      revision: 2,
+      outcome: 'no_answer',
+      startedAt: 1_000,
+      firstConnectedAt: null,
+      endedAt: 46_000,
+      durationMs: 0,
+      endReason: 'no_answer',
+      endedByUserId: null,
+      missedAt: 46_000,
+      missedRevision: 2,
+      missedSeenRevision: null
+    } satisfies DirectMessageCall
+  };
   await pool.query(
     `INSERT INTO direct_messages (id, sender_id, recipient_id, body, metadata) VALUES ('history', 'alice', 'bob', 'Call', $1)`,
     [missed]
   );
+  assert.equal((await down())[0]?.name, MISSED_ORDER_MIGRATION);
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query('SET LOCAL enable_seqscan = off');
+    const eligible = `
+      SELECT id FROM direct_messages WHERE recipient_id='bob' AND sender_id='alice' AND deleted_at IS NULL
+        AND metadata->>'kind' = 'voice-call' AND jsonb_typeof(metadata->'call'->'missedAt') = 'number'
+        AND metadata->'call'->>'missedAt' = '46000'`;
+    const plan = await client.query<{ 'QUERY PLAN': string }>(`EXPLAIN (COSTS OFF) ${eligible}`);
+    assert.match(plan.rows.map((row) => row['QUERY PLAN']).join('\n'), /direct_messages_missed_voice_calls_idx/);
+    assert.deepEqual((await client.query<{ id: string }>(eligible)).rows, [{ id: 'history' }]);
+  } finally {
+    await client.query('ROLLBACK');
+    client.release();
+  }
+  assert.equal((await runMigrations({ databaseUrl, logger: SILENT })).length, 1);
   assert.equal(await rollBackThrough(databaseUrl, MISSED_MIGRATION), rollbackCountThrough(MISSED_MIGRATION));
   assert.equal(
     (await pool.query<{ name: string | null }>(`SELECT to_regclass('direct_messages_missed_voice_calls_idx') AS name`))

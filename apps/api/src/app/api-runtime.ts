@@ -48,7 +48,6 @@ import { createProductSampler } from '../domains/ops/product-snapshot.service.ts
 import { createSystemSampler } from '../domains/ops/system-snapshot.service.ts';
 import { staffToken } from '../domains/staff/staff.routes.ts';
 import { MAX_UPLOAD_BYTES } from '../domains/media/media.service.ts';
-import { DomainError } from '../platform/http/domain-error.ts';
 
 // The process logger is pino until an app hands over its Fastify logger.
 type Logger = FastifyBaseLogger;
@@ -337,10 +336,8 @@ export function createApiRuntime({
         join: (connection, target, user, ip, requestId) =>
           hub.runtime().joinCallVoice(connection, target, user, ip, requestId),
         revoke: (roomId, userId, peerId) => hub.runtime().revokeCallSeat(roomId, userId, peerId),
-        evict: async (roomId, userId, peerId) => {
-          const result = await hub.runtime().disconnectAccountFromRoom({ roomId, userId }, peerId);
-          if (!result.ok) throw new DomainError(result.code, 503, 'Call eviction failed');
-        },
+        fence: (roomId, userId, peerId) => hub.runtime().fenceCallSeat(roomId, userId, peerId),
+        cleanup: hub.callSeatCleanup,
         token: createCallVoiceAdmission({
           currentPeer: hub.presence.currentRosterPeer,
           store: services.getRoomStore,
@@ -379,6 +376,7 @@ export function createApiRuntime({
       ringDelivery.start();
     });
     app.addHook('onClose', ringDelivery.stop);
+    app.addHook('onClose', async () => hub.callSeatCleanup.stop());
 
     const { roomRuntime, wsHandler, widgetWsHandler } = hub.start({
       logger: appLogger,
