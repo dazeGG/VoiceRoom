@@ -163,6 +163,17 @@
   overflow: hidden;
 }
 
+.lobby-shell--portrait {
+  --splitter-height: 100dvh;
+}
+
+.lobby-shell--portrait-focus {
+  .lobby-shell__side,
+  .lobby-shell__side + [role='separator'] {
+    display: none;
+  }
+}
+
 .lobby-shell__room {
   flex: 1;
   min-height: 0;

@@ -1,9 +1,19 @@
 import { defineStore } from 'pinia';
 import { computed, reactive, ref, shallowRef } from 'vue';
-import type { CallActionBody, CallAnswer, CallIncoming, CallSnapshot } from '@voiceroom/shared/contracts/rings';
-import { actOnCallRing, fetchCallRing, fetchCallRings, startCallRing } from '@/api/call-rings';
+import type {
+  CallActionBody,
+  CallAnswer,
+  CallBootstrap,
+  CallIncoming,
+  CallMissedCount,
+  CallMissedSeenBody,
+  CallMissedUpdated,
+  CallSnapshot
+} from '@voiceroom/shared/contracts/rings';
+import { actOnCallRing, fetchCallRing, fetchCallRings, markCallMissedSeen, startCallRing } from '@/api/call-rings';
 import { ApiError } from '@/api/client';
 import { subscribeCallAccountEvents } from '@/entities/room/room-realtime';
+import { onAppVisibilityChange } from '@/platform/app-visibility';
 import { t } from '@/shared/i18n';
 import { newId } from '@/shared/new-id';
 import { readStorage, writeStorage } from '@/shared/storage';
@@ -13,10 +23,12 @@ type Action = CallActionBody['action'];
 type Admission = NonNullable<CallAnswer['voiceAdmission']>;
 type CallRecord = { call: CallSnapshot; offset: number };
 type IncomingAttempt = CallIncoming & { expiresAt: number };
+type MissedRecord = CallMissedCount & { serverNow: number; revision: number };
 type Navigation = {
   prepareVoice(): Promise<void>;
   openCall(callId: string): void;
   closeCall(callId: string, peerId: string): void;
+  retainMobileRealtime?: () => () => void;
 };
 const RINGER_MUTED_KEY = 'voice-room:incoming-call-muted';
 export const incomingAttemptKey = ({ callId, attempt }: CallIncoming) => `${callId}:${attempt}`;
@@ -33,15 +45,21 @@ export const useFriendCallStore = defineStore('friend-call', () => {
   const busy = shallowRef<{ action: Action | 'start'; id: string } | null>(null);
   const mutedAttempt = ref<string | null>(null);
   const closingCallId = ref('');
+  const missedLoaded = ref(false);
+  const missed = reactive(new Map<string, MissedRecord>());
+  const pendingSeen = new Set<string>();
   const toasts = useToastsStore();
   const fences = new Map<string, number>();
   const expiredAttempts = new Map<string, number>();
   const timers = new Map<string, { deadline: number; handle: ReturnType<typeof setTimeout> }>();
   let closeTimer: ReturnType<typeof setTimeout> | undefined;
   let unsubscribe: (() => void) | undefined;
+  let releaseMobileRealtime: (() => void) | undefined;
+  let stopMobileVisibility: (() => void) | undefined;
   let navigation: Navigation | undefined;
   let session = 0;
   let resync = 0;
+  let missedBootstrapAt = 0;
   let startRetry: { peerId: string; requestId: string } | undefined;
   const updateSilence = () => {
     mutedAttempt.value = readStorage(RINGER_MUTED_KEY);
@@ -58,6 +76,44 @@ export const useFriendCallStore = defineStore('friend-call', () => {
     return [...records.values()].find(
       ({ call }) => call.phase !== 'closed' && callPeer(call, userId.value).id === peerId
     )?.call;
+  }
+
+  function applyMissed(update: CallMissedUpdated): void {
+    if (update.serverNow < missedBootstrapAt) return;
+    const prior = missed.get(update.peerUserId);
+    if (prior && (update.revision <= prior.revision || update.serverNow < prior.serverNow)) return;
+    missed.set(update.peerUserId, update);
+  }
+
+  function reconcileMissed(result: CallBootstrap, before: ReadonlyMap<string, MissedRecord>): void {
+    const fetched = new Map(result.missed.map((entry) => [entry.peerUserId, entry]));
+    for (const peerId of new Set([...missed.keys(), ...fetched.keys()])) {
+      const prior = missed.get(peerId);
+      if (prior && prior !== before.get(peerId) && prior.serverNow >= result.serverNow) continue;
+      missed.set(peerId, {
+        ...(fetched.get(peerId) ?? { peerUserId: peerId, count: 0, watermark: null }),
+        revision: prior?.revision ?? 0,
+        serverNow: result.serverNow
+      });
+    }
+    missedBootstrapAt = result.serverNow;
+  }
+
+  async function acknowledgeMissed(peerId: string, watermark: CallMissedSeenBody['watermark']): Promise<void> {
+    const current = missed.get(peerId)?.watermark;
+    if (current?.messageId !== watermark.messageId || current.missedAt !== watermark.missedAt) return;
+    const key = `${peerId}:${watermark.messageId}:${watermark.missedAt}`;
+    if (pendingSeen.has(key)) return;
+    const epoch = session;
+    pendingSeen.add(key);
+    try {
+      const update = await markCallMissedSeen(peerId, { watermark });
+      if (epoch === session) applyMissed(update);
+    } catch {
+      // Keep the authoritative count until a later render or reconnect retries the acknowledgement.
+    } finally {
+      if (epoch === session) pendingSeen.delete(key);
+    }
   }
 
   function syncDeadline(callId: string): void {
@@ -176,10 +232,13 @@ export const useFriendCallStore = defineStore('friend-call', () => {
     const request = ++resync;
     const oldRecords = [...records];
     const oldAttempts = [...attempts];
+    const oldMissed = new Map(missed);
     try {
       const result = await fetchCallRings();
       if (epoch !== session || request !== resync) return;
       enabled.value = result.enabled;
+      reconcileMissed(result, oldMissed);
+      if (result.enabled || result.activeCalls.length || result.missed.length) connectAccountEvents();
       const activeIds = new Set(result.activeCalls.map((call) => call.id));
       const incomingIds = new Set(result.incoming.map((event) => event.callId));
       for (const call of result.activeCalls) applyCall(call);
@@ -200,6 +259,8 @@ export const useFriendCallStore = defineStore('friend-call', () => {
       if (epoch === session && request === resync && error instanceof ApiError && error.status === 404) {
         enabled.value = false;
       }
+    } finally {
+      if (epoch === session && request === resync) missedLoaded.value = true;
     }
   }
 
@@ -207,6 +268,10 @@ export const useFriendCallStore = defineStore('friend-call', () => {
     session += 1;
     unsubscribe?.();
     unsubscribe = undefined;
+    releaseMobileRealtime?.();
+    releaseMobileRealtime = undefined;
+    stopMobileVisibility?.();
+    stopMobileVisibility = undefined;
     window.removeEventListener('storage', onStorage);
     navigation = undefined;
     userId.value = '';
@@ -219,9 +284,24 @@ export const useFriendCallStore = defineStore('friend-call', () => {
     attempts.clear();
     fences.clear();
     expiredAttempts.clear();
+    missed.clear();
+    missedLoaded.value = false;
+    missedBootstrapAt = 0;
+    pendingSeen.clear();
     for (const { handle } of timers.values()) clearTimeout(handle);
     timers.clear();
     clearTimeout(closeTimer);
+  }
+
+  function connectAccountEvents(): void {
+    if (unsubscribe) return;
+    releaseMobileRealtime = navigation?.retainMobileRealtime?.();
+    unsubscribe = subscribeCallAccountEvents(userId.value, {
+      ready: () => void reconcile(),
+      state: applyCall,
+      incoming: applyIncoming,
+      missed: applyMissed
+    });
   }
 
   function startSession(id: string, hooks: Navigation): () => void {
@@ -231,11 +311,11 @@ export const useFriendCallStore = defineStore('friend-call', () => {
     updateSilence();
     window.addEventListener('storage', onStorage);
     const epoch = session;
-    unsubscribe = subscribeCallAccountEvents(id, {
-      ready: () => void reconcile(),
-      state: applyCall,
-      incoming: applyIncoming
-    });
+    if (hooks.retainMobileRealtime) {
+      stopMobileVisibility = onAppVisibilityChange((visible) => {
+        if (visible) void reconcile();
+      });
+    } else connectAccountEvents();
     void reconcile();
     return () => {
       if (epoch === session) reset();
@@ -367,6 +447,10 @@ export const useFriendCallStore = defineStore('friend-call', () => {
     return run('leave', voice.value?.callId ?? '', depart);
   }
 
+  function open(): void {
+    if (voice.value) navigation?.openCall(voice.value.callId);
+  }
+
   function toggleSilence(attempt: CallIncoming): void {
     const key = incomingAttemptKey(attempt);
     mutedAttempt.value = mutedAttempt.value === key ? null : key;
@@ -383,10 +467,14 @@ export const useFriendCallStore = defineStore('friend-call', () => {
     closingCallId,
     startSession,
     callForPeer,
+    missedForPeer: (peerId: string): CallMissedCount | undefined => missed.get(peerId),
+    missedLoaded,
+    acknowledgeMissed,
     record: (id: string) => records.get(id),
     dial,
     act,
     leave,
+    open,
     toggleSilence
   };
 });

@@ -212,6 +212,36 @@
   min-width: 0;
 }
 
+.sidebar__row--missed {
+  height: auto;
+  min-height: var(--size-48);
+
+  .sidebar__row-name {
+    font-weight: 600;
+  }
+}
+
+.sidebar__row-missed,
+.sidebar__row-call {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.sidebar__row-missed {
+  color: var(--vr-text-2);
+  font-size: 0.75rem;
+
+  svg {
+    flex: none;
+    color: var(--vr-danger);
+  }
+}
+
+.sidebar__row-call {
+  color: var(--vr-accent);
+}
+
 .sidebar__row-title {
   display: flex;
   align-items: center;

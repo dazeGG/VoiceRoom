@@ -15,6 +15,7 @@ import { useRoomUiStore } from '@/features/room/room-ui.store';
 import { useScreenUiStore } from '@voiceroom/call/engine';
 import { useVoiceSessionStore } from '@voiceroom/call/engine';
 import RoomPage from '@/features/room/RoomPage.vue';
+import { usePortraitCallLayout } from '@/features/room/mobile-call-layout';
 import FriendCallView from '@/features/friend-call/FriendCallView.vue';
 import { useFriendCallStore } from '@/features/friend-call/friend-call.store';
 import { useRoute } from 'vue-router';
@@ -37,7 +38,7 @@ import RoomPreviewView from './components/lobby/RoomPreviewView.vue';
 import Sidebar from './components/lobby/Sidebar.vue';
 import VoiceHome from './components/lobby/VoiceHome.vue';
 import { ProfileCardHost } from './components/profile-card';
-import type { ActiveVoice } from './model/active-voice';
+import { useActiveFriendCall, type ActiveVoice } from './model/active-voice';
 import { syncLobbyWithDesktop } from './model/desktop-sync';
 import { syncEmbeddedRoomDocument } from './model/embedded-room-document';
 import type { FriendMenuTarget } from './model/friend-menu';
@@ -90,11 +91,14 @@ const routing = useLobbyRouting(lobby, rooms);
 lobby.configure({ onEnterRoom: routing.requestEnterRoom, onBrowse: routing.hideCall });
 const route = useRoute();
 const calls = useFriendCallStore();
+const portrait = usePortraitCallLayout();
 const shownCall = computed(() => {
   const id = route.query.call;
   if (typeof id !== 'string' || (calls.voice?.callId !== id && calls.closingCallId !== id)) return undefined;
   return calls.record(id);
 });
+const portraitDm = computed(() => portrait.value && lobby.mode === 'friends' && lobby.view === 'dm' && calls.enabled);
+const portraitFocus = computed(() => portrait.value && Boolean(shownCall.value || portraitDm.value));
 const staff = useStaffAccess(toast);
 const notifications = useLobbyNotifications();
 const preferences = useNotificationPreferencesStore();
@@ -145,7 +149,7 @@ const connectedVoiceRoomId = computed(() => navigation.getActiveVoiceRoomId());
 
 const prompts = useAccountPrompts({
   user: () => props.user,
-  voiceActive: () => Boolean(connectedVoiceRoomId.value || navigation.joinIntentRoomId),
+  voiceActive: () => Boolean(calls.voice || connectedVoiceRoomId.value || navigation.joinIntentRoomId),
   lobbyDialogOpen: () => createDialogOpen.value,
   onToast: (message, options) => toast(message, options)
 });
@@ -161,19 +165,22 @@ const connectedVoiceRoomName = computed(() =>
     ? roomDisplayName(connectedVoiceRoom.value)
     : clientRoomName(connectedVoiceRoomId.value) || connectedVoiceRoomId.value || ''
 );
-const activeVoice = computed<ActiveVoice | null>(() =>
-  connectedVoiceRoomId.value
-    ? {
-        roomName: connectedVoiceRoomName.value.trim() || connectedVoiceRoomId.value,
-        avatarUrl: connectedVoiceRoom.value?.avatarUrl ?? null,
-        muted: voiceSession.muted,
-        deafened: voiceSession.deafened,
-        open: routing.openConnectedVoiceRoom,
-        toggleMic: voiceSession.toggleActiveVoiceMic,
-        toggleDeafen: voiceSession.toggleActiveVoiceDeafen,
-        leave: () => void routing.leaveConnectedVoiceRoom()
-      }
-    : null
+const activeFriendCall = useActiveFriendCall();
+const activeVoice = computed<ActiveVoice | null>(
+  () =>
+    activeFriendCall.value ??
+    (connectedVoiceRoomId.value
+      ? {
+          roomName: connectedVoiceRoomName.value.trim() || connectedVoiceRoomId.value,
+          avatarUrl: connectedVoiceRoom.value?.avatarUrl ?? null,
+          muted: voiceSession.muted,
+          deafened: voiceSession.deafened,
+          open: routing.openConnectedVoiceRoom,
+          toggleMic: voiceSession.toggleActiveVoiceMic,
+          toggleDeafen: voiceSession.toggleActiveVoiceDeafen,
+          leave: () => void routing.leaveConnectedVoiceRoom()
+        }
+      : null)
 );
 const sortedFriends = computed(() =>
   [...lobby.friends].sort((a, b) => (b.lastMessage?.createdAt ?? 0) - (a.lastMessage?.createdAt ?? 0))
@@ -183,6 +190,7 @@ const sidebarFriends = computed(() =>
   sortedFriends.value.map(({ user, online, unreadCount }) => ({
     user,
     unreadCount,
+    missedCount: calls.missedForPeer(user.id)?.count ?? 0,
     presence: effectivePresenceStatus(online, user.presenceStatus, user.doNotDisturb),
     muted: preferences.notificationPreferences.mutedPeerIds.includes(user.id)
   }))
@@ -311,7 +319,9 @@ function roomDeleted(): void {
     :class="{
       'lobby-shell--sidebar-collapsed': sidebarLayoutCollapsed,
       'lobby-shell--sidebar-peeking': sidebarPeeking,
-      'lobby-shell--resizing': sidebarDragging
+      'lobby-shell--resizing': sidebarDragging,
+      'lobby-shell--portrait': portrait,
+      'lobby-shell--portrait-focus': portraitFocus
     }"
     :style="{ '--lv-side-w': `${dragWidth ?? sidebarWidth}px` }"
     :width="sidebarWidth"
@@ -345,10 +355,10 @@ function roomDeleted(): void {
                 ring="var(--vr-surface)"
               />
               <Badge
-                v-if="friend.unreadCount > 0"
+                v-if="friend.missedCount > 0 || friend.unreadCount > 0"
                 class="lobby-shell__sidebar-unread"
-                :tone="friend.muted ? 'muted' : 'accent'"
-                :count="friend.unreadCount"
+                :tone="friend.missedCount > 0 ? 'danger' : friend.muted ? 'muted' : 'accent'"
+                :count="friend.missedCount || friend.unreadCount"
                 size="sm"
                 ring
               />
@@ -445,7 +455,12 @@ function roomDeleted(): void {
         @rooms-changed="closeViewedRoomAndRefresh"
         @toast="(message: string) => toast(message)"
       />
-      <DmView v-else-if="lobby.mode === 'friends' && lobby.view === 'dm'" :self="user" />
+      <DmView
+        v-else-if="lobby.mode === 'friends' && lobby.view === 'dm'"
+        :self="user"
+        :portrait="portraitDm"
+        @back="routing.goHome"
+      />
       <PeopleView
         v-else-if="lobby.mode === 'friends' && lobby.view === 'people'"
         :user="user"

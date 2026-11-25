@@ -1,4 +1,5 @@
 .friend-call {
+  --friend-call-safe-bottom: 0px;
   position: relative;
   display: flex;
   flex: 1;
@@ -42,7 +43,7 @@
   align-items: center;
   justify-content: center;
   min-height: 0;
-  padding: var(--space-24) var(--space-24) calc(var(--space-64) + var(--space-40));
+  padding: var(--space-24) var(--space-24) calc(var(--space-64) + var(--space-40) + var(--friend-call-safe-bottom));
   gap: var(--space-24);
   overflow: auto;
 }
@@ -86,9 +87,31 @@
   width: min(100%, 560px);
 }
 
+.friend-call__dock {
+  container: stage / inline-size;
+  position: absolute;
+  inset: auto 0 var(--friend-call-safe-bottom);
+}
+
 .friend-call__pending-dock {
   display: grid;
   justify-items: center;
   position: absolute;
   inset: auto 0 var(--space-20);
+}
+
+.friend-call--portrait {
+  --friend-call-safe-bottom: env(safe-area-inset-bottom, 0px);
+
+  .friend-call__stage {
+    justify-content: safe center;
+    gap: var(--space-16);
+    padding-inline: var(--space-16);
+    scroll-padding-block-end: calc(var(--space-64) + var(--space-40) + var(--friend-call-safe-bottom));
+  }
+
+  .friend-call__tiles {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-8);
+  }
 }

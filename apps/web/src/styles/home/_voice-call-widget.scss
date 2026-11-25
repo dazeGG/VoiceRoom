@@ -12,7 +12,6 @@
 //   .voice-live-label    -> .voice-call-widget__live-label
 //   .voice-actions       -> .voice-call-widget__actions
 //   .voice-btn           -> .voice-call-widget__button
-//   .voice-leave         -> .voice-call-widget__button--leave
 //
 // [data-*] and state classes -> aria
 //   .voice-btn.is-off    -> .voice-call-widget__button[aria-pressed='true'] (the mic and sound buttons)
@@ -91,6 +90,10 @@
   color: var(--vr-accent);
 }
 
+.voice-call-widget__clock {
+  font-family: var(--font-mono);
+}
+
 .voice-call-widget__actions {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -107,14 +110,5 @@
     &:hover {
       background: var(--vr-danger-soft);
     }
-  }
-}
-
-.voice-call-widget__actions .voice-call-widget__button--leave {
-  background: var(--vr-danger);
-  color: var(--vr-on-danger);
-
-  &:hover {
-    background: color-mix(in oklch, var(--vr-danger), var(--vr-on-danger) 12%);
   }
 }

@@ -473,8 +473,8 @@ export function createCallRingRepository(pool: pg.Pool, clock?: () => number) {
     const recipient = rows.find((row) => row.id === call.recipientId);
     if (!caller || !recipient) throw new Error('Call participants are missing');
     const profile = (row: typeof caller) => {
-      const { id, displayName, avatarColorKey, avatarAccent, avatarUrl } = mapPublicUser(row);
-      return { id, displayName, avatarColorKey, avatarAccent, avatarUrl };
+      const { id, displayName, login, avatarColorKey, avatarAccent, avatarUrl } = mapPublicUser(row);
+      return { id, displayName: displayName.trim() || login, avatarColorKey, avatarAccent, avatarUrl };
     };
     return { caller: profile(caller), recipient: profile(recipient) };
   }

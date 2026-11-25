@@ -4,6 +4,8 @@ import {
   CallAnswer,
   CallBootstrap,
   CallDetails,
+  CallMissedSeenAnswer,
+  CallMissedSeenBody,
   CallStartBody,
   CallVoiceProof
 } from '@voiceroom/shared/contracts/rings';
@@ -13,6 +15,10 @@ const callPath = (callId: string) => `/api/call-rings/${encodeURIComponent(callI
 
 export const fetchCallRings = () => api.get('/api/call-rings', CallBootstrap);
 export const fetchCallRing = (callId: string) => api.get(callPath(callId), CallDetails);
+export const markCallMissedSeen = (peerId: string, body: CallMissedSeenBody) =>
+  api.post(`/api/call-rings/missed/${encodeURIComponent(peerId)}/seen`, CallMissedSeenAnswer, body, {
+    bodySchema: CallMissedSeenBody
+  });
 export const startCallRing = (body: CallStartBody) =>
   api.post('/api/call-rings', CallAnswer, body, { bodySchema: CallStartBody });
 export const actOnCallRing = (callId: string, body: CallActionBody) =>

@@ -7,6 +7,7 @@ import { useToastsStore } from '@/features/home/model/toasts.store';
 import { usePageStore } from '@/stores/page.store';
 import { getAppRealtime } from '@/api/realtime';
 import { t } from '@/shared/i18n';
+import { retainMobileFriendCallRealtime } from '@/platform/desktop-boundary';
 import { APP_HOME, LEGACY_APP_HOME } from '@/shared/app-home';
 import { shallowPush, shallowReplace } from '@/shared/utils/shallow-routing';
 import IncomingCallStack from './IncomingCallStack.vue';
@@ -19,11 +20,12 @@ const session = useSessionStore();
 const router = useRouter();
 const page = usePageStore();
 const toasts = useToastsStore();
+const { mobile } = defineProps<{ mobile?: boolean }>();
 useFriendCallEngine();
 let stopSessionEnded: (() => void) | undefined;
 const isLobbyRoute = () => {
   const id = router.currentRoute.value.meta.routeId;
-  return id === LEGACY_APP_HOME || id === '/r/[roomId]';
+  return id === LEGACY_APP_HOME || (!mobile && id === '/r/[roomId]');
 };
 
 onMounted(() => {
@@ -41,7 +43,11 @@ watch(
     if (!id) return;
     onCleanup(
       calls.startSession(id, {
+        ...(mobile && { retainMobileRealtime: retainMobileFriendCallRealtime }),
         async prepareVoice() {
+          if (mobile && router.currentRoute.value.meta.routeId === '/r/[roomId]') {
+            await router.replace(APP_HOME);
+          }
           navigation.clearViewedRoom();
           navigation.clearEmbeddedRoom();
           await nextTick();

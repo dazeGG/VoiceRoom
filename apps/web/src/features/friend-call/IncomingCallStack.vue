@@ -4,10 +4,12 @@ import { IncomingCallCard, useDialogOverlayTarget } from '@voiceroom/ui-kit/comp
 import { useVoiceSessionStore, clientRoomName } from '@voiceroom/call/engine';
 import { t } from '@/shared/i18n';
 import { useNotificationPreferencesStore } from '@/shared/notifications/preferences.store';
+import { usePortraitCallLayout } from '@/features/room/mobile-call-layout';
 import { ringOnThisDevice } from './call-ringer';
 import { incomingAttemptKey, useFriendCallStore } from './friend-call.store';
 
 const calls = useFriendCallStore();
+const portrait = usePortraitCallLayout();
 const voice = useVoiceSessionStore();
 const preferences = useNotificationPreferencesStore();
 const dialogTarget = useDialogOverlayTarget();
@@ -102,6 +104,7 @@ onBeforeUnmount(() => {
             colorKey: attempt.fromUser.avatarColorKey
           }"
           :variant="index === 0 ? 'default' : 'compact'"
+          :icon-size="portrait ? 44 : 32"
           :silenced="calls.mutedAttempt === incomingAttemptKey(attempt)"
           :expires-at="attempt.expiresAt"
           :state="calls.busy?.action === 'accept' && calls.busy.id === attempt.callId ? 'accepting' : 'ringing'"

@@ -27,6 +27,7 @@ import { useCallActivityStore } from '@/shared/call-activity.store';
 import { installEmojiCopy } from '@/shared/chat/emoji-copy';
 import EmojiText from '@/shared/chat/EmojiText.vue';
 import { useThemeStore } from '@/shared/theme/theme.store';
+import { LEGACY_APP_HOME } from '@/shared/app-home';
 
 const route = useRoute();
 const router = useRouter();
@@ -53,6 +54,9 @@ const roomClientAllowed = ref(false);
 // Phones get only the routes in mobile-routes.ts; the rest keep the block
 // screen below.
 const allowed = computed(() => desktopAllowed.value || (roomClientAllowed.value && isMobileRoute(route.meta.routeId)));
+const showFriendCalls = computed(
+  () => desktopAllowed.value || route.meta.routeId === LEGACY_APP_HOME || route.meta.routeId === '/r/[roomId]'
+);
 
 // The build marker belongs to web. The desktop shell reports its own updates through the bridge.
 const versionCheck = createVersionCheck({
@@ -161,7 +165,7 @@ onBeforeUnmount(() => {
   </main>
   <template v-else-if="allowed">
     <RouterView />
-    <FriendCallHost v-if="desktopAllowed" />
+    <FriendCallHost v-if="showFriendCalls" :mobile="!desktopAllowed" />
     <Toast id="toast" viewport-class="app-toast-viewport" :toasts="toastItems" :on-dismiss="dismissToast">
       <template #message="{ message }"><EmojiText :text="message" /></template>
     </Toast>

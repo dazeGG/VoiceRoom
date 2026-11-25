@@ -305,6 +305,7 @@ test('cross-dial coalesces, an accepting participant switches rooms, and late ac
   const lab = await setup(t);
   const api = await lab.boot();
   const [a, b, outsider] = await Promise.all([api.account('alice'), api.account('bob'), api.account('eve')]);
+  await lab.pool.query("UPDATE users SET display_name = '' WHERE id = $1", [a.id]);
   await befriend(api, a, b);
   const [aWs, bWs, outsiderWs] = await Promise.all([
     api.socket(a.cookie),
@@ -326,9 +327,12 @@ test('cross-dial coalesces, an accepting participant switches rooms, and late ac
   const { id, startedAt } = outgoing.call;
   const aSeat = await enter(aWs, outgoing);
   assert.equal(outgoing.disposition, 'start');
+  assert.equal(outgoing.call.caller.displayName, a.login);
+  assert.equal(outgoing.call.recipient.displayName, b.login);
   assert.equal(outgoing.call.ringingExpiresAt, startedAt + 45_000);
   const incoming = await waitForWsType(bWs.frames, 'call.incoming');
   assert.equal(incoming.payload.callId, id);
+  assert.equal(incoming.payload.fromUser.displayName, a.login);
   assert.equal((await start(api, a, b, requestId)).disposition, 'open');
   const accepted = await start(api, b, a);
   assert.equal(accepted.disposition, 'accept');

@@ -11,7 +11,11 @@ import Spinner from '../Spinner/Spinner.vue';
 import { useCallClock } from '../call-clock';
 import type { IncomingCallCardProps } from './types';
 
-const props = withDefaults(defineProps<IncomingCallCardProps>(), { variant: 'default', state: 'ringing' });
+const props = withDefaults(defineProps<IncomingCallCardProps>(), {
+  variant: 'default',
+  state: 'ringing',
+  iconSize: 32
+});
 const emit = defineEmits<{ accept: []; decline: []; toggleSilence: [] }>();
 const ringWindowMs = 45_000;
 
@@ -49,6 +53,7 @@ function act(action: () => void): void {
       </div>
       <IconButton
         v-if="variant === 'default'"
+        :size="iconSize"
         :label="silenced ? t('Включить звук звонка') : t('Выключить звук звонка')"
         :aria-pressed="silenced"
         :disabled="unavailable"
@@ -62,6 +67,7 @@ function act(action: () => void): void {
       <template v-if="variant === 'compact'">
         <IconButton
           :label="t('Отклонить: {name}', { name: caller.name })"
+          :size="iconSize"
           variant="danger-solid"
           :tooltip="false"
           :disabled="unavailable"
@@ -71,6 +77,7 @@ function act(action: () => void): void {
         </IconButton>
         <IconButton
           :label="accepting ? t('Подключаемся…') : t('Принять: {name}', { name: caller.name })"
+          :size="iconSize"
           variant="primary"
           :tooltip="false"
           :disabled="unavailable"

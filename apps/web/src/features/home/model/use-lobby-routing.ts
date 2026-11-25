@@ -177,9 +177,10 @@ export function useLobbyRouting(lobby: RoutingLobby, rooms: RoutingRooms, router
   };
 
   const goHome = (): void => {
-    const wasInCall = Boolean(router.currentRoute.value.query.call);
+    const { call, dm } = router.currentRoute.value.query;
     lobby.showHome();
-    if (!wasInCall && navigation.viewedRoomId) closeViewedRoom();
+    if (!call && navigation.viewedRoomId) closeViewedRoom();
+    else if (!call && dm) void shallowPush(router, APP_HOME);
   };
 
   /** The room shown here was left from its own leave button. */

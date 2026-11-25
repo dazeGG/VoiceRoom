@@ -68,6 +68,13 @@ test('compact call actions identify their caller and emit once per activation', 
   expect(second.emitted('decline')).toBeUndefined();
 });
 
+test('both touch actions are 44px and preserve their accessible names', () => {
+  render(IncomingCallCard, { props: { caller, expiresAt: Date.now() + 30_000, variant: 'compact', iconSize: 44 } });
+  for (const name of ['Принять: Аня', 'Отклонить: Аня']) {
+    expect(screen.getByRole('button', { name }).classList.contains('ui-icon-button--size-44')).toBe(true);
+  }
+});
+
 test.each(['default', 'compact'] as const)('accepting blocks decline on a %s card', async (variant) => {
   const view = render(IncomingCallCard, {
     props: { caller, expiresAt: Date.now() + 30_000, state: 'accepting', variant }

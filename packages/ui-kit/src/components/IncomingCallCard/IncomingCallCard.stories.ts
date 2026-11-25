@@ -29,5 +29,6 @@ export const InRoom: Story = { args: { leaveRoomName: 'Вечерний созв
 export const Silenced: Story = { args: { silenced: true } };
 export const Accepting: Story = { args: { state: 'accepting' } };
 export const Compact: Story = { args: { caller: { name: 'Лена', colorKey: 'amber' }, variant: 'compact' } };
+export const CompactTouch: Story = { args: { ...Compact.args, iconSize: 44 } };
 export const CompactAccepting: Story = { args: { ...Compact.args, state: 'accepting' } };
 export const Expired: Story = { args: { expiresAt: 1 } };

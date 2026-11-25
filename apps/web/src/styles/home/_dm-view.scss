@@ -94,3 +94,20 @@
 .dm-view__head-status--offline {
   color: var(--vr-text-muted);
 }
+
+.dm-view--portrait {
+  padding-block-end: env(safe-area-inset-bottom, 0px);
+
+  .dm-view__header {
+    padding-block-start: env(safe-area-inset-top, 0px);
+    padding-inline: var(--space-8);
+  }
+
+  .dm-view__head {
+    padding-inline: 0;
+  }
+
+  .dm-view__head-name {
+    overflow-wrap: anywhere;
+  }
+}

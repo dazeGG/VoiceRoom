@@ -17,6 +17,18 @@
   @include visually-hidden;
 }
 
+@media (orientation: portrait) {
+  @include below($bp-phone) {
+    .incoming-call-stack {
+      --incoming-call-top: calc(env(safe-area-inset-top, 0px) + var(--size-56) + var(--space-8));
+      inset-block-start: var(--incoming-call-top);
+      inset-inline: var(--space-16);
+      inline-size: auto;
+      max-block-size: calc(100dvh - var(--incoming-call-top) - env(safe-area-inset-bottom, 0px) - var(--space-8));
+    }
+  }
+}
+
 @media (prefers-reduced-motion: no-preference) {
   .incoming-call-stack__primary {
     animation: incoming-call-promote 120ms var(--ease-out);

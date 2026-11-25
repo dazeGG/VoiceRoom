@@ -316,8 +316,9 @@ export const useLobbyStore = defineStore('lobby', () => {
   }
 
   function applyEditedMessage(message: DirectMessage): void {
-    thread.replace(message);
     const peerId = message.senderId === selfId ? message.recipientId : message.senderId;
+    if (!message.call || (view.value === 'dm' && selectedFriendId.value === peerId)) thread.replace(message);
+    if (message.call) return;
     const friend = findFriend(peerId);
     if (friend?.lastMessage?.id === message.id) {
       const invite = message.invite === undefined ? friend.lastMessage.invite : message.invite;
@@ -481,6 +482,10 @@ export const useLobbyStore = defineStore('lobby', () => {
       case 'dm.message': {
         const message = directMessageFromView(event.payload.message);
         const peerId = message.senderId === selfId ? message.recipientId : message.senderId;
+        if (message.call) {
+          if (view.value === 'dm' && selectedFriendId.value === peerId) thread.append(message);
+          break;
+        }
         // The message itself ends that friend's "typing" state.
         if (message.senderId !== selfId) dmTyping.clear(message.senderId);
         bumpLastMessage(peerId, message);

@@ -368,6 +368,7 @@ export function subscribeCallAccountEvents(
     ready: () => void;
     incoming: (payload: ServerEvents['call.incoming']) => void;
     state: (payload: ServerEvents['call.state']['call']) => void;
+    missed: (payload: ServerEvents['call.missed.updated']) => void;
   }
 ): () => void {
   const connection = getAppRealtime();
@@ -376,6 +377,7 @@ export function subscribeCallAccountEvents(
     if (event.type === 'ready') handlers.ready();
     else if (event.type === 'call.incoming') handlers.incoming(event.payload);
     else if (event.type === 'call.state') handlers.state(event.payload.call);
+    else if (event.type === 'call.missed.updated') handlers.missed(event.payload);
   });
 }
 

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { badgeOf } from '@/shared/badges';
 import { t } from '@/shared/i18n';
-import { User } from '@lucide/vue';
+import { ChevronLeft, User } from '@lucide/vue';
 import { computed, onMounted, ref } from 'vue';
 import type { AuthUser } from '@/api/auth';
 import AttachmentDropOverlay from '@/shared/chat/AttachmentDropOverlay.vue';
@@ -22,7 +22,8 @@ import DmProfilePanel from './dm/DmProfilePanel.vue';
 const lobby = useLobby();
 const { pushToast } = useToastsStore();
 
-const { self } = defineProps<{ self: AuthUser }>();
+const { self, portrait } = defineProps<{ self: AuthUser; portrait?: boolean }>();
+const emit = defineEmits<{ back: [] }>();
 
 const quickReactions = ref<string[]>([...DEFAULT_FREQUENT_REACTIONS]);
 
@@ -55,6 +56,7 @@ const drop = new AttachmentDrop({
 <template>
   <div
     class="dm-view"
+    :class="{ 'dm-view--portrait': portrait }"
     role="region"
     :aria-label="t('Личные сообщения')"
     @dragenter="drop.enter"
@@ -65,6 +67,9 @@ const drop = new AttachmentDrop({
     <AttachmentDropOverlay v-if="drop.active" />
     <div class="dm-view__col">
       <div v-if="peer" class="dm-view__header">
+        <IconButton v-if="portrait" :label="t('Назад')" :size="44" @click="emit('back')">
+          <ChevronLeft aria-hidden="true" />
+        </IconButton>
         <Pressable class="dm-view__head" @click="lobby.toggleProfile">
           <Avatar
             :name="displayNameOf(peer)"
@@ -97,7 +102,7 @@ const drop = new AttachmentDrop({
           :label="call.label"
           :tooltip-description="call.description"
           :variant="call.accent ? 'soft' : 'default'"
-          :size="40"
+          :size="portrait ? 44 : 40"
           :disabled="call.disabled"
           @click="void call.open()"
         >
@@ -106,7 +111,7 @@ const drop = new AttachmentDrop({
         <IconButton
           :label="t('Профиль')"
           :aria-pressed="lobby.thread.profileOpen"
-          :size="40"
+          :size="portrait ? 44 : 40"
           @click="lobby.toggleProfile"
         >
           <User aria-hidden="true" />
