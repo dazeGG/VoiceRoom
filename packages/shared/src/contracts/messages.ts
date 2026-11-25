@@ -2,8 +2,10 @@
 // mark read), their paginated history, and the parts every message carries.
 
 import { Type, type Static } from 'typebox';
+import { Value } from 'typebox/value';
 import { Failure, Nullable, Ok } from './http.ts';
 import { AttachmentContext, AttachmentState } from './media.ts';
+import { DirectMessageCall } from './rings.ts';
 import { PublicUser } from './users.ts';
 
 // --- the parts of a message --------------------------------------------------
@@ -166,6 +168,7 @@ export const DirectMessage = Type.Object({
   editedAt: Nullable(Type.Number()),
   readAt: Nullable(Type.Number()),
   invite: Nullable(DirectMessageInvite),
+  call: Type.Optional(DirectMessageCall),
   attachments: Type.Optional(Type.Array(Attachment)),
   linkPreview: Type.Optional(LinkPreview),
   replyTo: Type.Optional(Nullable(ReplyPointer)),
@@ -266,8 +269,7 @@ export const RoomHistoryMessage = Type.Object({
 });
 export type RoomHistoryMessage = Static<typeof RoomHistoryMessage>;
 
-/** What a direct message's metadata can say: a room invitation and a link preview. */
-export const DirectMessageMetadata = Type.Object({
+const DirectMessageLegacyMetadata = Type.Object({
   kind: Type.Optional(Type.Literal('room-invite')),
   roomId: Type.Optional(Type.String()),
   roomName: Type.Optional(Type.String()),
@@ -275,6 +277,19 @@ export const DirectMessageMetadata = Type.Object({
   expiresAt: Type.Optional(Nullable(Type.Number())),
   linkPreview: Type.Optional(LinkPreview)
 });
+
+const DirectMessageCallMetadata = Type.Object({
+  kind: Type.Literal('voice-call'),
+  call: DirectMessageCall,
+  linkPreview: Type.Optional(LinkPreview)
+});
+export const DirectMessageMetadata = Type.Union([DirectMessageLegacyMetadata, DirectMessageCallMetadata]);
+export type DirectMessageMetadata = Static<typeof DirectMessageMetadata>;
+
+export function callMetadataOf(metadata: unknown): DirectMessageCall | undefined {
+  if (!Value.Check(DirectMessageCallMetadata, metadata)) return undefined;
+  return metadata.call;
+}
 
 export const DirectHistoryMessage = Type.Object({
   ...HistoryMessageFields,

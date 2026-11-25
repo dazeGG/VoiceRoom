@@ -144,6 +144,7 @@ export interface RoomSessionState {
   joined: boolean;
   peerId: string;
   roomId: string;
+  callId: string | undefined;
   roomAvatarUrl: string;
   roomName: string;
   /** Permanent rooms survive being empty; temporary ones are deleted once idle. */

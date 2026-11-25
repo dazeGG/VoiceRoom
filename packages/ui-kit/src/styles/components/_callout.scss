@@ -1,3 +1,5 @@
+@use '../mixins' as *;
+
 .ui-callout {
   display: flex;
   align-items: flex-start;
@@ -51,6 +53,36 @@
     flex-wrap: wrap;
     gap: var(--space-8);
     margin-top: var(--space-8);
+  }
+
+  &__clock {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+  }
+
+  &__announcement {
+    @include visually-hidden;
+  }
+
+  &--countdown &__actions {
+    align-self: center;
+    margin: 0;
+  }
+
+  @include below($bp-phone) {
+    &--countdown {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+    }
+
+    &--countdown &__actions {
+      grid-column: 1 / -1;
+
+      > .ui-button {
+        flex: 1;
+        min-height: var(--size-44);
+      }
+    }
   }
 
   &--pill {

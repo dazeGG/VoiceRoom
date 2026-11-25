@@ -8,7 +8,7 @@ import { createPinia, setActivePinia } from 'pinia';
 import { createRouter, createWebHistory, type Router } from 'vue-router';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { useLobbyRouting } from '../../src/features/home/model/use-lobby-routing.ts';
-import type { LobbyMode } from '../../src/features/home/model/lobby.store.ts';
+import type { LobbyStore } from '../../src/features/home/model/lobby.store.ts';
 import { useRoomNavigationStore } from '../../src/features/home/model/room-navigation.store.ts';
 import { ROOM_SWITCH_CONFIRM_STORAGE_KEY } from '../../src/features/home/model/room-switch-confirmation.ts';
 import { useVoiceSessionStore } from '@voiceroom/call/engine/core/voice-session.store';
@@ -26,8 +26,10 @@ async function openAt(...paths: string[]) {
   });
   for (const path of paths) await router.push(path);
   await router.isReady();
-  const lobby: { mode: LobbyMode; openDm: (userId: string) => Promise<void>; showHome: () => void } = {
+  const lobby: Pick<LobbyStore, 'mode' | 'openDm' | 'showHome' | 'view' | 'selectedFriendId'> = {
     mode: 'friends',
+    view: 'home',
+    selectedFriendId: null,
     openDm: vi.fn(async () => {}),
     showHome: vi.fn()
   };
@@ -112,4 +114,15 @@ test('entering a room puts it in the address before the room mounts', async () =
   // The room client and the room chat read their room from the address.
   expect(window.location.pathname).toBe('/r/abc123');
   await settlesOn('/r/abc123');
+});
+
+test('browsing to messages keeps Back pointed at the private call view', async () => {
+  const routing = await openAt('/app', '/app?call=active-call');
+  routing.hideCall('friend');
+  await vi.waitFor(() => expect(router.currentRoute.value.query).toEqual({ dm: 'friend' }));
+  expect(window.location.pathname).toBe('/app');
+
+  await back();
+  await vi.waitFor(() => expect(router.currentRoute.value.query).toEqual({ call: 'active-call' }));
+  expect(window.location.pathname).toBe('/app');
 });

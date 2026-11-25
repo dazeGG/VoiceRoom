@@ -14,7 +14,8 @@ const meta = {
           '- Use sm 16 and md 20, and a dot of 8 (`--dot`).',
           '- Use accent for unread, muted for a reference count, danger for reports and errors, and warning or soft for words in small caps («Бета» (Beta)).',
           '- Place sm on an icon or an avatar with a 2px stroke in the background colour.',
-          '- Above 99, show «99+».'
+          '- Above 99, show «99+». Provide a localized `label` with the exact count when the count carries meaning.',
+          '- Use an `online` dot next to text that names the status.'
         ].join('\n')
       }
     }
@@ -30,6 +31,18 @@ export const Danger: Story = { args: { tone: 'danger', count: 2 } };
 export const Overflow: Story = { args: { count: 135 } };
 export const SmallWithRing: Story = { args: { size: 'sm', ring: true, count: 3 } };
 export const Dot: Story = { args: { variant: 'dot' } };
+export const LiveDot: Story = {
+  args: { tone: 'online', variant: 'dot' },
+  render: (args) => ({
+    components: { Badge },
+    setup: () => ({ args }),
+    template: '<span><Badge v-bind="args" /> В звонке</span>'
+  })
+};
+export const OneMissedCall: Story = { args: { tone: 'danger', count: 1, label: '1 пропущенный звонок' } };
+export const TwoMissedCalls: Story = { args: { tone: 'danger', count: 2, label: '2 пропущенных звонка' } };
+export const FiveMissedCalls: Story = { args: { tone: 'danger', count: 5, label: '5 пропущенных звонков' } };
+export const OverflowMissedCalls: Story = { args: { tone: 'danger', count: 105, label: '105 пропущенных звонков' } };
 export const Words: Story = {
   render: () => ({
     components: { Badge },

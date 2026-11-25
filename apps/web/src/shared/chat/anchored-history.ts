@@ -19,6 +19,7 @@ interface AnchoredHistoryOptions<T extends { id: string }> {
     request: { mode: 'latest' | 'before' | 'around'; cursor?: string; messageId?: string; signal: AbortSignal }
   ) => Promise<AnchoredHistoryPage<T>>;
   compare?: (left: T, right: T) => number;
+  reconcile?: (known: T, incoming: T) => T;
   /** Where a scope's newest messages are kept between visits; without it nothing is kept. */
   cache?: HistoryCache<T>;
   onChange?: (state: AnchoredHistoryState<T>) => void;
@@ -41,7 +42,7 @@ export function createAnchoredHistory<T extends { id: string }>(options: Anchore
   let olderPromise: Promise<void> | null = null;
   // The kept copy is shown and the newest page is on its way.
   let revalidating = false;
-  const snapshots = createHistorySnapshots<T>();
+  const snapshots = createHistorySnapshots<T>(options.reconcile);
 
   const state: AnchoredHistoryState<T> = shallowReactive({
     messages: [],
@@ -63,7 +64,7 @@ export function createAnchoredHistory<T extends { id: string }>(options: Anchore
   }
 
   function merge(items: T[]): void {
-    state.messages = ordered(mergeById(state.messages, items));
+    state.messages = ordered(mergeById(state.messages, items, options.reconcile));
     notify();
   }
 
@@ -105,7 +106,13 @@ export function createAnchoredHistory<T extends { id: string }>(options: Anchore
       if (requestGeneration !== generation || controller.signal.aborted) return;
       const messages = snapshot.apply(page.messages);
       if (!messages) return;
-      state.messages = ordered(messages);
+      const known = new Map(state.messages.map((item) => [item.id, item]));
+      state.messages = ordered(
+        messages.map((item) => {
+          const prior = known.get(item.id);
+          return prior && options.reconcile ? options.reconcile(prior, item) : item;
+        })
+      );
       state.before = page.pageInfo.before;
       state.hasMoreBefore = page.pageInfo.hasMoreBefore;
       notify();

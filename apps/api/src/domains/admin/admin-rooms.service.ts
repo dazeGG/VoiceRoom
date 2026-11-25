@@ -20,6 +20,7 @@ import {
 } from '@voiceroom/shared/contracts/admin';
 import type { AdminCallFeedbackEntry, RoomCallDetail } from '@voiceroom/shared/contracts/feedback';
 import type { PresencePeer } from '../rooms/room-views.ts';
+import type { RoomKind } from '../rooms/room-surface.policy.ts';
 import type { DescribeAddress } from '../rooms/voice-session.repository.ts';
 import { avatarColorForPeerId } from '../rooms/avatar-color.ts';
 import { currentVoice, refreshVoice, VOICE_REPORT_STALE_MS } from '../../realtime/voice-track.ts';
@@ -47,10 +48,16 @@ type Payload<T> = Omit<T, 'ok'>;
 
 interface PresenceRoom {
   id: string;
-  kind?: 'main' | 'widget';
+  kind?: RoomKind;
   peers: Map<string, PresencePeer>;
   /** The call clock the room screen counts from (RoomSnapshot.voiceActiveSince). */
   voiceActiveSince?: number | null;
+}
+
+export function isAdminPresenceRoom<Room extends PresenceRoom>(
+  room: Room
+): room is Room & { kind?: 'main' | 'widget' } {
+  return room.kind !== 'meet' && room.kind !== 'call';
 }
 
 /**
@@ -92,7 +99,7 @@ export function createAdminRoomsService(deps: AdminRoomsServiceDeps) {
   async function live(userId: string): Promise<Payload<{ rooms: LiveRoom[] }> | null> {
     if (!(await allowed(userId))) return null;
     const origin = await seesOrigin(userId);
-    const occupied = [...deps.presenceRooms()].filter((room) => room.peers.size > 0);
+    const occupied = [...deps.presenceRooms()].filter(isAdminPresenceRoom).filter((room) => room.peers.size > 0);
     const accountIds = new Set<string>();
     for (const room of occupied) {
       for (const peer of room.peers.values()) if (peer.accountUserId) accountIds.add(peer.accountUserId);
@@ -181,6 +188,7 @@ export function createAdminRoomsService(deps: AdminRoomsServiceDeps) {
     if (!origin && (query.clientId || query.ipKey)) return null;
     const liveSince = new Map<string, number>();
     for (const room of deps.presenceRooms()) {
+      if (!isAdminPresenceRoom(room)) continue;
       const since = room.peers.size > 0 ? callSince(room) : null;
       if (since !== null) liveSince.set(room.id, since);
     }
@@ -220,7 +228,9 @@ export function createAdminRoomsService(deps: AdminRoomsServiceDeps) {
       sort: query.sort ?? 'lastCall',
       order: query.order ?? 'desc',
       page,
-      liveIds: [...deps.presenceRooms()].filter((room) => room.peers.size > 0).map((room) => room.id)
+      liveIds: [...deps.presenceRooms()]
+        .filter((room) => isAdminPresenceRoom(room) && room.peers.size > 0)
+        .map((room) => room.id)
     });
     return { rooms, total, page, pageSize: STATIC_ROOMS_PAGE_SIZE, counts };
   }
@@ -298,8 +308,9 @@ export function createAdminRoomsService(deps: AdminRoomsServiceDeps) {
   ): Promise<Payload<RoomCallDetail> | null | undefined> {
     if (!(await allowed(userId))) return null;
     const room = [...deps.presenceRooms()].find((candidate) => candidate.id === roomId);
-    const since = room && room.peers.size > 0 ? callSince(room) : null;
-    if (!room || since === null) return undefined;
+    if (!room || !isAdminPresenceRoom(room) || room.peers.size === 0) return undefined;
+    const since = callSince(room);
+    if (since === null) return undefined;
     const at = now();
     const peers = [...room.peers.values()];
     const accountIds = peers.flatMap((peer) => (peer.accountUserId ? [peer.accountUserId] : []));

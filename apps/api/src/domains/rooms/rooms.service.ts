@@ -5,7 +5,7 @@ import type { Logger } from 'pino';
 import type { LiveRoom, LobbyRoom, StoredRoom } from './room-views.ts';
 import { createRoomId } from '../../platform/db/ids.ts';
 import { isRoomOwner } from './room.policy.ts';
-import type { RoomKind } from './room-surface.policy.ts';
+import { roomAllowsSurface, type RoomSurface } from './room-surface.policy.ts';
 
 type RequestLog = { log?: Pick<Logger, 'warn' | 'error'> } | null;
 
@@ -16,7 +16,7 @@ export interface RoomsStore {
   roomIdExists?(roomId: string): Promise<boolean>;
   getRoom(roomId: string): Promise<StoredRoom | null>;
   createRoomWithQuota(input: {
-    kind?: RoomKind;
+    kind?: RoomSurface;
     widgetChatEnabled?: boolean;
     creatorIp: string;
     isStatic: boolean;
@@ -65,7 +65,7 @@ export function createRoomCreation(
   }
 
   async function createRoom(input: {
-    kind?: RoomKind;
+    kind?: RoomSurface;
     widgetChatEnabled?: boolean;
     creatorIp: string;
     isStatic: boolean;
@@ -93,7 +93,7 @@ export function createRoomsService(deps: RoomsServiceDeps) {
   async function checkOwner(userId: string | null | undefined, roomId: string): Promise<OwnerCheck> {
     if (!userId) return { status: 'unauthenticated' };
     const room = await deps.getRoom(roomId);
-    if (!room) return { status: 'not_found' };
+    if (!room || !roomAllowsSurface(room, 'main')) return { status: 'not_found' };
     if (!isRoomOwner(room, userId)) return { status: 'forbidden' };
     return { status: 'owner', room };
   }

@@ -56,6 +56,18 @@
   }
 }
 
+.mobile-call-topbar--friend {
+  --mc-safe-top: env(safe-area-inset-top, 0px);
+  position: relative;
+  flex: none;
+  padding-inline: var(--space-8);
+  border-block-end: 1px solid var(--vr-line);
+
+  .mobile-call-topbar__meta[role='timer'] {
+    font-family: var(--font-mono);
+  }
+}
+
 .mobile-call--chrome-hidden .mobile-call-topbar {
   opacity: 0;
   transform: translateY(-16px);

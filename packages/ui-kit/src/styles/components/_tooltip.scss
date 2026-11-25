@@ -21,3 +21,20 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+.ui-tooltip__copy {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.ui-tooltip--described .ui-tooltip__text,
+.ui-tooltip__description {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.ui-tooltip__description {
+  color: var(--vr-text-2);
+  font-weight: 400;
+}

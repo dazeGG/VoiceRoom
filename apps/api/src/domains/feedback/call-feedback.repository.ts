@@ -4,7 +4,7 @@
 import { sql } from 'kysely';
 import type pg from 'pg';
 import { Value } from 'typebox/value';
-import { kyselyOn } from '../../platform/db/kysely.ts';
+import { kyselyOn, type Database } from '../../platform/db/kysely.ts';
 import { epochMillis } from '../../platform/epoch-millis.ts';
 import {
   ADMIN_CALL_FEEDBACK_LIMIT,
@@ -45,10 +45,18 @@ const isRating = (value: string): value is CallFeedbackRating => RATINGS.has(val
 const isTag = (value: string): value is CallFeedbackTag => TAGS.has(value);
 const isPlatform = (value: string): value is CallFeedbackPlatform => PLATFORMS.has(value);
 
+/** Erases old ordinary feedback in the transaction that prunes the private room. */
+export async function deletePrivateRoomFeedback(db: Database, roomId: string): Promise<void> {
+  await db.deleteFrom('call_feedback').where('room_id', '=', roomId).execute();
+}
+
 export function createCallFeedbackRepository({ pool }: { pool: pg.Pool }) {
   const db = kyselyOn(pool);
+  const privateRooms = db.selectFrom('rooms').select('id').where('kind', '=', 'call');
 
-  async function insert(input: NewCallFeedback): Promise<void> {
+  async function insert(input: NewCallFeedback): Promise<boolean> {
+    const room = await db.selectFrom('rooms').select('kind').where('id', '=', input.call.roomId).executeTakeFirst();
+    if (room?.kind === 'call') return false;
     await db
       .insertInto('call_feedback')
       .values({
@@ -64,6 +72,7 @@ export function createCallFeedbackRepository({ pool }: { pool: pg.Pool }) {
         quality: input.call.quality ? JSON.stringify(input.call.quality) : null
       })
       .execute();
+    return true;
   }
 
   /** The ratings and tags of every answer since `since`. */
@@ -72,12 +81,14 @@ export function createCallFeedbackRepository({ pool }: { pool: pg.Pool }) {
       .selectFrom('call_feedback')
       .select(['rating', (eb) => eb.fn.countAll<string>().as('count')])
       .where('created_at', '>=', since)
+      .where('room_id', 'not in', privateRooms)
       .groupBy('rating')
       .execute();
     const tags = await sql<{ tag: string; count: string }>`
       SELECT tag, count(*) AS count
       FROM call_feedback, unnest(call_feedback.tags) AS tag
       WHERE call_feedback.created_at >= ${since}
+        AND call_feedback.room_id NOT IN (${privateRooms})
       GROUP BY tag
       ORDER BY count DESC, tag ASC
     `.execute(db);
@@ -132,6 +143,7 @@ export function createCallFeedbackRepository({ pool }: { pool: pg.Pool }) {
       .selectFrom('call_feedback as f')
       .leftJoin('users as u', 'u.id', 'f.user_id')
       .leftJoin('rooms as r', (join) => join.onRef('r.id', '=', 'f.room_id').on('r.deleted_at', 'is', null))
+      .where('f.room_id', 'not in', privateRooms)
       .select([
         'f.id',
         'f.rating',

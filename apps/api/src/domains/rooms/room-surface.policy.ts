@@ -2,7 +2,7 @@ import type { RoomCapabilities } from '@voiceroom/shared/contracts/rooms';
 
 // Scope comes from server transport wiring, never a request body or header.
 export type RoomSurface = 'main' | 'widget' | 'meet';
-export type RoomKind = RoomSurface;
+export type RoomKind = RoomSurface | 'call';
 export interface RoomBoundary {
   kind?: RoomKind;
   widgetChatEnabled?: boolean;

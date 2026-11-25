@@ -102,6 +102,7 @@ export type ServiceRegistryConfig = {
   RUSTORE_PUSH?: RuStorePushConfig;
   /** The oldest Android app a ring push still reaches; no bound when absent or empty. */
   ANDROID_MIN_VERSION?: string;
+  ANDROID_CALL_PUSH_MIN_VERSION?: string;
   /** Where uploaded chat media lives; defaults to /data/media. */
   MEDIA_STORAGE_DIR?: string;
   /** Uploads pause below this much free space; defaults to 2 GiB. */
@@ -268,7 +269,8 @@ export function createServiceRegistry(config: ServiceRegistryConfig, deps: Servi
       tokens: () => deviceTokens.get(),
       client: createRuStorePushClient(RUSTORE_PUSH),
       logger: poolLogger,
-      minVersion: config.ANDROID_MIN_VERSION ?? ''
+      minVersion: config.ANDROID_MIN_VERSION ?? '',
+      callMinVersion: config.ANDROID_CALL_PUSH_MIN_VERSION ?? ''
     })
   );
   const rings = pooled((pool) =>
@@ -347,8 +349,10 @@ export function createServiceRegistry(config: ServiceRegistryConfig, deps: Servi
       roomExists: async (roomId) => roomAllowsSurface(await getRoom(roomId), 'main'),
       roomMessageExists: async (roomId, messageId) =>
         Boolean(await messageService.get().room.getMessage(roomId, messageId)),
-      directMessageVisible: async (userId, peerId, messageId) =>
-        Boolean(await messageService.get().direct.getMessage(userId, peerId, messageId)),
+      directMessageVisible: async (userId, peerId, messageId) => {
+        const message = await messageService.get().direct.getMessage(userId, peerId, messageId);
+        return Boolean(message && !message.call);
+      },
       canReadRoom: (roomId, userId) => roomStore.get().canUserReadRoomChat(roomId, userId),
       canReactInRoom: (roomId, userId) => roomStore.get().canUserReactInRoom(roomId, userId),
       broadcastRoomDetail,

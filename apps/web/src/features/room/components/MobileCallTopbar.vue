@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { IconButton, Avatar, Pressable, ControlGroup } from '@voiceroom/ui-kit/components';
 import { t } from '@/shared/i18n';
-import { LayoutGrid, MessageSquare, Users } from '@lucide/vue';
+import { ChevronLeft, LayoutGrid, MessageSquare, Users } from '@lucide/vue';
 import { computed } from 'vue';
 import { isRecord } from '@voiceroom/shared/guards';
 import { state as roomClientState } from '@voiceroom/call/engine/core/room-runtime.store';
@@ -11,9 +11,15 @@ import { useParticipantsUiStore } from '@voiceroom/call/engine/core/participants
 import { useRoomPanelToggleStore } from '@/features/room/room-panel-toggle.store';
 import { useVoiceSessionStore } from '@voiceroom/call/engine/core/voice-session.store';
 import { copyText } from '@/shared/utils/clipboard';
+import EmojiText from '@/shared/chat/EmojiText.vue';
+import type { CallSnapshot } from '@voiceroom/shared/contracts/rings';
 import RoomCallTimer from './RoomCallTimer.vue';
 
-defineProps<{ duo: boolean }>();
+defineProps<{
+  duo?: boolean;
+  friendCall?: { peer: CallSnapshot['caller']; subtitle: string; timed: boolean };
+}>();
+const emit = defineEmits<{ back: []; messages: [] }>();
 
 const mobileCall = useMobileCallUiStore();
 const participantsUi = useParticipantsUiStore();
@@ -51,7 +57,28 @@ function handleInviteClick(): void {
 </script>
 
 <template>
-  <header :class="['mobile-call-topbar', { 'mobile-call-topbar--duo': duo }]">
+  <header v-if="friendCall" class="mobile-call-topbar mobile-call-topbar--friend">
+    <IconButton :label="t('Назад')" :size="44" @click="emit('back')">
+      <ChevronLeft aria-hidden="true" />
+    </IconButton>
+    <Avatar
+      :name="friendCall.peer.displayName"
+      :src="friendCall.peer.avatarUrl"
+      :color-key="friendCall.peer.avatarColorKey"
+      :background="friendCall.peer.avatarAccent || undefined"
+      :size="32"
+    />
+    <div class="mobile-call-topbar__copy">
+      <h1 class="mobile-call-topbar__title"><EmojiText :text="friendCall.peer.displayName" /></h1>
+      <p class="mobile-call-topbar__meta" :role="friendCall.timed ? 'timer' : undefined">
+        {{ friendCall.subtitle }}
+      </p>
+    </div>
+    <IconButton :label="t('Открыть личные сообщения')" :size="44" @click="emit('messages')">
+      <MessageSquare aria-hidden="true" />
+    </IconButton>
+  </header>
+  <header v-else :class="['mobile-call-topbar', { 'mobile-call-topbar--duo': duo }]">
     <Pressable
       class="mobile-call-topbar__room"
       :aria-label="t('Пригласить в «{p0}»', { p0: heading })"

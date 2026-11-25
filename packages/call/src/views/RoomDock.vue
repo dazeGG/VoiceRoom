@@ -38,6 +38,8 @@ const props = defineProps<{
   cameraMenu: boolean;
   hideLeaveButton: boolean;
   showScreenExit: boolean;
+  groupLabel?: string | undefined;
+  leaveLabel?: string | undefined;
 }>();
 
 const emit = defineEmits<{
@@ -77,7 +79,7 @@ onBeforeUnmount(() => window.removeEventListener(HOTKEY_BINDINGS_CHANGED_EVENT, 
 </script>
 
 <template>
-  <div class="room-dock" role="group" :aria-label="t('Управление голосом')">
+  <div class="room-dock" role="group" :aria-label="groupLabel ?? t('Управление голосом')">
     <div class="room-dock__shell">
       <div class="room-dock__cluster">
         <Popover
@@ -266,7 +268,7 @@ onBeforeUnmount(() => window.removeEventListener(HOTKEY_BINDINGS_CHANGED_EVENT, 
         id="leaveButton"
         class="room-dock__button room-dock__button--leave"
         :size="44"
-        :label="t('Покинуть звонок')"
+        :label="leaveLabel ?? t('Покинуть звонок')"
         :hidden="hideLeaveButton"
         @click="emit('leave')"
       >

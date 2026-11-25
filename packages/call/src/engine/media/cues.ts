@@ -32,13 +32,13 @@ interface CueNote {
   type?: OscillatorType;
 }
 
-function playCueSequence(notes: CueNote[], label: string): void {
+function playCueSequence(notes: CueNote[], label: string, stopSignal?: AbortSignal): void {
   if (isCuePlaybackSuppressed()) return;
 
   try {
     const context = getSharedAudioContext();
     if (context.state !== 'running') {
-      queueAudioUnlock();
+      if (!stopSignal) queueAudioUnlock();
       return;
     }
 
@@ -59,13 +59,19 @@ function playCueSequence(notes: CueNote[], label: string): void {
       gain.connect(getAudioBusInput('sfx'));
       oscillator.start(startedAt);
       oscillator.stop(startedAt + duration + 0.02);
+      const stop = () => {
+        gain.disconnect();
+        oscillator.stop();
+      };
+      stopSignal?.addEventListener('abort', stop, { once: true });
       oscillator.addEventListener('ended', () => {
+        stopSignal?.removeEventListener('abort', stop);
         oscillator.disconnect();
         gain.disconnect();
       });
     });
   } catch (error) {
-    log.warn(`${label} sound unavailable`, errorContext(error));
+    if (!stopSignal) log.warn(`${label} sound unavailable`, errorContext(error));
   }
 }
 
@@ -125,7 +131,8 @@ export function playFriendAcceptedCue(): void {
   );
 }
 
-export function playRingCue(): void {
+export function playRingCue(stopSignal?: AbortSignal): void {
+  if (stopSignal?.aborted) return;
   playCueSequence(
     [
       { frequency: 659, peak: 0.032, duration: 0.14 },
@@ -133,8 +140,49 @@ export function playRingCue(): void {
       { frequency: 659, peak: 0.03, start: 0.34, duration: 0.14 },
       { frequency: 988, peak: 0.032, start: 0.47, duration: 0.2 }
     ],
-    'Ring'
+    'Ring',
+    stopSignal
   );
+}
+
+export function startCallRinger(signal: AbortSignal): void {
+  if (signal.aborted) return;
+  playRingCue(signal);
+  const interval = setInterval(() => playRingCue(signal), 3_000);
+  signal.addEventListener('abort', () => clearInterval(interval), { once: true });
+}
+
+export async function waitForCallRingerAudio(signal: AbortSignal): Promise<boolean> {
+  if (signal.aborted) return false;
+  try {
+    const context = getSharedAudioContext();
+    if (context.state === 'running') return true;
+    if (context.state === 'closed') return false;
+
+    return await new Promise((resolve) => {
+      const listeners = new AbortController();
+      const onAbort = () => finish(false);
+      const onGesture = () => void context.resume().catch(() => {});
+      function finish(playable: boolean): void {
+        listeners.abort();
+        signal.removeEventListener('abort', onAbort);
+        resolve(playable);
+      }
+      signal.addEventListener('abort', onAbort, { once: true });
+      context.addEventListener(
+        'statechange',
+        () => {
+          if (context.state === 'running') finish(true);
+          else if (context.state === 'closed') finish(false);
+        },
+        { signal: listeners.signal }
+      );
+      document.addEventListener('pointerdown', onGesture, { signal: listeners.signal });
+      document.addEventListener('keydown', onGesture, { signal: listeners.signal });
+    });
+  } catch {
+    return false;
+  }
 }
 
 export function playPeerJoinCue(peerId: string | undefined): void {

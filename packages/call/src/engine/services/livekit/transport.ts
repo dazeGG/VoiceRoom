@@ -26,12 +26,10 @@ const NOT_IN_ROOM_RETRY_DELAYS_MS = [500, 1_000, 2_000];
 export async function requestLiveKitCredentials(name: string, isCurrent: () => boolean): Promise<LiveKitCredentials> {
   for (let attempt = 0; ; attempt += 1) {
     try {
-      return await requestLiveKitToken({
-        name,
-        peerId: state.peerId,
-        roomId: state.roomId,
-        sessionToken: state.sessionToken
-      });
+      return await requestLiveKitToken(
+        { name, peerId: state.peerId, roomId: state.roomId, sessionToken: state.sessionToken },
+        state.callId
+      );
     } catch (error) {
       const delay = NOT_IN_ROOM_RETRY_DELAYS_MS[attempt];
       if (getCallPorts().transport.failure(error)?.code !== 'not_in_room' || delay === undefined) throw error;

@@ -52,7 +52,7 @@ function serviceFor(permissions: readonly StaffPermission[]) {
   const asked: StayAsk[][] = [];
   const service = createCallFeedbackService({
     repository: () => ({
-      insert: () => Promise.resolve(),
+      insert: () => Promise.resolve(true),
       summarize: () => Promise.resolve({ good: 0, bad: 1, tags: [] }),
       listRecent: () => Promise.resolve([answer])
     }),

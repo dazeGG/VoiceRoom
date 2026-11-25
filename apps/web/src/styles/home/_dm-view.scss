@@ -8,7 +8,6 @@
 //   .lobby-dm-head-text                   -> .dm-view__head-text
 //   .lobby-dm-head-name                   -> .dm-view__head-name
 //   .lobby-dm-head-status                 -> .dm-view__head-status
-//   .lobby-dm-head-icon                   -> .dm-view__head-icon
 //
 // [data-*] -> modifier class
 //   .lobby-dm-head-status[data-presence='dnd|away|online|offline']
@@ -29,17 +28,25 @@
   flex-direction: column;
 }
 
-.dm-view__head {
+.dm-view__header {
   flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  padding-inline-end: var(--space-24);
+  border-bottom: 1px solid var(--vr-line);
+}
+
+.dm-view__head {
+  flex: 1;
+  min-width: 0;
   min-height: var(--dm-view-head-height);
   box-sizing: border-box;
   display: flex;
   align-items: center;
   gap: var(--space-12);
-  width: 100%;
   padding: var(--space-12) var(--space-24);
   border: 0;
-  border-bottom: 1px solid var(--vr-line);
   background: transparent;
   color: inherit;
   text-align: left;
@@ -54,16 +61,6 @@
 .dm-view__head-text {
   flex: 1;
   min-width: 0;
-}
-
-.dm-view__head-icon {
-  flex: none;
-  width: var(--size-32);
-  height: var(--size-32);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--vr-text-muted);
 }
 
 .dm-view__head-name {
@@ -90,6 +87,27 @@
   color: var(--vr-online);
 }
 
+.dm-view__head-status--in-call {
+  color: var(--vr-accent);
+}
+
 .dm-view__head-status--offline {
   color: var(--vr-text-muted);
+}
+
+.dm-view--portrait {
+  padding-block-end: env(safe-area-inset-bottom, 0px);
+
+  .dm-view__header {
+    padding-block-start: env(safe-area-inset-top, 0px);
+    padding-inline: var(--space-8);
+  }
+
+  .dm-view__head {
+    padding-inline: 0;
+  }
+
+  .dm-view__head-name {
+    overflow-wrap: anywhere;
+  }
 }

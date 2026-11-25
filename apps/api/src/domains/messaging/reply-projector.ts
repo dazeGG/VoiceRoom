@@ -29,7 +29,12 @@ function isInvitation(message: Loose): boolean {
 
 function isReplyTargetKindAllowed(message: unknown): boolean {
   if (!isRecord(message) || !messageId(message)) return false;
-  return !isInvitation(message) && !isSystemCard(message.content ?? message.kind ?? message.type ?? message.metadata);
+  return (
+    !isInvitation(message) &&
+    !(isRecord(message.metadata) && message.metadata.kind === 'voice-call') &&
+    message.call === undefined &&
+    !isSystemCard(message.content ?? message.kind ?? message.type ?? message.metadata)
+  );
 }
 
 function isUnavailable(message: unknown, now: number = Date.now()): boolean {

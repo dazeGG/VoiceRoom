@@ -77,12 +77,16 @@ export const useLobbyStore = defineStore('lobby', () => {
   let selfId = '';
   // Enters voice in a room through the page's usual confirmation flow.
   let onEnterRoom: (roomId: string) => void = () => {};
+  let onBrowse: (peerId?: string) => void = () => {};
   const presence = useFriendPresence();
   const browserNotifications = new BrowserNotificationRouting(() => getActiveNotificationTarget());
 
   /** `onEnterRoom` enters voice in a room through the page's usual confirmation flow. */
-  function configure(options: { onEnterRoom?: (roomId: string) => void } = {}): void {
+  function configure(
+    options: { onEnterRoom?: (roomId: string) => void; onBrowse?: (peerId?: string) => void } = {}
+  ): void {
     onEnterRoom = options.onEnterRoom ?? (() => {});
+    onBrowse = options.onBrowse ?? (() => {});
   }
 
   function clearLegacyResolvedRoomInvitations(): void {
@@ -207,19 +211,23 @@ export const useLobbyStore = defineStore('lobby', () => {
   // --- Navigation ---------------------------------------------------------
 
   function setMode(next: LobbyMode): void {
+    onBrowse();
     mode.value = next;
   }
 
   function showHome(): void {
+    onBrowse();
     view.value = 'home';
   }
 
   function showPeople(): void {
+    onBrowse();
     view.value = 'people';
     void refreshRequests().catch(() => {});
   }
 
   async function openDm(userId: string): Promise<void> {
+    onBrowse(userId);
     mode.value = 'friends';
     selectedFriendId.value = userId;
     view.value = 'dm';
@@ -308,8 +316,9 @@ export const useLobbyStore = defineStore('lobby', () => {
   }
 
   function applyEditedMessage(message: DirectMessage): void {
-    thread.replace(message);
     const peerId = message.senderId === selfId ? message.recipientId : message.senderId;
+    if (!message.call || (view.value === 'dm' && selectedFriendId.value === peerId)) thread.replace(message);
+    if (message.call) return;
     const friend = findFriend(peerId);
     if (friend?.lastMessage?.id === message.id) {
       const invite = message.invite === undefined ? friend.lastMessage.invite : message.invite;
@@ -473,6 +482,10 @@ export const useLobbyStore = defineStore('lobby', () => {
       case 'dm.message': {
         const message = directMessageFromView(event.payload.message);
         const peerId = message.senderId === selfId ? message.recipientId : message.senderId;
+        if (message.call) {
+          if (view.value === 'dm' && selectedFriendId.value === peerId) thread.append(message);
+          break;
+        }
         // The message itself ends that friend's "typing" state.
         if (message.senderId !== selfId) dmTyping.clear(message.senderId);
         bumpLastMessage(peerId, message);

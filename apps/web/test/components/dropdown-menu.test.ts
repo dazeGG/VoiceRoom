@@ -138,3 +138,37 @@ test('a menu in a modal stays inside its focus scope', async () => {
   const option = await within(dialog).findByRole('menuitem', { name: 'На час' });
   await waitFor(() => expect(document.activeElement).toBe(option));
 });
+
+test('call menu typeahead uses the label and exposes its trailing hint once', async () => {
+  const onSelect = vi.fn();
+  render(
+    defineComponent(
+      () => () =>
+        h(
+          DropdownMenu,
+          { ariaLabel: 'Действия' },
+          {
+            trigger: () => h('button', { type: 'button' }, 'Открыть'),
+            content: () => [
+              h(MenuItem, { label: 'Написать' }),
+              h(MenuItem, { label: 'Позвонить', hint: 'не в сети', shortcut: 'Alt+P', onSelect }),
+              h(MenuItem, { label: 'Вернуться в звонок', tone: 'accent' })
+            ]
+          }
+        )
+    )
+  );
+
+  const user = userEvent.setup();
+  await user.tab();
+  await user.keyboard('{ArrowDown}');
+  const first = await screen.findByRole('menuitem', { name: 'Написать' });
+  await waitFor(() => expect(document.activeElement).toBe(first));
+  const call = screen.getByRole('menuitem', { name: 'Позвонить', description: 'не в сети' });
+  expect(within(call).getByText('не в сети')).toBeTruthy();
+  expect(within(call).getByText('Alt+P')).toBeTruthy();
+  await user.keyboard('п');
+  await waitFor(() => expect(document.activeElement).toBe(call));
+  await user.keyboard('{Enter}');
+  expect(onSelect).toHaveBeenCalledOnce();
+});

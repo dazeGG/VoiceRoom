@@ -95,6 +95,7 @@ export function createDmThreadRepository({ pool }: { pool: pg.Pool }) {
       .where('sender_id', '=', senderId)
       .where('recipient_id', '=', recipientId)
       .where('deleted_at', 'is', null)
+      .where(sql<boolean>`metadata->>'kind' IS DISTINCT FROM 'voice-call'`)
       .returningAll()
       .executeTakeFirst();
     return mapMessage(row);
@@ -106,6 +107,7 @@ export function createDmThreadRepository({ pool }: { pool: pg.Pool }) {
     recipientId,
     body,
     metadata = null,
+    alreadyRead = false,
     replyToMessageId = null,
     beforeUnitOfWork = null,
     prepareMessage = null,
@@ -115,6 +117,7 @@ export function createDmThreadRepository({ pool }: { pool: pg.Pool }) {
     recipientId: string;
     body: string;
     metadata?: Metadata | null;
+    alreadyRead?: boolean;
     replyToMessageId?: string | null;
     beforeUnitOfWork?:
       ((client: pg.PoolClient) => Promise<{ replay: true; message: Replayed } | null | undefined>) | null;
@@ -138,6 +141,7 @@ export function createDmThreadRepository({ pool }: { pool: pg.Pool }) {
           recipient_id: recipientId,
           body: preparedMessage.body,
           created_at: now,
+          ...(alreadyRead && { read_at: now }),
           metadata: preparedMessage.metadata ? JSON.stringify(preparedMessage.metadata) : '{}',
           reply_to_message_id: replyToMessageId
         })

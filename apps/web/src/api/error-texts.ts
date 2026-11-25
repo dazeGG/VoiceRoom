@@ -216,6 +216,15 @@ export const ERROR_TEXTS: Record<ErrorCode, string> = {
   get invalid_ring_target() {
     return t('Этому пользователю нельзя позвонить');
   },
+  get call_disabled() {
+    return t(VOICE_UNAVAILABLE);
+  },
+  get call_rate_limited() {
+    return t(TRY_LATER);
+  },
+  get call_request_conflict() {
+    return t(REALTIME_REJECTED);
+  },
   get invite_cooldown() {
     return t('Приглашение уже отправлено, подождите немного');
   },

@@ -358,7 +358,8 @@ export function createAdminRoomsRepository({ pool }: { pool: pg.Pool }) {
         'u.avatar_accent'
       ])
       .where('s.room_id', 'is not', null)
-      .where('s.room_id', '!=', '');
+      .where('s.room_id', '!=', '')
+      .where((eb) => eb.or([eb('r.kind', 'is', null), eb('r.kind', '!=', 'call')]));
   }
 
   type StayRow = Awaited<ReturnType<ReturnType<typeof stays>['execute']>>[number];
@@ -526,7 +527,8 @@ export function createAdminRoomsRepository({ pool }: { pool: pg.Pool }) {
             )`.as('earlier_end')
           ])
           .where('room_id', 'is not', null)
-          .where('room_id', '!=', '');
+          .where('room_id', '!=', '')
+          .where('room_id', 'not in', (eb) => eb.selectFrom('rooms').select('id').where('kind', '=', 'call'));
         if (roomId) base = base.where('room_id', '=', roomId);
         // Only the rooms that held that kind; the call's own kind is checked once it is gathered.
         if (query.kind) {

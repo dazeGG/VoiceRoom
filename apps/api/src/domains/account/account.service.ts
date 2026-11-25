@@ -76,6 +76,7 @@ export interface AccountDeps {
   };
   /** Ends what the given sessions still hold open: sockets and voice seats. */
   endSessionConnections(input: { userId?: string | null; tokenHashes?: string[] | null }): Promise<void>;
+  invalidateCalls?(userId: string): void;
   notifyUser(userId: string, event: AccountMessage): void;
   queuePush(userId: string, payload: PushPayload, options: { ignorePreferences: boolean }): Promise<unknown>;
   /** Refreshes the user's live room peers after a profile change. */
@@ -432,6 +433,7 @@ export function createAccountService(deps: AccountDeps) {
     if (result.status === 'not_found') return { status: 'not_found' };
     if (result.status === 'already_requested')
       return { status: 'already_requested', deletionScheduledFor: result.scheduledFor };
+    deps.invalidateCalls?.(userId);
     await deps.endSessionConnections({ userId });
     const hidden = await deps.users().getUserById(userId);
     if (hidden) await deps.broadcastProfileToFriends(hidden, log);

@@ -4,7 +4,7 @@ import { useLocalizedText } from '@/shared/i18n/localized-text';
 // resync that converges the newest page after missed events. The lobby decides
 // which peer is open; the thread keeps that peer's messages right.
 
-import { nextTick, ref, toRaw } from 'vue';
+import { nextTick, ref, toRaw, watch } from 'vue';
 import { plainSnapshot } from '@/shared/utils/plain-snapshot';
 import { fetchThreadPage, markThreadRead, type DirectMessage } from '@/api/dm';
 import type { PublicUser } from '@/api/friends';
@@ -12,6 +12,8 @@ import { createAnchoredHistory } from '@/shared/chat/anchored-history';
 import { createHistoryCache } from '@/shared/chat/history-cache';
 import { createReadReconciliation } from '@/shared/chat/read-reconciliation';
 import { createTrailingTask } from '@/shared/utils/trailing-task';
+import { useFriendCallStore } from '@/features/friend-call/friend-call.store';
+import { isAppVisible, onAppVisibilityChange } from '@/platform/app-visibility';
 
 /** Conversations kept between visits, by peer id. */
 const dmHistoryCache = createHistoryCache<DirectMessage>((messages) =>
@@ -37,6 +39,10 @@ export function useDmThread(isOpen: (peerId: string) => boolean) {
   const history = createAnchoredHistory<DirectMessage>({
     loadPage: async (peerId, request) => fetchThreadPage(peerId, request),
     compare: (left, right) => left.createdAt - right.createdAt || left.id.localeCompare(right.id),
+    reconcile: (known, incoming) =>
+      known.call && (!incoming.call || known.call.revision > incoming.call.revision)
+        ? { ...incoming, call: known.call }
+        : incoming,
     cache: dmHistoryCache,
     onChange: (state) => {
       messages.value = state.messages;
@@ -64,7 +70,41 @@ export function useDmThread(isOpen: (peerId: string) => boolean) {
     });
     readReconciliation = reconciliation;
     if (!loading.value) noteLatestRendered();
+    const calls = useFriendCallStore();
+    let openingWatermark = calls.missedForPeer(peerId)?.watermark;
+    let awaitingBootstrap = !calls.missedLoaded;
+    const visible = ref(isAppVisible());
+    const stopVisibility = onAppVisibilityChange((value) => (visible.value = value));
+    const stopMissed = watch(
+      () =>
+        [
+          calls.missedForPeer(peerId)?.watermark,
+          calls.missedLoaded,
+          messages.value,
+          loading.value,
+          visible.value
+        ] as const,
+      ([watermark, loaded, rendered, isLoading, isVisible]) => {
+        if (awaitingBootstrap && loaded) {
+          awaitingBootstrap = false;
+          openingWatermark = watermark;
+        }
+        if (!isOpen(peerId) || isLoading || !isVisible || !watermark) return;
+        const knownWhenOpened =
+          openingWatermark?.messageId === watermark.messageId && openingWatermark.missedAt === watermark.missedAt;
+        const renderedMiss = rendered.some(
+          (message) =>
+            message.id === watermark.messageId &&
+            message.recipientId === calls.userId &&
+            message.call?.missedAt === watermark.missedAt
+        );
+        if (knownWhenOpened || renderedMiss) void calls.acknowledgeMissed(peerId, watermark);
+      },
+      { immediate: true, flush: 'post' }
+    );
     return () => {
+      stopMissed();
+      stopVisibility();
       reconciliation.dispose();
       if (readReconciliation === reconciliation) readReconciliation = null;
     };

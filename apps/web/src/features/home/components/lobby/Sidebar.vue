@@ -1,10 +1,7 @@
 <script setup lang="ts">
-import { badgeOf } from '@/shared/badges';
 import {
   Tooltip,
   IconButton,
-  Badge,
-  AccountBadge,
   Avatar,
   Button,
   DropdownMenu,
@@ -14,14 +11,14 @@ import {
   Pressable
 } from '@voiceroom/ui-kit/components';
 import { t } from '@/shared/i18n';
-import { Bell, BellOff, LayoutDashboard, Settings, UserPlus, Users } from '@lucide/vue';
+import { Bell, LayoutDashboard, Settings, UserPlus, Users } from '@lucide/vue';
 import { computed, ref } from 'vue';
 import type { AuthUser } from '@/api/auth';
 import type { Friend } from '@/api/friends';
 import EmojiText from '@/shared/chat/EmojiText.vue';
 import BetaMark from '@/shared/components/BetaMark.vue';
 import { useNotificationPreferencesStore } from '@/shared/notifications/preferences.store';
-import { effectivePresenceStatus, normalizePresenceStatus, type PresenceStatus } from '@/shared/presence';
+import { normalizePresenceStatus, type PresenceStatus } from '@/shared/presence';
 import { iconSm } from '@voiceroom/ui-kit/icon-defaults';
 import { displayNameOf } from '@/shared/utils/display-name';
 import type { ActiveVoice } from '../../model/active-voice';
@@ -29,6 +26,7 @@ import type { FriendMenuTarget } from '../../model/friend-menu';
 import { useLobby } from '../../model/lobby-context';
 import SidebarDownload from '../SidebarDownload.vue';
 import FriendContextMenu from './FriendContextMenu.vue';
+import SidebarFriendRow from './SidebarFriendRow.vue';
 import VoiceCallWidget from './VoiceCallWidget.vue';
 
 const lobby = useLobby();
@@ -87,10 +85,6 @@ const statusOptions = computed<ReadonlyArray<{ value: PresenceStatus; label: str
   ]
 );
 const statusSaving = ref<PresenceStatus | null>(null);
-
-function friendPresence(entry: Friend): PresenceStatus {
-  return effectivePresenceStatus(entry.online, entry.user.presenceStatus, entry.user.doNotDisturb);
-}
 
 function openFriendMenu(event: MouseEvent | KeyboardEvent, friend: Friend): void {
   if (event instanceof KeyboardEvent && event.key !== 'ContextMenu' && !(event.shiftKey && event.key === 'F10')) {
@@ -178,51 +172,16 @@ async function selectStatus(value: string | undefined, close: () => void): Promi
         </Button>
       </div>
       <template v-else>
-        <Pressable
+        <SidebarFriendRow
           v-for="entry in sortedFriends"
           :key="entry.user.id"
-          inset
-          class="sidebar__row"
-          aria-haspopup="menu"
-          :aria-current="lobby.selectedFriendId === entry.user.id && lobby.view === 'dm' ? 'true' : undefined"
-          @click="lobby.openDm(entry.user.id)"
-          @contextmenu="openFriendMenu($event, entry)"
-          @keydown="openFriendMenu($event, entry)"
-        >
-          <Avatar
-            :name="displayNameOf(entry.user)"
-            :src="entry.user.avatarUrl"
-            :color-key="entry.user.avatarColorKey"
-            :background="entry.user.avatarAccent || undefined"
-            :online="friendPresence(entry) === 'online'"
-            :afk="friendPresence(entry) === 'away'"
-            :dnd="friendPresence(entry) === 'dnd'"
-            show-dot
-            :size="32"
-            ring="var(--vr-surface)"
-          />
-          <div class="sidebar__row-body">
-            <div class="sidebar__row-title">
-              <div class="sidebar__row-name">
-                <EmojiText :text="displayNameOf(entry.user)" /><AccountBadge :badge="badgeOf(entry.user.id)" />
-              </div>
-              <span
-                v-if="notificationPreferences.mutedPeerIds.includes(entry.user.id)"
-                class="sidebar__row-muted"
-                role="img"
-                :aria-label="t('Уведомления отключены')"
-                :title="t('Уведомления отключены')"
-              >
-                <BellOff v-bind="iconSm" aria-hidden="true" />
-              </span>
-            </div>
-          </div>
-          <Badge
-            v-if="entry.unreadCount > 0"
-            :tone="notificationPreferences.mutedPeerIds.includes(entry.user.id) ? 'muted' : 'accent'"
-            :count="entry.unreadCount"
-          />
-        </Pressable>
+          :friend="entry"
+          :muted="notificationPreferences.mutedPeerIds.includes(entry.user.id)"
+          :selected="lobby.selectedFriendId === entry.user.id && lobby.view === 'dm'"
+          :in-call="activeVoice?.friendCall?.peerId === entry.user.id && activeVoice.friendCall.status !== 'waiting'"
+          @open="lobby.openDm(entry.user.id)"
+          @menu="openFriendMenu($event, entry)"
+        />
       </template>
     </div>
 

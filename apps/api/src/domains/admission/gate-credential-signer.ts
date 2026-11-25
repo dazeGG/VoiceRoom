@@ -7,6 +7,7 @@ export type GatePrincipalType = 'account' | 'guest';
 
 export type GateClaims = {
   cid: string;
+  call?: true;
   companion?: true;
   exp: number | null;
   iat: number;
@@ -24,6 +25,7 @@ export type GateVerification =
 
 export type GateSignInput = {
   credentialId?: string | undefined;
+  call?: true | undefined;
   companion?: true | undefined;
   expiresAt?: number | null;
   issuedAt?: number | undefined;
@@ -87,6 +89,7 @@ function createGateCredentialSigner({
 
   function sign({
     credentialId = crypto.randomUUID(),
+    call,
     companion,
     expiresAt,
     issuedAt = nowMs(),
@@ -98,6 +101,7 @@ function createGateCredentialSigner({
   }: GateSignInput = {}): string {
     const body = {
       cid: credentialId || '',
+      call,
       companion,
       exp: expiresAt === null ? null : Number(expiresAt),
       iat: Number(issuedAt),
@@ -143,11 +147,12 @@ function createGateCredentialSigner({
     }
     // Only this signer writes payloads, so a signed one is always an object.
     if (!isRecord(claims)) return { ok: false, code: 'malformed_payload' };
-    const { cid, companion, room, peer, pId, pType, iat, exp } = claims;
+    const { cid, call, companion, room, peer, pId, pType, iat, exp } = claims;
     const pEpoch = Number(claims.pEpoch);
     if (
       typeof cid !== 'string' ||
       !cid ||
+      (call !== undefined && (call !== true || pType !== 'account' || companion !== undefined)) ||
       (companion !== undefined && companion !== true) ||
       typeof room !== 'string' ||
       !room ||
@@ -168,7 +173,10 @@ function createGateCredentialSigner({
       return { ok: false, code: 'issued_in_future', claims };
     }
     if (exp !== null && exp <= nowMs()) return { ok: false, code: 'expired', claims };
-    return { ok: true, claims: { cid, ...(companion && { companion }), exp, iat, peer, pEpoch, pId, pType, room } };
+    return {
+      ok: true,
+      claims: { cid, ...(call && { call }), ...(companion && { companion }), exp, iat, peer, pEpoch, pId, pType, room }
+    };
   }
 
   return {

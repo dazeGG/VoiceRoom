@@ -31,6 +31,9 @@ import { getConnectionStatusView } from '@voiceroom/call/engine/ui/status';
 import { createLogger, errorContext } from '@/shared/log';
 
 const log = createLogger('room:dock');
+withDefaults(defineProps<{ friendCall?: { groupLabel: string; leaveLabel: string; leave: () => void } | null }>(), {
+  friendCall: null
+});
 const devices = useRoomDeviceUiStore();
 const screenUi = useScreenUiStore();
 
@@ -111,11 +114,13 @@ function exitScreenView(): void {
     :camera-menu="devices.cameraPopoverOpen"
     :hide-leave-button="screenUi.hideLeaveButton"
     :show-screen-exit="screenUi.showScreenExit"
+    :group-label="friendCall?.groupLabel"
+    :leave-label="friendCall?.leaveLabel"
     @toggle-microphone="handleMicButtonClick"
     @toggle-output="toggleOutputMute()"
     @toggle-camera="void toggleCamera()"
     @toggle-screen="handleScreenButtonClick"
-    @leave="handleLeaveButtonClick"
+    @leave="friendCall ? friendCall.leave() : handleLeaveButtonClick()"
     @exit-screen="exitScreenView"
     @toggle-device-menu="toggleDeviceMenu"
     @update-device-menu="updateDeviceMenu"

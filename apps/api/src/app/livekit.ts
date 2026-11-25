@@ -23,6 +23,7 @@ export function createLiveKit(
     config: liveKitConfig,
     roomName,
     removeParticipant: admin.removeParticipant,
+    removeCallParticipant: (roomId: string, peerId: string) => admin.removeParticipant(roomId, peerId, true),
     removeNativeVoiceParticipant: admin.removeNativeVoiceParticipant,
     setParticipantMuted: admin.setParticipantMuted
   };

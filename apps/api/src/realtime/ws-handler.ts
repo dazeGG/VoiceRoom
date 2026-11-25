@@ -19,12 +19,14 @@ import { createLogger, hashIp } from '../lib/logger.ts';
 import { createRateLimiter } from '../lib/rate-limit.ts';
 import type { Logger } from '../platform/types.ts';
 import type { ResolvedSession, SessionUser } from '../app/context.ts';
+import { DomainError } from '../platform/http/domain-error.ts';
 
 // Validated commands always carry a payload object.
 type InboundEnvelope = ClientCommand;
 /** What the socket reads of the signed-in account: what a join reads, and its presence. */
 type WsUser = NonNullable<JoinUser> & Partial<Pick<SessionUser, 'presenceStatus'>>;
 export interface WsRoomRuntime {
+  isCallRoom?(roomId: string): boolean;
   subscribePreview(connection: WsConnection, roomId: string): Promise<unknown>;
   unsubscribePreview(connection: WsConnection, roomId: string): unknown;
   joinVoiceRoom(
@@ -79,6 +81,7 @@ function closeReasonText(reason: unknown): string {
 function createWsHandler({
   registry,
   roomRuntime,
+  joinCallVoice,
   surface = 'main',
   meetChat,
   getBoundary,
@@ -99,6 +102,16 @@ function createWsHandler({
   widgetAdmissionEnabled?: () => Promise<boolean>;
   widgetLocalAllowed?: () => boolean;
   roomRuntime: WsRoomRuntime;
+  joinCallVoice?:
+    | ((
+        connection: WsConnection,
+        auth: ResolvedSession,
+        callId: string,
+        proof: string,
+        ip: string,
+        requestId?: string
+      ) => Promise<JoinResult>)
+    | undefined;
   resolveSessionUser?: (req: IncomingMessage) => Promise<ResolvedSession | null>;
   getFriendIds?: (userId: string) => Promise<string[]>;
   isUserOnline?: (userId: string) => boolean;
@@ -197,13 +210,38 @@ function createWsHandler({
       registry.sendToConnection(connection, buildServerErrorEnvelope('forbidden', 'Command unavailable', envelope.id));
       return;
     }
-    if (
-      'roomId' in envelope.payload &&
-      getBoundary &&
-      !roomAllowsSurface(await getBoundary(envelope.payload.roomId), surface)
-    ) {
-      registry.sendToConnection(connection, buildServerErrorEnvelope('room_not_found', 'Room not found', envelope.id));
-      return;
+    const active = connection.activeVoice;
+    const existingSeatCommand =
+      surface === 'main' &&
+      !connection.guest &&
+      active !== null &&
+      (envelope.type === 'room.leave' ||
+        envelope.type === 'room.peer.update' ||
+        envelope.type === 'room.media.request' ||
+        envelope.type === 'room.voice.report') &&
+      active.roomId === envelope.payload.roomId &&
+      active.peerId === envelope.payload.peerId &&
+      active.sessionToken === envelope.payload.sessionToken;
+    const callLeave =
+      envelope.type === 'room.leave' &&
+      existingSeatCommand &&
+      roomRuntime.isCallRoom?.(envelope.payload.roomId) === true;
+    if ('roomId' in envelope.payload && getBoundary && !callLeave) {
+      const boundary = await getBoundary(envelope.payload.roomId);
+      if (!roomAllowsSurface(boundary, surface) && !(boundary?.kind === 'call' && existingSeatCommand)) {
+        if (
+          envelope.type === 'room.leave' &&
+          surface === 'main' &&
+          !connection.guest &&
+          (!boundary || boundary.kind === 'call')
+        )
+          return;
+        registry.sendToConnection(
+          connection,
+          buildServerErrorEnvelope('room_not_found', 'Room not found', envelope.id)
+        );
+        return;
+      }
     }
     if (
       !ceiling.screenShare &&
@@ -246,6 +284,34 @@ function createWsHandler({
 
       case 'room.preview.unsubscribe': {
         roomRuntime.unsubscribePreview(connection, envelope.payload.roomId);
+        return;
+      }
+
+      case 'call.voice.join': {
+        const auth = joinCallVoice && surface === 'main' && !connection.guest ? await resolveSessionUser(req) : null;
+        if (connection.closed) return;
+        let result: JoinResult = { ok: false, code: 'call_not_found' };
+        if (joinCallVoice && auth) {
+          try {
+            result = await joinCallVoice(
+              connection,
+              auth,
+              envelope.payload.callId,
+              envelope.payload.seatToken,
+              getClientIp?.(req) ?? '',
+              envelope.id
+            );
+          } catch (error) {
+            if (!(error instanceof DomainError)) throw error;
+            result = { ok: false, code: error.code, message: error.message };
+          }
+        }
+        if (!result.ok) {
+          registry.sendToConnection(
+            connection,
+            buildServerErrorEnvelope(result.code, result.message ?? 'Call voice join refused', envelope.id)
+          );
+        }
         return;
       }
 
@@ -302,9 +368,9 @@ function createWsHandler({
         logger.info(
           {
             evt: LOG_EVENTS.ROOM_LEFT,
-            connId: connection.id,
-            userId: connection.userId || undefined,
-            roomId: ceiling.guestOnly ? undefined : envelope.payload.roomId
+            connId: callLeave ? undefined : connection.id,
+            userId: callLeave ? undefined : connection.userId || undefined,
+            roomId: callLeave || ceiling.guestOnly ? undefined : envelope.payload.roomId
           },
           'room left'
         );

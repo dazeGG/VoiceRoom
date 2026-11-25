@@ -90,6 +90,7 @@ function directMessageFromHistory(message: DirectHistoryMessage): DirectMessage 
     editedAt: message.editedAt ?? null,
     readAt: message.readAt ?? null,
     invite,
+    ...(metadata.kind === 'voice-call' && { call: metadata.call }),
     cursor: message.cursor,
     readCursor: message.readCursor,
     attachments: message.attachments,

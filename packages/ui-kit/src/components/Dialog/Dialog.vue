@@ -6,6 +6,7 @@ import { useTemplateRef } from 'vue';
 import IconButton from '../IconButton/IconButton.vue';
 import { isToastPress } from './toast-press';
 import type { DialogProps } from './types';
+import { registerDialogOverlayTarget } from './dialog-overlay-target';
 
 defineOptions({ inheritAttrs: false });
 defineSlots<{
@@ -22,6 +23,7 @@ const props = withDefaults(defineProps<DialogProps>(), {
   initialFocus: '[data-dialog-initial-focus]'
 });
 const overlay = useTemplateRef<HTMLElement>('overlay');
+registerDialogOverlayTarget(useTemplateRef<HTMLElement>('noticeTarget'));
 
 // Reka traps Tab, closes on Escape and on a press outside the card, and returns
 // focus to the element that was focused before the dialog opened. Only the
@@ -120,6 +122,7 @@ function onTab(event: KeyboardEvent): void {
           <footer v-if="$slots.footer" class="ui-dialog__foot">
             <slot name="footer" />
           </footer>
+          <div v-if="modal" ref="noticeTarget"></div>
         </DialogContent>
       </div>
     </DialogPortal>

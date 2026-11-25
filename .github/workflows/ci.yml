@@ -277,6 +277,8 @@ jobs:
           cache: npm
       - run: npm ci --workspace @voiceroom/web --workspace @voiceroom/shared --workspace @voiceroom/ui --workspace @voiceroom/ui-kit --workspace @voiceroom/call
       - name: Start the voice stack and pull the Playwright image
+        env:
+          VOICE_CALLS_ENABLED: "true"
         run: |
           version=$(node -p "require('./package-lock.json').packages['node_modules/@playwright/test'].version")
           image="mcr.microsoft.com/playwright:v${version}-noble"
@@ -293,6 +295,7 @@ jobs:
             e2e/room-voice.spec.ts e2e/rnnoise-assets.spec.ts e2e/microphone-recovery.spec.ts \
             e2e/chat-image-paste.spec.ts e2e/manual-chat-polish.spec.ts e2e/chat-drafts.spec.ts \
             e2e/chat-typing.spec.ts e2e/guest-account-cta.spec.ts e2e/mobile-room.spec.ts \
+            e2e/friend-call.spec.ts \
             --project=chromium --retries=0
       # No teardown step: a hosted runner is discarded after the job together
       # with its containers and volumes.

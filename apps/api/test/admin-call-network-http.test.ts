@@ -19,6 +19,8 @@ import { createAdminRoomsRepository } from '../src/domains/admin/admin-rooms.rep
 import { cookieFrom, registerAccount, request, startApiServer } from './fakes/server-process.ts';
 import { staffCookie } from './staff-session.ts';
 import { createTestDatabase } from './db-harness.ts';
+import { seedVoiceCall } from './fixtures/voice-call.ts';
+import { createCallRingRepository } from '../src/domains/rings/call-rings.repository.ts';
 import { rollBackThrough } from './migration-steps.ts';
 import { countWsType, joinVoiceRoom, openWs, sendWs, waitForWsType, type WsSession } from './ws-harness.ts';
 import { defined } from './helpers/assert-defined.ts';
@@ -254,6 +256,60 @@ test('a live call counts from its call clock, and a stay keeps how its voice wen
 
   aliceWs.ws.close();
   guestWs.ws.close();
+});
+
+test('the feedback endpoint refuses private call rooms', { skip }, async (t) => {
+  const { socketPath, pool, alice, aliceId } = await startWithAdmin(t, 'private-feedback-submit-');
+  const { room } = await seedVoiceCall(pool, aliceId, ADMIN_ID);
+  const submit = (roomId: string) =>
+    request(socketPath, {
+      method: 'POST',
+      pathname: '/api/feedback/calls',
+      cookie: alice,
+      body: { rating: 'good', tags: [], call: { roomId, durationS: 60, peers: 2, platform: 'browser', quality: null } }
+    });
+  assert.equal((await submit(room.id)).status, 404);
+  assert.equal((await pool.query('SELECT 1 FROM call_feedback WHERE room_id=$1', [room.id])).rowCount, 0);
+  assert.equal((await submit('kitchen')).status, 201);
+});
+
+test('staff never sees existing private feedback, including after room pruning', { skip }, async (t) => {
+  const { socketPath, pool, admin, aliceId } = await startWithAdmin(t, 'private-feedback-read-');
+  const { room, callId } = await seedVoiceCall(pool, aliceId, ADMIN_ID);
+  await pool.query(
+    `INSERT INTO call_feedback (user_id, rating, tags, room_id, duration_s, peers, platform)
+     VALUES ($1, 'bad', ARRAY['poor_sound'], $2, 60, 2, 'browser'),
+            ($1, 'good', ARRAY[]::text[], 'kitchen', 60, 2, 'browser')`,
+    [aliceId, room.id]
+  );
+  const assertVisible = async () => {
+    const page = await request(socketPath, { pathname: '/api/admin/feedback', cookie: admin }, AdminCallFeedbackPage);
+    assert.equal(page.status, 200);
+    assert.deepEqual(
+      page.body.entries.map((entry) => entry.roomId),
+      ['kitchen']
+    );
+    assert.deepEqual(page.body.summary, { good: 1, bad: 0, tags: [] });
+  };
+  await assertVisible();
+  const calls = createCallRingRepository(pool);
+  const closedAt = Date.now();
+  await calls.update(callId, null, (call) => ({
+    call: {
+      ...call,
+      phase: 'closed',
+      attemptResult: 'cancelled',
+      aloneDeadline: null,
+      endReason: 'cancelled',
+      endedAt: closedAt
+    },
+    result: null
+  }));
+  const [closed] = await calls.listClosed();
+  assert.ok(closed);
+  assert.equal(await calls.prune(closed, closedAt + 86_400_000), true);
+  assert.equal((await pool.query('SELECT 1 FROM call_feedback WHERE room_id=$1', [room.id])).rowCount, 0);
+  await assertVisible();
 });
 
 test(

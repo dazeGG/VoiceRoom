@@ -12,7 +12,11 @@ const percent = computed(() =>
 
 <template>
   <div class="ui-progress-row">
-    <div class="ui-progress-row__head" :class="{ 'ui-progress-row__head--compact': hideLabel }">
+    <div
+      v-if="variant !== 'track'"
+      class="ui-progress-row__head"
+      :class="{ 'ui-progress-row__head--compact': hideLabel }"
+    >
       <span :id="labelId" :class="{ 'ui-progress-row__label--hidden': hideLabel }">{{ label }}</span>
       <span v-if="percent !== null" class="ui-progress-row__percent" aria-hidden="true"
         >{{ Math.round(percent) }}%</span
@@ -24,12 +28,14 @@ const percent = computed(() =>
         `ui-progress--${size}`,
         {
           'ui-progress--indeterminate': percent === null,
+          'ui-progress--track': variant === 'track',
           'ui-progress--error': error
         }
       ]"
       :model-value="percent"
       :get-value-label="() => undefined"
-      :aria-labelledby="labelId"
+      :aria-hidden="variant === 'track' || undefined"
+      :aria-labelledby="variant === 'track' ? undefined : labelId"
     >
       <ProgressIndicator class="ui-progress__fill" :style="{ '--progress-value': `${percent ?? 0}%` }" />
     </ProgressRoot>

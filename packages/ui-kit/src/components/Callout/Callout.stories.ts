@@ -17,7 +17,8 @@ const meta = {
           '- Offer tones `info`, `warning` (`--vr-away`), `danger` and `accent` (for suggestions).',
           '- Use a title of 14/600 and text of 13 in `--vr-text-2`.',
           '- Use sm buttons for actions, and an IconButton 28 to close.',
-          '- Use the pill layout for a compact notice with a status dot and an inline xs action.'
+          '- Use the pill layout for a compact notice with a status dot and an inline xs action.',
+          '- Use the countdown layout with an absolute deadline in milliseconds. The optional title sits above the timer. At 1:00 the tone switches to danger.'
         ].join('\n')
       }
     }
@@ -68,4 +69,29 @@ export const Pill: Story = {
 export const PillWithNote: Story = {
   args: { layout: 'pill', tone: 'accent', text: 'после звонка' },
   parameters: { layout: 'centered' }
+};
+
+function countdown(remaining: number): NonNullable<Story['render']> {
+  return (args) => ({
+    components: { Button, Callout },
+    setup: () => ({ args, deadline: Date.now() + remaining }),
+    template: `<Callout v-bind="args" :deadline="deadline">
+      <template #actions><Button variant="primary" size="sm">Позвонить снова</Button></template>
+    </Callout>`
+  });
+}
+
+export const CountdownAlone: Story = {
+  args: { layout: 'countdown', title: 'Аня покидает звонок', text: '' },
+  render: countdown(299_000)
+};
+export const CountdownNoAnswer: Story = {
+  args: { layout: 'countdown', title: '', text: 'Можно позвонить ещё раз или завершить звонок.' },
+  render: countdown(255_000)
+};
+export const CountdownDanger: Story = { ...CountdownAlone, render: countdown(42_000) };
+export const CountdownExpired: Story = { ...CountdownAlone, render: countdown(0) };
+export const CountdownReducedMotion: Story = {
+  ...CountdownAlone,
+  parameters: { docs: { description: { story: 'The clock and tone changes use no animation.' } } }
 };

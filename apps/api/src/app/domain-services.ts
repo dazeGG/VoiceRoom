@@ -13,7 +13,7 @@ import packageJson from '../../package.json' with { type: 'json' };
 import { createAccountService } from '../domains/account/account.service.ts';
 import { createAdminService } from '../domains/admin/admin.service.ts';
 import { createAdminAccountsService } from '../domains/admin/admin-accounts.service.ts';
-import { callSince, createAdminRoomsService } from '../domains/admin/admin-rooms.service.ts';
+import { callSince, createAdminRoomsService, isAdminPresenceRoom } from '../domains/admin/admin-rooms.service.ts';
 import { createAdminWidgetsService } from '../domains/admin/admin-widgets.service.ts';
 import { createSessionCookies } from '../domains/account/session-cookie.ts';
 import type { AdmissionService } from '../domains/admission/admission.service.ts';
@@ -49,6 +49,8 @@ export interface DomainServiceDeps {
   limits: RateLimits;
   logger: () => FastifyBaseLogger;
   admission: Pick<AdmissionService, 'revokeForServerMute'>;
+  invalidateCalls?(userId: string, peerId?: string): void;
+  refreshCallMisses?(this: void, recipientId: string, senderId: string): void;
   /** What the realtime layer holds right now: the admin panel shows it. */
   liveNumbers: () => LiveNumbers;
   /** The accounts with a socket open right now. */
@@ -153,6 +155,7 @@ export function createDomainServices(deps: DomainServiceDeps) {
     deletions: services.getAccountDeletionRepository,
     loginFailures: limits.loginFailures,
     endSessionConnections: (input) => hub.accountLifecycle.endSessionConnections(input),
+    invalidateCalls: (userId) => deps.invalidateCalls?.(userId),
     notifyUser: (userId, event) => hub.broadcastToUser(userId, event),
     queuePush: (userId, payload, options) => hub.notifications.queuePush(userId, payload, options),
     refreshActiveProfile: (user) => hub.roomLifecycle.refreshActiveProfile(user),
@@ -180,6 +183,8 @@ export function createDomainServices(deps: DomainServiceDeps) {
     ringInvitation: rings.create,
     isOnline: (userId) => hub.isUserOnline(userId),
     notifyUser: (userId, event) => hub.broadcastToUser(userId, event),
+    invalidateCalls: (userId, peerId) => deps.invalidateCalls?.(userId, peerId),
+    ...(deps.refreshCallMisses ? { refreshCallMisses: deps.refreshCallMisses } : {}),
     queuePush: (userId, payload, context) => hub.notifications.queuePush(userId, payload, context)
   });
   const directMessages = createDirectMessagesService({
@@ -198,6 +203,7 @@ export function createDomainServices(deps: DomainServiceDeps) {
     projectReply: hub.projection.projectReply,
     directEmit: config.MESSAGE_DIRECT_EMIT_ENABLED,
     notifyUser: (userId, event) => hub.broadcastToUser(userId, event),
+    ...(deps.refreshCallMisses ? { callMessageDeleted: deps.refreshCallMisses } : {}),
     notifyRecipient: (recipientId, sender, message) =>
       hub.notifications.broadcastDmNotification(recipientId, sender, message),
     scheduleLinkPreview: hub.linkPreviews.scheduleDirectLinkPreview
@@ -271,12 +277,8 @@ export function createDomainServices(deps: DomainServiceDeps) {
     stays: (asks) => required(services.getAdminRoomsRepository()).lastStays(asks)
   });
 
-  const adminPresenceRooms = () =>
-    [...hub.presenceRooms.values()].filter(
-      (room): room is typeof room & { kind?: 'main' | 'widget' } => room.kind !== 'meet'
-    );
   const liveCalls = () =>
-    adminPresenceRooms().flatMap((room) => {
+    [...hub.presenceRooms.values()].filter(isAdminPresenceRoom).flatMap((room) => {
       const since = room.peers.size > 0 ? callSince(room) : null;
       return since === null ? [] : [{ roomId: room.id, since }];
     });
@@ -311,7 +313,7 @@ export function createDomainServices(deps: DomainServiceDeps) {
 
   const adminRooms = createAdminRoomsService({
     staff,
-    presenceRooms: adminPresenceRooms,
+    presenceRooms: () => hub.presenceRooms.values(),
     repository: () => required(services.getAdminRoomsRepository()),
     describeAddress: services.describeAddress,
     feedbackInRoom: async (roomId, from, until) =>

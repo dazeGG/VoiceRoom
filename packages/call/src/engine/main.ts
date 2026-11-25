@@ -45,6 +45,7 @@ import {
 
 import { createLogger, errorContext, reportClientLogs } from './diagnostics';
 import { DISPLAY_NAME_STORAGE_KEY, readStorage } from './core/storage';
+import type { PeerSession } from './core/types';
 
 const log = createLogger('room');
 
@@ -69,6 +70,13 @@ export function mountRoomClient(
     shell?: CallShell;
     autoJoin?: boolean;
     guestEntry?: { displayName: string; checkedAt: number };
+    friendCall?: {
+      callId: string;
+      session: PeerSession;
+      name: string;
+      onMissingMicrophone: () => void;
+      onJoinFailed: () => void;
+    };
   } = {}
 ): () => void {
   const ports = getCallPorts();
@@ -199,10 +207,12 @@ export function mountRoomClient(
   }
 
   const mountedRoomId = options.roomId ?? '';
+  const friendCall = options.friendCall;
+  state.callId = friendCall?.callId;
   state.roomRoute = options.roomRoute ?? Boolean(mountedRoomId);
   state.missingRoomLabel = options.missingRoomLabel ?? '';
   if (mountedRoomId) {
-    const peerSession = ports.identity.credentials(mountedRoomId);
+    const peerSession = friendCall?.session ?? ports.identity.credentials(mountedRoomId);
     state.connecting = false;
     state.joined = false;
     state.voiceRealtimeTeardown?.();
@@ -211,7 +221,7 @@ export function mountRoomClient(
     state.serverPeerIds.clear();
     state.serverPeerSyncReady = false;
     state.self = null;
-    state.roomName = '';
+    state.roomName = friendCall?.name ?? '';
     state.roomAvatarUrl = '';
     state.roomIsStatic = false;
     state.roomId = mountedRoomId;
@@ -224,7 +234,10 @@ export function mountRoomClient(
     state.sessionToken = '';
   }
 
-  const savedName = options.guestEntry?.displayName ?? cleanDisplayName(readStorage(DISPLAY_NAME_STORAGE_KEY));
+  const savedName =
+    (friendCall && ports.identity.current().profile?.displayName) ??
+    options.guestEntry?.displayName ??
+    cleanDisplayName(readStorage(DISPLAY_NAME_STORAGE_KEY));
   state.savedName = savedName;
   useStartUiStore().nameInput = savedName;
   updateNameStatuses(savedName);
@@ -263,7 +276,12 @@ export function mountRoomClient(
   if (state.roomRoute && !state.roomId) {
     showRoomNotFound();
   } else if (state.roomId) {
-    if (options.guestEntry) {
+    if (friendCall) {
+      // The signed-in action admitted this seat. It has no public room status or preview.
+      void joinRoom(undefined, friendCall.onMissingMicrophone).then(() => {
+        if (!listenerSignal.aborted && !state.joined) friendCall.onJoinFailed();
+      });
+    } else if (options.guestEntry) {
       rememberRoomStatus(state.roomId, { name: '', avatarUrl: null, isStatic: false }, options.guestEntry.checkedAt);
       showRoomScreen();
     } else {
@@ -278,6 +296,7 @@ export function mountRoomClient(
 
 function unmountRoomClient(): void {
   leaveRoom();
+  state.callId = undefined;
   void syncDesktopGlobalHotkeys(false);
   desktopHotkeysTeardown?.();
   desktopHotkeysTeardown = null;

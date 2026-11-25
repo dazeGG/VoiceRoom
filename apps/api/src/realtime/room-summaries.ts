@@ -61,7 +61,7 @@ export function createRoomSummaries(deps: RoomSummaryDeps) {
 
   async function flushSummary(roomId: string): Promise<void> {
     const dbRoom = await getRoomStore().getRoom(roomId);
-    if (!dbRoom) return;
+    if (!dbRoom || dbRoom.kind === 'call') return;
     const presence = presenceRooms.get(roomId);
     const peers = presence ? Array.from(presence.peers.values()).map(publicPeer) : [];
     const recipients = await resolveSummaryRecipients(roomId);
@@ -76,7 +76,7 @@ export function createRoomSummaries(deps: RoomSummaryDeps) {
   ): Promise<boolean> {
     if (!roomId || !userId) return false;
     const dbRoom = room || (await getRoomStore().getRoom(roomId));
-    if (!dbRoom) return false;
+    if (!dbRoom || dbRoom.kind === 'call') return false;
     const presence = presenceRooms.get(roomId);
     const peers = roomPeers || (presence ? Array.from(presence.peers.values()).map(publicPeer) : []);
     const unreadCount = await resolveRoomUnreadCount(roomId, userId);
@@ -97,7 +97,7 @@ export function createRoomSummaries(deps: RoomSummaryDeps) {
   });
 
   function scheduleSummaryBroadcast(roomId: string): void {
-    if (!roomId) return;
+    if (!roomId || presenceRooms.get(roomId)?.kind === 'call') return;
     summaryCoalescer.schedule(roomId);
   }
 

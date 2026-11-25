@@ -15,6 +15,7 @@ import {
 } from './credential-boundary.service.ts';
 import { kyselyOn } from '../../platform/db/kysely.ts';
 import { createGateCredentialRepository } from './gate-credential.repository.ts';
+import { callGateAllows } from './call-gate.repository.ts';
 import { LOG_EVENTS } from '../../lib/log-events.ts';
 import { createLogger } from '../../lib/logger.ts';
 import { DEFAULT_ROOM_PREFIX, getLiveKitRoomName, verifyAccessTokenBinding } from './livekit-token-binding.mts';
@@ -38,6 +39,7 @@ type GateDecision =
       claims: unknown;
       strippedPath: string;
       widget?: boolean;
+      call?: boolean;
       generation?: string;
       companion?: CompanionWindow;
     }
@@ -288,6 +290,16 @@ function createLiveKitAuthGateService({
         result.claims.room
       ]);
       if (!room.rows[0]) return { ok: false, code: 'room_not_found', strippedPath };
+      if (room.rows[0].kind === 'call' || result.claims.call) {
+        if (
+          room.rows[0].kind !== 'call' ||
+          !result.claims.call ||
+          result.claims.pType !== 'account' ||
+          !(await callGateAllows(kyselyOn(pool), result.claims))
+        )
+          return { ok: false, code: 'room_not_found', strippedPath };
+        return { ok: true, claims: result.claims, strippedPath, call: true };
+      }
       if (room.rows[0].kind === 'widget') {
         const generation = await owner?.capture();
         if (generation === null || generation === undefined)
@@ -295,6 +307,7 @@ function createLiveKitAuthGateService({
         return { ok: true, claims: result.claims, strippedPath, widget: true, generation };
       }
     }
+    if (result.claims.call) return { ok: false, code: 'room_not_found', strippedPath };
     return { ok: true, claims: result.claims, strippedPath };
   }
 
@@ -426,6 +439,13 @@ function createLiveKitAuthGateService({
                     !owner.localEnabled() ||
                     token.cancelled
                   ) {
+                    cancel(token);
+                    return;
+                  }
+                }
+                if (decision.call) {
+                  const fresh = await authorize(request.url, request.headers);
+                  if (!fresh.ok || !fresh.call || token.cancelled) {
                     cancel(token);
                     return;
                   }

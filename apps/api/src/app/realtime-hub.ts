@@ -33,9 +33,10 @@ import { sessionAvatarColorKey, sessionDisplayName } from './session.ts';
 export interface RealtimeHubDeps {
   config: ReturnType<typeof readApiConfig>;
   services: ReturnType<typeof createServiceRegistry>;
-  liveKit: Pick<LiveKit, 'removeParticipant'>;
+  liveKit: Pick<LiveKit, 'removeParticipant' | 'removeCallParticipant'>;
   logger(this: void): FastifyBaseLogger;
   onVoiceRosterChange?(): void;
+  onCallVoiceChange?(roomId: string, userId: string, departed: boolean): void;
   /** Removes a stored avatar file (the avatars service, built after the hub). */
   removeAvatar(key: string | null | undefined, log: Pick<FastifyBaseLogger, 'error'> | undefined): Promise<void>;
 }
@@ -47,6 +48,7 @@ interface RealtimeStartOptions extends CallRealtimeStartOptions {
   widgetCanAdmit?: () => Promise<boolean>;
   widgetLocalAllowed?: () => boolean;
   nativeVoice?: NativeVoiceService;
+  joinCallVoice?: Parameters<typeof createWsHandler>[0]['joinCallVoice'];
 }
 
 export function createRealtimeHub(deps: RealtimeHubDeps) {
@@ -65,6 +67,7 @@ export function createRealtimeHub(deps: RealtimeHubDeps) {
     liveKit: deps.liveKit,
     logger: deps.logger,
     findRoomBan,
+    onCallDeparture: (roomId, userId) => deps.onCallVoiceChange?.(roomId, userId, true),
     accountPresence: {
       onPresenceChange: (friendId, userId, online) => {
         broadcastToUser(friendId, { type: 'presence', userId, online });
@@ -201,11 +204,15 @@ export function createRealtimeHub(deps: RealtimeHubDeps) {
       logger: options.logger
     });
     const startedRuntime = {
-      ...call.start(options, {
-        ...product.callEffects,
-        sessionAvatarColorKey,
-        ...(options.nativeVoice && { nativeVoice: options.nativeVoice })
-      }),
+      ...call.start(
+        options,
+        {
+          ...product.callEffects,
+          sessionAvatarColorKey,
+          ...(options.nativeVoice && { nativeVoice: options.nativeVoice })
+        },
+        (roomId, userId) => deps.onCallVoiceChange?.(roomId, userId, false)
+      ),
       ...product.handlers
     };
     roomRuntime = startedRuntime;
@@ -213,6 +220,7 @@ export function createRealtimeHub(deps: RealtimeHubDeps) {
     const wsHandler = createWsHandler({
       registry: wsRegistry,
       roomRuntime: startedRuntime,
+      joinCallVoice: options.joinCallVoice,
       getBoundary: getRoom,
       resolveSessionUser: options.resolveSession,
       getFriendIds: (userId) => services.getFriendStore().getFriendIds(userId),
@@ -266,6 +274,7 @@ export function createRealtimeHub(deps: RealtimeHubDeps) {
     registry: wsRegistry,
     runtime,
     presence: roomPresence,
+    callSeatCleanup: call.seatCleanup,
     recordOpenSessions: voiceStays.recordOpenSessions,
     resetPresence: () => {
       roomPresence.reset();

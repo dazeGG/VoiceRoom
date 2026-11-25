@@ -15,7 +15,7 @@ export function createVoiceStays(deps: {
   let sessionsClosed = false;
 
   function finishedSession(target: PresenceRoom, peer: RosterPeer, leftAt: number): FinishedVoiceSession | null {
-    if (!peer.joinedAt || target.kind === 'meet') return null;
+    if (!peer.joinedAt || target.kind === 'meet' || target.kind === 'call') return null;
     const userId = peer.accountUserId || null;
     return {
       roomId: target.id,

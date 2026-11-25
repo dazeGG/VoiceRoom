@@ -7,26 +7,28 @@ import {
   NativeVoiceRenewalBody
 } from '@voiceroom/shared/contracts/admission';
 import { api, ApiError } from '@/api/client';
+import { fetchCallVoiceToken } from '@/api/call-rings';
 import { ERROR_TEXTS } from '@/api/error-texts';
 import { fetchRoomStatus } from '@/api/rooms';
 import { preloadRuntimeConfig, resolveLiveKitUrls } from '@/platform/runtime-config';
 import type { CallTransport, CallRealtimeEvent, LiveKitCredentials } from '@voiceroom/call/engine/transport';
 
-async function requestLiveKitToken(input: {
-  name: string;
-  peerId: string;
-  roomId: string;
-  sessionToken: string;
-}): Promise<LiveKitCredentials> {
+async function requestLiveKitToken(
+  input: { name: string; peerId: string; roomId: string; sessionToken: string },
+  callId?: string
+): Promise<LiveKitCredentials> {
   // The address list comes from a second request; it goes out beside the token, not after it.
   preloadRuntimeConfig();
   const signal = AbortSignal.timeout(10_000);
-  const admission = await api
-    .post('/api/livekit-token', LiveKitAdmission, input, { bodySchema: LiveKitTokenBody, signal })
-    .catch((error: unknown) => {
-      if (signal.aborted) throw new ApiError(ERROR_TEXTS.unavailable, 0, { code: 'unavailable' });
-      throw error;
-    });
+  const pending = callId
+    ? waitForCallVoiceJoin(callId, input.sessionToken, signal).then(() =>
+        fetchCallVoiceToken(callId, input.sessionToken, signal)
+      )
+    : api.post('/api/livekit-token', LiveKitAdmission, input, { bodySchema: LiveKitTokenBody, signal });
+  const admission = await pending.catch((error: unknown) => {
+    if (signal.aborted) throw new ApiError(ERROR_TEXTS.unavailable, 0, { code: 'unavailable' });
+    throw error;
+  });
   return { ...admission, urls: await resolveLiveKitUrls(admission.url) };
 }
 
@@ -42,7 +44,8 @@ import {
   requestMediaGrant,
   setActiveVoiceResyncFailureHandler,
   subscribeRoomVoice,
-  updateVoicePeer
+  updateVoicePeer,
+  waitForCallVoiceJoin
 } from '@/entities/room/room-realtime';
 
 export function mapWebCallEvent(event: RealtimeEvent): CallRealtimeEvent | undefined {

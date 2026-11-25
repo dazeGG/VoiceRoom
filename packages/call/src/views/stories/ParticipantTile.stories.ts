@@ -57,6 +57,7 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Idle: Story = {};
+export const WithoutSpotlight: Story = { args: { staticTile: true, participant: { ...participant, screen: true } } };
 export const Speaking: Story = { args: { participant: { ...participant, speaking: true } } };
 export const Muted: Story = { args: { participant: { ...participant, muted: true, deafened: true } } };
 export const Sharing: Story = {

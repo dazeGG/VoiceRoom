@@ -30,7 +30,15 @@ defineSlots<{ fallback?(): unknown }>();
   <AvatarRoot
     :key="src ?? ''"
     as="span"
-    :class="['ui-avatar', { 'ui-avatar--squircle': shape === 'squircle' }]"
+    :class="[
+      'ui-avatar',
+      {
+        'ui-avatar--squircle': shape === 'squircle',
+        'ui-avatar--ringing': ringing,
+        'ui-avatar--ringing-animated': ringing === 'ringing',
+        'ui-avatar--ringing-stage': ringing && size >= 96
+      }
+    ]"
     :style="{
       '--avatar-dimension': size === 80 ? undefined : `var(--size-${size}, ${size}px)`,
       '--ring': ring,
