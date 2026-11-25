@@ -10,27 +10,29 @@ import { apiLanes, compareFixtures, runTestFiles } from '../ci/api-tests.mts';
 
 const runner = new URL('../ci/api-tests.mts', import.meta.url);
 const api = 'apps/api/test';
-const unit = api + '/no-db.test.ts';
-const integration = api + '/nested/no-db.test.ts';
+const unit = api + '/rooms/unit/no-db.test.ts';
+const integration = api + '/rooms/integration/no-db.test.ts';
 
 function fixture(t: TestContext) {
   const root = mkdtempSync(join(tmpdir(), 'vr-api-lanes-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
-  mkdirSync(join(root, api, 'nested'), { recursive: true });
+  for (const lane of ['unit', 'integration']) mkdirSync(join(root, api, 'rooms', lane), { recursive: true });
   writeFileSync(join(root, unit), '');
   writeFileSync(join(root, integration), '');
-  const manifest = (files: string[]) => writeFileSync(join(root, api, 'no-db-files.json'), JSON.stringify(files));
-  manifest([unit]);
-  return { root, manifest };
+  return { root };
 }
 
-test('an unproved API test defaults to integration; duplicate or stale admissions are an error', (t) => {
-  const { root, manifest } = fixture(t);
+test('domain and fixture directories assign each API test once; unknown or misplaced files fail closed', (t) => {
+  const { root } = fixture(t);
   assert.deepEqual(apiLanes(root), { unit: [unit], integration: [integration] });
-  manifest([unit, unit]);
-  assert.throws(() => apiLanes(root), /unique/);
-  manifest([api + '/absent.test.ts']);
-  assert.throws(() => apiLanes(root), /Unknown API test file/);
+  mkdirSync(join(root, api, 'media', 'integration'), { recursive: true });
+  const other = api + '/media/integration/photo.test.ts';
+  writeFileSync(join(root, other), '');
+  assert.deepEqual(apiLanes(root, 'rooms'), { unit: [unit], integration: [integration] });
+  assert.deepEqual(apiLanes(root, 'media'), { unit: [], integration: [other] });
+  assert.throws(() => apiLanes(root, 'roo'), /No API tests/);
+  writeFileSync(join(root, api, 'misplaced.test.ts'), '');
+  assert.throws(() => apiLanes(root, 'rooms'), /Expected API test under/);
 });
 
 function child(args: string[], extraEnv: NodeJS.ProcessEnv = {}) {
