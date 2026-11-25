@@ -85,15 +85,27 @@ npm run test:api -- --fixture unit  # no PostgreSQL or database URL needed
 docker compose -f docker-compose.dev.yml up -d postgres
 export TEST_DATABASE_URL=postgres://voice_room:voice_room_dev@127.0.0.1:5432/voice_room_dev
 npm run test:api -- --fixture integration
+npm run test:api -- rooms                # весь домен, включая интеграционные тесты
+npm run test:api -- rooms --fixture unit # только без БД
+npm -w @voiceroom/ui-kit test
+npm -w @voiceroom/call test
 npm test        # both API groups and the other workspaces
 npm run build
 npm run e2e     # Playwright, нужен запущенный dev-стек
 ```
 
-`npm run test:api` runs both groups. Integration needs a reachable PostgreSQL
-server and permission to create test databases. New API tests default to integration.
-Before adding a file to `apps/api/test/no-db-files.json`, run the same candidates
-(one repository-relative path per line) on the same checkout in both environments:
+API-тест лежит в `apps/api/test/<домен>/<фикстура>/`. Домен выбирается по поведению,
+которое проверяет тест, а не по первому импорту или транспорту запроса: например,
+создание комнаты через HTTP относится к `rooms`. Обычно это одноимённый каталог
+в `apps/api/src/domains/`. Для сквозных проверок используются `platform` (сборка
+приложения, общая инфраструктура и миграции нескольких доменов), `realtime`
+(сам транспорт, реестр соединений и доставка кадров) и `ops` (эксплуатация и метрики).
+Общие стенды, фейки, фикстуры и вспомогательные функции остаются в `apps/api/test/`.
+
+Без фильтра `npm run test:api` запускает обе группы всех доменов. Для `integration`
+нужен доступный PostgreSQL с правом создания тестовых баз. Новый или смешанный тест
+помещается в `integration`. Чтобы перенести его в `unit`, проверьте тот же набор
+кандидатов (один путь от корня репозитория на строку) в двух окружениях:
 
 ```bash
 # With TEST_DATABASE_URL pointing at a real test PostgreSQL:
@@ -103,8 +115,25 @@ node scripts/ci/api-tests.mts report --files candidates.txt --out no-db.json
 node scripts/ci/api-tests.mts compare-fixtures db.json no-db.json
 ```
 
-Admit only files with identical passing cases, no skips or conditional cases,
-and no database connection attempts.
+В `unit` допускаются только файлы с одинаковыми прошедшими сценариями, без
+пропусков, условных сценариев и попыток подключения к БД. Для CI деления на
+домены нет: если выбран API, выполняются все домены.
+
+Поведение компонентов кита проверяется в `packages/ui-kit/test/`, движка звонков —
+в `packages/call/test/`. Тесты оболочек приложения остаются в Web; независимые
+тесты функций сгруппированы в `apps/web/test/features/`. Проверки Caddy, edge и
+контрактов публикации остаются рядом с их Web-фикстурами. Команды пакетов сохраняют
+исходное окружение каждого файла (Node или jsdom).
+
+Для проверки массового переноса сравните полные отчёты раннеров из двух рабочих
+деревьев: `node scripts/ci/compare-test-files.mts --before before.json --after after.json --base <до> --tested <после>`.
+Формат отчёта: Git `tree` (результат `git rev-parse 'HEAD^{tree}'`) и массив `files`.
+Каждая запись содержит путь `file` от корня, `project`, `environment`, `fixture` и
+счётчики `tests`, `passed`, `skipped` (включая todo). Берите счётчики из событий
+`test:summary` Node и из `assertionResults` JSON-репортера Vitest; сохраняйте проект и
+окружение, а не имя нового каталога. Сравнение сверяет обе выборки с Git, а затем
+проверяет каждый файл по парам переименований. Это проверка переноса, не источник
+для отбора тестов в CI.
 
 ### CI verification and reuse
 
