@@ -23,6 +23,10 @@ jobs:
       pull-requests: read
     outputs:
       verified: ${{ steps.reuse.outputs.verified }}
+      base: ${{ steps.route.outputs.base }}
+      selection: ${{ steps.route.outputs.selection }}
+      digest: ${{ steps.route.outputs.digest }}
+      schedule: ${{ steps.schedule.outputs.schedule }}
       app: ${{ steps.route.outputs.app }}
       site: ${{ steps.route.outputs.site }}
       docs: ${{ steps.route.outputs.docs }}
@@ -38,40 +42,48 @@ jobs:
         id: route
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
         run: |
-          node --test scripts/test/changed-components.test.mts
+          node --test scripts/test/{changed-components,test-lanes,verification-policy}.test.mts
           bash scripts/test/reuse-app-checks.sh
-          node scripts/ci/changed-components.mts "$BASE_SHA" "$GITHUB_SHA" >> "$GITHUB_OUTPUT"
-          installer=false
-          if [[ "$BASE_SHA" =~ ^0+$ ]]; then
-            installer=true
-          else
-            installer_changes=$(git diff --name-only --no-renames "$BASE_SHA" "$GITHUB_SHA" -- apps/get/)
-            if [[ -n "$installer_changes" ]]; then
-              installer=true
-            fi
-          fi
-          echo "installer=$installer" >> "$GITHUB_OUTPUT"
+          node scripts/ci/changed-components.mts "$BASE_SHA" "$GITHUB_SHA" ${PR_HEAD:+"$PR_HEAD"} >> "$GITHUB_OUTPUT"
+          # JSON escapes arbitrary Git filenames; never interpolate paths as shell code.
+          cat "$GITHUB_OUTPUT" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Look for already verified application changes
         id: reuse
-        if: github.event_name == 'push' && steps.route.outputs.app == 'true'
+        if: github.event_name == 'push'
         env:
           GH_TOKEN: ${{ github.token }}
           BEFORE_SHA: ${{ github.event.before }}
+          SELECTION_DIGEST: ${{ steps.route.outputs.digest }}
         run: |
           if ! timeout 25s bash scripts/ci/reuse-app-checks.sh; then
             echo "PR verification lookup failed. Running app checks."
             echo 'verified=false' >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Schedule verification (full on main or a push without proof)
+        id: schedule
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_BRANCH: ${{ github.base_ref || github.ref_name }}
+          SELECTION: ${{ steps.route.outputs.selection }}
+          VERIFIED: ${{ steps.reuse.outputs.verified }}
+        run: node scripts/ci/verification-policy.mts schedule >> "$GITHUB_OUTPUT"
+
   policy:
     name: Git Flow policy
-    needs: [changes, site, docs, personal-smoke, widget-smoke, installer]
-    if: always() && github.event_name == 'pull_request'
+    needs: [changes, check-lane, check, api-unit, api-integration, test, test-web, voice-join, goal-g05, widget-smoke, personal-smoke, installer, static-publication, site, docs]
+    if: always()
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
       - name: Validate source branch and Conventional Commit PR title
+        if: github.event_name == 'pull_request'
         env:
           BASE_BRANCH: ${{ github.base_ref }}
           HEAD_BRANCH: ${{ github.head_ref }}
@@ -96,41 +108,18 @@ jobs:
               ;;
           esac
 
-      # This check already protects main. Require each routed job while letting
-      # jobs for unaffected components skip.
-      - name: Require each selected static, personal stack, widget and installer check
+      - name: Require fresh, intentionally skipped or proven prior evidence for every lane
         env:
-          ROUTING_RESULT: ${{ needs.changes.result }}
-          APP_CHANGED: ${{ needs.changes.outputs.app }}
-          PERSONAL_RESULT: ${{ needs.personal-smoke.result }}
-          WIDGET_RESULT: ${{ needs.widget-smoke.result }}
-          SITE_CHANGED: ${{ needs.changes.outputs.site }}
-          SITE_RESULT: ${{ needs.site.result }}
-          DOCS_CHANGED: ${{ needs.changes.outputs.docs }}
-          DOCS_RESULT: ${{ needs.docs.result }}
-          INSTALLER_CHANGED: ${{ needs.changes.outputs.installer }}
-          INSTALLER_RESULT: ${{ needs.installer.result }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          if [[ "$ROUTING_RESULT" != success || ! "$APP_CHANGED" =~ ^(true|false)$ ]]; then
-            echo "::error::Could not determine the changes that need checks."
-            exit 1
-          fi
-          for lane in "site:$SITE_CHANGED:$SITE_RESULT" "docs:$DOCS_CHANGED:$DOCS_RESULT" \
-              "personal:$APP_CHANGED:$PERSONAL_RESULT" "widget:$APP_CHANGED:$WIDGET_RESULT" \
-              "installer:$INSTALLER_CHANGED:$INSTALLER_RESULT"; do
-            case "$lane" in
-              *:true:success|*:false:skipped) ;;
-              *) echo "::error::Unexpected check result: $lane"; exit 1 ;;
-            esac
-          done
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_BRANCH: ${{ github.base_ref || github.ref_name }}
+          NEEDS: ${{ toJSON(needs) }}
+        run: node scripts/ci/verification-policy.mts verify
 
   # The lanes run in parallel; together they are `npm run check:app` plus the build.
   check-lane:
     name: Check ${{ matrix.lane }}
     needs: changes
-    if: needs.changes.outputs.app == 'true' && needs.changes.outputs.verified != 'true'
+    if: contains(fromJSON(needs.changes.outputs.schedule).lanes, 'check-lane')
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -154,11 +143,36 @@ jobs:
           WEB_DEPLOY_CONTRACT=built npm --workspace @voiceroom/web run test -- \
             test/deploy-contract.test.ts -t 'a production (web|widget) build keeps the deployment contract'
 
+      - name: Verify maintained browser fixture inventory without launching browsers
+        if: matrix.lane == 'build'
+        run: |
+          for workspace in web meet; do
+            export PLAYWRIGHT_JSON_OUTPUT_FILE="$RUNNER_TEMP/discovered-$workspace.json"
+            npm --workspace "@voiceroom/$workspace" run e2e -- --list --reporter=json
+            node scripts/ci/completed-tests.mts "$workspace" "$PLAYWRIGHT_JSON_OUTPUT_FILE"
+          done
+
+      - name: Script tests and real Caddy log-redaction regression
+        if: matrix.lane == 'build'
+        env:
+          CADDY_TEST_IMAGE: caddy:2.11.4-alpine
+        run: |
+          docker pull "$CADDY_TEST_IMAGE"
+          tests=()
+          for test in scripts/test/*.test.mts; do
+            # Routing runs in changes; coverage-gate runs with PostgreSQL on both events.
+            case "$test" in
+              scripts/test/changed-components.test.mts|scripts/test/test-lanes.test.mts|scripts/test/verification-policy.test.mts|scripts/test/coverage-gate.test.mts) continue ;;
+            esac
+            tests+=("$test")
+          done
+          node --test --test-concurrency=4 "${tests[@]}"
+
   # Branch protection on main requires this name.
   check:
     name: Lint, typecheck & build
     needs: [changes, check-lane]
-    if: ${{ !cancelled() && needs.changes.outputs.app == 'true' && needs.changes.outputs.verified != 'true' }}
+    if: ${{ !cancelled() && contains(fromJSON(needs.changes.outputs.schedule).lanes, 'check') }}
     runs-on: ubuntu-latest
     steps:
       - name: Require every check lane
@@ -174,7 +188,7 @@ jobs:
   api-unit:
     name: API without PostgreSQL
     needs: changes
-    if: needs.changes.outputs.app == 'true' && needs.changes.outputs.verified != 'true'
+    if: contains(fromJSON(needs.changes.outputs.schedule).lanes, 'api-unit')
     runs-on: ubuntu-latest
     env:
       FIXTURE: unit
@@ -185,14 +199,9 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci
-      - name: Run assigned tests without coverage on push
-        if: github.event_name == 'push'
-        run: node scripts/coverage/run-g08.mts --fixture "$FIXTURE" --without-coverage
       - name: Collect raw V8 coverage for assigned tests
-        if: github.event_name == 'pull_request'
         run: node scripts/coverage/run-g08.mts --fixture "$FIXTURE"
       - name: Upload fixture coverage and assignment
-        if: github.event_name == 'pull_request'
         uses: actions/upload-artifact@v5
         with:
           name: g08-raw-${{ env.FIXTURE }}
@@ -200,26 +209,11 @@ jobs:
           if-no-files-found: error
           overwrite: true
           retention-days: 7
-      - name: Script tests and real Caddy log-redaction regression
-        if: env.FIXTURE == 'unit'
-        env:
-          CADDY_TEST_IMAGE: caddy:2.11.4-alpine
-        run: |
-          docker pull "$CADDY_TEST_IMAGE"
-          tests=()
-          for test in scripts/test/*.test.mts; do
-            # Routing runs in changes; coverage-gate runs with PostgreSQL on both events.
-            case "$test" in
-              scripts/test/changed-components.test.mts|scripts/test/coverage-gate.test.mts) continue ;;
-            esac
-            tests+=("$test")
-          done
-          node --test --test-concurrency=4 "${tests[@]}"
 
   api-integration:
     name: API with PostgreSQL
     needs: changes
-    if: needs.changes.outputs.app == 'true' && needs.changes.outputs.verified != 'true'
+    if: contains(fromJSON(needs.changes.outputs.schedule).lanes, 'api-integration')
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -246,7 +240,7 @@ jobs:
   test:
     name: API tests
     needs: [changes, api-unit, api-integration]
-    if: ${{ !cancelled() && needs.changes.outputs.app == 'true' && needs.changes.outputs.verified != 'true' }}
+    if: ${{ !cancelled() && contains(fromJSON(needs.changes.outputs.schedule).lanes, 'test') }}
     runs-on: ubuntu-latest
     steps:
       - name: Require both API fixture jobs
@@ -258,43 +252,35 @@ jobs:
             echo "::error::API fixture results: unit=$UNIT_RESULT integration=$INTEGRATION_RESULT"
             exit 1
           fi
-      - if: github.event_name == 'pull_request'
-        uses: actions/checkout@v5
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
-      - if: github.event_name == 'pull_request'
-        uses: actions/setup-node@v5
+      - uses: actions/setup-node@v5
         with:
           node-version-file: .nvmrc
           cache: npm
       # Collecting and judging coverage needs only the API workspace's typebox.
-      - if: github.event_name == 'pull_request'
-        run: npm ci --workspace @voiceroom/api
-      - if: github.event_name == 'pull_request'
-        uses: actions/download-artifact@v5
+      - run: npm ci --workspace @voiceroom/api
+      - uses: actions/download-artifact@v5
         with:
           name: g08-raw-unit
           path: coverage/g08-unit
-      - if: github.event_name == 'pull_request'
-        uses: actions/download-artifact@v5
+      - uses: actions/download-artifact@v5
         with:
           name: g08-raw-integration
           path: coverage/g08-integration
       - name: Validate assignments and collect merged G08 coverage
-        if: github.event_name == 'pull_request'
         run: node scripts/coverage/run-g08.mts --merge
       - name: Capture protected-base coverage policy and changed files
-        if: github.event_name == 'pull_request'
         shell: bash
         env:
-          BASE: ${{ github.event.pull_request.base.sha }}
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
           PR_HEAD: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
-          baseline_args=$(node scripts/coverage/g08-inputs.mts --base "$BASE" --head "$PR_HEAD" --tested HEAD --out coverage)
+          baseline_args=$(node scripts/coverage/g08-inputs.mts --base "$BASE" ${PR_HEAD:+--head "$PR_HEAD"} --tested HEAD --out coverage)
           echo "G08_BASELINE_ARGS=$baseline_args" >> "$GITHUB_ENV"
       - name: Enforce G08 coverage and protected-base ratchet
-        if: github.event_name == 'pull_request'
         shell: bash
         run: |
           read -r -a baseline_args <<< "$G08_BASELINE_ARGS"
@@ -304,10 +290,9 @@ jobs:
             --changed-diff coverage/release-250-changed.diff \
             "${baseline_args[@]}"
       - name: Persist G08 measured coverage artifact
-        if: github.event_name == 'pull_request'
         uses: actions/upload-artifact@v5
         with:
-          name: g08-release-250-coverage-run-${{ github.run_id }}-attempt-${{ github.run_attempt }}-head-${{ github.event.pull_request.head.sha }}
+          name: g08-release-250-coverage-run-${{ github.run_id }}-attempt-${{ github.run_attempt }}-head-${{ github.event.pull_request.head.sha || github.sha }}
           path: |
             coverage/release-250-summary.json
             coverage/release-250-changed-files.txt
@@ -319,7 +304,9 @@ jobs:
   test-web:
     name: Web tests
     needs: changes
-    if: needs.changes.outputs.app == 'true' && needs.changes.outputs.verified != 'true'
+    if: contains(fromJSON(needs.changes.outputs.schedule).lanes, 'test-web')
+    outputs:
+      completed: ${{ steps.evidence.outputs.completed }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -328,17 +315,41 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci
-      - run: npm --workspace @voiceroom/web run test
+      - name: Test Web workspace
+        if: contains(fromJSON(needs.changes.outputs.schedule).workspaces, 'web')
         env:
+          WORKSPACE: web
           WEB_DEPLOY_CONTRACT: checked
-      - run: npm --workspace @voiceroom/admin run test
-      - run: npm --workspace @voiceroom/meet run test
-      - run: npm --workspace @voiceroom/widget run test
+        run: &test-workspace |
+          report="$RUNNER_TEMP/$WORKSPACE.json"
+          npm --workspace "@voiceroom/$WORKSPACE" test -- --reporter=default --reporter=json --outputFile.json="$report"
+          node scripts/ci/completed-tests.mts workspace "$report"
+          echo "$WORKSPACE" >> "$RUNNER_TEMP/completed-workspaces"
+      - name: Test Admin workspace
+        if: contains(fromJSON(needs.changes.outputs.schedule).workspaces, 'admin')
+        env:
+          WORKSPACE: admin
+        run: *test-workspace
+      - name: Test Meet workspace
+        if: contains(fromJSON(needs.changes.outputs.schedule).workspaces, 'meet')
+        env:
+          WORKSPACE: meet
+        run: *test-workspace
+      - name: Test Widget workspace
+        if: contains(fromJSON(needs.changes.outputs.schedule).workspaces, 'widget')
+        env:
+          WORKSPACE: widget
+        run: *test-workspace
+      - name: Record workspaces with executed test files
+        id: evidence
+        run: echo "completed=$(jq -Rn -c '[inputs]' < "$RUNNER_TEMP/completed-workspaces")" >> "$GITHUB_OUTPUT"
 
   voice-join:
     name: Voice room join smoke
     needs: changes
-    if: needs.changes.outputs.app == 'true' && needs.changes.outputs.verified != 'true'
+    if: contains(fromJSON(needs.changes.outputs.schedule).lanes, 'voice-join')
+    outputs:
+      completed: ${{ steps.evidence.outputs.completed }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -359,16 +370,18 @@ jobs:
           docker compose -f docker-compose.ci.yml up -d --build --wait --wait-timeout 180
           wait "$browser_pull"
           echo "PLAYWRIGHT_IMAGE=$image" >> "$GITHUB_ENV"
-      - name: Join voice and verify chat behavior through production-like services
+      - name: Exercise selected voice journeys through production-like services
+        id: evidence
+        env:
+          GROUPS_JSON: ${{ toJSON(fromJSON(needs.changes.outputs.schedule).groups) }}
         run: |
+          paths=$(node scripts/ci/verification-policy.mts voice-specs)
+          read -r -a specs <<< "$paths"
           docker run --rm --init --network host --ipc host --user "$(id -u):$(id -g)" \
-            -e HOME=/tmp -e CI -v "$GITHUB_WORKSPACE:/work" -w /work "$PLAYWRIGHT_IMAGE" \
+            -e HOME=/tmp -e CI -e PLAYWRIGHT_JSON_OUTPUT_FILE=/work/voice-report.json -v "$GITHUB_WORKSPACE:/work" -w /work "$PLAYWRIGHT_IMAGE" \
             npm --workspace @voiceroom/web run e2e -- \
-            e2e/room-voice.spec.ts e2e/rnnoise-assets.spec.ts e2e/microphone-recovery.spec.ts \
-            e2e/chat-image-paste.spec.ts e2e/manual-chat-polish.spec.ts e2e/chat-drafts.spec.ts \
-            e2e/chat-typing.spec.ts e2e/guest-account-cta.spec.ts e2e/mobile-room.spec.ts \
-            e2e/friend-call.spec.ts \
-            --project=chromium --retries=0
+            "${specs[@]}" --project=chromium --retries=0 --reporter=line,json
+          node scripts/ci/completed-tests.mts voice voice-report.json >> "$GITHUB_OUTPUT"
       # No teardown step: a hosted runner is discarded after the job together
       # with its containers and volumes.
       - name: Capture voice stack diagnostics
@@ -380,7 +393,7 @@ jobs:
   goal-g05:
     name: G05 strict LiveKit gate proof
     needs: changes
-    if: needs.changes.outputs.app == 'true' && needs.changes.outputs.verified != 'true'
+    if: contains(fromJSON(needs.changes.outputs.schedule).lanes, 'goal-g05')
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -397,7 +410,9 @@ jobs:
   widget-smoke:
     name: Embedded guest call and media boundary
     needs: changes
-    if: needs.changes.outputs.app == 'true' && needs.changes.outputs.verified != 'true'
+    if: contains(fromJSON(needs.changes.outputs.schedule).lanes, 'widget-smoke')
+    outputs:
+      completed: ${{ steps.evidence.outputs.completed }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
@@ -423,9 +438,15 @@ jobs:
             psql -v ON_ERROR_STOP=1 -U voice_room -d voice_room_ci \
             -c 'UPDATE widget_boundary_activation SET widget_boundary_required=true, widget_admission_enabled=true WHERE singleton'
       - name: Exercise frozen loader compatibility, reconnect and SFU denials
+        id: evidence
+        env:
+          GROUPS_JSON: ${{ toJSON(fromJSON(needs.changes.outputs.schedule).groups) }}
+          PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ runner.temp }}/widget.json
         run: |
-          npm --workspace @voiceroom/web run e2e -- \
-            e2e/widget-embed.spec.ts e2e/widget-media-boundary.spec.ts e2e/widget-reconnect.spec.ts
+          paths=$(node scripts/ci/verification-policy.mts widget-specs)
+          read -r -a specs <<< "$paths"
+          npm --workspace @voiceroom/web run e2e -- "${specs[@]}" --reporter=line,json
+          node scripts/ci/completed-tests.mts widget "$PLAYWRIGHT_JSON_OUTPUT_FILE" >> "$GITHUB_OUTPUT"
       - name: Report widget service states
         if: failure()
         run: |
@@ -448,7 +469,9 @@ jobs:
   personal-smoke:
     name: Personal Compose smoke
     needs: changes
-    if: needs.changes.outputs.app == 'true' && needs.changes.outputs.verified != 'true'
+    if: contains(fromJSON(needs.changes.outputs.schedule).lanes, 'personal-smoke')
+    outputs:
+      completed: ${{ steps.evidence.outputs.completed }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
@@ -481,7 +504,13 @@ jobs:
         run: docker compose -p "$PERSONAL_SMOKE_PROJECT" -f docker-compose.personal.yml up -d --build --wait --wait-timeout 120
       - run: node --test scripts/ci/personal-compose-smoke.test.mts
       - name: Exercise a two-guest Meet call through Caddy
-        run: npm --workspace @voiceroom/meet run e2e
+        id: evidence
+        env:
+          GROUPS_JSON: ${{ toJSON(fromJSON(needs.changes.outputs.schedule).groups) }}
+          PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ runner.temp }}/personal.json
+        run: |
+          npm --workspace @voiceroom/meet run e2e -- --reporter=line,json
+          node scripts/ci/completed-tests.mts personal "$PLAYWRIGHT_JSON_OUTPUT_FILE" >> "$GITHUB_OUTPUT"
       - name: Report personal service states
         if: failure()
         run: docker compose -p "$PERSONAL_SMOKE_PROJECT" -f docker-compose.personal.yml ps --all
@@ -496,7 +525,7 @@ jobs:
   installer:
     name: Meet installer and CLI tests
     needs: changes
-    if: needs.changes.outputs.installer == 'true'
+    if: contains(fromJSON(needs.changes.outputs.schedule).lanes, 'installer')
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -508,27 +537,22 @@ jobs:
 
   record-app-checks:
     name: Record verified application tree
-    needs: [changes, policy, check, api-unit, api-integration, test, test-web, voice-join, widget-smoke, goal-g05]
-    # Policy follows jobs that skip for unaffected components, and the implicit
-    # success() would skip this job after them. Require each check by name.
+    needs: [changes, policy]
     if: >-
       !cancelled() && github.event_name == 'pull_request' && github.base_ref == 'develop' &&
-      needs.changes.result == 'success' && needs.changes.outputs.app == 'true' &&
-      needs.policy.result == 'success' && needs.check.result == 'success' && needs.test.result == 'success' &&
-      needs.api-unit.result == 'success' && needs.api-integration.result == 'success' &&
-      needs.test-web.result == 'success' && needs.voice-join.result == 'success' &&
-      needs.widget-smoke.result == 'success' && needs.goal-g05.result == 'success'
+      github.event.pull_request.head.repo.full_name == github.repository && needs.policy.result == 'success'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
       - name: Record the tested tree
         id: tree
         env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          BASE_SHA: ${{ needs.changes.outputs.base }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
+          SELECTION_DIGEST: ${{ needs.changes.outputs.digest }}
         run: |
           tree=$(git rev-parse 'HEAD^{tree}')
-          echo "name=verified-dev-pr-$PR_NUMBER-$BASE_SHA-$tree-$GITHUB_RUN_ATTEMPT" >> "$GITHUB_OUTPUT"
+          echo "name=verified-dev-pr-$PR_NUMBER-$BASE_SHA-$tree-$GITHUB_RUN_ATTEMPT-$SELECTION_DIGEST" >> "$GITHUB_OUTPUT"
           printf '%s\n' "$tree" > verified-tree.txt
       - uses: actions/upload-artifact@v6
         # A storage failure only disables check reuse on the subsequent push.
@@ -541,16 +565,10 @@ jobs:
 
   images:
     name: Publish images
-    needs: &app-checks [changes, check, api-unit, api-integration, test, test-web, voice-join, widget-smoke, goal-g05, personal-smoke, installer]
+    needs: &app-checks [changes, policy]
     if: &publish-app >-
-      !cancelled() && github.event_name == 'push' && needs.changes.result == 'success' &&
-      needs.changes.outputs.app == 'true' &&
-      (needs.changes.outputs.installer == 'false' || needs.installer.result == 'success') &&
-      (needs.changes.outputs.verified == 'true' ||
-      (needs.check.result == 'success' && needs.test.result == 'success' &&
-      needs.api-unit.result == 'success' && needs.api-integration.result == 'success' &&
-      needs.test-web.result == 'success' && needs.voice-join.result == 'success' && needs.widget-smoke.result == 'success' &&
-      needs.goal-g05.result == 'success' && needs.personal-smoke.result == 'success'))
+      !cancelled() && github.event_name == 'push' && needs.policy.result == 'success' &&
+      needs.changes.outputs.app == 'true'
     permissions:
       contents: read
       packages: write
@@ -593,7 +611,7 @@ jobs:
   static-publication:
     name: Static publication checks
     needs: changes
-    if: needs.changes.outputs.site == 'true' || needs.changes.outputs.docs == 'true'
+    if: contains(fromJSON(needs.changes.outputs.schedule).lanes, 'static-publication')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -602,7 +620,7 @@ jobs:
   site:
     name: Site checks
     needs: [changes, static-publication]
-    if: needs.changes.outputs.site == 'true'
+    if: contains(fromJSON(needs.changes.outputs.schedule).lanes, 'site')
     uses: ./.github/workflows/build-static.yml
     with:
       component: site
@@ -611,7 +629,7 @@ jobs:
   docs:
     name: Docs checks
     needs: [changes, static-publication]
-    if: needs.changes.outputs.docs == 'true'
+    if: contains(fromJSON(needs.changes.outputs.schedule).lanes, 'docs')
     uses: ./.github/workflows/build-static.yml
     with:
       component: docs
@@ -619,8 +637,10 @@ jobs:
 
   deploy-site-dev:
     name: Deploy site to dev
-    needs: site
-    if: github.event_name == 'push'
+    needs: [changes, policy, site]
+    if: >-
+      !cancelled() && github.event_name == 'push' && needs.policy.result == 'success' &&
+      needs.changes.outputs.site == 'true' && needs.site.result == 'success'
     uses: ./.github/workflows/deploy-static.yml
     with:
       component: site
@@ -629,8 +649,10 @@ jobs:
 
   deploy-docs-dev:
     name: Deploy docs to dev
-    needs: docs
-    if: github.event_name == 'push'
+    needs: [changes, policy, docs]
+    if: >-
+      !cancelled() && github.event_name == 'push' && needs.policy.result == 'success' &&
+      needs.changes.outputs.docs == 'true' && needs.docs.result == 'success'
     uses: ./.github/workflows/deploy-static.yml
     with:
       component: docs
