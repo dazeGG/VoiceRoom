@@ -50,16 +50,20 @@ function repository(t: TestContext) {
     git('commit', '-m', message);
     return git('rev-parse', 'HEAD').trim();
   };
-  const capture = (base: string, sha = git('rev-parse', 'HEAD').trim()) =>
-    spawnSync(process.execPath, [helper, '--base', base, '--tested', 'HEAD', '--out', 'coverage'], {
-      cwd,
-      encoding: 'utf8',
-      env: {
-        ...process.env,
-        GITHUB_SHA: sha,
-        GITHUB_EVENT_NAME: 'pull_request'
+  const capture = (base: string, pr?: { head?: string; sha?: string }) =>
+    spawnSync(
+      process.execPath,
+      [helper, '--base', base, '--tested', 'HEAD', '--out', 'coverage', ...(pr?.head ? ['--head', pr.head] : [])],
+      {
+        cwd,
+        encoding: 'utf8',
+        env: {
+          ...process.env,
+          GITHUB_SHA: pr?.sha ?? git('rev-parse', 'HEAD').trim(),
+          GITHUB_EVENT_NAME: pr ? 'pull_request' : ''
+        }
       }
-    });
+    );
   const measure = (module = source) => {
     const v8Dir = path.join(cwd, 'coverage/raw');
     execFileSync(process.execPath, [module], { cwd, env: { ...process.env, NODE_V8_COVERAGE: v8Dir } });
@@ -114,7 +118,7 @@ test('divergent base: G08 rejects the uncovered addition at the tested merge lin
   assert.equal(old.status, 0, old.stderr);
   t.diagnostic('Old base-to-head patch: line 5 (covered in the merge), evaluator exits 0.');
 
-  const inputs = r.capture(base);
+  const inputs = r.capture(base, { head });
   assert.equal(inputs.status, 0, inputs.stderr);
   const current = r.verdict(inputs.stdout);
   assert.equal(current.status, 1, 'The merge-line verdict must reject the uncovered addition');
@@ -122,6 +126,73 @@ test('divergent base: G08 rejects the uncovered addition at the tested merge lin
   assert.deepEqual(r.read(files).trim().split(/\r?\n/), [source]);
   assert.match(r.read(patch), /\+7 @@[^\n]*\n\+export function uncalled/);
   t.diagnostic(`Base-to-merge patch: line 7; evaluator exits 1: ${current.stderr.trim()}`);
+});
+
+test('PR merge provenance', async (t) => {
+  const r = repository(t);
+  const baseOnly = 'src/base-only.mjs';
+  r.write(baseOnly, covered);
+  const payloadBase = r.commit('Base at event creation');
+  r.git('switch', '-c', 'pr');
+  r.write(source, uncovered);
+  const head = r.commit('PR change');
+  const rejects = (name: string, base: string, pr: { head?: string; sha?: string }, reason: RegExp) =>
+    t.test(name, () => {
+      const result = r.capture(base, pr);
+      assert.equal(result.status, 1, result.stderr);
+      assert.match(result.stderr, reason);
+      assert.equal(result.stdout, '');
+    });
+  await rejects('rejects a non-merge checkout', payloadBase, { head }, /exactly two parents/i);
+  r.git('switch', '-c', 'extra', payloadBase);
+  r.write('extra.md', 'Another independent branch');
+  r.commit('Extra merge parent');
+  r.git('switch', 'base');
+  r.write(baseOnly, covered + uncovered);
+  r.write(config, JSON.stringify({ ...policy, strictBranchMinimum: 99 }));
+  const firstParent = r.commit('Change measured base-only file and tighten policy');
+  r.git('merge', '--no-ff', 'pr', '-m', 'Test PR on advanced base');
+
+  await t.test('uses the advanced first parent for the PR diff and policy', () => {
+    const result = r.capture(payloadBase, { head });
+    assert.equal(result.status, 0, result.stderr);
+    assert.deepEqual(r.read(files).trim().split(/\r?\n/), [source]);
+    assert.match(r.read(patch), /\+\+\+ b\/src\/feature\.mjs/);
+    assert.ok(!r.read(patch).includes(baseOnly));
+    assert.ok(!r.read(patch).includes(config));
+    assert.equal(r.read(protectedPolicy), r.git('show', `${firstParent}:${config}`));
+  });
+  await t.test('local capture still uses the supplied base on the same merge', () => {
+    const result = r.capture(payloadBase);
+    assert.equal(result.status, 0, result.stderr);
+    assert.deepEqual(r.read(files).trim().split(/\r?\n/).sort(), [config, baseOnly, source].sort());
+    assert.equal(r.read(protectedPolicy), r.git('show', `${payloadBase}:${config}`));
+  });
+  await t.test('refetches the missing base of a shallow PR merge', (t) => {
+    const shallow = repository(t);
+    shallow.commit('Local root');
+    shallow.git('remote', 'add', 'origin', r.cwd);
+    shallow.git('fetch', '--depth=1', 'origin', 'base');
+    shallow.git('switch', '--detach', 'FETCH_HEAD');
+    assert.throws(() => shallow.git('cat-file', '-e', firstParent));
+    const result = shallow.capture(payloadBase, { head });
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(shallow.read(files).trim(), source);
+    assert.equal(shallow.read(protectedPolicy), r.git('show', `${firstParent}:${config}`));
+  });
+  await rejects('rejects a mismatched checkout SHA', payloadBase, { head, sha: head }, /GITHUB_SHA/);
+  await rejects('rejects a missing PR head SHA', payloadBase, {}, /full PR head commit SHA/i);
+  await rejects(
+    'rejects a second parent different from the PR head',
+    payloadBase,
+    { head: firstParent },
+    /second parent.*PR head/i
+  );
+  await rejects('rejects a payload base not ancestral to the first parent', head, { head }, /not an ancestor/i);
+
+  r.git('switch', '--detach', firstParent);
+  r.git('merge', '--no-ff', 'pr', 'extra', '-m', 'Octopus merge');
+  await rejects('rejects a three-parent checkout', payloadBase, { head }, /exactly two parents/i);
 });
 
 test('rename-only and edited renames use destination paths; deletion has no destination', (t) => {
@@ -180,9 +251,12 @@ test('lowering the checked-out policy cannot lower the protected threshold', (t)
   const r = repository(t);
   r.write(source, covered);
   const base = r.commit('Protected policy');
+  r.git('switch', '-c', 'pr');
   r.write(config, JSON.stringify({ ...policy, changedBusinessCode: { line: 0, branch: 85 } }));
-  r.commit('Attempt to reduce the patch requirement');
-  const inputs = r.capture(base);
+  const head = r.commit('Attempt to reduce the patch requirement');
+  r.git('switch', 'base');
+  r.git('merge', '--no-ff', 'pr', '-m', 'Test proposed policy reduction');
+  const inputs = r.capture(base, { head });
   assert.equal(inputs.status, 0, inputs.stderr);
   r.measure();
   const verdict = r.verdict(inputs.stdout);
@@ -206,7 +280,6 @@ test('only a verified base without the policy permits initial adoption', (t) => 
   assert.equal(verdict.status, 0, verdict.stderr);
   assert.match(verdict.stdout, /explicit-initial-adoption/);
   assert.notEqual(r.capture('1'.repeat(40)).status, 0, 'An unresolvable base is not initial adoption');
-  assert.notEqual(r.capture(base, base).status, 0, 'The PR SHA must match the tested checkout');
 });
 
 test('an initially missing base is fetched and supplies its policy and diff', (t) => {

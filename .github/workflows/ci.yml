@@ -230,9 +230,10 @@ jobs:
         shell: bash
         env:
           BASE: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
-          baseline_args=$(node scripts/coverage/g08-inputs.mts --base "$BASE" --tested HEAD --out coverage)
+          baseline_args=$(node scripts/coverage/g08-inputs.mts --base "$BASE" --head "$PR_HEAD" --tested HEAD --out coverage)
           echo "G08_BASELINE_ARGS=$baseline_args" >> "$GITHUB_ENV"
       - name: Run shared and API tests with G08 coverage
         if: github.event_name == 'pull_request'
