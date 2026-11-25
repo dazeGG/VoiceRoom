@@ -50,16 +50,11 @@ function broadInput(path: string) {
 }
 
 function observesG08(path: string, trees: TreeInputs[]) {
-  return (
-    /^(?:apps\/web\/src\/(?:api|shared)\/|packages\/call\/src\/engine\/media\/|packages\/ui-kit\/src\/i18n|packages\/ui\/src\/log)/.test(
-      path
-    ) ||
-    trees.some(
-      ({ measured }) =>
-        measured.exact.includes(path) ||
-        measured.prefixes.some((p) => path.startsWith(p)) ||
-        measured.fragments.some((p) => path.includes(p))
-    )
+  return trees.some(
+    ({ measured }) =>
+      measured.exact.includes(path) ||
+      measured.prefixes.some((p) => path.startsWith(p)) ||
+      measured.fragments.some((p) => path.includes(p))
   );
 }
 

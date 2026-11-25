@@ -8,6 +8,9 @@ export interface RoutingWorkspace {
   localDirs: Record<string, string>;
   requiredLocal: string[];
   tests: boolean;
+  exports?: unknown;
+  main?: string;
+  module?: string;
 }
 
 function strings(value: unknown): string[] {
@@ -60,6 +63,9 @@ export function workspace(dir: string, manifest: unknown): RoutingWorkspace {
     dependencies,
     requiredLocal,
     localDirs,
+    exports: manifest.exports,
+    ...(typeof manifest.main === 'string' ? { main: manifest.main } : {}),
+    ...(typeof manifest.module === 'string' ? { module: manifest.module } : {}),
     tests: isRecord(manifest.scripts) && !!manifest.scripts.test
   };
 }

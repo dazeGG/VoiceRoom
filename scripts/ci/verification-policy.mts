@@ -8,7 +8,7 @@ export interface Selection {
 }
 
 // Bump when changing the meaning of a lane, graph edge, group, or proof.
-export const SELECTOR_VERSION = 'pr3a-1';
+export const SELECTOR_VERSION = 'pr3a-2';
 export const VOICE_SPECS: Record<string, string[]> = {
   'voice-core': ['room-voice'],
   'voice-chat': ['chat-typing', 'manual-chat-polish', 'chat-drafts', 'chat-image-paste'],

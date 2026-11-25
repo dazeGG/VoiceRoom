@@ -110,7 +110,10 @@ and no database connection attempts.
 
 On a PR into `develop`, CI compares the base tree with the tested merge tree. An
 Admin leaf keeps repository checks and the Admin workspace test step; an API edit
-runs both API fixtures, the coverage verdict and G05. Shared configuration,
+runs both API fixtures, the coverage verdict and G05. CI follows the measured
+non-API sources' imports in both Git trees; a neighbouring chat component alone
+does not trigger API coverage. A frontend unit test file selects its workspace,
+not a browser fixture. Non-test helpers can still be browser inputs. Shared configuration,
 unknown paths and unresolved inputs select the full inventory. The changes job
 reports the reason, selected workspaces and browser groups. Reproduce a decision
 locally with `node scripts/ci/changed-components.mts <base-sha> <tested-sha>`.

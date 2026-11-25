@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { changedComponents } from '../ci/changed-components.mts';
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { changedComponents, routeTrees } from '../ci/changed-components.mts';
 import { measuredInputs, workspace, workspaceDirs } from '../ci/routing-inputs.mts';
 import { selectTests, type TreeInputs } from '../ci/test-lanes.mts';
 import { FULL_SELECTION } from '../ci/verification-policy.mts';
@@ -60,16 +64,11 @@ test('every API source selects the two producers, aggregate and G05 (no domain e
   assert.deepEqual(api.workspaces, []);
 });
 
-test('G08 consumes measured and runtime inputs even outside API', () => {
+test('G08 path policy accepts exact paths, prefixes and group fragments', () => {
   for (const path of [
     'apps/web/src/features/synthetic/measured.ts',
     'apps/widget/src/dynamic-input.ts',
-    'apps/admin/src/extra-measured/a.ts',
-    'apps/web/src/api/auth.ts',
-    'apps/web/src/shared/i18n/runtime.ts',
-    'packages/call/src/engine/media/model.ts',
-    'packages/ui-kit/src/i18n.ts',
-    'packages/ui/src/log.ts'
+    'apps/admin/src/extra-measured/a.ts'
   ])
     assert.ok(route([path]).selection.lanes.includes('test'), path);
 });
@@ -229,4 +228,78 @@ test('a unit test cannot add a browser group to its component change or mask one
   const unit = 'apps/web/test/composer-emoji.test.ts';
   assert.deepEqual(route([component, unit]).selection, route([component]).selection);
   assert.deepEqual(route([unit, component]).selection.groups, ['voice-chat', 'voice-core']);
+});
+
+test('G08 follows transitive import, re-export and dynamic import edges, not neighbouring chat files', (t) => {
+  const cwd = mkdtempSync(join(tmpdir(), 'g08-routing-'));
+  t.after(() => rmSync(cwd, { recursive: true, force: true }));
+  const git = (...args: string[]) => execFileSync('git', args, { cwd, encoding: 'utf8' }).trim();
+  const put = (file: string, content: string) => {
+    const blob = execFileSync('git', ['hash-object', '-w', '--stdin'], {
+      cwd,
+      input: content,
+      encoding: 'utf8'
+    }).trim();
+    git('update-index', '--add', '--cacheinfo', '100644', blob, file);
+  };
+  git('init', '--quiet');
+  const auth = 'apps/web/src/api/auth.ts';
+  const runtime = 'apps/web/src/shared/i18n/runtime.ts';
+  const catalog = 'apps/web/src/shared/i18n/catalog';
+  const dirs = ['apps/web', 'packages/ui-kit', 'packages/shared'];
+  put('package.json', JSON.stringify({ workspaces: dirs }));
+  for (const dir of dirs) {
+    put(
+      dir + '/package.json',
+      JSON.stringify({
+        name: '@voiceroom/' + dir.split('/')[1],
+        scripts: dir === 'apps/web' ? { test: 'vitest run' } : {},
+        ...(dir === 'apps/web' ? { dependencies: { '@voiceroom/ui-kit': '*', '@voiceroom/shared': '*' } } : {}),
+        ...(dir === 'packages/ui-kit' ? { exports: { './i18n': './src/i18n.ts' } } : {})
+      })
+    );
+  }
+  put(
+    'config/coverage/release-250-thresholds.json',
+    JSON.stringify({
+      businessPathPatterns: [auth],
+      strictBranchGroups: []
+    })
+  );
+  put(auth, "import { t } from '../shared/i18n/runtime.ts'; export default t;");
+  put(runtime, "export { t } from './catalog'; import { locale } from '@voiceroom/ui-kit/i18n';");
+  put(catalog + '/index.ts', "export const t = () => import('./Labels.vue');");
+  put(catalog + '/Labels.vue', `<script setup lang="ts">import { labels } from './labels.js';</script>`);
+  put(catalog + '/labels.js', "export const labels = ['hi'];");
+  put('packages/ui-kit/src/i18n.ts', 'export const locale = "en";');
+  const base = git('write-tree');
+  const edit = (file: string, content: string) => {
+    git('read-tree', base);
+    put(file, content);
+    return git('write-tree');
+  };
+  const api = (before: string, after: string) => {
+    const { selection, reason } = routeTrees(before, after, cwd);
+    assert.notDeepEqual(selection, FULL_SELECTION, reason);
+    for (const id of ['api-unit', 'api-integration', 'test', 'goal-g05']) assert.ok(selection.lanes.includes(id), id);
+  };
+  api(base, edit(catalog + '/labels.js', "export const labels = ['bye'];"));
+  api(base, edit('packages/ui-kit/src/other.ts', 'export const other = 1;'));
+  const chat = routeTrees(base, edit('apps/web/src/shared/chat/EmojiPickerPanel.vue', '<template/>'), cwd);
+  assert.deepEqual(chat.selection.lanes, ['check', 'check-lane', 'test-web', 'voice-join'], chat.reason);
+
+  // Same specifier, new resolution: the added module takes precedence over
+  // catalog/index.ts. Only the tested closure can select it; on deletion only the base can.
+  const shadow = edit(catalog + '.ts', 'export const t = () => "changed";');
+  api(base, shadow);
+  api(shadow, base);
+  const broken = edit(runtime, "export { t } from './not-found';");
+  for (const [before, after] of [
+    [base, broken],
+    [broken, base]
+  ] as const) {
+    const fallback = routeTrees(before, after, cwd);
+    assert.deepEqual(fallback.selection, FULL_SELECTION);
+    assert.match(fallback.reason, /not-found/);
+  }
 });
