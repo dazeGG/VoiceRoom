@@ -41,24 +41,25 @@ test('room context menu supports pointer, keyboard navigation, focus restore, an
     );
   await page.setViewportSize({ width: 360, height: 240 });
   await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  // A visible panel can still be translating into place. Verify the final
+  // collision padding at all four edges, not a frame of the entrance animation.
+  const withinViewport = () =>
+    expect
+      .poll(async () => {
+        const box = await boxOf(menu);
+        return Math.min(box.x, box.y, 360 - box.x - box.width, 240 - box.y - box.height);
+      })
+      .toBeGreaterThanOrEqual(8);
   await openAtCorner();
   await expect(menu).toBeVisible();
-  const box = await boxOf(menu);
-  expect(box.x).toBeGreaterThanOrEqual(8);
-  expect(box.y).toBeGreaterThanOrEqual(8);
-  expect(box.x + box.width).toBeLessThanOrEqual(352);
-  expect(box.y + box.height).toBeLessThanOrEqual(232);
+  await withinViewport();
 
   // The far corner keeps the same margins.
   await page.keyboard.press('Escape');
   await expect(menu).toBeHidden();
   await openAtCorner(356, 236);
   await expect(menu).toBeVisible();
-  const farBox = await boxOf(menu);
-  expect(farBox.x).toBeGreaterThanOrEqual(8);
-  expect(farBox.y).toBeGreaterThanOrEqual(8);
-  expect(farBox.x + farBox.width).toBeLessThanOrEqual(352);
-  expect(farBox.y + farBox.height).toBeLessThanOrEqual(232);
+  await withinViewport();
 
   await page.setViewportSize({ width: 360, height: 120 });
   await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
