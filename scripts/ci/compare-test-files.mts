@@ -30,10 +30,16 @@ function treeId(root: string, rev: string) {
 // Independent of directories and runners' selectors: this includes the Personal
 // Compose node:test on its own fixture. Browser *.spec.ts journeys use Playwright.
 function trackedTests(root: string, tree: string) {
-  return git(root, 'ls-tree', '-r', '-z', '--name-only', tree)
-    .split('\0')
-    .filter((file) => /\.test\.[cm]?[jt]sx?$/.test(file))
-    .sort();
+  const blobs = new Map<string, string>();
+  for (const entry of git(root, 'ls-tree', '-r', '-z', tree).split('\0')) {
+    const tab = entry.indexOf('\t');
+    const file = entry.slice(tab + 1);
+    if (!/\.test\.[cm]?[jt]sx?$/.test(file)) continue;
+    const [, type, hash] = entry.slice(0, tab).split(' ');
+    assert.ok(type === 'blob' && hash, 'Invalid test blob: ' + file);
+    blobs.set(file, hash);
+  }
+  return blobs;
 }
 
 function inventory(input: unknown, tree: string, root: string) {
@@ -45,8 +51,9 @@ function inventory(input: unknown, tree: string, root: string) {
     assert.ok(record.tests > 0 && record.tests === record.passed + record.skipped, 'Incomplete outcomes: ' + file);
     files.set(file, record);
   }
-  assert.deepEqual([...files.keys()].sort(), trackedTests(root, tree), 'Runner files differ from tracked test files');
-  return files;
+  const blobs = trackedTests(root, tree);
+  assert.deepEqual([...files.keys()].sort(), [...blobs.keys()].sort(), 'Runner files differ from tracked test files');
+  return { files, blobs };
 }
 
 export function compareTestFiles(before: unknown, after: unknown, base: string, tested: string, root = process.cwd()) {
@@ -64,21 +71,27 @@ export function compareTestFiles(before: unknown, after: unknown, base: string, 
     renames.set(source, destination);
   }
   const seen = new Set<string>();
+  const origins = new Map<string, string>();
   let moved = 0,
     passed = 0,
     skipped = 0;
-  for (const [source, expected] of old) {
+  for (const [source, expected] of old.files) {
     const destination = renames.get(source) ?? source;
-    const actual = current.get(destination);
+    const actual = current.files.get(destination);
     assert.ok(actual, 'Unresolved move or missing test: ' + source);
     assert.ok(!seen.has(destination), 'Duplicate destination: ' + destination);
     assert.deepEqual(actual, expected, 'Runner drift: ' + source + ' -> ' + destination);
+    const oldBlob = old.blobs.get(source);
+    const newBlob = current.blobs.get(destination);
+    assert.ok(oldBlob && newBlob);
+    assert.ok(!origins.has(newBlob) || origins.get(newBlob) === oldBlob, 'New duplicate test content: ' + destination);
+    origins.set(newBlob, oldBlob);
     seen.add(destination);
     if (source !== destination) moved++;
     passed += actual.passed;
     skipped += actual.skipped;
   }
-  assert.deepEqual([...seen].sort(), [...current.keys()].sort(), 'Unmapped destination test files');
+  assert.deepEqual([...seen].sort(), [...current.files.keys()].sort(), 'Unmapped destination test files');
   return { files: seen.size, moved, unchanged: seen.size - moved, tests: passed + skipped, passed, skipped };
 }
 

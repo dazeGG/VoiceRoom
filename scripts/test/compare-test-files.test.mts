@@ -56,4 +56,12 @@ test('reconciles runner outcomes through real Git renames, never grand totals', 
   writeFileSync(join(root, c), 'another behaviour\n');
   const replaced = tree();
   assert.throws(() => compareTestFiles(before, { ...after, tree: replaced }, base, replaced, root), /Unresolved move/);
+  // Even retaining the original path and counts cannot disguise a second
+  // byte-identical copy of the remaining test.
+  renameSync(join(root, c), join(root, a));
+  const overwritten = tree();
+  assert.throws(
+    () => compareTestFiles(before, { ...before, tree: overwritten }, base, overwritten, root),
+    /duplicate test content/i
+  );
 });
