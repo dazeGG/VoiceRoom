@@ -8,7 +8,7 @@ import { usePageStore } from '@/stores/page.store';
 import { getAppRealtime } from '@/api/realtime';
 import { t } from '@/shared/i18n';
 import { retainMobileFriendCallRealtime } from '@/platform/desktop-boundary';
-import { APP_HOME, LEGACY_APP_HOME } from '@/shared/app-home';
+import { APP_HOME, LEGACY_APP_HOME, dmPath, DM_CALL_CHAT_HASH } from '@/shared/app-home';
 import { shallowPush, shallowReplace } from '@/shared/utils/shallow-routing';
 import IncomingCallStack from './IncomingCallStack.vue';
 import { useFriendCallStore } from './friend-call.store';
@@ -53,17 +53,17 @@ watch(
           await nextTick();
           page.screen = 'start';
         },
-        openCall(callId) {
+        openCall(peerId) {
           const current = router.currentRoute.value;
-          if (current.query.call === callId) return;
-          const path = `${APP_HOME}?call=${encodeURIComponent(callId)}`;
+          const path = dmPath(peerId);
+          if (current.fullPath === path) return;
+          if (current.path === APP_HOME && current.query.dm === peerId && current.hash === DM_CALL_CHAT_HASH) {
+            void shallowReplace(router, path);
+            return;
+          }
           if (isLobbyRoute()) {
             void shallowPush(router, path);
           } else void router.push(path);
-        },
-        closeCall(callId, peerId) {
-          if (router.currentRoute.value.query.call !== callId) return;
-          void shallowReplace(router, `${APP_HOME}?dm=${encodeURIComponent(peerId)}`);
         }
       })
     );

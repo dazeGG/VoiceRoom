@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { IconButton, Badge, Splitter, type SplitterWidth, Avatar } from '@voiceroom/ui-kit/components';
+import { IconButton, Badge, Splitter, type SplitterSize, Avatar } from '@voiceroom/ui-kit/components';
 import { PanelLeftClose, PanelLeftOpen } from '@lucide/vue';
 import { t } from '@/shared/i18n';
 import type { InboxItem } from '@voiceroom/shared/contracts/notifications';
@@ -16,12 +16,12 @@ import { useScreenUiStore } from '@voiceroom/call/engine';
 import { useVoiceSessionStore } from '@voiceroom/call/engine';
 import RoomPage from '@/features/room/RoomPage.vue';
 import { usePortraitCallLayout } from '@/features/room/mobile-call-layout';
-import FriendCallView from '@/features/friend-call/FriendCallView.vue';
 import { useFriendCallStore } from '@/features/friend-call/friend-call.store';
 import { useRoute } from 'vue-router';
 import { useSessionStore } from '@/features/auth/session.store';
 import { usePageStore } from '@/stores/page.store';
 import { useNotificationPreferencesStore } from '@/shared/notifications/preferences.store';
+import { DM_CALL_CHAT_HASH } from '@/shared/app-home';
 import { effectivePresenceStatus } from '@/shared/presence';
 import { displayNameOf } from '@/shared/utils/display-name';
 import { extractRoomId } from '@/shared/utils/room';
@@ -88,17 +88,11 @@ const page = usePageStore();
 
 const rooms = useLobbyRooms((message) => toast(message));
 const routing = useLobbyRouting(lobby, rooms);
-lobby.configure({ onEnterRoom: routing.requestEnterRoom, onBrowse: routing.hideCall });
-const route = useRoute();
+lobby.configure({ onEnterRoom: routing.requestEnterRoom, onBrowse: routing.browseFromLinkedDm });
 const calls = useFriendCallStore();
+const route = useRoute();
 const portrait = usePortraitCallLayout();
-const shownCall = computed(() => {
-  const id = route.query.call;
-  if (typeof id !== 'string' || (calls.voice?.callId !== id && calls.closingCallId !== id)) return undefined;
-  return calls.record(id);
-});
 const portraitDm = computed(() => portrait.value && lobby.mode === 'friends' && lobby.view === 'dm' && calls.enabled);
-const portraitFocus = computed(() => portrait.value && Boolean(shownCall.value || portraitDm.value));
 const staff = useStaffAccess(toast);
 const notifications = useLobbyNotifications();
 const preferences = useNotificationPreferencesStore();
@@ -125,7 +119,7 @@ const sidebarToggleLabel = computed(() =>
 );
 const sidebarToggle = useTemplateRef<HTMLButtonElement>('sidebarToggle');
 const sidebarHandleId = 'lobby-sidebar-resize';
-function commitSidebar(layout: SplitterWidth): void {
+function commitSidebar(layout: SplitterSize): void {
   if (layout.collapsed && document.activeElement?.id === sidebarHandleId) {
     sidebarToggle.value?.focus();
   }
@@ -321,13 +315,13 @@ function roomDeleted(): void {
       'lobby-shell--sidebar-peeking': sidebarPeeking,
       'lobby-shell--resizing': sidebarDragging,
       'lobby-shell--portrait': portrait,
-      'lobby-shell--portrait-focus': portraitFocus
+      'lobby-shell--portrait-focus': portraitDm
     }"
     :style="{ '--lv-side-w': `${dragWidth ?? sidebarWidth}px` }"
-    :width="sidebarWidth"
-    :min-width="sidebar.minWidth"
-    :max-width="sidebarMaxWidth"
-    :collapsed-width="48"
+    :size="sidebarWidth"
+    :min-size="sidebar.minWidth"
+    :max-size="sidebarMaxWidth"
+    :collapsed-size="48"
     :handle-id="sidebarHandleId"
     :label="t('Ширина боковой панели')"
     @dragging="sidebar.setDragging"
@@ -420,16 +414,8 @@ function roomDeleted(): void {
         />
       </div>
 
-      <FriendCallView
-        v-if="shownCall"
-        :key="shownCall.call.id"
-        :call="shownCall.call"
-        :offset="shownCall.offset"
-        @back="routing.goHome"
-        @messages="void lobby.openDm($event)"
-      />
       <RoomBrowseView
-        v-else-if="
+        v-if="
           lobby.mode === 'rooms' && selectedRoom && connectedVoiceRoomId && selectedRoom.roomId !== connectedVoiceRoomId
         "
         :user="user"
@@ -457,8 +443,11 @@ function roomDeleted(): void {
       />
       <DmView
         v-else-if="lobby.mode === 'friends' && lobby.view === 'dm'"
+        :key="lobby.selectedFriendId ?? ''"
         :self="user"
         :portrait="portraitDm"
+        :mobile-chat="route.hash === DM_CALL_CHAT_HASH"
+        @update:mobile-chat="routing.setMobileCallChat"
         @back="routing.goHome"
       />
       <PeopleView

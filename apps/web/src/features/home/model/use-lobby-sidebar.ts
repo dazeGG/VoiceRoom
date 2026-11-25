@@ -1,5 +1,5 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue';
-import type { SplitterWidth } from '@voiceroom/ui-kit/components';
+import type { SplitterSize } from '@voiceroom/ui-kit/components';
 import { readStorage, writeStorage } from '@/shared/storage';
 
 const WIDTH_KEY = 'voice-room:lobby-sidebar-width';
@@ -69,10 +69,10 @@ export function useLobbySidebar(keepPreviewOpen: () => boolean) {
     if (dragging.value && pixels >= MIN_WIDTH) dragWidth.value = pixels;
   }
 
-  function commit(next: SplitterWidth): void {
+  function commit(next: SplitterSize): void {
     if (!next.collapsed) {
-      preferredWidth.value = next.width;
-      writeStorage(WIDTH_KEY, String(next.width));
+      preferredWidth.value = next.size;
+      writeStorage(WIDTH_KEY, String(next.size));
     }
     setCollapsed(next.collapsed);
   }

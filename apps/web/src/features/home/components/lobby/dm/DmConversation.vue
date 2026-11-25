@@ -35,13 +35,14 @@ import DmComposer from './DmComposer.vue';
 import DmCallEvent from './DmCallEvent.vue';
 import DmInviteCard from './DmInviteCard.vue';
 
-const { peerId, self, peer, presence, media, quickReactions } = defineProps<{
+const { peerId, self, peer, presence, media, quickReactions, visible } = defineProps<{
   peerId: string;
   self: AuthUser;
   peer: PublicUser | null;
   presence: PresenceStatus;
   media: AttachmentComposeStore | null;
   quickReactions: string[];
+  visible: boolean;
 }>();
 
 interface Group {
@@ -98,7 +99,6 @@ const groups = computed<Group[]>(() => {
 });
 
 let stopReactions = (): void => {};
-let stopReader = (): void => {};
 
 onMounted(() => {
   stopReactions = getAppRealtime().subscribe((event) => {
@@ -106,14 +106,18 @@ onMounted(() => {
     if (event.payload.conversation.id !== peerId) return;
     reactions.applyServer(event.payload.messageId, event.payload.summary);
   });
-  // Read receipts follow the conversation on screen: unmounting stops them.
-  stopReader = lobby.thread.attachReader(peerId);
 });
 
-onBeforeUnmount(() => {
-  stopReactions();
-  stopReader();
-});
+onBeforeUnmount(() => stopReactions());
+
+// Keep the composer and scroll state while hiding the chat, and read only while it is on screen.
+watch(
+  () => visible,
+  (isVisible, _, onCleanup) => {
+    if (isVisible) onCleanup(lobby.thread.attachReader(peerId));
+  },
+  { immediate: true, flush: 'post' }
+);
 
 // System messages have their own actions.
 const menu = new MessageMenuState<DirectMessage>({

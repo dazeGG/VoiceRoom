@@ -75,7 +75,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function currentPath(): string {
-  return `${window.location.pathname}${window.location.search}`;
+  return `${window.location.pathname}${window.location.search}${window.location.hash}`;
 }
 
 /** Whether the history entry now shown for `fullPath` was written by a shallow push or replace. */

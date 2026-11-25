@@ -7,33 +7,11 @@
   min-height: 0;
 }
 
-.friend-call__header {
-  display: flex;
-  align-items: center;
-  padding: var(--space-12) var(--space-24);
-  gap: var(--space-12);
-  border-block-end: 1px solid var(--vr-line);
-}
-
-.friend-call__heading {
-  flex: 1;
-  min-width: 0;
-}
-
-.friend-call__heading h1 {
-  overflow: hidden;
-  font-size: var(--size-16);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.friend-call__heading p {
-  color: var(--vr-text-muted);
-  font-size: 0.8125rem;
-}
-
-.friend-call__heading [role='timer'] {
-  font-family: var(--font-mono);
+.friend-call__expand {
+  position: absolute;
+  z-index: 2;
+  inset-block-start: var(--space-8);
+  inset-inline-end: var(--space-12);
 }
 
 .friend-call__stage {
@@ -41,24 +19,24 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: safe center;
   min-height: 0;
-  padding: var(--space-24) var(--space-24) calc(var(--space-64) + var(--space-40) + var(--friend-call-safe-bottom));
-  gap: var(--space-24);
+  padding: var(--space-12) var(--space-48) calc(var(--space-64) + var(--space-20) + var(--friend-call-safe-bottom));
+  gap: var(--space-8);
   overflow: auto;
+  overscroll-behavior: contain;
 }
 
 .friend-call__placeholder {
   display: grid;
   justify-items: center;
   align-content: center;
-  gap: var(--space-12);
+  gap: var(--space-4);
   text-align: center;
 }
 
 .friend-call__name {
-  margin-block-start: var(--space-16);
-  font-size: var(--size-28);
+  font-size: var(--size-20);
   font-weight: 600;
   overflow-wrap: anywhere;
 }
@@ -77,10 +55,29 @@
 }
 
 .friend-call__tiles {
+  container-type: size;
   display: grid;
+  place-items: center;
+}
+
+.friend-call__tile-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  display: grid;
+  justify-items: stretch;
   gap: var(--space-12);
-  width: 100%;
+  inline-size: min(100%, calc(100cqb * 32 / 9 + var(--space-12)));
+}
+
+.friend-call__tiles,
+.friend-call__screen {
+  flex: 1;
+  inline-size: 100%;
+  min-block-size: calc(var(--size-56) + var(--space-32));
+}
+
+.friend-call__screen {
+  display: grid;
+  place-items: center;
 }
 
 .friend-call__countdown {
@@ -104,13 +101,22 @@
   --friend-call-safe-bottom: env(safe-area-inset-bottom, 0px);
 
   .friend-call__stage {
-    justify-content: safe center;
     gap: var(--space-16);
     padding-inline: var(--space-16);
-    scroll-padding-block-end: calc(var(--space-64) + var(--space-40) + var(--friend-call-safe-bottom));
+  }
+
+  .friend-call__name {
+    margin-block-start: var(--space-16);
+    font-size: var(--size-28);
   }
 
   .friend-call__tiles {
+    container-type: normal;
+    flex: none;
+  }
+
+  .friend-call__tile-grid {
+    inline-size: 100%;
     grid-template-columns: minmax(0, 1fr);
     gap: var(--space-8);
   }

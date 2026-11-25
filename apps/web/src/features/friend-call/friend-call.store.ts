@@ -26,8 +26,7 @@ type IncomingAttempt = CallIncoming & { expiresAt: number };
 type MissedRecord = CallMissedCount & { serverNow: number; revision: number };
 type Navigation = {
   prepareVoice(): Promise<void>;
-  openCall(callId: string): void;
-  closeCall(callId: string, peerId: string): void;
+  openCall(peerId: string): void;
   retainMobileRealtime?: () => () => void;
 };
 const RINGER_MUTED_KEY = 'voice-room:incoming-call-muted';
@@ -44,7 +43,6 @@ export const useFriendCallStore = defineStore('friend-call', () => {
   const voice = shallowRef<(Admission & { callId: string }) | null>(null);
   const busy = shallowRef<{ action: Action | 'start'; id: string } | null>(null);
   const mutedAttempt = ref<string | null>(null);
-  const closingCallId = ref('');
   const missedLoaded = ref(false);
   const missed = reactive(new Map<string, MissedRecord>());
   const pendingSeen = new Set<string>();
@@ -52,7 +50,6 @@ export const useFriendCallStore = defineStore('friend-call', () => {
   const fences = new Map<string, number>();
   const expiredAttempts = new Map<string, number>();
   const timers = new Map<string, { deadline: number; handle: ReturnType<typeof setTimeout> }>();
-  let closeTimer: ReturnType<typeof setTimeout> | undefined;
   let unsubscribe: (() => void) | undefined;
   let releaseMobileRealtime: (() => void) | undefined;
   let stopMobileVisibility: (() => void) | undefined;
@@ -191,15 +188,6 @@ export const useFriendCallStore = defineStore('friend-call', () => {
       if (heldVoice && call.endReason === 'alone_timeout') {
         toasts.pushToast(t('Звонок завершён'), { description: t('Вы были одни в звонке 5 минут') });
       }
-      const peerId = callPeer(call, userId.value).id;
-      if (call.endReason === 'declined' && call.endedByUserId !== userId.value && heldVoice) {
-        clearTimeout(closeTimer);
-        closingCallId.value = id;
-        closeTimer = setTimeout(() => {
-          closingCallId.value = '';
-          navigation?.closeCall(id, peerId);
-        }, 2_000);
-      } else navigation?.closeCall(id, peerId);
       return;
     }
     // The seat can leave or be transferred while this tab was disconnected.
@@ -207,7 +195,6 @@ export const useFriendCallStore = defineStore('friend-call', () => {
     const nowAbsent = call.seats?.some((seat) => seat.userId === userId.value && seat.status === 'absent');
     if (wasPresent && nowAbsent && voice.value?.callId === id) {
       voice.value = null;
-      navigation?.closeCall(id, callPeer(call, userId.value).id);
     }
   }
 
@@ -222,7 +209,6 @@ export const useFriendCallStore = defineStore('friend-call', () => {
         records.delete(id);
         fences.set(id, before.call.revision);
         if (voice.value?.callId === id) voice.value = null;
-        navigation?.closeCall(id, callPeer(before.call, userId.value).id);
       }
     }
   }
@@ -278,7 +264,6 @@ export const useFriendCallStore = defineStore('friend-call', () => {
     enabled.value = false;
     busy.value = null;
     voice.value = null;
-    closingCallId.value = '';
     startRetry = undefined;
     records.clear();
     attempts.clear();
@@ -290,7 +275,6 @@ export const useFriendCallStore = defineStore('friend-call', () => {
     pendingSeen.clear();
     for (const { handle } of timers.values()) clearTimeout(handle);
     timers.clear();
-    clearTimeout(closeTimer);
   }
 
   function connectAccountEvents(): void {
@@ -363,7 +347,6 @@ export const useFriendCallStore = defineStore('friend-call', () => {
     if (!record || record.call.phase === 'closed') return;
     const { call } = record;
     const epoch = session;
-    navigation?.closeCall(call.id, callPeer(call, userId.value).id);
     const result = await actOnCallRing(call.id, {
       action: 'leave',
       clientRequestId: newId(),
@@ -385,14 +368,14 @@ export const useFriendCallStore = defineStore('friend-call', () => {
       if (epoch !== session || records.get(id)?.call.phase === 'closed') return;
       voice.value = { callId: id, ...answer.voiceAdmission };
     }
-    if (voice.value?.callId === id) navigation?.openCall(id);
+    if (voice.value?.callId === id) navigation?.openCall(callPeer(answer.call, userId.value).id);
   }
 
   async function dial(peerId: string): Promise<void> {
     if (!enabled.value || peerId === userId.value) return;
     const existing = callForPeer(peerId);
     if (existing && voice.value?.callId === existing.id) {
-      navigation?.openCall(existing.id);
+      navigation?.openCall(peerId);
       return;
     }
     if (existing?.allowedActions.includes('accept')) return act(existing, 'accept');
@@ -448,7 +431,8 @@ export const useFriendCallStore = defineStore('friend-call', () => {
   }
 
   function open(): void {
-    if (voice.value) navigation?.openCall(voice.value.callId);
+    const record = voice.value && records.get(voice.value.callId);
+    if (record) navigation?.openCall(callPeer(record.call, userId.value).id);
   }
 
   function toggleSilence(attempt: CallIncoming): void {
@@ -464,7 +448,6 @@ export const useFriendCallStore = defineStore('friend-call', () => {
     busy,
     mutedAttempt,
     incoming,
-    closingCallId,
     startSession,
     callForPeer,
     missedForPeer: (peerId: string): CallMissedCount | undefined => missed.get(peerId),

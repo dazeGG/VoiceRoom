@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { incomingFriendRequestIds, registerViaUi, uniqueLogin } from './helpers';
+import { boxOf, incomingFriendRequestIds, registerViaUi, uniqueLogin } from './helpers';
 
 async function befriend(caller: Page, recipient: Page) {
   const callerName = uniqueLogin('callhost');
@@ -18,7 +18,8 @@ async function befriend(caller: Page, recipient: Page) {
 
 const friend = (page: Page, name: string) => page.locator('.sidebar__row', { hasText: name });
 const dm = (page: Page) => page.getByRole('region', { name: 'Личные сообщения' });
-const stage = (page: Page, name: string) => page.getByRole('region', { name: `Звонок: ${name}` });
+const stage = (page: Page, name: string) => dm(page).getByRole('region', { name: `Звонок: ${name}` });
+const dmHeader = (page: Page) => dm(page).locator('.dm-view__header');
 const controls = (page: Page) => page.getByRole('group', { name: 'Управление звонком' });
 
 test('friends answer a DM call, return from the rail, and see the completed call in both threads', async ({
@@ -36,16 +37,36 @@ test('friends answer a DM call, return from the rail, and see the completed call
       .getByRole('region', { name: `${callerName} звонит вам` })
       .getByRole('button', { name: 'Принять', exact: true })
       .click();
-    await expect(stage(page, recipientName).getByRole('timer')).toContainText('Звонок ·', { timeout: 20_000 });
-    await expect(stage(recipient, callerName).getByRole('timer')).toContainText('Звонок ·', { timeout: 20_000 });
+    await expect(dmHeader(page).getByRole('timer')).toContainText('в звонке ·', { timeout: 20_000 });
+    await expect(dmHeader(recipient).getByRole('timer')).toContainText('в звонке ·', { timeout: 20_000 });
+    await expect(page).toHaveURL(/[?]dm=[^&#]+$/);
+    await expect(recipient).toHaveURL(/[?]dm=[^&#]+$/);
 
-    await stage(page, recipientName).getByRole('button', { name: 'Открыть личные сообщения' }).click();
     const live = dm(page).getByRole('article');
     await expect(live).toContainText('Вы в звонке');
-    await expect(live.getByRole('button', { name: 'Вернуться в звонок' })).toBeVisible();
+    const composer = dm(page).getByRole('textbox');
+    await expect(composer).toBeVisible();
+    const divider = dm(page).getByRole('separator', { name: 'Высота звонка' });
+    const initialHeight = await divider.getAttribute('aria-valuetext');
+    const { x, y, width, height } = await boxOf(divider);
+    await page.mouse.move(x + width / 2, y + height / 2);
+    await page.mouse.down();
+    await page.mouse.move(x + width / 2, y + height / 2 + 48, { steps: 6 });
+    await page.mouse.up();
+    await expect(divider).not.toHaveAttribute('aria-valuetext', initialHeight ?? '');
+    const chosenHeight = await divider.getAttribute('aria-valuetext');
+    await stage(page, recipientName).getByRole('button', { name: 'Развернуть' }).click();
+    await expect(composer).toBeHidden();
+    await stage(page, recipientName).getByRole('button', { name: 'Свернуть' }).click();
+    await expect(composer).toBeVisible();
+    await expect(divider).toHaveAttribute('aria-valuetext', chosenHeight ?? '');
+
+    await page.getByRole('button', { name: /VoiceRoom/ }).click();
+    await expect(stage(page, recipientName)).toBeHidden();
     const rail = page.getByRole('region', { name: 'Активный звонок' });
     await rail.getByRole('button', { name: 'Вернуться в звонок' }).click();
     await expect(stage(page, recipientName)).toBeVisible();
+    await expect(divider).toHaveAttribute('aria-valuetext', chosenHeight ?? '');
     await controls(page).getByRole('button', { name: 'Завершить', exact: true }).click();
     await expect(stage(recipient, callerName).getByRole('button', { name: 'Позвонить снова' })).toBeVisible();
     await controls(recipient).getByRole('button', { name: 'Завершить', exact: true }).click();

@@ -14,7 +14,7 @@
 //                                         -> .dm-view__head-status--dnd / --away / --online / --offline
 
 .dm-view {
-  --dm-view-head-height: 65px;
+  --dm-view-head-height: var(--size-56);
   position: relative;
   flex: 1;
   min-height: 0;
@@ -37,15 +37,21 @@
   border-bottom: 1px solid var(--vr-line);
 }
 
+.dm-view__panes {
+  --splitter-height: 100%;
+  flex: 1;
+  min-block-size: 0;
+}
+
 .dm-view__head {
   flex: 1;
   min-width: 0;
-  min-height: var(--dm-view-head-height);
+  min-height: calc(var(--dm-view-head-height) - 1px);
   box-sizing: border-box;
   display: flex;
   align-items: center;
   gap: var(--space-12);
-  padding: var(--space-12) var(--space-24);
+  padding: var(--space-4) var(--space-24);
   border: 0;
   background: transparent;
   color: inherit;
@@ -64,10 +70,13 @@
 }
 
 .dm-view__head-name {
+  overflow: hidden;
   color: var(--vr-text);
   font-size: 16px;
   font-weight: 600;
   letter-spacing: -0.01em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .dm-view__head-status {
@@ -91,6 +100,10 @@
   color: var(--vr-accent);
 }
 
+.dm-view__head-status[role='timer'] {
+  font-family: var(--font-mono);
+}
+
 .dm-view__head-status--offline {
   color: var(--vr-text-muted);
 }
@@ -105,9 +118,5 @@
 
   .dm-view__head {
     padding-inline: 0;
-  }
-
-  .dm-view__head-name {
-    overflow-wrap: anywhere;
   }
 }

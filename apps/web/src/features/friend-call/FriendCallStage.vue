@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, watchEffect } from 'vue';
-import { ChevronLeft, MessageSquare, Mic, MicOff, Phone, PhoneOff } from '@lucide/vue';
-import { Avatar, Button, Callout, IconButton, formatCallClock, useCallClock } from '@voiceroom/ui-kit/components';
+import { Maximize2, Minimize2, Mic, MicOff, Phone, PhoneOff } from '@lucide/vue';
+import { Avatar, Button, Callout, IconButton } from '@voiceroom/ui-kit/components';
 import { useVoiceSessionStore } from '@voiceroom/call/engine';
 import { useScreenUiStore } from '@voiceroom/call/engine/core/screen-ui.store';
 import { state } from '@voiceroom/call/engine/core/room-runtime.store';
@@ -12,47 +12,31 @@ import type { CallSnapshot } from '@voiceroom/shared/contracts/rings';
 import RoomDock from '@/features/room/components/RoomDock.vue';
 import MobileCallTopbar from '@/features/room/components/MobileCallTopbar.vue';
 import ScreenStage from '@/features/room/components/ScreenStage.vue';
-import { usePortraitCallLayout } from '@/features/room/mobile-call-layout';
 import EmojiText from '@/shared/chat/EmojiText.vue';
 import { t } from '@/shared/i18n';
 import FriendCallTiles from './FriendCallTiles.vue';
+import type { FriendCallStatus } from './use-friend-call-status';
 import { callPeer, useFriendCallStore } from './friend-call.store';
 
-const { call, offset } = defineProps<{ call: CallSnapshot; offset: number }>();
-const emit = defineEmits<{ back: []; messages: [peerId: string] }>();
+const { call, status, portrait, expanded } = defineProps<{
+  call: CallSnapshot;
+  status: FriendCallStatus;
+  portrait?: boolean;
+  expanded?: boolean;
+}>();
+const emit = defineEmits<{ back: []; messages: []; toggleExpanded: [] }>();
 const calls = useFriendCallStore();
-const portrait = usePortraitCallLayout();
 const voice = useVoiceSessionStore();
 const screen = useScreenUiStore();
 const peer = computed(() => callPeer(call, calls.userId));
 const self = computed(() => (call.caller.id === calls.userId ? call.caller : call.recipient));
 const peerSeat = computed(() => call.seats?.find((seat) => seat.userId === peer.value.id));
 const peerStatus = computed(() => peerSeat.value?.status ?? 'absent');
-const ringingClock = useCallClock(
-  () => (call.phase === 'ringing' ? call.ringingExpiresAt + offset : undefined),
-  'until'
-);
-const startedClock = useCallClock(() => (call.firstConnectedAt ?? call.startedAt) + offset, 'since');
-const clock = computed(() => formatCallClock(Math.floor(startedClock.value / 1000), true));
-const ringing = computed(() => call.phase === 'ringing' && ringingClock.value > 0);
-const declined = computed(() => call.phase === 'closed' && call.endReason === 'declined');
-const noAnswer = computed(() => call.attemptResult === 'no_answer' || (call.phase === 'ringing' && !ringing.value));
-const deadline = computed(() =>
-  !ringing.value && !declined.value && call.aloneDeadline !== null ? call.aloneDeadline + offset : undefined
-);
 const muted = computed(() => isMicrophoneShownMuted() || !state.localStream);
 const hasEngine = computed(() => Boolean(calls.voice?.callId === call.id && voice.roomId === calls.voice.roomId));
-const showElapsed = computed(
-  () =>
-    !ringing.value && !declined.value && !noAnswer.value && (call.firstConnectedAt !== null || call.phase === 'alone')
+const showPlaceholder = computed(
+  () => status.declined || status.ringing || (status.noAnswer && call.firstConnectedAt === null)
 );
-const subtitle = computed(() => {
-  if (declined.value) return t('Звонок отклонён');
-  if (ringing.value) return t('Звоним…');
-  if (noAnswer.value) return t('Нет ответа');
-  return showElapsed.value ? t('Звонок · {time}', { time: clock.value }) : t('Подключаемся…');
-});
-const showPlaceholder = computed(() => ringing.value || declined.value || (noAnswer.value && !call.firstConnectedAt));
 const canRingAgain = computed(() => call.allowedActions.includes('re-ring'));
 
 watchEffect(() => {
@@ -71,29 +55,16 @@ onBeforeUnmount(() => {
   >
     <MobileCallTopbar
       v-if="portrait"
-      :friend-call="{ peer, subtitle, timed: showElapsed }"
+      :friend-call="{ peer, subtitle: status.subtitle, timed: status.timed }"
       @back="emit('back')"
-      @messages="emit('messages', peer.id)"
+      @messages="emit('messages')"
     />
-    <header v-else class="friend-call__header">
-      <IconButton :label="t('Назад')" :size="40" @click="emit('back')"><ChevronLeft aria-hidden="true" /></IconButton>
-      <Avatar
-        :name="peer.displayName"
-        :src="peer.avatarUrl"
-        :color-key="peer.avatarColorKey"
-        :background="peer.avatarAccent || undefined"
-        :size="40"
-      />
-      <div class="friend-call__heading">
-        <h1><EmojiText :text="peer.displayName" /></h1>
-        <p :role="showElapsed ? 'timer' : undefined">
-          {{ subtitle }}
-        </p>
-      </div>
-      <IconButton :label="t('Открыть личные сообщения')" :size="40" @click="emit('messages', peer.id)">
-        <MessageSquare aria-hidden="true" />
+    <div v-else-if="!status.declined" class="friend-call__expand">
+      <IconButton :label="expanded ? t('Свернуть') : t('Развернуть')" :size="32" @click="emit('toggleExpanded')">
+        <Minimize2 v-if="expanded" aria-hidden="true" />
+        <Maximize2 v-else aria-hidden="true" />
       </IconButton>
-    </header>
+    </div>
 
     <div class="friend-call__stage">
       <div v-if="showPlaceholder" class="friend-call__placeholder">
@@ -102,17 +73,15 @@ onBeforeUnmount(() => {
           :src="peer.avatarUrl"
           :color-key="peer.avatarColorKey"
           :background="peer.avatarAccent || undefined"
-          :size="128"
-          :ringing="ringing ? 'ringing' : undefined"
+          :size="portrait ? 128 : 64"
+          :ringing="status.ringing ? 'ringing' : undefined"
         />
         <p class="friend-call__name"><EmojiText :text="peer.displayName" /></p>
         <div role="status">
-          <p v-if="declined">{{ t('Звонок отклонён') }}</p>
-          <p v-else-if="ringing">{{ t('Звоним…') }}</p>
+          <p v-if="status.declined || status.ringing">{{ status.subtitle }}</p>
           <p v-else>{{ t('{name} не отвечает', { name: peer.displayName }) }}</p>
         </div>
-        <p v-if="declined">{{ t('Возвращаемся в личные сообщения…') }}</p>
-        <p v-else-if="ringing" class="friend-call__mic-note">
+        <p v-if="status.ringing" class="friend-call__mic-note">
           <MicOff v-if="muted" aria-hidden="true" /><Mic v-else aria-hidden="true" />
           {{
             muted
@@ -122,12 +91,12 @@ onBeforeUnmount(() => {
         </p>
       </div>
       <Callout
-        v-if="deadline !== undefined"
+        v-if="status.deadline !== undefined"
         class="friend-call__countdown"
         layout="countdown"
-        :deadline="deadline"
-        :title="noAnswer ? '' : t('{name} покидает звонок', { name: peer.displayName })"
-        :text="noAnswer ? t('Можно позвонить ещё раз или завершить звонок.') : undefined"
+        :deadline="status.deadline"
+        :title="status.noAnswer ? '' : t('{name} покидает звонок', { name: peer.displayName })"
+        :text="status.noAnswer ? t('Можно позвонить ещё раз или завершить звонок.') : undefined"
       >
         <template v-if="canRingAgain && !portrait" #actions>
           <Button variant="primary" size="sm" :disabled="Boolean(calls.busy)" @click="void calls.act(call, 're-ring')">
@@ -136,7 +105,7 @@ onBeforeUnmount(() => {
         </template>
       </Callout>
       <Button
-        v-if="portrait && deadline !== undefined && canRingAgain"
+        v-if="portrait && status.deadline !== undefined && canRingAgain"
         variant="primary"
         size="lg"
         fill
@@ -147,12 +116,14 @@ onBeforeUnmount(() => {
         {{ t('Позвонить снова') }}
       </Button>
       <template v-if="!showPlaceholder">
-        <ScreenStage v-if="hasEngine" />
+        <div v-if="hasEngine" v-show="screen.stageVisible" class="friend-call__screen">
+          <ScreenStage />
+        </div>
         <FriendCallTiles :peer="peer" :self="self" :peer-status="peerStatus" :has-engine="hasEngine" />
       </template>
     </div>
 
-    <div v-if="!declined" class="friend-call__dock">
+    <div v-if="!status.declined" class="friend-call__dock">
       <RoomDock
         v-if="hasEngine"
         :friend-call="{ groupLabel: t('Управление звонком'), leaveLabel: t('Завершить'), leave: calls.leave }"
