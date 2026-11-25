@@ -515,6 +515,32 @@ test('G08-A04 rejects unmeasured/regressed coverage and changed business gaps', 
   );
 });
 
+test('G08-A04b a covered changed line must also cover its intersecting V8 block', () => {
+  const file = 'apps/web/src/api/client.ts';
+  const options = { thresholds, changedFiles: [file], changedLineMap: new Map([[file, new Set([3])]]) };
+  assert.throws(() => checkCoverage({ ...options, coverageSummary: greenSummary }), /changed-line coverage details/i);
+  assert.throws(
+    () =>
+      checkCoverage({
+        ...options,
+        coverageSummary: {
+          ...greenSummary,
+          files: {
+            [file]: {
+              lines: 99,
+              branches: 99,
+              details: {
+                lines: [{ line: 3, covered: true }],
+                branches: [{ startLine: 2, endLine: 4, covered: false }]
+              }
+            }
+          }
+        }
+      }),
+    /changed node-v8-branch coverage 0\.00% is below 85%/
+  );
+});
+
 test('G08-A05 changed auth and web media strict files fail closed when missing or below the strict minimum', () => {
   const media = 'packages/call/src/engine/media/screen-receiver-demand.ts';
   assert.throws(
