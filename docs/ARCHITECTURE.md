@@ -296,7 +296,8 @@ styles/                 SCSS: tokens, mixins and one partial per BEM block
   covered lines against its measurable changed lines. A 0/0 metric adds
   nothing; a 0/0-only patch is N/A. Blocks must intersect measurable
   changed lines. No protected file contributes to the pool or borrows its
-  coverage; neither check uses unchanged code as a global floor.
+  coverage. A rename within the pool or a mode-only change contributes no
+  unchanged lines. A pure rename into scope still checks the promoted file.
 - The CI artifact `coverage/release-250-patch.json` records the pooled verdict
   and every eligible changed file's
   covered/eligible lines and blocks, worst first (lower non-N/A patch

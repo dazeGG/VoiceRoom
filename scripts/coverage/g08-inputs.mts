@@ -76,7 +76,7 @@ const diff = [
   testedTree
 ];
 // Name-only keeps the destination even for a 100% rename (no patch hunks):
-// the evaluator then checks the entire file if its new name is eligible.
+// protected files and promotions into scope still get a whole-file check.
 const names = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true })
   .decode(git(...diff, '--name-only', '-z', '--'))
   .split('\0')

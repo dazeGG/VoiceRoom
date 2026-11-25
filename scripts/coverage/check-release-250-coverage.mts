@@ -535,12 +535,24 @@ function readChangedFiles(filePath: string) {
     .filter(Boolean);
 }
 
-function readChangedLineMap(filePath: string) {
+function readChangedLineMap(filePath: string, thresholds: CoverageThresholds) {
   const changed = new Map<string, Set<number>>();
   if (!filePath) return changed;
   let currentPath = '';
+  let oldPath = '';
+  const inPool = (name: string) => isBusinessFile(name, thresholds) && isPooledBusinessFile(name, thresholds);
   for (const line of fs.readFileSync(filePath, 'utf8').split(/\r?\n/)) {
-    if (line.startsWith('+++ ')) {
+    if (line.startsWith('diff --git ')) {
+      currentPath = '';
+      oldPath = /^diff --git a\/(.+) b\/\1$/.exec(line)?.[1] ?? '';
+    } else if (line.startsWith('rename from ')) {
+      oldPath = line.slice('rename from '.length);
+    } else if (line.startsWith('rename to ') || line.startsWith('new mode ')) {
+      // A move within the pool or a chmod changes no lines by itself. A
+      // promotion from outside the pool keeps the whole-file fallback.
+      const destination = line.startsWith('rename to ') ? line.slice('rename to '.length) : oldPath;
+      if (inPool(oldPath) && inPool(destination)) changed.set(destination, new Set());
+    } else if (line.startsWith('+++ ')) {
       currentPath = normalizePath(line.slice(4).replace(/^b\//, ''));
       if (currentPath === '/dev/null') currentPath = '';
       continue;
@@ -923,7 +935,7 @@ if (import.meta.main) {
       coverageSummary,
       thresholds,
       changedFiles: readChangedFiles(args.changedFiles),
-      changedLineMap: readChangedLineMap(args.changedDiff),
+      changedLineMap: readChangedLineMap(args.changedDiff, thresholds),
       coveragePath,
       baseThresholds: args.baseThresholds
         ? readJson(args.baseThresholds, 'protected base thresholds', ThresholdsFile)
