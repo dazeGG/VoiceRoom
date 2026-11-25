@@ -1,6 +1,6 @@
 # G08 v2: calibration evidence
 
-**Decision:** keep 90% changed lines and 85% changed V8 blocks **in each changed file**, for new and previously measured code alike. Keep 95% whole-file blocks for each changed member of the auth-admission and media groups. Retire only the v1 global floors, 9.17% / 53.9%. No aggregate in this report is a replacement floor.
+**Decision:** enforce one 90% line / 85% V8 block verdict on the **pooled patch in newly measured API and shared code**. Keep independent per-file 90/85 patch checks on v1-eligible paths, plus 95% whole-file blocks for changed members of the auth-admission and media groups. The old 9.17% / 53.9% global floors are retired. The pool is a changed-code gate, not a global baseline.
 
 ## One current reference, two scopes
 
@@ -56,89 +56,89 @@ node scripts/coverage/check-release-250-coverage.mts --root "$BASE_CHECKOUT" \
 
 The original hosted v1 whole-scope totals were 3,991/4,065 lines and 1,068/1,106 blocks on A; 4,006/4,065 and 1,085/1,117 on B. The following **local counterfactual** is not the missing hosted artifact. It uses the complete historical file inventory with real PostgreSQL, plus separately instrumented successful retries on the same tree. A's full run had a server-readiness and a native-lease heartbeat timeout; B's had the heartbeat timeout. Two cases per tree required the opt-in LiveKit fixture and were skipped. Retrying the affected behavior on each tree supplied the missing execution, without relaxing a threshold or changing the tested source. V8 unions can also observe additional blocks. The resulting whole-scope v1 counts (3,993/4,065 and 1,070/1,106; 4,008/4,065 and 1,086/1,116) are not identical to hosted, but both original changed-line fractions and failing file verdicts reproduce. Per-file block counts below are local observations, not inferred from rounded hosted percentages. Additional Linux replays also hit historical fixture timeouts; their partial profiles are not used in the table.
 
-| Attempt | Policy | Changed files | Changed lines (pooled) | Changed blocks (pooled) | File verdicts |
-|---|---|---:|---:|---:|---|
-| A | v1 | 7 | 129/149 | 46/54 | 5 pass, 2 fail |
-| A | v2 | 63 | 2275/2377 | 788/870 | 46 pass, 15 fail, 2 N/A |
-| B | v1 | 7 | 144/149 | 62/64 | 6 pass, 1 fail |
-| B | v2 | 63 | 2289/2377 | 805/882 | 46 pass, 15 fail, 2 N/A |
+| Attempt | New-scope changed files | Pool: changed lines | Pool: changed blocks | Pool verdict | Previously protected per-file patch verdicts (v2) | Strict groups (whole file) | PR verdict |
+|---|---:|---:|---:|---|---|---|---|
+| A | 56 | 2,166/2,248 (96.35%) | 744/818 (90.95%) | Pass | 5 pass, 2 fail | 4/4 pass | **Fail** |
+| B | 56 | 2,165/2,248 (96.31%) | 745/820 (90.85%) | Pass | 6 pass, 1 fail | 4/4 pass | **Fail** |
 
-Both candidate gates reject both attempts. The v1 line misses reported by the hosted jobs reproduce: **36/52 (69.23%)** in `call-voice-admission.service.ts` on A; **13/17 (76.47%)** in `livekit-auth-gate.service.ts` on B. Erasing type-only lines changes those v2 denominators to 40 and 16. The change to the block denominator on a patch excludes blocks whose only changed lines are comments or erased types; it does not change the whole-file V8 branch metric.
+To reproduce the split, take the 63 changed-file rows measured with the v2 collector for each attempt. Seven match both a protected v1 path and a v1-eligible extension; **do not add their counts to the pool**. Of the other 56, 54 have measurable changed lines and 40 have observed intersecting blocks. Two rows are N/A on both metrics. Add covered and eligible counts for each metric separately; do not average file percentages. A branchless file with measurable changes still contributes its lines.
 
-**Why 90/85?** The new-scope whole-suite line rate is below 90%, but this gate applies to a patch in an individual file, not to unchanged debt. The historical pooled rates would conceal real failures, including a missing private-call feedback boundary. These are reasons to add behavior tests, not to lower the gate. Keep one positive rule for old and new files; do not make a 15-file failure pass by averaging or exempting files. Two iterations of one PR are not an estimate of the future false-positive rate.
+The protected failures on A were `call-voice-admission.service.ts` (24/40 lines, 1/8 blocks) and `livekit-auth-gate.service.ts` (12/16, 13/14). On B the former passed (39/40, 17/18); the latter still failed on lines. The v1 collector reproduces the first failure recorded by each hosted job: **36/52 (69.23%)** on A and **13/17 (76.47%)** on B. Erasing type-only lines changes the denominators under v2, not the floors. All four changed strict members passed their separate whole-file branch check on both attempts: `credential-boundary.service.ts` 49/50, `gate-credential-signer.ts` 65/67, `livekit-auth-gate.service.ts` 164/169 and `livekit-credential-provider.ts` 28/29.
+
+**Why pool at 90/85?** The earlier candidate rejected 15 of 63 files in each attempt when it applied those floors to *every* file. Small denominators made a single missed block decisive (for example, `app/api-runtime.ts` has 2/3 blocks on a 59/60-line patch). The owner chose to weight each changed line or block equally across newly measured code, not to relax either threshold. This trade-off allows a weak new-scope file to pass as part of a well-tested patch. The report still exposes every file, including gaps such as private-call feedback, and neither the pool nor unchanged code can rescue a protected file. Two iterations of one PR are a calibration example, not an estimate of a future failure rate.
 
 ### Per-file patch evidence
 
-API names are relative to `apps/api/src/`; shared names retain their package prefix. Each pair is covered/eligible. N/A means 0/0, not 100%. A strict verdict also considers whole-file branches.
+Each attempt lists all 63 changed eligible files, worst first by its lower non-N/A patch percentage, then by full path; N/A-only rows are last. API names are relative to `apps/api/src/`. Each fraction is covered/eligible. **Parentheses mark the seven protected per-file verdicts**; other rows contribute counts to the pool, not individual pass/fail decisions. The file order can differ between attempts.
 
-| File | A lines | A blocks | A | B lines | B blocks | B |
-|---|---:|---:|---|---:|---:|---|
-| `app/api-routes.ts` | 2/2 | N/A | pass | 2/2 | N/A | pass |
-| `app/api-runtime.ts` | 59/60 | 2/3 | FAIL | 59/60 | 2/3 | FAIL |
-| `app/call-realtime.ts` | 44/46 | 4/5 | FAIL | 44/46 | 4/5 | FAIL |
-| `app/config.ts` | 5/5 | 4/4 | pass | 5/5 | 4/4 | pass |
-| `app/domain-services.ts` | 4/7 | 0/2 | FAIL | 4/7 | 0/2 | FAIL |
-| `app/full-room-realtime.ts` | 1/1 | 3/3 | pass | 1/1 | 3/3 | pass |
-| `app/livekit.ts` | 0/1 | N/A | FAIL | 0/1 | N/A | FAIL |
-| `app/realtime-hub.ts` | 11/11 | N/A | pass | 11/11 | N/A | pass |
-| `app/service-registry.ts` | 4/6 | 0/2 | FAIL | 4/6 | 0/2 | FAIL |
-| `domains/account/account.service.ts` | 1/1 | 2/2 | pass | 1/1 | 2/2 | pass |
-| `domains/admin/admin-accounts.repository.ts` | 11/11 | N/A | pass | 11/11 | N/A | pass |
-| `domains/admin/admin-rooms.repository.ts` | 4/4 | N/A | pass | 4/4 | N/A | pass |
-| `domains/admin/admin-rooms.service.ts` | 12/12 | 10/10 | pass | 12/12 | 10/10 | pass |
-| `domains/admission/call-gate.repository.ts` | 42/42 | 2/2 | pass | 42/42 | 2/2 | pass |
-| `domains/admission/call-voice-admission.service.ts` | 24/40 | 1/8 | FAIL | 39/40 | 17/18 | pass |
-| `domains/admission/credential-boundary.service.ts` | 5/5 | 4/4 | pass | 5/5 | 4/4 | pass |
-| `domains/admission/gate-credential-signer.ts` | 8/8 | 7/7 | pass | 8/8 | 7/7 | pass |
-| `domains/admission/livekit-admin.ts` | 7/7 | 9/9 | pass | 7/7 | 9/9 | pass |
-| `domains/admission/livekit-auth-gate.service.ts` | 12/16 | 13/14 | FAIL | 12/16 | 13/14 | FAIL |
-| `domains/admission/livekit-credential-provider.ts` | 11/11 | 8/8 | pass | 11/11 | 8/8 | pass |
-| `domains/feedback/call-feedback.repository.ts` | 5/11 | N/A | FAIL | 5/11 | N/A | FAIL |
-| `domains/feedback/call-feedback.service.ts` | 1/3 | N/A | FAIL | 1/3 | N/A | FAIL |
-| `domains/messaging/call-history.repository.ts` | 103/103 | 7/8 | pass | 103/103 | 7/8 | pass |
-| `domains/messaging/direct-messages.service.ts` | 3/4 | 8/8 | FAIL | 3/4 | 8/8 | FAIL |
-| `domains/messaging/dm-history.service.ts` | 3/3 | 4/4 | pass | 3/3 | 4/4 | pass |
-| `domains/messaging/dm-thread.repository.ts` | 3/3 | 1/1 | pass | 3/3 | 1/1 | pass |
-| `domains/messaging/reaction.repository.ts` | 1/1 | N/A | pass | 1/1 | N/A | pass |
-| `domains/messaging/reply-projector.ts` | 6/6 | 5/5 | pass | 6/6 | 5/5 | pass |
-| `domains/notifications/native-push.service.ts` | 10/10 | 15/15 | pass | 10/10 | 15/15 | pass |
-| `domains/notifications/notification-preferences.repository.ts` | 2/2 | N/A | pass | 2/2 | N/A | pass |
-| `domains/rings/call-lifecycle.policy.ts` | 88/89 | 72/73 | pass | 88/89 | 72/73 | pass |
-| `domains/rings/call-push.repository.ts` | 127/130 | 24/28 | pass | 127/130 | 26/30 | pass |
-| `domains/rings/call-push.service.ts` | 80/81 | 40/41 | pass | 80/81 | 40/41 | pass |
-| `domains/rings/call-rings.repository.ts` | 402/415 | 115/129 | pass | 402/415 | 115/129 | pass |
-| `domains/rings/call-rings.routes.ts` | 98/98 | 6/7 | pass | 98/98 | 6/7 | pass |
-| `domains/rings/call-rings.service.ts` | 448/479 | 199/234 | pass | 447/479 | 199/235 | FAIL |
-| `domains/rings/ring-delivery.ts` | 10/13 | 7/7 | FAIL | 10/13 | 7/7 | FAIL |
-| `domains/rings/ring.repository.ts` | 42/42 | 10/10 | pass | 42/42 | 10/10 | pass |
-| `domains/rooms/peer-moderation.service.ts` | 0/1 | 0/1 | FAIL | 0/1 | 0/1 | FAIL |
-| `domains/rooms/room-surface.policy.ts` | N/A | N/A | N/A | N/A | N/A | N/A |
-| `domains/rooms/room.repository.ts` | 22/22 | 5/6 | FAIL | 22/22 | 5/6 | FAIL |
-| `domains/rooms/rooms.service.ts` | 2/2 | 4/4 | pass | 2/2 | 4/4 | pass |
-| `domains/social/friends.service.ts` | 10/10 | 7/7 | pass | 10/10 | 7/7 | pass |
-| `domains/social/friendship.repository.ts` | 1/1 | N/A | pass | 1/1 | N/A | pass |
-| `domains/social/pair-eligibility.repository.ts` | 38/38 | 7/7 | pass | 38/38 | 7/7 | pass |
-| `domains/social/social-records.ts` | 3/3 | 2/2 | pass | 3/3 | 2/2 | pass |
-| `platform/db/schema.ts` | N/A | N/A | N/A | N/A | N/A | N/A |
-| `realtime/account-events.ts` | 8/8 | 3/3 | pass | 8/8 | 3/3 | pass |
-| `realtime/call-seat-cleanup.ts` | 65/72 | 11/16 | FAIL | 65/72 | 11/16 | FAIL |
-| `realtime/reconnect-leases.ts` | 4/5 | 4/5 | FAIL | 4/5 | 4/5 | FAIL |
-| `realtime/room-presence.ts` | 1/1 | 4/4 | pass | 1/1 | 3/3 | pass |
-| `realtime/room-runtime.ts` | 46/48 | 34/36 | pass | 46/48 | 34/36 | pass |
-| `realtime/room-summaries.ts` | 3/3 | 10/10 | pass | 3/3 | 10/10 | pass |
-| `realtime/voice-join.ts` | 47/48 | 27/28 | pass | 47/48 | 27/28 | pass |
-| `realtime/voice-stays.ts` | 1/1 | 5/5 | pass | 1/1 | 5/5 | pass |
-| `realtime/ws-handler.ts` | 59/59 | 42/42 | pass | 59/59 | 42/42 | pass |
-| `packages/shared/src/contracts/errors.ts` | 3/3 | N/A | pass | 3/3 | N/A | pass |
-| `packages/shared/src/contracts/messages.ts` | 13/13 | 2/2 | pass | 13/13 | 2/2 | pass |
-| `packages/shared/src/contracts/realtime.ts` | 5/5 | N/A | pass | 5/5 | N/A | pass |
-| `packages/shared/src/contracts/rings.ts` | 141/141 | N/A | pass | 141/141 | N/A | pass |
-| `packages/shared/src/native-push.ts` | 28/28 | 24/24 | pass | 28/28 | 24/24 | pass |
-| `packages/shared/src/notification-text.ts` | 20/20 | N/A | pass | 20/20 | N/A | pass |
-| `packages/shared/src/notifications.ts` | 56/56 | 15/15 | pass | 56/56 | 15/15 | pass |
+| Attempt A: file | A lines | A blocks | Attempt B: file | B lines | B blocks |
+|---|---:|---:|---|---:|---:|
+| `app/domain-services.ts` | 4/7 | 0/2 | `app/domain-services.ts` | 4/7 | 0/2 |
+| `app/livekit.ts` | 0/1 | N/A | `app/livekit.ts` | 0/1 | N/A |
+| `app/service-registry.ts` | 4/6 | 0/2 | `app/service-registry.ts` | 4/6 | 0/2 |
+| `domains/rooms/peer-moderation.service.ts` | 0/1 | 0/1 | `domains/rooms/peer-moderation.service.ts` | 0/1 | 0/1 |
+| `domains/admission/call-voice-admission.service.ts` (fail) | 24/40 | 1/8 | `domains/feedback/call-feedback.service.ts` | 1/3 | N/A |
+| `domains/feedback/call-feedback.service.ts` | 1/3 | N/A | `domains/feedback/call-feedback.repository.ts` | 5/11 | N/A |
+| `domains/feedback/call-feedback.repository.ts` | 5/11 | N/A | `app/api-runtime.ts` | 59/60 | 2/3 |
+| `app/api-runtime.ts` | 59/60 | 2/3 | `realtime/call-seat-cleanup.ts` | 65/72 | 11/16 |
+| `realtime/call-seat-cleanup.ts` | 65/72 | 11/16 | `domains/admission/livekit-auth-gate.service.ts` (fail) | 12/16 | 13/14 |
+| `domains/admission/livekit-auth-gate.service.ts` (fail) | 12/16 | 13/14 | `domains/messaging/direct-messages.service.ts` | 3/4 | 8/8 |
+| `domains/messaging/direct-messages.service.ts` | 3/4 | 8/8 | `domains/rings/ring-delivery.ts` | 10/13 | 7/7 |
+| `domains/rings/ring-delivery.ts` | 10/13 | 7/7 | `app/call-realtime.ts` | 44/46 | 4/5 |
+| `app/call-realtime.ts` | 44/46 | 4/5 | `realtime/reconnect-leases.ts` | 4/5 | 4/5 |
+| `realtime/reconnect-leases.ts` | 4/5 | 4/5 | `domains/rooms/room.repository.ts` | 22/22 | 5/6 |
+| `domains/rooms/room.repository.ts` | 22/22 | 5/6 | `domains/rings/call-rings.service.ts` | 447/479 | 199/235 |
+| `domains/rings/call-rings.service.ts` | 448/479 | 199/234 | `domains/rings/call-rings.routes.ts` | 98/98 | 6/7 |
+| `domains/rings/call-push.repository.ts` | 127/130 | 24/28 | `domains/rings/call-push.repository.ts` | 127/130 | 26/30 |
+| `domains/rings/call-rings.routes.ts` | 98/98 | 6/7 | `domains/messaging/call-history.repository.ts` | 103/103 | 7/8 |
+| `domains/messaging/call-history.repository.ts` | 103/103 | 7/8 | `domains/rings/call-rings.repository.ts` | 402/415 | 115/129 |
+| `domains/rings/call-rings.repository.ts` | 402/415 | 115/129 | `domains/admission/call-voice-admission.service.ts` (pass) | 39/40 | 17/18 |
+| `realtime/room-runtime.ts` | 46/48 | 34/36 | `realtime/room-runtime.ts` | 46/48 | 34/36 |
+| `realtime/voice-join.ts` | 47/48 | 27/28 | `realtime/voice-join.ts` | 47/48 | 27/28 |
+| `domains/rings/call-push.service.ts` | 80/81 | 40/41 | `domains/rings/call-push.service.ts` | 80/81 | 40/41 |
+| `domains/rings/call-lifecycle.policy.ts` | 88/89 | 72/73 | `domains/rings/call-lifecycle.policy.ts` | 88/89 | 72/73 |
+| `app/api-routes.ts` | 2/2 | N/A | `app/api-routes.ts` | 2/2 | N/A |
+| `app/config.ts` | 5/5 | 4/4 | `app/config.ts` | 5/5 | 4/4 |
+| `app/full-room-realtime.ts` | 1/1 | 3/3 | `app/full-room-realtime.ts` | 1/1 | 3/3 |
+| `app/realtime-hub.ts` | 11/11 | N/A | `app/realtime-hub.ts` | 11/11 | N/A |
+| `domains/account/account.service.ts` | 1/1 | 2/2 | `domains/account/account.service.ts` | 1/1 | 2/2 |
+| `domains/admin/admin-accounts.repository.ts` | 11/11 | N/A | `domains/admin/admin-accounts.repository.ts` | 11/11 | N/A |
+| `domains/admin/admin-rooms.repository.ts` | 4/4 | N/A | `domains/admin/admin-rooms.repository.ts` | 4/4 | N/A |
+| `domains/admin/admin-rooms.service.ts` | 12/12 | 10/10 | `domains/admin/admin-rooms.service.ts` | 12/12 | 10/10 |
+| `domains/admission/call-gate.repository.ts` (pass) | 42/42 | 2/2 | `domains/admission/call-gate.repository.ts` (pass) | 42/42 | 2/2 |
+| `domains/admission/credential-boundary.service.ts` (pass) | 5/5 | 4/4 | `domains/admission/credential-boundary.service.ts` (pass) | 5/5 | 4/4 |
+| `domains/admission/gate-credential-signer.ts` (pass) | 8/8 | 7/7 | `domains/admission/gate-credential-signer.ts` (pass) | 8/8 | 7/7 |
+| `domains/admission/livekit-admin.ts` (pass) | 7/7 | 9/9 | `domains/admission/livekit-admin.ts` (pass) | 7/7 | 9/9 |
+| `domains/admission/livekit-credential-provider.ts` (pass) | 11/11 | 8/8 | `domains/admission/livekit-credential-provider.ts` (pass) | 11/11 | 8/8 |
+| `domains/messaging/dm-history.service.ts` | 3/3 | 4/4 | `domains/messaging/dm-history.service.ts` | 3/3 | 4/4 |
+| `domains/messaging/dm-thread.repository.ts` | 3/3 | 1/1 | `domains/messaging/dm-thread.repository.ts` | 3/3 | 1/1 |
+| `domains/messaging/reaction.repository.ts` | 1/1 | N/A | `domains/messaging/reaction.repository.ts` | 1/1 | N/A |
+| `domains/messaging/reply-projector.ts` | 6/6 | 5/5 | `domains/messaging/reply-projector.ts` | 6/6 | 5/5 |
+| `domains/notifications/native-push.service.ts` | 10/10 | 15/15 | `domains/notifications/native-push.service.ts` | 10/10 | 15/15 |
+| `domains/notifications/notification-preferences.repository.ts` | 2/2 | N/A | `domains/notifications/notification-preferences.repository.ts` | 2/2 | N/A |
+| `domains/rings/ring.repository.ts` | 42/42 | 10/10 | `domains/rings/ring.repository.ts` | 42/42 | 10/10 |
+| `domains/rooms/rooms.service.ts` | 2/2 | 4/4 | `domains/rooms/rooms.service.ts` | 2/2 | 4/4 |
+| `domains/social/friends.service.ts` | 10/10 | 7/7 | `domains/social/friends.service.ts` | 10/10 | 7/7 |
+| `domains/social/friendship.repository.ts` | 1/1 | N/A | `domains/social/friendship.repository.ts` | 1/1 | N/A |
+| `domains/social/pair-eligibility.repository.ts` | 38/38 | 7/7 | `domains/social/pair-eligibility.repository.ts` | 38/38 | 7/7 |
+| `domains/social/social-records.ts` | 3/3 | 2/2 | `domains/social/social-records.ts` | 3/3 | 2/2 |
+| `realtime/account-events.ts` | 8/8 | 3/3 | `realtime/account-events.ts` | 8/8 | 3/3 |
+| `realtime/room-presence.ts` | 1/1 | 4/4 | `realtime/room-presence.ts` | 1/1 | 3/3 |
+| `realtime/room-summaries.ts` | 3/3 | 10/10 | `realtime/room-summaries.ts` | 3/3 | 10/10 |
+| `realtime/voice-stays.ts` | 1/1 | 5/5 | `realtime/voice-stays.ts` | 1/1 | 5/5 |
+| `realtime/ws-handler.ts` | 59/59 | 42/42 | `realtime/ws-handler.ts` | 59/59 | 42/42 |
+| `packages/shared/src/contracts/errors.ts` | 3/3 | N/A | `packages/shared/src/contracts/errors.ts` | 3/3 | N/A |
+| `packages/shared/src/contracts/messages.ts` | 13/13 | 2/2 | `packages/shared/src/contracts/messages.ts` | 13/13 | 2/2 |
+| `packages/shared/src/contracts/realtime.ts` | 5/5 | N/A | `packages/shared/src/contracts/realtime.ts` | 5/5 | N/A |
+| `packages/shared/src/contracts/rings.ts` | 141/141 | N/A | `packages/shared/src/contracts/rings.ts` | 141/141 | N/A |
+| `packages/shared/src/native-push.ts` | 28/28 | 24/24 | `packages/shared/src/native-push.ts` | 28/28 | 24/24 |
+| `packages/shared/src/notification-text.ts` | 20/20 | N/A | `packages/shared/src/notification-text.ts` | 20/20 | N/A |
+| `packages/shared/src/notifications.ts` | 56/56 | 15/15 | `packages/shared/src/notifications.ts` | 56/56 | 15/15 |
+| `domains/rooms/room-surface.policy.ts` | N/A | N/A | `domains/rooms/room-surface.policy.ts` | N/A | N/A |
+| `platform/db/schema.ts` | N/A | N/A | `platform/db/schema.ts` | N/A | N/A |
 
 ## Routing and cost
 
-Compared with PR3b on matched local Git trees, an ordinary Admin leaf still selects only check/check-lane and the Admin tests. An API leaf selects both API producers, the API verdict and G05; shared selects ALL. The existing measured Web dependency still reaches G08. The selector revision changes from `pr3b-2` to `pr4-1` because the verified policy changed, not because more jobs are scheduled.
+Compared with PR3b on matched local Git trees, an ordinary Admin leaf still selects only check/check-lane and the Admin tests. An API leaf selects both API producers, the API verdict and G05; shared selects ALL. The existing measured Web dependency still reaches G08. Selector revision `pr4-2` prevents reuse of `pr3b-2` or `pr4-1` markers for the revised proof. Pooling does not schedule additional jobs.
 
-The local full reference test process took 346.6 s. Collector-only replays of its raw input took 7.55 s (v1) and 6.65 s (v2), one observation each under varying local load. They do **not** establish a speedup. The actual PR3b graph already split Voice core and feature journeys into two jobs. PR4 changes no topology: at most **16**, not the earlier plan's 15 (4 check matrix + 2 API producers + 1 Web + 2 Voice + 1 UI audit + 1 G05 + 1 Widget + 1 Personal + 1 installer + 2 reusable static builds; aggregators replace their workers). [PR3b #350](https://github.com/dazeGG/VoiceRoom/actions/runs/45674723298) ran 18:23:52–18:31:48 UTC, 7:56 wall, 55.77 summed runner-minutes and observed peak 16 by the half-open job intervals. The [#345 baseline](https://github.com/dazeGG/VoiceRoom/actions/runs/45602093060) was 8:07 wall, peak 12. Neither wall time measures PR4. Admin-only changes do not pay for collection; API, broad, full main and develop misses pay for the complete check; a matching develop marker reuses its verified scope. No PR4 hosted runs were created: observed queue, peak, runner-minutes and whole-PR wall deltas against #345 or PR3b are unavailable.
+The local full reference test process took 346.6 s. Collector-only replays of its raw input took 7.55 s (v1) and 6.65 s (v2), one observation each under varying local load. They do **not** establish a speedup. The actual PR3b graph already split Voice core and feature journeys into two jobs. PR4 changes no topology: at most **16**, not the earlier plan's 15 (4 check matrix + 2 API producers + 1 Web + 2 Voice + 1 UI audit + 1 G05 + 1 Widget + 1 Personal + 1 installer + 2 reusable static builds; aggregators replace their workers). [PR3b #350](https://github.com/dazeGG/VoiceRoom/actions/runs/45674723298) ran 18:23:52â€“18:31:48 UTC, 7:56 wall, 55.77 summed runner-minutes and observed peak 16 by the half-open job intervals. The [#345 baseline](https://github.com/dazeGG/VoiceRoom/actions/runs/45602093060) was 8:07 wall, peak 12. Neither wall time measures PR4. Admin-only changes do not pay for collection; API, broad, full main and develop misses pay for the complete check; a matching develop marker reuses its verified scope. No PR4 hosted runs were created: observed queue, peak, runner-minutes and whole-PR wall deltas against #345 or PR3b are unavailable.
