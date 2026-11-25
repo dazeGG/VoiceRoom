@@ -226,8 +226,13 @@ export function selectTests(paths: string[], trees: TreeInputs[], intent: Compon
       case 'apps/api':
         apiLanes.forEach((id) => lanes.add(id));
         for (const g of ['voice-core', ...smokeJourneys, ...featureGroups(path), 'widget', 'personal']) groups.add(g);
-        // Web imports the client log intake normalizer across the workspace boundary.
+        // Keep the previous Web edge and its moved call diagnostics consumer.
         if (path.startsWith('apps/api/src/lib/')) owners.add('@voiceroom/web');
+        if (
+          path === 'apps/api/src/lib/client-log-intake.ts' &&
+          inputs.some((w) => w.dir === 'packages/call' && w.tests)
+        )
+          workspaces.add('call');
         break;
       case 'packages/ui-kit':
       case 'packages/ui':

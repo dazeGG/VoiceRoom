@@ -126,6 +126,7 @@ test('changed tests retain their owner and correct fixture; portable runtime and
 });
 
 test('relative cross-workspace test imports retain Web on API log or Site download changes', () => {
+  assert.ok(route(['apps/api/src/lib/client-log-intake.ts']).selection.workspaces.includes('call'));
   for (const path of [
     'apps/api/src/lib/client-log-intake.ts',
     'apps/site/src/scripts/download.ts',

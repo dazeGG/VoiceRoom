@@ -54,6 +54,9 @@ function importBoundary(pattern, message) {
 // the Web host via its @/ alias. Keep other app imports (and upward kit imports)
 // forbidden in tests too. Both runners share the single Web Vitest factory.
 const webHarness = String.raw`(?:\.\./)+apps/web/test/(?:helpers|fixtures)/[\w.-]+`;
+// Capture diagnostics generates records and validates them against the real
+// intake contract. This permits the normalizer, not the API's other modules.
+const logIntake = String.raw`(?:\.\./)+apps/api/src/lib/client-log-intake\.ts`;
 const vitestFactory = String.raw`(?:\.\./)+apps/web/scripts/vitest-projects\.ts`;
 function exceptImports(forbidden, permitted) {
   return `^(?!(?:${permitted})$).*(?:${forbidden})`;
@@ -217,7 +220,10 @@ export default tseslint.config(
   },
   {
     files: ['packages/call/test/**'],
-    rules: importBoundary(exceptImports(PORTABLE_APP_IMPORTS, `${webHarness}|@/[\\w/.-]+`), PORTABLE_IMPORT_MESSAGE)
+    rules: importBoundary(
+      exceptImports(PORTABLE_APP_IMPORTS, `${webHarness}|${logIntake}|@/[\\w/.-]+`),
+      PORTABLE_IMPORT_MESSAGE
+    )
   },
   ...['call', 'ui-kit'].map((name) => ({
     files: [`packages/${name}/vitest.config.ts`],
