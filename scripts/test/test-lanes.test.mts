@@ -315,14 +315,14 @@ test('G08 follows transitive import, re-export and dynamic import edges, not nei
   const auth = 'apps/web/src/api/auth.ts';
   const runtime = 'apps/web/src/shared/i18n/runtime.ts';
   const catalog = 'apps/web/src/shared/i18n/catalog';
-  const dirs = ['apps/web', 'packages/ui-kit', 'packages/shared'];
+  const dirs = ['apps/web', 'apps/api', 'apps/admin', 'packages/ui-kit', 'packages/shared'];
   put('package.json', JSON.stringify({ workspaces: dirs }));
   for (const dir of dirs) {
     put(
       dir + '/package.json',
       JSON.stringify({
         name: '@voiceroom/' + dir.slice(dir.lastIndexOf('/') + 1),
-        scripts: dir === 'apps/web' ? { test: 'vitest run' } : {},
+        scripts: dir.startsWith('apps/') ? { test: 'test' } : {},
         ...(dir === 'apps/web' ? { dependencies: { '@voiceroom/ui-kit': '*', '@voiceroom/shared': '*' } } : {}),
         ...(dir === 'packages/ui-kit' ? { exports: { './i18n': './src/i18n.ts' } } : {})
       })
@@ -331,7 +331,7 @@ test('G08 follows transitive import, re-export and dynamic import edges, not nei
   put(
     'config/coverage/release-250-thresholds.json',
     JSON.stringify({
-      businessPathPatterns: [auth],
+      businessPathPatterns: ['apps/api/src/', 'packages/shared/src/', auth],
       strictBranchGroups: []
     })
   );
@@ -352,6 +352,16 @@ test('G08 follows transitive import, re-export and dynamic import edges, not nei
     assert.notDeepEqual(selection, FULL_SELECTION, reason);
     for (const id of ['api-unit', 'api-integration', 'test', 'goal-g05']) assert.ok(selection.lanes.includes(id), id);
   };
+  api(base, edit('apps/api/src/domains/rooms/new-room.mts', 'export const limit = 4;'));
+  assert.deepEqual(
+    routeTrees(base, edit('packages/shared/src/room-limit.ts', 'export const limit = 4;'), cwd).selection,
+    FULL_SELECTION
+  );
+  assert.deepEqual(routeTrees(base, edit('apps/admin/src/limit.ts', 'export const limit = 4;'), cwd).selection, {
+    lanes: ['check', 'check-lane', 'test-web'],
+    workspaces: ['admin'],
+    groups: []
+  });
   api(base, edit(catalog + '/labels.js', "export const labels = ['bye'];"));
   api(base, edit('packages/ui-kit/src/other.ts', 'export const other = 1;'));
   const chat = routeTrees(base, edit('apps/web/src/shared/chat/EmojiPickerPanel.vue', '<template/>'), cwd);
