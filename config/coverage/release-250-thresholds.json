@@ -20,6 +20,11 @@
     "line": 90,
     "branch": 85
   },
+  "pooledBusinessCode": {
+    "pathPatterns": ["apps/api/src/", "packages/shared/src/"],
+    "line": 90,
+    "branch": 85
+  },
   "strictBranchMinimum": 95,
   "strictBranchPaths": [],
   "strictBranchGroups": [
@@ -50,9 +55,7 @@
     "apps/api/src/domains/media/attachment.repository.ts",
     "apps/api/src/domains/media/media-job.repository.ts",
     "apps/web/src/api/auth.ts",
-    "packages/call/src/engine/media/screen-receiver-demand.ts",
-    "apps/api/src/",
-    "packages/shared/src/"
+    "packages/call/src/engine/media/screen-receiver-demand.ts"
   ],
   "ignoredPathPatterns": [
     "/test/",

@@ -175,6 +175,8 @@ async function main(args: string[]) {
       'scripts/coverage/check-release-250-coverage.mts',
       '--coverage',
       SUMMARY,
+      '--report',
+      'coverage/release-250-patch.json',
       '--changed-files',
       'coverage/release-250-changed-files.txt',
       '--changed-diff',

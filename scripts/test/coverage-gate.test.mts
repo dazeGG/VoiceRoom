@@ -178,9 +178,14 @@ const greenSummary: CoverageSummary = {
 };
 
 const v1 = thresholdFixture({
-  businessPathPatterns: policy.businessPathPatterns.filter(
-    (p) => !['apps/api/src/', 'packages/shared/src/'].includes(p)
-  ),
+  // The protected base is independent of the candidate's classification.
+  businessPathPatterns: [
+    'apps/api/src/domains/admission/',
+    'apps/api/src/domains/media/attachment.repository.ts',
+    'apps/api/src/domains/media/media-job.repository.ts',
+    'apps/web/src/api/auth.ts',
+    'packages/call/src/engine/media/screen-receiver-demand.ts'
+  ],
   ignoredPathPatterns: policy.ignoredPathPatterns,
   strictBranchGroups: policy.strictBranchGroups,
   baseline: { ...policy.baseline, total: { lines: 9.17, branches: 53.9 } }
@@ -204,7 +209,16 @@ test('G08 v1 -> v2 retires only the two stale floors; v2 remains protected on su
       { changedBusinessCode: { ...policy.changedBusinessCode, branch: 84 } },
       { strictBranchMinimum: 94 },
       { businessPathPatterns: policy.businessPathPatterns.filter((p) => p !== 'apps/web/src/api/auth.ts') },
-      { businessPathPatterns: policy.businessPathPatterns.filter((p) => p !== 'apps/api/src/') },
+      // Still in the broad API pool, but no longer individually enforced.
+      { businessPathPatterns: policy.businessPathPatterns.filter((p) => p !== 'apps/api/src/domains/admission/') },
+      { pooledBusinessCode: { ...policy.pooledBusinessCode, line: 89 } },
+      { pooledBusinessCode: { ...policy.pooledBusinessCode, branch: 84 } },
+      {
+        pooledBusinessCode: {
+          ...policy.pooledBusinessCode,
+          pathPatterns: policy.pooledBusinessCode.pathPatterns.filter((p) => p !== 'apps/api/src/')
+        }
+      },
       { ignoredPathPatterns: [...policy.ignoredPathPatterns, 'apps/api/src/lib/'] },
       { strictBranchGroups: policy.strictBranchGroups.slice(1) }
     ])
@@ -286,11 +300,170 @@ test('G08 measures new API/shared sources, distinguishing uncovered, unloaded an
   assert.throws(() => check(unloaded, 1), /changed line coverage 0\.00% is below 90%/);
   assert.equal(summary.files[api]?.loaded, true);
   assert.deepEqual(summary.files[api]?.branches, { total: 0, covered: 0, skipped: 0, pct: null });
-  assert.deepEqual(check(api, 1).patch, [{ path: api, lines: 100, branches: null }]);
+  assert.partialDeepStrictEqual(check(api, 1).patch, [
+    { path: api, scope: 'pooled', lines: { covered: 1, total: 1 }, branches: { covered: 0, total: 0, pct: null } }
+  ]);
   // Even a fully covered patch does not excuse a regression in the rest of a strict file.
   assert.throws(() => check(strict, 8), /requires 95% node-v8-branch/);
   // A comment inside an unexecuted block is not a changed statement or decision.
-  assert.deepEqual(check(ordinary, 3).patch, [{ path: ordinary, lines: null, branches: null }]);
+  const commentOnly = check(ordinary, 3);
+  const empty = { covered: 0, total: 0, pct: null };
+  assert.partialDeepStrictEqual(commentOnly.patch, [{ path: ordinary, lines: empty, branches: empty }]);
+  assert.partialDeepStrictEqual(commentOnly.pooled, { files: 0, verdict: 'N/A', lines: empty, branches: empty });
+});
+
+// Feed the evaluator patch details, not precalculated patch percentages. Keep an
+// unchanged, uncovered line/block in every loaded file: neither belongs in the pool.
+type PatchFixture = {
+  path: string;
+  lines: [covered: number, total: number];
+  blocks: [covered: number, total: number];
+  loaded?: false;
+};
+
+function reviewPatch(entries: PatchFixture[]) {
+  const changedLineMap = new Map<string, Set<number>>();
+  const files: CoverageSummary['files'] = {};
+  for (const {
+    path,
+    lines: [lineHits, lineCount],
+    blocks: [blockHits, blockCount],
+    loaded = true
+  } of entries) {
+    const lines = Array.from({ length: lineCount }, (_, i) => ({ line: i + 1, covered: i < lineHits }));
+    const branches = Array.from({ length: blockCount }, (_, i) => ({
+      startLine: 1,
+      endLine: 1,
+      covered: i < blockHits
+    }));
+    changedLineMap.set(path, new Set(lines.map((entry) => entry.line)));
+    if (loaded) {
+      lines.push({ line: lineCount + 1, covered: false });
+      branches.push({ startLine: lineCount + 1, endLine: lineCount + 1, covered: false });
+    }
+    files[path] = {
+      loaded,
+      lines: lines.length ? (100 * lineHits) / lines.length : { total: 0, covered: 0, pct: null },
+      branches: branches.length ? (100 * blockHits) / branches.length : { total: 0, covered: 0, pct: null },
+      details: { lines, branches }
+    };
+  }
+  return enforceCoverage({
+    coverageSummary: { ...greenSummary, schemaVersion: 2, files },
+    thresholds: policy,
+    baseThresholds: v1,
+    changedFiles: [...changedLineMap.keys()],
+    changedLineMap
+  });
+}
+
+const sharedPatch = 'packages/shared/src/strong.ts';
+const admissionMts = 'apps/api/src/domains/admission/v2-only.mts';
+
+test('G08 pools raw changed counts across API and shared, and lists even passing patches worst first', () => {
+  const emptyPath = 'packages/shared/src/types.ts';
+  const protectedPath = 'apps/web/src/api/auth.ts';
+  const report = reviewPatch([
+    { path: emptyPath, lines: [0, 0], blocks: [0, 0], loaded: false },
+    { path: protectedPath, lines: [3, 3], blocks: [3, 3] },
+    { path: sharedPatch, lines: [18, 18], blocks: [16, 17] },
+    // This extension was not measured by v1, despite the admission prefix.
+    { path: admissionMts, lines: [0, 2], blocks: [1, 3] }
+  ]);
+  assert.partialDeepStrictEqual(report.pooled, {
+    files: 2,
+    verdict: 'pass',
+    lines: { covered: 18, total: 20, pct: 90 },
+    branches: { covered: 17, total: 20, pct: 85 }
+  });
+  assert.deepEqual(
+    report.patch.map(({ path }) => path),
+    [admissionMts, sharedPatch, protectedPath, emptyPath]
+  );
+  assert.partialDeepStrictEqual(report.patch, [
+    { path: admissionMts, scope: 'pooled', lines: { covered: 0, total: 2 }, branches: { covered: 1, total: 3 } },
+    { path: sharedPatch, scope: 'pooled', lines: { covered: 18, total: 18 }, branches: { covered: 16, total: 17 } },
+    { path: protectedPath, scope: 'per-file', lines: { covered: 3, total: 3 }, branches: { covered: 3, total: 3 } },
+    {
+      path: emptyPath,
+      scope: 'pooled',
+      lines: { covered: 0, total: 0, pct: null },
+      branches: { covered: 0, total: 0, pct: null }
+    }
+  ]);
+});
+
+test('G08 rejects a mostly uncovered pool regardless of abundant covered changes to protected files', () => {
+  assert.throws(
+    () =>
+      reviewPatch([
+        { path: sharedPatch, lines: [1, 4], blocks: [1, 4] },
+        { path: 'apps/web/src/api/auth.ts', lines: [99, 99], blocks: [99, 99] }
+      ]),
+    /changed line coverage 25\.00% is below 90%/
+  );
+  assert.throws(
+    () => reviewPatch([{ path: sharedPatch, lines: [4, 4], blocks: [1, 4] }]),
+    /node-v8-branch coverage 25\.00% is below 85%/
+  );
+});
+
+test('G08 a rounded pool percentage cannot pass a shortfall in measured counts', () => {
+  // 18,000 / 20,001 displays as 90.00%, but is strictly below nine tenths.
+  assert.throws(
+    () => reviewPatch([{ path: sharedPatch, lines: [18_000, 20_001], blocks: [0, 0] }]),
+    (error: unknown) => {
+      assert.ok(error instanceof Error && 'report' in error);
+      assert.partialDeepStrictEqual(error.report, {
+        pooled: { verdict: 'fail', lines: { covered: 18_000, total: 20_001 } }
+      });
+      return true;
+    }
+  );
+});
+
+test('G08 an unloaded source contributes its uncovered changed lines, with unknown blocks', () => {
+  const loaded: PatchFixture = { path: sharedPatch, lines: [9, 9], blocks: [1, 1] };
+  const missing = 'apps/api/src/never-loaded.ts';
+  assert.partialDeepStrictEqual(reviewPatch([loaded]).pooled, { lines: { covered: 9, total: 9 } });
+  assert.throws(
+    () => reviewPatch([loaded, { path: missing, lines: [0, 2], blocks: [0, 0], loaded: false }]),
+    (error: unknown) => {
+      assert.ok(error instanceof Error && 'report' in error);
+      assert.match(error.message, /changed line coverage 81\.82% is below 90%/);
+      assert.partialDeepStrictEqual(error.report, {
+        pooled: { files: 2, verdict: 'fail', lines: { covered: 9, total: 11 }, branches: { covered: 1, total: 1 } },
+        patch: [
+          {
+            path: missing,
+            loaded: false,
+            lines: { covered: 0, total: 2 },
+            branches: { covered: 0, total: 0, pct: null }
+          },
+          { path: sharedPatch, loaded: true, lines: { covered: 9, total: 9 }, branches: { covered: 1, total: 1 } }
+        ]
+      });
+      return true;
+    }
+  );
+});
+
+test('G08 neither a protected per-file miss nor a strict whole-file regression can hide in a passing pool', () => {
+  const strong: PatchFixture = { path: sharedPatch, lines: [100, 100], blocks: [100, 100] };
+  assert.throws(
+    () => reviewPatch([strong, { path: 'apps/api/src/domains/admission/legacy.ts', lines: [1, 2], blocks: [1, 1] }]),
+    /legacy\.ts changed line coverage 50\.00%/
+  );
+  // The patch covers every changed block, but the unchanged untested block
+  // leaves the strict member at 18/19 (<95%) for the whole file.
+  assert.throws(
+    () =>
+      reviewPatch([
+        strong,
+        { path: 'apps/api/src/domains/media/attachment.repository.ts', lines: [1, 1], blocks: [18, 18] }
+      ]),
+    /requires 95% node-v8-branch/
+  );
 });
 
 test('G08-A01 accepts measured coverage and explicit initial adoption', () => {

@@ -289,6 +289,7 @@ jobs:
           read -r -a baseline_args <<< "$G08_BASELINE_ARGS"
           node scripts/coverage/check-release-250-coverage.mts \
             --coverage coverage/release-250-summary.json \
+            --report coverage/release-250-patch.json \
             --changed-files coverage/release-250-changed-files.txt \
             --changed-diff coverage/release-250-changed.diff \
             "${baseline_args[@]}"
@@ -300,6 +301,7 @@ jobs:
           name: g08-release-250-coverage-run-${{ github.run_id }}-attempt-${{ github.run_attempt }}-head-${{ github.event.pull_request.head.sha || github.sha }}
           path: |
             coverage/release-250-summary.json
+            coverage/release-250-patch.json
             coverage/release-250-changed-files.txt
             coverage/release-250-changed.diff
             coverage/release-250-base-thresholds.json

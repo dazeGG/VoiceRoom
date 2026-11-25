@@ -331,7 +331,13 @@ test('G08 follows transitive import, re-export and dynamic import edges, not nei
   put(
     'config/coverage/release-250-thresholds.json',
     JSON.stringify({
-      businessPathPatterns: ['apps/api/src/', 'packages/shared/src/', auth],
+      schemaVersion: 2,
+      businessPathPatterns: [auth],
+      pooledBusinessCode: {
+        pathPatterns: ['apps/api/src/', 'packages/shared/src/', 'apps/admin/src/pooled/'],
+        line: 90,
+        branch: 85
+      },
       strictBranchGroups: []
     })
   );
@@ -341,6 +347,10 @@ test('G08 follows transitive import, re-export and dynamic import edges, not nei
   put(catalog + '/Labels.vue', `<script setup lang="ts">import { labels } from './labels.js';</script>`);
   put(catalog + '/labels.js', "export const labels = ['hi'];");
   put('packages/ui-kit/src/i18n.ts', 'export const locale = "en";');
+  // Unlike API/shared, Admin is not intrinsically an API route. A transitive
+  // input of a pooled source must reach both API producers through the policy.
+  put('apps/admin/src/pooled/metric.ts', "export { score } from '../score.ts';");
+  put('apps/admin/src/score.ts', 'export const score = 1;');
   const base = git('write-tree');
   const edit = (file: string, content: string) => {
     git('read-tree', base);
@@ -353,6 +363,7 @@ test('G08 follows transitive import, re-export and dynamic import edges, not nei
     for (const id of ['api-unit', 'api-integration', 'test', 'goal-g05']) assert.ok(selection.lanes.includes(id), id);
   };
   api(base, edit('apps/api/src/domains/rooms/new-room.mts', 'export const limit = 4;'));
+  api(base, edit('apps/admin/src/score.ts', 'export const score = 2;'));
   assert.deepEqual(
     routeTrees(base, edit('packages/shared/src/room-limit.ts', 'export const limit = 4;'), cwd).selection,
     FULL_SELECTION
