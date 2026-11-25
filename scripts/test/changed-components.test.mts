@@ -1,6 +1,17 @@
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, mkdirSync, writeFileSync, renameSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, dirname } from 'node:path';
+import { FULL_SELECTION } from '../ci/verification-policy.mts';
 import { test } from 'node:test';
-import { changedComponents, lockVersionComponent, manifestVersionOnly } from '../ci/changed-components.mts';
+import {
+  changedComponents,
+  lockVersionComponent,
+  manifestVersionOnly,
+  routeTrees,
+  routingBase
+} from '../ci/changed-components.mts';
 
 const app = { app: true, site: false, docs: false };
 const site = { app: false, site: true, docs: false };
@@ -99,4 +110,82 @@ test('manifest and lock version bumps stay in their release lane', () => {
     app
   );
   assert.deepEqual(changedComponents(['package-lock.json']), appAndSite);
+});
+
+test('tree routing observes both sides of rename/deletion and handles a missing base separately from publication intent', (t) => {
+  const cwd = mkdtempSync(join(tmpdir(), 'routing-trees-'));
+  t.after(() => rmSync(cwd, { recursive: true, force: true }));
+  const git = (...args: string[]) => execFileSync('git', args, { cwd, encoding: 'utf8' }).trim();
+  const put = (name: string, value: string) => {
+    mkdirSync(dirname(join(cwd, name)), { recursive: true });
+    writeFileSync(join(cwd, name), value);
+  };
+  git('init', '--quiet');
+  put('package.json', JSON.stringify({ workspaces: ['apps/admin', 'apps/web', 'packages/*'] }));
+  for (const dir of ['apps/admin', 'apps/web', 'packages/ui'])
+    put(
+      dir + '/package.json',
+      JSON.stringify({
+        name: '@voiceroom/' + dir.slice(dir.indexOf('/') + 1),
+        scripts: dir.startsWith('apps/') ? { test: 'test' } : {}
+      })
+    );
+  put(
+    'config/coverage/release-250-thresholds.json',
+    JSON.stringify({ businessPathPatterns: ['apps/api/src/'], strictBranchGroups: [] })
+  );
+  put('apps/admin/src/a space.ts', 'same content');
+  put('apps/web/src/stay.ts', 'not moved');
+  git('add', '.');
+  const base = git('write-tree');
+  renameSync(join(cwd, 'apps/admin/src/a space.ts'), join(cwd, 'apps/web/src/a space.ts'));
+  git('add', '-A');
+  const tested = git('write-tree');
+  const moved = routeTrees(base, tested, cwd);
+  assert.deepEqual(moved.selection.workspaces, ['admin', 'web']);
+  assert.equal(moved.site, false);
+  assert.deepEqual(routeTrees(tested, base, cwd).selection, moved.selection);
+  for (const missing of ['', 'f'.repeat(40), '0'.repeat(40)]) {
+    const result = routeTrees(missing, tested, cwd);
+    assert.deepEqual(result.selection, FULL_SELECTION);
+    assert.match(result.reason, /missing base/);
+    assert.equal(result.site, missing === '0'.repeat(40));
+  }
+  put('unowned input', 'unknown');
+  git('add', '.');
+  const unknown = routeTrees(tested, git('write-tree'), cwd);
+  assert.deepEqual(unknown.selection, FULL_SELECTION);
+  assert.deepEqual([unknown.app, unknown.site, unknown.docs, unknown.installer], [true, false, false, false]);
+  put('packages/new-suite/package.json', JSON.stringify({ name: 'new-suite', scripts: { test: 'node --test' } }));
+  git('add', '.');
+  assert.throws(() => routeTrees(tested, git('write-tree'), cwd), /ALL cannot execute unassigned test workspace/);
+});
+
+test('a stale PR payload base routes against the tested merge first parent; a non-merge or wrong head is not proof', (t) => {
+  const cwd = mkdtempSync(join(tmpdir(), 'routing-parents-'));
+  t.after(() => rmSync(cwd, { recursive: true, force: true }));
+  const git = (...args: string[]) =>
+    execFileSync('git', ['-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.test', ...args], {
+      cwd,
+      encoding: 'utf8'
+    }).trim();
+  git('init', '--quiet');
+  const tree = git('write-tree');
+  const base = git('commit-tree', tree, '-m', 'original base');
+  const head = git('commit-tree', tree, '-p', base, '-m', 'head');
+  const current = git('commit-tree', tree, '-p', base, '-m', 'new base');
+  const merge = git('commit-tree', tree, '-p', current, '-p', head, '-m', 'test merge');
+  git('update-ref', 'HEAD', merge);
+  assert.equal(routingBase(base, merge, head, cwd), current);
+  assert.equal(routingBase(base, merge, undefined, cwd), base);
+  for (const missing of ['', 'f'.repeat(40)]) {
+    const unknown = routingBase(missing, merge, head, cwd);
+    assert.equal(unknown, '');
+    assert.deepEqual(routeTrees(unknown, merge, cwd).selection, FULL_SELECTION);
+  }
+  assert.throws(() => routingBase(base, merge, current, cwd), /parents/);
+  assert.throws(() => routingBase(head, merge, head, cwd)); // payload is not a base ancestor
+  git('update-ref', 'HEAD', head);
+  assert.throws(() => routingBase(base, merge, head, cwd), /checkout/);
+  assert.throws(() => routingBase(base, head, head, cwd), /parents/);
 });
