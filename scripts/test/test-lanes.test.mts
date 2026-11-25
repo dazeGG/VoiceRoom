@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import { changedComponents, routeTrees } from '../ci/changed-components.mts';
 import { measuredInputs, workspace, workspaceDirs } from '../ci/routing-inputs.mts';
 import { selectTests, type TreeInputs } from '../ci/test-lanes.mts';
-import { FULL_SELECTION } from '../ci/verification-policy.mts';
+import { fixtureSpecs, FULL_SELECTION } from '../ci/verification-policy.mts';
 
 // Synthetic manifests force traversal: ui-kit -> ui -> Widget; Web imports via call.
 // Includes a dev-only edge; no installation or working tree files are evidence.
@@ -133,6 +133,70 @@ test('relative cross-workspace test imports retain Web on API log or Site downlo
   }
 });
 
+test('each new Voice journey runs on its feature and on a direct spec change, not on an Admin leaf', () => {
+  const admin = route(['apps/admin/src/pages/UsersPage.vue']).selection;
+  for (const [spec, feature] of [
+    ['context-menu', 'apps/web/src/features/home/model/friend-menu.ts'],
+    ['reactions', 'apps/api/src/domains/messaging/reaction.repository.ts'],
+    ['room-delete', 'apps/web/src/features/room/components/RoomSettingsDialog.vue'],
+    ['room-edit', 'apps/web/src/features/room/room-settings.store.ts'],
+    ['room-realtime', 'apps/web/src/entities/room/room-realtime.ts'],
+    ['localization', 'apps/web/src/shared/i18n/LanguageControl.vue'],
+    ['desktop-root-boundary', 'apps/web/src/service-worker.ts'],
+    ['mic-stall', 'packages/call/src/engine/services/microphone-service.ts']
+  ] as const) {
+    const specPath = 'e2e/' + spec + '.spec.ts';
+    const group = 'voice-' + spec;
+    const selected = route([feature]).selection;
+    assert.ok(selected.lanes.includes('voice-join'), feature);
+    assert.ok(fixtureSpecs('voice', selected.groups).includes(specPath), feature);
+    assert.ok(!admin.groups.includes(group));
+    assert.deepEqual(route(['apps/web/' + specPath]).selection.groups, ['voice-core', group].sort());
+  }
+  assert.ok(!route(['apps/web/src/features/home/model/friend-menu.ts']).selection.groups.includes('voice-mic-stall'));
+  for (const path of [
+    'apps/api/src/domains/admin/admin-stats.repository.ts',
+    'apps/web/src/features/call-feedback/CallFeedbackCard.vue'
+  ]) {
+    const { groups } = route([path]).selection;
+    assert.ok(groups.includes('voice-core'));
+    assert.ok(!groups.includes('voice-reactions') && !groups.includes('voice-mic-stall'), path);
+  }
+});
+
+test('audit inputs select the dedicated fixture; unrelated app leaves do not', () => {
+  for (const path of [
+    'packages/ui-kit/src/components/Dialog/Dialog.vue',
+    'apps/site/src/styles/site.scss',
+    'apps/web/src/styles/chat/_reaction-picker.scss',
+    'apps/admin/src/shell/GlobalSearch.vue',
+    'apps/web/src/entities/room/room-membership.store.ts',
+    'apps/web/playwright.ui-audit.config.ts',
+    'apps/web/ui-audit-e2e/focus.spec.ts',
+    'apps/web/test/browser/SecurityCacheFixture.vue',
+    'apps/admin/test/browser/vite.config.ts'
+  ])
+    assert.ok(route([path]).selection.lanes.includes('ui-audit'), path);
+  assert.deepEqual(route(['apps/web/ui-audit-e2e/focus.spec.ts']).selection.groups, ['ui-audit']);
+  for (const path of ['apps/web/src/features/legal/PrivacyPolicy.vue', 'apps/admin/src/users.ts'])
+    assert.ok(!route([path]).selection.lanes.includes('ui-audit'), path);
+});
+
+test('rename/delete fan-out is shared with chat and voice, even in engine and chat directories', () => {
+  for (const path of [
+    'apps/web/src/features/room/use-room-chat-session.ts',
+    'apps/web/src/entities/room/room-realtime.ts',
+    'apps/web/src/features/room/adapters/web-call-transport.ts',
+    'packages/call/src/engine/room/voice-events.ts',
+    'packages/call/src/engine/room/lifecycle.ts'
+  ]) {
+    const specs = fixtureSpecs('voice', route([path]).selection.groups);
+    for (const journey of ['room-realtime', 'reactions', 'mic-stall']) {
+      assert.ok(specs.includes('e2e/' + journey + '.spec.ts'), path + ': ' + journey);
+    }
+  }
+});
+
 test('missing evidence, invalid metadata and unresolved workspace edges cannot narrow the selection', () => {
   const broken = {
     ...metadata,
@@ -184,17 +248,15 @@ test('local packages need no name prefix; mismatched file dependencies cannot be
 test('exclusive production surfaces retain their journey; test helpers remain shared browser inputs', () => {
   for (const [path, groups] of [
     ['apps/web/src/features/legal/PrivacyPolicy.vue', ['voice-core']],
-    ['apps/web/src/shared/chat/EmojiPickerPanel.vue', ['voice-chat', 'voice-core']],
+    ['apps/web/src/shared/chat/EmojiPickerPanel.vue', ['voice-chat', 'voice-core', 'voice-reactions']],
     ['apps/web/src/features/friend-call/FriendCallTiles.vue', ['voice-call', 'voice-core']],
     ['apps/web/src/features/room/components/MobileCallGrid.vue', ['voice-core', 'voice-guest']]
   ] as const)
     assert.deepEqual(route([path]).selection.groups, groups, path);
-  assert.deepEqual(route(['apps/web/test/helpers/assert.ts']).selection.groups, [
-    'voice-call',
-    'voice-chat',
-    'voice-core',
-    'voice-guest'
-  ]);
+  assert.deepEqual(
+    route(['apps/web/test/helpers/assert.ts']).selection.groups,
+    FULL_SELECTION.groups.filter((group) => group.startsWith('voice-'))
+  );
 });
 
 test('named unit tests run their owning workspace without starting browser fixtures', () => {
@@ -227,7 +289,7 @@ test('a unit test cannot add a browser group to its component change or mask one
   const component = 'apps/web/src/shared/chat/EmojiPickerPanel.vue';
   const unit = 'apps/web/test/composer-emoji.test.ts';
   assert.deepEqual(route([component, unit]).selection, route([component]).selection);
-  assert.deepEqual(route([unit, component]).selection.groups, ['voice-chat', 'voice-core']);
+  assert.deepEqual(route([unit, component]).selection.groups, ['voice-chat', 'voice-core', 'voice-reactions']);
 });
 
 test('G08 follows transitive import, re-export and dynamic import edges, not neighbouring chat files', (t) => {

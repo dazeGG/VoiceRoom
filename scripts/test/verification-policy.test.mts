@@ -27,6 +27,7 @@ function evidence(selected: Selection, executed: Selection, verified = false) {
     'test-web': executed.workspaces,
     'voice-join': executed.groups.filter((s) => s.startsWith('voice-')),
     'widget-smoke': executed.groups.filter((s) => s === 'widget'),
+    'ui-audit': executed.groups.filter((s) => s === 'ui-audit'),
     'personal-smoke': executed.groups.filter((s) => s === 'personal')
   })) {
     jobs[lane] = { ...jobs[lane], result: jobs[lane]?.result ?? '', outputs: { completed: JSON.stringify(items) } };
@@ -72,6 +73,7 @@ test('group and workspace evidence must match exactly even when the parent job s
     ['test-web', ''],
     ['voice-join', '["voice-core"]'],
     ['widget-smoke', '["widget","widget"]'],
+    ['ui-audit', '[]'],
     ['personal-smoke', '["voice-core"]']
   ] as const) {
     const jobs = evidence(FULL_SELECTION, FULL_SELECTION);
@@ -123,12 +125,17 @@ test('current browser command expands only the selected spec groups on their own
     'e2e/mobile-room.spec.ts'
   ]);
   const full = fixtureSpecs('voice', FULL_SELECTION.groups);
-  assert.equal(full.length, 10);
+  assert.equal(full.length, 18);
   assert.equal(new Set(full).size, full.length);
   assert.deepEqual(fixtureSpecs('widget', FULL_SELECTION.groups), [
     'e2e/widget-embed.spec.ts',
     'e2e/widget-media-boundary.spec.ts',
     'e2e/widget-reconnect.spec.ts'
+  ]);
+  assert.deepEqual(fixtureSpecs('personal', FULL_SELECTION.groups), ['e2e/meet.spec.ts']);
+  assert.deepEqual(fixtureSpecs('ui-audit', FULL_SELECTION.groups), [
+    'ui-audit-e2e/focus.spec.ts',
+    'ui-audit-e2e/security-hardening-cache.spec.ts'
   ]);
   assert.throws(() => fixtureSpecs('voice', ['widget']), /No selected specs/);
 });

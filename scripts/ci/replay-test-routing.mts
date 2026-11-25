@@ -17,6 +17,7 @@ const names: Record<string, string> = {
   'API with PostgreSQL': 'api-integration',
   'Web tests': 'test-web',
   'Voice room join smoke': 'voice-join',
+  'Cross-browser UI audit': 'ui-audit',
   'G05 strict LiveKit gate proof': 'goal-g05',
   'Embedded guest call and media boundary': 'widget-smoke',
   'Personal Compose smoke': 'personal-smoke',

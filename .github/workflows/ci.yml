@@ -74,7 +74,7 @@ jobs:
 
   policy:
     name: Git Flow policy
-    needs: [changes, check-lane, check, api-unit, api-integration, test, test-web, voice-join, goal-g05, widget-smoke, personal-smoke, installer, static-publication, site, docs]
+    needs: [changes, check-lane, check, api-unit, api-integration, test, test-web, voice-join, ui-audit, goal-g05, widget-smoke, personal-smoke, installer, static-publication, site, docs]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -151,6 +151,9 @@ jobs:
             npm --workspace "@voiceroom/$workspace" run e2e -- --list --reporter=json
             node scripts/ci/completed-tests.mts "$workspace" "$PLAYWRIGHT_JSON_OUTPUT_FILE"
           done
+          export PLAYWRIGHT_JSON_OUTPUT_FILE="$RUNNER_TEMP/discovered-ui-audit.json"
+          npm --workspace @voiceroom/web run e2e -- --config playwright.ui-audit.config.ts --list --reporter=json
+          node scripts/ci/completed-tests.mts audit-discovery "$PLAYWRIGHT_JSON_OUTPUT_FILE"
 
       - name: Script tests and real Caddy log-redaction regression
         if: matrix.lane == 'build'
@@ -358,7 +361,8 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: npm
-      - run: npm ci --workspace @voiceroom/web --workspace @voiceroom/shared --workspace @voiceroom/ui --workspace @voiceroom/ui-kit --workspace @voiceroom/call
+      # The real reaction pagination fixture uses the API workspace's pg client.
+      - run: npm ci --workspace @voiceroom/api --workspace @voiceroom/web --workspace @voiceroom/shared --workspace @voiceroom/ui --workspace @voiceroom/ui-kit --workspace @voiceroom/call
       - name: Start the voice stack and pull the Playwright image
         env:
           VOICE_CALLS_ENABLED: "true"
@@ -374,10 +378,18 @@ jobs:
         id: evidence
         env:
           GROUPS_JSON: ${{ toJSON(fromJSON(needs.changes.outputs.schedule).groups) }}
+          E2E_REAL_REACTIONS: "true"
         run: |
           paths=$(node scripts/ci/verification-policy.mts voice-specs)
           read -r -a specs <<< "$paths"
+          # Use the disposable Compose DB, not the runner's development credentials.
+          E2E_DATABASE_URL=$(docker compose -f docker-compose.ci.yml exec -T api node -e '
+            const url = new URL(process.env.DATABASE_URL);
+            url.host = "127.0.0.1:55439";
+            process.stdout.write(url.href)')
+          export E2E_DATABASE_URL
           docker run --rm --init --network host --ipc host --user "$(id -u):$(id -g)" \
+            -e E2E_REAL_REACTIONS -e E2E_DATABASE_URL \
             -e HOME=/tmp -e CI -e PLAYWRIGHT_JSON_OUTPUT_FILE=/work/voice-report.json -v "$GITHUB_WORKSPACE:/work" -w /work "$PLAYWRIGHT_IMAGE" \
             npm --workspace @voiceroom/web run e2e -- \
             "${specs[@]}" --project=chromium --retries=0 --reporter=line,json
@@ -389,6 +401,31 @@ jobs:
         run: |
           docker compose -f docker-compose.ci.yml ps
           docker compose -f docker-compose.ci.yml logs --no-color --tail=250
+
+  ui-audit:
+    name: Cross-browser UI audit
+    needs: changes
+    if: contains(fromJSON(needs.changes.outputs.schedule).lanes, 'ui-audit')
+    outputs:
+      completed: ${{ steps.evidence.outputs.completed }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium webkit firefox
+      - name: Exercise Web, Admin and Site across three browser engines
+        id: evidence
+        env:
+          GROUPS_JSON: ${{ toJSON(fromJSON(needs.changes.outputs.schedule).groups) }}
+          PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ runner.temp }}/ui-audit-report.json
+        run: |
+          npm --workspace @voiceroom/web run e2e -- --config playwright.ui-audit.config.ts --workers=1 --reporter=line,json
+          node scripts/ci/completed-tests.mts ui-audit "$PLAYWRIGHT_JSON_OUTPUT_FILE" >> "$GITHUB_OUTPUT"
 
   goal-g05:
     name: G05 strict LiveKit gate proof

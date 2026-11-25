@@ -8,13 +8,24 @@ export interface Selection {
 }
 
 // Bump when changing the meaning of a lane, graph edge, group, or proof.
-export const SELECTOR_VERSION = 'pr3a-2';
+export const SELECTOR_VERSION = 'pr3b-1';
 export const VOICE_SPECS: Record<string, string[]> = {
   'voice-core': ['room-voice'],
   'voice-chat': ['chat-typing', 'manual-chat-polish', 'chat-drafts', 'chat-image-paste'],
   'voice-guest': ['guest-account-cta', 'mobile-room'],
-  'voice-call': ['friend-call', 'microphone-recovery', 'rnnoise-assets']
+  'voice-call': ['friend-call', 'microphone-recovery', 'rnnoise-assets'],
+  'voice-context-menu': ['context-menu'],
+  'voice-reactions': ['reactions'],
+  'voice-room-delete': ['room-delete'],
+  'voice-room-edit': ['room-edit'],
+  'voice-room-realtime': ['room-realtime'],
+  'voice-localization': ['localization'],
+  'voice-desktop-root-boundary': ['desktop-root-boundary'],
+  'voice-mic-stall': ['mic-stall']
 };
+export const AUDIT_PROJECTS = ['chromium', 'webkit', 'firefox'];
+const auditSpecs = ['focus', 'security-hardening-cache'];
+const personalSpecs = ['meet'];
 const widgetSpecs = ['widget-embed', 'widget-media-boundary', 'widget-reconnect'];
 const apiLanes = ['api-unit', 'api-integration', 'test', 'goal-g05'];
 const alwaysFresh = ['installer', 'static-publication', 'site', 'docs'];
@@ -30,10 +41,11 @@ export const FULL_SELECTION: Selection = {
     'voice-join',
     'widget-smoke',
     'personal-smoke',
+    'ui-audit',
     ...alwaysFresh
   ].sort(),
   workspaces: ['admin', 'meet', 'web', 'widget'],
-  groups: [...Object.keys(VOICE_SPECS), 'widget', 'personal'].sort()
+  groups: [...Object.keys(VOICE_SPECS), 'widget', 'personal', 'ui-audit'].sort()
 };
 
 function members(value: unknown, allowed: string[], field: string): string[] {
@@ -62,6 +74,7 @@ export function canonicalSelection(value: unknown): Selection {
     groups.some((group) => group.startsWith('voice-'))
   );
   requireTogether('widget-smoke', groups.includes('widget'));
+  requireTogether('ui-audit', groups.includes('ui-audit'));
   requireTogether('personal-smoke', groups.includes('personal'));
   requireTogether('static-publication', lanes.includes('site') || lanes.includes('docs'));
   return { lanes, workspaces, groups };
@@ -100,6 +113,8 @@ function completedFor(lane: string, selected: Selection): string[] {
       return selected.groups.filter((group) => group.startsWith('voice-'));
     case 'widget-smoke':
       return ['widget'];
+    case 'ui-audit':
+      return ['ui-audit'];
     case 'personal-smoke':
       return ['personal'];
     default:
@@ -157,16 +172,20 @@ export function verify(event: string, branch: string, needs: unknown): string[] 
   });
 }
 
-export function fixtureSpecs(fixture: 'voice' | 'widget', input: unknown): string[] {
+export type BrowserFixture = 'voice' | 'widget' | 'personal' | 'ui-audit';
+
+export function fixtureSpecs(fixture: BrowserFixture, input: unknown): string[] {
   const groups = members(input, FULL_SELECTION.groups, 'fixture groups');
+  const otherSpecs = { widget: widgetSpecs, personal: personalSpecs, 'ui-audit': auditSpecs };
   const specs =
     fixture === 'voice'
       ? groups.flatMap((group) => VOICE_SPECS[group] ?? [])
-      : groups.includes('widget')
-        ? widgetSpecs
+      : groups.includes(fixture)
+        ? otherSpecs[fixture]
         : [];
   if (!specs.length) throw new Error('No selected specs for ' + fixture);
-  return specs.map((spec) => 'e2e/' + spec + '.spec.ts');
+  const dir = fixture === 'ui-audit' ? 'ui-audit-e2e' : 'e2e';
+  return specs.map((spec) => dir + '/' + spec + '.spec.ts');
 }
 
 if (import.meta.main) {

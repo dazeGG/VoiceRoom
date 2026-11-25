@@ -74,6 +74,12 @@ test('unattributed browser failures need all plausible fixture groups', () => {
   assert.equal(auditAttempt([voice], FULL_SELECTION).misses.length, 0);
 });
 
+test('an omitted cross-browser audit is a missed failure even if Voice was selected', () => {
+  const red = job('Cross-browser UI audit', 'failure', 1);
+  assert.equal(auditAttempt([red], { lanes: ['voice-join'], workspaces: [], groups: ['voice-core'] }).misses.length, 1);
+  assert.equal(auditAttempt([red], FULL_SELECTION).misses.length, 0);
+});
+
 test('checkout evidence must identify the requested PR merge, not the head or another checkout', () => {
   const hash = 'a'.repeat(40);
   const log = 'fetch +' + hash + ':refs/remotes/pull/5/merge\ntime [command]/usr/bin/git log -1 --format=%H\ntime ';

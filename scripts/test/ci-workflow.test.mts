@@ -12,6 +12,7 @@ const JobSchema = Type.Object({
   needs: Type.Optional(Type.Union([Type.String(), Type.Array(Type.String())])),
   if: Type.Optional(Type.String()),
   env: Type.Optional(Type.Record(Type.String(), Type.String())),
+  strategy: Type.Optional(Type.Object({ matrix: Type.Optional(Type.Unknown()) })),
   services: Type.Optional(Type.Record(Type.String(), Type.Unknown())),
   steps: Type.Optional(
     Type.Array(
@@ -67,6 +68,11 @@ test('the verified marker follows policy on same-repository develop PRs, not eve
   const condition = job('record-app-checks').if ?? '';
   for (const input of ['github.base_ref', 'github.event.pull_request.head.repo.full_name', 'needs.policy.result'])
     assert.ok(condition.includes(input), input);
+});
+
+test('the UI audit uses a single runner independently of the Voice Compose stack', () => {
+  assert.deepEqual(needs('ui-audit'), ['changes']);
+  assert.equal(job('ui-audit').strategy?.matrix, undefined);
 });
 
 test('client artifacts build beside the images behind the same gate', () => {
