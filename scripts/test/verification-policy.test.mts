@@ -6,6 +6,7 @@ import {
   schedule,
   selectionDigest,
   verify,
+  voiceFixture,
   type Selection
 } from '../ci/verification-policy.mts';
 
@@ -25,8 +26,10 @@ function evidence(selected: Selection, executed: Selection, verified = false) {
   }
   for (const [lane, items] of Object.entries({
     'test-web': executed.workspaces,
-    'voice-join': executed.groups.filter((s) => s.startsWith('voice-')),
+    'voice-join': executed.groups.filter((s) => voiceFixture(s) === 'voice'),
+    'voice-features': executed.groups.filter((s) => voiceFixture(s) === 'voice-features'),
     'widget-smoke': executed.groups.filter((s) => s === 'widget'),
+    'ui-audit': executed.groups.filter((s) => s === 'ui-audit'),
     'personal-smoke': executed.groups.filter((s) => s === 'personal')
   })) {
     jobs[lane] = { ...jobs[lane], result: jobs[lane]?.result ?? '', outputs: { completed: JSON.stringify(items) } };
@@ -51,6 +54,27 @@ test('develop accepts success with workspace proof and explicitly unselected ski
   assert.ok(lines.includes('api-integration: intentional skip'));
 });
 
+test('the smoke and feature jobs separately own their groups on develop, main and full fallback', () => {
+  const smoke: Selection = { lanes: ['voice-join'], groups: ['voice-core'], workspaces: [] };
+  const features: Selection = { lanes: ['voice-features'], groups: ['voice-reactions'], workspaces: [] };
+  for (const [selected, other] of [
+    [smoke, features],
+    [features, smoke]
+  ] as const) {
+    assert.deepEqual(schedule(pr, selected), selected);
+    assert.throws(() => schedule(pr, { ...selected, lanes: other.lanes }), /Inconsistent/);
+    const lines = verify(pr.event, pr.branch, evidence(selected, selected));
+    for (const lane of other.lanes) assert.ok(lines.includes(lane + ': intentional skip'));
+  }
+  for (const ctx of [{ ...pr, branch: 'main' }, push]) {
+    const jobs = evidence(empty, FULL_SELECTION);
+    jobs['voice-features'] = { result: 'skipped' };
+    assert.throws(() => verify(ctx.event, ctx.branch, jobs), /voice-features: expected success/);
+    jobs['voice-features'] = { result: 'success', outputs: { completed: JSON.stringify(smoke.groups) } };
+    assert.throws(() => verify(ctx.event, ctx.branch, jobs), /voice-features completed evidence/);
+  }
+});
+
 test('no skip, failed/cancelled job, or missing result can stand in for expected success', () => {
   for (const result of ['skipped', 'failure', 'cancelled', '']) {
     const jobs = evidence(admin, admin);
@@ -72,6 +96,7 @@ test('group and workspace evidence must match exactly even when the parent job s
     ['test-web', ''],
     ['voice-join', '["voice-core"]'],
     ['widget-smoke', '["widget","widget"]'],
+    ['ui-audit', '[]'],
     ['personal-smoke', '["voice-core"]']
   ] as const) {
     const jobs = evidence(FULL_SELECTION, FULL_SELECTION);
@@ -122,13 +147,25 @@ test('current browser command expands only the selected spec groups on their own
     'e2e/guest-account-cta.spec.ts',
     'e2e/mobile-room.spec.ts'
   ]);
-  const full = fixtureSpecs('voice', FULL_SELECTION.groups);
-  assert.equal(full.length, 10);
-  assert.equal(new Set(full).size, full.length);
+  const smoke = fixtureSpecs('voice', FULL_SELECTION.groups);
+  const features = fixtureSpecs('voice-features', FULL_SELECTION.groups);
+  assert.equal(smoke.length, 10);
+  assert.equal(features.length, 8);
+  assert.equal(new Set([...smoke, ...features]).size, 18);
+  const mixed = ['voice-reactions', 'voice-core'];
+  assert.deepEqual(fixtureSpecs('voice', mixed), ['e2e/room-voice.spec.ts']);
+  assert.deepEqual(fixtureSpecs('voice-features', mixed), ['e2e/reactions.spec.ts']);
+  assert.throws(() => fixtureSpecs('voice', ['voice-reactions']), /No selected specs/);
+  assert.throws(() => fixtureSpecs('voice-features', ['voice-core']), /No selected specs/);
   assert.deepEqual(fixtureSpecs('widget', FULL_SELECTION.groups), [
     'e2e/widget-embed.spec.ts',
     'e2e/widget-media-boundary.spec.ts',
     'e2e/widget-reconnect.spec.ts'
+  ]);
+  assert.deepEqual(fixtureSpecs('personal', FULL_SELECTION.groups), ['e2e/meet.spec.ts']);
+  assert.deepEqual(fixtureSpecs('ui-audit', FULL_SELECTION.groups), [
+    'ui-audit-e2e/focus.spec.ts',
+    'ui-audit-e2e/security-hardening-cache.spec.ts'
   ]);
   assert.throws(() => fixtureSpecs('voice', ['widget']), /No selected specs/);
 });

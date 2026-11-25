@@ -1,12 +1,5 @@
 import { expect, test } from '@playwright/test';
-import {
-  createPermanentRoom,
-  enterRoom,
-  registerViaUi,
-  openRoomSettings,
-  settingsDialog,
-  uniqueLogin
-} from './helpers';
+import { createPermanentRoom, enterRoom, registerViaUi, deleteRoomViaSettings, uniqueLogin } from './helpers';
 
 test('owner can delete a room: redirected home, gone from list, direct URL is not-found', async ({ page }) => {
   const login = uniqueLogin('del');
@@ -17,16 +10,7 @@ test('owner can delete a room: redirected home, gone from list, direct URL is no
 
   await enterRoom(page, roomId);
 
-  // Open settings -> reveal danger zone -> two-step confirm.
-  await openRoomSettings(page);
-  const dialog = settingsDialog(page);
-  await expect(dialog).toBeVisible();
-
-  await dialog.getByRole('button', { name: 'Удалить комнату' }).click();
-  await dialog.getByRole('button', { name: 'Удалить навсегда' }).click();
-
-  // Delete redirects to the home/lobby ("/app").
-  await page.waitForURL('**/', { timeout: 15_000 });
+  await deleteRoomViaSettings(page, roomName);
   await expect(page.getByRole('button', { name: 'Создать комнату' })).toBeVisible({ timeout: 15_000 });
 
   // The deleted room is gone from the owned-rooms list.

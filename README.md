@@ -118,6 +118,17 @@ unknown paths and unresolved inputs select the full inventory. The changes job
 reports the reason, selected workspaces and browser groups. Reproduce a decision
 locally with `node scripts/ci/changed-components.mts <base-sha> <tested-sha>`.
 
+On a full run, **Voice room join smoke** runs the original 10 specs (including
+`room-voice`), while **Voice feature journeys** runs the other eight in parallel
+on a separate runner. Each job starts its own CI Compose stack with a real SFU
+and disposable PostgreSQL. On develop PRs, the second job runs only when paths
+select context menus, reactions, room lifecycle, localization, desktop
+boundaries or microphone stalls. Shared inputs can select both jobs. Widget and Meet
+keep their isolated stacks. Changes to the kit, styles, focus surfaces or the audit
+fixture also select **Cross-browser UI audit**: Chromium, WebKit and Firefox on
+one runner. Run it locally with
+`npm -w @voiceroom/web run e2e -- --config playwright.ui-audit.config.ts --workers=1`.
+
 The final **Git Flow policy** checks actual job results and completed test groups.
 PRs into `main` and unverified pushes to `develop` require a fixed full suite.
 A matching same-repository PR marker binds the parent, tested tree, successful

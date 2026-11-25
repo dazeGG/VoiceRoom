@@ -1,5 +1,6 @@
 import { expect, type Locator, type Page } from '@playwright/test';
 import { Value } from 'typebox/value';
+import { APP_HOME } from '@voiceroom/shared/app-home';
 import { Failure } from '@voiceroom/shared/contracts/http';
 import { Capabilities } from '@voiceroom/shared/contracts/ops';
 import { RoomCreated } from '@voiceroom/shared/contracts/rooms';
@@ -165,4 +166,12 @@ export async function openRoomSettings(page: Page): Promise<void> {
 
 export function settingsDialog(page: Page) {
   return page.getByRole('dialog', { name: 'Настройки комнаты' });
+}
+
+export async function deleteRoomViaSettings(page: Page, roomName: string): Promise<void> {
+  await openRoomSettings(page);
+  await settingsDialog(page).getByRole('button', { name: 'Удалить комнату', exact: true }).click();
+  const confirm = page.getByRole('alertdialog', { name: `Удалить комнату «${roomName}»?` });
+  await confirm.getByRole('button', { name: 'Удалить', exact: true }).click();
+  await page.waitForURL((url) => url.pathname === APP_HOME, { waitUntil: 'commit', timeout: 15_000 });
 }

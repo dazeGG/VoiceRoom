@@ -8,13 +8,40 @@ export interface Selection {
 }
 
 // Bump when changing the meaning of a lane, graph edge, group, or proof.
-export const SELECTOR_VERSION = 'pr3a-2';
-export const VOICE_SPECS: Record<string, string[]> = {
+export const SELECTOR_VERSION = 'pr3b-2';
+const voiceSmokeSpecs = {
   'voice-core': ['room-voice'],
   'voice-chat': ['chat-typing', 'manual-chat-polish', 'chat-drafts', 'chat-image-paste'],
   'voice-guest': ['guest-account-cta', 'mobile-room'],
   'voice-call': ['friend-call', 'microphone-recovery', 'rnnoise-assets']
 };
+const voiceFeatureSpecs = {
+  'voice-context-menu': ['context-menu'],
+  'voice-reactions': ['reactions'],
+  'voice-room-delete': ['room-delete'],
+  'voice-room-edit': ['room-edit'],
+  'voice-room-realtime': ['room-realtime'],
+  'voice-localization': ['localization'],
+  'voice-desktop-root-boundary': ['desktop-root-boundary'],
+  'voice-mic-stall': ['mic-stall']
+};
+export const VOICE_SPECS: Record<string, string[]> = { ...voiceSmokeSpecs, ...voiceFeatureSpecs };
+type VoiceFixture = 'voice' | 'voice-features';
+export type BrowserFixture = VoiceFixture | 'widget' | 'personal' | 'ui-audit';
+
+export function voiceFixture(group: string): VoiceFixture | undefined {
+  if (Object.hasOwn(voiceSmokeSpecs, group)) return 'voice';
+  if (Object.hasOwn(voiceFeatureSpecs, group)) return 'voice-features';
+  return undefined;
+}
+
+export function fixtureGroups(fixture: BrowserFixture, groups: readonly string[]): string[] {
+  return groups.filter((group) => (voiceFixture(group) ?? group) === fixture);
+}
+
+export const AUDIT_PROJECTS = ['chromium', 'webkit', 'firefox'];
+const auditSpecs = ['focus', 'security-hardening-cache'];
+const personalSpecs = ['meet'];
 const widgetSpecs = ['widget-embed', 'widget-media-boundary', 'widget-reconnect'];
 const apiLanes = ['api-unit', 'api-integration', 'test', 'goal-g05'];
 const alwaysFresh = ['installer', 'static-publication', 'site', 'docs'];
@@ -28,12 +55,14 @@ export const FULL_SELECTION: Selection = {
     ...apiLanes,
     'test-web',
     'voice-join',
+    'voice-features',
     'widget-smoke',
     'personal-smoke',
+    'ui-audit',
     ...alwaysFresh
   ].sort(),
   workspaces: ['admin', 'meet', 'web', 'widget'],
-  groups: [...Object.keys(VOICE_SPECS), 'widget', 'personal'].sort()
+  groups: [...Object.keys(VOICE_SPECS), 'widget', 'personal', 'ui-audit'].sort()
 };
 
 function members(value: unknown, allowed: string[], field: string): string[] {
@@ -57,11 +86,10 @@ export function canonicalSelection(value: unknown): Selection {
   requireTogether('check-lane', lanes.includes('check'));
   for (const lane of apiLanes) requireTogether(lane, lanes.includes('test'));
   requireTogether('test-web', workspaces.length > 0);
-  requireTogether(
-    'voice-join',
-    groups.some((group) => group.startsWith('voice-'))
-  );
+  requireTogether('voice-join', fixtureGroups('voice', groups).length > 0);
+  requireTogether('voice-features', fixtureGroups('voice-features', groups).length > 0);
   requireTogether('widget-smoke', groups.includes('widget'));
+  requireTogether('ui-audit', groups.includes('ui-audit'));
   requireTogether('personal-smoke', groups.includes('personal'));
   requireTogether('static-publication', lanes.includes('site') || lanes.includes('docs'));
   return { lanes, workspaces, groups };
@@ -97,9 +125,13 @@ function completedFor(lane: string, selected: Selection): string[] {
     case 'test-web':
       return selected.workspaces;
     case 'voice-join':
-      return selected.groups.filter((group) => group.startsWith('voice-'));
+      return fixtureGroups('voice', selected.groups);
+    case 'voice-features':
+      return fixtureGroups('voice-features', selected.groups);
     case 'widget-smoke':
       return ['widget'];
+    case 'ui-audit':
+      return ['ui-audit'];
     case 'personal-smoke':
       return ['personal'];
     default:
@@ -157,16 +189,18 @@ export function verify(event: string, branch: string, needs: unknown): string[] 
   });
 }
 
-export function fixtureSpecs(fixture: 'voice' | 'widget', input: unknown): string[] {
-  const groups = members(input, FULL_SELECTION.groups, 'fixture groups');
+export function fixtureSpecs(fixture: BrowserFixture, input: unknown): string[] {
+  const groups = fixtureGroups(fixture, members(input, FULL_SELECTION.groups, 'fixture groups'));
+  const otherSpecs = { widget: widgetSpecs, personal: personalSpecs, 'ui-audit': auditSpecs };
   const specs =
-    fixture === 'voice'
+    fixture === 'voice' || fixture === 'voice-features'
       ? groups.flatMap((group) => VOICE_SPECS[group] ?? [])
-      : groups.includes('widget')
-        ? widgetSpecs
+      : groups.includes(fixture)
+        ? otherSpecs[fixture]
         : [];
   if (!specs.length) throw new Error('No selected specs for ' + fixture);
-  return specs.map((spec) => 'e2e/' + spec + '.spec.ts');
+  const dir = fixture === 'ui-audit' ? 'ui-audit-e2e' : 'e2e';
+  return specs.map((spec) => dir + '/' + spec + '.spec.ts');
 }
 
 if (import.meta.main) {
@@ -181,10 +215,15 @@ if (import.meta.main) {
       console.log(verify(event, branch, parsed(NEEDS)).join('\n'));
       break;
     case 'voice-specs':
+      console.log(fixtureSpecs('voice', parsed(GROUPS_JSON)).join(' '));
+      break;
+    case 'voice-features-specs':
+      console.log(fixtureSpecs('voice-features', parsed(GROUPS_JSON)).join(' '));
+      break;
     case 'widget-specs':
-      console.log(fixtureSpecs(process.argv[2] === 'voice-specs' ? 'voice' : 'widget', parsed(GROUPS_JSON)).join(' '));
+      console.log(fixtureSpecs('widget', parsed(GROUPS_JSON)).join(' '));
       break;
     default:
-      throw new Error('Expected schedule, verify, voice-specs or widget-specs');
+      throw new Error('Expected schedule, verify, voice-specs, voice-features-specs or widget-specs');
   }
 }

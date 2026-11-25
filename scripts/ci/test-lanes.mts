@@ -1,4 +1,10 @@
-import { canonicalSelection, FULL_SELECTION, VOICE_SPECS, type Selection } from './verification-policy.mts';
+import {
+  canonicalSelection,
+  FULL_SELECTION,
+  VOICE_SPECS,
+  voiceFixture,
+  type Selection
+} from './verification-policy.mts';
 import { type measuredInputs, reverseConsumers, type RoutingWorkspace } from './routing-inputs.mts';
 
 export interface TreeInputs {
@@ -12,7 +18,7 @@ interface ComponentIntent {
   installer: boolean;
 }
 const apiLanes = ['api-unit', 'api-integration', 'test', 'goal-g05'];
-const voiceFeatures = ['voice-chat', 'voice-call', 'voice-guest'];
+const smokeJourneys = ['voice-chat', 'voice-call', 'voice-guest'];
 const sorted = (values: Set<string>) => [...values].sort();
 export const allTests = (why: string) => ({ selection: FULL_SELECTION, reason: 'ALL: ' + why });
 
@@ -26,17 +32,126 @@ const voiceSurfaces = [
   { group: 'voice-call', path: /^apps\/web\/src\/features\/friend-call\/FriendCall(?:Tiles|Stage)\.vue$/ },
   { group: 'voice-guest', path: /^apps\/web\/src\/features\/room\/components\/MobileCall(?:Grid|Focus|Pip|Tile)\.vue$/ }
 ];
+// Narrow on presentation and domain leaves, not on their enclosing features.
+// Room transport and chat-session wiring also deliver rename/delete events;
+// they, session/shell/entry and other unclassified runtime inputs remain broad.
+const lifecycle = ['voice-room-delete', 'voice-room-edit', 'voice-room-realtime'];
+const webInputs = (...inputs: string[]) => inputs.map((input) => 'apps/web/src/' + input);
+const browserOwners = [
+  {
+    groups: [],
+    inputs: [
+      ...['admin', 'staff', 'reports', 'feedback'].map((domain) => 'apps/api/src/domains/' + domain + '/'),
+      ...webInputs(
+        'features/call-feedback/',
+        'pages/WidgetsPage.vue',
+        'api/staff.ts',
+        'api/reports.ts',
+        'api/feedback.ts'
+      )
+    ]
+  },
+  {
+    groups: ['voice-reactions'],
+    inputs: [
+      'apps/api/src/domains/messaging/',
+      ...webInputs(
+        'shared/chat/Reaction',
+        'shared/chat/reaction-',
+        'shared/chat/ReactorList',
+        'shared/chat/Message',
+        'shared/chat/EmojiPickerPanel',
+        'api/reactions',
+        'features/room/components/RoomChat',
+        'styles/chat/_emoji-picker',
+        'styles/chat/_reaction'
+      )
+    ]
+  },
+  {
+    groups: ['voice-context-menu'],
+    inputs: [
+      'apps/api/src/domains/social/',
+      'apps/api/src/domains/notifications/',
+      'apps/api/src/domains/messaging/',
+      ...webInputs(
+        'features/home/model/friend-menu',
+        'features/home/model/use-friend-presence',
+        'features/home/components/lobby/dm/',
+        'features/home/components/lobby/DmView',
+        'features/home/model/use-dm-',
+        'entities/profile-card/',
+        'api/dm.ts',
+        'api/friends.ts',
+        'features/home/components/lobby/SidebarFriendRow',
+        'features/home/components/lobby/FriendContextMenu'
+      )
+    ]
+  },
+  {
+    groups: ['voice-context-menu', ...lifecycle],
+    inputs: webInputs(
+      'shared/components/room-menu/',
+      'features/room/room-settings',
+      'features/room/components/RoomSettingsDialog',
+      'features/home/components/lobby/LobbyRoomSettingsDialog'
+    )
+  },
+  {
+    groups: ['voice-localization'],
+    inputs: webInputs(
+      'shared/i18n/LanguageControl',
+      'features/home/components/settings/AppearanceSettings',
+      'features/home/components/SettingsModal',
+      'styles/home/_settings.',
+      'styles/home/_landing',
+      'features/home/components/Landing'
+    )
+  },
+  {
+    groups: ['voice-desktop-root-boundary', 'voice-localization'],
+    inputs: webInputs('service-worker.')
+  },
+  {
+    groups: ['voice-mic-stall'],
+    inputs: [
+      'packages/call/src/engine/services/microphone-',
+      'packages/call/src/engine/core/microphone-',
+      'packages/call/src/engine/room/capture-diagnostics.ts'
+    ]
+  }
+];
+function featureGroups(path: string, broad = true) {
+  const owners = browserOwners.filter(({ inputs }) => inputs.some((prefix) => path.startsWith(prefix)));
+  return (broad && !owners.length ? browserOwners : owners).flatMap(({ groups }) => groups);
+}
+
+function auditFixture(path: string) {
+  return /^apps\/(?:web\/(?:ui-audit-e2e\/|playwright\.ui-audit\.config\.ts$)|(?:web|admin)\/test\/browser\/)/.test(
+    path
+  );
+}
+function auditInput(path: string) {
+  return [
+    /^packages\/ui-kit\//,
+    /^(?:apps\/(?:admin|web|site)|packages\/(?:call|ui))\/.*(?:\.(?:s?css)$|focus)/i,
+    /^apps\/admin\/src\/(?:shell\/|ui\/|pages\/Account(?:Block|Delete)Dialog|TimeRangePicker|time-range|staff\.store)/,
+    /^apps\/web\/src\/(?:shared\/(?:i18n\/|chat\/(?:TypingIndicator|StructuredMessageContent))|features\/(?:auth\/session|home\/components\/(?:WhatsNew|settings\/Appearance))|entities\/room\/(?:room-membership|components\/RoomMemberList))/,
+    /^apps\/site\/src\/(?:components\/|layouts\/|pages\/index\.astro|site\.ts)/
+  ].some((input) => input.test(path));
+}
+
 function voiceGroups(path: string) {
   if (path.startsWith('apps/web/src/features/legal/')) return ['voice-core'];
   const surface = voiceSurfaces.find((candidate) => candidate.path.test(path));
-  if (surface) return ['voice-core', surface.group];
+  if (surface) return ['voice-core', surface.group, ...featureGroups(path, false)];
   if (/^apps\/web\/e2e\/widget-/.test(path)) return ['voice-core', 'widget'];
   for (const [group, specs] of Object.entries(VOICE_SPECS)) {
     if (specs.some((spec) => path === 'apps/web/e2e/' + spec + '.spec.ts')) {
       return [...new Set(['voice-core', group])];
     }
   }
-  return ['voice-core', ...voiceFeatures];
+  return ['voice-core', ...smokeJourneys, ...featureGroups(path)];
 }
 function broadInput(path: string) {
   return (
@@ -69,6 +184,11 @@ export function selectTests(paths: string[], trees: TreeInputs[], intent: Compon
   for (const name of ['site', 'docs', 'installer'] as const) if (intent[name]) lanes.add(name);
   if (trees.length !== 2) return allTests('missing base or tested workspace inventory');
   for (const path of paths) {
+    if (auditFixture(path)) {
+      groups.add('ui-audit');
+      reasons.add('UI audit fixture');
+      continue;
+    }
     if (broadInput(path) || path.startsWith('packages/shared/'))
       return allTests('shared, configuration or verification input: ' + path);
     if (observesG08(path, trees)) {
@@ -97,18 +217,19 @@ export function selectTests(paths: string[], trees: TreeInputs[], intent: Compon
       }
       continue;
     }
+    if (auditInput(path)) groups.add('ui-audit');
     owners.add(owner.name);
     switch (owner.dir) {
       case 'apps/api':
         apiLanes.forEach((id) => lanes.add(id));
-        for (const g of ['voice-core', ...voiceFeatures, 'widget', 'personal']) groups.add(g);
+        for (const g of ['voice-core', ...smokeJourneys, ...featureGroups(path), 'widget', 'personal']) groups.add(g);
         // Web imports the client log intake normalizer across the workspace boundary.
         if (path.startsWith('apps/api/src/lib/')) owners.add('@voiceroom/web');
         break;
       case 'packages/ui-kit':
       case 'packages/ui':
       case 'packages/call':
-        for (const g of ['voice-core', ...voiceFeatures, 'widget', 'personal']) groups.add(g);
+        for (const g of ['voice-core', ...smokeJourneys, ...featureGroups(path), 'widget', 'personal']) groups.add(g);
         break;
       case 'apps/web':
         if (!/^apps\/web\/(?:src|test|e2e|public)\//.test(path)) return allTests('unknown Web input: ' + path);
@@ -150,9 +271,13 @@ export function selectTests(paths: string[], trees: TreeInputs[], intent: Compon
   }
 
   if (workspaces.size) lanes.add('test-web');
-  if (groups.has('voice-core')) lanes.add('voice-join');
+  for (const group of groups) {
+    const fixture = voiceFixture(group);
+    if (fixture) lanes.add(fixture === 'voice' ? 'voice-join' : fixture);
+  }
   if (groups.has('widget')) lanes.add('widget-smoke');
   if (groups.has('personal')) lanes.add('personal-smoke');
+  if (groups.has('ui-audit')) lanes.add('ui-audit');
   if (lanes.has('site') || lanes.has('docs')) lanes.add('static-publication');
   if (
     intent.app &&
