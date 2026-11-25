@@ -75,6 +75,7 @@
   "apps/api/test/moderation-integration.test.ts",
   "apps/api/test/moderation-routes.test.ts",
   "apps/api/test/native-push-service.test.ts",
+  "apps/api/test/native-voice-recovery-shutdown.test.ts",
   "apps/api/test/native-voice-recovery.test.ts",
   "apps/api/test/native-voice-service.test.ts",
   "apps/api/test/native-voice-watchdog.test.ts",
