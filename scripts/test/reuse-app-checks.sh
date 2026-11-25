@@ -10,7 +10,10 @@ GITHUB_SHA=$(git rev-parse HEAD)
 export BEFORE_SHA
 BEFORE_SHA=$(git rev-parse HEAD^)
 tree=$(git rev-parse 'HEAD^{tree}')
-export PROOF="verified-dev-pr-12-$BEFORE_SHA-$tree-2"
+export SELECTION_DIGEST
+SELECTION_DIGEST=$(printf '%064d' 42)
+export PREFIX="verified-dev-pr-12-$BEFORE_SHA-$tree"
+export PROOF="$PREFIX-2-$SELECTION_DIGEST"
 export SCENARIO=valid
 
 cat > "$tmp/gh" <<'MOCK'
@@ -30,15 +33,20 @@ case "$*" in
   *'/actions/workflows/ci.yml/runs -f event=pull_request -f head_sha=pr-head -F per_page=1')
     conclusion=success
     if [[ "$SCENARIO" == 'failed-ci' ]]; then conclusion=failure; fi
-    jq -n --arg conclusion "$conclusion" '
-      {workflow_runs: [{id: 15, run_attempt: 2, conclusion: $conclusion, updated_at: "2026-11-19T07:59:00Z"}]}'
+    updated_at="2026-11-19T07:59:00Z"
+    if [[ "$SCENARIO" == 'late-proof' ]]; then updated_at="2026-11-19T08:01:00Z"; fi
+    jq -n --arg conclusion "$conclusion" --arg time "$updated_at" '
+      {workflow_runs: [{id: 15, run_attempt: 2, conclusion: $conclusion, updated_at: $time}]}'
     ;;
   *"/actions/runs/15/artifacts -f name=$PROOF")
     name=$PROOF
     expired=false
     case "$SCENARIO" in
-      different-tree) name="verified-dev-pr-12-$BEFORE_SHA-different-tree-2" ;;
-      old-attempt) name="${PROOF%-2}-1" ;;
+      different-tree) name="verified-dev-pr-12-$BEFORE_SHA-different-tree-2-$SELECTION_DIGEST" ;;
+      old-attempt) name="$PREFIX-1-$SELECTION_DIGEST" ;;
+      old-name) name="$PREFIX-2" ;;
+      different-selection) name="$PREFIX-2-$(printf '%064d' 43)" ;;
+      lookup-timeout) exit 124 ;;
       expired) expired=true ;;
       api-error) exit 1 ;;
     esac
@@ -57,7 +65,7 @@ check() {
 }
 
 check valid true
-for scenario in direct-push failed-ci different-tree old-attempt expired api-error; do
+for scenario in direct-push failed-ci different-tree old-attempt expired api-error late-proof old-name different-selection lookup-timeout; do
   check "$scenario" false
 done
 BEFORE_SHA=unexpected-parent

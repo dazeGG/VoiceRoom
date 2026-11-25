@@ -5,6 +5,7 @@ import test from 'node:test';
 import { Type, type Static } from 'typebox';
 import { Value } from 'typebox/value';
 import { parse } from 'yaml';
+import { FULL_SELECTION } from '../ci/verification-policy.mts';
 
 const JobSchema = Type.Object({
   name: Type.Optional(Type.String()),
@@ -40,18 +41,32 @@ function needs(id: string): string[] {
   return Array.isArray(value) ? value : [value];
 }
 
-// GitHub's implicit success() skips a job when any job up its needs chain skipped,
-// even a job its direct needs tolerate with always(). The installer, site and
-// docs jobs skip on most pull requests.
-test('recording the verified tree survives skipped jobs further up the chain', () => {
+// These are deployment-configuration contracts. Outcome semantics are exercised
+// in verification-policy.test.mts; keep this suite about edges and reachability.
+function survivesSkippedAncestors(id: string) {
+  assert.match(job(id).if ?? '', /always\(\)|!cancelled\(\)/, id);
+}
+
+test('the final policy can inspect every lane even after skips, failures and cancellation', () => {
+  assert.equal(job('policy').name, 'Git Flow policy');
+  assert.deepEqual(needs('policy').toSorted(), ['changes', ...FULL_SELECTION.lanes].sort());
+  assert.equal(job('policy').if, 'always()');
+  for (const [id, name] of Object.entries({
+    check: 'Lint, typecheck & build',
+    test: 'API tests',
+    'test-web': 'Web tests',
+    'voice-join': 'Voice room join smoke',
+    'goal-g05': 'G05 strict LiveKit gate proof'
+  }))
+    assert.equal(job(id).name, name);
+});
+
+test('the verified marker follows policy on same-repository develop PRs, not every producer', () => {
+  assert.deepEqual(needs('record-app-checks').toSorted(), ['changes', 'policy']);
+  survivesSkippedAncestors('record-app-checks');
   const condition = job('record-app-checks').if ?? '';
-  assert.match(condition, /^!cancelled\(\) && /);
-  for (const need of needs('record-app-checks')) {
-    assert.ok(
-      condition.includes(`needs.${need}.result == 'success'`),
-      `record-app-checks must require ${need} by its result`
-    );
-  }
+  for (const input of ['github.base_ref', 'github.event.pull_request.head.repo.full_name', 'needs.policy.result'])
+    assert.ok(condition.includes(input), input);
 });
 
 test('client artifacts build beside the images behind the same gate', () => {
@@ -63,7 +78,7 @@ test('client artifacts build beside the images behind the same gate', () => {
 
 test('the required check name waits for every check lane', () => {
   assert.ok(needs('check').includes('check-lane'));
-  assert.match(job('check').if ?? '', /^\$\{\{ !cancelled\(\) && /);
+  survivesSkippedAncestors('check');
 });
 
 const producers = ['api-unit', 'api-integration'];
@@ -91,11 +106,21 @@ test('only integration waits for PostgreSQL; both raw bundles reach the protecte
   assert.deepEqual(downloads?.map((step) => step.with?.name).sort(), uploads.sort());
 });
 
-test('both publication jobs and the verified-tree marker require the producers and verdict', () => {
-  for (const consumer of ['record-app-checks', 'images', 'client-artifacts']) {
-    for (const id of [...producers, 'test']) {
-      assert.ok(needs(consumer).includes(id), `${consumer} must wait for ${id}`);
-      assert.ok(job(consumer).if?.includes(`needs.${id}.result == 'success'`));
-    }
+test('publication requires a successful push policy and independent component intent', () => {
+  for (const [id, intent] of Object.entries({
+    images: 'app',
+    'client-artifacts': 'app',
+    'deploy-site-dev': 'site',
+    'deploy-docs-dev': 'docs'
+  })) {
+    assert.ok(needs(id).includes('policy') && needs(id).includes('changes'));
+    survivesSkippedAncestors(id);
+    const guard = job(id).if ?? '';
+    for (const input of [
+      "github.event_name == 'push'",
+      "needs.policy.result == 'success'",
+      `needs.changes.outputs.${intent} == 'true'`
+    ])
+      assert.ok(guard.includes(input), id + ' must require ' + input);
   }
 });

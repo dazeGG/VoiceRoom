@@ -38,14 +38,22 @@ jobs:
           npm ci
           npm run check:site
           npm --workspace @voiceroom/site run build
-          npm run test:site
+          node scripts/test/web-text-contrast.test.mts --site
       - name: Check and build documentation
         if: inputs.component == 'docs'
         run: |
           npm --prefix apps/docs ci
           npm --prefix apps/docs run check
           npm --prefix apps/docs run build
-          npm --prefix apps/docs test
+      # Node exits successfully on an unmatched --test glob. Require executed
+      # workspace tests, not just a green build (or the separate contrast check).
+      - name: Test the static workspace
+        env:
+          NODE_OPTIONS: --test-reporter=tap
+        run: |
+          set -eo pipefail
+          npm --prefix "apps/$COMPONENT" test | tee "$RUNNER_TEMP/static-tests.tap"
+          grep -Eq '^# pass [1-9][0-9]*$' "$RUNNER_TEMP/static-tests.tap"
       - uses: actions/upload-artifact@v6
         if: github.event_name != 'pull_request'
         with:
