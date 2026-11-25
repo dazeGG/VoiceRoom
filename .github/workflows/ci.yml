@@ -267,8 +267,9 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: npm
+      # Collecting and judging coverage needs only the API workspace's typebox.
       - if: github.event_name == 'pull_request'
-        run: npm ci
+        run: npm ci --workspace @voiceroom/api
       - if: github.event_name == 'pull_request'
         uses: actions/download-artifact@v5
         with:
