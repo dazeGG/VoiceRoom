@@ -27,10 +27,7 @@ const voiceSurfaces = [
   { group: 'voice-guest', path: /^apps\/web\/src\/features\/room\/components\/MobileCall(?:Grid|Focus|Pip|Tile)\.vue$/ }
 ];
 function voiceGroups(path: string) {
-  // Legal document pages are isolated routes. Unit test files are not browser
-  // inputs; do not exclude their helpers (manual-chat-polish imports one).
-  if (path.startsWith('apps/web/src/features/legal/') || /^apps\/web\/test\/.+\.test\.[cm]?[jt]s$/.test(path))
-    return ['voice-core'];
+  if (path.startsWith('apps/web/src/features/legal/')) return ['voice-core'];
   const surface = voiceSurfaces.find((candidate) => candidate.path.test(path));
   if (surface) return ['voice-core', surface.group];
   if (/^apps\/web\/e2e\/widget-/.test(path)) return ['voice-core', 'widget'];
@@ -91,8 +88,21 @@ export function selectTests(paths: string[], trees: TreeInputs[], intent: Compon
     }
     const owner = inputs.find((w) => path.startsWith(w.dir + '/'));
     if (!owner) return allTests('unknown path: ' + path);
-    owners.add(owner.name);
     reasons.add(owner.dir);
+    // Only named tests are private to their runner. A helper beside them can
+    // still be imported by browser fixtures (e.g. manual-chat-polish).
+    if (path.startsWith(owner.dir + '/test/') && /\.test\.[cm]?[jt]sx?$/.test(path)) {
+      if (!owner.tests) return allTests('unresolved test workspace: ' + owner.dir);
+      if (owner.dir === 'apps/api') apiLanes.forEach((lane) => lanes.add(lane));
+      else if (owner.dir === 'apps/site') lanes.add('site');
+      else {
+        const name = owner.name.replace(/^@voiceroom\//, '');
+        if (!FULL_SELECTION.workspaces.includes(name)) return allTests('unresolved test workspace: ' + owner.dir);
+        workspaces.add(name);
+      }
+      continue;
+    }
+    owners.add(owner.name);
     switch (owner.dir) {
       case 'apps/api':
         apiLanes.forEach((id) => lanes.add(id));

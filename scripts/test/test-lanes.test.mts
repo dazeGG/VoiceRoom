@@ -185,11 +185,48 @@ test('local packages need no name prefix; mismatched file dependencies cannot be
 test('exclusive production surfaces retain their journey; test helpers remain shared browser inputs', () => {
   for (const [path, groups] of [
     ['apps/web/src/features/legal/PrivacyPolicy.vue', ['voice-core']],
-    ['apps/web/test/contract.test.ts', ['voice-core']],
     ['apps/web/src/shared/chat/EmojiPickerPanel.vue', ['voice-chat', 'voice-core']],
     ['apps/web/src/features/friend-call/FriendCallTiles.vue', ['voice-call', 'voice-core']],
     ['apps/web/src/features/room/components/MobileCallGrid.vue', ['voice-core', 'voice-guest']]
   ] as const)
     assert.deepEqual(route([path]).selection.groups, groups, path);
-  assert.ok(route(['apps/web/test/helpers/assert.ts']).selection.groups.includes('voice-chat'));
+  assert.deepEqual(route(['apps/web/test/helpers/assert.ts']).selection.groups, [
+    'voice-call',
+    'voice-chat',
+    'voice-core',
+    'voice-guest'
+  ]);
+});
+
+test('named unit tests run their owning workspace without starting browser fixtures', () => {
+  for (const [name, file] of [
+    ['web', 'features/embedded-room-document.test.ts'],
+    ['admin', 'accounts.test.ts'],
+    ['meet', 'guest-controller.test.ts'],
+    ['widget', 'widget-loader.test.ts']
+  ] as const) {
+    assert.deepEqual(route([`apps/${name}/test/${file}`]).selection, {
+      lanes: ['check', 'check-lane', 'test-web'],
+      workspaces: [name],
+      groups: []
+    });
+  }
+  assert.deepEqual(route(['apps/site/test/desktop-download.test.ts']).selection, {
+    lanes: ['site', 'static-publication'],
+    workspaces: [],
+    groups: []
+  });
+  assert.deepEqual(route(['apps/api/test/voice-call-lifecycle.test.ts']).selection, {
+    lanes: ['api-integration', 'api-unit', 'check', 'check-lane', 'goal-g05', 'test'],
+    workspaces: [],
+    groups: []
+  });
+  assert.deepEqual(route(['packages/shared/test/widget.test.ts']).selection, FULL_SELECTION);
+});
+
+test('a unit test cannot add a browser group to its component change or mask one', () => {
+  const component = 'apps/web/src/shared/chat/EmojiPickerPanel.vue';
+  const unit = 'apps/web/test/composer-emoji.test.ts';
+  assert.deepEqual(route([component, unit]).selection, route([component]).selection);
+  assert.deepEqual(route([unit, component]).selection.groups, ['voice-chat', 'voice-core']);
 });
