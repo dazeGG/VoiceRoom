@@ -10,8 +10,9 @@ import { AttachmentDrop } from '@/shared/chat/attachment-drop';
 import EmojiText from '@/shared/chat/EmojiText.vue';
 import { DEFAULT_FREQUENT_REACTIONS, loadFrequentReactions } from '@/shared/chat/frequent-reactions';
 import { effectivePresenceStatus, presenceStatusLabel } from '@/shared/presence';
-import { AccountBadge, Avatar, Pressable } from '@voiceroom/ui-kit/components';
-import { iconMd } from '@voiceroom/ui-kit/icon-defaults';
+import { AccountBadge, Avatar, IconButton, Pressable } from '@voiceroom/ui-kit/components';
+import { useCallEntry } from '@/features/friend-call/use-call-entry';
+import CallEntryIcon from '@/features/friend-call/CallEntryIcon.vue';
 import { displayNameOf } from '@/shared/utils/display-name';
 import { useLobby } from '../../model/lobby-context';
 import { useToastsStore } from '../../model/toasts.store';
@@ -28,6 +29,10 @@ const quickReactions = ref<string[]>([...DEFAULT_FREQUENT_REACTIONS]);
 const peerId = computed(() => lobby.selectedFriendId ?? '');
 const peer = computed(() => lobby.thread.peer);
 const online = computed(() => lobby.friends.find((entry) => entry.user.id === peerId.value)?.online ?? false);
+const call = useCallEntry(
+  () => peer.value?.id,
+  () => online.value
+);
 const presence = computed(() =>
   effectivePresenceStatus(online.value, peer.value?.presenceStatus, peer.value?.doNotDisturb)
 );
@@ -59,31 +64,54 @@ const drop = new AttachmentDrop({
   >
     <AttachmentDropOverlay v-if="drop.active" />
     <div class="dm-view__col">
-      <Pressable v-if="peer" class="dm-view__head" @click="lobby.toggleProfile">
-        <Avatar
-          :name="displayNameOf(peer)"
-          :src="peer.avatarUrl"
-          :color-key="peer.avatarColorKey"
-          :background="peer.avatarAccent || undefined"
+      <div v-if="peer" class="dm-view__header">
+        <Pressable class="dm-view__head" @click="lobby.toggleProfile">
+          <Avatar
+            :name="displayNameOf(peer)"
+            :src="peer.avatarUrl"
+            :color-key="peer.avatarColorKey"
+            :background="peer.avatarAccent || undefined"
+            :size="40"
+            :online="presence === 'online'"
+            :afk="presence === 'away'"
+            :dnd="presence === 'dnd'"
+            show-dot
+            ring="var(--vr-bg)"
+          />
+          <div class="dm-view__head-text">
+            <div class="dm-view__head-name">
+              <EmojiText :text="displayNameOf(peer)" /><AccountBadge :badge="badgeOf(peer.id)" />
+            </div>
+            <div
+              :class="[
+                'dm-view__head-status',
+                `dm-view__head-status--${call.visible && call.peerInCall ? 'in-call' : presence}`
+              ]"
+            >
+              {{ call.visible && call.peerInCall ? t('в звонке') : presenceStatusLabel(presence).toLowerCase() }}
+            </div>
+          </div>
+        </Pressable>
+        <IconButton
+          v-if="call.visible"
+          :label="call.label"
+          :tooltip-description="call.description"
+          :variant="call.accent ? 'soft' : 'default'"
           :size="40"
-          :online="presence === 'online'"
-          :afk="presence === 'away'"
-          :dnd="presence === 'dnd'"
-          show-dot
-          ring="var(--vr-bg)"
-        />
-        <div class="dm-view__head-text">
-          <div class="dm-view__head-name">
-            <EmojiText :text="displayNameOf(peer)" /><AccountBadge :badge="badgeOf(peer.id)" />
-          </div>
-          <div :class="['dm-view__head-status', `dm-view__head-status--${presence}`]">
-            {{ presenceStatusLabel(presence).toLowerCase() }}
-          </div>
-        </div>
-        <span class="dm-view__head-icon">
-          <User v-bind="iconMd" aria-hidden="true" />
-        </span>
-      </Pressable>
+          :disabled="call.disabled"
+          @click="void call.open()"
+        >
+          <CallEntryIcon :mode="call.mode" />
+        </IconButton>
+        <IconButton
+          :label="t('Профиль')"
+          :aria-pressed="lobby.thread.profileOpen"
+          :size="40"
+          @click="lobby.toggleProfile"
+        >
+          <User aria-hidden="true" />
+        </IconButton>
+      </div>
 
       <DmConversation
         v-if="peerId"

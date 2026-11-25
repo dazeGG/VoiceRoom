@@ -48,6 +48,7 @@ export * from './components/Toast';
 export * from './components/Toggle';
 export * from './components/Tooltip';
 export { isToastPress } from './components/Dialog/toast-press';
+export { formatCallClock, useCallClock } from './components/call-clock';
 export { resolvePopoverPlacement } from './components/Popover/popover-placement';
 export * from './components/Tabs';
 export * from './components/NavList';

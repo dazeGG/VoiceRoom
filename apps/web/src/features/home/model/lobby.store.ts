@@ -77,12 +77,16 @@ export const useLobbyStore = defineStore('lobby', () => {
   let selfId = '';
   // Enters voice in a room through the page's usual confirmation flow.
   let onEnterRoom: (roomId: string) => void = () => {};
+  let onBrowse: (peerId?: string) => void = () => {};
   const presence = useFriendPresence();
   const browserNotifications = new BrowserNotificationRouting(() => getActiveNotificationTarget());
 
   /** `onEnterRoom` enters voice in a room through the page's usual confirmation flow. */
-  function configure(options: { onEnterRoom?: (roomId: string) => void } = {}): void {
+  function configure(
+    options: { onEnterRoom?: (roomId: string) => void; onBrowse?: (peerId?: string) => void } = {}
+  ): void {
     onEnterRoom = options.onEnterRoom ?? (() => {});
+    onBrowse = options.onBrowse ?? (() => {});
   }
 
   function clearLegacyResolvedRoomInvitations(): void {
@@ -207,19 +211,23 @@ export const useLobbyStore = defineStore('lobby', () => {
   // --- Navigation ---------------------------------------------------------
 
   function setMode(next: LobbyMode): void {
+    onBrowse();
     mode.value = next;
   }
 
   function showHome(): void {
+    onBrowse();
     view.value = 'home';
   }
 
   function showPeople(): void {
+    onBrowse();
     view.value = 'people';
     void refreshRequests().catch(() => {});
   }
 
   async function openDm(userId: string): Promise<void> {
+    onBrowse(userId);
     mode.value = 'friends';
     selectedFriendId.value = userId;
     view.value = 'dm';

@@ -13,7 +13,8 @@ const {
   state = 'connected',
   screenRequesting,
   viewing,
-  contextMenu
+  contextMenu,
+  staticTile
 } = defineProps<{
   participant: Pick<
     Participant,
@@ -26,6 +27,7 @@ const {
   mirrored: boolean;
   screenRequesting: boolean;
   contextMenu?: boolean;
+  staticTile?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -42,6 +44,7 @@ defineSlots<{
 const tile = ref<HTMLElement | null>(null);
 const cameraVideo = ref<HTMLVideoElement | null>(null);
 const connected = computed(() => state === 'connected');
+const canActivate = computed(() => connected.value && !staticTile);
 const canWatch = computed(() => connected.value && !participant.isLocal && participant.screen && !viewing);
 const screenActionLabel = computed(() => (screenRequesting ? t('Подключение') : t('Смотреть экран')));
 const cameraStream = computed(() => (connected.value ? participant.cameraStream : null));
@@ -68,7 +71,7 @@ watch(
 );
 
 function handleTileClick(event: MouseEvent): void {
-  if (!connected.value) return;
+  if (!canActivate.value) return;
   if (event.target instanceof Element && event.target.closest('button, select, input, a')) return;
   emit('activate');
 }
@@ -79,14 +82,14 @@ function handleScreenAction(event: MouseEvent): void {
 }
 
 function handleContextMenu(event: MouseEvent): void {
-  if (!connected.value || !contextMenu) return;
+  if (!canActivate.value || !contextMenu) return;
   event.preventDefault();
   event.stopPropagation();
   emit('contextMenu', event.clientX, event.clientY, tile.value);
 }
 
 function handleKeydown(event: KeyboardEvent): void {
-  if (!connected.value || event.target !== tile.value) return;
+  if (!canActivate.value || event.target !== tile.value) return;
   if (event.key === 'Enter' || event.key === ' ') {
     event.preventDefault();
     emit('activate');
@@ -105,7 +108,7 @@ function handleKeydown(event: KeyboardEvent): void {
 <template>
   <div
     ref="tile"
-    :role="connected ? 'button' : undefined"
+    :role="canActivate ? 'button' : undefined"
     :class="[
       'participant',
       `participant--${variant}`,
@@ -119,10 +122,10 @@ function handleKeydown(event: KeyboardEvent): void {
       }
     ]"
     :data-peer-id="participant.id"
-    :tabindex="connected ? 0 : undefined"
-    :aria-haspopup="connected && contextMenu ? 'dialog' : undefined"
+    :tabindex="canActivate ? 0 : undefined"
+    :aria-haspopup="canActivate && contextMenu ? 'dialog' : undefined"
     :aria-label="
-      connected && contextMenu
+      canActivate && contextMenu
         ? t('{p0}. Откройте контекстное меню Shift+F10 или клавишей меню.', { p0: participant.name })
         : undefined
     "

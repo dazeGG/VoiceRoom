@@ -4,8 +4,8 @@ import { state } from '../core/room-runtime.store';
 
 export type { LiveKitCredentials };
 
-export const requestLiveKitToken: CallTransport['requestLiveKitToken'] = (input) =>
-  getCallPorts().transport.requestLiveKitToken(input);
+export const requestLiveKitToken: CallTransport['requestLiveKitToken'] = (input, callId) =>
+  getCallPorts().transport.requestLiveKitToken(input, callId);
 
 // How long "the room exists" holds for a join. The token request checks again
 // on the server, so a room deleted in this window still ends in room_not_found.

@@ -16,6 +16,7 @@ import { reloadNavigationsOnUpdate } from '@/features/app-update/update-navigati
 import { createVersionCheck } from '@/features/app-update/version-check';
 import { useCallFeedbackStore } from '@/features/call-feedback/call-feedback.store';
 import CallFeedbackPrompt from '@/features/call-feedback/CallFeedbackPrompt.vue';
+import FriendCallHost from '@/features/friend-call/FriendCallHost.vue';
 import { useToastsStore } from '@/features/home/model/toasts.store';
 import { useLeaveScreenStore } from '@/features/room/leave-screen.store';
 import { applyDesktopBoundaryToDocument } from '@/platform/desktop-boundary';
@@ -160,6 +161,7 @@ onBeforeUnmount(() => {
   </main>
   <template v-else-if="allowed">
     <RouterView />
+    <FriendCallHost v-if="desktopAllowed" />
     <Toast id="toast" viewport-class="app-toast-viewport" :toasts="toastItems" :on-dismiss="dismissToast">
       <template #message="{ message }"><EmojiText :text="message" /></template>
     </Toast>

@@ -1,3 +1,4 @@
 // The app shell around every page (App.vue). One partial per BEM block, forwarded from here.
 @forward 'device-boundary';
 @forward 'boot-splash';
+@forward 'incoming-call-stack';

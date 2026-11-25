@@ -45,7 +45,7 @@ type Member = PeerSession & { roomId: string };
 
 export interface CallTransport {
   roomStatus(roomId: string): Promise<Pick<RoomLifecycleSummary, 'name' | 'avatarUrl' | 'isStatic'> | null>;
-  requestLiveKitToken(input: Member & { name: string }): Promise<LiveKitCredentials>;
+  requestLiveKitToken(input: Member & { name: string }, callId?: string): Promise<LiveKitCredentials>;
   requestNativeVoiceAdmission?: (input: NativeVoiceAdmissionBody) => Promise<NativeVoiceAdmission>;
   renewNativeVoiceLease?: (input: NativeVoiceRenewalBody, signal: AbortSignal) => Promise<NativeVoiceRenewal>;
   failure(error: unknown): CallTransportFailure | null;
@@ -55,7 +55,7 @@ export interface CallTransport {
     getConnectionEpoch(): number;
     onStateChange(listener: (connected: boolean, epoch: number) => void): () => void;
     subscribeRoom(roomId: string, handler: (event: CallRealtimeEvent) => void): () => void;
-    join(input: Member & { name: string }): void;
+    join(input: Member & { name: string }, callId?: string): void;
     leave(input: ClientCommands['room.leave']): void;
     updatePeer(input: Member & { patch: Record<string, unknown> }): void;
     reportPoll(input: ClientCommands['room.voice.report']): void;

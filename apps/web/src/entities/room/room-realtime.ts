@@ -16,6 +16,9 @@ import {
 import { useRoomPresenceStore } from './room-presence.store';
 import { guestBrowserId } from './guest-id';
 import type { OwnedRoom } from '@/api/auth';
+import { ApiError } from '@/api/client';
+import { errorText } from '@/api/error-texts';
+import { newId } from '@/shared/new-id';
 
 type RoomDetailHandler = (event: RealtimeEvent) => void;
 
@@ -139,6 +142,7 @@ function retainDetailDispatch(): void {
   if (detailDispatchUnsub) return;
   detailDispatchUnsub = getAppRealtime().subscribe((event) => {
     acknowledgeActiveVoiceResync(event);
+    acknowledgeCallVoiceJoin(event);
     acknowledgePreview(event);
     if (event.type === 'pong') {
       // Heartbeat has no roomId; every room handler may use it as liveness.
@@ -159,7 +163,10 @@ function releaseDetailDispatch(): void {
   }
 }
 
-let activeVoiceJoin: ClientCommands['room.join'] | null = null;
+type VoiceJoin = { target: ClientCommands['room.join']; callId?: string };
+let activeVoiceJoin: VoiceJoin | null = null;
+let stopCallJoinOnOpen: (() => void) | undefined;
+let activeCallJoin: { requestId: string; result: 'pending' | 'joined' | ApiError; changed: EventTarget } | null = null;
 let restoreHooked = false;
 let lastRestoreEpoch = 0;
 let lastActiveResyncKey = '';
@@ -224,7 +231,7 @@ export function acknowledgeActiveVoiceResync(event: RealtimeEvent): boolean {
     pending.requestIds.has(event.id || '') &&
     event.id === pending.currentRequestId &&
     event.payload.mode === 'active' &&
-    event.payload.roomId === activeVoiceJoin?.roomId
+    event.payload.roomId === activeVoiceJoin?.target.roomId
   ) {
     clearActiveResync();
     return true;
@@ -355,8 +362,44 @@ export function subscribeRoomVoice(roomId: string, handler: RoomDetailHandler): 
   };
 }
 
-export function joinVoiceRoom(payload: { roomId: string; peerId: string; sessionToken: string; name: string }): void {
+export function subscribeCallAccountEvents(
+  userId: string,
+  handlers: {
+    ready: () => void;
+    incoming: (payload: ServerEvents['call.incoming']) => void;
+    state: (payload: ServerEvents['call.state']['call']) => void;
+  }
+): () => void {
+  const connection = getAppRealtime();
+  return connection.subscribe((event) => {
+    if (connection.getReadyUserId() !== userId) return;
+    if (event.type === 'ready') handlers.ready();
+    else if (event.type === 'call.incoming') handlers.incoming(event.payload);
+    else if (event.type === 'call.state') handlers.state(event.payload.call);
+  });
+}
+
+export function joinVoiceRoom(
+  payload: { roomId: string; peerId: string; sessionToken: string; name: string },
+  callId?: string
+): void {
   ensureReconnectRestore();
+  if (callId) {
+    const join = { target: payload, callId };
+    activeVoiceJoin = join;
+    const connection = getAppRealtime();
+    if (connection.isConnected()) sendVoiceJoin(join);
+    else {
+      stopCallJoinOnOpen?.();
+      stopCallJoinOnOpen = connection.onStateChange((connected) => {
+        if (!connected) return;
+        stopCallJoinOnOpen?.();
+        stopCallJoinOnOpen = undefined;
+        if (activeVoiceJoin === join && !activeCallJoin) sendVoiceJoin(join);
+      });
+    }
+    return;
+  }
   const guestId = guestBrowserId();
   const runtime = readDesktopRuntime();
   const desktopVersion = normalizeDesktopShellVersion(runtime?.isDesktop ? runtime.version : undefined);
@@ -367,19 +410,85 @@ export function joinVoiceRoom(payload: { roomId: string; peerId: string; session
     ...(guestId ? { guestId, clientId: guestId } : {}),
     ...(desktopVersion ? { desktopVersion } : {})
   };
-  activeVoiceJoin = join;
+  activeVoiceJoin = { target: join };
   beginDesktopNativeVoiceConnection();
-  sendVoiceJoin(join);
+  sendVoiceJoin(activeVoiceJoin);
 }
 
-function sendVoiceJoin(join: ClientCommands['room.join'], requestId?: string): void {
+function sendVoiceJoin(join: VoiceJoin, requestId?: string): void {
+  if (join.callId) {
+    const previous = activeCallJoin;
+    const id = requestId ?? newId();
+    activeCallJoin = { requestId: id, result: 'pending', changed: new EventTarget() };
+    previous?.changed.dispatchEvent(new Event('change'));
+    getAppRealtime().send('call.voice.join', { callId: join.callId, seatToken: join.target.sessionToken }, id);
+    return;
+  }
   const nativeVoicePreference = readDesktopNativeVoiceConnectionPreference();
-  getAppRealtime().send('room.join', { ...join, ...(nativeVoicePreference && { nativeVoicePreference }) }, requestId);
+  getAppRealtime().send(
+    'room.join',
+    { ...join.target, ...(nativeVoicePreference && { nativeVoicePreference }) },
+    requestId
+  );
+}
+
+function acknowledgeCallVoiceJoin(event: RealtimeEvent): void {
+  if (!activeCallJoin || activeCallJoin.result !== 'pending') return;
+  if (event.type === 'error' && event.payload.id === activeCallJoin.requestId) {
+    const { code } = event.payload;
+    activeCallJoin.result = new ApiError(errorText(code) ?? '', 0, { code });
+  } else if (
+    event.type === 'room.snapshot' &&
+    event.id === activeCallJoin.requestId &&
+    event.payload.mode === 'active' &&
+    event.payload.roomId === activeVoiceJoin?.target.roomId
+  ) {
+    activeCallJoin.result = 'joined';
+  } else return;
+  activeCallJoin.changed.dispatchEvent(new Event('change'));
+}
+
+export function waitForCallVoiceJoin(callId: string, seatToken: string, signal: AbortSignal): Promise<void> {
+  // The token endpoint requires the socket to hold this seat first.
+  return new Promise((resolve, reject) => {
+    const onAbort = () => finish(new ApiError(errorText('unavailable') ?? '', 0, { code: 'unavailable' }));
+    let waitTarget: EventTarget | undefined;
+    const connection = getAppRealtime();
+    const stopState = connection.onStateChange(check);
+    signal.addEventListener('abort', onAbort, { once: true });
+    check();
+
+    function finish(error?: ApiError): void {
+      stopState();
+      waitTarget?.removeEventListener('change', check);
+      signal.removeEventListener('abort', onAbort);
+      if (error) reject(error);
+      else resolve();
+    }
+
+    function check(): void {
+      if (signal.aborted) onAbort();
+      else if (activeVoiceJoin?.callId !== callId || activeVoiceJoin.target.sessionToken !== seatToken) {
+        finish(new ApiError(errorText('call_not_found') ?? '', 404, { code: 'call_not_found' }));
+      } else if (activeCallJoin?.result instanceof ApiError) finish(activeCallJoin.result);
+      else if (activeCallJoin?.result === 'joined' && connection.isConnected()) finish();
+      else {
+        waitTarget?.removeEventListener('change', check);
+        waitTarget = activeCallJoin?.changed;
+        waitTarget?.addEventListener('change', check);
+      }
+    }
+  });
 }
 
 export function leaveVoiceRoom(payload: ClientCommands['room.leave']): void {
-  if (activeVoiceJoin?.roomId === payload.roomId && activeVoiceJoin.peerId === payload.peerId) {
+  if (activeVoiceJoin?.target.roomId === payload.roomId && activeVoiceJoin.target.peerId === payload.peerId) {
     activeVoiceJoin = null;
+    stopCallJoinOnOpen?.();
+    stopCallJoinOnOpen = undefined;
+    const previous = activeCallJoin;
+    activeCallJoin = null;
+    previous?.changed.dispatchEvent(new Event('change'));
     endDesktopNativeVoiceConnection();
     lastActiveResyncKey = '';
     clearActiveResync();

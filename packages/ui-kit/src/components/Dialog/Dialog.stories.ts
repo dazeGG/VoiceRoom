@@ -4,6 +4,7 @@ import Button from '../Button/Button.vue';
 import Field from '../Field/Field.vue';
 import TextField from '../TextField/TextField.vue';
 import Dialog from './Dialog.vue';
+import { useDialogOverlayTarget } from './dialog-overlay-target';
 
 const meta = {
   title: 'Components/Overlays/Dialog',
@@ -81,6 +82,22 @@ export const BottomPanel: Story = {
 
 export const InlinePanel: Story = {
   args: { layout: 'panel', modal: false, closeLabel: 'Закрыть панель' }
+};
+
+export const WithActionableNotice: Story = {
+  render: (args) => ({
+    components: { Button, Dialog },
+    setup: () => ({ args, open: ref(false), notice: ref(false), target: useDialogOverlayTarget() }),
+    template: `
+      <Button @click="open = true">Open settings</Button>
+      <Dialog v-bind="args" :open="open" title="Settings" :on-close="() => (open = false)">
+        <Button @click="notice = true">Show incoming notice</Button>
+      </Dialog>
+      <Teleport v-if="notice && target" :to="target">
+        <Button @click="notice = false">Dismiss incoming notice</Button>
+      </Teleport>
+    `
+  })
 };
 
 export const MediaOverDialog: Story = {

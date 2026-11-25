@@ -4,6 +4,7 @@
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { FakeWebSocket, installFakeWebSocket } from '../fixtures/fake-websocket.ts';
 import { freshImport, muteWarnings } from '../helpers/fresh-module.ts';
+import { lobbyRoom } from '../fixtures/answers.ts';
 
 async function load() {
   installFakeWebSocket();
@@ -93,6 +94,45 @@ test('an active snapshot with a future native voice stage still reaches realtime
     ...frame,
     payload: { ...frame.payload, nativeVoice: { ...frame.payload.nativeVoice, stage: 'off' } }
   });
+  unsubscribe();
+});
+
+test('private voice waits for the matching socket acknowledgement before requesting a media token', async () => {
+  await load();
+  const transport = await import('@/entities/room/room-realtime');
+  const roomId = 'opaque-room';
+  const peerId = 'seat-local';
+  const token = 'a99357f4-dad9-4a77-9ff4-bf139989e489';
+  const callId = 'add6d72c-141d-4023-b41b-17cdf25526ef';
+  const unsubscribe = transport.subscribeRoomVoice(roomId, () => {});
+  const socket = FakeWebSocket.latest();
+  const controller = new AbortController();
+  transport.joinVoiceRoom({ roomId, peerId, sessionToken: token, name: 'Local' }, callId);
+  const ready = vi.fn<() => void>();
+  const pending = transport.waitForCallVoiceJoin(callId, token, controller.signal).then(ready);
+  expect(socket.sent).toHaveLength(0);
+  socket.open();
+  const join = socket.sent.find(({ type }) => type === 'call.voice.join');
+  expect(join).toMatchObject({ payload: { callId, seatToken: token } });
+  expect(join?.id).toEqual(expect.any(String));
+  const snapshot = {
+    type: 'room.snapshot',
+    payload: {
+      roomId,
+      room: lobbyRoom({ roomId }),
+      peers: [],
+      recentMessages: [],
+      voiceActiveSince: null,
+      mode: 'active'
+    }
+  };
+  socket.receive({ ...snapshot, id: 'unrelated' });
+  await Promise.resolve();
+  expect(ready).not.toHaveBeenCalled();
+  socket.receive({ ...snapshot, id: join?.id });
+  await pending;
+  expect(ready).toHaveBeenCalledOnce();
+  transport.leaveVoiceRoom({ roomId, peerId, sessionToken: token });
   unsubscribe();
 });
 

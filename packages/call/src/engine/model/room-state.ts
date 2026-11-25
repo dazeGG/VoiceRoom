@@ -77,6 +77,7 @@ export function createInitialRoomState(): AppState {
     peers: reactive(new Map()),
     peerId: '',
     roomId: '',
+    callId: undefined,
     moderationReason: '',
     roomAvatarUrl: '',
     roomName: '',

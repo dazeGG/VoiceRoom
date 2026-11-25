@@ -18,7 +18,14 @@ function navigate(router: Router, path: string, replace: boolean): Promise<void>
   // of the same entry, and a flag would mark that real navigation shallow too.
   // `force`: the address may lag behind the route (the back button inside the
   // lobby), and a write to the route the router is on must still land.
-  const location = { path, state: { shallowPath: path }, force: true };
+  const target = router.resolve(path);
+  const location = {
+    path: target.path,
+    query: target.query,
+    hash: target.hash,
+    state: { shallowPath: path },
+    force: true
+  };
   // SvelteKit wrote the address at once, and the code copied from it reads
   // window.location right after (the room client and the room chat take their
   // room from it). The router writes after its guards, so the address changes

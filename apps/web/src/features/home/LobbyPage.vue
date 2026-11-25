@@ -15,6 +15,9 @@ import { useRoomUiStore } from '@/features/room/room-ui.store';
 import { useScreenUiStore } from '@voiceroom/call/engine';
 import { useVoiceSessionStore } from '@voiceroom/call/engine';
 import RoomPage from '@/features/room/RoomPage.vue';
+import FriendCallView from '@/features/friend-call/FriendCallView.vue';
+import { useFriendCallStore } from '@/features/friend-call/friend-call.store';
+import { useRoute } from 'vue-router';
 import { useSessionStore } from '@/features/auth/session.store';
 import { usePageStore } from '@/stores/page.store';
 import { useNotificationPreferencesStore } from '@/shared/notifications/preferences.store';
@@ -51,7 +54,6 @@ import { roomDisplayName } from './model/rooms';
 import type { ToastOptions } from './model/toasts.store';
 
 const lobby = useLobbyStore();
-lobby.configure({ onEnterRoom: (roomId) => routing.requestEnterRoom(roomId) });
 provideLobby(lobby);
 
 // Rooms shown inside the lobby see the account's friends through this.
@@ -76,8 +78,8 @@ function toast(...args: [message: string, options?: ToastOptions]): void {
   emit('toast', ...args);
 }
 
-const session = useSessionStore();
 const navigation = useRoomNavigationStore();
+const session = useSessionStore();
 const voiceSession = useVoiceSessionStore();
 const roomUi = useRoomUiStore();
 const screenUi = useScreenUiStore();
@@ -85,6 +87,14 @@ const page = usePageStore();
 
 const rooms = useLobbyRooms((message) => toast(message));
 const routing = useLobbyRouting(lobby, rooms);
+lobby.configure({ onEnterRoom: routing.requestEnterRoom, onBrowse: routing.hideCall });
+const route = useRoute();
+const calls = useFriendCallStore();
+const shownCall = computed(() => {
+  const id = route.query.call;
+  if (typeof id !== 'string' || (calls.voice?.callId !== id && calls.closingCallId !== id)) return undefined;
+  return calls.record(id);
+});
 const staff = useStaffAccess(toast);
 const notifications = useLobbyNotifications();
 const preferences = useNotificationPreferencesStore();
@@ -182,19 +192,15 @@ const previewAnchorOfSelected = computed(() =>
   selectedRoom.value && previewAnchor.value?.roomId === selectedRoom.value.roomId ? previewAnchor.value : null
 );
 
-// The server closes the realtime socket with a dedicated code when this
-// device's session was ended elsewhere (another device, password recovery).
-let stopSessionEnded: (() => void) | undefined;
 let teardown: (() => void) | undefined;
+let stopSessionEnded: (() => void) | undefined;
 
 onMounted(() => {
   stopSessionEnded = getAppRealtime().onSessionEnded(() => {
-    // Our own sign-out or password change already handles the UI.
     if (session.consumeExpectedSessionEnd() || !session.user) return;
     session.clearSession();
     toast(t('Сеанс на этом устройстве завершён. Войдите снова'));
   });
-
   void rooms.refresh();
   if (props.createRoomOnOpen) createDialogOpen.value = true;
   prompts.start();
@@ -209,6 +215,7 @@ onMounted(() => {
     teardownRooms();
     teardownStaff();
     teardownRouting();
+    lobby.configure();
   };
 });
 
@@ -403,8 +410,16 @@ function roomDeleted(): void {
         />
       </div>
 
+      <FriendCallView
+        v-if="shownCall"
+        :key="shownCall.call.id"
+        :call="shownCall.call"
+        :offset="shownCall.offset"
+        @back="routing.goHome"
+        @messages="void lobby.openDm($event)"
+      />
       <RoomBrowseView
-        v-if="
+        v-else-if="
           lobby.mode === 'rooms' && selectedRoom && connectedVoiceRoomId && selectedRoom.roomId !== connectedVoiceRoomId
         "
         :user="user"

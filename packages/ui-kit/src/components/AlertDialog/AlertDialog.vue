@@ -8,12 +8,15 @@ import {
   AlertDialogTitle
 } from 'reka-ui';
 import { t } from '../../i18n';
+import { useTemplateRef } from 'vue';
 import Button from '../Button/Button.vue';
+import { registerDialogOverlayTarget } from '../Dialog/dialog-overlay-target';
 import type { AlertDialogProps } from './types';
 
 withDefaults(defineProps<AlertDialogProps>(), { tone: 'default' });
 
 const emit = defineEmits<{ confirm: []; cancel: [] }>();
+registerDialogOverlayTarget(useTemplateRef<HTMLElement>('noticeTarget'));
 
 function onOpenChange(next: boolean): void {
   if (!next) emit('cancel');
@@ -42,6 +45,7 @@ function onOpenChange(next: boolean): void {
               {{ confirmLabel }}
             </Button>
           </footer>
+          <div ref="noticeTarget"></div>
         </AlertDialogContent>
       </div>
     </AlertDialogPortal>

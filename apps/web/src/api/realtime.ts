@@ -74,6 +74,7 @@ function parseRealtimeEvent(frame: unknown): RealtimeEvent | null {
 
 class AppRealtimeConnection {
   private socket: WebSocket | null = null;
+  private readyUserId: string | undefined;
   private handlers = new Set<(event: RealtimeEvent) => void>();
   private refCount = 0;
   private closedByClient = false;
@@ -154,6 +155,7 @@ class AppRealtimeConnection {
     this.openGeneration += 1;
     this.clearTimers();
     this.socket = null;
+    this.readyUserId = undefined;
     // Silence is what gave it away, so the outage began when it fell silent.
     this.outage.noteLost(this.lastHeardAt);
     try {
@@ -250,6 +252,7 @@ class AppRealtimeConnection {
       return;
     const generation = ++this.openGeneration;
     const socket = new WebSocket(wsUrl());
+    this.readyUserId = undefined;
     this.socket = socket;
     let opened = false;
     this.connectTimer = setTimeout(() => {
@@ -289,6 +292,7 @@ class AppRealtimeConnection {
       }
       const parsed = parseRealtimeEvent(frame);
       if (!parsed) return;
+      if (parsed.type === 'ready') this.readyUserId = parsed.payload.userId;
       if (parsed.type === 'pong') {
         this.lastPongAt = Date.now();
         this.heartbeatWatchdog.recordPong();
@@ -300,6 +304,7 @@ class AppRealtimeConnection {
       const pingUnanswered = this.heartbeatWatchdog.pendingSince !== null;
       this.clearTimers();
       this.socket = null;
+      this.readyUserId = undefined;
       // An abnormal close with a ping unanswered may be the network giving up
       // long after the server fell silent. Otherwise the socket was fine until
       // now, however long ago it last had something to say.
@@ -364,6 +369,10 @@ class AppRealtimeConnection {
     return this.connectionEpoch;
   }
 
+  getReadyUserId(): string | undefined {
+    return this.readyUserId;
+  }
+
   isConnected(): boolean {
     return this.socket?.readyState === WebSocket.OPEN;
   }
@@ -390,6 +399,7 @@ class AppRealtimeConnection {
     this.outage.reset();
     this.socket?.close();
     this.socket = null;
+    this.readyUserId = undefined;
   }
 }
 

@@ -42,6 +42,8 @@ test('a disconnected participant presents a placeholder until active media and a
   expect(screen.getByTitle('Микрофон выключен')).toBeTruthy();
   expect(screen.getByTitle('Звук выключен')).toBeTruthy();
   expect(view.container.firstElementChild?.classList.contains('participant--speaking')).toBe(true);
+  await view.rerender({ staticTile: true });
+  expect(screen.getAllByRole('button')).toHaveLength(1);
   await userEvent.click(screen.getByRole('button', { name: 'Смотреть экран' }));
   expect(view.emitted('watchScreen')).toEqual([[]]);
 });

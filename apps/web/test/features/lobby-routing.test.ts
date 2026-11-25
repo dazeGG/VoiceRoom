@@ -7,7 +7,7 @@ import { createPinia, setActivePinia } from 'pinia';
 import { createMemoryHistory, createRouter } from 'vue-router';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { useLobbyRouting } from '../../src/features/home/model/use-lobby-routing.ts';
-import type { LobbyMode } from '../../src/features/home/model/lobby.store.ts';
+import type { LobbyStore } from '../../src/features/home/model/lobby.store.ts';
 import { useRoomNavigationStore } from '../../src/features/home/model/room-navigation.store.ts';
 import { ROOM_SWITCH_CONFIRM_STORAGE_KEY } from '../../src/features/home/model/room-switch-confirmation.ts';
 import { useVoiceSessionStore } from '@voiceroom/call/engine/core/voice-session.store';
@@ -28,8 +28,10 @@ let navigation: ReturnType<typeof makeRouter>;
 
 function setup(path = '/app') {
   window.history.replaceState(null, '', path);
-  const lobby: { mode: LobbyMode; openDm: (userId: string) => Promise<void>; showHome: () => void } = {
+  const lobby: Pick<LobbyStore, 'mode' | 'openDm' | 'showHome' | 'view' | 'selectedFriendId'> = {
     mode: 'friends',
+    view: 'home',
+    selectedFriendId: null,
     openDm: vi.fn(async () => {}),
     showHome: vi.fn()
   };

@@ -10,7 +10,9 @@ export {
   playPeerCue,
   playRingCue,
   playRoomChatMessageCue,
-  playStreamCue
+  playStreamCue,
+  startCallRinger,
+  waitForCallRingerAudio
 } from './media/cues';
 export { getDefaultHotkeyBinding, readHotkeyBinding, writeHotkeyBinding, type HotkeyAction } from './core/hotkeys';
 export { desktopGlobalHotkeysAvailable, setDesktopGlobalHotkeysSuspended } from './services/desktop-hotkey-service';

@@ -69,6 +69,12 @@
   font-size: 13px;
 }
 
+.dm-profile__call {
+  display: grid;
+  margin-block-start: var(--space-16);
+  gap: var(--space-8);
+}
+
 .dm-profile__stats {
   display: grid;
   grid-template-columns: 1fr 1fr;

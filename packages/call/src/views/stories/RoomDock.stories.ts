@@ -118,6 +118,7 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const AllButtons: Story = { args: { showScreenExit: true } };
+export const OneOnOne: Story = { args: { groupLabel: 'Управление звонком', leaveLabel: 'Завершить' } };
 export const MicrophoneOff: Story = {
   args: { callControls: { ...microphone, label: 'Включить микрофон', ariaPressed: true, stateName: 'muted' } }
 };
