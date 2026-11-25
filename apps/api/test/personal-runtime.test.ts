@@ -8,7 +8,10 @@ import { LiveKitAdmission } from '@voiceroom/shared/contracts/admission';
 import { MeetOwnerAuthorization, MeetRoomCreated, MeetRoomStatus } from '@voiceroom/shared/contracts/rooms';
 import { TokenVerifier } from 'livekit-server-sdk';
 import { createOwnerCapability } from '../src/domains/rooms/meet-owner.service.ts';
+import { codeOf } from '../src/platform/error-code.ts';
+import { bootstrapPersonal } from '../src/server.personal.ts';
 import { createTestDatabase } from './db-harness.ts';
+import { recordingLogger } from './fakes/index.ts';
 import { request, socketDir, startServer, waitForHealthz, type ServerLogs } from './fakes/server-process.ts';
 import { countWsType, joinVoiceRoom, openWs, sendRawWs, sendWs, waitForClose, waitForWsType } from './ws-harness.ts';
 
@@ -24,6 +27,27 @@ async function until(check: () => Promise<boolean>, message: string): Promise<vo
   } while (Date.now() < deadline);
   assert.fail(message);
 }
+
+test('personal bootstrap refuses to listen and releases its connection if startup reconciliation fails', async (t) => {
+  const db = await createTestDatabase(t, { empty: true });
+  t.after(db.cleanup);
+  const logger = recordingLogger();
+  const exits: Array<number | undefined> = [];
+  const server = await bootstrapPersonal({
+    env: { DATABASE_URL: db.databaseUrl, MIGRATE_ON_START: 'false', PERSONAL_ORIGIN: origin, PORT: '0' },
+    logger,
+    exit: (code) => exits.push(code)
+  });
+  assert.equal(server, null);
+  assert.deepEqual(exits, [1]);
+  assert.equal(codeOf(logger.records.find((record) => record.evt === 'boot.failed')?.err), '42P01');
+  await until(async () => {
+    const { rowCount } = await db.pool.query(
+      'SELECT 1 FROM pg_stat_activity WHERE datname = current_database() AND pid <> pg_backend_pid()'
+    );
+    return rowCount === 0;
+  }, 'Failed startup kept its database connection');
+});
 
 test('personal process keeps call and chat state transient and purges it on expiry and an unclean restart', async (t) => {
   const database = await createTestDatabase(t, { empty: true });
