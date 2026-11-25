@@ -1,6 +1,7 @@
 <script setup lang="ts" generic="Payload">
 // The messages of an outbox at the foot of a chat: dimmed while on their
 // way, and with their error and a way to send again or drop when they fail.
+import { Button } from '@voiceroom/ui-kit/components';
 import { t } from '@/shared/i18n';
 import type { Outgoing } from './outbox';
 

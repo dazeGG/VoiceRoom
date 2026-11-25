@@ -237,6 +237,9 @@ test('a sent message empties the field at once, shows dimmed, and a failed one w
   expect(screen.getByText('привет', { selector: '.outgoing-messages__text' })).toBeTruthy();
   const failed = await screen.findByRole('alert');
   expect(failed.textContent).toMatch(/Не отправлено/);
+  for (const action of ['Повторить', 'Удалить']) {
+    expect(within(failed).getByRole('button', { name: action }).getAttribute('type')).toBe('button');
+  }
 
   await open(lobby, bob);
   expect(document.querySelector('.outgoing-messages__item')).toBeNull();
