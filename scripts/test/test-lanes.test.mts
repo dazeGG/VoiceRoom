@@ -252,7 +252,7 @@ test('G08 follows transitive import, re-export and dynamic import edges, not nei
     put(
       dir + '/package.json',
       JSON.stringify({
-        name: '@voiceroom/' + dir.split('/')[1],
+        name: '@voiceroom/' + dir.slice(dir.lastIndexOf('/') + 1),
         scripts: dir === 'apps/web' ? { test: 'vitest run' } : {},
         ...(dir === 'apps/web' ? { dependencies: { '@voiceroom/ui-kit': '*', '@voiceroom/shared': '*' } } : {}),
         ...(dir === 'packages/ui-kit' ? { exports: { './i18n': './src/i18n.ts' } } : {})
