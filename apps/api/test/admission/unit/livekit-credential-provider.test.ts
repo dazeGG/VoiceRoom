@@ -1,0 +1,202 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+
+import { Type } from 'typebox';
+import type { CredentialIssue } from '../../../src/domains/admission/credential-boundary.service.ts';
+import { createLiveKitCredentialProvider } from '../../../src/domains/admission/livekit-credential-provider.ts';
+import { checked } from '../../helpers/checked.ts';
+import { mistyped } from '../../helpers/mistyped.ts';
+
+type AdmissionInput = NonNullable<Parameters<ReturnType<typeof createLiveKitCredentialProvider>['issueAdmission']>[0]>;
+
+const JwtPayload = Type.Object({ video: Type.Object({ canPublishSources: Type.Array(Type.String()) }) });
+
+function jwtPayload(token: string) {
+  return checked(
+    JwtPayload,
+    JSON.parse(Buffer.from(token.split('.')[1] ?? '', 'base64url').toString('utf8')),
+    'the token payload'
+  );
+}
+
+function issued(id: string, value: string) {
+  return { status: 'issued' as const, credential: { id, value, expiresAt: 0, principalEpoch: 0 } };
+}
+
+test('livekit credential provider rejects missing admission input without issuing a gate credential', async () => {
+  let calls = 0;
+  const config = {
+    apiKey: 'key',
+    apiSecret: 'secret',
+    boundary: {
+      async issueCredential() {
+        calls += 1;
+        return { status: 'unavailable' as const, credential: null };
+      }
+    },
+    gateUrl: 'ws://gate.example/rtc'
+  };
+  const admission: AdmissionInput = {
+    roomId: 'room-1',
+    livekitRoom: 'voice-room-room-1',
+    peerId: 'peer-1',
+    principal: { principalId: 'guest-1', principalType: 'guest' }
+  };
+
+  for (const key of ['apiKey', 'apiSecret', 'gateUrl']) {
+    assert.deepEqual(await createLiveKitCredentialProvider({ ...config, [key]: '' }).issueAdmission(admission), {
+      status: 'unavailable',
+      admission: null
+    });
+  }
+  for (const key of ['roomId', 'livekitRoom', 'peerId', 'principal']) {
+    assert.deepEqual(await createLiveKitCredentialProvider(config).issueAdmission({ ...admission, [key]: null }), {
+      status: 'unavailable',
+      admission: null
+    });
+  }
+  assert.equal(calls, 0);
+});
+
+test('livekit credential provider preserves boundary refusal without minting a LiveKit token', async () => {
+  const provider = createLiveKitCredentialProvider({
+    apiKey: 'key',
+    apiSecret: 'secret',
+    boundary: {
+      async issueCredential() {
+        // A refusal the provider does not interpret: it is passed on as is.
+        return mistyped<CredentialIssue>({ status: 'revoked', credential: null });
+      }
+    },
+    gateUrl: 'ws://gate.example/rtc'
+  });
+
+  assert.deepEqual(
+    await provider.issueAdmission({
+      roomId: 'room-1',
+      livekitRoom: 'voice-room-room-1',
+      peerId: 'peer-1',
+      principal: { principalId: 'guest-1', principalType: 'guest' }
+    }),
+    { status: 'revoked', admission: null }
+  );
+});
+
+test('livekit credential provider binds the signed gate credential to the public URL', async () => {
+  const provider = createLiveKitCredentialProvider({
+    apiKey: 'key',
+    apiSecret: 'secret',
+    boundary: {
+      async issueCredential(input) {
+        assert.deepEqual(input, {
+          roomId: 'room-1',
+          peerId: 'peer-1',
+          principal: { principalId: 'user-1', principalType: 'account' }
+        });
+        return issued('credential-1', 'signed-gate-value');
+      }
+    },
+    gateUrl: 'wss://gate.example/rtc?region=eu',
+    tokenTtlSeconds: 120
+  });
+
+  const result = await provider.issueAdmission({
+    roomId: 'room-1',
+    livekitRoom: 'voice-room-room-1',
+    peerId: 'peer-1',
+    name: 'Ada',
+    principal: { principalId: 'user-1', principalType: 'account' }
+  });
+
+  assert.equal(result.status, 'issued');
+  assert.ok(result.admission);
+  assert.equal(result.admission.gateCredentialId, 'credential-1');
+  assert.equal(result.admission.room, 'voice-room-room-1');
+  assert.equal(result.admission.ttlSeconds, 120);
+  assert.equal(new URL(result.admission.url).pathname, '/');
+  assert.equal(new URL(result.admission.url).searchParams.get('vr_gate_credential'), 'signed-gate-value');
+  assert.equal(typeof result.admission.token, 'string');
+  assert.equal(result.admission.token.split('.').length, 3);
+});
+
+test('livekit credential provider clamps invalid token TTL to a safe minimum', async () => {
+  const provider = createLiveKitCredentialProvider({
+    apiKey: 'key',
+    apiSecret: 'secret',
+    boundary: {
+      async issueCredential() {
+        return issued('credential-2', 'signed-value-2');
+      }
+    },
+    gateUrl: 'wss://gate.example/rtc',
+    tokenTtlSeconds: 0
+  });
+
+  const result = await provider.issueAdmission({
+    roomId: 'room-2',
+    livekitRoom: 'voice-room-room-2',
+    peerId: 'peer-2',
+    principal: { principalId: 'guest-2', principalType: 'guest' }
+  });
+
+  assert.equal(result.status, 'issued');
+  assert.ok(result.admission);
+  assert.equal(result.admission.ttlSeconds, 6 * 60 * 60);
+});
+
+test('server-muted admission omits microphone publishing while preserving screen sharing', async () => {
+  const provider = createLiveKitCredentialProvider({
+    apiKey: 'key',
+    apiSecret: 'secret',
+    boundary: {
+      async issueCredential() {
+        return issued('credential-muted', 'signed-muted');
+      }
+    },
+    gateUrl: 'wss://gate.example/rtc'
+  });
+
+  const result = await provider.issueAdmission({
+    roomId: 'room-muted',
+    livekitRoom: 'voice-room-muted',
+    peerId: 'peer-muted',
+    principal: { principalId: 'user-muted', principalType: 'account' },
+    canPublishMicrophone: false
+  });
+
+  assert.ok(result.admission);
+  const sources = jwtPayload(result.admission.token).video.canPublishSources;
+  assert.equal(sources.includes('microphone'), false, 'microphone TrackSource is absent');
+  assert.equal(sources.includes('screen_share'), true, 'screen-share TrackSource remains allowed');
+  assert.equal(sources.includes('screen_share_audio'), true, 'screen-share audio TrackSource remains allowed');
+  assert.equal(sources.includes('camera'), true, 'a server-muted peer can still turn the camera on');
+});
+
+test('widget media grant contains microphone/camera only and preserves server mute', async () => {
+  const provider = createLiveKitCredentialProvider({
+    apiKey: 'key',
+    apiSecret: 'secret',
+    gateUrl: 'wss://gate.example',
+    boundary: {
+      async issueCredential() {
+        return issued('widget-credential', 'widget-value');
+      }
+    }
+  });
+  for (const muted of [false, true]) {
+    const result = await provider.issueAdmission({
+      roomId: 'widget',
+      livekitRoom: 'voice-widget',
+      peerId: 'guest',
+      principal: { principalType: 'guest', principalId: 'guest' },
+      canPublishScreen: false,
+      canPublishMicrophone: !muted
+    });
+    assert.equal(result.status, 'issued');
+    assert.ok(result.admission);
+    assert.deepEqual(
+      jwtPayload(result.admission.token).video.canPublishSources,
+      muted ? ['camera'] : ['microphone', 'camera']
+    );
+  }
+});
