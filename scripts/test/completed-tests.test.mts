@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { checkDiscovery, checkWorkspace, completedGroups } from '../ci/completed-tests.mts';
+import { FULL_SELECTION } from '../ci/verification-policy.mts';
 
 test('a selected workspace must execute a test in at least one file', () => {
   const file = (status: string) => ({ name: 'test/leaf.test.ts', assertionResults: [{ status }] });
@@ -52,11 +53,26 @@ test('UI audit needs execution in both specs on each of the three browsers', () 
 
 test('passing mocked reactions do not cover a skipped real case', () => {
   const run = (status: string) =>
-    completedGroups('voice', ['voice-reactions'], {
+    completedGroups('voice-features', ['voice-reactions'], {
       suites: [suite('reactions.spec.ts'), suite('reactions.spec.ts', status)]
     });
   assert.deepEqual(run('passed'), ['voice-reactions']);
   assert.throws(() => run('skipped'), /Every real and mocked reaction case/);
+});
+
+test('a passing or skipped foreign spec cannot hide beside the correct Voice evidence', () => {
+  const groups = ['voice-core', 'voice-reactions'];
+  for (const [fixture, own, foreign] of [
+    ['voice', 'room-voice.spec.ts', 'reactions.spec.ts'],
+    ['voice-features', 'reactions.spec.ts', 'room-voice.spec.ts']
+  ] as const) {
+    for (const status of ['passed', 'skipped']) {
+      assert.throws(
+        () => completedGroups(fixture, groups, { suites: [suite(own), suite(foreign, status)] }),
+        /Unexpected spec in fixture report/
+      );
+    }
+  }
 });
 
 test('unfiltered Web and audit discovery must match their complete independent inventories', () => {
@@ -70,7 +86,9 @@ test('unfiltered Web and audit discovery must match their complete independent i
     'mobile-room',
     'friend-call',
     'microphone-recovery',
-    'rnnoise-assets',
+    'rnnoise-assets'
+  ];
+  const features = [
     'context-menu',
     'reactions',
     'room-delete',
@@ -80,8 +98,16 @@ test('unfiltered Web and audit discovery must match their complete independent i
     'desktop-root-boundary',
     'mic-stall'
   ];
+  // Derive proof from independent per-job spec lists: changing an assignment
+  // without changing the fixture must fail even if Web discovery is unchanged.
   for (const [fixture, files] of [
-    ['web', [...voice, 'widget-embed', 'widget-media-boundary', 'widget-reconnect']],
+    ['voice', voice],
+    ['voice-features', features]
+  ] as const) {
+    completedGroups(fixture, FULL_SELECTION.groups, { suites: files.map((name) => suite(name + '.spec.ts')) });
+  }
+  for (const [fixture, files] of [
+    ['web', [...voice, ...features, 'widget-embed', 'widget-media-boundary', 'widget-reconnect']],
     ['audit-discovery', ['focus', 'security-hardening-cache']]
   ] as const) {
     const suites = files.map((name) => ({ file: name + '.spec.ts' }));

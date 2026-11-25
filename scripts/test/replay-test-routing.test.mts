@@ -68,10 +68,32 @@ test('unmapped red jobs are unresolved, and a skipped job is not an observation'
   assert.equal(r.skipped, 1);
 });
 
-test('unattributed browser failures need all plausible fixture groups', () => {
-  const voice = job('Voice room join smoke', 'failure', 1, ['Join voice']);
-  assert.equal(auditAttempt([voice], { ...FULL_SELECTION, groups: ['voice-core'] }).misses.length, 1);
-  assert.equal(auditAttempt([voice], FULL_SELECTION).misses.length, 0);
+test('unattributed Voice failures require all groups on the failed job, not on both parallel stacks', () => {
+  const smoke = job('Voice room join smoke', 'failure', 1, ['Join voice']);
+  const features = job('Voice feature journeys', 'failure', 1);
+  const smokeOnly = {
+    lanes: ['voice-join'],
+    groups: ['voice-core', 'voice-chat', 'voice-guest', 'voice-call'],
+    workspaces: []
+  };
+  assert.deepEqual(auditAttempt([smoke], smokeOnly).misses, []);
+  assert.equal(auditAttempt([smoke], { ...smokeOnly, groups: ['voice-core'] }).misses.length, 1);
+  assert.equal(auditAttempt([features], smokeOnly).misses.length, 1);
+  assert.equal(auditAttempt([features], { ...FULL_SELECTION, groups: ['voice-reactions'] }).misses.length, 1);
+  assert.deepEqual(auditAttempt([features], FULL_SELECTION).misses, []);
+});
+
+test('known spec failures must come from their own job and require their owning group', () => {
+  const steps = ['Run e2e/reactions.spec.ts'];
+  const red = job('Voice feature journeys', 'failure', 1, steps);
+  const selected = { lanes: ['voice-features'], groups: ['voice-reactions'], workspaces: [] };
+  assert.deepEqual(auditAttempt([red], selected).misses, []);
+  assert.equal(auditAttempt([red], { ...selected, groups: ['voice-mic-stall'] }).misses.length, 1);
+  for (const misplaced of [
+    job('Voice room join smoke', 'failure', 1, steps),
+    job('Voice feature journeys', 'failure', 1, ['Run e2e/room-voice.spec.ts'])
+  ])
+    assert.deepEqual(auditAttempt([misplaced], FULL_SELECTION).unknown, [misplaced.name]);
 });
 
 test('an omitted cross-browser audit is a missed failure even if Voice was selected', () => {

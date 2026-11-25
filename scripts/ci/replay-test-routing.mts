@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { parseArgs } from 'node:util';
 import { routeTrees } from './changed-components.mts';
 import { lastMerged, runJobs, testedTrees, workflowRuns } from './replay-history.mts';
-import { FULL_SELECTION, VOICE_SPECS, type Selection } from './verification-policy.mts';
+import { FULL_SELECTION, VOICE_SPECS, voiceFixture, type Selection } from './verification-policy.mts';
 
 type Job = Awaited<ReturnType<typeof runJobs>>[number];
 
@@ -17,6 +17,7 @@ const names: Record<string, string> = {
   'API with PostgreSQL': 'api-integration',
   'Web tests': 'test-web',
   'Voice room join smoke': 'voice-join',
+  'Voice feature journeys': 'voice-features',
   'Cross-browser UI audit': 'ui-audit',
   'G05 strict LiveKit gate proof': 'goal-g05',
   'Embedded guest call and media boundary': 'widget-smoke',
@@ -51,13 +52,16 @@ function coversFailure(job: Job, selected: Selection): boolean | undefined {
     const required = workspaces.length ? workspaces : FULL_SELECTION.workspaces;
     return required.every((w) => w !== undefined && selected.workspaces.includes(w));
   }
-  if (lane === 'voice-join') {
+  if (lane === 'voice-join' || lane === 'voice-features') {
+    const fixture = lane === 'voice-join' ? 'voice' : 'voice-features';
+    const owners = Object.entries(VOICE_SPECS).filter(([group]) => voiceFixture(group) === fixture);
     const specs = job.steps.flatMap((s) => [...s.matchAll(/(?:^|[/ ])([\w-]+)\.spec\.ts/g)].map((m) => m[1]));
-    if (specs.some((s) => !s || !Object.values(VOICE_SPECS).flat().includes(s))) return undefined;
-    const groups = Object.entries(VOICE_SPECS)
-      .filter(([, members]) => members.some((s) => specs.includes(s)))
-      .map(([g]) => g);
-    return (groups.length ? groups : Object.keys(VOICE_SPECS)).every((g) => selected.groups.includes(g));
+    if (specs.some((s) => !s || !owners.some(([, members]) => members.includes(s)))) return undefined;
+    // An unattributed failure could come from any group that actually ran on
+    // this fixture, not from a journey on the other parallel Voice stack.
+    return owners
+      .filter(([, members]) => !specs.length || members.some((s) => specs.includes(s)))
+      .every(([group]) => selected.groups.includes(group));
   }
   return true;
 }

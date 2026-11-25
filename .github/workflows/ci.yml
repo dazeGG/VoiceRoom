@@ -74,7 +74,7 @@ jobs:
 
   policy:
     name: Git Flow policy
-    needs: [changes, check-lane, check, api-unit, api-integration, test, test-web, voice-join, ui-audit, goal-g05, widget-smoke, personal-smoke, installer, static-publication, site, docs]
+    needs: [changes, check-lane, check, api-unit, api-integration, test, test-web, voice-join, voice-features, ui-audit, goal-g05, widget-smoke, personal-smoke, installer, static-publication, site, docs]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -355,14 +355,20 @@ jobs:
       completed: ${{ steps.evidence.outputs.completed }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    steps:
+    env:
+      FIXTURE: voice
+    steps: &voice-stack-steps
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
         with:
           node-version-file: .nvmrc
           cache: npm
-      # The real reaction pagination fixture uses the API workspace's pg client.
-      - run: npm ci --workspace @voiceroom/api --workspace @voiceroom/web --workspace @voiceroom/shared --workspace @voiceroom/ui --workspace @voiceroom/ui-kit --workspace @voiceroom/call
+      - name: Install the selected browser fixture's dependencies
+        run: |
+          extra=()
+          # Only the real reaction pagination test imports the API workspace's pg client.
+          if [[ ${E2E_REAL_REACTIONS:-} == true ]]; then extra+=(--workspace @voiceroom/api); fi
+          npm ci "${extra[@]}" --workspace @voiceroom/web --workspace @voiceroom/shared --workspace @voiceroom/ui --workspace @voiceroom/ui-kit --workspace @voiceroom/call
       - name: Start the voice stack and pull the Playwright image
         env:
           VOICE_CALLS_ENABLED: "true"
@@ -378,22 +384,24 @@ jobs:
         id: evidence
         env:
           GROUPS_JSON: ${{ toJSON(fromJSON(needs.changes.outputs.schedule).groups) }}
-          E2E_REAL_REACTIONS: "true"
         run: |
-          paths=$(node scripts/ci/verification-policy.mts voice-specs)
+          paths=$(node scripts/ci/verification-policy.mts "$FIXTURE-specs")
           read -r -a specs <<< "$paths"
-          # Use the disposable Compose DB, not the runner's development credentials.
-          E2E_DATABASE_URL=$(docker compose -f docker-compose.ci.yml exec -T api node -e '
-            const url = new URL(process.env.DATABASE_URL);
-            url.host = "127.0.0.1:55439";
-            process.stdout.write(url.href)')
-          export E2E_DATABASE_URL
+          db_env=()
+          if [[ ${E2E_REAL_REACTIONS:-} == true ]]; then
+            E2E_DATABASE_URL=$(docker compose -f docker-compose.ci.yml exec -T api node -e '
+              const url = new URL(process.env.DATABASE_URL);
+              url.host = "127.0.0.1:55439";
+              process.stdout.write(url.href)')
+            export E2E_DATABASE_URL
+            db_env+=(-e E2E_REAL_REACTIONS -e E2E_DATABASE_URL)
+          fi
           docker run --rm --init --network host --ipc host --user "$(id -u):$(id -g)" \
-            -e E2E_REAL_REACTIONS -e E2E_DATABASE_URL \
+            "${db_env[@]}" \
             -e HOME=/tmp -e CI -e PLAYWRIGHT_JSON_OUTPUT_FILE=/work/voice-report.json -v "$GITHUB_WORKSPACE:/work" -w /work "$PLAYWRIGHT_IMAGE" \
             npm --workspace @voiceroom/web run e2e -- \
             "${specs[@]}" --project=chromium --retries=0 --reporter=line,json
-          node scripts/ci/completed-tests.mts voice voice-report.json >> "$GITHUB_OUTPUT"
+          node scripts/ci/completed-tests.mts "$FIXTURE" voice-report.json >> "$GITHUB_OUTPUT"
       # No teardown step: a hosted runner is discarded after the job together
       # with its containers and volumes.
       - name: Capture voice stack diagnostics
@@ -401,6 +409,19 @@ jobs:
         run: |
           docker compose -f docker-compose.ci.yml ps
           docker compose -f docker-compose.ci.yml logs --no-color --tail=250
+
+  voice-features:
+    name: Voice feature journeys
+    needs: changes
+    if: contains(fromJSON(needs.changes.outputs.schedule).lanes, 'voice-features')
+    outputs:
+      completed: ${{ steps.evidence.outputs.completed }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      FIXTURE: voice-features
+      E2E_REAL_REACTIONS: ${{ contains(fromJSON(needs.changes.outputs.schedule).groups, 'voice-reactions') && 'true' || 'false' }}
+    steps: *voice-stack-steps
 
   ui-audit:
     name: Cross-browser UI audit

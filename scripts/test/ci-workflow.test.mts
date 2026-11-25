@@ -75,6 +75,19 @@ test('the UI audit uses a single runner independently of the Voice Compose stack
   assert.equal(job('ui-audit').strategy?.matrix, undefined);
 });
 
+test('both Voice fixtures can start directly after routing, each on its own runner', () => {
+  for (const [id, fixture] of [
+    ['voice-join', 'voice'],
+    ['voice-features', 'voice-features']
+  ] as const) {
+    assert.deepEqual(needs(id), ['changes']);
+    assert.equal(job(id).env?.FIXTURE, fixture);
+    assert.equal(job(id).strategy?.matrix, undefined);
+  }
+  assert.equal(job('voice-features').name, 'Voice feature journeys');
+  assert.equal(job('voice-join').env?.E2E_REAL_REACTIONS, undefined);
+});
+
 test('client artifacts build beside the images behind the same gate', () => {
   assert.ok(!needs('client-artifacts').includes('images'));
   assert.deepEqual(needs('client-artifacts'), needs('images'));

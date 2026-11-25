@@ -120,7 +120,9 @@ test('changed tests retain their owner and correct fixture; portable runtime and
     ['apps/get/install.sh', 'personal']
   ] as const)
     assert.ok(route([path]).selection.groups.includes(group), path);
-  assert.deepEqual(route(['apps/web/e2e/chat-drafts.spec.ts']).selection.groups, ['voice-chat', 'voice-core']);
+  const original = route(['apps/web/e2e/chat-drafts.spec.ts']).selection;
+  assert.deepEqual(original.groups, ['voice-chat', 'voice-core']);
+  assert.ok(original.lanes.includes('voice-join') && !original.lanes.includes('voice-features'));
 });
 
 test('relative cross-workspace test imports retain Web on API log or Site download changes', () => {
@@ -135,6 +137,7 @@ test('relative cross-workspace test imports retain Web on API log or Site downlo
 
 test('each new Voice journey runs on its feature and on a direct spec change, not on an Admin leaf', () => {
   const admin = route(['apps/admin/src/pages/UsersPage.vue']).selection;
+  assert.ok(!admin.lanes.includes('voice-join') && !admin.lanes.includes('voice-features'));
   for (const [spec, feature] of [
     ['context-menu', 'apps/web/src/features/home/model/friend-menu.ts'],
     ['reactions', 'apps/api/src/domains/messaging/reaction.repository.ts'],
@@ -148,18 +151,22 @@ test('each new Voice journey runs on its feature and on a direct spec change, no
     const specPath = 'e2e/' + spec + '.spec.ts';
     const group = 'voice-' + spec;
     const selected = route([feature]).selection;
-    assert.ok(selected.lanes.includes('voice-join'), feature);
-    assert.ok(fixtureSpecs('voice', selected.groups).includes(specPath), feature);
+    assert.ok(selected.lanes.includes('voice-features') && selected.lanes.includes('voice-join'), feature);
+    assert.ok(fixtureSpecs('voice-features', selected.groups).includes(specPath), feature);
+    assert.ok(!fixtureSpecs('voice', selected.groups).includes(specPath), feature);
     assert.ok(!admin.groups.includes(group));
-    assert.deepEqual(route(['apps/web/' + specPath]).selection.groups, ['voice-core', group].sort());
+    const direct = route(['apps/web/' + specPath]).selection;
+    assert.deepEqual(direct.groups, ['voice-core', group].sort());
+    assert.ok(direct.lanes.includes('voice-features') && direct.lanes.includes('voice-join'));
   }
   assert.ok(!route(['apps/web/src/features/home/model/friend-menu.ts']).selection.groups.includes('voice-mic-stall'));
   for (const path of [
     'apps/api/src/domains/admin/admin-stats.repository.ts',
     'apps/web/src/features/call-feedback/CallFeedbackCard.vue'
   ]) {
-    const { groups } = route([path]).selection;
+    const { groups, lanes } = route([path]).selection;
     assert.ok(groups.includes('voice-core'));
+    assert.ok(!lanes.includes('voice-features'), path);
     assert.ok(!groups.includes('voice-reactions') && !groups.includes('voice-mic-stall'), path);
   }
 });
@@ -190,7 +197,7 @@ test('rename/delete fan-out is shared with chat and voice, even in engine and ch
     'packages/call/src/engine/room/voice-events.ts',
     'packages/call/src/engine/room/lifecycle.ts'
   ]) {
-    const specs = fixtureSpecs('voice', route([path]).selection.groups);
+    const specs = fixtureSpecs('voice-features', route([path]).selection.groups);
     for (const journey of ['room-realtime', 'reactions', 'mic-stall']) {
       assert.ok(specs.includes('e2e/' + journey + '.spec.ts'), path + ': ' + journey);
     }
@@ -348,7 +355,11 @@ test('G08 follows transitive import, re-export and dynamic import edges, not nei
   api(base, edit(catalog + '/labels.js', "export const labels = ['bye'];"));
   api(base, edit('packages/ui-kit/src/other.ts', 'export const other = 1;'));
   const chat = routeTrees(base, edit('apps/web/src/shared/chat/EmojiPickerPanel.vue', '<template/>'), cwd);
-  assert.deepEqual(chat.selection.lanes, ['check', 'check-lane', 'test-web', 'voice-join'], chat.reason);
+  assert.deepEqual(
+    chat.selection.lanes,
+    ['check', 'check-lane', 'test-web', 'voice-features', 'voice-join'],
+    chat.reason
+  );
 
   // Same specifier, new resolution: the added module takes precedence over
   // catalog/index.ts. Only the tested closure can select it; on deletion only the base can.

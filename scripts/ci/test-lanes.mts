@@ -1,4 +1,10 @@
-import { canonicalSelection, FULL_SELECTION, VOICE_SPECS, type Selection } from './verification-policy.mts';
+import {
+  canonicalSelection,
+  FULL_SELECTION,
+  VOICE_SPECS,
+  voiceFixture,
+  type Selection
+} from './verification-policy.mts';
 import { type measuredInputs, reverseConsumers, type RoutingWorkspace } from './routing-inputs.mts';
 
 export interface TreeInputs {
@@ -12,7 +18,7 @@ interface ComponentIntent {
   installer: boolean;
 }
 const apiLanes = ['api-unit', 'api-integration', 'test', 'goal-g05'];
-const voiceFeatures = ['voice-chat', 'voice-call', 'voice-guest'];
+const smokeJourneys = ['voice-chat', 'voice-call', 'voice-guest'];
 const sorted = (values: Set<string>) => [...values].sort();
 export const allTests = (why: string) => ({ selection: FULL_SELECTION, reason: 'ALL: ' + why });
 
@@ -145,7 +151,7 @@ function voiceGroups(path: string) {
       return [...new Set(['voice-core', group])];
     }
   }
-  return ['voice-core', ...voiceFeatures, ...featureGroups(path)];
+  return ['voice-core', ...smokeJourneys, ...featureGroups(path)];
 }
 function broadInput(path: string) {
   return (
@@ -216,14 +222,14 @@ export function selectTests(paths: string[], trees: TreeInputs[], intent: Compon
     switch (owner.dir) {
       case 'apps/api':
         apiLanes.forEach((id) => lanes.add(id));
-        for (const g of ['voice-core', ...voiceFeatures, ...featureGroups(path), 'widget', 'personal']) groups.add(g);
+        for (const g of ['voice-core', ...smokeJourneys, ...featureGroups(path), 'widget', 'personal']) groups.add(g);
         // Web imports the client log intake normalizer across the workspace boundary.
         if (path.startsWith('apps/api/src/lib/')) owners.add('@voiceroom/web');
         break;
       case 'packages/ui-kit':
       case 'packages/ui':
       case 'packages/call':
-        for (const g of ['voice-core', ...voiceFeatures, ...featureGroups(path), 'widget', 'personal']) groups.add(g);
+        for (const g of ['voice-core', ...smokeJourneys, ...featureGroups(path), 'widget', 'personal']) groups.add(g);
         break;
       case 'apps/web':
         if (!/^apps\/web\/(?:src|test|e2e|public)\//.test(path)) return allTests('unknown Web input: ' + path);
@@ -265,7 +271,10 @@ export function selectTests(paths: string[], trees: TreeInputs[], intent: Compon
   }
 
   if (workspaces.size) lanes.add('test-web');
-  if (groups.has('voice-core')) lanes.add('voice-join');
+  for (const group of groups) {
+    const fixture = voiceFixture(group);
+    if (fixture) lanes.add(fixture === 'voice' ? 'voice-join' : fixture);
+  }
   if (groups.has('widget')) lanes.add('widget-smoke');
   if (groups.has('personal')) lanes.add('personal-smoke');
   if (groups.has('ui-audit')) lanes.add('ui-audit');

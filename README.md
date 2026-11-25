@@ -118,10 +118,12 @@ unknown paths and unresolved inputs select the full inventory. The changes job
 reports the reason, selected workspaces and browser groups. Reproduce a decision
 locally with `node scripts/ci/changed-components.mts <base-sha> <tested-sha>`.
 
-Voice journeys use the CI Compose stack (including the real SFU and disposable
-PostgreSQL). Develop PRs select context menus, reactions, room lifecycle,
-localization, desktop boundaries and microphone recovery by their feature paths;
-shared runtime and fixture inputs select all affected journeys. Widget and Meet
+On a full run, **Voice room join smoke** runs the original 10 specs (including
+`room-voice`), while **Voice feature journeys** runs the other eight in parallel
+on a separate runner. Each job starts its own CI Compose stack with a real SFU
+and disposable PostgreSQL. On develop PRs, the second job runs only when paths
+select context menus, reactions, room lifecycle, localization, desktop
+boundaries or microphone stalls. Shared inputs can select both jobs. Widget and Meet
 keep their isolated stacks. Changes to the kit, styles, focus surfaces or the audit
 fixture also select **Cross-browser UI audit**: Chromium, WebKit and Firefox on
 one runner. Run it locally with
