@@ -31,3 +31,4 @@ export const Complete: Story = { args: { value: 100 } };
 export const Indeterminate: Story = { args: { label: 'Подключение к экрану', value: null } };
 export const Error: Story = { args: { label: 'Не удалось загрузить изображение', error: true } };
 export const HiddenLabel: Story = { args: { hideLabel: true } };
+export const DecorativeTrack: Story = { args: { label: '', variant: 'track' } };

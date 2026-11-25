@@ -1,10 +1,12 @@
 <script setup lang="ts">
+import { computed } from 'vue';
+import { t } from '../../i18n';
 import Tooltip from '../Tooltip/Tooltip.vue';
 import type { IconButtonProps } from './types';
 
 defineOptions({ inheritAttrs: false });
 
-withDefaults(defineProps<IconButtonProps>(), {
+const props = withDefaults(defineProps<IconButtonProps>(), {
   size: 32,
   variant: 'default',
   tooltip: true,
@@ -13,13 +15,26 @@ withDefaults(defineProps<IconButtonProps>(), {
 });
 
 const emit = defineEmits<{ click: [event: MouseEvent] }>();
+const accessibleLabel = computed(() =>
+  props.tooltipDescription
+    ? t('{label}. {description}', { label: props.label, description: props.tooltipDescription })
+    : props.label
+);
 </script>
 
 <template>
-  <Tooltip v-if="tooltip" :text="label" :side="tooltipSide" :shortcut="shortcut" :portal-target="tooltipTarget">
+  <Tooltip
+    v-if="tooltip"
+    :text="label"
+    :description="tooltipDescription"
+    :description-in-label="Boolean(tooltipDescription)"
+    :side="tooltipSide"
+    :shortcut="shortcut"
+    :portal-target="tooltipTarget"
+  >
     <component
       :is="href ? 'a' : 'button'"
-      v-bind="$attrs"
+      v-bind="tooltipDescription ? { 'aria-describedby': null, ...$attrs } : $attrs"
       :class="[
         'ui-icon-button',
         `ui-icon-button--${variant}`,
@@ -34,7 +49,7 @@ const emit = defineEmits<{ click: [event: MouseEvent] }>();
       :type="href ? undefined : type"
       :disabled="href ? undefined : disabled"
       :aria-disabled="href && disabled ? true : undefined"
-      :aria-label="label"
+      :aria-label="accessibleLabel"
       @click="
         (event: MouseEvent) => {
           if (!disabled) emit('click', event);
@@ -63,7 +78,7 @@ const emit = defineEmits<{ click: [event: MouseEvent] }>();
     :type="href ? undefined : type"
     :disabled="href ? undefined : disabled"
     :aria-disabled="href && disabled ? true : undefined"
-    :aria-label="label"
+    :aria-label="accessibleLabel"
     @click="
       (event: MouseEvent) => {
         if (!disabled) emit('click', event);

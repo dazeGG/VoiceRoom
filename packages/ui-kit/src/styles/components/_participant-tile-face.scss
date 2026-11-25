@@ -1,0 +1,19 @@
+.ui-participant-tile-face {
+  &__ring--placeholder {
+    opacity: 0.4;
+  }
+
+  &__offline {
+    flex: none;
+    width: var(--icon-16);
+    height: var(--icon-16);
+    color: var(--vr-away);
+  }
+
+  &__status {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-6);
+    grid-row: 1;
+  }
+}

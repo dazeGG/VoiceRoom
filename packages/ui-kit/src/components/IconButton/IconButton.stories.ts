@@ -19,9 +19,9 @@ const meta = {
           '- Use 32 to close a dialog and for actions in headers.',
           '- Use 40 next to md buttons.',
           '- Use 44 on the phone and in the dock.',
-          '- Offer a transparent variant as the default, plus `filled` (`--vr-surface-3`), `outline`, `soft`, `primary` and `danger`.',
+          '- Offer a transparent variant as the default, plus `filled` (`--vr-surface-3`), `outline`, `soft`, `primary`, `danger` and `danger-solid`.',
           '- Set `aria-pressed` when it is pressed, and `aria-expanded` when its menu is open.',
-          '- Require `aria-label`, and make it match the Tooltip text.',
+          '- Set `label` for the tooltip and accessible label. Add `tooltipDescription` to include extra context in both places.',
           '- Set `tooltipSide="bottom"` when a header sits under native window chrome.',
           '- Do not use the `title` attribute.'
         ].join('\n')
@@ -31,7 +31,10 @@ const meta = {
   args: { label: 'Выключить микрофон', size: 32, variant: 'default', tooltip: true, disabled: false },
   argTypes: {
     size: { control: 'inline-radio', options: [24, 28, 32, 40, 44] },
-    variant: { control: 'select', options: ['default', 'filled', 'outline', 'soft', 'primary', 'danger'] }
+    variant: {
+      control: 'select',
+      options: ['default', 'filled', 'outline', 'soft', 'primary', 'danger', 'danger-solid']
+    }
   },
   render: (args) => ({
     components: { IconButton, StoryIcon },
@@ -80,3 +83,15 @@ export const NeutralExpanded: Story = {
 };
 export const Scrim: Story = { args: { scrim: true, pill: true } };
 export const Link: Story = { args: { href: '#rooms' } };
+export const CallActions: Story = {
+  args: { label: 'Отклонить: Лена', size: 44, variant: 'danger-solid' },
+  render: (args) => ({
+    components: { IconButton, StoryIcon },
+    setup: () => ({ args }),
+    template: `<div class="story-popover-setting">
+      <IconButton v-bind="args"><StoryIcon name="phone-off" /></IconButton>
+      <IconButton label="Принять: Лена" variant="primary" :size="44"><StoryIcon name="phone" /></IconButton>
+    </div>`
+  })
+};
+export const CallActionsDisabled: Story = { ...CallActions, args: { ...CallActions.args, disabled: true } };

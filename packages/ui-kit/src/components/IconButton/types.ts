@@ -9,9 +9,10 @@ export interface IconButtonProps {
   href?: string;
   label: string;
   size?: 24 | 28 | 32 | 40 | 44 | undefined;
-  variant?: 'default' | 'filled' | 'outline' | 'soft' | 'primary' | 'danger' | undefined;
+  variant?: 'default' | 'filled' | 'outline' | 'soft' | 'primary' | 'danger' | 'danger-solid' | undefined;
   tooltip?: boolean | undefined;
   tooltipSide?: TooltipProps['side'];
+  tooltipDescription?: string | undefined;
   tooltipTarget?: HTMLElement | undefined;
   shortcut?: string[] | undefined;
   disabled?: boolean | undefined;

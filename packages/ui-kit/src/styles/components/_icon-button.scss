@@ -105,6 +105,16 @@
   color: var(--vr-danger);
 }
 
+.ui-icon-button--danger-solid {
+  background: var(--vr-danger);
+  color: var(--vr-on-danger);
+}
+
+.ui-icon-button--danger-solid:where(:hover):not(:disabled, [aria-disabled='true']) {
+  background: color-mix(in oklch, var(--vr-danger), var(--vr-on-danger) 12%);
+  color: var(--vr-on-danger);
+}
+
 .ui-icon-button[aria-pressed='true'],
 .ui-icon-button[aria-expanded='true']:where(:not(.ui-icon-button--neutral-expanded)) {
   background: var(--vr-surface-3);

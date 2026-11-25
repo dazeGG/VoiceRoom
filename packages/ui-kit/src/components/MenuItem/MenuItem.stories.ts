@@ -14,7 +14,8 @@ const meta = {
           'A selectable action row shared by dropdown and context menus.',
           '',
           '- Set `label` for the accessible name and typeahead. Add `description` for a two-line row, an icon slot or a `shortcut` when available.',
-          '- Use the `friendly` or `danger` tone when the action warrants it, and use `disabled` for an unavailable action.',
+          '- Use `hint` for trailing context while keeping the label available for typeahead and a shortcut available in its own position.',
+          '- Use the `friendly`, `accent` or `danger` tone when the action warrants it, and use `disabled` for an unavailable action.',
           '- Handle `select` so the action works from the keyboard and pointer.'
         ].join('\n')
       }
@@ -37,3 +38,7 @@ type Story = StoryObj<typeof meta>;
 export const Default: Story = {};
 export const Destructive: Story = { args: { label: 'Удалить комнату', tone: 'danger' } };
 export const Disabled: Story = { args: { disabled: true } };
+export const Call: Story = { args: { label: 'Позвонить', shortcut: '' } };
+export const Offline: Story = { args: { ...Call.args, hint: 'не в сети' } };
+export const LeaveRoom: Story = { args: { ...Call.args, hint: 'Вы покинете «Вечерний созвон»' } };
+export const ReturnToCall: Story = { args: { label: 'Вернуться в звонок', shortcut: '', tone: 'accent' } };

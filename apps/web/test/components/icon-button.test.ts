@@ -70,3 +70,39 @@ test('a disabled icon button ignores pointer and keyboard input', async () => {
   expect(document.activeElement).not.toBe(button);
   expect(onclick).not.toHaveBeenCalled();
 });
+
+test('an action description is visible on hover and focus and included in the accessible name once', async () => {
+  const description = 'Не в сети. Звонок придёт уведомлением';
+  const view = render(IconButton, { props: { label: 'Позвонить', tooltipDescription: description } });
+  const button = screen.getByRole('button', { name: `Позвонить. ${description}`, description: '' });
+  const user = userEvent.setup();
+  await user.hover(button);
+  expect(await screen.findByText(description, { ignore: '[role="tooltip"]' })).toBeTruthy();
+  expect(button.hasAttribute('aria-describedby')).toBe(false);
+  await user.unhover(button);
+  await user.tab();
+  expect(document.activeElement).toBe(button);
+
+  const roomHint = 'Вы покинете «Вечерний созвон с друзьями и длинным названием»';
+  await view.rerender({ tooltipDescription: roomHint });
+  expect(await screen.findByText(roomHint, { ignore: '[role="tooltip"]' })).toBeTruthy();
+  expect(screen.getByRole('button', { name: `Позвонить. ${roomHint}`, description: '' })).toBe(button);
+});
+
+test('the solid danger action supports keyboard activation and becomes inert when disabled', async () => {
+  const onClick = vi.fn();
+  const view = render(IconButton, {
+    props: { label: 'Завершить', size: 44, variant: 'danger-solid', tooltip: false },
+    attrs: { onClick }
+  });
+  const user = userEvent.setup();
+  const button = screen.getByRole('button', { name: 'Завершить' });
+  await user.tab();
+  expect(document.activeElement).toBe(button);
+  await user.keyboard('{Enter}');
+  expect(onClick).toHaveBeenCalledOnce();
+  await view.rerender({ disabled: true });
+  await user.click(button);
+  expect(button).toHaveProperty('disabled', true);
+  expect(onClick).toHaveBeenCalledOnce();
+});

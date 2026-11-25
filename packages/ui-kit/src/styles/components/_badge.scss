@@ -26,6 +26,10 @@
     background: var(--vr-danger);
     color: var(--vr-on-danger);
   }
+  &--online {
+    background: var(--vr-online);
+    color: var(--vr-bg);
+  }
   &--warning {
     border-color: color-mix(in oklch, var(--vr-away), transparent 55%);
     background: color-mix(in oklch, var(--vr-away), transparent 82%);

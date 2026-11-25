@@ -17,14 +17,15 @@ const meta = {
           '- Use a circle for people, and a squircle (31%) for rooms and groups.',
           '- Use a status dot of 8 up to size 28, of 12 from 32 to 48, and of 14 with a 3px stroke from 56.',
           '- Colour that stroke with the surface under the avatar (`--ring`).',
-          '- Size the letter to 39% of the avatar, and colour it with the pair `--avatar-<key>-bg` / `-ink`.'
+          '- Size the letter to 39% of the avatar, and colour it with the pair `--avatar-<key>-bg` / `-ink`.',
+          '- Use `ringing` at size 32 or 48 on a card and at size 128 on the stage. Silenced and reduced-motion halos are static.'
         ].join('\n')
       }
     }
   },
   args: { name: 'Анна', colorKey: 'blurple', size: 36, shape: 'circle' },
   argTypes: {
-    size: { control: 'select', options: [20, 24, 28, 32, 36, 40, 48, 56, 80] },
+    size: { control: 'select', options: [20, 24, 28, 32, 36, 40, 48, 56, 80, 128] },
     shape: { control: 'inline-radio', options: ['circle', 'squircle'] }
   }
 } satisfies Meta<typeof Avatar>;
@@ -60,3 +61,17 @@ export const RoomImage: Story = {
   }
 };
 export const ImageFallback: Story = { args: { src: './missing-avatar.png' } };
+export const RingingStage: Story = { args: { name: 'Аня', size: 128, ringing: 'ringing' } };
+export const RingingCard: Story = { args: { name: 'Аня', size: 48, ringing: 'ringing' } };
+export const SilencedCompact: Story = { args: { name: 'Лена', size: 32, ringing: 'silenced' } };
+export const IdleStage: Story = { args: { name: 'Аня', size: 128 } };
+export const ReducedMotion: Story = {
+  ...RingingCard,
+  parameters: {
+    docs: {
+      description: {
+        story: 'Emulate `prefers-reduced-motion: reduce` in the browser to see the single static halo.'
+      }
+    }
+  }
+};

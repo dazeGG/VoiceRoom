@@ -1,9 +1,11 @@
 import type { Meta, StoryObj } from '@storybook/vue3-vite';
+import { ref } from 'vue';
+import Button from '../Button/Button.vue';
 
 import ParticipantTileFace from './ParticipantTileFace.vue';
 
 const meta = {
-  title: 'Components/ParticipantTileFace',
+  title: 'Components/Calls/ParticipantTileFace',
   component: ParticipantTileFace,
   tags: ['autodocs'],
   parameters: {
@@ -14,7 +16,8 @@ const meta = {
           '',
           '- Pass the participant name and initials, and provide `avatarSrc` when an image is available.',
           '- Mark the current participant with `local` and use `statusLabel` for the status line.',
-          '- Use the `name` and `badge` slots to extend the heading. The surrounding tile controls the visibility of the muted and deafened marks.'
+          '- Use the `name` and `badge` slots to extend the heading. The surrounding tile controls the visibility of the muted and deafened marks.',
+          '- Set `state` to `reconnecting` or `absent` for a placeholder without live media status or actions.'
         ].join('\n')
       }
     }
@@ -61,3 +64,18 @@ export const Deafened: Story = {
   })
 };
 export const ImageFallback: Story = { args: { avatarSrc: './missing-avatar.png' } };
+export const Reconnecting: Story = { args: { name: 'Аня', state: 'reconnecting' } };
+export const Absent: Story = { args: { name: 'Аня', state: 'absent' } };
+export const Reconnected: Story = {
+  ...Reconnecting,
+  render: (args) => ({
+    components: { Button, ParticipantTileFace },
+    setup: () => ({ args, connected: ref(false) }),
+    template: `<div class="story-participant-tile">
+      <div class="participant" :class="{ 'participant--speaking': connected }">
+        <ParticipantTileFace v-bind="args" :state="connected ? 'connected' : 'reconnecting'" />
+      </div>
+      <Button @click="connected = !connected">{{ connected ? 'Подключаемся…' : 'В звонке' }}</Button>
+    </div>`
+  })
+};
