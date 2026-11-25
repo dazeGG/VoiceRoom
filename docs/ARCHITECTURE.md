@@ -281,6 +281,22 @@ styles/                 SCSS: tokens, mixins and one partial per BEM block
   `npm run check` fails a test that reads a code file under `src/`.
 - API tests run against a real PostgreSQL (`test/db-harness.ts`) where the
   behaviour touches SQL.
+- G08 enforces **per-file patch** floors: 90% of changed measurable lines and
+  85% of V8 blocks intersecting those lines. It covers `apps/api/src/`,
+  `packages/shared/src/`, and the existing Web auth and call media files. A
+  changed member of the auth-admission or media strict group must also retain
+  95% whole-file block coverage. There is no global percentage floor.
+- The collector inventories source files independently of what V8 loaded.
+  The summary lists excluded paths with reasons and unloaded eligible files;
+  their measurable lines are uncovered. A zero denominator is N/A (JSON
+  `null`), not 100%. Lines are a source-line proxy: strip erasable TypeScript,
+  ignore comments, blank lines and brace-only lines, then use the shortest
+  overlapping V8 range. Blocks are observed V8 ranges, not AST decisions.
+- CI merges the complete API/shared/G08 producer inventory, then checks the
+  protected-base policy and base-to-tested patch. Locally, run
+  `npm run coverage:g08 -- --base <revision>` with PostgreSQL and a committed
+  test tree; without a base it measures the whole suite, not a PR diff.
+  See the [v2 measurement and calibration](testing/g08-v2-calibration.md).
 - Critical user flows have Playwright coverage under `apps/web/e2e`.
 
 ## 7. Runtime state and scaling
