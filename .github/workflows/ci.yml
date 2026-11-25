@@ -262,7 +262,7 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: npm
-      # Collecting and judging coverage needs only the API workspace's typebox.
+      # Collecting and judging coverage needs the API workspace's existing TypeBox and TypeScript packages.
       - run: npm ci --workspace @voiceroom/api
       - uses: actions/download-artifact@v5
         with:
@@ -293,6 +293,8 @@ jobs:
             --changed-diff coverage/release-250-changed.diff \
             "${baseline_args[@]}"
       - name: Persist G08 measured coverage artifact
+        # A red patch needs the same per-file evidence as a green one.
+        if: ${{ !cancelled() && hashFiles('coverage/release-250-summary.json') != '' }}
         uses: actions/upload-artifact@v5
         with:
           name: g08-release-250-coverage-run-${{ github.run_id }}-attempt-${{ github.run_attempt }}-head-${{ github.event.pull_request.head.sha || github.sha }}

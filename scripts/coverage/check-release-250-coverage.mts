@@ -1,17 +1,20 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
+import { stripTypeScriptTypes } from 'node:module';
 import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
+import ts from 'typescript';
 import { Type, type Static, type TProperties, type TSchema } from 'typebox';
 import { Compile, type Validator } from 'typebox/compile';
 import { firstMismatch } from '../../packages/shared/src/contracts/http.ts';
 import { isArray } from '../../packages/shared/src/guards.ts';
 
 const DEFAULT_THRESHOLDS = 'config/coverage/release-250-thresholds.json';
-const BUSINESS_EXTENSIONS = /\.(?:js|mjs|cjs|ts|vue)$/;
+const BUSINESS_EXTENSIONS = /\.(?:[cm]?[jt]s|vue)$/;
 const BRANCH_METRIC = 'node-v8-branch';
 
 // The shapes of the JSON files this gate reads, checked once when they are read.
@@ -54,7 +57,13 @@ const CoverageThresholds = Type.Object({
 });
 export type CoverageThresholds = Static<typeof CoverageThresholds>;
 
-type Metric = { total: number; covered: number; skipped: number; pct: number };
+// null means no observed denominator, not perfect coverage. Policy floors are
+// still numbers; a missing percentage or an unexplained null is not evidence.
+const MeasuredPercentage = Type.Union([
+  Percentage,
+  Type.Object({ total: Type.Literal(0), covered: Type.Literal(0), pct: Type.Null() })
+]);
+type MeasuredPercentage = Static<typeof MeasuredPercentage> | undefined;
 
 const CoverageDetails = Type.Object({
   lines: Type.Array(Type.Object({ line: Type.Number(), covered: Type.Boolean() })),
@@ -72,19 +81,27 @@ const CoverageSummary = Type.Object({
       branchMetric: Type.Optional(Type.String())
     })
   ),
-  total: Type.Optional(Type.Object({ lines: Type.Optional(Percentage), branches: Type.Optional(Percentage) })),
+  total: Type.Optional(
+    Type.Object({ lines: Type.Optional(MeasuredPercentage), branches: Type.Optional(MeasuredPercentage) })
+  ),
   files: Type.Record(
     Type.String(),
     Type.Object({
-      lines: Type.Optional(Percentage),
-      branches: Type.Optional(Percentage),
+      lines: Type.Optional(MeasuredPercentage),
+      branches: Type.Optional(MeasuredPercentage),
+      loaded: Type.Optional(Type.Boolean()),
       details: Type.Optional(CoverageDetails)
     })
   )
 });
 export type CoverageSummary = Static<typeof CoverageSummary>;
 
-type FileCoverage = { lines: number; branches: number; details: CoverageDetails | undefined };
+type FileCoverage = {
+  loaded: boolean | undefined;
+  lines: number | null;
+  branches: number | null;
+  details: CoverageDetails | undefined;
+};
 
 const V8Range = Type.Object({ startOffset: Type.Number(), endOffset: Type.Number(), count: Type.Number() });
 const V8Script = Type.Object({
@@ -201,8 +218,9 @@ function pct(value: Percentage, label: string): number {
   return percentage;
 }
 
-function metric(covered: number, total: number): Metric {
-  return { total, covered, skipped: 0, pct: total === 0 ? 100 : Number(((covered / total) * 100).toFixed(2)) };
+function metric(covered: number, total: number) {
+  if (total === 0) return { total: 0, covered: 0, skipped: 0, pct: null } as const;
+  return { total, covered, skipped: 0, pct: Number(((covered / total) * 100).toFixed(2)) };
 }
 
 function assertStringArray(value: unknown, label: string) {
@@ -211,7 +229,7 @@ function assertStringArray(value: unknown, label: string) {
 }
 
 function validateThresholds(thresholds: CoverageThresholds) {
-  assert.equal(thresholds.schemaVersion, 1, 'threshold schemaVersion must be 1');
+  assert.ok([1, 2].includes(thresholds.schemaVersion), 'threshold schemaVersion must be 1 or 2');
   assert.equal(thresholds.release, '2.5.0', 'threshold release must be 2.5.0');
   assert.equal(thresholds.branchMetric, BRANCH_METRIC, `branchMetric must be ${BRANCH_METRIC}`);
   assertStringArray(thresholds.businessPathPatterns, 'businessPathPatterns');
@@ -229,41 +247,78 @@ function validateThresholds(thresholds: CoverageThresholds) {
     Number.isFinite(Date.parse(thresholds.baseline?.measuredAt)),
     'baseline.measuredAt must be an ISO timestamp'
   );
-  pct(thresholds.baseline.total?.lines, 'baseline.total.lines');
-  pct(thresholds.baseline.total?.branches, 'baseline.total.branches');
+  if (thresholds.schemaVersion === 1) {
+    pct(thresholds.baseline.total?.lines, 'baseline.total.lines');
+    pct(thresholds.baseline.total?.branches, 'baseline.total.branches');
+  } else {
+    assert.equal(thresholds.baseline.total, undefined, 'v2 has no global floors');
+    for (const root of ['apps/api/src/', 'packages/shared/src/'])
+      assert.ok(thresholds.businessPathPatterns.includes(root), `v2 must measure ${root}`);
+  }
   pct(thresholds.changedBusinessCode?.line, 'changedBusinessCode.line');
   pct(thresholds.changedBusinessCode?.branch, 'changedBusinessCode.branch');
   pct(thresholds.strictBranchMinimum, 'strictBranchMinimum');
 }
 
-function isBusinessFile(filePath: string, thresholds: CoverageThresholds) {
-  const normalized = normalizePath(filePath);
-  return (
-    thresholds.businessPathPatterns.some((prefix) => normalized.startsWith(normalizePath(prefix))) &&
-    !thresholds.ignoredPathPatterns.some((pattern) => normalized.includes(normalizePath(pattern))) &&
-    BUSINESS_EXTENSIONS.test(normalized)
-  );
+function exclusionReason(file: string, thresholds: CoverageThresholds) {
+  for (const entry of thresholds.ignoredPathPatterns.map(normalizePath)) {
+    if (entry === '.d.ts') {
+      if (/\.d\.[cm]?ts$/.test(file)) return 'TypeScript declaration';
+    } else if (entry.startsWith('/') && entry.endsWith('/') && file.includes(entry)) {
+      return entry === '/migrations/'
+        ? 'migration (verified by migration/rollback tests)'
+        : `policy directory: ${entry}`;
+    } else if (BUSINESS_EXTENSIONS.test(entry)) {
+      if (file === entry)
+        return entry === 'packages/shared/src/emoji.ts' ? 'generated Unicode data' : `policy file: ${entry}`;
+    } else if (file.includes(entry)) return `policy exclusion: ${entry}`;
+  }
+  return BUSINESS_EXTENSIONS.test(file) ? undefined : 'non-code asset';
 }
 
-function listBusinessSourceFiles(root: string, thresholds: CoverageThresholds) {
-  const results: string[] = [];
-  const roots = [
-    ...new Set(thresholds.businessPathPatterns.map((value) => normalizePath(value).split('/')[0] ?? '').filter(Boolean))
+function inBusinessScope(file: string, thresholds: CoverageThresholds) {
+  return thresholds.businessPathPatterns.some((prefix) => file.startsWith(normalizePath(prefix)));
+}
+
+function isBusinessFile(filePath: string, thresholds: CoverageThresholds) {
+  const normalized = normalizePath(filePath);
+  return inBusinessScope(normalized, thresholds) && !exclusionReason(normalized, thresholds);
+}
+
+function businessInventory(root: string, thresholds: CoverageThresholds) {
+  // Read the checkout, not ignored developer data or transient build products.
+  // Standalone fixture directories have no Git metadata.
+  const directories = [
+    ...new Set(
+      thresholds.businessPathPatterns.map(normalizePath).map((p) => (p.endsWith('/') ? p : path.posix.dirname(p)))
+    )
   ];
-  const visit = (directory: string) => {
-    if (!fs.existsSync(directory)) return;
-    for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
-      if (['node_modules', 'dist', 'build'].includes(entry.name)) continue;
-      const absolute = path.join(directory, entry.name);
-      if (entry.isDirectory()) visit(absolute);
-      else {
-        const repoPath = toRepoPath(absolute, root);
-        if (isBusinessFile(repoPath, thresholds)) results.push(repoPath);
-      }
-    }
-  };
-  for (const directory of roots) visit(path.join(root, directory));
-  return [...new Set(results)].sort();
+  const paths = fs.existsSync(path.join(root, '.git'))
+    ? execFileSync('git', ['ls-files', '-z', '--cached', '--others', '--exclude-standard', '--', ...directories], {
+        cwd: root,
+        encoding: 'utf8'
+      }).split('\0')
+    : fs
+        .globSync('**/*', { cwd: root, exclude: ['**/node_modules/**'], withFileTypes: true })
+        .filter((entry) => !entry.isDirectory())
+        .map((entry) => toRepoPath(path.join(entry.parentPath, entry.name), root));
+  const files: string[] = [];
+  const excludedFiles: { path: string; reason: string }[] = [];
+  for (const file of paths.sort()) {
+    if (!inBusinessScope(file, thresholds) || !fs.existsSync(path.join(root, file))) continue;
+    const reason = exclusionReason(file, thresholds);
+    if (reason) excludedFiles.push({ path: file, reason });
+    else files.push(file);
+  }
+  return { files, excludedFiles };
+}
+
+function measuredPct(value: MeasuredPercentage, label: string) {
+  if (typeof value === 'object' && value.pct === null) {
+    assert.ok('total' in value && value.total === 0 && value.covered === 0, `Invalid empty metric: ${label}`);
+    return null;
+  }
+  return pct(typeof value === 'number' ? value : value?.pct, label);
 }
 
 function normalizeFileCoverage(summary: CoverageSummary) {
@@ -271,30 +326,19 @@ function normalizeFileCoverage(summary: CoverageSummary) {
   for (const [filePath, coverage] of Object.entries(summary.files)) {
     if (filePath === 'total' || filePath === 'meta') continue;
     files.set(normalizePath(filePath), {
-      lines: pct(coverage.lines, `${filePath}.lines`),
-      branches: pct(coverage.branches, `${filePath}.branches`),
+      loaded: coverage.loaded,
+      lines: measuredPct(coverage.lines, `${filePath}.lines`),
+      branches: measuredPct(coverage.branches, `${filePath}.branches`),
       details: coverage.details
     });
   }
   return files;
 }
 
-function totalCoverage(summary: CoverageSummary, files: Map<string, FileCoverage>) {
-  if (summary.total)
-    return { lines: pct(summary.total.lines, 'total.lines'), branches: pct(summary.total.branches, 'total.branches') };
-  if (!files.size) throw new Error('Coverage summary contains no files');
-  const values = [...files.values()];
+function globalFloors(policy: CoverageThresholds) {
   return {
-    lines: Number((values.reduce((sum, file) => sum + file.lines, 0) / values.length).toFixed(2)),
-    branches: Number((values.reduce((sum, file) => sum + file.branches, 0) / values.length).toFixed(2))
-  };
-}
-
-function configuredBaseline(thresholds: CoverageThresholds) {
-  return {
-    artifact: normalizePath(thresholds.baseline.artifact),
-    lines: pct(thresholds.baseline.total?.lines, 'baseline.total.lines'),
-    branches: pct(thresholds.baseline.total?.branches, 'baseline.total.branches')
+    lines: pct(policy.baseline.total?.lines, 'baseline.total.lines'),
+    branches: pct(policy.baseline.total?.branches, 'baseline.total.branches')
   };
 }
 
@@ -309,16 +353,25 @@ function enforceBaselineRatchet(
   }
   if (baseThresholds) {
     validateThresholds(baseThresholds);
-    const current = configuredBaseline(thresholds);
-    const base = configuredBaseline(baseThresholds);
-    if (current.lines < base.lines)
-      throw new Error(`Configured line baseline decreased from protected base ${base.lines}% to ${current.lines}%`);
-    if (current.branches < base.branches)
-      throw new Error(
-        `Configured ${BRANCH_METRIC} baseline decreased from protected base ${base.branches}% to ${current.branches}%`
-      );
-    if (current.artifact !== base.artifact)
-      throw new Error(`Coverage artifact policy changed from protected base ${base.artifact} to ${current.artifact}`);
+    assert.ok(thresholds.schemaVersion >= baseThresholds.schemaVersion, 'Coverage policy version may not decrease');
+    if (baseThresholds.schemaVersion === 1) {
+      const base = globalFloors(baseThresholds);
+      if (thresholds.schemaVersion === 2) {
+        // This is the single reviewed migration, not permission to retire
+        // arbitrary protected floors by bumping a version number.
+        assert.deepEqual(base, { lines: 9.17, branches: 53.9 }, 'Unrecognized protected global floors for v1 -> v2');
+      } else {
+        const current = globalFloors(thresholds);
+        if (current.lines < base.lines)
+          throw new Error(`Configured line baseline decreased from protected base ${base.lines}% to ${current.lines}%`);
+        if (current.branches < base.branches)
+          throw new Error(
+            `Configured ${BRANCH_METRIC} baseline decreased from protected base ${base.branches}% to ${current.branches}%`
+          );
+      }
+    }
+    if (normalizePath(thresholds.baseline.artifact) !== normalizePath(baseThresholds.baseline.artifact))
+      throw new Error('Coverage artifact policy changed from protected base');
     if (thresholds.changedBusinessCode.line < baseThresholds.changedBusinessCode.line)
       throw new Error('changedBusinessCode.line may not decrease from protected base');
     if (thresholds.changedBusinessCode.branch < baseThresholds.changedBusinessCode.branch)
@@ -496,20 +549,19 @@ function checkFileThreshold(
   if (changedLines) {
     if (!coverage.details) throw new Error(`Changed-line coverage details are missing for business file: ${filePath}`);
     const lineDetails = coverage.details.lines.filter((entry) => changedLines.has(entry.line));
-    const branchDetails = coverage.details.branches.filter((entry) => {
-      for (let number = entry.startLine; number <= entry.endLine; number += 1)
-        if (changedLines.has(number)) return true;
-      return false;
-    });
+    const branchDetails = coverage.details.branches.filter((branch) =>
+      lineDetails.some(({ line }) => branch.startLine <= line && line <= branch.endLine)
+    );
     lines = metric(lineDetails.filter((entry) => entry.covered).length, lineDetails.length).pct;
     branches = metric(branchDetails.filter((entry) => entry.covered).length, branchDetails.length).pct;
   }
-  if (lines < minimums.line)
+  if (lines !== null && lines < minimums.line)
     throw new Error(`${filePath} changed line coverage ${lines.toFixed(2)}% is below ${minimums.line}%`);
-  if (branches < minimums.branch)
+  if (branches !== null && branches < minimums.branch)
     throw new Error(
       `${filePath} changed ${BRANCH_METRIC} coverage ${branches.toFixed(2)}% is below ${minimums.branch}%`
     );
+  return { path: filePath, lines, branches };
 }
 
 function sourceLines(source: string) {
@@ -522,11 +574,33 @@ function sourceLines(source: string) {
   return lines;
 }
 
-function isRelevantLine(line: string) {
-  const trimmed = line.trim();
-  return Boolean(
-    trimmed && trimmed !== '{' && trimmed !== '}' && !trimmed.startsWith('//') && !trimmed.startsWith('*')
-  );
+// Comments are trivia, not missing execution. Walk actual tokens so a comment
+// delimiter in a string, regexp or template cannot hide the following code.
+function measurableLines(accumulator: Accumulator, lines: SourceLine[]) {
+  const { repoPath, source } = accumulator;
+  const relevant = new Set<number>();
+  // Strip mode preserves source offsets. Type-only lines in mixed modules
+  // must not dilute an uncovered addition with fictitious executed lines.
+  const runtimeSource = /\.[cm]?ts$/.test(repoPath) ? stripTypeScriptTypes(source) : source;
+  const file = ts.createSourceFile(repoPath, runtimeSource, ts.ScriptTarget.Latest);
+  const visit = (node: ts.Node) => {
+    if (node.kind === ts.SyntaxKind.JSDoc) return;
+    const children = node.getChildren(file);
+    if (children.length) {
+      children.forEach(visit);
+      return;
+    }
+    const start = node.getStart(file);
+    if (start >= node.end) return;
+    const first = lineNumberAtOffset(lines, start) - 1;
+    const last = lineNumberAtOffset(lines, node.end - 1) - 1;
+    for (let i = first; i <= last; i++) {
+      const text = lines[i]?.text.trim();
+      if (text && text !== '{' && text !== '}') relevant.add(i);
+    }
+  };
+  visit(file);
+  return relevant;
 }
 
 function createAccumulator(repoPath: string, source: string): Accumulator {
@@ -578,9 +652,10 @@ function serializeAccumulator(accumulator: Accumulator) {
   let lineTotal = 0;
   let lineCovered = 0;
   const lines = sourceLines(accumulator.source);
+  const relevant = measurableLines(accumulator, lines);
   const lineDetails: CoverageDetails['lines'] = [];
   for (const [lineIndex, line] of lines.entries()) {
-    if (!isRelevantLine(line.text)) continue;
+    if (!relevant.has(lineIndex)) continue;
     lineTotal += 1;
     const end = Math.max(line.start + 1, line.end);
     const candidates = ranges.filter((range) => range.startOffset < end && range.endOffset > line.start);
@@ -594,10 +669,9 @@ function serializeAccumulator(accumulator: Accumulator) {
   }
   const branchRanges = ranges.filter((range) => !range.isFunctionRoot);
   return {
+    loaded: accumulator.seenInCoverage,
     lines: metric(lineCovered, lineTotal),
-    branches: branchRanges.length
-      ? metric(branchRanges.filter((range) => range.covered).length, branchRanges.length)
-      : metric(accumulator.seenInCoverage ? 0 : 0, accumulator.seenInCoverage ? 0 : 1),
+    branches: metric(branchRanges.filter((range) => range.covered).length, branchRanges.length),
     details: {
       lines: lineDetails,
       branches: branchRanges.map((range) => ({
@@ -637,9 +711,11 @@ export function collectV8Coverage({
   validateThresholds(thresholds);
   const absoluteRoot = path.resolve(root);
   const accumulators = new Map<string, Accumulator>();
-  for (const repoPath of listBusinessSourceFiles(absoluteRoot, thresholds)) {
+  const inventory = businessInventory(absoluteRoot, thresholds);
+  for (const repoPath of inventory.files) {
     accumulators.set(repoPath, createAccumulator(repoPath, fs.readFileSync(path.join(absoluteRoot, repoPath), 'utf8')));
   }
+  let observed = false;
   if (!fs.existsSync(v8Dir)) throw new Error(`V8 coverage directory does not exist: ${v8Dir}`);
   for (const entry of fs
     .readdirSync(v8Dir)
@@ -649,7 +725,7 @@ export function collectV8Coverage({
     for (const script of payload.result ?? []) {
       // Most scripts arrive as file:// URLs; a TypeScript module that CommonJS
       // require() loads is reported by its plain filesystem path instead.
-      if (typeof script.url !== 'string') continue;
+      if (typeof script.url !== 'string' || !script.functions?.some((fn) => fn.ranges?.length)) continue;
       const absolute = script.url.startsWith('file://')
         ? fileURLToPath(script.url)
         : path.isAbsolute(script.url)
@@ -657,12 +733,13 @@ export function collectV8Coverage({
           : '';
       if (!absolute) continue;
       const repoPath = toRepoPath(absolute, absoluteRoot);
-      if (!repoPath || !isBusinessFile(repoPath, thresholds) || !fs.existsSync(absolute)) continue;
-      const accumulator = accumulators.get(repoPath) ?? createAccumulator(repoPath, fs.readFileSync(absolute, 'utf8'));
+      const accumulator = accumulators.get(repoPath);
+      if (!accumulator) continue;
+      observed ||= script.functions.some((fn) => fn.ranges?.some((r) => r.count > 0 && r.endOffset > r.startOffset));
       mergeScriptCoverage(accumulator, script);
-      accumulators.set(repoPath, accumulator);
     }
   }
+  if (!observed) throw new Error('No in-scope V8 execution evidence in ' + v8Dir);
   const files = Object.fromEntries(
     [...accumulators.entries()]
       .sort(([left], [right]) => left.localeCompare(right))
@@ -678,7 +755,7 @@ export function collectV8Coverage({
     { lineCovered: 0, lineTotal: 0, branchCovered: 0, branchTotal: 0 }
   );
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     release: '2.5.0',
     meta: {
       measured: true,
@@ -690,7 +767,9 @@ export function collectV8Coverage({
       documentation: 'https://nodejs.org/api/cli.html#node_v8_coveragedir',
       root: absoluteRoot,
       measuredAt,
-      sourceFileCount: Object.keys(files).length
+      sourceFileCount: inventory.files.length,
+      unloadedFiles: inventory.files.filter((file) => !accumulators.get(file)?.seenInCoverage),
+      excludedFiles: inventory.excludedFiles
     },
     total: {
       lines: metric(totals.lineCovered, totals.lineTotal),
@@ -720,7 +799,10 @@ export function checkCoverage({
   fileExists?: FileExists;
 }) {
   validateThresholds(thresholds);
-  assert.equal(coverageSummary.schemaVersion, 1, 'coverage summary schemaVersion must be 1');
+  assert.ok(
+    coverageSummary.schemaVersion === 2 || (thresholds.schemaVersion === 1 && coverageSummary.schemaVersion === 1),
+    'v2 policy requires a freshly collected v2 coverage summary'
+  );
   assert.equal(coverageSummary.release, '2.5.0', 'coverage summary release must be 2.5.0');
   assert.equal(coverageSummary.meta?.measured, true, 'coverage summary must be produced from measured coverage');
   assert.equal(coverageSummary.meta?.engine, 'node-v8-coverage', 'coverage summary must use node-v8-coverage');
@@ -731,36 +813,44 @@ export function checkCoverage({
   );
   const ratchetMode = enforceBaselineRatchet(thresholds, { baseThresholds, baseThresholdsAbsent, fileExists });
   const files = normalizeFileCoverage(coverageSummary);
-  const total = totalCoverage(coverageSummary, files);
-  const baseline = configuredBaseline(thresholds);
-  if (coveragePath && normalizePath(coveragePath) !== baseline.artifact)
+  const total = {
+    lines: measuredPct(coverageSummary.total?.lines, 'total.lines'),
+    branches: measuredPct(coverageSummary.total?.branches, 'total.branches')
+  };
+  const artifact = normalizePath(thresholds.baseline.artifact);
+  if (coveragePath && normalizePath(coveragePath) !== artifact)
     throw new Error(
-      `Coverage artifact path ${normalizePath(coveragePath)} does not match baseline artifact ${baseline.artifact}`
+      `Coverage artifact path ${normalizePath(coveragePath)} does not match baseline artifact ${artifact}`
     );
-  if (total.lines < baseline.lines)
-    throw new Error(`Total line coverage regressed from ${baseline.lines}% to ${total.lines.toFixed(2)}%`);
-  if (total.branches < baseline.branches)
-    throw new Error(
-      `Total ${BRANCH_METRIC} coverage regressed from ${baseline.branches}% to ${total.branches.toFixed(2)}%`
-    );
+  if (thresholds.schemaVersion === 1) {
+    const baseline = globalFloors(thresholds);
+    if ((total.lines ?? 0) < baseline.lines)
+      throw new Error(`Total line coverage regressed from ${baseline.lines}% to ${total.lines ?? 'N/A'}`);
+    if ((total.branches ?? 0) < baseline.branches)
+      throw new Error(
+        `Total ${BRANCH_METRIC} coverage regressed from ${baseline.branches}% to ${total.branches ?? 'N/A'}`
+      );
+  }
 
   const checkedChangedFiles = changedFiles
     .map(normalizePath)
     .filter((filePath) => isBusinessFile(filePath, thresholds));
-  for (const changedFile of checkedChangedFiles) {
+  const patch = checkedChangedFiles.map((changedFile) =>
     checkFileThreshold(
       changedFile,
       files.get(changedFile),
       thresholds.changedBusinessCode,
       changedLineMap.get(changedFile)
-    );
-  }
+    )
+  );
 
   const checkedStrictPaths = strictBranchFiles(changedFiles, thresholds);
   for (const strictPath of checkedStrictPaths) {
     const file = files.get(strictPath);
     if (!file) throw new Error(`Changed strict file is missing from coverage summary: ${strictPath}`);
-    if (file.branches < thresholds.strictBranchMinimum) {
+    if (file.branches === null && file.loaded !== true)
+      throw new Error(`Changed strict file has no measured branch evidence: ${strictPath}`);
+    if (file.branches !== null && file.branches < thresholds.strictBranchMinimum) {
       throw new Error(
         `${strictPath} requires ${thresholds.strictBranchMinimum}% ${BRANCH_METRIC} coverage, saw ${file.branches.toFixed(2)}%`
       );
@@ -772,6 +862,7 @@ export function checkCoverage({
     total,
     ratchetMode,
     checkedChangedFiles: checkedChangedFiles.length,
+    patch,
     strictBranchPaths: checkedStrictPaths.length,
     coverageDigest: `sha256:${crypto.createHash('sha256').update(JSON.stringify(coverageSummary)).digest('hex')}`
   };

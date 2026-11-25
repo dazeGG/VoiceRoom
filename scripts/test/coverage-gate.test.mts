@@ -10,6 +10,7 @@ import path from 'node:path';
 import test from 'node:test';
 import { createRequire } from 'node:module';
 import pg from 'pg';
+import policy from '../../config/coverage/release-250-thresholds.json' with { type: 'json' };
 
 import {
   checkCoverage as enforceCoverage,
@@ -175,6 +176,122 @@ const greenSummary: CoverageSummary = {
     'apps/web/src/api/client.ts': { lines: { pct: 91 }, branches: { pct: 86 } }
   }
 };
+
+const v1 = thresholdFixture({
+  businessPathPatterns: policy.businessPathPatterns.filter(
+    (p) => !['apps/api/src/', 'packages/shared/src/'].includes(p)
+  ),
+  ignoredPathPatterns: policy.ignoredPathPatterns,
+  strictBranchGroups: policy.strictBranchGroups,
+  baseline: { ...policy.baseline, total: { lines: 9.17, branches: 53.9 } }
+});
+
+test('G08 v1 -> v2 retires only the two stale floors; v2 remains protected on subsequent PRs', () => {
+  const run = (current: CoverageThresholds, base: CoverageThresholds) =>
+    enforceCoverage({
+      coverageSummary: { ...greenSummary, schemaVersion: 2, total: { lines: 1, branches: 1 } },
+      thresholds: current,
+      baseThresholds: base
+    });
+  assert.throws(
+    () => enforceCoverage({ thresholds: policy, baseThresholds: v1, coverageSummary: greenSummary }),
+    /freshly collected v2/
+  );
+  for (const base of [v1, policy]) {
+    assert.equal(run(policy, base).ratchetMode, 'protected-base-ratchet');
+    for (const edit of [
+      { changedBusinessCode: { ...policy.changedBusinessCode, line: 89 } },
+      { changedBusinessCode: { ...policy.changedBusinessCode, branch: 84 } },
+      { strictBranchMinimum: 94 },
+      { businessPathPatterns: policy.businessPathPatterns.filter((p) => p !== 'apps/web/src/api/auth.ts') },
+      { businessPathPatterns: policy.businessPathPatterns.filter((p) => p !== 'apps/api/src/') },
+      { ignoredPathPatterns: [...policy.ignoredPathPatterns, 'apps/api/src/lib/'] },
+      { strictBranchGroups: policy.strictBranchGroups.slice(1) }
+    ])
+      assert.throws(() => run({ ...policy, ...edit }, base), /protected base|protected-base|must measure/i);
+  }
+  assert.throws(
+    () => run(policy, { ...v1, baseline: { ...v1.baseline, total: { lines: 10, branches: 53.9 } } }),
+    /unrecognized protected global floors/i
+  );
+  assert.throws(() => run(v1, policy), /version may not decrease/i);
+});
+
+test('G08 measures new API/shared sources, distinguishing uncovered, unloaded and N/A patches', (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'g08-v2-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const write = (name: string, source: string) => {
+    const file = path.join(root, name);
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, source);
+  };
+  const api = 'apps/api/src/rooms.mts';
+  const unloaded = 'packages/shared/src/never-imported.js';
+  const strict = 'apps/api/src/domains/media/media-job.repository.ts';
+  const types = Array.from({ length: 9 }, (_, i) => `export type Alias${i} = string;\n`).join('');
+  write(api, 'export const loaded = 1;\nexport function uncalled() { return 2; }\n' + types);
+  write(unloaded, 'export const never = 3;\n');
+  const ordinary = 'apps/api/src/ordinary.ts';
+  const decision =
+    'export const value = (flag: boolean) => {\n  if (flag) {\n    /* untested case */\n    return 1;\n  }\n  return 0;\n};\nvalue(false);\n';
+  write(strict, decision);
+  write(ordinary, decision);
+  write('apps/api/src/lib/ambient.d.ts', 'declare const foo: string;\n');
+  write('packages/shared/src/emoji.ts', 'export const emoji = [];\n');
+  const unrelatedRaw = path.join(root, 'unrelated');
+  const unrelated = spawnSync(process.execPath, ['-e', 'process.cwd()'], {
+    env: { ...process.env, NODE_V8_COVERAGE: unrelatedRaw },
+    encoding: 'utf8'
+  });
+  assert.equal(unrelated.status, 0, unrelated.stderr);
+  assert.throws(
+    () => collectV8Coverage({ root, v8Dir: unrelatedRaw, thresholds: policy }),
+    /no in-scope V8 execution evidence/i
+  );
+  const raw = path.join(root, 'raw');
+  const run = spawnSync(
+    process.execPath,
+    [
+      '--input-type=module',
+      '-e',
+      `await import('./${api}'); await import('./${strict}'); await import('./${ordinary}');`
+    ],
+    { cwd: root, encoding: 'utf8', env: { ...process.env, NODE_V8_COVERAGE: raw } }
+  );
+  assert.equal(run.status, 0, run.stderr);
+  const summary = collectV8Coverage({ root, v8Dir: raw, thresholds: policy });
+  assert.deepEqual(Object.keys(summary.files).sort(), [api, ordinary, strict, unloaded].sort());
+  const check = (file: string, line: number) =>
+    enforceCoverage({
+      thresholds: policy,
+      baseThresholds: v1,
+      coverageSummary: summary,
+      changedFiles: [file],
+      changedLineMap: new Map([[file, new Set([line])]])
+    });
+  assert.throws(() => check(api, 2), /changed line coverage 0\.00% is below 90%/);
+  assert.throws(
+    () =>
+      enforceCoverage({
+        thresholds: policy,
+        baseThresholds: v1,
+        coverageSummary: summary,
+        changedFiles: [api],
+        changedLineMap: new Map([[api, new Set(Array.from({ length: 10 }, (_, i) => i + 2))]])
+      }),
+    /changed line coverage 0\.00%/
+  );
+  assert.equal(summary.files[unloaded]?.loaded, false);
+  assert.deepEqual(summary.files[unloaded]?.lines, { covered: 0, total: 1, skipped: 0, pct: 0 });
+  assert.throws(() => check(unloaded, 1), /changed line coverage 0\.00% is below 90%/);
+  assert.equal(summary.files[api]?.loaded, true);
+  assert.deepEqual(summary.files[api]?.branches, { total: 0, covered: 0, skipped: 0, pct: null });
+  assert.deepEqual(check(api, 1).patch, [{ path: api, lines: 100, branches: null }]);
+  // Even a fully covered patch does not excuse a regression in the rest of a strict file.
+  assert.throws(() => check(strict, 8), /requires 95% node-v8-branch/);
+  // A comment inside an unexecuted block is not a changed statement or decision.
+  assert.deepEqual(check(ordinary, 3).patch, [{ path: ordinary, lines: null, branches: null }]);
+});
 
 test('G08-A01 accepts measured coverage and explicit initial adoption', () => {
   const result = checkCoverage({

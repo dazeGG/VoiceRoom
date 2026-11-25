@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "release": "2.5.0",
   "branchMetric": "node-v8-branch",
   "branchMetricLabel": "V8 block branch coverage",
@@ -14,11 +14,7 @@
   },
   "baseline": {
     "artifact": "coverage/release-250-summary.json",
-    "measuredAt": "2026-07-20T09:26:55.358Z",
-    "total": {
-      "lines": 9.17,
-      "branches": 53.9
-    }
+    "measuredAt": "2026-07-20T09:26:55.358Z"
   },
   "changedBusinessCode": {
     "line": 90,
@@ -54,7 +50,9 @@
     "apps/api/src/domains/media/attachment.repository.ts",
     "apps/api/src/domains/media/media-job.repository.ts",
     "apps/web/src/api/auth.ts",
-    "packages/call/src/engine/media/screen-receiver-demand.ts"
+    "packages/call/src/engine/media/screen-receiver-demand.ts",
+    "apps/api/src/",
+    "packages/shared/src/"
   ],
   "ignoredPathPatterns": [
     "/test/",
