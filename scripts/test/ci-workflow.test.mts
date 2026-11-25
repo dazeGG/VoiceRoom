@@ -7,8 +7,19 @@ import { Value } from 'typebox/value';
 import { parse } from 'yaml';
 
 const JobSchema = Type.Object({
+  name: Type.Optional(Type.String()),
   needs: Type.Optional(Type.Union([Type.String(), Type.Array(Type.String())])),
-  if: Type.Optional(Type.String())
+  if: Type.Optional(Type.String()),
+  env: Type.Optional(Type.Record(Type.String(), Type.String())),
+  services: Type.Optional(Type.Record(Type.String(), Type.Unknown())),
+  steps: Type.Optional(
+    Type.Array(
+      Type.Object({
+        uses: Type.Optional(Type.String()),
+        with: Type.Optional(Type.Record(Type.String(), Type.Unknown()))
+      })
+    )
+  )
 });
 type Job = Static<typeof JobSchema>;
 
@@ -53,4 +64,38 @@ test('client artifacts build beside the images behind the same gate', () => {
 test('the required check name waits for every check lane', () => {
   assert.ok(needs('check').includes('check-lane'));
   assert.match(job('check').if ?? '', /^\$\{\{ !cancelled\(\) && /);
+});
+
+const producers = ['api-unit', 'api-integration'];
+
+test('only integration waits for PostgreSQL; both raw bundles reach the protected API check', () => {
+  const aggregate = job('test');
+  assert.equal(aggregate.name, 'API tests');
+  assert.deepEqual(needs('test').toSorted(), [...producers, 'changes'].sort());
+  assert.match(aggregate.if ?? '', /!cancelled\(\)/);
+  assert.deepEqual(Object.keys(job('api-unit').services ?? {}), []);
+  assert.equal(job('api-unit').env?.TEST_DATABASE_URL, undefined);
+  assert.ok(job('api-integration').services?.postgres);
+  assert.ok(job('api-integration').env?.TEST_DATABASE_URL);
+
+  const uploads = producers.map((id) => {
+    assert.deepEqual(needs(id), ['changes']);
+    const fixture = job(id).env?.FIXTURE;
+    assert.equal(fixture, id.slice('api-'.length));
+    const steps = job(id).steps?.filter((step) => step.uses?.startsWith('actions/upload-artifact@'));
+    assert.equal(steps?.length, 1);
+    return String(steps[0]?.with?.name).replace('${{ env.FIXTURE }}', fixture);
+  });
+  assert.equal(new Set(uploads).size, 2);
+  const downloads = aggregate.steps?.filter((step) => step.uses?.startsWith('actions/download-artifact@'));
+  assert.deepEqual(downloads?.map((step) => step.with?.name).sort(), uploads.sort());
+});
+
+test('both publication jobs and the verified-tree marker require the producers and verdict', () => {
+  for (const consumer of ['record-app-checks', 'images', 'client-artifacts']) {
+    for (const id of [...producers, 'test']) {
+      assert.ok(needs(consumer).includes(id), `${consumer} must wait for ${id}`);
+      assert.ok(job(consumer).if?.includes(`needs.${id}.result == 'success'`));
+    }
+  }
 });

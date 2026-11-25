@@ -35,6 +35,15 @@ test('the watchdog cuts a live tunnel when a refresh returns a deadline that has
   assert.ok(closed);
   assert.deepEqual(removed, [window.identity]);
   assert.equal(watchdog.allows(window), false);
+
+  // Recovery can find this participant again before the original drain finishes.
+  // It must not start a second removal or reset the pending drain.
+  t.mock.timers.tick(1_000);
+  assert.ok(watchdog.recover(window, undefined, async () => null));
+  assert.deepEqual(removed, [window.identity]);
+  t.mock.timers.tick(6_000);
+  await setImmediate();
+  assert.deepEqual(removed, [window.identity, window.identity]);
 });
 
 test('the gate caps watch count, concurrent removals and time spent retrying', async (t) => {

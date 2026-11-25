@@ -17,6 +17,7 @@ import {
   type CoverageSummary,
   type CoverageThresholds
 } from '../coverage/check-release-250-coverage.mts';
+import { mergeG08Bundles } from '../coverage/run-g08.mts';
 import { createTestDatabase } from '../../apps/api/test/db-harness.ts';
 import { runMigrations } from '../../apps/api/src/lib/migrate.ts';
 import { createRoomStore } from '../../apps/api/src/app/room-store.ts';
@@ -581,16 +582,25 @@ test('G08-A05 changed auth and web media strict files fail closed when missing o
   );
 });
 
-test('G08-A06 collector unions complementary raw V8 ranges across shards', (t) => {
+function writeBundle(root: string, fixture: string, files: string[], url: string, functions: unknown[]) {
+  const checkout = fixture === 'unit' ? 'file:///work/no%20PG/' : 'file:///D:/checks/with%20PG/';
+  const dir = path.join(root, 'coverage', `g08-${fixture}`);
+  const raw = 'coverage-1.json';
+  fs.mkdirSync(path.join(dir, 'raw'), { recursive: true });
+  fs.writeFileSync(path.join(dir, 'raw', raw), JSON.stringify({ result: [{ url, functions }] }));
+  const manifest = { fixture, tree: 'tested-tree', checkout, files, raw: [raw] };
+  const save = () => fs.writeFileSync(path.join(dir, 'manifest.json'), JSON.stringify(manifest));
+  save();
+  return { manifest, save, dir };
+}
+
+test('G08 collector unions colliding raw filenames and complementary ranges from different checkout roots', (t) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'g08-v8-union-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const sourcePath = path.join(root, 'apps/api/src/decision.js');
-  const v8Dir = path.join(root, 'v8');
   fs.mkdirSync(path.dirname(sourcePath), { recursive: true });
-  fs.mkdirSync(v8Dir);
   const source = "export function decision(value) { return value ? 'yes' : 'no'; }\n";
   fs.writeFileSync(sourcePath, source);
-  const scriptUrl = new URL(`file://${sourcePath}`).href;
   const functions = (left: number, right: number) => [
     {
       functionName: 'decision',
@@ -601,14 +611,9 @@ test('G08-A06 collector unions complementary raw V8 ranges across shards', (t) =
       ]
     }
   ];
-  fs.writeFileSync(
-    path.join(v8Dir, 'one.json'),
-    JSON.stringify({ result: [{ url: scriptUrl, functions: functions(1, 0) }] })
-  );
-  fs.writeFileSync(
-    path.join(v8Dir, 'two.json'),
-    JSON.stringify({ result: [{ url: scriptUrl, functions: functions(0, 1) }] })
-  );
+  writeBundle(root, 'unit', ['u'], 'file:///work/no%20PG/apps/api/src/decision.js', functions(1, 0));
+  writeBundle(root, 'integration', ['i'], 'D:/checks/with PG/apps/api/src/decision.js', functions(0, 1));
+  const v8Dir = mergeG08Bundles(root, 'tested-tree', ['i', 'u']);
   const summary = collectV8Coverage({
     v8Dir,
     root,
@@ -620,6 +625,36 @@ test('G08-A06 collector unions complementary raw V8 ranges across shards', (t) =
   assert.deepEqual(summary.files['apps/api/src/decision.js']?.branches, { total: 2, covered: 2, skipped: 0, pct: 100 });
   assert.equal(summary.meta.branchMetric, 'node-v8-branch');
   assert.match(summary.meta.semantics, /not Istanbul AST branch coverage/);
+});
+
+test('G08 rejects missing, duplicate and unexpected assignments, a different tree, or missing raw evidence', (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'g08-v8-invalid-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  writeBundle(root, 'unit', ['u'], 'node:internal', []);
+  const { manifest, save, dir } = writeBundle(root, 'integration', ['i'], 'node:internal', []);
+  const merge = () => mergeG08Bundles(root, 'tested-tree', ['u', 'i', 'j']);
+  assert.throws(merge, /assignment/);
+  for (const bad of [
+    ['i', 'u'],
+    ['i', 'j', 'j'],
+    ['i', 'j', 'extra']
+  ]) {
+    manifest.files = bad;
+    save();
+    assert.throws(merge, /assignment/);
+  }
+  manifest.files = ['i', 'j'];
+  manifest.tree = 'other';
+  save();
+  assert.throws(merge, /tree mismatch/);
+  manifest.tree = 'tested-tree';
+  manifest.raw.push('lost.json');
+  save();
+  assert.throws(merge, /Incomplete integration raw V8 bundle/);
+  fs.unlinkSync(path.join(dir, 'raw', 'coverage-1.json'));
+  assert.throws(merge, /Missing raw V8 coverage/);
+  fs.rmSync(dir, { recursive: true });
+  assert.throws(merge, /ENOENT/);
 });
 
 test('G08-A06b collector merges a script reported by its filesystem path', (t) => {

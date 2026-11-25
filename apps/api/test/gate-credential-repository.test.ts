@@ -36,6 +36,25 @@ test('a revoke missing its target changes nothing and answers invalid', { skip }
   });
 });
 
+test('revocation fences issuance at a previously captured principal epoch', { skip }, async (t) => {
+  const gate = await seeded(t);
+  const target = { principal, roomId: ROOM };
+  const captured = await gate.getLiveKitGatePrincipalEpoch(target);
+  assert.equal(captured.status, 'ready');
+  const revoked = await gate.revokeLiveKitGatePrincipal(target);
+  assert.equal(revoked.status, 'revoked');
+  const issue = (principalEpoch: number) =>
+    gate.createLiveKitGateCredential({
+      ...target,
+      principalEpoch,
+      credentialHash: 'tab-credential',
+      peerId: 'tab',
+      expiresAt: Date.now() + 60_000
+    });
+  assert.deepEqual(await issue(captured.epoch), { status: 'epoch_mismatch', credential: null });
+  assert.equal((await issue(revoked.epoch)).status, 'created');
+});
+
 test("a peer's credentials are revoked alone, and one issued without an expiry is never valid", { skip }, async (t) => {
   const gate = await seeded(t);
   const issue = (peerId: string, credentialHash: string, expiresAt?: number) =>

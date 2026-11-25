@@ -46,7 +46,8 @@
     "test": "npm --workspace @voiceroom/shared run test && npm --workspace @voiceroom/api run test && npm --workspace @voiceroom/web run test && npm --workspace @voiceroom/meet run test && npm --workspace @voiceroom/widget run test && npm --workspace @voiceroom/admin run test && npm run test:site && node --test scripts/test/*.test.mts",
     "test:site": "npm --workspace @voiceroom/site run test && node scripts/test/web-text-contrast.test.mts --site",
     "e2e": "npm --workspace @voiceroom/web run e2e",
-    "coverage:g08": "node scripts/coverage/run-g08.mts"
+    "coverage:g08": "node scripts/coverage/run-g08.mts",
+    "test:api": "node scripts/ci/api-tests.mts"
   },
   "packageManager": "npm@11.16.0",
   "engines": {

@@ -559,7 +559,13 @@ test('the gate tunnels a seated call credential and drops it when the seat leave
   }
 
   assert.match((await upgrade()).writes[0] ?? '', /^GET \/rtc/);
-  const late = await upgrade(() => action(api, a, call.call.id, 'leave', 1, seat.seatToken));
+  const late = await upgrade(async () => {
+    await action(api, a, call.call.id, 'leave', 1, seat.seatToken);
+    await until(
+      () => lab.evicted.some(({ roomId, peerId }) => roomId === seat.roomId && peerId === seat.peerId),
+      'the seat was removed before upstream connected'
+    );
+  });
   assert.deepEqual(late.writes, []);
   assert.equal(late.destroyed, true);
 });
