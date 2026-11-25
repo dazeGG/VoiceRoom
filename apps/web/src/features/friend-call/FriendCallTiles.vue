@@ -52,28 +52,30 @@ function watchScreen(): void {
 
 <template>
   <div v-show="!state.viewedScreenPeerId || !hasEngine" class="friend-call__tiles">
-    <ParticipantTile
-      :participant="remoteSeat"
-      :avatar="getAvatarPresentation(remoteSeat)"
-      :state="remoteState"
-      static-tile
-      :viewing="state.viewedScreenPeerId === remoteSeat.id"
-      :mirrored="false"
-      :screen-requesting="state.screenRequesting"
-      @watch-screen="watchScreen"
-    >
-      <template #name><EmojiText :text="remoteSeat.name" /></template>
-    </ParticipantTile>
-    <ParticipantTile
-      :participant="ownSeat"
-      :avatar="getAvatarPresentation(ownSeat)"
-      :state="own ? 'connected' : 'reconnecting'"
-      static-tile
-      :viewing="false"
-      :mirrored="state.cameraFacing !== 'environment'"
-      :screen-requesting="false"
-    >
-      <template #name><EmojiText :text="ownSeat.name" /></template>
-    </ParticipantTile>
+    <div class="friend-call__tile-grid">
+      <ParticipantTile
+        :participant="remoteSeat"
+        :avatar="getAvatarPresentation(remoteSeat)"
+        :state="remoteState"
+        static-tile
+        :viewing="state.viewedScreenPeerId === remoteSeat.id"
+        :mirrored="false"
+        :screen-requesting="state.screenRequesting"
+        @watch-screen="watchScreen"
+      >
+        <template #name><EmojiText :text="remoteSeat.name" /></template>
+      </ParticipantTile>
+      <ParticipantTile
+        :participant="ownSeat"
+        :avatar="getAvatarPresentation(ownSeat)"
+        :state="own ? 'connected' : 'reconnecting'"
+        static-tile
+        :viewing="false"
+        :mirrored="state.cameraFacing !== 'environment'"
+        :screen-requesting="false"
+      >
+        <template #name><EmojiText :text="ownSeat.name" /></template>
+      </ParticipantTile>
+    </div>
   </div>
 </template>

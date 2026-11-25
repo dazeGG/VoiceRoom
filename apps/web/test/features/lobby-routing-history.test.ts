@@ -12,7 +12,7 @@ import type { LobbyStore } from '../../src/features/home/model/lobby.store.ts';
 import { useRoomNavigationStore } from '../../src/features/home/model/room-navigation.store.ts';
 import { ROOM_SWITCH_CONFIRM_STORAGE_KEY } from '../../src/features/home/model/room-switch-confirmation.ts';
 import { useVoiceSessionStore } from '@voiceroom/call/engine/core/voice-session.store';
-import { isShallowEntry } from '../../src/shared/utils/shallow-routing.ts';
+import { isShallowEntry, shallowPush } from '../../src/shared/utils/shallow-routing.ts';
 
 let router: Router;
 let voiceSession: ReturnType<typeof useVoiceSessionStore>;
@@ -30,12 +30,17 @@ async function openAt(...paths: string[]) {
     mode: 'friends',
     view: 'home',
     selectedFriendId: null,
-    openDm: vi.fn(async () => {}),
-    showHome: vi.fn()
+    openDm: vi.fn(async (peerId: string) => {
+      lobby.selectedFriendId = peerId;
+      lobby.view = 'dm';
+    }),
+    showHome: vi.fn(() => {
+      lobby.view = 'home';
+    })
   };
   const routing = useLobbyRouting(lobby, { left: vi.fn() }, router);
   stop = routing.start();
-  return routing;
+  return { ...routing, lobby };
 }
 
 /** The address and the route both settle on `path`. */
@@ -116,13 +121,23 @@ test('entering a room puts it in the address before the room mounts', async () =
   await settlesOn('/r/abc123');
 });
 
-test('browsing to messages keeps Back pointed at the private call view', async () => {
-  const routing = await openAt('/app', '/app?call=active-call');
-  routing.hideCall('friend');
-  await vi.waitFor(() => expect(router.currentRoute.value.query).toEqual({ dm: 'friend' }));
+test('browsing away from a linked conversation keeps Back pointed at that DM', async () => {
+  const routing = await openAt('/app');
+  await shallowPush(router, '/app?dm=call-peer');
+  routing.browseFromLinkedDm('another-friend');
+  await vi.waitFor(() => expect(router.currentRoute.value.query).toEqual({ dm: 'another-friend' }));
   expect(window.location.pathname).toBe('/app');
 
   await back();
-  await vi.waitFor(() => expect(router.currentRoute.value.query).toEqual({ call: 'active-call' }));
+  await vi.waitFor(() => expect(router.currentRoute.value.query).toEqual({ dm: 'call-peer' }));
   expect(window.location.pathname).toBe('/app');
+});
+
+test('a notification link keeps its DM open after removing the initial handoff query', async () => {
+  const { lobby } = await openAt('/app?dm=call-peer');
+  await vi.waitFor(() => {
+    expect(router.currentRoute.value.fullPath).toBe('/app');
+    expect(lobby.view).toBe('dm');
+    expect(lobby.selectedFriendId).toBe('call-peer');
+  });
 });

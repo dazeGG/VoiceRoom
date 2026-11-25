@@ -5,6 +5,7 @@
 import { ref } from 'vue';
 import { useRouter, type Router } from 'vue-router';
 import { useVoiceSessionStore } from '@voiceroom/call/engine';
+import { isRecord } from '@voiceroom/shared/guards';
 import { useRoomUiStore } from '@/features/room/room-ui.store';
 import { useFriendCallStore } from '@/features/friend-call/friend-call.store';
 import { bindDesktopLinks, type DesktopLink } from '@/platform/desktop-links';
@@ -15,7 +16,7 @@ import {
   readOpenInAppSignals,
   shouldOfferOpenInApp
 } from '@/platform/open-in-app';
-import { APP_HOME } from '@/shared/app-home';
+import { APP_HOME, dmPath, DM_CALL_CHAT_HASH } from '@/shared/app-home';
 import { usePageStore } from '@/stores/page.store';
 import { extractRoomId } from '@/shared/utils/room';
 import { shallowPush, shallowReplace } from '@/shared/utils/shallow-routing';
@@ -92,8 +93,14 @@ export function useLobbyRouting(lobby: RoutingLobby, rooms: RoutingRooms, router
     }
     const initialParams = new URLSearchParams(window.location.search);
     const initialDmId = initialParams.get('dm');
+    let clearingInitialDm = false;
     if (!initialRoomId && initialDmId) {
-      replaceState(APP_HOME);
+      if (!calls.voice) {
+        clearingInitialDm = true;
+        void shallowReplace(router, APP_HOME).finally(() => {
+          clearingInitialDm = false;
+        });
+      }
       void lobby.openDm(initialDmId);
     }
     // A mention link — from the bell or from a push — lands here rather than on
@@ -113,7 +120,14 @@ export function useLobbyRouting(lobby: RoutingLobby, rooms: RoutingRooms, router
         (lobby.view !== 'dm' || lobby.selectedFriendId !== to.query.dm)
       ) {
         void lobby.openDm(to.query.dm);
-      } else if (!failure && from.query.call && !to.query.call && !to.query.dm && !to.params.roomId) {
+      } else if (
+        !failure &&
+        !clearingInitialDm &&
+        from.query.dm &&
+        to.fullPath === APP_HOME &&
+        lobby.mode === 'friends' &&
+        lobby.view === 'dm'
+      ) {
         lobby.showHome();
       }
     });
@@ -177,10 +191,8 @@ export function useLobbyRouting(lobby: RoutingLobby, rooms: RoutingRooms, router
   };
 
   const goHome = (): void => {
-    const { call, dm } = router.currentRoute.value.query;
     lobby.showHome();
-    if (!call && navigation.viewedRoomId) closeViewedRoom();
-    else if (!call && dm) void shallowPush(router, APP_HOME);
+    if (navigation.viewedRoomId) closeViewedRoom();
   };
 
   /** The room shown here was left from its own leave button. */
@@ -216,7 +228,6 @@ export function useLobbyRouting(lobby: RoutingLobby, rooms: RoutingRooms, router
    * and it reloaded the page while still failing to open the chat.
    */
   const openRoomMessage = (roomId: string, messageId: string): void => {
-    hideCall();
     lobby.mode = 'rooms';
     if (navigation.getActiveVoiceRoomId() === roomId) {
       // Already in that room: its own chat is the one to show.
@@ -273,7 +284,7 @@ export function useLobbyRouting(lobby: RoutingLobby, rooms: RoutingRooms, router
     // takes over, and rewriting its entry would swallow the move.
     if (!roomId && window.location.pathname !== APP_HOME) return;
     const params = new URLSearchParams(window.location.search);
-    if (!roomId && (params.has('call') || params.has('dm'))) return;
+    if (!roomId && params.has('dm')) return;
     if (roomId) {
       navigation.setViewedRoomFromRoute(roomId);
       lobby.mode = 'rooms';
@@ -285,11 +296,22 @@ export function useLobbyRouting(lobby: RoutingLobby, rooms: RoutingRooms, router
     replaceUrlWithActiveVoiceRoom();
   };
 
-  function hideCall(peerId?: string): void {
-    if (!router.currentRoute.value.query.call) return;
-    const target = peerId ? `${APP_HOME}?dm=${encodeURIComponent(peerId)}` : APP_HOME;
-    // Keep the call entry in history so Back returns to the same engine.
-    void shallowPush(router, target);
+  function browseFromLinkedDm(peerId?: string): void {
+    const dm = router.currentRoute.value.query.dm;
+    if (typeof dm !== 'string' || dm === peerId) return;
+    const target = peerId ? dmPath(peerId) : APP_HOME;
+    pushState(target);
+  }
+
+  function setMobileCallChat(open: boolean): void {
+    if (lobby.view !== 'dm' || !lobby.selectedFriendId) return;
+    const path = dmPath(lobby.selectedFriendId);
+    if (open) pushState(path + DM_CALL_CHAT_HASH);
+    else {
+      const history: { readonly state: unknown } = window.history;
+      if (isRecord(history.state) && history.state.back === path) router.back();
+      else replaceState(path);
+    }
   }
 
   return {
@@ -308,7 +330,8 @@ export function useLobbyRouting(lobby: RoutingLobby, rooms: RoutingRooms, router
     openConnectedVoiceRoom,
     leaveConnectedVoiceRoom,
     openRoomMessage,
-    hideCall
+    browseFromLinkedDm,
+    setMobileCallChat
   };
 }
 

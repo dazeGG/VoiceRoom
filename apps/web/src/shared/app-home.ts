@@ -13,3 +13,9 @@ export function appHomeForHost(hostname: string): '/' | typeof LEGACY_APP_HOME {
 }
 
 export const APP_HOME = appHomeForHost(globalThis.location?.hostname ?? '');
+
+export const DM_CALL_CHAT_HASH = '#chat';
+
+export function dmPath(peerId: string): string {
+  return `${APP_HOME}?dm=${encodeURIComponent(peerId)}`;
+}

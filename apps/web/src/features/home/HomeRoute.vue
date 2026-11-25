@@ -22,7 +22,7 @@ const startRoom = takeStartRoomRequest(useRoute(), useRouter());
 const boundaryReady = ref(false);
 const desktopAllowed = ref(false);
 const roomClientAllowed = ref(false);
-const mobileLobby = computed(() => Boolean(session.user && (calls.enabled || calls.voice || calls.closingCallId)));
+const mobileLobby = computed(() => Boolean(session.user && (calls.enabled || calls.voice)));
 const checkingMobileSession = computed(
   () => !session.loaded || (session.user && !calls.missedLoaded && !calls.enabled)
 );

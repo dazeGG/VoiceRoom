@@ -1,14 +1,16 @@
 export interface SplitterProps {
   sideClass?: string;
+  direction?: 'horizontal' | 'vertical';
+  singlePane?: 'side' | 'main' | undefined;
   label: string;
-  width: number;
-  minWidth: number;
-  maxWidth: number;
-  collapsedWidth?: number;
+  size: number;
+  minSize: number;
+  maxSize: number;
+  collapsedSize?: number;
   handleId?: string;
 }
 
-export interface SplitterWidth {
-  width: number;
+export interface SplitterSize {
+  size: number;
   collapsed: boolean;
 }

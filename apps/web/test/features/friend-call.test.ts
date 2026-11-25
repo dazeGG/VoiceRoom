@@ -1,6 +1,7 @@
 import { render, screen, fireEvent, within } from '@testing-library/vue';
 import { createPinia, setActivePinia, type Pinia } from 'pinia';
 import { defineComponent, h, nextTick, ref } from 'vue';
+import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import type {
   CallAnswer,
@@ -12,10 +13,9 @@ import type {
 } from '@voiceroom/shared/contracts/rings';
 import { Button, Dialog } from '@voiceroom/ui-kit/components';
 import IncomingCallStack from '@/features/friend-call/IncomingCallStack.vue';
-import FriendCallView from '@/features/friend-call/FriendCallView.vue';
 import { useFriendCallStore } from '@/features/friend-call/friend-call.store';
 import { useCallEntry } from '@/features/friend-call/use-call-entry';
-import { useVoiceSessionStore } from '@voiceroom/call/engine';
+import { useScreenUiStore, useVoiceSessionStore } from '@voiceroom/call/engine';
 import { useToastsStore } from '@/features/home/model/toasts.store';
 import { useLobbyStore } from '@/features/home/model/lobby.store';
 import DmCallEvent from '@/features/home/components/lobby/dm/DmCallEvent.vue';
@@ -23,6 +23,7 @@ import DmView from '@/features/home/components/lobby/DmView.vue';
 import Sidebar from '@/features/home/components/lobby/Sidebar.vue';
 import VoiceCallWidget from '@/features/home/components/lobby/VoiceCallWidget.vue';
 import { provideLobby } from '@/features/home/model/lobby-context';
+import { usePortraitCallLayout } from '@/features/room/mobile-call-layout';
 import { PORTRAIT_PHONE_QUERY } from '@/features/room/mobile-call-ui.store';
 import { clockTime } from '@/shared/utils/date-format';
 import { useLocaleStore } from '@/shared/i18n';
@@ -30,6 +31,7 @@ import { FakeWebSocket, installFakeWebSocket } from '../fixtures/fake-websocket'
 import { stubFetch, type Reply } from '../fixtures/fetch';
 import { authUser } from '../fixtures/users';
 import { stubOverlayDom } from '../helpers/overlay-dom';
+import { stubSplitterLayout } from '../helpers/splitter-layout';
 
 const muteRinger = vi.hoisted(() => vi.fn<(signal: AbortSignal) => Promise<void>>(async () => {}));
 vi.mock('@/features/friend-call/call-ringer', () => ({ ringOnThisDevice: muteRinger }));
@@ -103,7 +105,6 @@ let calls: ReturnType<typeof useFriendCallStore>;
 let stop: (() => void) | undefined;
 const prepareVoice = vi.fn(async () => {});
 const openCall = vi.fn<(id: string) => void>();
-const closeCall = vi.fn<(id: string, peerId: string) => void>();
 const flush = () => vi.advanceTimersByTimeAsync(0);
 const realtimeState = (socket: FakeWebSocket, call: CallSnapshot) =>
   socket.receive({ type: 'call.state', payload: { call } });
@@ -148,7 +149,7 @@ afterEach(() => {
 
 async function start(routes: Record<string, Reply> = {}) {
   const fetch = stubFetch({ '/api/call-rings': { body: bootstrap() }, ...routes });
-  stop = calls.startSession(self.id, { prepareVoice, openCall, closeCall });
+  stop = calls.startSession(self.id, { prepareVoice, openCall });
   const socket = FakeWebSocket.latest();
   socket.open();
   socket.receive({ type: 'ready', payload: { userId: self.id } });
@@ -187,7 +188,7 @@ test('one entry model covers online, offline, room switch, an existing seat and 
   expect(entry.value.label).toBe('Вернуться в звонок');
   expect(entry.value.description).toBeUndefined();
   await entry.value.open();
-  expect(openCall.mock.calls).toEqual([[firstId], [firstId]]);
+  expect(openCall.mock.calls).toEqual([[ada.id], [ada.id]]);
 
   realtimeState(socket, snapshot({ id: secondId, recipient: bob, phase: 'alone', allowedActions: ['join'] }));
   const join = useCallEntry(
@@ -289,7 +290,30 @@ test('the stack is keyboard reachable inside a modal, keeps its other card after
   expect(muteRinger.mock.lastCall?.[0].aborted).toBe(true);
 });
 
-test('the call view goes from ringing to a countdown, re-rings, and gives a decline two seconds before returning', async () => {
+function mountDm(lobby = useLobbyStore(pinia)) {
+  stubSplitterLayout();
+  return render(
+    defineComponent(() => {
+      provideLobby(lobby);
+      const portrait = usePortraitCallLayout();
+      return () => h(DmView, { self, portrait: portrait.value });
+    }),
+    { global: { plugins: [pinia] } }
+  );
+}
+
+function selectPeer(lobby: ReturnType<typeof useLobbyStore>, peer = ada): void {
+  lobby.selectedFriendId = peer.id;
+  lobby.thread.peer = peer;
+  lobby.view = 'dm';
+}
+
+const dm = () => screen.getByRole('region', { name: 'Личные сообщения' });
+const stage = () => within(dm()).getByRole('region', { name: 'Звонок: Ада' });
+const splitter = () => screen.getByRole('separator', { name: 'Высота звонка' });
+const composer = () => within(dm()).getByRole('textbox', { name: /Написать сообщение|^$/ });
+
+test('the DM stage counts down, re-rings and closes on decline while the conversation stays open', async () => {
   const initial = snapshot();
   const { socket } = await start({
     'POST /api/call-rings': { body: answer(initial) },
@@ -313,14 +337,11 @@ test('the call view goes from ringing to a countdown, re-rings, and gives a decl
     })
   });
   await calls.dial(ada.id);
-  render(
-    defineComponent(() => () => {
-      const record = calls.record(firstId);
-      return record ? h(FriendCallView, record) : null;
-    }),
-    { global: { plugins: [pinia] } }
-  );
-  expect(screen.getByRole('region', { name: 'Звонок: Ада' })).toBeTruthy();
+  const lobby = useLobbyStore(pinia);
+  selectPeer(lobby);
+  mountDm(lobby);
+  expect(stage()).toBeTruthy();
+  const field = composer();
   expect(screen.getByText('Звоним…', { selector: '[role=status] p' })).toBeTruthy();
   await vi.advanceTimersByTimeAsync(45_000);
   expect(screen.getByRole('timer').textContent).toContain('4:15');
@@ -340,12 +361,11 @@ test('the call view goes from ringing to a countdown, re-rings, and gives a decl
     })
   );
   await nextTick();
-  expect(screen.getByText('Возвращаемся в личные сообщения…')).toBeTruthy();
-  expect(screen.queryByRole('button', { name: 'Завершить' })).toBeNull();
-  await vi.advanceTimersByTimeAsync(1_999);
-  expect(closeCall).not.toHaveBeenCalled();
-  await vi.advanceTimersByTimeAsync(1);
-  expect(closeCall).toHaveBeenCalledWith(firstId, ada.id);
+  expect(within(stage()).getByRole('status').textContent).toContain('Звонок отклонён');
+  expect(within(stage()).queryByRole('button', { name: 'Завершить' })).toBeNull();
+  await vi.advanceTimersByTimeAsync(800);
+  expect(screen.queryByRole('region', { name: 'Звонок: Ада' })).toBeNull();
+  expect(composer()).toBe(field);
 });
 
 test('a departed peer has a stable tile and an alone deadline', async () => {
@@ -360,7 +380,6 @@ test('a departed peer has a stable tile and an alone deadline', async () => {
       { userId: ada.id, status: 'absent', reconnectUntil: null }
     ]
   });
-  await start();
   const reconnecting: CallSnapshot = {
     ...call,
     phase: 'connecting',
@@ -370,10 +389,16 @@ test('a departed peer has a stable tile and an alone deadline', async () => {
       { userId: ada.id, status: 'reconnecting', reconnectUntil: now + 30_000 }
     ]
   };
-  const view = render(FriendCallView, { props: { call: reconnecting, offset: 0 }, global: { plugins: [pinia] } });
-  expect(screen.getByRole('timer').textContent).toContain('01:30');
+  const { socket } = await start({ 'POST /api/call-rings': { body: answer(reconnecting) } });
+  await calls.dial(ada.id);
+  const lobby = useLobbyStore(pinia);
+  selectPeer(lobby);
+  mountDm(lobby);
+  expect(within(dm()).getByText('Переподключаемся…')).toBeTruthy();
   expect(screen.queryByText('Ада покидает звонок')).toBeNull();
-  await view.rerender({ call });
+  realtimeState(socket, { ...call, revision: 2 });
+  await nextTick();
+  expect(screen.getAllByRole('timer').some((timer) => timer.textContent?.includes('01:30'))).toBe(true);
   expect(screen.getByText('Ада покидает звонок')).toBeTruthy();
   expect(screen.getByText('Не в звонке')).toBeTruthy();
   await vi.advanceTimersByTimeAsync(60_000);
@@ -586,7 +611,7 @@ test('calling back joins the still-open call, then starts a new call after it cl
   expect(http.filter(({ method }) => method === 'POST')).toMatchObject([
     { url: `/api/call-rings/${firstId}/actions`, body: { action: 'join', expectedAttempt: 1 } }
   ]);
-  expect(openCall).toHaveBeenCalledWith(firstId);
+  expect(openCall).toHaveBeenCalledWith(ada.id);
   realtimeState(socket, { ...waiting, phase: 'closed', revision: 3, endedAt: Date.now(), allowedActions: [] });
   await view.rerender({ projection: projection({ outcome: 'no_answer', revision: 3 }) });
   await vi.advanceTimersByTimeAsync(1);
@@ -596,7 +621,7 @@ test('calling back joins the still-open call, then starts a new call after it cl
     url: '/api/call-rings',
     body: { peerUserId: ada.id }
   });
-  expect(openCall).toHaveBeenLastCalledWith(secondId);
+  expect(openCall).toHaveBeenLastCalledWith(ada.id);
 });
 
 test('only the visible DM acknowledges a watermark and both devices clear the missed badge', async () => {
@@ -628,7 +653,7 @@ test('only the visible DM acknowledges a watermark and both devices clear the mi
   };
   const other = createPinia();
   const otherCalls = useFriendCallStore(other);
-  const stopOther = otherCalls.startSession(self.id, { prepareVoice, openCall, closeCall });
+  const stopOther = otherCalls.startSession(self.id, { prepareVoice, openCall });
   try {
     const first = mountSidebar(pinia);
     const second = mountSidebar(other);
@@ -682,26 +707,127 @@ test('only the visible DM acknowledges a watermark and both devices clear the mi
   }
 });
 
-test('a portrait call places the 44px re-ring action outside the countdown and switches back on rotation', async () => {
-  const media = Object.assign(new EventTarget(), { matches: false });
+test('the desktop call stage belongs to its own DM and the chat composer sends while it is open', async () => {
+  const { calls: http } = await start({
+    'POST /api/call-rings': { body: answer(snapshot()) },
+    'POST /api/dm/ada': {
+      body: {
+        ok: true,
+        message: {
+          id: 'sent',
+          senderId: self.id,
+          recipientId: ada.id,
+          body: 'hello during the call',
+          createdAt: now,
+          editedAt: null,
+          readAt: null,
+          invite: null
+        }
+      }
+    }
+  });
+  const lobby = useLobbyStore(pinia);
+  selectPeer(lobby, bob);
+  mountDm(lobby);
+  await calls.dial(ada.id);
+  await nextTick();
+  expect(screen.queryByRole('region', { name: 'Звонок: Ада' })).toBeNull();
+  selectPeer(lobby);
+  await nextTick();
+  expect(stage()).toBeTruthy();
+  expect(within(dm()).getByRole('button', { name: 'Вернуться в звонок' })).toBeTruthy();
+  expect(within(dm()).getByRole('button', { name: 'Добавить вложение' })).toBeTruthy();
+  expect(within(dm()).getByRole('button', { name: 'Добавить эмодзи' })).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Открыть личные сообщения' })).toBeNull();
+
+  const user = userEvent.setup({ delay: null, advanceTimers: vi.advanceTimersByTime });
+  await user.click(composer());
+  await user.keyboard('hello during the call{Enter}');
+  await flush();
+  expect(http.find(({ url, method }) => url === '/api/dm/ada' && method === 'POST')?.body).toMatchObject({
+    text: 'hello during the call'
+  });
+  expect(stage()).toBeTruthy();
+});
+
+test('the desktop call remembers a resized height through screen share, expansion, and reopening', async () => {
+  const call = snapshot({ phase: 'connected', attemptResult: 'accepted', firstConnectedAt: now });
+  await start({ 'POST /api/call-rings': { body: answer(call) } });
+  await calls.dial(ada.id);
+  const lobby = useLobbyStore(pinia);
+  selectPeer(lobby);
+  const view = mountDm(lobby);
+  await nextTick();
+
+  const handle = splitter();
+  const initial = Number.parseInt(handle.getAttribute('aria-valuetext') ?? '', 10);
+  await fireEvent.keyDown(handle, { key: 'ArrowDown' });
+  const resized = `${initial + 16} px`;
+  expect(handle.getAttribute('aria-valuetext')).toBe(resized);
+  const field = composer();
+
+  const voice = useVoiceSessionStore(pinia);
+  const screenUi = useScreenUiStore(pinia);
+  vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {});
+  voice.roomId = 'opaque-room';
+  await nextTick();
+  const screenVideo = stage().querySelector('video');
+  expect(screenVideo).toBeTruthy();
+  screenUi.stageVisible = true;
+  await nextTick();
+  expect(stage().querySelector('video')).toBe(screenVideo);
+  expect(within(stage()).getByRole('button', { name: 'Закрыть просмотр экрана' })).toBeTruthy();
+  expect(handle.getAttribute('aria-valuetext')).toBe(resized);
+  screenUi.stageVisible = false;
+  voice.roomId = null;
+  await nextTick();
+
+  await fireEvent.click(within(stage()).getByRole('button', { name: 'Развернуть' }));
+  expect(within(dm()).queryByRole('textbox')).toBeNull();
+  expect(screen.queryByRole('separator', { name: 'Высота звонка' })).toBeNull();
+  await fireEvent.click(within(stage()).getByRole('button', { name: 'Свернуть' }));
+  expect(composer()).toBe(field);
+  expect(splitter().getAttribute('aria-valuetext')).toBe(resized);
+
+  view.unmount();
+  mountDm(lobby);
+  await nextTick();
+  expect(splitter().getAttribute('aria-valuetext')).toBe(resized);
+});
+
+test('a portrait call shows the compact header, opens chat over the call, and restores the stage', async () => {
+  const media = Object.assign(new EventTarget(), { matches: true });
   vi.stubGlobal('matchMedia', (query: string) => (query === PORTRAIT_PHONE_QUERY ? media : new EventTarget()));
-  await start();
   const call = snapshot({
     phase: 'alone',
     firstConnectedAt: now - 12_000,
     allowedActions: ['leave', 're-ring']
   });
-  render(FriendCallView, { props: { call, offset: 0 }, global: { plugins: [pinia] } });
-  const button = () => screen.getByRole('button', { name: 'Позвонить снова' });
-  const countdown = screen.getByText('Ада покидает звонок').closest('.friend-call__countdown');
-  expect(countdown?.contains(button())).toBe(true);
-  media.dispatchEvent(Object.assign(new Event('change'), { matches: true }));
-  await nextTick();
-  expect(countdown?.contains(button())).toBe(false);
-  expect(button().classList.contains('ui-button--size-lg')).toBe(true);
-  expect(screen.getByRole('button', { name: 'Назад' }).classList.contains('ui-icon-button--size-44')).toBe(true);
-  expect(screen.getByRole('region', { name: 'Звонок: Ада' }).classList.contains('friend-call--portrait')).toBe(true);
+  await start({ 'POST /api/call-rings': { body: answer(call) } });
+  await calls.dial(ada.id);
+  const lobby = useLobbyStore(pinia);
+  selectPeer(lobby);
+  mountDm(lobby);
+
+  const reRing = within(stage()).getByRole('button', { name: 'Позвонить снова' });
+  const countdown = within(stage()).getByText('Ада покидает звонок').closest('.friend-call__countdown');
+  expect(countdown?.contains(reRing)).toBe(false);
+  expect(reRing.classList.contains('ui-button--size-lg')).toBe(true);
+  expect(within(stage()).getByRole('button', { name: 'Назад' }).classList.contains('ui-icon-button--size-44')).toBe(
+    true
+  );
+  expect(screen.queryByRole('separator', { name: 'Высота звонка' })).toBeNull();
+  expect(within(dm()).queryByRole('textbox')).toBeNull();
+
+  await fireEvent.click(within(stage()).getByRole('button', { name: 'Открыть личные сообщения' }));
+  expect(composer()).toBeTruthy();
+  expect(within(dm()).queryByRole('region', { name: 'Звонок: Ада' })).toBeNull();
+  await fireEvent.click(within(dm()).getByRole('button', { name: 'Назад' }));
+  expect(stage()).toBeTruthy();
+  expect(within(dm()).queryByRole('textbox')).toBeNull();
+
   media.dispatchEvent(Object.assign(new Event('change'), { matches: false }));
   await nextTick();
-  expect(countdown?.contains(button())).toBe(true);
+  expect(composer()).toBeTruthy();
+  expect(countdown?.contains(within(stage()).getByRole('button', { name: 'Позвонить снова' }))).toBe(true);
 });
