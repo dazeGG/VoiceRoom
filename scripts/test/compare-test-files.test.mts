@@ -16,7 +16,7 @@ test('reconciles runner outcomes through real Git renames, never grand totals', 
   };
   const dir = 'apps/web/test';
   const a = dir + '/original.test.ts',
-    b = dir + '/other.test.ts',
+    b = 'scripts/ci/other.test.mts',
     c = dir + '/owned.test.ts';
   const row = (file: string) => ({
     file,
@@ -29,6 +29,7 @@ test('reconciles runner outcomes through real Git renames, never grand totals', 
   });
   git('init', '--quiet');
   mkdirSync(join(root, dir), { recursive: true });
+  mkdirSync(join(root, 'scripts/ci'), { recursive: true });
   writeFileSync(join(root, a), 'original behaviour\n');
   writeFileSync(join(root, b), 'another behaviour\n');
   const base = tree();

@@ -27,12 +27,12 @@ function treeId(root: string, rev: string) {
   return git(root, 'rev-parse', '--verify', '--end-of-options', rev + '^{tree}').trim();
 }
 
-// Independent of the runners' selectors. The Personal Compose smoke and Playwright
-// specs run on their own fixtures, outside the workspace and repository unit suites.
+// Independent of directories and runners' selectors: this includes the Personal
+// Compose node:test on its own fixture. Browser *.spec.ts journeys use Playwright.
 function trackedTests(root: string, tree: string) {
   return git(root, 'ls-tree', '-r', '-z', '--name-only', tree)
     .split('\0')
-    .filter((file) => /^(?:(?:apps|packages)\/[^/]+\/test|scripts\/test)\/.*\.test\.[cm]?[jt]sx?$/.test(file))
+    .filter((file) => /\.test\.[cm]?[jt]sx?$/.test(file))
     .sort();
 }
 

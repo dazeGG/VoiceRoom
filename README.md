@@ -131,7 +131,8 @@ node scripts/ci/api-tests.mts compare-fixtures db.json no-db.json
 Каждая запись содержит путь `file` от корня, `project`, `environment`, `fixture` и
 счётчики `tests`, `passed`, `skipped` (включая todo). Берите счётчики из событий
 `test:summary` Node и из `assertionResults` JSON-репортера Vitest; сохраняйте проект и
-окружение, а не имя нового каталога. Сравнение сверяет обе выборки с Git, а затем
+окружение, а не имя нового каталога. Включите и отдельный node:test Personal Compose:
+его отчёт снимается на чистом стеке Personal, а не через `npm test`. Сравнение сверяет обе выборки с Git, а затем
 проверяет каждый файл по парам переименований. Это проверка переноса, не источник
 для отбора тестов в CI.
 
