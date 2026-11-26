@@ -202,6 +202,30 @@ function healthyCall(outcome: ReplacementOutcome) {
 }
 const snapshot = () => recovery.notifyRoomSnapshotApplied({ appEpoch: 1, active: true, hasLocalPeer: true });
 
+test('an in-place LiveKit recovery can reconcile before the same-epoch snapshot clears voice failure', async () => {
+  const { setActiveVoiceResyncFailureHandler } = await import('@/entities/room/room-realtime');
+  const { attemptFreshReplacement, phases, unsubscribe } = healthyCall({ retryable: false, code: 'invalid_session' });
+
+  try {
+    recovery.notifyLiveKitDisconnected();
+    const refuseSnapshot = vi.mocked(setActiveVoiceResyncFailureHandler).mock.lastCall?.[0];
+    if (!refuseSnapshot) throw new Error('Missing snapshot refusal handler');
+    refuseSnapshot({ code: 'invalid_session', requestId: 'resync' });
+    expect(phases.at(-1)).toBe('failed');
+    expect(state.voiceRecoveryFailed).toBe(true);
+
+    recovery.notifyLiveKitReconnecting();
+    recovery.notifyLiveKitReconciled();
+    expect(state.voiceRecoveryFailed).toBe(true);
+    snapshot();
+    expect(phases.at(-1)).toBe('healthy');
+    expect(state.voiceRecoveryFailed).toBe(false);
+    expect(attemptFreshReplacement).not.toHaveBeenCalled();
+  } finally {
+    unsubscribe();
+  }
+});
+
 test('asking to replace a standing connection replaces it and says when it is over', async () => {
   const { attemptFreshReplacement, phases, unsubscribe } = healthyCall({ ok: true });
   const replacing = recovery.requestLiveKitReplacement();

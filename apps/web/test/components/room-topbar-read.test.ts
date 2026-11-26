@@ -12,11 +12,22 @@ import { useRoomUiStore } from '@/features/room/room-ui.store';
 import { usePageStore } from '@/stores/page.store';
 import { getAppRealtime } from '@/api/realtime';
 import { webCallTransport } from '@/features/room/adapters/web-call-transport';
+import { buildServerEnvelope, buildServerErrorEnvelope } from '@voiceroom/shared/realtime';
+import type { ReplacementOutcome } from '@voiceroom/call/engine/recovery/realtime-recovery';
+import {
+  cancelRoomRecovery,
+  notifyLiveKitDisconnected,
+  notifyLiveKitReconciled,
+  notifyRoomSnapshotApplied,
+  setRoomRecoveryLiveKitAdapter,
+  startRoomRecovery,
+  subscribeRoomRecoveryTransitions
+} from '@voiceroom/call/engine/recovery/room-recovery';
 import { leaveRoom } from '@voiceroom/call/engine/room/room';
 import * as cues from '@voiceroom/call/engine/media/cues';
 import * as devices from '@voiceroom/call/engine/ui/devices';
 import * as livekit from '@voiceroom/call/engine/services/livekit-service';
-import { roomStatus } from '../fixtures/answers';
+import { lobbyRoom, roomStatus } from '../fixtures/answers';
 import { installFakeWebSocket } from '../fixtures/fake-websocket';
 import { stubFetch } from '../fixtures/fetch.ts';
 import { participant } from '../fixtures/participant.ts';
@@ -130,5 +141,95 @@ test('the room reconnect button leaves then joins once, stays after failure and 
     Object.assign(roomClientState, { voiceRecoveryFailed: false });
     unsubscribe();
     vi.restoreAllMocks();
+  }
+});
+
+test('a late resync snapshot can start a replacement that clears the callout after a newer refusal', async () => {
+  const { pinia } = await renderWithApp(RoomTopbar, { route: '/r/abc123' });
+  await installWebCallPortsForTest();
+  usePageStore(pinia).screen = 'room';
+  const member = { roomId: 'abc123', peerId: 'peer-resync', sessionToken: 's'.repeat(32), name: 'Retry peer' };
+  Object.assign(roomClientState, { ...member, joined: true, outputMuted: true });
+  await nextTick();
+  vi.useFakeTimers();
+  const sockets = installFakeWebSocket();
+  const { realtime } = webCallTransport;
+  const unsubscribe = realtime.subscribeRoom(member.roomId, (event) => {
+    if (event.type !== 'room.snapshot') return;
+    notifyRoomSnapshotApplied({
+      appEpoch: realtime.getConnectionEpoch(),
+      active: event.payload.mode === 'active',
+      hasLocalPeer: event.payload.peers.some(({ id }) => id === member.peerId)
+    });
+  });
+  const socket = sockets.latest();
+  socket.open();
+  realtime.join(member);
+  const replacement = Promise.withResolvers<ReplacementOutcome>();
+  const attemptFreshReplacement = vi.fn(() => replacement.promise);
+  setRoomRecoveryLiveKitAdapter({ attemptFreshReplacement });
+  const onTransition = vi.fn<(event: { phase: string }) => void>();
+  const unsubscribeTransitions = subscribeRoomRecoveryTransitions(onTransition);
+  const snapshot = (id?: string) =>
+    socket.receive(
+      buildServerEnvelope(
+        'room.snapshot',
+        {
+          mode: 'active',
+          roomId: member.roomId,
+          room: lobbyRoom({ roomId: member.roomId }),
+          peers: [
+            {
+              id: member.peerId,
+              name: member.name,
+              serverMuted: false,
+              accountUserId: '',
+              avatarAccent: '',
+              avatarColorKey: '',
+              avatarUrl: null
+            }
+          ],
+          recentMessages: [],
+          voiceActiveSince: null
+        },
+        id
+      )
+    );
+  const lastJoinId = () => socket.sent.findLast(({ type }) => type === 'room.join')?.id;
+
+  try {
+    startRoomRecovery(realtime.getConnectionEpoch(), realtime.isConnected());
+    snapshot();
+    notifyLiveKitReconciled();
+    notifyLiveKitDisconnected();
+    const first = lastJoinId();
+    expect(first).toBeDefined();
+    await vi.advanceTimersByTimeAsync(1_000);
+    const second = lastJoinId();
+    expect(second).toBeDefined();
+    expect(second).not.toBe(first);
+
+    snapshot(first);
+    expect(attemptFreshReplacement).toHaveBeenCalledOnce();
+    socket.receive(buildServerErrorEnvelope('server_mute_unavailable', '', second));
+    await nextTick();
+    expect(roomClientState.voiceRecoveryFailed).toBe(true);
+    expect(screen.getByRole('button', { name: 'Подключиться снова' })).toBeTruthy();
+
+    replacement.resolve({ ok: true });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(onTransition.mock.lastCall?.[0].phase).toBe('healthy');
+    expect(roomClientState.voiceRecoveryFailed).toBe(false);
+    expect(screen.queryByText('Голос отключён')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Подключиться снова' })).toBeNull();
+    expect(attemptFreshReplacement).toHaveBeenCalledOnce();
+  } finally {
+    cancelRoomRecovery();
+    setRoomRecoveryLiveKitAdapter(null);
+    realtime.leave(member);
+    unsubscribeTransitions();
+    unsubscribe();
+    Object.assign(roomClientState, { joined: false, outputMuted: false });
+    vi.useRealTimers();
   }
 });

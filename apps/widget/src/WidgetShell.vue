@@ -162,6 +162,13 @@ function leave() {
         :tone="notice && notice.variant !== 'error' ? 'info' : 'danger'"
         :title="notice?.message || entry.error"
       />
+      <Callout
+        v-if="entry.voiceRecoveryFailed"
+        class="widget-shell__notice"
+        tone="danger"
+        layout="pill"
+        :title="entry.status"
+      />
       <WidgetJoinControls
         v-if="!entry.joined"
         v-model:name="entry.name"
@@ -175,6 +182,7 @@ function leave() {
         :members="participants"
         :room-code="entry.roomId"
         :status="entry.status"
+        :voice-recovery-failed="entry.voiceRecoveryFailed"
         :quality="state.localConnectionQuality"
         :muted="isMicrophoneShownMuted() || state.self?.serverMuted === true"
         :output-muted="state.localAppAudioSuppressed || outputBlocked"

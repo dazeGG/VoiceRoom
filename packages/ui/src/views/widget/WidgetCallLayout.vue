@@ -15,7 +15,7 @@ import {
   VideoOff
 } from '@lucide/vue';
 import { computed, nextTick, onBeforeUnmount, ref, useTemplateRef, watch } from 'vue';
-import { Button, IconButton, ParticipantTileFace, Tooltip } from '@voiceroom/ui-kit/components';
+import { Badge, Button, IconButton, ParticipantTileFace, Tooltip } from '@voiceroom/ui-kit/components';
 import { fitWidgetTiles } from '../../tile-grid';
 import { avatarInitial } from '@voiceroom/ui-kit/avatar-initial';
 import { copyText } from '../../clipboard';
@@ -33,6 +33,7 @@ const props = withDefaults(
     }[];
     roomCode: string;
     status: string;
+    voiceRecoveryFailed?: boolean;
     quality?: 'excellent' | 'good' | 'poor' | 'lost' | 'unknown';
     muted?: boolean;
     outputMuted?: boolean;
@@ -48,6 +49,7 @@ const props = withDefaults(
 );
 
 const connection = computed(() => {
+  if (props.voiceRecoveryFailed) return { state: 'error', label: props.status };
   switch (props.quality) {
     case 'excellent':
       return { state: 'connected', label: 'Отличная связь' };
@@ -289,8 +291,11 @@ function openParticipantMenu(event: MouseEvent | KeyboardEvent, member: (typeof 
               tabindex="0"
               :aria-label="connection.label"
             >
-              <span class="room-dock__bar"></span><span class="room-dock__bar"></span
-              ><span class="room-dock__bar"></span>
+              <Badge v-if="voiceRecoveryFailed" variant="dot" tone="danger" aria-hidden="true" />
+              <template v-else>
+                <span class="room-dock__bar"></span><span class="room-dock__bar"></span
+                ><span class="room-dock__bar"></span>
+              </template>
             </span>
           </Tooltip>
         </div>

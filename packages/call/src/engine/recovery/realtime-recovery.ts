@@ -289,7 +289,7 @@ export class RealtimeRecoveryController {
   }
 
   appSnapshotRequestFailed(error: unknown): void {
-    if (!this.active || (this.phase === 'failed' && this.terminalFailure)) return;
+    if (!this.active) return;
     const classified = classifyRecoveryFailure(error);
     // The answer to a request nothing waits for any more: an abandoned replacement's
     // keeps retrying for seconds, and the call may be waiting for its socket by then.
@@ -312,7 +312,6 @@ export class RealtimeRecoveryController {
   livekitReconnecting(): void {
     if (!this.active) return;
     this.livekitReady = false;
-    if (this.phase === 'failed' && this.terminalFailure) return;
     this.beginRecovery('livekit_reconnecting');
     this.setPhase('waiting-livekit', 'livekit_reconnecting');
   }
@@ -342,7 +341,6 @@ export class RealtimeRecoveryController {
     this.optionalReplacement = false;
     this.livekitReady = false;
     this.replacementRequired = true;
-    if (this.phase === 'failed' && this.terminalFailure) return;
     if (!alreadyWaiting) {
       // Snapshot requests are one per epoch, and the asked replacement already made this one's.
       if (wasOptional) this.epoch += 1;
@@ -521,9 +519,6 @@ export class RealtimeRecoveryController {
     this.terminalFailure = result === 'terminal';
     if (this.terminalFailure) {
       // Terminal failures skip the cooldown but still require a real reconnect event.
-      this.cancelAllTimers();
-      this.effectGeneration += 1;
-      this.inFlight = false;
       this.cooldownComplete = true;
       this.meaningfulRearm = false;
       this.rearmNeedsSnapshotRequest = false;
@@ -567,7 +562,7 @@ export class RealtimeRecoveryController {
     this.cooldownCycles += 1;
     this.cooldownTimer = this.schedule(() => {
       this.cooldownTimer = null;
-      if (!this.isCurrent(failedEpoch)) return;
+      if (!this.isCurrent(failedEpoch) || this.terminalFailure) return;
       this.cooldownComplete = true;
       if (this.isNetworkOnline && this.appConnected && this.replacementRequired) {
         this.markMeaningfulRearm('cooldown_probe', true);
@@ -587,6 +582,8 @@ export class RealtimeRecoveryController {
   tryRearm(): void {
     if (this.phase !== 'failed' || !this.cooldownComplete || !this.meaningfulRearm) return;
     this.effectGeneration += 1;
+    // A terminal refusal can leave a replacement running until a new epoch supersedes it.
+    if (this.terminalFailure) this.inFlight = false;
     this.epoch += 1;
     this.startedAt = this.now();
     this.attempts = 0;
