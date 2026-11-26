@@ -75,6 +75,7 @@ import { isMicrophoneShownMuted } from '../core/microphone-mute';
 import type { MicrophoneCapture } from '../core/types';
 import {
   cancelRoomRecovery,
+  markRoomVoiceFailed,
   abandonOptionalLiveKitReplacement,
   notifyRoomAppConnection,
   notifyRoomNetworkOffline,
@@ -177,10 +178,24 @@ function showRoomModerationScreen(reason: 'banned' | 'kicked'): void {
 
 export async function joinRoom(event?: Event): Promise<void> {
   event?.preventDefault();
+  await runRoomJoin(false);
+}
+
+export async function reconnectRoomVoice(): Promise<void> {
+  if (!state.voiceRecoveryFailed || state.connecting || callPageState().screen !== 'room') return;
+  const roomId = state.roomId;
+  leaveVoiceRoom(true);
+  const generation = joinAttemptGeneration + 1;
+  await runRoomJoin(true);
+  if (isCurrentJoinAttempt(generation) && state.roomId === roomId && callPageState().screen === 'room' && !state.joined)
+    markRoomVoiceFailed();
+}
+
+async function runRoomJoin(reconnect: boolean): Promise<void> {
   if (state.joined || state.connecting) return;
 
   const generation = ++joinAttemptGeneration;
-  const attempt = performJoinRoom(generation);
+  const attempt = performJoinRoom(generation, reconnect);
   activeJoinAttempt = attempt;
   try {
     await attempt;
@@ -189,7 +204,7 @@ export async function joinRoom(event?: Event): Promise<void> {
   }
 }
 
-async function performJoinRoom(generation: number): Promise<void> {
+async function performJoinRoom(generation: number, reconnect: boolean): Promise<void> {
   const isCurrent = (): boolean => isCurrentJoinAttempt(generation);
   let pendingMicrophoneCapture: MicrophoneCapture | null = null;
   const startedAt = performance.now();
@@ -328,6 +343,7 @@ async function performJoinRoom(generation: number): Promise<void> {
     attachMeter(state.self, state.localStream);
     notifyLiveKitReconciled();
     state.joined = true;
+    state.voiceRecoveryFailed = false;
     syncNativeVoiceReceive();
     startMicrophoneCall();
     startCaptureDiagnostics();
@@ -381,7 +397,7 @@ async function performJoinRoom(generation: number): Promise<void> {
     log.error('room action failed', errorContext(error));
     const failure = getCallPorts().transport.failure(error);
     const banned = failure?.code === 'room_banned';
-    if (!banned) showToast(formatJoinError(error, failure));
+    if (!banned && !reconnect) showToast(formatJoinError(error, failure));
     setVoiceConnectionStatus(error instanceof LiveKitTransportError ? 'no-route' : 'error');
     if (voiceJoinSent && state.roomId && state.peerId && state.sessionToken) {
       getCallPorts().transport.realtime.leave({
@@ -396,6 +412,7 @@ async function performJoinRoom(generation: number): Promise<void> {
     state.serverPeerIds.clear();
     state.serverPeerSyncReady = false;
     await disconnectLiveKitRoom();
+    if (!isCurrent()) return;
     state.self = null;
     stopLocalStream();
     if (banned) showRoomModerationScreen('banned');
@@ -428,6 +445,11 @@ async function openJoinMicrophone(isCurrent: () => boolean): Promise<MicrophoneC
 }
 
 export function leaveRoom(): void {
+  leaveVoiceRoom(false);
+}
+
+function leaveVoiceRoom(reconnecting: boolean): void {
+  if (!reconnecting) state.voiceRecoveryFailed = false;
   const relief = processingReliefForPoll();
   const nativeVoice = nativeVoiceTelemetryForReport();
   invalidateMicrophoneActions();

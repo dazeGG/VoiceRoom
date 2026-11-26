@@ -6,6 +6,7 @@ import {
   classifyRecoveryFailure,
   sanitizeRecoveryCode,
   type RealtimeRecoveryOptions,
+  type RecoveryTransition,
   type ReplacementOutcome
 } from '@voiceroom/call/engine/recovery/realtime-recovery';
 
@@ -49,7 +50,7 @@ function createController(overrides: Partial<RealtimeRecoveryOptions> & { clock?
   const clock = overrides.clock ?? fakeClock();
   const snapshots: unknown[] = [];
   const attempts: unknown[] = [];
-  const transitions: unknown[] = [];
+  const transitions: RecoveryTransition[] = [];
   const controller = new RealtimeRecoveryController({
     attemptReplacement: async (context) => {
       attempts.push(context);
@@ -68,6 +69,138 @@ function createController(overrides: Partial<RealtimeRecoveryOptions> & { clock?
   controller.activate({ appEpoch: 4, appConnected: true });
   return { controller, clock, snapshots, attempts, transitions };
 }
+
+const tokenRefusal = { retryable: false, code: 'invalid_session', status: 403, tokenRefused: true } as const;
+
+test('R1/R2/R3: one fresh resync per token refusal, then only a later app epoch rearms', async () => {
+  const clock = fakeClock();
+  const outcomes = [tokenRefusal, tokenRefusal, tokenRefusal, { ok: true } as const];
+  const order: string[] = [];
+  const { controller } = createController({
+    clock,
+    requestAppSnapshot: () => {
+      order.push('join');
+    },
+    attemptReplacement: () => {
+      order.push('token');
+      return outcomes.shift() ?? tokenRefusal;
+    }
+  });
+  const snapshot = (appEpoch: number) => controller.appSnapshotApplied({ appEpoch, active: true, hasLocalPeer: true });
+  controller.livekitDisconnected();
+  snapshot(4);
+  await Promise.resolve();
+  assert.deepEqual(order, ['join', 'token', 'join']);
+  snapshot(4);
+  await Promise.resolve();
+  assert.equal(controller.getSnapshot().phase, 'failed');
+  const failedEpoch = controller.getSnapshot().epoch;
+  clock.advance(60_000);
+  controller.appWsRestored(4);
+  snapshot(4);
+  assert.equal(controller.getSnapshot().epoch, failedEpoch);
+  assert.deepEqual(order, ['join', 'token', 'join', 'token']);
+
+  controller.appWsLost(4);
+  controller.appWsRestored(5);
+  controller.appWsRestored(5);
+  assert.equal(controller.getSnapshot().epoch, failedEpoch + 1);
+  assert.deepEqual(order, ['join', 'token', 'join', 'token']);
+  snapshot(4);
+  assert.equal(order.length, 4);
+  snapshot(5);
+  await Promise.resolve();
+  assert.deepEqual(order, ['join', 'token', 'join', 'token', 'token', 'join']);
+  snapshot(5);
+  await Promise.resolve();
+  assert.equal(controller.getSnapshot().phase, 'healthy');
+  assert.deepEqual(order, ['join', 'token', 'join', 'token', 'token', 'join', 'token']);
+});
+
+test('R6: a special retry is available on the fifth ordinary attempt and does not reset the budget', async () => {
+  const clock = fakeClock();
+  let calls = 0;
+  const { controller } = createController({
+    clock,
+    attemptReplacement: () => (++calls === 5 ? tokenRefusal : { retryable: true, status: 503 })
+  });
+  const snapshot = () => controller.appSnapshotApplied({ appEpoch: 4, active: true, hasLocalPeer: true });
+  controller.livekitDisconnected();
+  snapshot();
+  for (const delay of [500, 1_000, 2_000, 4_000]) {
+    await Promise.resolve();
+    clock.advance(delay);
+  }
+  await Promise.resolve();
+  assert.equal(calls, 5);
+  assert.equal(controller.getSnapshot().phase, 'waiting-app-snapshot');
+  snapshot();
+  await Promise.resolve();
+  assert.equal(calls, 6);
+  assert.equal(controller.getSnapshot().phase, 'failed');
+  clock.advance(4_000);
+  assert.equal(calls, 6);
+});
+
+test('R4: duplicate online notifications coalesce with a later socket restore', async () => {
+  let calls = 0;
+  const { controller, snapshots } = createController({
+    attemptReplacement: () => {
+      calls++;
+      return { retryable: false, code: 'room_banned' };
+    }
+  });
+  const snapshot = (appEpoch: number) => controller.appSnapshotApplied({ appEpoch, active: true, hasLocalPeer: true });
+  controller.livekitDisconnected();
+  snapshot(4);
+  await Promise.resolve();
+  const failedEpoch = controller.getSnapshot().epoch;
+  controller.networkOnline();
+  assert.equal(controller.getSnapshot().epoch, failedEpoch);
+  controller.networkOffline();
+  controller.appWsLost(4);
+  controller.appWsRestored(5);
+  controller.networkOnline();
+  controller.networkOnline();
+  assert.equal(controller.getSnapshot().epoch, failedEpoch + 1);
+  assert.equal(snapshots.length, 1);
+  snapshot(5);
+  snapshot(5);
+  await Promise.resolve();
+  assert.equal(controller.getSnapshot().phase, 'failed');
+  controller.networkOffline();
+  controller.networkOnline();
+  controller.networkOnline();
+  assert.equal(controller.getSnapshot().epoch, failedEpoch + 2);
+  assert.equal(snapshots.length, 2);
+  assert.equal(calls, 2);
+});
+
+test('R5/R6: a denied retry resync never authorizes a replacement token request', async () => {
+  const { controller, snapshots } = createController({ attemptReplacement: () => tokenRefusal });
+  controller.livekitDisconnected();
+  controller.appSnapshotApplied({ appEpoch: 4, active: true, hasLocalPeer: true });
+  await Promise.resolve();
+  assert.equal(snapshots.length, 2);
+  controller.appSnapshotRequestFailed({ code: 'invalid_session' });
+  assert.equal(controller.getSnapshot().phase, 'failed');
+  assert.equal(controller.getSnapshot().attempts, 1);
+});
+
+test('R9/R11: failed app restore alone does not declare in-place media recovery failed', () => {
+  const { controller, transitions } = createController();
+  controller.appSnapshotApplied({ appEpoch: 4, active: true, hasLocalPeer: true });
+  controller.livekitReconciled();
+  controller.livekitReconnecting();
+  controller.appWsLost(4);
+  controller.appWsRestored(5);
+  controller.appSnapshotRequestFailed({ code: 'invalid_session' });
+  assert.equal(controller.getSnapshot().phase, 'waiting-app-snapshot');
+  assert.equal(
+    transitions.some((event) => event.trigger === 'recovery_failed'),
+    false
+  );
+});
 
 test('activation is not healthy before either bootstrap authority is ready', () => {
   const { controller } = createController();

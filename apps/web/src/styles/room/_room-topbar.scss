@@ -24,6 +24,11 @@
 //   html[data-platform-class='mobile']              -> html.platform--mobile
 @use 'pkg:@voiceroom/ui-kit/styles/mixins' as *;
 
+.room-topbar__voice-failure {
+  flex: 0 0 100%;
+  margin-block-end: var(--space-8);
+}
+
 .room-topbar__heading {
   display: none;
   flex: 1 1 auto;

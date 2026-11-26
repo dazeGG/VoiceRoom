@@ -1,4 +1,6 @@
 import { getCallPorts, getInstalledCallPorts } from '../ports';
+import { state } from '../core/room-runtime.store';
+import { playVoiceLostCue } from '../media/cues';
 import {
   REPLACEMENT_ABANDONED,
   RealtimeRecoveryController,
@@ -16,6 +18,7 @@ export type RoomRecoveryLiveKitAdapter = {
 };
 
 let controller: RealtimeRecoveryController | null = null;
+let lastRecoveryEpoch = 0;
 let liveKitAdapter: RoomRecoveryLiveKitAdapter | null = null;
 const transitionHandlers = new Set<(event: RecoveryTransition) => void>();
 const optionalRequests = new WeakMap<Promise<boolean>, { controller: RealtimeRecoveryController; epoch: number }>();
@@ -27,6 +30,7 @@ const optionalRequests = new WeakMap<Promise<boolean>, { controller: RealtimeRec
 function logTransition(event: RecoveryTransition): void {
   const context: LogContext = {
     epoch: event.epoch,
+    appEpoch: event.appEpoch,
     trigger: event.trigger,
     phase: event.phase,
     attempt: event.attempt,
@@ -36,14 +40,21 @@ function logTransition(event: RecoveryTransition): void {
     result: event.result
   };
 
-  if (event.phase === 'failed') {
+  if (event.trigger === 'recovery_failed') {
+    markRoomVoiceFailed();
     log.warn('room recovery failed', context);
     void reportClientLogs(`room recovery failed: ${context.code}`);
   } else {
+    if (event.phase === 'healthy') state.voiceRecoveryFailed = false;
     log.debug('room recovery transition', context);
   }
 
   for (const handler of transitionHandlers) handler(event);
+}
+
+export function markRoomVoiceFailed(): void {
+  state.voiceRecoveryFailed = true;
+  playVoiceLostCue();
 }
 
 export function subscribeRoomRecoveryTransitions(handler: (event: RecoveryTransition) => void): () => void {
@@ -72,7 +83,7 @@ export function setRoomRecoveryLiveKitAdapter(adapter: RoomRecoveryLiveKitAdapte
 }
 
 export function startRoomRecovery(appEpoch: number, appConnected: boolean): number {
-  controller?.cancel();
+  cancelRoomRecovery();
   controller = new RealtimeRecoveryController({
     attemptReplacement: async (context: { epoch: number; attempt: number }) => {
       if (!liveKitAdapter) return { retryable: false, code: 'unknown_error' };
@@ -82,20 +93,26 @@ export function startRoomRecovery(appEpoch: number, appConnected: boolean): numb
         return classifyRecoveryFailure(error);
       }
     },
-    requestAppSnapshot: ({ epoch, appEpoch: currentAppEpoch }: { epoch: number; appEpoch: number }) => {
-      return getCallPorts().transport.realtime.requestResync(epoch, currentAppEpoch);
+    requestAppSnapshot: ({ epoch, appEpoch: currentAppEpoch, fresh }) => {
+      const realtime = getCallPorts().transport.realtime;
+      return fresh
+        ? realtime.requestResync(epoch, currentAppEpoch, fresh)
+        : realtime.requestResync(epoch, currentAppEpoch);
     },
     onTransition: logTransition
   });
   getCallPorts().transport.realtime.setResyncFailureHandler(({ code }) =>
     controller?.appSnapshotRequestFailed({ code })
   );
-  return controller.activate({ appEpoch, appConnected });
+  return controller.activate({ appEpoch, appConnected, previousEpoch: lastRecoveryEpoch });
 }
 
 export function cancelRoomRecovery(): void {
   getInstalledCallPorts()?.transport.realtime.setResyncFailureHandler(null);
-  controller?.cancel();
+  if (controller) {
+    lastRecoveryEpoch = controller.getSnapshot().epoch;
+    controller.cancel();
+  }
   controller = null;
 }
 
@@ -168,5 +185,5 @@ export function abandonOptionalLiveKitReplacement(request: Promise<boolean>): bo
 }
 
 export function isCurrentRoomRecoveryEpoch(epoch: number): boolean {
-  return controller?.isCurrent(epoch) ?? false;
+  return controller !== null && controller.phase !== 'failed' && controller.isCurrent(epoch);
 }

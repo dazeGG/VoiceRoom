@@ -356,11 +356,11 @@ export function createGuestTransport(
         if (!send({ id, type: 'room.media.request', payload: input })) finish(deniedMedia(input));
       });
     },
-    requestResync(recoveryEpoch, appEpoch) {
+    requestResync(recoveryEpoch, appEpoch, fresh) {
       if (!session || !connected || connectionEpoch !== appEpoch) return false;
       const key = `${recoveryEpoch}:${appEpoch}`;
-      if (key === resyncKey) return false;
-      if (!joinRequestId && !sendJoin()) return false;
+      if (!fresh && key === resyncKey) return Boolean(resyncRequestId);
+      if ((fresh || !joinRequestId) && !sendJoin()) return false;
       clearResync();
       resyncKey = key;
       resyncRequestId = joinRequestId;

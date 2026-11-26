@@ -16,6 +16,37 @@ import {
 } from '@voiceroom/call/engine/ui/devices';
 import { installWebCallPortsForTest } from '../helpers/call-ports';
 
+const cue = vi.hoisted(() => {
+  const frequency = vi.fn<(frequency: number, startedAt: number) => void>();
+  const connect = vi.fn();
+  return {
+    frequency,
+    connect,
+    bus: {},
+    context: {
+      state: 'running',
+      currentTime: 0,
+      createOscillator: () => ({
+        frequency: { setValueAtTime: frequency },
+        connect() {},
+        start() {},
+        stop() {},
+        addEventListener() {}
+      }),
+      createGain: () => ({ gain: { setValueAtTime() {}, exponentialRampToValueAtTime() {} }, connect })
+    }
+  };
+});
+vi.mock('@voiceroom/call/engine/services/media-playback-service', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  getSharedAudioContext: () => cue.context,
+  isAppPlaybackMuted: () => false
+}));
+vi.mock('@voiceroom/call/engine/services/audio-bus', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  getAudioBusInput: () => cue.bus
+}));
+
 vi.mock('@/entities/room/room-realtime', () => ({
   requestActiveVoiceResync: vi.fn(() => true),
   setActiveVoiceResyncFailureHandler: vi.fn()
@@ -25,7 +56,7 @@ vi.mock('@/shared/log', async (importOriginal) => ({
   reportClientLogs: vi.fn(async () => true)
 }));
 
-const { reportClientLogs } = await import('@/shared/log');
+const { reportClientLogs, clearLogBuffer, readLogBuffer } = await import('@/shared/log');
 const recovery = await import('@voiceroom/call/engine/recovery/room-recovery');
 
 beforeEach(() => vi.mocked(reportClientLogs).mockClear());
@@ -64,6 +95,92 @@ test('a terminal failure is reported with its code', async () => {
   expect(reportClientLogs).toHaveBeenCalledWith('room recovery failed: room_banned');
 });
 
+test('R10/R11: failed epochs report once and sound a rate-limited cue on the sfx bus', async () => {
+  vi.useFakeTimers();
+  vi.setSystemTime(Date.now() + 60_000);
+  cue.frequency.mockClear();
+  cue.connect.mockClear();
+  clearLogBuffer();
+  const tokenRefusal = { retryable: false, code: 'invalid_session', status: 403, tokenRefused: true } as const;
+  const { attemptFreshReplacement, unsubscribe } = healthyCall(tokenRefusal);
+  const transitions = () =>
+    readLogBuffer()
+      .filter((event) => event.ns === 'room:recovery')
+      .map((event) => event.ctx);
+  const acknowledge = (appEpoch: number) =>
+    recovery.notifyRoomSnapshotApplied({ appEpoch, active: true, hasLocalPeer: true });
+  const flush = () => vi.advanceTimersByTimeAsync(0);
+  try {
+    recovery.notifyLiveKitDisconnected();
+    acknowledge(1);
+    await flush();
+    acknowledge(1);
+    await flush();
+    expect(cue.frequency).toHaveBeenCalledTimes(3);
+    expect(cue.frequency.mock.calls.map(([frequency]) => frequency)).toEqual(
+      cue.frequency.mock.calls.map(([frequency]) => frequency).sort((a, b) => b - a)
+    );
+    expect(cue.connect).toHaveBeenCalledWith(cue.bus);
+    expect(reportClientLogs).toHaveBeenCalledTimes(1);
+
+    recovery.notifyRoomAppConnection(false, 1);
+    recovery.notifyRoomAppConnection(true, 2);
+    acknowledge(2);
+    await flush();
+    acknowledge(2);
+    await flush();
+    expect(reportClientLogs).toHaveBeenCalledTimes(2);
+    expect(cue.frequency).toHaveBeenCalledTimes(3);
+    expect(transitions()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          trigger: 'session_retry',
+          result: 'requested',
+          appEpoch: 1,
+          attempt: 1,
+          code: 'invalid_session',
+          status: 403
+        }),
+        expect.objectContaining({ trigger: 'session_retry', result: 'terminal', appEpoch: 1, attempt: 2 }),
+        expect.objectContaining({ trigger: 'app_epoch', result: 'rearm_pending', appEpoch: 2 }),
+        expect.objectContaining({ trigger: 'recovery_failed', appEpoch: 2, code: 'invalid_session' })
+      ])
+    );
+
+    await vi.advanceTimersByTimeAsync(60_000);
+    recovery.notifyRoomAppConnection(true, 3);
+    acknowledge(3);
+    await flush();
+    acknowledge(3);
+    await flush();
+    expect(cue.frequency).toHaveBeenCalledTimes(6);
+    attemptFreshReplacement.mockResolvedValue({ ok: true });
+    recovery.notifyRoomAppConnection(true, 4);
+    acknowledge(4);
+    await flush();
+    expect(cue.frequency).toHaveBeenCalledTimes(6);
+    expect(transitions()).toContainEqual(
+      expect.objectContaining({
+        trigger: 'replacement_succeeded',
+        result: 'succeeded',
+        appEpoch: 4
+      })
+    );
+
+    attemptFreshReplacement.mockResolvedValue({ retryable: false, code: 'room_banned' });
+    const optional = recovery.requestLiveKitReplacement();
+    acknowledge(4);
+    await expect(optional).resolves.toBe(false);
+    recovery.cancelRoomRecovery();
+    recovery.notifyRoomAppConnection(true, 5);
+    acknowledge(5);
+    expect(cue.frequency).toHaveBeenCalledTimes(6);
+    expect(reportClientLogs).toHaveBeenCalledTimes(3);
+  } finally {
+    unsubscribe();
+  }
+});
+
 test('without a LiveKit adapter recovery fails closed instead of hanging', async () => {
   const phases: string[] = [];
   recovery.subscribeRoomRecoveryTransitions((event) => phases.push(String(event.phase)));
@@ -78,6 +195,9 @@ test('an epoch is current only for the running recovery', () => {
   expect(recovery.isCurrentRoomRecoveryEpoch(epoch)).toBe(true);
   recovery.cancelRoomRecovery();
   expect(recovery.isCurrentRoomRecoveryEpoch(epoch)).toBe(false);
+  const next = recovery.startRoomRecovery(1, true);
+  expect(recovery.isCurrentRoomRecoveryEpoch(epoch)).toBe(false);
+  expect(recovery.isCurrentRoomRecoveryEpoch(next)).toBe(true);
 });
 
 /** A healthy call whose replacement attempts answer `outcome`. */

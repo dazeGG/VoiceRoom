@@ -1,11 +1,26 @@
-import { test, vi } from 'vitest';
+import { afterEach, expect, test, vi } from 'vitest';
 import { lobbyRoom } from './fixtures/answers';
 import assert from 'node:assert/strict';
 import { defined } from './helpers/assert';
+import type { PublicPeer } from '@voiceroom/shared/contracts/rooms';
+import type { RealtimeEvent } from '@/api/realtime';
+
+const localPeer: PublicPeer = {
+  id: 'peer-resync',
+  name: 'Retry peer',
+  joinedAt: 1,
+  serverMuted: false,
+  accountUserId: '',
+  avatarColorKey: '',
+  avatarAccent: null,
+  avatarUrl: null
+};
 
 async function loadRoomRealtime() {
   vi.resetModules();
   const sent: Array<{ type: string; payload: unknown; id?: string | undefined }> = [];
+  const listeners = new Set<(event: RealtimeEvent) => void>();
+  const restore = new Set<(epoch: number) => void>();
   const connection = {
     epoch: 7,
     connected: true,
@@ -16,19 +31,75 @@ async function loadRoomRealtime() {
     isConnected() {
       return this.connected;
     },
-    onRestore() {
+    onRestore(handler: (epoch: number) => void) {
+      restore.add(handler);
       return () => {};
     },
     send(type: string, payload: unknown, id?: string) {
       sent.push({ type, payload, id });
     },
-    subscribe() {
-      return () => {};
+    subscribe(handler: (event: RealtimeEvent) => void) {
+      listeners.add(handler);
+      return () => listeners.delete(handler);
     }
   };
   vi.doMock('@/api/realtime', () => ({ getAppRealtime: () => connection }));
-  return { realtime: await import('@/entities/room/room-realtime'), sent };
+  return {
+    realtime: await import('@/entities/room/room-realtime'),
+    sent,
+    emit: (event: RealtimeEvent) => listeners.forEach((handler) => handler(event)),
+    reconnect: () => {
+      connection.epoch++;
+      restore.forEach((handler) => handler(connection.epoch));
+    }
+  };
 }
+
+afterEach(() => vi.useRealTimers());
+
+test('R3/R5: voice accepts only the current valid join acknowledgement and reuses the restore join', async () => {
+  vi.useFakeTimers();
+  const { realtime, sent, emit, reconnect } = await loadRoomRealtime();
+  const member = { roomId: 'room-resync', peerId: 'peer-resync', sessionToken: 'r'.repeat(32), name: 'Retry peer' };
+  const received = vi.fn();
+  realtime.subscribeRoomVoice(member.roomId, received);
+  realtime.joinVoiceRoom(member);
+  const initialId = sent.at(-1)?.id;
+  reconnect();
+  const restoredId = sent.at(-1)?.id;
+  expect(realtime.requestActiveVoiceResync(1, 8)).toBe(true);
+  expect(sent).toHaveLength(2);
+  expect(restoredId).toBeDefined();
+  const snapshot = (id: string | undefined, roomId = member.roomId, hasPeer = true) =>
+    emit({
+      type: 'room.snapshot',
+      ...(id ? { id } : {}),
+      payload: {
+        mode: 'active',
+        roomId,
+        room: lobbyRoom({ roomId }),
+        recentMessages: [],
+        voiceActiveSince: null,
+        peers: hasPeer ? [localPeer] : []
+      }
+    });
+  snapshot(initialId);
+  snapshot(restoredId, 'another-room');
+  snapshot(restoredId, member.roomId, false);
+  expect(received).not.toHaveBeenCalled();
+  snapshot(restoredId);
+  expect(received).toHaveBeenCalledOnce();
+
+  expect(realtime.requestActiveVoiceResync(1, 8, true)).toBe(true);
+  const freshId = sent.at(-1)?.id;
+  expect(freshId).toBeDefined();
+  expect(freshId).not.toBe(restoredId);
+  expect(sent.at(-1)?.payload).toEqual(expect.objectContaining(member));
+  snapshot(restoredId);
+  expect(received).toHaveBeenCalledOnce();
+  snapshot(freshId);
+  expect(received).toHaveBeenCalledTimes(2);
+});
 
 test('a delayed retryable error cannot cancel a newer successful voice resync attempt', async () => {
   const timers = new Map<number, () => void>();
@@ -71,7 +142,7 @@ test('a delayed retryable error cannot cancel a newer successful voice resync at
       true
     );
     assert.equal(failures.length, 0);
-    assert.equal(sent.filter((entry) => entry.id).length, 2);
+    assert.equal(sent.length, 3);
 
     assert.equal(
       realtime.acknowledgeActiveVoiceResync({
@@ -81,7 +152,7 @@ test('a delayed retryable error cannot cancel a newer successful voice resync at
           mode: 'active',
           roomId: 'room-resync',
           room: lobbyRoom({ roomId: 'room-resync' }),
-          peers: [],
+          peers: [localPeer],
           recentMessages: [],
           voiceActiveSince: null
         }

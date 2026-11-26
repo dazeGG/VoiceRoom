@@ -79,6 +79,23 @@ export function playDirectMessageCue(): void {
   );
 }
 
+const VOICE_LOST_CUE_DEDUPE_MS = 60_000;
+let lastVoiceLostCueAt = -Infinity;
+
+export function playVoiceLostCue(): void {
+  const now = Date.now();
+  if (now - lastVoiceLostCueAt < VOICE_LOST_CUE_DEDUPE_MS) return;
+  lastVoiceLostCueAt = now;
+  playCueSequence(
+    [
+      { frequency: 620, peak: 0.027, duration: 0.075, type: 'triangle' },
+      { frequency: 410, peak: 0.024, duration: 0.085, type: 'triangle' },
+      { frequency: 250, peak: 0.021, duration: 0.15, type: 'triangle' }
+    ],
+    'Voice lost'
+  );
+}
+
 const ROOM_CHAT_CUE_DEDUPE_MS = 10_000;
 const roomChatCueTimes = new Map<string, number>();
 

@@ -28,6 +28,10 @@ export function setVoiceConnectionStatus(connection: VoiceConnection): void {
 // RoomDock (connection bars) each subscribe via `$derived(getConnectionStatusView())`,
 // so changing state.serverConnection/voiceConnection/localPingMs repaints both.
 export function getConnectionStatusView(): ConnectionStatusView {
+  if (state.voiceRecoveryFailed) {
+    return { label: t('Голос отключён'), stateName: 'error', title: t('Медиасоединение до LiveKit потеряно') };
+  }
+
   if (state.voiceConnection === 'playback-blocked') {
     return {
       label: t('Звук заблокирован'),

@@ -17,7 +17,7 @@ import { useRoomPresenceStore } from './room-presence.store';
 import { guestBrowserId } from './guest-id';
 import type { OwnedRoom } from '@/api/auth';
 
-type RoomDetailHandler = (event: RealtimeEvent) => void;
+type RoomDetailHandler = (event: RealtimeEvent, voiceAcknowledged: boolean) => void;
 
 const previewSubscriptions = new Map<string, number>();
 const detailHandlers = new Map<string, Set<RoomDetailHandler>>();
@@ -119,10 +119,10 @@ function roomDetailEventTargetsRoom(event: RealtimeEvent, roomId: string): boole
   return event.type !== 'error' && roomOf(event) === roomId;
 }
 
-function dispatchRoomDetail(roomId: string, event: RealtimeEvent): void {
+function dispatchRoomDetail(roomId: string, event: RealtimeEvent, voiceAcknowledged = false): void {
   const handlers = detailHandlers.get(roomId);
   if (!handlers) return;
-  for (const handler of handlers) handler(event);
+  for (const handler of handlers) handler(event, voiceAcknowledged);
 }
 
 // One shared connection subscription fans events out to per-room handlers.
@@ -135,6 +135,8 @@ function retainDetailDispatch(): void {
   detailDispatchRefs += 1;
   if (detailDispatchUnsub) return;
   detailDispatchUnsub = getAppRealtime().subscribe((event) => {
+    const voiceAcknowledged = matchesVoiceSnapshot(event, activeResync?.currentRequestId || initialVoiceJoinRequestId);
+    if (voiceAcknowledged && !activeResync) initialVoiceJoinRequestId = '';
     acknowledgeActiveVoiceResync(event);
     acknowledgePreview(event);
     if (event.type === 'pong') {
@@ -143,7 +145,7 @@ function retainDetailDispatch(): void {
       return;
     }
     for (const roomId of detailHandlers.keys()) {
-      if (roomDetailEventTargetsRoom(event, roomId)) dispatchRoomDetail(roomId, event);
+      if (roomDetailEventTargetsRoom(event, roomId)) dispatchRoomDetail(roomId, event, voiceAcknowledged);
     }
   });
 }
@@ -160,8 +162,9 @@ let activeVoiceJoin: ClientCommands['room.join'] | null = null;
 let restoreHooked = false;
 let lastRestoreEpoch = 0;
 let lastActiveResyncKey = '';
+let initialVoiceJoinRequestId = '';
 let activeResync: {
-  key: string;
+  appEpoch: number;
   requestId: string;
   currentRequestId: string;
   requestIds: Set<string>;
@@ -192,6 +195,11 @@ function sendActiveResyncAttempt(): void {
   pending.timer = setTimeout(
     () => {
       if (activeResync !== pending) return;
+      const conn = getAppRealtime();
+      if (!conn.isConnected() || conn.getConnectionEpoch() !== pending.appEpoch) {
+        clearActiveResync();
+        return;
+      }
       if (pending.attempts < 3) {
         sendActiveResyncAttempt();
         return;
@@ -211,18 +219,25 @@ export function setActiveVoiceResyncFailureHandler(
   handler: ((failure: { code: string; requestId: string }) => void) | null
 ): void {
   activeResyncFailureHandler = handler;
+  if (!handler) clearActiveResync();
+}
+
+function matchesVoiceSnapshot(event: RealtimeEvent, requestId: string): boolean {
+  return Boolean(
+    activeVoiceJoin &&
+    requestId &&
+    event.type === 'room.snapshot' &&
+    event.id === requestId &&
+    event.payload.mode === 'active' &&
+    event.payload.roomId === activeVoiceJoin.roomId &&
+    event.payload.peers.some((peer) => peer.id === activeVoiceJoin?.peerId)
+  );
 }
 
 export function acknowledgeActiveVoiceResync(event: RealtimeEvent): boolean {
   const pending = activeResync;
   if (!pending) return false;
-  if (
-    event.type === 'room.snapshot' &&
-    pending.requestIds.has(event.id || '') &&
-    event.id === pending.currentRequestId &&
-    event.payload.mode === 'active' &&
-    event.payload.roomId === activeVoiceJoin?.roomId
-  ) {
+  if (matchesVoiceSnapshot(event, pending.currentRequestId)) {
     clearActiveResync();
     return true;
   }
@@ -252,7 +267,7 @@ function ensureReconnectRestore(): void {
     clearActiveResync();
     for (const roomId of previewSubscriptions.keys()) sendPreviewSubscribe(roomId);
     if (activeVoiceJoin) {
-      sendVoiceJoin(activeVoiceJoin);
+      beginActiveResync(connectionEpoch);
     }
   });
 }
@@ -337,16 +352,20 @@ export function subscribeRoomPreview(roomId: string, handler: RoomDetailHandler)
 }
 
 export function subscribeRoomVoice(roomId: string, handler: RoomDetailHandler): () => void {
+  const voiceHandler: RoomDetailHandler = (event, voiceAcknowledged) => {
+    if (event.type === 'room.snapshot' && event.payload.mode === 'active' && !voiceAcknowledged) return;
+    handler(event, voiceAcknowledged);
+  };
   let handlers = detailHandlers.get(roomId);
   if (!handlers) {
     handlers = new Set();
     detailHandlers.set(roomId, handlers);
   }
-  handlers.add(handler);
+  handlers.add(voiceHandler);
   retainDetailDispatch();
 
   return () => {
-    handlers?.delete(handler);
+    handlers?.delete(voiceHandler);
     if (handlers && handlers.size === 0) detailHandlers.delete(roomId);
     releaseDetailDispatch();
   };
@@ -365,11 +384,14 @@ export function joinVoiceRoom(payload: { roomId: string; peerId: string; session
     ...(desktopVersion ? { desktopVersion } : {})
   };
   activeVoiceJoin = join;
+  lastActiveResyncKey = '';
+  clearActiveResync();
+  initialVoiceJoinRequestId = `voice-join-${++activeResyncSequence}`;
   beginDesktopNativeVoiceConnection();
-  sendVoiceJoin(join);
+  sendVoiceJoin(join, initialVoiceJoinRequestId);
 }
 
-function sendVoiceJoin(join: ClientCommands['room.join'], requestId?: string): void {
+function sendVoiceJoin(join: ClientCommands['room.join'], requestId: string): void {
   const nativeVoicePreference = readDesktopNativeVoiceConnectionPreference();
   getAppRealtime().send('room.join', { ...join, ...(nativeVoicePreference && { nativeVoicePreference }) }, requestId);
 }
@@ -379,20 +401,28 @@ export function leaveVoiceRoom(payload: ClientCommands['room.leave']): void {
     activeVoiceJoin = null;
     endDesktopNativeVoiceConnection();
     lastActiveResyncKey = '';
+    initialVoiceJoinRequestId = '';
     clearActiveResync();
   }
   getAppRealtime().send('room.leave', payload);
 }
 
-export function requestActiveVoiceResync(recoveryEpoch: number, appEpoch: number): boolean {
+export function requestActiveVoiceResync(recoveryEpoch: number, appEpoch: number, fresh?: true): boolean {
   const conn = getAppRealtime();
   if (!activeVoiceJoin || !conn.isConnected() || conn.getConnectionEpoch() !== appEpoch) return false;
   const key = `${recoveryEpoch}:${appEpoch}`;
-  if (lastActiveResyncKey === key) return false;
+  if (!fresh && activeResync?.appEpoch === appEpoch) return true;
+  if (!fresh && lastActiveResyncKey === key) return false;
   lastActiveResyncKey = key;
+  beginActiveResync(appEpoch);
+  return true;
+}
+
+function beginActiveResync(appEpoch: number): void {
+  initialVoiceJoinRequestId = '';
   clearActiveResync();
   activeResync = {
-    key,
+    appEpoch,
     requestId: `voice-resync-${appEpoch}-${++activeResyncSequence}`,
     currentRequestId: '',
     requestIds: new Set(),
@@ -400,7 +430,6 @@ export function requestActiveVoiceResync(recoveryEpoch: number, appEpoch: number
     timer: null
   };
   sendActiveResyncAttempt();
-  return true;
 }
 
 export function updateVoicePeer(payload: {

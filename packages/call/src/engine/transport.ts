@@ -60,7 +60,7 @@ export interface CallTransport {
     updatePeer(input: Member & { patch: Record<string, unknown> }): void;
     reportPoll(input: ClientCommands['room.voice.report']): void;
     requestMediaGrant(input: ClientCommands['room.media.request']): Promise<MediaGrant | null>;
-    requestResync(recoveryEpoch: number, appEpoch: number): boolean;
+    requestResync(recoveryEpoch: number, appEpoch: number, fresh?: true): boolean;
     setResyncFailureHandler(handler: ((input: { code: string }) => void) | null): void;
   };
 }
