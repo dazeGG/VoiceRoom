@@ -22,6 +22,8 @@ import { getConnectionStatusView } from '@voiceroom/call/engine/ui/status';
 import { showToast } from '@voiceroom/call/engine/ui/toast';
 import { useParticipantsUiStore } from '@voiceroom/call/engine/core/participants-ui.store';
 import { useRoomPanelToggleStore } from '../room-panel-toggle.store';
+import { useMobileCallUiStore } from '../mobile-call-ui.store';
+import RoomVoiceFailure from './RoomVoiceFailure.vue';
 import { useCallPageStore } from '@voiceroom/call/engine/core/call-page.store';
 import { useRoomSettingsStore } from '../room-settings.store';
 import { useRoomUiStore } from '../room-ui.store';
@@ -39,8 +41,10 @@ const roomUi = useRoomUiStore();
 const roomSettingsUi = useRoomSettingsStore();
 const panelToggle = useRoomPanelToggleStore();
 const participantsUi = useParticipantsUiStore();
+const mobileCall = useMobileCallUiStore();
 
 const connection = computed(() => getConnectionStatusView());
+const voiceFailed = computed(() => page.screen === 'room' && roomClientState.voiceRecoveryFailed);
 
 // Heading content is derived from the reactive room state — the room client
 // populates roomClientState.room* on join/rename.
@@ -167,6 +171,7 @@ function notifyRoomsChanged(): void {
     </div>
 
     <div
+      v-if="!voiceFailed"
       :class="['room-topbar__status', `room-topbar__status--${connection.stateName}`]"
       :title="connection.title || undefined"
       :hidden="connection.stateName === 'idle' || page.screen !== 'room'"
@@ -174,5 +179,6 @@ function notifyRoomsChanged(): void {
       <span class="room-topbar__status-dot" aria-hidden="true"></span>
       <span>{{ connection.label }}</span>
     </div>
+    <RoomVoiceFailure v-if="voiceFailed && !mobileCall.isMobileCallActive()" class="room-topbar__voice-failure" />
   </Topbar>
 </template>

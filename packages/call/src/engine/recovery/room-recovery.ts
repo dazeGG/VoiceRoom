@@ -1,4 +1,6 @@
 import { getCallPorts, getInstalledCallPorts } from '../ports';
+import { state } from '../core/room-runtime.store';
+import { playVoiceLostCue } from '../media/cues';
 import {
   REPLACEMENT_ABANDONED,
   RealtimeRecoveryController,
@@ -24,9 +26,10 @@ const optionalRequests = new WeakMap<Promise<boolean>, { controller: RealtimeRec
 // transition, which is exactly the trail needed to tell a brief blip from a
 // call that never came back. Every transition is buffered; only the terminal
 // failure is raised and reported, so the ordinary reconnect stays quiet.
-function logTransition(event: RecoveryTransition): void {
+function logTransition(event: RecoveryTransition, enteredFailed: boolean): void {
   const context: LogContext = {
     epoch: event.epoch,
+    appEpoch: event.appEpoch,
     trigger: event.trigger,
     phase: event.phase,
     attempt: event.attempt,
@@ -36,14 +39,21 @@ function logTransition(event: RecoveryTransition): void {
     result: event.result
   };
 
-  if (event.phase === 'failed') {
+  if (enteredFailed) {
+    markRoomVoiceFailed();
     log.warn('room recovery failed', context);
     void reportClientLogs(`room recovery failed: ${context.code}`);
   } else {
+    if (event.phase === 'healthy') state.voiceRecoveryFailed = false;
     log.debug('room recovery transition', context);
   }
 
   for (const handler of transitionHandlers) handler(event);
+}
+
+export function markRoomVoiceFailed(): void {
+  state.voiceRecoveryFailed = true;
+  playVoiceLostCue();
 }
 
 export function subscribeRoomRecoveryTransitions(handler: (event: RecoveryTransition) => void): () => void {
@@ -73,6 +83,7 @@ export function setRoomRecoveryLiveKitAdapter(adapter: RoomRecoveryLiveKitAdapte
 
 export function startRoomRecovery(appEpoch: number, appConnected: boolean): number {
   controller?.cancel();
+  let reportedFailedEpoch = 0;
   controller = new RealtimeRecoveryController({
     attemptReplacement: async (context: { epoch: number; attempt: number }) => {
       if (!liveKitAdapter) return { retryable: false, code: 'unknown_error' };
@@ -85,7 +96,11 @@ export function startRoomRecovery(appEpoch: number, appConnected: boolean): numb
     requestAppSnapshot: ({ epoch, appEpoch: currentAppEpoch }: { epoch: number; appEpoch: number }) => {
       return getCallPorts().transport.realtime.requestResync(epoch, currentAppEpoch);
     },
-    onTransition: logTransition
+    onTransition: (event) => {
+      const enteredFailed = event.trigger === 'recovery_failed' && event.epoch !== reportedFailedEpoch;
+      if (enteredFailed) reportedFailedEpoch = event.epoch;
+      logTransition(event, enteredFailed);
+    }
   });
   getCallPorts().transport.realtime.setResyncFailureHandler(({ code }) =>
     controller?.appSnapshotRequestFailed({ code })
@@ -93,7 +108,8 @@ export function startRoomRecovery(appEpoch: number, appConnected: boolean): numb
   return controller.activate({ appEpoch, appConnected });
 }
 
-export function cancelRoomRecovery(): void {
+export function cancelRoomRecovery(keepVoiceFailure = false): void {
+  if (!keepVoiceFailure) state.voiceRecoveryFailed = false;
   getInstalledCallPorts()?.transport.realtime.setResyncFailureHandler(null);
   controller?.cancel();
   controller = null;
