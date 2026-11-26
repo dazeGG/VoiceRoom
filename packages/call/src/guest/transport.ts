@@ -18,6 +18,7 @@ interface JoinSession {
   input: ClientCommands['room.join'];
   lifetime: AbortController;
   rosterListeners: Set<() => void>;
+  hasJoinedRoster: boolean;
 }
 
 interface PendingMedia {
@@ -29,6 +30,7 @@ const READY_TIMEOUT_MS = 8_000;
 const HEARTBEAT_MS = 15_000;
 const ROSTER_TIMEOUT_MS = 10_000;
 const MEDIA_TIMEOUT_MS = 4_000;
+const RESYNC_TIMEOUT_MS = 4_000;
 interface GuestTransportOptions {
   status(roomId: string): Promise<{ roomId: string } | null>;
   admit(input: Parameters<CallTransport['requestLiveKitToken']>[0], signal: AbortSignal): Promise<LiveKitCredentials>;
@@ -146,7 +148,17 @@ export function createGuestTransport(
 
   function clearResync(): void {
     clearTimeout(resyncTimer);
+    resyncTimer = undefined;
     resyncRequestId = '';
+  }
+
+  function armResyncDeadline(): void {
+    if (resyncTimer !== undefined) return;
+    resyncTimer = setTimeout(() => {
+      clearResync();
+      joinRequestId = '';
+      resyncFailureHandler?.({ code: 'transport_error' });
+    }, RESYNC_TIMEOUT_MS);
   }
 
   function closeSocket(): void {
@@ -206,7 +218,7 @@ export function createGuestTransport(
       }
       if (send({ type: 'ping', payload: { at } })) unansweredPingAt ??= at;
     }, HEARTBEAT_MS);
-    sendJoin();
+    if (sendJoin() && session?.hasJoinedRoster) armResyncDeadline();
     for (const listener of stateListeners) listener(true, connectionEpoch);
   }
 
@@ -242,6 +254,7 @@ export function createGuestTransport(
         resyncFailureHandler?.({ code });
         return;
       }
+      if (frame.id) clearResync();
       if (isErrorCode(code) && RETRYABLE_JOIN_CODES.has(code)) {
         dropSocket();
         return;
@@ -259,6 +272,7 @@ export function createGuestTransport(
       joinRequestId = '';
       clearResync();
       reconnectAttempts = 0;
+      current.hasJoinedRoster = true;
       rosterAttached.value = true;
       for (const listener of current.rosterListeners) listener();
     }
@@ -325,7 +339,8 @@ export function createGuestTransport(
       session = {
         input: { ...input, ...options.joinIdentity },
         lifetime: new AbortController(),
-        rosterListeners: new Set()
+        rosterListeners: new Set(),
+        hasJoinedRoster: false
       };
       if (!sendJoin()) connect();
     },
@@ -360,15 +375,13 @@ export function createGuestTransport(
       if (!session || !connected || connectionEpoch !== appEpoch) return false;
       const key = `${recoveryEpoch}:${appEpoch}`;
       if (!fresh && key === resyncKey) return Boolean(resyncRequestId);
-      if ((fresh || !joinRequestId) && !sendJoin()) return false;
-      clearResync();
+      if (fresh || !joinRequestId) {
+        if (!sendJoin()) return false;
+        clearResync();
+      }
       resyncKey = key;
       resyncRequestId = joinRequestId;
-      resyncTimer = setTimeout(() => {
-        clearResync();
-        joinRequestId = '';
-        resyncFailureHandler?.({ code: 'transport_error' });
-      }, MEDIA_TIMEOUT_MS);
+      armResyncDeadline();
       return true;
     },
     setResyncFailureHandler(handler) {

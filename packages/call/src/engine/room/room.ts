@@ -88,6 +88,7 @@ import {
 import { createLogger, errorContext } from '../diagnostics';
 
 const log = createLogger('room');
+const MANUAL_JOIN_ACK_TIMEOUT_MS = 10_000;
 
 let voiceJoinSent = false;
 let stopVideoVisibilitySync: (() => void) | null = null;
@@ -300,7 +301,35 @@ async function performJoinRoom(generation: number, reconnect: boolean): Promise<
     const realtime = getCallPorts().transport.realtime;
     realtime.ensureConnected();
     state.voiceRealtimeTeardown?.();
+    const joiningPeerId = state.peerId;
+    let finishAcknowledgement = (_appEpoch: number | null): void => {};
+    const acknowledgement = reconnect
+      ? new Promise<number | null>((resolve) => {
+          const timer = setTimeout(() => resolve(null), MANUAL_JOIN_ACK_TIMEOUT_MS);
+          finishAcknowledgement = (appEpoch) => {
+            clearTimeout(timer);
+            resolve(appEpoch);
+          };
+        })
+      : null;
     const detachVoiceEvents = realtime.subscribeRoom(state.roomId, (event) => {
+      if (!isCurrent()) return;
+      if (reconnect && state.connecting && (event.type === 'room.full' || event.type === 'server.full')) {
+        reportOutcome('failure');
+        leaveVoiceRoom(true);
+        markRoomVoiceFailed();
+        return;
+      }
+      if (
+        acknowledgement &&
+        event.type === 'room.snapshot' &&
+        event.payload.mode === 'active' &&
+        event.payload.roomId === roomId &&
+        event.payload.peers.some((peer) => peer.id === joiningPeerId)
+      ) {
+        // Each transport delivers active snapshots only for its current join.
+        finishAcknowledgement(realtime.getConnectionEpoch());
+      }
       handleVoiceEvent(event).catch((err: unknown) => {
         log.error('voice realtime handler failed', errorContext(err));
       });
@@ -318,21 +347,28 @@ async function performJoinRoom(generation: number, reconnect: boolean): Promise<
     window.addEventListener('offline', handleOffline);
     window.addEventListener('online', handleOnline);
     state.voiceRealtimeTeardown = () => {
+      finishAcknowledgement(null);
       cancelRoomRecovery();
       window.removeEventListener('offline', handleOffline);
       window.removeEventListener('online', handleOnline);
       detachConnState();
       detachVoiceEvents();
     };
+    voiceJoinSent = true;
     realtime.join({
       roomId: state.roomId,
       peerId: state.peerId,
       sessionToken: state.sessionToken,
       name
     });
-    voiceJoinSent = true;
     setServerConnectionStatus('connecting');
 
+    if (acknowledgement) {
+      const appEpoch = await acknowledgement;
+      if (!isCurrent()) return;
+      if (appEpoch === null || !realtime.isConnected() || appEpoch !== realtime.getConnectionEpoch())
+        throw new Error('Manual voice join was not acknowledged on the current connection');
+    }
     const connected = await connectLiveKitRoom(name, isCurrent, microphoneCapture);
     if (!connected || !isCurrent()) {
       if (microphoneCapture && state.localStream === microphoneCapture.stream) stopLocalStream();

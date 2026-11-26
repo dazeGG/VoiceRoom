@@ -112,7 +112,6 @@ export class RealtimeRecoveryController {
   livekitReady: boolean;
   replacementRequired: boolean;
   optionalReplacement: boolean;
-  abandonedSnapshotRequest: boolean;
   attempts: number;
   // The one-refusal allowance gets its own request even at the end of the ordinary budget.
   private ordinaryAttempts = 0;
@@ -165,7 +164,6 @@ export class RealtimeRecoveryController {
     this.livekitReady = false;
     this.replacementRequired = false;
     this.optionalReplacement = false;
-    this.abandonedSnapshotRequest = false;
     this.attempts = 0;
     this.startedAt = 0;
     this.effectGeneration = 0;
@@ -198,7 +196,6 @@ export class RealtimeRecoveryController {
     this.livekitReady = false;
     this.replacementRequired = false;
     this.optionalReplacement = false;
-    this.abandonedSnapshotRequest = false;
     this.resetAttempts();
     this.phase = 'waiting-app-snapshot';
     this.startedAt = this.now();
@@ -221,6 +218,7 @@ export class RealtimeRecoveryController {
     this.appEpoch = appEpoch;
     this.appConnected = false;
     this.snapshotReady = false;
+    this.rearmSnapshotReady = false;
     if (this.phase === 'failed') {
       this.emit('app_ws_lost', 'ignored');
       return false;
@@ -247,6 +245,7 @@ export class RealtimeRecoveryController {
     this.appEpoch = appEpoch;
     this.appConnected = true;
     this.snapshotReady = false;
+    this.rearmSnapshotReady = false;
     if (!this.hasSeenAppConnection) {
       this.hasSeenAppConnection = true;
       this.emit('app_ws_initial', 'accepted');
@@ -276,7 +275,7 @@ export class RealtimeRecoveryController {
     active: boolean;
     hasLocalPeer: boolean;
   }): boolean {
-    if (!this.active || appEpoch !== this.appEpoch || !active || !hasLocalPeer) {
+    if (!this.active || !this.appConnected || appEpoch !== this.appEpoch || !active || !hasLocalPeer) {
       this.emit('app_snapshot', 'rejected');
       if (this.active && appEpoch === this.appEpoch && this.optionalReplacement && active) {
         this.keepStandingConnection('rejected', {});
@@ -301,8 +300,7 @@ export class RealtimeRecoveryController {
     const classified = classifyRecoveryFailure(error);
     // A restore replay can fail while LiveKit still stands or is reconciling in place.
     // Only recovery that needs an acknowledged join before replacing media can fail here.
-    if (this.phase === 'failed' || !this.replacementRequired || this.abandonedSnapshotRequest) {
-      this.abandonedSnapshotRequest = false;
+    if (this.phase === 'failed' || !this.appConnected || !this.replacementRequired) {
       this.emit('app_snapshot_failed', 'ignored', this.attempts, classified.status, classified.code);
       return;
     }
@@ -455,7 +453,6 @@ export class RealtimeRecoveryController {
 
   requestSnapshot(fresh?: true): void {
     if (!this.active || !this.appConnected) return;
-    this.abandonedSnapshotRequest = false;
     const requested = this.requestAppSnapshot({ epoch: this.epoch, appEpoch: this.appEpoch, ...(fresh && { fresh }) });
     if (requested === false) this.appSnapshotRequestFailed({ code: 'transport_error' });
   }
@@ -568,7 +565,6 @@ export class RealtimeRecoveryController {
     this.epoch += 1;
     this.inFlight = false;
     this.optionalReplacement = false;
-    this.abandonedSnapshotRequest = true;
     this.replacementRequired = false;
     this.livekitReady = true;
     this.emit(REPLACEMENT_ABANDONED, result, this.attempts, failure.status ?? 0, failure.code ?? 'unknown_error');
@@ -607,7 +603,7 @@ export class RealtimeRecoveryController {
   }
 
   tryRearm(): void {
-    if (this.phase !== 'failed' || !this.cooldownComplete || !this.meaningfulRearm) return;
+    if (this.phase !== 'failed' || !this.appConnected || !this.cooldownComplete || !this.meaningfulRearm) return;
     this.effectGeneration += 1;
     this.epoch += 1;
     this.startedAt = this.now();

@@ -163,8 +163,10 @@ let restoreHooked = false;
 let lastRestoreEpoch = 0;
 let lastActiveResyncKey = '';
 let initialVoiceJoinRequestId = '';
+let detachQueuedVoiceJoin: (() => void) | null = null;
 let activeResync: {
   appEpoch: number;
+  retransmitOnTimeout: boolean;
   requestId: string;
   currentRequestId: string;
   requestIds: Set<string>;
@@ -173,6 +175,7 @@ let activeResync: {
 } | null = null;
 let activeResyncSequence = 0;
 let activeResyncFailureHandler: ((failure: { code: string; requestId: string }) => void) | null = null;
+const RESTORE_ACK_TIMEOUT_MS = 7_000;
 const retryableActiveResyncErrors = new Set([
   'network_error',
   'reconnect_finalize_failed',
@@ -200,14 +203,14 @@ function sendActiveResyncAttempt(): void {
         clearActiveResync();
         return;
       }
-      if (pending.attempts < 3) {
+      if (pending.retransmitOnTimeout && pending.attempts < 3) {
         sendActiveResyncAttempt();
         return;
       }
       clearActiveResync();
       activeResyncFailureHandler?.({ code: 'transport_error', requestId: pending.currentRequestId });
     },
-    1_000 * 2 ** (pending.attempts - 1)
+    pending.retransmitOnTimeout ? 1_000 * 2 ** (pending.attempts - 1) : RESTORE_ACK_TIMEOUT_MS
   );
 }
 
@@ -266,7 +269,8 @@ function ensureReconnectRestore(): void {
     lastActiveResyncKey = '';
     clearActiveResync();
     for (const roomId of previewSubscriptions.keys()) sendPreviewSubscribe(roomId);
-    if (activeVoiceJoin) {
+    if (activeVoiceJoin && !detachQueuedVoiceJoin) {
+      // The server processes joins serially, so a slow restore keeps its request ID.
       beginActiveResync(connectionEpoch);
     }
   });
@@ -383,12 +387,30 @@ export function joinVoiceRoom(payload: { roomId: string; peerId: string; session
     ...(guestId ? { guestId, clientId: guestId } : {}),
     ...(desktopVersion ? { desktopVersion } : {})
   };
+  clearQueuedVoiceJoin();
   activeVoiceJoin = join;
   lastActiveResyncKey = '';
   clearActiveResync();
   initialVoiceJoinRequestId = `voice-join-${++activeResyncSequence}`;
   beginDesktopNativeVoiceConnection();
-  sendVoiceJoin(join, initialVoiceJoinRequestId);
+  const conn = getAppRealtime();
+  if (conn.isConnected()) {
+    sendVoiceJoin(join, initialVoiceJoinRequestId);
+    return;
+  }
+  // A new join must follow any queued leave. Restore runs before the queue is
+  // flushed; the connected notification runs after it.
+  detachQueuedVoiceJoin = conn.onStateChange((connected) => {
+    if (!connected) return;
+    clearQueuedVoiceJoin();
+    sendVoiceJoin(join, initialVoiceJoinRequestId);
+  });
+  conn.ensureConnected();
+}
+
+function clearQueuedVoiceJoin(): void {
+  detachQueuedVoiceJoin?.();
+  detachQueuedVoiceJoin = null;
 }
 
 function sendVoiceJoin(join: ClientCommands['room.join'], requestId: string): void {
@@ -402,6 +424,7 @@ export function leaveVoiceRoom(payload: ClientCommands['room.leave']): void {
     endDesktopNativeVoiceConnection();
     lastActiveResyncKey = '';
     initialVoiceJoinRequestId = '';
+    clearQueuedVoiceJoin();
     clearActiveResync();
   }
   getAppRealtime().send('room.leave', payload);
@@ -414,15 +437,16 @@ export function requestActiveVoiceResync(recoveryEpoch: number, appEpoch: number
   if (!fresh && activeResync?.appEpoch === appEpoch) return true;
   if (!fresh && lastActiveResyncKey === key) return false;
   lastActiveResyncKey = key;
-  beginActiveResync(appEpoch);
+  beginActiveResync(appEpoch, !fresh);
   return true;
 }
 
-function beginActiveResync(appEpoch: number): void {
+function beginActiveResync(appEpoch: number, retransmitOnTimeout = false): void {
   initialVoiceJoinRequestId = '';
   clearActiveResync();
   activeResync = {
     appEpoch,
+    retransmitOnTimeout,
     requestId: `voice-resync-${appEpoch}-${++activeResyncSequence}`,
     currentRequestId: '',
     requestIds: new Set(),

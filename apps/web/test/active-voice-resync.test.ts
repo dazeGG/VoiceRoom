@@ -4,8 +4,9 @@ import assert from 'node:assert/strict';
 import { defined } from './helpers/assert';
 import type { PublicPeer } from '@voiceroom/shared/contracts/rooms';
 import type { RealtimeEvent } from '@/api/realtime';
+import { installFakeWebSocket } from './fixtures/fake-websocket';
 
-const localPeer: PublicPeer = {
+const localPeer = {
   id: 'peer-resync',
   name: 'Retry peer',
   joinedAt: 1,
@@ -14,7 +15,7 @@ const localPeer: PublicPeer = {
   avatarColorKey: '',
   avatarAccent: null,
   avatarUrl: null
-};
+} satisfies PublicPeer;
 
 async function loadRoomRealtime() {
   vi.resetModules();
@@ -56,6 +57,59 @@ async function loadRoomRealtime() {
 }
 
 afterEach(() => vi.useRealTimers());
+
+test('a slow serial server acknowledges the single join sent for a Web restore', async () => {
+  vi.useFakeTimers();
+  vi.doUnmock('@/api/realtime');
+  vi.resetModules();
+  const sockets = installFakeWebSocket();
+  const realtime = await import('@/entities/room/room-realtime');
+  const member = { roomId: 'room-resync', peerId: localPeer.id, sessionToken: 'r'.repeat(32), name: localPeer.name };
+  const received = vi.fn();
+  const failed = vi.fn();
+  const unsubscribe = realtime.subscribeRoomVoice(member.roomId, received);
+  try {
+    const first = sockets.latest();
+    first.open();
+    realtime.joinVoiceRoom(member);
+    first.serverClose(1006);
+    await vi.advanceTimersByTimeAsync(500);
+    const restored = sockets.latest();
+    expect(restored).not.toBe(first);
+    let serial = Promise.resolve();
+    const send = restored.send.bind(restored);
+    vi.spyOn(restored, 'send').mockImplementation((raw) => {
+      send(raw);
+      const command = restored.sent.at(-1);
+      if (command?.type !== 'room.join') return;
+      serial = serial.then(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 2_500));
+        restored.receive({
+          type: 'room.snapshot',
+          id: command.id,
+          payload: {
+            mode: 'active',
+            roomId: member.roomId,
+            room: lobbyRoom({ roomId: member.roomId }),
+            recentMessages: [],
+            voiceActiveSince: null,
+            peers: [localPeer]
+          }
+        });
+      });
+    });
+    realtime.setActiveVoiceResyncFailureHandler(failed);
+    restored.open();
+    await vi.advanceTimersByTimeAsync(7_500);
+    await serial;
+    expect(received).toHaveBeenCalledOnce();
+    expect(restored.sent.filter(({ type }) => type === 'room.join')).toHaveLength(1);
+    expect(failed).not.toHaveBeenCalled();
+  } finally {
+    realtime.setActiveVoiceResyncFailureHandler(null);
+    unsubscribe();
+  }
+});
 
 test('R3/R5: voice accepts only the current valid join acknowledgement and reuses the restore join', async () => {
   vi.useFakeTimers();

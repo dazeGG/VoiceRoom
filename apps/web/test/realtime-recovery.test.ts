@@ -393,6 +393,37 @@ test('authoritative snapshot received during cooldown is retained for a later me
   assert.equal(controller.getSnapshot().phase, 'waiting-livekit');
 });
 
+test('cooldown cannot use a retained snapshot after its app socket drops', async () => {
+  const clock = fakeClock();
+  let calls = 0;
+  const { controller } = createController({
+    clock,
+    maxAttempts: 1,
+    cooldownMs: 1_000,
+    attemptReplacement: async () => {
+      calls += 1;
+      return { retryable: true, status: 503, code: 'membership_unavailable' };
+    }
+  });
+  controller.livekitDisconnected();
+  controller.appSnapshotApplied({ appEpoch: 4, active: true, hasLocalPeer: true });
+  await Promise.resolve();
+  assert.equal(controller.getSnapshot().phase, 'failed');
+
+  controller.appWsLost(4);
+  controller.appWsRestored(5);
+  controller.appSnapshotApplied({ appEpoch: 5, active: true, hasLocalPeer: true });
+  controller.appWsLost(5);
+  clock.advance(1_000);
+  assert.equal(calls, 1);
+  assert.equal(controller.getSnapshot().phase, 'failed');
+
+  controller.appWsRestored(6);
+  assert.equal(calls, 1);
+  controller.appSnapshotApplied({ appEpoch: 6, active: true, hasLocalPeer: true });
+  assert.equal(calls, 2);
+});
+
 test('initial app connection does not replay a queued join, later connection epochs request one snapshot', () => {
   const clock = fakeClock();
   const snapshots: unknown[] = [];
@@ -605,6 +636,19 @@ test('abandoning with the app connection down leaves a later real drop all its a
   assert.equal(controller.getSnapshot().attempts, 1);
   controller.appWsLost(4);
   assert.equal(controller.getSnapshot().attempts, 0);
+});
+
+test('the first required restore still fails on timeout after an optional replacement was abandoned', () => {
+  const { controller, clock, transitions } = healthy();
+  controller.requestLiveKitReplacement();
+  controller.appWsLost(4);
+  controller.livekitDisconnected();
+  controller.appWsRestored(5);
+  clock.setTimeout(() => controller.appSnapshotRequestFailed({ code: 'transport_error' }), 7_000);
+  clock.advance(7_000);
+
+  assert.equal(controller.getSnapshot().phase, 'failed');
+  assert.equal(transitions.at(-1)?.code, 'transport_error');
 });
 
 test('a real drop after an asked replacement went through, before its snapshot, gets a snapshot request of its own', async () => {
