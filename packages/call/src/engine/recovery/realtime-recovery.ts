@@ -494,7 +494,7 @@ export class RealtimeRecoveryController {
     const status = outcome.status !== undefined && Number.isInteger(outcome.status) ? outcome.status : 0;
     this.emit('replacement_attempt', outcome.retryable ? 'retryable' : 'terminal', attempt, status, code);
     const failure = { status, code };
-    const rearmPending = this.phase === 'failed' && this.meaningfulRearm;
+    const rearmPending = this.phase === 'failed' && this.terminalFailure && this.meaningfulRearm;
     if (!outcome.retryable) this.fail('terminal', failure, rearmPending);
     if (rearmPending) {
       this.tryRearm();
@@ -592,8 +592,15 @@ export class RealtimeRecoveryController {
   }
 
   tryRearm(): void {
-    // A replacement authorized before the failure may still restore voice in this epoch.
-    if (this.phase !== 'failed' || this.inFlight || !this.cooldownComplete || !this.meaningfulRearm) return;
+    // A replacement authorized before a terminal failure may still restore voice in this epoch.
+    // The exhausted cooldown keeps main's behaviour and does not wait for it.
+    if (
+      this.phase !== 'failed' ||
+      (this.terminalFailure && this.inFlight) ||
+      !this.cooldownComplete ||
+      !this.meaningfulRearm
+    )
+      return;
     this.effectGeneration += 1;
     this.epoch += 1;
     this.startedAt = this.now();

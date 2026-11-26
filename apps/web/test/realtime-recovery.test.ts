@@ -208,6 +208,35 @@ test.each([
   assert.equal(clock.pending(), 0);
 });
 
+test('an exhausted cooldown does not wait for a pending replacement before a fresh socket recovers', async () => {
+  const pending = deferred();
+  const attempts: number[] = [];
+  const { controller, clock } = createController({
+    cooldownMs: 1_000,
+    attemptReplacement: ({ epoch }) => {
+      attempts.push(epoch);
+      return attempts.length === 1 ? pending.promise : { ok: true };
+    }
+  });
+  controller.livekitDisconnected();
+  controller.appSnapshotApplied({ appEpoch: 4, active: true, hasLocalPeer: true });
+  assert.equal(attempts.length, 1);
+  controller.appSnapshotRequestFailed({ code: 'transport_error' });
+  assert.equal(controller.getSnapshot().phase, 'failed');
+
+  controller.appWsLost(4);
+  controller.appWsRestored(5);
+  controller.appSnapshotApplied({ appEpoch: 5, active: true, hasLocalPeer: true });
+  clock.advance(1_000);
+
+  controller.appWsLost(5);
+  controller.appWsRestored(6);
+  controller.appSnapshotApplied({ appEpoch: 6, active: true, hasLocalPeer: true });
+  await Promise.resolve();
+  assert.equal(attempts.length, 2);
+  assert.equal(controller.getSnapshot().phase, 'healthy');
+});
+
 test('a cooldown from an earlier snapshot failure cannot rearm a terminal refusal', () => {
   const { controller, clock, snapshots } = createController({ cooldownMs: 1_000 });
   controller.livekitDisconnected();
