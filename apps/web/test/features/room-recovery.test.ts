@@ -226,6 +226,58 @@ test('an in-place LiveKit recovery can reconcile before the same-epoch snapshot 
   }
 });
 
+test.each(['online edge', 'later socket epoch'])(
+  'a pending replacement restores voice with a pending %s',
+  async (edge) => {
+    const { requestActiveVoiceResync, setActiveVoiceResyncFailureHandler } =
+      await import('@/entities/room/room-realtime');
+    const requestSnapshot = vi.mocked(requestActiveVoiceResync).mockClear();
+    const candidateReady = Promise.withResolvers<void>();
+    const attemptFreshReplacement = vi
+      .fn<(context: { epoch: number; attempt: number }) => Promise<ReplacementOutcome>>()
+      .mockResolvedValue({ retryable: false, code: 'invalid_session' })
+      .mockImplementationOnce(async ({ epoch }) => {
+        await candidateReady.promise;
+        // A candidate that lost its recovery epoch cannot commit in the LiveKit service.
+        return recovery.isCurrentRoomRecoveryEpoch(epoch) ? { ok: true } : { retryable: true, code: 'transport_error' };
+      });
+    recovery.setRoomRecoveryLiveKitAdapter({ attemptFreshReplacement });
+    const phases: string[] = [];
+    const unsubscribe = recovery.subscribeRoomRecoveryTransitions(({ phase }) => phases.push(phase));
+
+    try {
+      const epoch = recovery.startRoomRecovery(1, true);
+      recovery.notifyLiveKitDisconnected();
+      snapshot();
+      expect(attemptFreshReplacement).toHaveBeenCalledExactlyOnceWith({ epoch, attempt: 1 });
+      const refuseSnapshot = vi.mocked(setActiveVoiceResyncFailureHandler).mock.lastCall?.[0];
+      if (!refuseSnapshot) throw new Error('Missing snapshot refusal handler');
+      refuseSnapshot({ code: 'invalid_session', requestId: 'newer-resync' });
+      expect(phases.at(-1)).toBe('failed');
+      expect(state.voiceRecoveryFailed).toBe(true);
+
+      if (edge === 'online edge') {
+        recovery.notifyRoomNetworkOffline();
+        recovery.notifyRoomNetworkOnline();
+      } else {
+        recovery.notifyRoomAppConnection(false, 1);
+        recovery.notifyRoomAppConnection(true, 2);
+        recovery.notifyRoomSnapshotApplied({ appEpoch: 2, active: true, hasLocalPeer: true });
+      }
+      candidateReady.resolve();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(phases.at(-1)).toBe('healthy');
+      expect(state.voiceRecoveryFailed).toBe(false);
+      expect(recovery.isCurrentRoomRecoveryEpoch(epoch)).toBe(true);
+      expect(requestSnapshot).toHaveBeenCalledExactlyOnceWith(epoch, 1);
+      expect(attemptFreshReplacement).toHaveBeenCalledExactlyOnceWith({ epoch, attempt: 1 });
+    } finally {
+      unsubscribe();
+    }
+  }
+);
+
 test('asking to replace a standing connection replaces it and says when it is over', async () => {
   const { attemptFreshReplacement, phases, unsubscribe } = healthyCall({ ok: true });
   const replacing = recovery.requestLiveKitReplacement();

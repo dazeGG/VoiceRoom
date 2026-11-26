@@ -442,6 +442,9 @@ export class RealtimeRecoveryController {
     this.optionalReplacement = false;
     this.attempts = 0;
     this.cooldownCycles = 0;
+    this.meaningfulRearm = false;
+    this.rearmNeedsSnapshotRequest = false;
+    this.rearmSnapshotReady = false;
     this.setPhase('healthy', trigger, 'succeeded');
   }
 
@@ -491,10 +494,13 @@ export class RealtimeRecoveryController {
     const status = outcome.status !== undefined && Number.isInteger(outcome.status) ? outcome.status : 0;
     this.emit('replacement_attempt', outcome.retryable ? 'retryable' : 'terminal', attempt, status, code);
     const failure = { status, code };
-    if (!outcome.retryable) {
-      this.fail('terminal', failure);
+    const rearmPending = this.phase === 'failed' && this.meaningfulRearm;
+    if (!outcome.retryable) this.fail('terminal', failure, rearmPending);
+    if (rearmPending) {
+      this.tryRearm();
       return;
     }
+    if (!outcome.retryable) return;
     if (this.attempts >= this.maxAttempts) {
       this.enterCooldown(failure);
       return;
@@ -509,7 +515,11 @@ export class RealtimeRecoveryController {
 
   // The failed transition carries the reason, so a failure report says why
   // recovery gave up instead of "unknown_error".
-  fail(result: 'terminal' | 'exhausted', failure: { status?: number; code?: string } = {}): void {
+  fail(
+    result: 'terminal' | 'exhausted',
+    failure: { status?: number; code?: string } = {},
+    preservePendingRearm = false
+  ): void {
     if (this.optionalReplacement) {
       this.keepStandingConnection(result, failure);
       return;
@@ -520,9 +530,11 @@ export class RealtimeRecoveryController {
     if (this.terminalFailure) {
       // Terminal failures skip the cooldown but still require a real reconnect event.
       this.cooldownComplete = true;
-      this.meaningfulRearm = false;
-      this.rearmNeedsSnapshotRequest = false;
-      this.rearmSnapshotReady = false;
+      if (!preservePendingRearm) {
+        this.meaningfulRearm = false;
+        this.rearmNeedsSnapshotRequest = false;
+        this.rearmSnapshotReady = false;
+      }
     }
     this.phase = 'failed';
     this.emit('recovery_failed', result, this.attempts, failure.status ?? 0, failure.code ?? 'unknown_error');
@@ -580,14 +592,13 @@ export class RealtimeRecoveryController {
   }
 
   tryRearm(): void {
-    if (this.phase !== 'failed' || !this.cooldownComplete || !this.meaningfulRearm) return;
+    // A replacement authorized before the failure may still restore voice in this epoch.
+    if (this.phase !== 'failed' || this.inFlight || !this.cooldownComplete || !this.meaningfulRearm) return;
     this.effectGeneration += 1;
-    // A terminal refusal can leave a replacement running until a new epoch supersedes it.
-    if (this.terminalFailure) this.inFlight = false;
     this.epoch += 1;
     this.startedAt = this.now();
     this.attempts = 0;
-    this.snapshotReady = this.rearmSnapshotReady;
+    this.snapshotReady = this.snapshotReady && this.rearmSnapshotReady;
     this.cooldownComplete = false;
     this.meaningfulRearm = false;
     const requestSnapshot = this.rearmNeedsSnapshotRequest;
