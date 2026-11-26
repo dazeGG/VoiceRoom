@@ -1,5 +1,12 @@
 .friend-call {
   --friend-call-safe-bottom: 0px;
+  // One gap above the tiles, between the tiles and the dock, and under the dock (the kit dock's own inset).
+  --friend-call-gap: var(--space-20);
+  // The kit dock: a 44 px control row, an 8 px inner padding and a 1 px border on each side.
+  --friend-call-dock-height: calc(var(--size-44) + 2 * var(--space-8) + var(--space-2));
+  --friend-call-dock-reserve: calc(
+    2 * var(--friend-call-gap) + var(--friend-call-dock-height) + var(--friend-call-safe-bottom)
+  );
   position: relative;
   display: flex;
   flex: 1;
@@ -21,7 +28,7 @@
   align-items: center;
   justify-content: safe center;
   min-height: 0;
-  padding: var(--space-12) var(--space-48) calc(var(--space-64) + var(--space-20) + var(--friend-call-safe-bottom));
+  padding: var(--friend-call-gap) var(--space-48) var(--friend-call-dock-reserve);
   gap: var(--space-8);
   overflow: auto;
   overscroll-behavior: contain;
@@ -90,6 +97,35 @@
   inset: auto 0 var(--friend-call-safe-bottom);
 }
 
+// A mouse user sees the whole stage until the pointer enters the call: the tiles take the dock's room,
+// and the dock rises back as they make way. Keyboard focus inside the call brings it back the same way.
+@media (hover: hover) and (pointer: fine) {
+  .friend-call--dock-autohide:not(:hover):not(:has(:focus-visible)) {
+    .friend-call__stage {
+      padding-block-end: var(--friend-call-gap);
+    }
+
+    .friend-call__dock {
+      opacity: 0;
+      transform: translateY(var(--space-12));
+    }
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .friend-call--dock-autohide {
+      .friend-call__stage {
+        transition: padding-block-end 220ms var(--ease-out);
+      }
+
+      .friend-call__dock {
+        transition:
+          opacity 180ms var(--ease-out),
+          transform 220ms var(--ease-out);
+      }
+    }
+  }
+}
+
 .friend-call__pending-dock {
   display: grid;
   justify-items: center;
@@ -102,7 +138,7 @@
 
   .friend-call__stage {
     gap: var(--space-16);
-    padding-inline: var(--space-16);
+    padding: var(--space-12) var(--space-16) calc(var(--space-64) + var(--space-20) + var(--friend-call-safe-bottom));
   }
 
   .friend-call__name {
