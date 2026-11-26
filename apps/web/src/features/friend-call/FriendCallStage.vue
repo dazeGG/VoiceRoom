@@ -4,6 +4,7 @@ import { Maximize2, Minimize2, Mic, MicOff, Phone, PhoneOff } from '@lucide/vue'
 import { Avatar, Button, Callout, IconButton } from '@voiceroom/ui-kit/components';
 import { useVoiceSessionStore } from '@voiceroom/call/engine';
 import { useScreenUiStore } from '@voiceroom/call/engine/core/screen-ui.store';
+import { useRoomDeviceUiStore } from '@voiceroom/call/engine/core/room-device-ui.store';
 import { state } from '@voiceroom/call/engine/core/room-runtime.store';
 import { isMicrophoneShownMuted } from '@voiceroom/call/engine/core/microphone-mute';
 import { closeScreenView } from '@voiceroom/call/engine/ui/screen-view';
@@ -28,6 +29,7 @@ const emit = defineEmits<{ back: []; messages: []; toggleExpanded: [] }>();
 const calls = useFriendCallStore();
 const voice = useVoiceSessionStore();
 const screen = useScreenUiStore();
+const devices = useRoomDeviceUiStore();
 const peer = computed(() => callPeer(call, calls.userId));
 const self = computed(() => (call.caller.id === calls.userId ? call.caller : call.recipient));
 const peerSeat = computed(() => call.seats?.find((seat) => seat.userId === peer.value.id));
@@ -38,6 +40,18 @@ const showPlaceholder = computed(
   () => status.declined || status.ringing || (status.noAnswer && call.firstConnectedAt === null)
 );
 const canRingAgain = computed(() => call.allowedActions.includes('re-ring'));
+// On a desktop call the dock steps aside until the pointer or keyboard focus enters the call; the styles
+// own the reveal. It stays put while a device menu is open, before the call connects, and over a countdown.
+const dockAutoHides = computed(
+  () =>
+    !portrait &&
+    hasEngine.value &&
+    !showPlaceholder.value &&
+    status.deadline === undefined &&
+    !devices.devicePopoverOpen &&
+    !devices.outputPopoverOpen &&
+    !devices.cameraPopoverOpen
+);
 
 watchEffect(() => {
   if (hasEngine.value) void syncRemoteCameraDemand();
@@ -50,7 +64,7 @@ onBeforeUnmount(() => {
 <template>
   <section
     class="friend-call"
-    :class="{ 'friend-call--portrait': portrait }"
+    :class="{ 'friend-call--portrait': portrait, 'friend-call--dock-autohide': dockAutoHides }"
     :aria-label="t('Звонок: {name}', { name: peer.displayName })"
   >
     <MobileCallTopbar
@@ -60,7 +74,7 @@ onBeforeUnmount(() => {
       @messages="emit('messages')"
     />
     <div v-else-if="!status.declined" class="friend-call__expand">
-      <IconButton :label="expanded ? t('Свернуть') : t('Развернуть')" :size="32" @click="emit('toggleExpanded')">
+      <IconButton :label="expanded ? t('Свернуть') : t('Развернуть')" :size="40" @click="emit('toggleExpanded')">
         <Minimize2 v-if="expanded" aria-hidden="true" />
         <Maximize2 v-else aria-hidden="true" />
       </IconButton>

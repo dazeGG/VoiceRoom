@@ -795,6 +795,37 @@ test('the desktop call remembers a resized height through screen share, expansio
   expect(splitter().getAttribute('aria-valuetext')).toBe(resized);
 });
 
+test('a connected desktop call lets its dock hide, but not before media joins or while a device menu is open', async () => {
+  const call = snapshot({
+    phase: 'connected',
+    attemptResult: 'accepted',
+    firstConnectedAt: now,
+    aloneDeadline: null,
+    seats: [
+      { userId: self.id, status: 'present', reconnectUntil: null },
+      { userId: ada.id, status: 'present', reconnectUntil: null }
+    ]
+  });
+  await start({ 'POST /api/call-rings': { body: answer(call) } });
+  await calls.dial(ada.id);
+  selectPeer(useLobbyStore(pinia));
+  mountDm();
+  await nextTick();
+  const autohides = () => stage().classList.contains('friend-call--dock-autohide');
+  expect(within(stage()).getByRole('button', { name: 'Завершить' })).toBeTruthy();
+  expect(autohides()).toBe(false);
+
+  useVoiceSessionStore(pinia).roomId = 'opaque-room';
+  await nextTick();
+  expect(within(stage()).getByRole('group', { name: 'Управление звонком' })).toBeTruthy();
+  expect(autohides()).toBe(true);
+
+  await fireEvent.click(within(stage()).getByRole('button', { name: 'Выбрать микрофон' }));
+  expect(autohides()).toBe(false);
+  await fireEvent.click(within(stage()).getByRole('button', { name: 'Выбрать микрофон' }));
+  expect(autohides()).toBe(true);
+});
+
 test('a portrait call shows the compact header, opens chat over the call, and restores the stage', async () => {
   const media = Object.assign(new EventTarget(), { matches: true });
   vi.stubGlobal('matchMedia', (query: string) => (query === PORTRAIT_PHONE_QUERY ? media : new EventTarget()));
