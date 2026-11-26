@@ -1,5 +1,4 @@
 import { voiceAssetUrls } from '@voiceroom/call/voice-assets';
-import { RealtimeRecoveryController } from '@voiceroom/call/engine/recovery/realtime-recovery';
 import { MEET_CHAT_MAX_BYTES, type ClientCommand, type ServerFrame } from '@voiceroom/shared/contracts/realtime';
 import type { RoomCapabilities } from '@voiceroom/shared/contracts/rooms';
 import { validateClientCommand } from '@voiceroom/shared/realtime';
@@ -271,42 +270,6 @@ describe('Meet realtime adapter', () => {
     await vi.advanceTimersByTimeAsync(10_000);
     expect(sockets).toHaveLength(2);
     expect(transport.capabilities.value).toBeNull();
-  });
-
-  it('bounds a lost guest restore acknowledgement when the socket opens before the network online event', async () => {
-    const realtime = transport.realtime;
-    const attemptReplacement = vi.fn(async () => ({ ok: true as const }));
-    const controller = new RealtimeRecoveryController({
-      attemptReplacement,
-      requestAppSnapshot: ({ epoch, appEpoch, fresh }) => realtime.requestResync(epoch, appEpoch, fresh)
-    });
-    controller.activate({ appEpoch: 0, appConnected: false });
-    realtime.onStateChange((connected, epoch) => {
-      if (connected) controller.appWsRestored(epoch);
-      else controller.appWsLost(epoch);
-    });
-    realtime.setResyncFailureHandler((failure) => controller.appSnapshotRequestFailed(failure));
-    realtime.subscribeRoom(roomId, (event) => {
-      if (event.type === 'room.snapshot')
-        controller.appSnapshotApplied({ appEpoch: realtime.getConnectionEpoch(), active: true, hasLocalPeer: true });
-    });
-    realtime.join(guest);
-    const first = ready();
-    snapshot(first);
-    controller.livekitReconciled();
-    controller.networkOffline();
-    first.close();
-    controller.livekitDisconnected();
-    await vi.advanceTimersByTimeAsync(400);
-    const restored = ready();
-    expect(restored).not.toBe(first);
-    controller.networkOnline();
-    await vi.advanceTimersByTimeAsync(4_000);
-
-    expect(restored.sent.filter(({ type }) => type === 'room.join')).toHaveLength(1);
-    expect(attemptReplacement).not.toHaveBeenCalled();
-    expect(controller.getSnapshot().phase).toBe('failed');
-    controller.cancel();
   });
 
   it('sends chat only on an admitted active roster and never sends a rejected draft after reconnect', async () => {

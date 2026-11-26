@@ -49,46 +49,6 @@ async function inCall(options: Parameters<typeof loadLiveKitHarness>[0] = {}) {
   return { lk, oldRoom };
 }
 
-test('R1: a refused token is fetched again with the current session only after a fresh join acknowledgement', async () => {
-  const order: string[] = [];
-  let refuse = () => new Error('no token');
-  const requests: unknown[] = [];
-  const { lk, oldRoom } = await inCall({
-    requestToken: async (input) => {
-      order.push('token');
-      requests.push(input);
-      if (requests.length === 1) throw refuse();
-      return { token: 'new-token', url: 'wss://lk.example' };
-    }
-  });
-  refuse = () => lk.refusal('invalid session', 'invalid_session', 403);
-  const controller = new RealtimeRecoveryController({
-    requestAppSnapshot: ({ fresh }) => {
-      order.push(fresh ? 'fresh join' : 'join');
-    },
-    attemptReplacement: lk.service.attemptFreshLiveKitReplacement
-  });
-  controller.activate({ appEpoch: 7, appConnected: true });
-  const acknowledge = () => controller.appSnapshotApplied({ appEpoch: 7, active: true, hasLocalPeer: true });
-  controller.livekitDisconnected();
-  acknowledge();
-  await vi.waitFor(() => expect(order).toEqual(['join', 'token', 'fresh join']));
-  expect(lk.rooms).toHaveLength(0);
-  expect(lk.state.livekitRoom).toBe(oldRoom);
-  acknowledge();
-  await vi.waitFor(() => expect(controller.getSnapshot().phase).toBe('healthy'));
-  expect(order).toEqual(['join', 'token', 'fresh join', 'token']);
-  expect(requests).toEqual(
-    Array.from({ length: 2 }, () => ({
-      name: 'Анна',
-      roomId: 'room-a',
-      peerId: 'peer-1',
-      sessionToken: 'session-1'
-    }))
-  );
-  expect(oldRoom.closed).toBe(true);
-});
-
 test('a replacement connects, publishes the kept microphone and only then takes over from the old room', async () => {
   const { lk, oldRoom } = await inCall({ requestToken: async () => ({ token: 't', url: 'wss://lk.example' }) });
   const outcome = await lk.service.attemptFreshLiveKitReplacement({ epoch: 1, attempt: 1 });

@@ -890,7 +890,6 @@ test.each(['on', 'default'] as const)('switching from off to %s waits for the ne
   const { writeDesktopNativeVoicePreference } = await import('@/platform/desktop-native-voice');
   const { getAppRealtime } = await import('@/api/realtime');
   const realtime = getAppRealtime();
-  vi.spyOn(realtime, 'isConnected').mockReturnValue(true);
   const send = vi.spyOn(realtime, 'send').mockImplementation(() => {});
   const restore = vi.spyOn(realtime, 'onRestore');
   const member = { roomId: ROOM_ID, peerId: call.state.peerId, sessionToken: SESSION_TOKEN };

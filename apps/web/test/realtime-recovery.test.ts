@@ -6,7 +6,6 @@ import {
   classifyRecoveryFailure,
   sanitizeRecoveryCode,
   type RealtimeRecoveryOptions,
-  type RecoveryTransition,
   type ReplacementOutcome
 } from '@voiceroom/call/engine/recovery/realtime-recovery';
 
@@ -50,7 +49,7 @@ function createController(overrides: Partial<RealtimeRecoveryOptions> & { clock?
   const clock = overrides.clock ?? fakeClock();
   const snapshots: unknown[] = [];
   const attempts: unknown[] = [];
-  const transitions: RecoveryTransition[] = [];
+  const transitions: unknown[] = [];
   const controller = new RealtimeRecoveryController({
     attemptReplacement: async (context) => {
       attempts.push(context);
@@ -70,136 +69,72 @@ function createController(overrides: Partial<RealtimeRecoveryOptions> & { clock?
   return { controller, clock, snapshots, attempts, transitions };
 }
 
-const tokenRefusal = { retryable: false, code: 'invalid_session', status: 403, tokenRefused: true } as const;
-
-test('R1/R2/R3: one fresh resync per token refusal, then only a later app epoch rearms', async () => {
-  const clock = fakeClock();
-  const outcomes = [tokenRefusal, tokenRefusal, tokenRefusal, { ok: true } as const];
-  const order: string[] = [];
-  const { controller } = createController({
-    clock,
-    requestAppSnapshot: () => {
-      order.push('join');
-    },
-    attemptReplacement: () => {
-      order.push('token');
-      return outcomes.shift() ?? tokenRefusal;
+test('a terminal failure waits for a later app socket epoch before trying once with its snapshot', async () => {
+  const terminal = classifyRecoveryFailure({ status: 403, code: 'invalid_session' });
+  const outcomes: ReplacementOutcome[] = [terminal, terminal, { ok: true }];
+  const attempts: number[] = [];
+  const { controller, clock, snapshots } = createController({
+    attemptReplacement: ({ epoch }) => {
+      attempts.push(epoch);
+      return outcomes.shift() ?? terminal;
     }
   });
   const snapshot = (appEpoch: number) => controller.appSnapshotApplied({ appEpoch, active: true, hasLocalPeer: true });
+
   controller.livekitDisconnected();
   snapshot(4);
   await Promise.resolve();
-  assert.deepEqual(order, ['join', 'token', 'join']);
-  snapshot(4);
-  await Promise.resolve();
-  assert.equal(controller.getSnapshot().phase, 'failed');
-  const failedEpoch = controller.getSnapshot().epoch;
-  clock.advance(60_000);
-  controller.appWsRestored(4);
-  snapshot(4);
-  assert.equal(controller.getSnapshot().epoch, failedEpoch);
-  assert.deepEqual(order, ['join', 'token', 'join', 'token']);
+  const failed = controller.getSnapshot().epoch;
+  for (const appEpoch of [4, 5]) {
+    assert.equal(controller.getSnapshot().phase, 'failed');
+    assert.equal(clock.pending(), 0);
+    clock.advance(60_000);
+    controller.appWsRestored(appEpoch);
+    snapshot(appEpoch);
+    assert.equal(controller.getSnapshot().epoch, failed + appEpoch - 4);
+    assert.deepEqual(attempts, appEpoch === 4 ? [failed] : [failed, failed + 1]);
 
-  controller.appWsLost(4);
-  controller.appWsRestored(5);
-  controller.appWsRestored(5);
-  assert.equal(controller.getSnapshot().epoch, failedEpoch + 1);
-  assert.deepEqual(order, ['join', 'token', 'join', 'token']);
-  snapshot(4);
-  assert.equal(order.length, 4);
-  snapshot(5);
-  await Promise.resolve();
-  assert.deepEqual(order, ['join', 'token', 'join', 'token', 'token', 'join']);
-  snapshot(5);
-  await Promise.resolve();
+    controller.appWsLost(appEpoch);
+    controller.appWsRestored(appEpoch + 1);
+    controller.appWsRestored(appEpoch + 1);
+    assert.equal(controller.getSnapshot().epoch, failed + appEpoch - 3);
+    assert.equal(controller.getSnapshot().phase, 'waiting-app-snapshot');
+    assert.equal(snapshots.length, 1, 'the app socket already replays the join');
+    assert.equal(snapshot(appEpoch), false);
+    assert.equal(attempts.length, appEpoch - 3);
+    snapshot(appEpoch + 1);
+    snapshot(appEpoch + 1);
+    await Promise.resolve();
+  }
+  assert.deepEqual(attempts, [failed, failed + 1, failed + 2]);
   assert.equal(controller.getSnapshot().phase, 'healthy');
-  assert.deepEqual(order, ['join', 'token', 'join', 'token', 'token', 'join', 'token']);
 });
 
-test('R6: a special retry is available on the fifth ordinary attempt and does not reset the budget', async () => {
-  const clock = fakeClock();
-  let calls = 0;
-  const { controller } = createController({
-    clock,
-    attemptReplacement: () => (++calls === 5 ? tokenRefusal : { retryable: true, status: 503 })
-  });
+test('a real online edge rearms a terminal failure once on the connected app socket', async () => {
+  const terminal = classifyRecoveryFailure({ status: 403, code: 'invalid_session' });
+  const { controller, clock, snapshots } = createController({ attemptReplacement: () => terminal });
   const snapshot = () => controller.appSnapshotApplied({ appEpoch: 4, active: true, hasLocalPeer: true });
   controller.livekitDisconnected();
   snapshot();
-  for (const delay of [500, 1_000, 2_000, 4_000]) {
-    await Promise.resolve();
-    clock.advance(delay);
-  }
   await Promise.resolve();
-  assert.equal(calls, 5);
-  assert.equal(controller.getSnapshot().phase, 'waiting-app-snapshot');
+  const failed = controller.getSnapshot().epoch;
+  controller.networkOnline();
+  assert.equal(controller.getSnapshot().epoch, failed);
+
+  controller.networkOffline();
+  controller.networkOnline();
+  controller.networkOnline();
+  assert.equal(controller.getSnapshot().epoch, failed + 1);
+  assert.deepEqual(snapshots, [
+    { epoch: failed, appEpoch: 4 },
+    { epoch: failed + 1, appEpoch: 4 }
+  ]);
   snapshot();
   await Promise.resolve();
-  assert.equal(calls, 6);
   assert.equal(controller.getSnapshot().phase, 'failed');
-  clock.advance(4_000);
-  assert.equal(calls, 6);
-});
-
-test('R4: duplicate online notifications coalesce with a later socket restore', async () => {
-  let calls = 0;
-  const { controller, snapshots } = createController({
-    attemptReplacement: () => {
-      calls++;
-      return { retryable: false, code: 'room_banned' };
-    }
-  });
-  const snapshot = (appEpoch: number) => controller.appSnapshotApplied({ appEpoch, active: true, hasLocalPeer: true });
-  controller.livekitDisconnected();
-  snapshot(4);
-  await Promise.resolve();
-  const failedEpoch = controller.getSnapshot().epoch;
   controller.networkOnline();
-  assert.equal(controller.getSnapshot().epoch, failedEpoch);
-  controller.networkOffline();
-  controller.appWsLost(4);
-  controller.appWsRestored(5);
-  controller.networkOnline();
-  controller.networkOnline();
-  assert.equal(controller.getSnapshot().epoch, failedEpoch + 1);
-  assert.equal(snapshots.length, 1);
-  snapshot(5);
-  snapshot(5);
-  await Promise.resolve();
-  assert.equal(controller.getSnapshot().phase, 'failed');
-  controller.networkOffline();
-  controller.networkOnline();
-  controller.networkOnline();
-  assert.equal(controller.getSnapshot().epoch, failedEpoch + 2);
-  assert.equal(snapshots.length, 2);
-  assert.equal(calls, 2);
-});
-
-test('R5/R6: a denied retry resync never authorizes a replacement token request', async () => {
-  const { controller, snapshots } = createController({ attemptReplacement: () => tokenRefusal });
-  controller.livekitDisconnected();
-  controller.appSnapshotApplied({ appEpoch: 4, active: true, hasLocalPeer: true });
-  await Promise.resolve();
-  assert.equal(snapshots.length, 2);
-  controller.appSnapshotRequestFailed({ code: 'invalid_session' });
-  assert.equal(controller.getSnapshot().phase, 'failed');
-  assert.equal(controller.getSnapshot().attempts, 1);
-});
-
-test('R9/R11: failed app restore alone does not declare in-place media recovery failed', () => {
-  const { controller, transitions } = createController();
-  controller.appSnapshotApplied({ appEpoch: 4, active: true, hasLocalPeer: true });
-  controller.livekitReconciled();
-  controller.livekitReconnecting();
-  controller.appWsLost(4);
-  controller.appWsRestored(5);
-  controller.appSnapshotRequestFailed({ code: 'invalid_session' });
-  assert.equal(controller.getSnapshot().phase, 'waiting-app-snapshot');
-  assert.equal(
-    transitions.some((event) => event.trigger === 'recovery_failed'),
-    false
-  );
+  assert.equal(controller.getSnapshot().epoch, failed + 1);
+  assert.equal(clock.pending(), 0);
 });
 
 test('activation is not healthy before either bootstrap authority is ready', () => {
@@ -391,37 +326,6 @@ test('authoritative snapshot received during cooldown is retained for a later me
   clock.advance(1_000);
   assert.equal(calls, 2);
   assert.equal(controller.getSnapshot().phase, 'waiting-livekit');
-});
-
-test('cooldown cannot use a retained snapshot after its app socket drops', async () => {
-  const clock = fakeClock();
-  let calls = 0;
-  const { controller } = createController({
-    clock,
-    maxAttempts: 1,
-    cooldownMs: 1_000,
-    attemptReplacement: async () => {
-      calls += 1;
-      return { retryable: true, status: 503, code: 'membership_unavailable' };
-    }
-  });
-  controller.livekitDisconnected();
-  controller.appSnapshotApplied({ appEpoch: 4, active: true, hasLocalPeer: true });
-  await Promise.resolve();
-  assert.equal(controller.getSnapshot().phase, 'failed');
-
-  controller.appWsLost(4);
-  controller.appWsRestored(5);
-  controller.appSnapshotApplied({ appEpoch: 5, active: true, hasLocalPeer: true });
-  controller.appWsLost(5);
-  clock.advance(1_000);
-  assert.equal(calls, 1);
-  assert.equal(controller.getSnapshot().phase, 'failed');
-
-  controller.appWsRestored(6);
-  assert.equal(calls, 1);
-  controller.appSnapshotApplied({ appEpoch: 6, active: true, hasLocalPeer: true });
-  assert.equal(calls, 2);
 });
 
 test('initial app connection does not replay a queued join, later connection epochs request one snapshot', () => {
@@ -636,19 +540,6 @@ test('abandoning with the app connection down leaves a later real drop all its a
   assert.equal(controller.getSnapshot().attempts, 1);
   controller.appWsLost(4);
   assert.equal(controller.getSnapshot().attempts, 0);
-});
-
-test('the first required restore still fails on timeout after an optional replacement was abandoned', () => {
-  const { controller, clock, transitions } = healthy();
-  controller.requestLiveKitReplacement();
-  controller.appWsLost(4);
-  controller.livekitDisconnected();
-  controller.appWsRestored(5);
-  clock.setTimeout(() => controller.appSnapshotRequestFailed({ code: 'transport_error' }), 7_000);
-  clock.advance(7_000);
-
-  assert.equal(controller.getSnapshot().phase, 'failed');
-  assert.equal(transitions.at(-1)?.code, 'transport_error');
 });
 
 test('a real drop after an asked replacement went through, before its snapshot, gets a snapshot request of its own', async () => {

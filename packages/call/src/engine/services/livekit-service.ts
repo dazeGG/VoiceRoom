@@ -270,12 +270,10 @@ export async function attemptFreshLiveKitReplacement({
   let candidate: Room | null = null;
   let microphonePublication: LocalTrackPublication | null = null;
   let screenPublications = new Map<string, LocalTrackPublication>();
-  let requestingCredentials = true;
 
   try {
     if (oldRoom) reconcileGenerationFor(oldRoom).invalidate();
     const credentials = await requestLiveKitCredentials(state.self?.name || state.peerId, isCurrent);
-    requestingCredentials = false;
     if (!isCurrent()) return { retryable: true, code: 'transport_error' };
 
     candidate = await connectLiveKitWithFallback(credentials, isCurrent);
@@ -344,8 +342,7 @@ export async function attemptFreshLiveKitReplacement({
     return {
       retryable: !failure || isRetryableLiveKitApiFailure(failure),
       status,
-      code,
-      ...(requestingCredentials && code === 'invalid_session' && { tokenRefused: true })
+      code
     };
   }
 }

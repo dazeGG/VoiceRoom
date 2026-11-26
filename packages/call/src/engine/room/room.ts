@@ -88,18 +88,20 @@ import {
 import { createLogger, errorContext } from '../diagnostics';
 
 const log = createLogger('room');
-const MANUAL_JOIN_ACK_TIMEOUT_MS = 10_000;
 
 let voiceJoinSent = false;
 let stopVideoVisibilitySync: (() => void) | null = null;
 let joinAttemptGeneration = 0;
+let voiceReconnectGeneration: number | null = null;
 let activeJoinAttempt: Promise<void> | null = null;
 let finishJoinTelemetry: ((outcome: 'failure' | 'cancel') => void) | null = null;
 
 const handleVoiceEvent = createVoiceEventHandler({
   leaveRoom: () => {
+    const retryFailed = state.connecting && voiceReconnectGeneration === joinAttemptGeneration;
     finishJoinTelemetry?.('failure');
     leaveRoom();
+    if (retryFailed) markRoomVoiceFailed();
   },
   showModeration: (reason) => showRoomModerationScreen(reason),
   showNotFound: () => showRoomNotFound()
@@ -179,24 +181,10 @@ function showRoomModerationScreen(reason: 'banned' | 'kicked'): void {
 
 export async function joinRoom(event?: Event): Promise<void> {
   event?.preventDefault();
-  await runRoomJoin(false);
-}
-
-export async function reconnectRoomVoice(): Promise<void> {
-  if (!state.voiceRecoveryFailed || state.connecting || callPageState().screen !== 'room') return;
-  const roomId = state.roomId;
-  leaveVoiceRoom(true);
-  const generation = joinAttemptGeneration + 1;
-  await runRoomJoin(true);
-  if (isCurrentJoinAttempt(generation) && state.roomId === roomId && callPageState().screen === 'room' && !state.joined)
-    markRoomVoiceFailed();
-}
-
-async function runRoomJoin(reconnect: boolean): Promise<void> {
   if (state.joined || state.connecting) return;
 
   const generation = ++joinAttemptGeneration;
-  const attempt = performJoinRoom(generation, reconnect);
+  const attempt = performJoinRoom(generation);
   activeJoinAttempt = attempt;
   try {
     await attempt;
@@ -205,8 +193,31 @@ async function runRoomJoin(reconnect: boolean): Promise<void> {
   }
 }
 
-async function performJoinRoom(generation: number, reconnect: boolean): Promise<void> {
+export async function reconnectRoomVoice(): Promise<void> {
+  if (!state.voiceRecoveryFailed || state.connecting || callPageState().screen !== 'room') return;
+
+  const roomId = state.roomId;
+  leaveRoom();
+  state.voiceRecoveryFailed = true;
+  const generation = joinAttemptGeneration + 1;
+  voiceReconnectGeneration = generation;
+  try {
+    await joinRoom();
+  } finally {
+    if (voiceReconnectGeneration === generation) voiceReconnectGeneration = null;
+    if (
+      isCurrentJoinAttempt(generation) &&
+      state.roomId === roomId &&
+      callPageState().screen === 'room' &&
+      !state.joined
+    )
+      markRoomVoiceFailed();
+  }
+}
+
+async function performJoinRoom(generation: number): Promise<void> {
   const isCurrent = (): boolean => isCurrentJoinAttempt(generation);
+  const reconnectingVoice = voiceReconnectGeneration === generation;
   let pendingMicrophoneCapture: MicrophoneCapture | null = null;
   const startedAt = performance.now();
   // Keep the original attempt's context if navigation or sign-in changes while
@@ -301,35 +312,7 @@ async function performJoinRoom(generation: number, reconnect: boolean): Promise<
     const realtime = getCallPorts().transport.realtime;
     realtime.ensureConnected();
     state.voiceRealtimeTeardown?.();
-    const joiningPeerId = state.peerId;
-    let finishAcknowledgement = (_appEpoch: number | null): void => {};
-    const acknowledgement = reconnect
-      ? new Promise<number | null>((resolve) => {
-          const timer = setTimeout(() => resolve(null), MANUAL_JOIN_ACK_TIMEOUT_MS);
-          finishAcknowledgement = (appEpoch) => {
-            clearTimeout(timer);
-            resolve(appEpoch);
-          };
-        })
-      : null;
     const detachVoiceEvents = realtime.subscribeRoom(state.roomId, (event) => {
-      if (!isCurrent()) return;
-      if (reconnect && state.connecting && (event.type === 'room.full' || event.type === 'server.full')) {
-        reportOutcome('failure');
-        leaveVoiceRoom(true);
-        markRoomVoiceFailed();
-        return;
-      }
-      if (
-        acknowledgement &&
-        event.type === 'room.snapshot' &&
-        event.payload.mode === 'active' &&
-        event.payload.roomId === roomId &&
-        event.payload.peers.some((peer) => peer.id === joiningPeerId)
-      ) {
-        // Each transport delivers active snapshots only for its current join.
-        finishAcknowledgement(realtime.getConnectionEpoch());
-      }
       handleVoiceEvent(event).catch((err: unknown) => {
         log.error('voice realtime handler failed', errorContext(err));
       });
@@ -347,28 +330,22 @@ async function performJoinRoom(generation: number, reconnect: boolean): Promise<
     window.addEventListener('offline', handleOffline);
     window.addEventListener('online', handleOnline);
     state.voiceRealtimeTeardown = () => {
-      finishAcknowledgement(null);
-      cancelRoomRecovery();
+      // The normal join tears down its recovery on refusal. Keep the retry action visible.
+      cancelRoomRecovery(reconnectingVoice);
       window.removeEventListener('offline', handleOffline);
       window.removeEventListener('online', handleOnline);
       detachConnState();
       detachVoiceEvents();
     };
-    voiceJoinSent = true;
     realtime.join({
       roomId: state.roomId,
       peerId: state.peerId,
       sessionToken: state.sessionToken,
       name
     });
+    voiceJoinSent = true;
     setServerConnectionStatus('connecting');
 
-    if (acknowledgement) {
-      const appEpoch = await acknowledgement;
-      if (!isCurrent()) return;
-      if (appEpoch === null || !realtime.isConnected() || appEpoch !== realtime.getConnectionEpoch())
-        throw new Error('Manual voice join was not acknowledged on the current connection');
-    }
     const connected = await connectLiveKitRoom(name, isCurrent, microphoneCapture);
     if (!connected || !isCurrent()) {
       if (microphoneCapture && state.localStream === microphoneCapture.stream) stopLocalStream();
@@ -433,7 +410,7 @@ async function performJoinRoom(generation: number, reconnect: boolean): Promise<
     log.error('room action failed', errorContext(error));
     const failure = getCallPorts().transport.failure(error);
     const banned = failure?.code === 'room_banned';
-    if (!banned && !reconnect) showToast(formatJoinError(error, failure));
+    if (!banned) showToast(formatJoinError(error, failure));
     setVoiceConnectionStatus(error instanceof LiveKitTransportError ? 'no-route' : 'error');
     if (voiceJoinSent && state.roomId && state.peerId && state.sessionToken) {
       getCallPorts().transport.realtime.leave({
@@ -448,7 +425,7 @@ async function performJoinRoom(generation: number, reconnect: boolean): Promise<
     state.serverPeerIds.clear();
     state.serverPeerSyncReady = false;
     await disconnectLiveKitRoom();
-    if (!isCurrent()) return;
+    if (reconnectingVoice && !isCurrent()) return;
     state.self = null;
     stopLocalStream();
     if (banned) showRoomModerationScreen('banned');
@@ -481,11 +458,6 @@ async function openJoinMicrophone(isCurrent: () => boolean): Promise<MicrophoneC
 }
 
 export function leaveRoom(): void {
-  leaveVoiceRoom(false);
-}
-
-function leaveVoiceRoom(reconnecting: boolean): void {
-  if (!reconnecting) state.voiceRecoveryFailed = false;
   const relief = processingReliefForPoll();
   const nativeVoice = nativeVoiceTelemetryForReport();
   invalidateMicrophoneActions();

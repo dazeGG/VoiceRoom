@@ -43,6 +43,13 @@
   display: contents;
 }
 
+.mobile-call__voice-failure {
+  position: absolute;
+  inset-block-start: calc(var(--mc-safe-top) + var(--size-56) + var(--space-8));
+  inset-inline: var(--space-12);
+  z-index: 6;
+}
+
 .mobile-call__content {
   position: absolute;
   top: var(--mc-top);

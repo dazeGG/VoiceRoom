@@ -19,6 +19,7 @@ import MobileCallTile from './MobileCallTile.vue';
 import MobileCallTopbar from './MobileCallTopbar.vue';
 import MobileCameraFlip from './MobileCameraFlip.vue';
 import RoomCallTimer from './RoomCallTimer.vue';
+import RoomVoiceFailure from './RoomVoiceFailure.vue';
 
 const mobileCall = useMobileCallUiStore();
 const roomUi = useRoomUiStore();
@@ -87,6 +88,8 @@ onUnmounted(() => {
       <MobileCallTopbar :duo="scene.kind === 'duo'" />
       <MobileCallDock />
     </div>
+
+    <RoomVoiceFailure v-if="roomClientState.voiceRecoveryFailed" class="mobile-call__voice-failure" />
 
     <Pressable
       class="mobile-call__bubble"

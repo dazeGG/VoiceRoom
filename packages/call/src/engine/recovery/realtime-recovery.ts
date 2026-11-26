@@ -12,7 +12,7 @@ export type RecoveryPhase =
   'idle' | 'waiting-app-snapshot' | 'waiting-livekit' | 'recovering' | 'healthy' | 'failed' | 'cancelled';
 
 /** A replacement attempt that failed: whether to try again, and why. */
-export type AttemptFailure = { ok?: false; retryable: boolean; status?: number; code?: string; tokenRefused?: true };
+export type AttemptFailure = { ok?: false; retryable: boolean; status?: number; code?: string };
 
 /** What one replacement attempt comes to: it worked, or it failed. */
 export type ReplacementOutcome = { ok: true } | AttemptFailure;
@@ -34,7 +34,7 @@ export type RecoveryTransition = Readonly<{
 
 export interface RealtimeRecoveryOptions {
   attemptReplacement: (context: { epoch: number; attempt: number }) => ReplacementOutcome | Promise<ReplacementOutcome>;
-  requestAppSnapshot: (context: { epoch: number; appEpoch: number; fresh?: true }) => boolean | void;
+  requestAppSnapshot: (context: { epoch: number; appEpoch: number }) => boolean | void;
   onTransition?: (event: RecoveryTransition) => void;
   now?: () => number;
   setTimeout?: ScheduleTimer;
@@ -112,10 +112,8 @@ export class RealtimeRecoveryController {
   livekitReady: boolean;
   replacementRequired: boolean;
   optionalReplacement: boolean;
+  abandonedSnapshotRequest: boolean;
   attempts: number;
-  // The one-refusal allowance gets its own request even at the end of the ordinary budget.
-  private ordinaryAttempts = 0;
-  private sessionRetry: 'available' | 'waiting' | 'used' = 'available';
   startedAt: number;
   effectGeneration: number;
   inFlight: boolean;
@@ -127,6 +125,7 @@ export class RealtimeRecoveryController {
   rearmNeedsSnapshotRequest: boolean;
   rearmSnapshotReady: boolean;
   failedAppEpoch: number;
+  private terminalFailure = false;
   isNetworkOnline: boolean;
   hasSeenAppConnection: boolean;
 
@@ -164,6 +163,7 @@ export class RealtimeRecoveryController {
     this.livekitReady = false;
     this.replacementRequired = false;
     this.optionalReplacement = false;
+    this.abandonedSnapshotRequest = false;
     this.attempts = 0;
     this.startedAt = 0;
     this.effectGeneration = 0;
@@ -180,14 +180,10 @@ export class RealtimeRecoveryController {
     this.hasSeenAppConnection = false;
   }
 
-  activate({
-    appEpoch = 0,
-    appConnected = false,
-    previousEpoch = this.epoch
-  }: { appEpoch?: number; appConnected?: boolean; previousEpoch?: number } = {}): number {
+  activate({ appEpoch = 0, appConnected = false }: { appEpoch?: number; appConnected?: boolean } = {}): number {
     this.cancelAllTimers();
     this.effectGeneration += 1;
-    this.epoch = previousEpoch + 1;
+    this.epoch += 1;
     this.active = true;
     this.appEpoch = appEpoch;
     this.appConnected = appConnected;
@@ -196,7 +192,8 @@ export class RealtimeRecoveryController {
     this.livekitReady = false;
     this.replacementRequired = false;
     this.optionalReplacement = false;
-    this.resetAttempts();
+    this.abandonedSnapshotRequest = false;
+    this.attempts = 0;
     this.phase = 'waiting-app-snapshot';
     this.startedAt = this.now();
     this.emit('activate', 'accepted');
@@ -218,7 +215,6 @@ export class RealtimeRecoveryController {
     this.appEpoch = appEpoch;
     this.appConnected = false;
     this.snapshotReady = false;
-    this.rearmSnapshotReady = false;
     if (this.phase === 'failed') {
       this.emit('app_ws_lost', 'ignored');
       return false;
@@ -231,7 +227,6 @@ export class RealtimeRecoveryController {
       this.inFlight = false;
       this.epoch += 1;
       this.startedAt = this.now();
-      this.sessionRetry = 'available';
     }
     this.beginRecovery('app_ws_lost');
     this.setPhase('waiting-app-snapshot', 'app_ws_lost');
@@ -241,11 +236,9 @@ export class RealtimeRecoveryController {
   appWsRestored(appEpoch: number): boolean {
     if (!this.active || !Number.isInteger(appEpoch) || appEpoch < this.appEpoch) return false;
     const laterEpoch = appEpoch > this.appEpoch;
-    if (!laterEpoch && this.appConnected) return false;
     this.appEpoch = appEpoch;
     this.appConnected = true;
     this.snapshotReady = false;
-    this.rearmSnapshotReady = false;
     if (!this.hasSeenAppConnection) {
       this.hasSeenAppConnection = true;
       this.emit('app_ws_initial', 'accepted');
@@ -275,7 +268,7 @@ export class RealtimeRecoveryController {
     active: boolean;
     hasLocalPeer: boolean;
   }): boolean {
-    if (!this.active || !this.appConnected || appEpoch !== this.appEpoch || !active || !hasLocalPeer) {
+    if (!this.active || appEpoch !== this.appEpoch || !active || !hasLocalPeer) {
       this.emit('app_snapshot', 'rejected');
       if (this.active && appEpoch === this.appEpoch && this.optionalReplacement && active) {
         this.keepStandingConnection('rejected', {});
@@ -296,11 +289,12 @@ export class RealtimeRecoveryController {
   }
 
   appSnapshotRequestFailed(error: unknown): void {
-    if (!this.active) return;
+    if (!this.active || (this.phase === 'failed' && this.terminalFailure)) return;
     const classified = classifyRecoveryFailure(error);
-    // A restore replay can fail while LiveKit still stands or is reconciling in place.
-    // Only recovery that needs an acknowledged join before replacing media can fail here.
-    if (this.phase === 'failed' || !this.appConnected || !this.replacementRequired) {
+    // The answer to a request nothing waits for any more: an abandoned replacement's
+    // keeps retrying for seconds, and the call may be waiting for its socket by then.
+    if (this.phase === 'healthy' || this.abandonedSnapshotRequest) {
+      this.abandonedSnapshotRequest = false;
       this.emit('app_snapshot_failed', 'ignored', this.attempts, classified.status, classified.code);
       return;
     }
@@ -316,8 +310,9 @@ export class RealtimeRecoveryController {
   }
 
   livekitReconnecting(): void {
-    if (!this.active || this.phase === 'failed') return;
+    if (!this.active) return;
     this.livekitReady = false;
+    if (this.phase === 'failed' && this.terminalFailure) return;
     this.beginRecovery('livekit_reconnecting');
     this.setPhase('waiting-livekit', 'livekit_reconnecting');
   }
@@ -347,6 +342,7 @@ export class RealtimeRecoveryController {
     this.optionalReplacement = false;
     this.livekitReady = false;
     this.replacementRequired = true;
+    if (this.phase === 'failed' && this.terminalFailure) return;
     if (!alreadyWaiting) {
       // Snapshot requests are one per epoch, and the asked replacement already made this one's.
       if (wasOptional) this.epoch += 1;
@@ -392,12 +388,18 @@ export class RealtimeRecoveryController {
     if (!this.active || this.isNetworkOnline) return;
     this.isNetworkOnline = true;
     if (this.phase === 'failed') {
-      if (this.appConnected) this.markMeaningfulRearm('network_online', true);
+      if (this.terminalFailure && !this.appConnected) return;
+      this.markMeaningfulRearm('network_online', true);
       return;
     }
     if (this.phase === 'recovering' && !this.replacementRequired && this.livekitReady && this.snapshotReady) {
       this.completeHealthy('network_online');
       return;
+    }
+    if (this.replacementRequired) {
+      this.snapshotReady = false;
+      this.setPhase('waiting-app-snapshot', 'network_online');
+      this.requestSnapshot();
     }
   }
 
@@ -429,7 +431,7 @@ export class RealtimeRecoveryController {
     if (this.phase === 'healthy') {
       this.epoch += 1;
       this.startedAt = this.now();
-      this.resetAttempts();
+      this.attempts = 0;
       this.effectGeneration += 1;
     }
     if (this.phase !== 'failed') this.setPhase('recovering', trigger);
@@ -445,15 +447,10 @@ export class RealtimeRecoveryController {
     this.setPhase('healthy', trigger, 'succeeded');
   }
 
-  private resetAttempts(): void {
-    this.attempts = 0;
-    this.ordinaryAttempts = 0;
-    this.sessionRetry = 'available';
-  }
-
-  requestSnapshot(fresh?: true): void {
+  requestSnapshot(): void {
     if (!this.active || !this.appConnected) return;
-    const requested = this.requestAppSnapshot({ epoch: this.epoch, appEpoch: this.appEpoch, ...(fresh && { fresh }) });
+    this.abandonedSnapshotRequest = false;
+    const requested = this.requestAppSnapshot({ epoch: this.epoch, appEpoch: this.appEpoch });
     if (requested === false) this.appSnapshotRequestFailed({ code: 'transport_error' });
   }
 
@@ -467,69 +464,44 @@ export class RealtimeRecoveryController {
       this.retryTimer
     )
       return;
-    const sessionRetry = this.sessionRetry === 'waiting';
-    if (!sessionRetry && this.ordinaryAttempts >= this.maxAttempts) {
+    if (this.attempts >= this.maxAttempts) {
       this.enterCooldown();
       return;
     }
     const epoch = this.epoch;
     const effectGeneration = ++this.effectGeneration;
     const attempt = ++this.attempts;
-    if (sessionRetry) this.sessionRetry = 'used';
-    else this.ordinaryAttempts += 1;
     this.inFlight = true;
     this.setPhase('waiting-livekit', 'replacement_attempt');
     Promise.resolve(this.attemptReplacement({ epoch, attempt }))
-      .then((outcome) => this.finishAttempt(epoch, effectGeneration, attempt, sessionRetry, outcome))
-      .catch((error: unknown) =>
-        this.finishAttempt(epoch, effectGeneration, attempt, sessionRetry, classifyRecoveryFailure(error))
-      );
+      .then((outcome) => this.finishAttempt(epoch, effectGeneration, attempt, outcome))
+      .catch((error: unknown) => this.finishAttempt(epoch, effectGeneration, attempt, classifyRecoveryFailure(error)));
   }
 
-  finishAttempt(
-    epoch: number,
-    effectGeneration: number,
-    attempt: number,
-    sessionRetry: boolean,
-    outcome: ReplacementOutcome
-  ): void {
+  finishAttempt(epoch: number, effectGeneration: number, attempt: number, outcome: ReplacementOutcome): void {
     if (!this.isCurrent(epoch) || effectGeneration !== this.effectGeneration) return;
     this.inFlight = false;
     if (outcome.ok === true) {
       this.livekitReady = true;
       this.replacementRequired = false;
-      this.emit(sessionRetry ? 'session_retry' : 'replacement_attempt', 'succeeded', attempt);
+      this.emit('replacement_attempt', 'succeeded', attempt);
       if (this.snapshotReady) this.completeHealthy('replacement_succeeded');
       else this.setPhase('waiting-app-snapshot', 'replacement_succeeded');
       return;
     }
     const code = sanitizeRecoveryCode(outcome.code);
     const status = outcome.status !== undefined && Number.isInteger(outcome.status) ? outcome.status : 0;
-    this.emit(
-      sessionRetry ? 'session_retry' : 'replacement_attempt',
-      outcome.retryable ? 'retryable' : 'terminal',
-      attempt,
-      status,
-      code
-    );
+    this.emit('replacement_attempt', outcome.retryable ? 'retryable' : 'terminal', attempt, status, code);
     const failure = { status, code };
-    if (outcome.tokenRefused && code === 'invalid_session' && this.sessionRetry === 'available') {
-      this.sessionRetry = 'waiting';
-      this.snapshotReady = false;
-      this.setPhase('waiting-app-snapshot', 'session_retry');
-      this.emit('session_retry', 'requested', attempt, status, code);
-      this.requestSnapshot(true);
-      return;
-    }
     if (!outcome.retryable) {
       this.fail('terminal', failure);
       return;
     }
-    if (this.ordinaryAttempts >= this.maxAttempts) {
+    if (this.attempts >= this.maxAttempts) {
       this.enterCooldown(failure);
       return;
     }
-    const baseDelay = this.retryDelaysMs[Math.min(this.ordinaryAttempts - 1, this.retryDelaysMs.length - 1)] ?? 0;
+    const baseDelay = this.retryDelaysMs[Math.min(this.attempts - 1, this.retryDelaysMs.length - 1)] ?? 0;
     const delay = Math.round(baseDelay * (0.5 + this.random() * 0.5));
     this.retryTimer = this.schedule(() => {
       this.retryTimer = null;
@@ -544,14 +516,19 @@ export class RealtimeRecoveryController {
       this.keepStandingConnection(result, failure);
       return;
     }
-    this.cancelAllTimers();
-    this.effectGeneration += 1;
-    this.inFlight = false;
-    this.cooldownComplete = result === 'terminal';
-    this.meaningfulRearm = false;
-    this.rearmNeedsSnapshotRequest = false;
-    this.rearmSnapshotReady = false;
+    this.clearRetryTimer();
     this.failedAppEpoch = this.appEpoch;
+    this.terminalFailure = result === 'terminal';
+    if (this.terminalFailure) {
+      // Terminal failures skip the cooldown but still require a real reconnect event.
+      this.cancelAllTimers();
+      this.effectGeneration += 1;
+      this.inFlight = false;
+      this.cooldownComplete = true;
+      this.meaningfulRearm = false;
+      this.rearmNeedsSnapshotRequest = false;
+      this.rearmSnapshotReady = false;
+    }
     this.phase = 'failed';
     this.emit('recovery_failed', result, this.attempts, failure.status ?? 0, failure.code ?? 'unknown_error');
   }
@@ -565,10 +542,11 @@ export class RealtimeRecoveryController {
     this.epoch += 1;
     this.inFlight = false;
     this.optionalReplacement = false;
+    this.abandonedSnapshotRequest = true;
     this.replacementRequired = false;
     this.livekitReady = true;
     this.emit(REPLACEMENT_ABANDONED, result, this.attempts, failure.status ?? 0, failure.code ?? 'unknown_error');
-    this.resetAttempts();
+    this.attempts = 0;
     if (this.appConnected) {
       this.snapshotReady = true;
       this.completeHealthy(REPLACEMENT_ABANDONED);
@@ -580,6 +558,10 @@ export class RealtimeRecoveryController {
   enterCooldown(failure: { status?: number; code?: string } = {}): void {
     this.fail('exhausted', failure);
     if (this.phase !== 'failed') return;
+    this.cooldownComplete = false;
+    this.meaningfulRearm = false;
+    this.rearmNeedsSnapshotRequest = false;
+    this.rearmSnapshotReady = false;
     const failedEpoch = this.epoch;
     const cooldownDelay = Math.min(this.cooldownMs * 8, this.cooldownMs * 2 ** this.cooldownCycles);
     this.cooldownCycles += 1;
@@ -603,11 +585,11 @@ export class RealtimeRecoveryController {
   }
 
   tryRearm(): void {
-    if (this.phase !== 'failed' || !this.appConnected || !this.cooldownComplete || !this.meaningfulRearm) return;
+    if (this.phase !== 'failed' || !this.cooldownComplete || !this.meaningfulRearm) return;
     this.effectGeneration += 1;
     this.epoch += 1;
     this.startedAt = this.now();
-    this.resetAttempts();
+    this.attempts = 0;
     this.snapshotReady = this.rearmSnapshotReady;
     this.cooldownComplete = false;
     this.meaningfulRearm = false;

@@ -7,7 +7,6 @@ import { createPinia, setActivePinia } from 'pinia';
 import { vi } from 'vitest';
 import { installWebCallPortsForTest } from './call-ports';
 import type { Participant } from '@voiceroom/call/engine/core/types';
-import type { CallTransport } from '@voiceroom/call/engine/transport';
 import type * as LiveKitServiceModule from '@voiceroom/call/engine/services/livekit-service';
 import type * as ScreenProfilesModule from '@voiceroom/call/engine/media/profiles';
 import type * as ParticipantsModule from '@voiceroom/call/engine/room/participants';
@@ -75,9 +74,7 @@ export async function loadLiveKitHarness(
   options: {
     autoResolveClient?: boolean;
     /** Answers the LiveKit token request. */
-    requestToken?: (
-      input: Parameters<CallTransport['requestLiveKitToken']>[0]
-    ) => Promise<{ token: string; url?: string; urls?: string[] }>;
+    requestToken?: () => Promise<{ token: string; url?: string; urls?: string[] }>;
     /** LiveKit URLs whose connect() fails. */
     failingUrls?: string[];
     /** Runs as a room connects: fills in who is there, or holds its publishing back. */

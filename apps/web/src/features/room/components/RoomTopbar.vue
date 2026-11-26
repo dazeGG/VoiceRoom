@@ -7,7 +7,6 @@ import {
   MenuItem,
   MenuLabel,
   Button,
-  Callout,
   ControlGroup
 } from '@voiceroom/ui-kit/components';
 import { t } from '@/shared/i18n';
@@ -20,10 +19,11 @@ import { iconMd, iconSm } from '@voiceroom/ui-kit/icon-defaults';
 import { copyText } from '@/shared/utils/clipboard';
 import { state as roomClientState } from '@voiceroom/call/engine/core/room-runtime.store';
 import { getConnectionStatusView } from '@voiceroom/call/engine/ui/status';
-import { reconnectRoomVoice } from '@voiceroom/call/engine/room/room';
 import { showToast } from '@voiceroom/call/engine/ui/toast';
 import { useParticipantsUiStore } from '@voiceroom/call/engine/core/participants-ui.store';
 import { useRoomPanelToggleStore } from '../room-panel-toggle.store';
+import { useMobileCallUiStore } from '../mobile-call-ui.store';
+import RoomVoiceFailure from './RoomVoiceFailure.vue';
 import { useCallPageStore } from '@voiceroom/call/engine/core/call-page.store';
 import { useRoomSettingsStore } from '../room-settings.store';
 import { useRoomUiStore } from '../room-ui.store';
@@ -41,6 +41,7 @@ const roomUi = useRoomUiStore();
 const roomSettingsUi = useRoomSettingsStore();
 const panelToggle = useRoomPanelToggleStore();
 const participantsUi = useParticipantsUiStore();
+const mobileCall = useMobileCallUiStore();
 
 const connection = computed(() => getConnectionStatusView());
 const voiceFailed = computed(() => page.screen === 'room' && roomClientState.voiceRecoveryFailed);
@@ -178,18 +179,6 @@ function notifyRoomsChanged(): void {
       <span class="room-topbar__status-dot" aria-hidden="true"></span>
       <span>{{ connection.label }}</span>
     </div>
-    <Callout
-      v-if="voiceFailed"
-      class="room-topbar__voice-failure"
-      role="status"
-      tone="danger"
-      :title="connection.label"
-    >
-      <template #actions>
-        <Button variant="outline" size="sm" :disabled="roomClientState.connecting" @click="reconnectRoomVoice">
-          {{ t('Подключиться снова') }}
-        </Button>
-      </template>
-    </Callout>
+    <RoomVoiceFailure v-if="voiceFailed && !mobileCall.isMobileCallActive()" class="room-topbar__voice-failure" />
   </Topbar>
 </template>
