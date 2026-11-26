@@ -237,7 +237,36 @@ test('an exhausted cooldown does not wait for a pending replacement before a fre
   assert.equal(controller.getSnapshot().phase, 'healthy');
 });
 
-test('a cooldown from an earlier snapshot failure cannot rearm a terminal refusal', () => {
+test('a late terminal refusal keeps an exhausted cooldown and its fresh replay', async () => {
+  const pending = deferred();
+  const attempts: number[] = [];
+  const { controller, clock } = createController({
+    cooldownMs: 1_000,
+    attemptReplacement: ({ epoch }) => {
+      attempts.push(epoch);
+      return attempts.length === 1 ? pending.promise : { ok: true };
+    }
+  });
+  controller.livekitDisconnected();
+  controller.appSnapshotApplied({ appEpoch: 4, active: true, hasLocalPeer: true });
+  controller.appSnapshotRequestFailed({ code: 'transport_error' });
+  assert.equal(controller.getSnapshot().phase, 'failed');
+
+  controller.appWsLost(4);
+  controller.appWsRestored(5);
+  controller.appSnapshotApplied({ appEpoch: 5, active: true, hasLocalPeer: true });
+  pending.resolve({ retryable: false, status: 403, code: 'invalid_session' });
+  await Promise.resolve();
+  await Promise.resolve();
+  assert.equal(controller.getSnapshot().phase, 'failed');
+
+  clock.advance(1_000);
+  await Promise.resolve();
+  assert.equal(attempts.length, 2);
+  assert.equal(controller.getSnapshot().phase, 'healthy');
+});
+
+test('a terminal refusal during an exhausted cooldown keeps one cooldown probe, as on main', () => {
   const { controller, clock, snapshots } = createController({ cooldownMs: 1_000 });
   controller.livekitDisconnected();
   controller.appSnapshotRequestFailed({ code: 'transport_error' });
@@ -245,9 +274,10 @@ test('a cooldown from an earlier snapshot failure cannot rearm a terminal refusa
 
   const failedEpoch = controller.getSnapshot().epoch;
   clock.advance(1_000);
-  assert.equal(controller.getSnapshot().epoch, failedEpoch);
-  assert.equal(controller.getSnapshot().phase, 'failed');
-  assert.equal(snapshots.length, 1);
+  assert.equal(controller.getSnapshot().epoch, failedEpoch + 1);
+  assert.equal(controller.getSnapshot().phase, 'waiting-app-snapshot');
+  assert.equal(snapshots.length, 2);
+  assert.equal(clock.pending(), 0);
 });
 
 test('activation is not healthy before either bootstrap authority is ready', () => {

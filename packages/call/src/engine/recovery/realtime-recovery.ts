@@ -524,9 +524,12 @@ export class RealtimeRecoveryController {
       this.keepStandingConnection(result, failure);
       return;
     }
+    // A terminal outcome that lands while an exhausted failure is already waiting
+    // keeps main's exhausted rearm: its cooldown and recorded edge stay intact.
+    const keepExhausted = result === 'terminal' && this.phase === 'failed' && !this.terminalFailure;
     this.clearRetryTimer();
     this.failedAppEpoch = this.appEpoch;
-    this.terminalFailure = result === 'terminal';
+    if (!keepExhausted) this.terminalFailure = result === 'terminal';
     if (this.terminalFailure) {
       // Terminal failures skip the cooldown but still require a real reconnect event.
       this.cooldownComplete = true;
