@@ -117,7 +117,8 @@ test('the call migrations preserve legacy rows and refuse rollback while call st
     `INSERT INTO direct_messages (id, sender_id, recipient_id, body, metadata) VALUES ('history', 'alice', 'bob', 'Call', $1)`,
     [missed]
   );
-  assert.equal((await down())[0]?.name, MISSED_ORDER_MIGRATION);
+  const missedOrderSteps = await rollBackThrough(databaseUrl, MISSED_ORDER_MIGRATION);
+  assert.equal(missedOrderSteps, rollbackCountThrough(MISSED_ORDER_MIGRATION));
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -133,7 +134,7 @@ test('the call migrations preserve legacy rows and refuse rollback while call st
     await client.query('ROLLBACK');
     client.release();
   }
-  assert.equal((await runMigrations({ databaseUrl, logger: SILENT })).length, 1);
+  assert.equal((await runMigrations({ databaseUrl, logger: SILENT })).length, missedOrderSteps);
   assert.equal(await rollBackThrough(databaseUrl, MISSED_MIGRATION), rollbackCountThrough(MISSED_MIGRATION));
   assert.equal(
     (await pool.query<{ name: string | null }>(`SELECT to_regclass('direct_messages_missed_voice_calls_idx') AS name`))
