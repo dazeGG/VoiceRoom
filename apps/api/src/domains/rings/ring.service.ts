@@ -21,7 +21,10 @@ export interface RingServiceDeps {
     recipientId: string;
     status: 'accepted' | 'declined';
   }): Promise<DirectMessage | null>;
-  queueWebPush(userId: string, payload: PushPayload, context: PushContext): Promise<unknown>;
+  /** The Web Push with preferences applied; the caller starts it. Null when none is due. */
+  prepareWebPush(userId: string, payload: PushPayload, context: PushContext): Promise<(() => Promise<unknown>) | null>;
+  /** Runs emit while the invitation message still exists, ordered with conversation deletion. */
+  whileMessageLive(message: { id: string; senderId: string; recipientId: string }, emit: () => void): Promise<boolean>;
   nativePush(userId: string, payload: unknown, context: TransportContext): Promise<unknown>;
   preferences(userId: string): Promise<{
     doNotDisturb?: boolean;
@@ -54,17 +57,7 @@ export function createRingService(deps: RingServiceDeps) {
     const room = result.room;
     // The transaction has committed. Failures here must not undo the stored
     // invitation; clients can replay its request ID to recover the snapshot.
-    deps.notifyUser(userId, {
-      type: 'ring.incoming',
-      fromUser: notificationActor(caller),
-      room: { id: roomId, name: room?.name || '', emoji: room?.emoji || '' },
-      expiresAt: result.ring.expiresAt
-    });
-    if (result.message) {
-      deps.notifyUser(userId, { type: 'dm-message', message: result.message });
-      deps.notifyUser(caller.id, { type: 'dm-message', message: result.message });
-    }
-    void deps.queueWebPush(
+    const push = await deps.prepareWebPush(
       userId,
       {
         type: 'ring',
@@ -83,6 +76,24 @@ export function createRingService(deps: RingServiceDeps) {
       },
       { expiresAt: result.ring.expiresAt, skipNative: true, peerUserId: caller.id, roomId }
     );
+    const message = result.message;
+    const emit = () => {
+      deps.notifyUser(userId, {
+        type: 'ring.incoming',
+        fromUser: notificationActor(caller),
+        room: { id: roomId, name: room?.name || '', emoji: room?.emoji || '' },
+        expiresAt: result.ring.expiresAt
+      });
+      if (message) {
+        deps.notifyUser(userId, { type: 'dm-message', message });
+        deps.notifyUser(caller.id, { type: 'dm-message', message });
+      }
+      if (push) void push();
+    };
+    // A conversation deletion right after the commit cancels the invitation and
+    // erases its message; the cue, the message and the push must not follow it.
+    if (message) await deps.whileMessageLive(message, emit);
+    else emit();
     return result;
   }
   async function act(ringId: string, actorUserId: string, action: RingAction, ip = ''): Promise<RingSnapshot | null> {
@@ -104,8 +115,10 @@ export function createRingService(deps: RingServiceDeps) {
       });
       if (message) {
         const event: AccountMessage = { type: 'dm.message.edited', message };
-        deps.notifyUser(ring.recipientUserId, event);
-        deps.notifyUser(ring.callerUserId, event);
+        await deps.whileMessageLive(message, () => {
+          deps.notifyUser(ring.recipientUserId, event);
+          deps.notifyUser(ring.callerUserId, event);
+        });
       }
     }
     return ring;

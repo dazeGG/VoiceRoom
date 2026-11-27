@@ -171,8 +171,22 @@ export function createCallRingRepository(pool: pg.Pool, clock?: () => number, da
   const messages = createDmThreadRepository({ pool });
   const calls = (query: Database) =>
     query.selectFrom('room_rings').selectAll().where('purpose', '=', 'voice-call').where('started_at', 'is not', null);
+  // A closed call whose conversation was deleted keeps its row for private
+  // room cleanup and dismissal delivery, but no longer exists for its participants.
   const participants = (query: Database, userId: string) =>
-    calls(query).where((eb) => eb.or([eb('caller_user_id', '=', userId), eb('recipient_user_id', '=', userId)]));
+    calls(query)
+      .where((eb) => eb.or([eb('caller_user_id', '=', userId), eb('recipient_user_id', '=', userId)]))
+      .where((eb) =>
+        eb.or([
+          eb('call_phase', '!=', 'closed'),
+          eb.exists(
+            eb
+              .selectFrom('direct_messages as history')
+              .select('history.id')
+              .whereRef('history.id', '=', 'room_rings.invite_message_id')
+          )
+        ])
+      );
 
   async function now(query = db): Promise<number> {
     if (clock) return clock();

@@ -100,6 +100,7 @@ function harness(store: Partial<FriendStore> = {}) {
   };
   const service = createFriendsService({
     friends: () => friends,
+    blockAndDelete: fake<Parameters<typeof createFriendsService>[0]['blockAndDelete']>(),
     contactStatus: async (_userId, peerId) => ({
       peer: publicUser(peerId),
       canRead: true,

@@ -210,8 +210,16 @@ function createAttachmentRepository({ pool: base }: { pool: AttachmentPool }) {
       bytes,
       width,
       height,
-      originalStorageKey
-    }: { mimeType: string; bytes: number; width: number; height: number; originalStorageKey: string },
+      originalStorageKey,
+      originalName
+    }: {
+      mimeType: string;
+      bytes: number;
+      width: number;
+      height: number;
+      originalStorageKey: string;
+      originalName?: string | undefined;
+    },
     client?: Client
   ): Promise<Attachment | null> {
     if (!MIME_TYPES.has(mimeType)) throw new TypeError('Invalid attachment MIME type');
@@ -225,6 +233,7 @@ function createAttachmentRepository({ pool: base }: { pool: AttachmentPool }) {
           width,
           height,
           original_storage_key: requiredText(originalStorageKey, 'original storage key', 512),
+          ...(originalName && { metadata: sql`metadata || jsonb_build_object('originalName', ${originalName}::text)` }),
           uploaded_at: now,
           failure_code: null,
           failed_at: null,

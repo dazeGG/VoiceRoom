@@ -85,6 +85,7 @@ export const ERROR_CODES = [
   'ban_not_found',
   'invalid_ring_target',
   'call_disabled',
+  'conversation_call_active',
   'call_rate_limited',
   'call_request_conflict',
   'invite_cooldown',

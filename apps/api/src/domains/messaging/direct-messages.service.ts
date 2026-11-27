@@ -103,6 +103,8 @@ export interface DirectMessagesDeps {
   projectMedia: Projection;
   projectReply: Projection;
   directEmit: boolean;
+  /** Sends to both participants unless the conversation was deleted meanwhile. */
+  broadcastDirectMessage(message: DirectMessage, type?: 'dm-message' | 'dm.message.edited'): Promise<boolean>;
   invalidateTyping(userId: string, peerId?: string): void;
   notifyUser(userId: string, event: AccountMessage): void;
   callMessageDeleted?(recipientId: string, senderId: string): void;
@@ -238,10 +240,8 @@ export function createDirectMessagesService(deps: DirectMessagesDeps) {
       : { ...projectedBase, replyPreview: send.replyPreview() };
     if (!stored.idempotencyReplay) {
       // To the recipient and the sender's other tabs; clients dedupe by id.
-      if (deps.directEmit) {
-        deps.notifyUser(recipientId, { type: 'dm-message', message });
+      if (deps.directEmit && (await deps.broadcastDirectMessage(message))) {
         await deps.notifyRecipient(recipientId, sender, message);
-        deps.notifyUser(sender.id, { type: 'dm-message', message });
       }
       deps.scheduleLinkPreview({ messageId: stored.id, senderId: sender.id, recipientId, text });
     }
@@ -268,9 +268,7 @@ export function createDirectMessagesService(deps: DirectMessagesDeps) {
     }
     const message = await deps.messages().direct.respondInvite({ messageId, recipientId: user.id, status: action });
     if (!message) return { status: 'already_answered' };
-    const event: AccountMessage = { type: 'dm.message.edited', message };
-    deps.notifyUser(peerId, event);
-    deps.notifyUser(user.id, event);
+    await deps.broadcastDirectMessage(message, 'dm.message.edited');
     return { status: 'answered', message };
   }
 
@@ -367,9 +365,7 @@ export function createDirectMessagesService(deps: DirectMessagesDeps) {
     });
     if (!message) return { status: 'not_found' };
     deps.scheduleLinkPreview({ messageId, senderId: userId, recipientId: peerId, text, edited: true });
-    const event: AccountMessage = { type: 'dm.message.edited', message };
-    deps.notifyUser(peerId, event);
-    deps.notifyUser(userId, event);
+    await deps.broadcastDirectMessage(message, 'dm.message.edited');
     return { status: 'edited', message };
   }
 

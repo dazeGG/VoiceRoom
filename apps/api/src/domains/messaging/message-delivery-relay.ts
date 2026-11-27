@@ -9,7 +9,7 @@
 
 import { isRecord } from '@voiceroom/shared/guards';
 import { isStoredDirectMessage } from '../social/social-records.ts';
-import type { AccountMessage } from '../../realtime/account-events.ts';
+import type { DirectMessage } from '@voiceroom/shared/contracts/messages';
 import type { Logger } from 'pino';
 import { LOG_EVENTS } from '../../lib/log-events.ts';
 import {
@@ -36,7 +36,7 @@ export interface MessageDeliveryRelayDeps {
   } | null;
   projection: MessageProjection;
   broadcastChatMessage(roomId: string, message: RoomChatMessage): void;
-  notifyUser(userId: string, event: AccountMessage): void;
+  broadcastDirectMessage(message: DirectMessage): Promise<boolean>;
   findUser(userId: string): Promise<StoredUser | null>;
   /** The recipient's DM notification and push. */
   broadcastDmNotification(
@@ -73,8 +73,7 @@ export function createMessageDeliveryRelay(deps: MessageDeliveryRelayDeps) {
       }
       const peerId = message.senderId === conversation.id ? message.recipientId : conversation.id;
       const projected = await deps.projection.project('dm', message, { userId: message.senderId, peerId });
-      deps.notifyUser(message.senderId, { type: 'dm-message', message: projected });
-      deps.notifyUser(message.recipientId, { type: 'dm-message', message: projected });
+      if (!(await deps.broadcastDirectMessage(projected))) return;
       // The direct-emit path notifies right after sending; the relayed path
       // has to do the same or DMs never raise a system notification.
       const sender = await deps.findUser(message.senderId).catch(() => null);

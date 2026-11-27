@@ -3,8 +3,7 @@
 // message, re-read in full so it carries its attachments and reply quote.
 
 import type { DirectMessage as StoredDirectMessage } from '../social/social-records.ts';
-import type { AccountMessage } from '../../realtime/account-events.ts';
-import type { RoomMessage } from '@voiceroom/shared/contracts/messages';
+import type { DirectMessage, RoomMessage } from '@voiceroom/shared/contracts/messages';
 import { firstPreviewableUrl } from '@voiceroom/shared/link-preview';
 import type { MessageProjection } from '../messaging/message-projection.ts';
 
@@ -22,7 +21,8 @@ export interface LinkPreviewEventsDeps {
   publicChatMessage(message: unknown): RoomMessage;
   /** Sends a room-detail envelope to voice peers and preview watchers. */
   broadcastRoomEdit(roomId: string, message: RoomMessage): void;
-  notifyUser(userId: string, event: AccountMessage): void;
+  /** Sends the edit to both participants unless the conversation was deleted meanwhile. */
+  broadcastDirectEdit(message: DirectMessage): Promise<boolean>;
 }
 
 export function createLinkPreviewEvents(deps: LinkPreviewEventsDeps) {
@@ -45,9 +45,7 @@ export function createLinkPreviewEvents(deps: LinkPreviewEventsDeps) {
     const message = await deps.directMessage(senderId, recipientId, messageId);
     if (!message) return;
     const projected = await deps.projection.project('dm', message, { userId: senderId, peerId: recipientId });
-    const event: AccountMessage = { type: 'dm.message.edited', message: projected };
-    deps.notifyUser(recipientId, event);
-    deps.notifyUser(senderId, event);
+    await deps.broadcastDirectEdit(projected);
   }
 
   // A new message without a link needs no work; an edit always does, because

@@ -1,8 +1,9 @@
 import { sql } from 'kysely';
 import type pg from 'pg';
 import type { LinkPreview } from '@voiceroom/shared/link-preview';
-import { kyselyOn } from '../../platform/db/kysely.ts';
+import { kyselyOn, withTransaction } from '../../platform/db/kysely.ts';
 import type { Json } from '../../platform/db/schema.ts';
+import { lockUserPair } from '../social/social-records.ts';
 
 type QueryClient = Pick<pg.Pool, 'query'>;
 
@@ -107,25 +108,31 @@ function createLinkPreviewRepository({ pool }: { pool: QueryClient }) {
   async function setDirectMessagePreview({
     messageId,
     senderId,
+    recipientId,
     text,
     preview
   }: {
     messageId: string;
     senderId: string;
+    recipientId: string;
     text: string;
     preview: LinkPreview | null;
   }): Promise<boolean> {
     const change = previewChange(preview);
-    const result = await db
-      .updateTable('direct_messages')
-      .set({ metadata: change.assignment })
-      .where('id', '=', messageId)
-      .where('sender_id', '=', senderId)
-      .where('body', '=', text)
-      .where('deleted_at', 'is', null)
-      .where(change.changes)
-      .executeTakeFirst();
-    return result.numUpdatedRows > 0n;
+    return withTransaction(db, async (tx) => {
+      await lockUserPair(tx, senderId, recipientId);
+      const result = await tx
+        .updateTable('direct_messages')
+        .set({ metadata: change.assignment })
+        .where('id', '=', messageId)
+        .where('sender_id', '=', senderId)
+        .where('recipient_id', '=', recipientId)
+        .where('body', '=', text)
+        .where('deleted_at', 'is', null)
+        .where(change.changes)
+        .executeTakeFirst();
+      return result.numUpdatedRows > 0n;
+    });
   }
 
   // Every image a cached preview or a message still refers to.

@@ -65,7 +65,8 @@ test(
         resolveSession: async (request) =>
           request.headers.cookie === 'session=a' ? { user: storedUser({ id: 'a' }) } : null
       }),
-      service
+      service,
+      async () => {}
     );
 
     const url = '/api/dm/conversations';

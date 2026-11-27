@@ -15,6 +15,7 @@ import { isUuid } from '@voiceroom/shared/validation';
 import type { StaffCheck } from '../staff/staff-check.ts';
 import { canReportDirectMessage } from './report.policy.ts';
 import type { ReportRepository } from './report.repository.ts';
+import type { Json } from '../../platform/db/schema.ts';
 
 export interface ReportServiceDeps {
   repository: () => Pick<
@@ -66,6 +67,7 @@ export function createReportService(deps: ReportServiceDeps) {
     }
     let roomId: string | null = null;
     let roomName: string | null = null;
+    let snapshot: Json = null;
     if (target.kind === 'room_message') {
       const message = await repository.findRoomMessage(target.roomId, target.messageId);
       // A persistent room shows its chat to members only; a temporary room to
@@ -83,6 +85,7 @@ export function createReportService(deps: ReportServiceDeps) {
       const access = canReportDirectMessage(message && !message.deleted ? message : null, reporterUserId);
       if (access === 'not_visible') return { status: 'target_not_found' };
       if (access === 'own_message') return { status: 'own_message' };
+      snapshot = message?.snapshot ?? null;
     }
     const filed = await repository.fileReport({
       reporterUserId,
@@ -90,7 +93,8 @@ export function createReportService(deps: ReportServiceDeps) {
       roomId,
       messageId: target.messageId,
       reason: body.reason,
-      comment: (body.comment ?? '').trim().slice(0, REPORT_COMMENT_MAX_LENGTH)
+      comment: (body.comment ?? '').trim().slice(0, REPORT_COMMENT_MAX_LENGTH),
+      snapshot
     });
     if (!filed) return { status: 'already_filed' };
     deps.reportsChanged?.({ reason: body.reason, targetKind: target.kind, roomName });

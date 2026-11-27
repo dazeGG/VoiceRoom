@@ -23,7 +23,7 @@ test('G75-A01 JPEG/PNG/WebP exact containers and upload status survive service r
   t.after(() => fs.promises.rm(root, { recursive: true, force: true }));
   const storage = createMediaStorage({ rootDir: root });
   const rows = new Map<string, Attachment>([
-    [ID, attachment({ id: ID, state: 'pending', internalState: 'uploading', reservedBytes: 10000 })]
+    [ID, attachment({ id: ID, context: 'dm', state: 'pending', internalState: 'uploading', reservedBytes: 10000 })]
   ]);
   const repository = fake<AttachmentRepository>({
     async findById(id) {
@@ -33,6 +33,7 @@ test('G75-A01 JPEG/PNG/WebP exact containers and upload status survive service r
       return operation(fakeDb());
     },
     async markUploaded(id, data) {
+      assert.equal(data.originalName, 'report.jpg');
       const row = attachment({
         ...rows.get(id),
         mimeType: data.mimeType,
@@ -74,7 +75,8 @@ test('G75-A01 JPEG/PNG/WebP exact containers and upload status survive service r
     id: ID,
     ownerId: 'owner',
     stream: Readable.from(jpeg),
-    mimeType: 'image/jpeg'
+    mimeType: 'image/jpeg',
+    originalName: 'folder/report.jpg'
   });
   assert.equal(uploaded?.state, 'processing');
   assert.equal(uploaded && 'ownerId' in uploaded, false);

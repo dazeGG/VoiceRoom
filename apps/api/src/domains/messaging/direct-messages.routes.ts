@@ -1,6 +1,7 @@
 // Direct messages over HTTP. Texts and codes are the ones the web client shows.
 
 import type { TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
+import { Type } from 'typebox';
 import {
   ConversationList,
   DirectMessageAnswer,
@@ -37,7 +38,12 @@ function tooMany(reply: FastifyReply, retryAfterSeconds: number) {
     });
 }
 
-export function registerDirectMessageRoutes(root: FastifyInstance, ctx: ApiContext, dms: DirectMessagesService): void {
+export function registerDirectMessageRoutes(
+  root: FastifyInstance,
+  ctx: ApiContext,
+  dms: DirectMessagesService,
+  deleteConversation: (userId: string, peerId: string) => Promise<void>
+): void {
   const app = root.withTypeProvider<TypeBoxTypeProvider>();
 
   async function signedIn(request: FastifyRequest, reply: FastifyReply): Promise<SocialUser | null> {
@@ -52,6 +58,19 @@ export function registerDirectMessageRoutes(root: FastifyInstance, ctx: ApiConte
     if (!user) return reply;
     return { ok: true as const, conversations: await dms.listConversations(user.id) };
   });
+
+  app.delete(
+    '/api/dm/:userId',
+    { schema: { params: PeerParams, response: { 204: Type.Null(), '4xx': MessageFailure } } },
+    async (request, reply) => {
+      const user = await signedIn(request, reply);
+      if (!user) return reply;
+      const peerId = cleanUuid(request.params.userId);
+      if (!peerId || peerId === user.id) return reply.code(404).send(THREAD_NOT_FOUND);
+      await deleteConversation(user.id, peerId);
+      return reply.code(204).send(null);
+    }
+  );
 
   app.get(
     '/api/dm/:userId',

@@ -154,6 +154,7 @@ function createReactionService({
         emoji: mutation.emoji,
         userId,
         active: mutation.active,
+        ...(conversation.type === 'dm' && { peerId: conversation.id }),
         client
       });
       const summary = await repository.getSummary({

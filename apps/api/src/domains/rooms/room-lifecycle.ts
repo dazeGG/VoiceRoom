@@ -4,7 +4,6 @@
 
 import { buildServerEnvelope } from '@voiceroom/shared/realtime';
 import type { DirectMessage as StoredDirectMessage } from '../social/social-records.ts';
-import type { AccountMessage } from '../../realtime/account-events.ts';
 import type { Logger } from 'pino';
 import { LOG_EVENTS } from '../../lib/log-events.ts';
 import type { RoomPresence, RosterPeer } from '../../realtime/room-presence.ts';
@@ -39,7 +38,8 @@ export interface RoomLifecycleDeps {
   invitations(): {
     expirePendingInvites(input: { senderId: string | null; roomId: string }): Promise<StoredDirectMessage[]>;
   } | null;
-  notifyUser(userId: string, event: AccountMessage): void;
+  /** Sends an edited DM to both participants through the conversation-deletion fence. */
+  broadcastDirectEdit(message: StoredDirectMessage): Promise<unknown>;
   /** Null without a gate secret; teardown then fails that peer's revocation. */
   credentials(): {
     revokePeer(input: { roomId: string; accountUserId: string | null; guestPrincipalId: string }): Promise<unknown>;
@@ -90,11 +90,7 @@ export function createRoomLifecycle(deps: RoomLifecycleDeps) {
     const store = deps.invitations();
     if (!store) return [];
     const messages = await store.expirePendingInvites({ senderId: senderId || null, roomId });
-    for (const message of messages) {
-      const event: AccountMessage = { type: 'dm.message.edited', message };
-      deps.notifyUser(message.senderId, event);
-      deps.notifyUser(message.recipientId, event);
-    }
+    for (const message of messages) await deps.broadcastDirectEdit(message);
     return messages;
   }
 

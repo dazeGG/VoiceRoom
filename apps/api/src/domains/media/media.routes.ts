@@ -94,12 +94,14 @@ export function registerMediaRoutes(root: FastifyInstance, ctx: ApiContext, deps
       return answer(reply, async () => {
         let stream: AsyncIterable<unknown> | undefined = request.raw;
         let mimeType = String(request.headers['content-type'] || '').split(';')[0] ?? '';
+        let originalName: string | undefined;
         if (mimeType.startsWith('multipart/')) {
           const part = await request.file();
           stream = part?.file;
           mimeType = part?.mimetype || '';
+          originalName = part?.filename;
         }
-        return media.upload({ id, ownerId, stream, mimeType });
+        return media.upload({ id, ownerId, stream, mimeType, originalName });
       });
     }
   );

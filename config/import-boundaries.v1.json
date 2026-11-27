@@ -118,6 +118,16 @@
         "voice_sessions",
         "user_activity_days",
         "call_feedback"
+      ],
+      "apps/api/src/domains/messaging/dm-conversation-delete.repository.ts": [
+        "direct_messages",
+        "direct_message_read_cursors",
+        "message_attachments",
+        "message_send_idempotency",
+        "message_delivery_outbox",
+        "notification_outbox",
+        "room_rings",
+        "ring_delivery_outbox"
       ]
     },
     "ownerPathPrefixes": ["apps/api/src/migrations/"]

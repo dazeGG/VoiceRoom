@@ -91,6 +91,7 @@ export interface ContentReports {
   resolved_at: Timestamp | null;
   resolved_by_user_id: string | null;
   room_id: string | null;
+  snapshot: Json | null;
   status: Generated<string>;
   target_kind: string;
 }

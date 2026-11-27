@@ -45,6 +45,11 @@ export interface NotificationDispatchDeps {
   preferences(userId: string): Promise<Preferences>;
   notifyUser(userId: string, event: AccountMessage): number;
   logger(): Pick<Logger, 'warn' | 'error'>;
+  /**
+   * Runs the DM notice and the start of its push only while the message still
+   * exists, ordered with conversation deletion. Without it they always run.
+   */
+  whileMessageLive?(message: { id: string; senderId: string; recipientId: string }, emit: () => void): Promise<boolean>;
 }
 
 // Private notification text hides the room a ring leads into, as its Web
@@ -58,30 +63,64 @@ function withoutRoomNames(nativeData: Record<string, string>): Record<string, st
 export function createNotificationDispatch(deps: NotificationDispatchDeps) {
   // A failed push is logged, never thrown: it is a side effect of something
   // that already succeeded.
-  async function queuePush(userId: string, payload: PushPayload, context: PushContext = {}): Promise<void> {
-    try {
-      if (!deps.push().config.enabled) return;
-      const preferences = await deps.preferences(userId);
-      if (!context.ignorePreferences && !shouldDeliverPush(preferences, context)) return;
-      const hideText = Boolean(preferences.privateNotifications && payload.privateBody);
-      const body = hideText ? payload.privateBody : payload.body;
-      const { privateBody: _privateBody, ...publicPayload } = payload;
-      const ttl = resolvePushTtl(context);
-      if (ttl === null) return;
-      const visibleContext =
-        hideText && context.nativeData ? { ...context, nativeData: withoutRoomNames(context.nativeData) } : context;
-      const deliveryContext = ttl === undefined ? visibleContext : { ...visibleContext, ttl };
-      await deps
-        .push()
-        .sendToUser(
+  function pushFailed(userId: string, error: unknown): void {
+    deps.logger().warn({ evt: LOG_EVENTS.PUSH_SEND_FAILED, userId, err: error }, 'failed to send a push notification');
+  }
+
+  // Applies the preferences and returns the transport call, or null when no
+  // push is due. Starting it is synchronous, so a caller can fence it.
+  function preparePush(
+    userId: string,
+    payload: PushPayload,
+    context: PushContext,
+    preferences: Preferences
+  ): (() => Promise<void>) | null {
+    const push = deps.push();
+    if (!push.config.enabled) return null;
+    if (!context.ignorePreferences && !shouldDeliverPush(preferences, context)) return null;
+    const hideText = Boolean(preferences.privateNotifications && payload.privateBody);
+    const body = hideText ? payload.privateBody : payload.body;
+    const { privateBody: _privateBody, ...publicPayload } = payload;
+    const ttl = resolvePushTtl(context);
+    if (ttl === null) return null;
+    const visibleContext =
+      hideText && context.nativeData ? { ...context, nativeData: withoutRoomNames(context.nativeData) } : context;
+    const deliveryContext = ttl === undefined ? visibleContext : { ...visibleContext, ttl };
+    return async () => {
+      try {
+        await push.sendToUser(
           userId,
           { ...publicPayload, body, ...(payload.copy ? { notificationPrivate: hideText } : {}) },
           deliveryContext
         );
+      } catch (error) {
+        pushFailed(userId, error);
+      }
+    };
+  }
+
+  async function queuePush(userId: string, payload: PushPayload, context: PushContext = {}): Promise<void> {
+    try {
+      if (!deps.push().config.enabled) return;
+      const send = preparePush(userId, payload, context, await deps.preferences(userId));
+      await send?.();
     } catch (error) {
-      deps
-        .logger()
-        .warn({ evt: LOG_EVENTS.PUSH_SEND_FAILED, userId, err: error }, 'failed to send a push notification');
+      pushFailed(userId, error);
+    }
+  }
+
+  /** The push with preferences applied, started by the caller; null when none is due. */
+  async function preparedPush(
+    userId: string,
+    payload: PushPayload,
+    context: PushContext = {}
+  ): Promise<(() => Promise<void>) | null> {
+    try {
+      if (!deps.push().config.enabled) return null;
+      return preparePush(userId, payload, context, await deps.preferences(userId));
+    } catch (error) {
+      pushFailed(userId, error);
+      return null;
     }
   }
 
@@ -109,8 +148,7 @@ export function createNotificationDispatch(deps: NotificationDispatchDeps) {
           ...(invite ? { invite } : {})
         }
       };
-      const broadcastCount = deps.notifyUser(recipientUserId, notification);
-      void queuePush(
+      const push = preparePush(
         recipientUserId,
         {
           type: 'dm.message',
@@ -136,8 +174,19 @@ export function createNotificationDispatch(deps: NotificationDispatchDeps) {
         // A room invitation comes with a ring, whose push already reaches the app.
         message.invite != null
           ? { peerUserId: sender.id, skipNative: true }
-          : { peerUserId: sender.id, nativeData: { peerUserId: sender.id, messageId: message.id } }
+          : { peerUserId: sender.id, nativeData: { peerUserId: sender.id, messageId: message.id } },
+        preferences
       );
+      let broadcastCount = 0;
+      const emit = () => {
+        broadcastCount = deps.notifyUser(recipientUserId, notification);
+        if (push) void push();
+      };
+      // The preferences lookup can outlast a conversation deletion; the notice
+      // and the push start only while the message still exists.
+      if (deps.whileMessageLive)
+        await deps.whileMessageLive({ id: message.id, senderId: sender.id, recipientId: recipientUserId }, emit);
+      else emit();
       return broadcastCount;
     } catch (error) {
       deps
@@ -150,7 +199,7 @@ export function createNotificationDispatch(deps: NotificationDispatchDeps) {
     }
   }
 
-  return { queuePush, broadcastDmNotification };
+  return { queuePush, preparedPush, broadcastDmNotification };
 }
 
 export type NotificationDispatch = ReturnType<typeof createNotificationDispatch>;

@@ -8,6 +8,8 @@ import type { AccountMessage } from '../../../src/realtime/account-events.ts';
 import { createRingRepository } from '../../../src/domains/rings/ring.repository.ts';
 import { createRingService } from '../../../src/domains/rings/ring.service.ts';
 import { createDmThreadRepository } from '../../../src/domains/messaging/dm-thread.repository.ts';
+import { createDmConversationDeleteService } from '../../../src/domains/messaging/dm-conversation-delete.service.ts';
+import { directMessageFence } from '../../../src/domains/messaging/dm-message-fence.repository.ts';
 import { createTestDatabase } from '../../db-harness.ts';
 import { storedUser } from '../../fakes/index.ts';
 
@@ -28,6 +30,7 @@ async function fixture(t: TestContext) {
   const native: Array<{ userId: string; payload: PushPayload; context: PushContext }> = [],
     web: unknown[] = [],
     events: Array<[string, AccountMessage]> = [];
+  let beforePush: (() => Promise<void>) | null = null;
   let fail = false,
     dnd = false,
     privateText = false;
@@ -38,9 +41,18 @@ async function fixture(t: TestContext) {
     findRoom: async () => ({ id: 'ring-room', name: 'Private Room', emoji: 'x' }),
     notifyUser: (id, event) => events.push([id, event]),
     answerInvitation: (input) => createDmThreadRepository({ pool: db.pool }).respondInvite(input),
-    queueWebPush: async (...args) => {
-      web.push(args);
+    prepareWebPush: async (...args) => {
+      await beforePush?.();
+      return async () => {
+        web.push(args);
+      };
     },
+    whileMessageLive: directMessageFence(
+      () => db.pool,
+      (error) => {
+        throw error;
+      }
+    ),
     nativePush: async (userId, payload, context) => {
       if (fail) throw new Error('temporary provider outage');
       assert.ok(isRecord(payload));
@@ -73,7 +85,16 @@ async function fixture(t: TestContext) {
     },
     setPrivate: (value: boolean) => {
       privateText = value;
-    }
+    },
+    setBeforePush: (run: (() => Promise<void>) | null) => {
+      beforePush = run;
+    },
+    deleteConversation: () =>
+      createDmConversationDeleteService({
+        pool: () => db.pool,
+        notifyUser: (id, event) => events.push([id, event]),
+        refreshCallMisses: () => {}
+      }).remove(b, a)
   };
 }
 
@@ -192,5 +213,115 @@ test(
     assert.equal((await f.service.act(expired.id, f.b, 'accept'))?.state, 'expired');
     assert.equal(await statusOf(expired.inviteMessageId), 'pending');
     assert.equal(editedFor().length, 4);
+  }
+);
+
+const ringStates = (f: Awaited<ReturnType<typeof fixture>>) =>
+  f.native
+    .filter((entry) => entry.payload.type === 'ring.state')
+    .map((entry) => {
+      const data = isRecord(entry.context.nativeData) ? entry.context.nativeData : {};
+      return [entry.userId, data.ringState, data.ringRevision];
+    })
+    .sort((left, right) => String(left[0]).localeCompare(String(right[0])));
+
+test(
+  'Deleting the conversation stops an invite already shown and supersedes a delayed first cue',
+  { skip: !process.env.TEST_DATABASE_URL },
+  async (t) => {
+    const f = await fixture(t);
+    const shown = await f.service.create(storedUser({ id: f.a }), 'ring-room', f.b, crypto.randomUUID());
+    assert.equal(shown.status, 'rung');
+    if (shown.status !== 'rung') return;
+    await f.service.drainOnce();
+    assert.deepEqual(
+      f.native.map((entry) => entry.payload.type),
+      ['ring']
+    );
+    await f.deleteConversation();
+    while (await f.service.drainOnce()) {
+      /* Drain both terminal jobs. */
+    }
+    const expected = [
+      [f.a, 'cancelled', '2'],
+      [f.b, 'cancelled', '2']
+    ].sort((left, right) => String(left[0]).localeCompare(String(right[0])));
+    assert.deepEqual(ringStates(f), expected);
+    // Both participants still learn the terminal state instead of a 404.
+    assert.equal((await f.service.act(shown.ring.id, f.b, 'status'))?.state, 'cancelled');
+    assert.equal((await f.service.act(shown.ring.id, f.b, 'accept'))?.state, 'cancelled');
+    assert.equal((await f.service.act(shown.ring.id, f.a, 'status'))?.state, 'cancelled');
+
+    const delayed = await fixture(t);
+    assert.equal(
+      (await delayed.service.create(storedUser({ id: delayed.a }), 'ring-room', delayed.b, crypto.randomUUID())).status,
+      'rung'
+    );
+    await delayed.deleteConversation();
+    while (await delayed.service.drainOnce()) {
+      /* The first cue never goes out; only the stop signals do. */
+    }
+    assert.deepEqual(
+      delayed.native.map((entry) => entry.payload.type),
+      ['ring.state', 'ring.state']
+    );
+  }
+);
+
+test(
+  'Deleting the conversation keeps the invite rate window and the request identity',
+  { skip: !process.env.TEST_DATABASE_URL },
+  async (t) => {
+    const f = await fixture(t);
+    const key = crypto.randomUUID();
+    const create = (clientRequestId: string) =>
+      f.service.create(storedUser({ id: f.a }), 'ring-room', f.b, clientRequestId);
+    const first = await create(key);
+    assert.equal(first.status, 'rung');
+    if (first.status !== 'rung') return;
+    await f.deleteConversation();
+    const [events, pushes] = [f.events.length, f.web.length];
+
+    const replay = await create(key);
+    assert.equal(replay.status, 'rung');
+    if (replay.status !== 'rung') return;
+    assert.equal(replay.replay, true);
+    assert.equal(replay.ring.id, first.ring.id);
+    assert.equal(replay.ring.state, 'cancelled');
+    const fresh = await create(crypto.randomUUID());
+    assert.equal(fresh.status, 'rate_limited');
+    assert.equal(f.events.length, events, 'no new incoming cue or message');
+    assert.equal(f.web.length, pushes, 'no new Web Push');
+    assert.equal((await f.pool.query(`SELECT 1 FROM direct_messages`)).rowCount, 0);
+    assert.equal((await f.pool.query(`SELECT 1 FROM ring_delivery_outbox WHERE kind = 'incoming'`)).rowCount, 0);
+  }
+);
+
+test(
+  'A deletion that commits before the invite fan-out suppresses its cue, message and push',
+  { skip: !process.env.TEST_DATABASE_URL },
+  async (t) => {
+    const f = await fixture(t);
+    f.setBeforePush(async () => {
+      f.setBeforePush(null);
+      await f.deleteConversation();
+    });
+    const result = await f.service.create(storedUser({ id: f.a }), 'ring-room', f.b, crypto.randomUUID());
+    assert.equal(result.status, 'rung');
+    assert.deepEqual(
+      f.events.map(([userId, event]) => [userId, event.type]),
+      [
+        [f.b, 'dm.conversation.deleted'],
+        [f.a, 'dm.conversation.deleted']
+      ]
+    );
+    assert.equal(f.web.length, 0);
+    while (await f.service.drainOnce()) {
+      /* Only the stop signals remain. */
+    }
+    assert.deepEqual(
+      f.native.map((entry) => entry.payload.type),
+      ['ring.state', 'ring.state']
+    );
   }
 );

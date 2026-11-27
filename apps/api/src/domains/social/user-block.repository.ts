@@ -60,9 +60,9 @@ export function createUserBlockRepository({ pool }: { pool: pg.Pool }) {
   // Blocking is a hard reset of the relationship: the friendship goes away and
   // any pending request in either direction is cancelled, so unblocking later
   // starts from a clean slate rather than silently restoring contact.
-  async function blockUser({ userId, targetId }: { userId: string; targetId: string }) {
+  async function blockUser({ userId, targetId }: { userId: string; targetId: string }, client?: pg.PoolClient) {
     if (!targetId || userId === targetId) return { status: 'invalid' as const };
-    return db.transaction().execute(async (trx) => {
+    const applyBlock = async (trx: Database) => {
       await lockUserPair(trx, userId, targetId);
       const exists = await trx.selectFrom('users').select('id').where('id', '=', targetId).executeTakeFirst();
       if (!exists) return { status: 'not_found' as const };
@@ -106,7 +106,8 @@ export function createUserBlockRepository({ pool }: { pool: pg.Pool }) {
           Number(inserted.numInsertedOrUpdatedRows ?? 0) > 0 ? ('blocked' as const) : ('already_blocked' as const),
         unfriended: unfriended.numDeletedRows > 0n
       };
-    });
+    };
+    return client ? applyBlock(kyselyOn(client)) : db.transaction().execute(applyBlock);
   }
 
   async function unblockUser({ userId, targetId }: { userId: string; targetId: string }) {

@@ -2,9 +2,11 @@
 // writer of content_reports.
 
 import type pg from 'pg';
+import { sql } from 'kysely';
 import { kyselyOn } from '../../platform/db/kysely.ts';
+import type { Json } from '../../platform/db/schema.ts';
 import { REPORT_REASONS, type AdminReport, type ReportReason } from '@voiceroom/shared/contracts/reports';
-import { isOneOf } from '@voiceroom/shared/guards';
+import { isOneOf, isRecord } from '@voiceroom/shared/guards';
 import { epochMillis } from '../../platform/epoch-millis.ts';
 import { createUserReportRepository } from './user-report.repository.ts';
 
@@ -18,10 +20,21 @@ export type ReportedRoomMessage = {
   roomIsStatic: boolean;
   roomName: string;
 };
-export type ReportedDirectMessage = { senderId: string; recipientId: string; deleted: boolean };
+export type ReportedDirectMessage = { senderId: string; recipientId: string; deleted: boolean; snapshot: Json };
 export type OpenReport = { id: string; targetKind: ReportTargetKind; roomId: string | null; messageId: string };
 
 const OPEN_REPORTS_LIMIT = 200;
+
+type SnapshotAttachment = NonNullable<AdminReport['target']['attachments']>[number];
+
+// The attachment references the snapshot captured; anything malformed is skipped.
+function snapshotAttachments(value: Json): SnapshotAttachment[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((item): SnapshotAttachment[] => {
+    if (!isRecord(item) || typeof item.id !== 'string' || typeof item.mimeType !== 'string') return [];
+    return [{ id: item.id, mimeType: item.mimeType, name: typeof item.name === 'string' ? item.name : null }];
+  });
+}
 
 export function createReportRepository({ pool }: { pool: pg.Pool }) {
   const db = kyselyOn(pool);
@@ -57,9 +70,26 @@ export function createReportRepository({ pool }: { pool: pg.Pool }) {
     const row = await db
       .selectFrom('direct_messages')
       .select(['sender_id', 'recipient_id', 'deleted_at'])
+      .select(
+        sql<Json>`jsonb_build_object(
+          'text', body, 'senderId', sender_id, 'createdAt', created_at,
+          'attachments', coalesce((
+            select jsonb_agg(jsonb_build_object('id', a.id, 'mimeType', a.mime_type,
+              'name', a.metadata->>'originalName') order by a.attachment_order)
+            from message_attachments a where a.direct_message_id = direct_messages.id
+          ), '[]'::jsonb)
+        )`.as('snapshot')
+      )
       .where('id', '=', messageId)
       .executeTakeFirst();
-    return row ? { senderId: row.sender_id, recipientId: row.recipient_id, deleted: Boolean(row.deleted_at) } : null;
+    return row
+      ? {
+          senderId: row.sender_id,
+          recipientId: row.recipient_id,
+          deleted: Boolean(row.deleted_at),
+          snapshot: row.snapshot
+        }
+      : null;
   }
 
   /** Stores an open report; false when this account already has one open for the message. */
@@ -70,6 +100,7 @@ export function createReportRepository({ pool }: { pool: pg.Pool }) {
     messageId: string;
     reason: ReportReason;
     comment: string;
+    snapshot: Json;
   }): Promise<boolean> {
     const inserted = await db
       .insertInto('content_reports')
@@ -79,7 +110,8 @@ export function createReportRepository({ pool }: { pool: pg.Pool }) {
         room_id: input.roomId,
         message_id: input.messageId,
         reason: input.reason,
-        comment: input.comment
+        comment: input.comment,
+        snapshot: input.snapshot
       })
       .onConflict((conflict) =>
         conflict.columns(['reporter_user_id', 'target_kind', 'message_id']).where('status', '=', 'open').doNothing()
@@ -125,7 +157,7 @@ export function createReportRepository({ pool }: { pool: pg.Pool }) {
     return Number(result.numUpdatedRows);
   }
 
-  /** The open reports, oldest first, each with the message as it stands now. */
+  /** The open reports, oldest first, with the captured DM content when available. */
   async function listOpen(): Promise<AdminReport[]> {
     const rows = await db
       .selectFrom('content_reports as r')
@@ -144,7 +176,10 @@ export function createReportRepository({ pool }: { pool: pg.Pool }) {
         join.on((eb) =>
           eb.or([
             eb.and([eb('r.target_kind', '=', 'room_message'), eb('author.id', '=', eb.ref('rm.author_user_id'))]),
-            eb.and([eb('r.target_kind', '=', 'direct_message'), eb('author.id', '=', eb.ref('dm.sender_id'))])
+            eb.and([
+              eb('r.target_kind', '=', 'direct_message'),
+              eb('author.id', '=', sql<string>`coalesce(r.snapshot->>'senderId', dm.sender_id)`)
+            ])
           ])
         )
       )
@@ -166,12 +201,16 @@ export function createReportRepository({ pool }: { pool: pg.Pool }) {
         'rm.deleted_at as room_deleted_at',
         'rm.id as room_message_id',
         'dm.id as dm_id',
-        'dm.body as dm_body',
-        'dm.created_at as dm_sent_at',
         'dm.deleted_at as dm_deleted_at',
         'author.id as author_id',
         'author.login as author_login',
         'author.display_name as author_display_name'
+      ])
+      .select([
+        sql<string | null>`coalesce(r.snapshot->>'senderId', dm.sender_id)`.as('dm_sender_id'),
+        sql<string | null>`coalesce(r.snapshot->>'text', dm.body)`.as('dm_body'),
+        sql<Date | null>`coalesce((r.snapshot->>'createdAt')::timestamptz, dm.created_at)`.as('dm_sent_at'),
+        sql<Json>`r.snapshot->'attachments'`.as('dm_attachments')
       ])
       .where('r.status', '=', 'open')
       .orderBy('r.created_at', 'asc')
@@ -199,11 +238,12 @@ export function createReportRepository({ pool }: { pool: pg.Pool }) {
           messageId: row.message_id,
           roomId: row.room_id,
           roomName: isRoom ? row.room_name || null : null,
-          authorUserId: row.author_id || null,
+          authorUserId: isRoom ? row.author_id : row.dm_sender_id,
           authorName: (isRoom ? row.room_author_name || accountName : accountName) || '',
           text: (isRoom ? row.room_text : row.dm_body) || '',
           sentAt: epochMillis(isRoom ? row.room_sent_at : row.dm_sent_at),
-          deleted: !found || Boolean(isRoom ? row.room_deleted_at : row.dm_deleted_at)
+          deleted: !found || Boolean(isRoom ? row.room_deleted_at : row.dm_deleted_at),
+          attachments: isRoom ? [] : snapshotAttachments(row.dm_attachments)
         }
       };
     });

@@ -958,13 +958,9 @@ test('a re-ring from the peer resets the unanswered cap while an outgoing call l
   await waitForWsType(aliceWs.frames, 'call.incoming', (frame) => frame.payload.attempt === 2);
   assert.equal((await send()).status, 201);
 
-  // The gate judges the current attempt from its inviter: Bob now rings Alice,
-  // so Alice's call setting decides whether Bob's seat may reach the room.
+  // Bob's re-ring makes him the inviter; Alice takes calls from everyone, so
+  // his seat still reaches the room (test/admission covers the refusals).
   const bobToken = await issue(api, bob, live.call.id, bobSeat.seatToken);
-  assert.equal((await lab.gate.authorize(new URL(bobToken.url).search)).ok, true);
-  await setCallAudience(api, alice, 'friends');
-  assert.equal((await lab.gate.authorize(new URL(bobToken.url).search)).ok, false);
-  await setCallAudience(api, alice, 'everyone');
   assert.equal((await lab.gate.authorize(new URL(bobToken.url).search)).ok, true);
 });
 

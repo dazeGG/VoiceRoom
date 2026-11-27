@@ -191,12 +191,14 @@ function createMediaService({
     id,
     ownerId,
     stream,
-    mimeType
+    mimeType,
+    originalName
   }: {
     id: string;
     ownerId: string;
     stream?: UploadStream | null | undefined;
     mimeType?: string;
+    originalName?: string | undefined;
   }): Promise<PublicAttachment | null> {
     await pressureService.assertAcceptingUploads();
     if (!stream) throw new DomainError('media_body_required', 400, 'Image body is required');
@@ -217,6 +219,10 @@ function createMediaService({
           throw new DomainError('media_size_mismatch', 413, 'Image exceeds its reserved size');
         }
         const image = await inspectOriginal(id, mimeType);
+        const name =
+          attachment.context === 'dm'
+            ? originalName?.split(/[\\/]/).at(-1)?.replaceAll('\0', '').trim().slice(0, 255)
+            : undefined;
         const updated = await attachments.markUploaded(
           id,
           {
@@ -224,7 +230,8 @@ function createMediaService({
             bytes: saved.bytes,
             width: image.width,
             height: image.height,
-            originalStorageKey: saved.key
+            originalStorageKey: saved.key,
+            originalName: name
           },
           client
         );

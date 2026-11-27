@@ -6,6 +6,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { Done, Failure, IdParams, RoomIdParams, UserIdParams } from '@voiceroom/shared/contracts/http';
 import {
   BlockApplied,
+  BlockBody,
   BlockList,
   FriendList,
   FriendRequestAnswered,
@@ -156,13 +157,16 @@ export function registerFriendsRoutes(
 
   app.put(
     '/api/blocks/:userId',
-    { schema: { params: UserIdParams, response: answers(BlockApplied) } },
+    {
+      preValidation: optionalJsonBody,
+      schema: { params: UserIdParams, body: BlockBody, response: answers(BlockApplied) }
+    },
     async (request, reply) => {
       const user = await signedIn(request, reply);
       if (!user) return reply;
       const id = cleanUuid(request.params.userId);
       if (!id || id === user.id) return reply.code(400).send(CANNOT_BLOCK);
-      const result = await friends.block(user.id, id);
+      const result = await friends.block(user.id, id, request.body.deleteConversation);
       if (result.status === 'not_found') return reply.code(404).send(USER_NOT_FOUND);
       if (result.status === 'invalid') return reply.code(400).send(CANNOT_BLOCK);
       return { ok: true as const, status: result.result };
