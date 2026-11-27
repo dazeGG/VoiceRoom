@@ -873,21 +873,26 @@ export const english = {
   'Не удалось отложить напоминание': 'Failed to snooze reminder',
   'Новая жалоба': 'New complaint',
   Посмотреть: 'View',
-  'Лобби VoiceRoom в новом графитовом оформлении: друзья слева, комната в эфире и список комнат':
-    'VoiceRoom lobby in new graphite design: friends on the left, room on air and list of rooms',
-  'Новый внешний вид': 'New look',
-  'Графитовая палитра, новый шрифт и заново нарисованные экраны: лобби, звонок, сообщения и настройки.':
-    'Graphite palette, new font and newly designed screens: lobby, call, messages and settings.',
-  'Звонок в комнате: двое участников с включённой камерой и третий с аватаром, внизу панель управления с кнопкой камеры':
-    'Call in the room: two participants with the camera turned on and a third with an avatar, at the bottom there is a control panel with a camera button',
-  'Камера в звонке': 'Camera in the call',
-  'Включайте камеру кнопкой на панели звонка, а устройство выбирайте рядом, в меню.':
-    'Turn on the camera with the button on the call panel, and select the device next to it in the menu.',
-  'Настройки, вкладка «Внешний вид»: три карточки темы Volt, Ice и Coral, выбрана Coral':
-    'Settings, Appearance tab: three theme cards Volt, Ice and Coral, Coral selected',
-  'Свой акцент': 'Your own accent',
-  'Выберите цвет акцента, Volt, Ice или Coral, и он сразу применится во всём приложении.':
-    'Choose an accent color, Volt, Ice or Coral, and it will immediately apply throughout the application.',
+  'Звонки друзьям': 'Call your friends',
+  'Позвоните другу прямо из личных сообщений. Звонок защищён сквозным шифрованием: сверьте четыре эмодзи под замком.':
+    'Call a friend right from your direct messages. Calls are end-to-end encrypted: compare the four emoji under the lock icon.',
+  'Звонок другу в личных сообщениях: плитки собеседников, панель управления и открытый код из четырёх эмодзи под замком':
+    'Call with a friend in direct messages: participant tiles, call controls, and the four-emoji code revealed under the lock icon',
+  'Панель звонка прячется': 'Hide the call controls',
+  'Включите «Скрывать панель звонка» во внешнем виде, и панель появится, только когда вы наведёте курсор на звонок.':
+    'Turn on “Hide call controls” in Appearance to show the controls only when you hover over the call.',
+  'Звонок: курсор уходит со сцены, панель управления скрывается, плитки занимают её место':
+    'Call: the pointer leaves the stage, the call controls hide, and the tiles expand into their place',
+  'Форматирование в чате': 'Chat formatting',
+  'Жирный, курсив, код и списки прямо в сообщениях: пишите, как в Markdown.':
+    'Use Markdown to add bold, italics, code, and lists right in your messages.',
+  'Чат: сообщение со словом жирным шрифтом, курсивом, фрагментом кода и списком':
+    'Chat: a message with a bold word, italics, a code snippet, and a list',
+  'English и Français': 'English and French',
+  'Интерфейс теперь доступен на английском и французском. Язык меняется во внешнем виде.':
+    'The interface is now available in English and French. Change your language in Appearance.',
+  'Настройки, «Внешний вид»: выбор языка, интерфейс переключается на английский':
+    'Settings, Appearance: selecting a language switches the interface to English',
   'Ефремов Владимир Владимирович': 'Efremov Vladimir Vladimirovich',
   'физическое лицо, плательщик налога на профессиональный доход (самозанятый)':
     'individual, payer of professional income tax (self-employed)',
@@ -2718,21 +2723,26 @@ export const french: Record<MessageKey, string> = {
   'Не удалось отложить напоминание': 'Échec de la répétition du rappel',
   'Новая жалоба': 'Nouvelle plainte',
   Посмотреть: 'Voir',
-  'Лобби VoiceRoom в новом графитовом оформлении: друзья слева, комната в эфире и список комнат':
-    "Hall VoiceRoom dans un nouveau design graphite : amis à gauche, salon à l'antenne et liste des salons",
-  'Новый внешний вид': 'Nouveau look',
-  'Графитовая палитра, новый шрифт и заново нарисованные экраны: лобби, звонок, сообщения и настройки.':
-    'Palette Graphite, nouvelle police et écrans repensés : lobby, appel, messages et paramètres.',
-  'Звонок в комнате: двое участников с включённой камерой и третий с аватаром, внизу панель управления с кнопкой камеры':
-    'Appel dans le salon : deux participants avec la caméra allumée et un troisième avec un avatar, en bas il y a un panneau de contrôle avec un bouton caméra',
-  'Камера в звонке': "Caméra dans l'appel",
-  'Включайте камеру кнопкой на панели звонка, а устройство выбирайте рядом, в меню.':
-    "Activez la caméra avec le bouton du panneau d'appel et sélectionnez l'appareil à côté dans le menu.",
-  'Настройки, вкладка «Внешний вид»: три карточки темы Volt, Ice и Coral, выбрана Coral':
-    'Paramètres, onglet Apparence : trois cartes thématiques Volt, Glace et Corail, Corail sélectionné',
-  'Свой акцент': 'Votre propre accent',
-  'Выберите цвет акцента, Volt, Ice или Coral, и он сразу применится во всём приложении.':
-    "Choisissez une couleur d'accent, Volt, Glace ou Corail, et elle s'appliquera immédiatement tout au long de l'application.",
+  'Звонки друзьям': 'Appeler vos amis',
+  'Позвоните другу прямо из личных сообщений. Звонок защищён сквозным шифрованием: сверьте четыре эмодзи под замком.':
+    'Appelez un ami depuis vos messages privés. Les appels sont chiffrés de bout en bout : comparez les quatre émojis sous le cadenas.',
+  'Звонок другу в личных сообщениях: плитки собеседников, панель управления и открытый код из четырёх эмодзи под замком':
+    'Appel avec un ami dans les messages privés : vignettes des participants, commandes et code de quatre émojis affiché sous le cadenas',
+  'Панель звонка прячется': 'Masquer les commandes d’appel',
+  'Включите «Скрывать панель звонка» во внешнем виде, и панель появится, только когда вы наведёте курсор на звонок.':
+    'Activez « Masquer les commandes d’appel » dans Apparence pour afficher les commandes au survol de l’appel.',
+  'Звонок: курсор уходит со сцены, панель управления скрывается, плитки занимают её место':
+    'Appel : le pointeur quitte la zone d’appel, les commandes se masquent et les vignettes prennent leur place',
+  'Форматирование в чате': 'Mise en forme des messages',
+  'Жирный, курсив, код и списки прямо в сообщениях: пишите, как в Markdown.':
+    'Utilisez Markdown pour ajouter du gras, de l’italique, du code et des listes dans vos messages.',
+  'Чат: сообщение со словом жирным шрифтом, курсивом, фрагментом кода и списком':
+    'Discussion : un message avec un mot en gras, de l’italique, un extrait de code et une liste',
+  'English и Français': 'Anglais et français',
+  'Интерфейс теперь доступен на английском и французском. Язык меняется во внешнем виде.':
+    'L’interface est désormais disponible en anglais et en français. Changez la langue dans Apparence.',
+  'Настройки, «Внешний вид»: выбор языка, интерфейс переключается на английский':
+    'Paramètres, Apparence : le choix de la langue fait passer l’interface en anglais',
   'Ефремов Владимир Владимирович': 'Efremov Vladimir Vladimirovitch',
   'физическое лицо, плательщик налога на профессиональный доход (самозанятый)':
     "particulier assujetti à l'impôt sur le revenu professionnel (indépendant)",
