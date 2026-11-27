@@ -964,6 +964,8 @@ test('a re-ring from the peer resets the unanswered cap while an outgoing call l
   assert.equal((await lab.gate.authorize(new URL(bobToken.url).search)).ok, true);
   await setCallAudience(api, alice, 'friends');
   assert.equal((await lab.gate.authorize(new URL(bobToken.url).search)).ok, false);
+  await setCallAudience(api, alice, 'everyone');
+  assert.equal((await lab.gate.authorize(new URL(bobToken.url).search)).ok, true);
 });
 
 test('a participant can open a stored private missed-call target after closing calls to strangers', async (t) => {

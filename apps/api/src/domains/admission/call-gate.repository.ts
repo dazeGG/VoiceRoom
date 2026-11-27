@@ -16,11 +16,20 @@ export async function callGateAllows(
     .where('call_phase', '!=', 'closed')
     .where((eb) => eb.or([eb('alone_deadline', 'is', null), eb('alone_deadline', '>', sql<Date>`clock_timestamp()`)]))
     .where((eb) => eb.or([eb('caller_user_id', '=', pId), eb('recipient_user_id', '=', pId)]))
+    // A started voice call always records its attempt's inviter (room_rings check).
+    .where('attempt_inviter_user_id', 'is not', null)
+    .$narrowType<{ attempt_inviter_user_id: string }>()
     .executeTakeFirst();
-  if (!call) return false;
-  const inviter = call.attempt_inviter_user_id ?? call.caller_user_id;
-  const invitee = inviter === call.caller_user_id ? call.recipient_user_id : call.caller_user_id;
-  if (await getCallRefusal(db, inviter, invitee)) return false;
+  // The current attempt's inviter is the one calling; the other participant decides.
+  if (
+    !call ||
+    (await getCallRefusal(
+      db,
+      call.attempt_inviter_user_id,
+      call.attempt_inviter_user_id === call.caller_user_id ? call.recipient_user_id : call.caller_user_id
+    ))
+  )
+    return false;
   // The standalone gate shares the durable revocation with the API. Recheck it
   // after the call and friendship reads, since a seat can leave during either.
   return Boolean(
