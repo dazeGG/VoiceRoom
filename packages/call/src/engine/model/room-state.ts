@@ -78,6 +78,8 @@ export function createInitialRoomState(): AppState {
     peerId: '',
     roomId: '',
     callId: undefined,
+    callE2eeInitiator: false,
+    callE2ee: null,
     moderationReason: '',
     roomAvatarUrl: '',
     roomName: '',

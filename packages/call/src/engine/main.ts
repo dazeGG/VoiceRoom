@@ -1,3 +1,4 @@
+import { setCallPeerTakesRed } from './services/livekit/local-publications';
 import { getCallPorts } from './ports';
 import { t } from '@voiceroom/ui-kit/i18n';
 import { GATE_THRESHOLD_MIN_DB } from './core/config';
@@ -72,6 +73,8 @@ export function mountRoomClient(
     guestEntry?: { displayName: string; checkedAt: number };
     friendCall?: {
       callId: string;
+      /** The caller starts the call's E2EE key agreement and the callee answers it. */
+      initiator: boolean;
       session: PeerSession;
       name: string;
       onMissingMicrophone: () => void;
@@ -209,6 +212,9 @@ export function mountRoomClient(
   const mountedRoomId = options.roomId ?? '';
   const friendCall = options.friendCall;
   state.callId = friendCall?.callId;
+  state.callE2eeInitiator = friendCall?.initiator ?? false;
+  state.callE2ee = null;
+  setCallPeerTakesRed(null);
   state.roomRoute = options.roomRoute ?? Boolean(mountedRoomId);
   state.missingRoomLabel = options.missingRoomLabel ?? '';
   if (mountedRoomId) {
@@ -297,6 +303,9 @@ export function mountRoomClient(
 function unmountRoomClient(): void {
   leaveRoom();
   state.callId = undefined;
+  state.callE2eeInitiator = false;
+  state.callE2ee = null;
+  setCallPeerTakesRed(null);
   void syncDesktopGlobalHotkeys(false);
   desktopHotkeysTeardown?.();
   desktopHotkeysTeardown = null;

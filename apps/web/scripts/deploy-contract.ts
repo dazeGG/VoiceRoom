@@ -9,6 +9,7 @@ import { build, type Plugin } from 'vite';
 import { cspMetaPlugin as createCspMetaPlugin } from '../../../scripts/build/csp-meta.ts';
 
 export { precompressPlugin } from '../../../scripts/build/precompress.ts';
+export { liveKitE2eeRedPlugin, transformLiveKitModule } from '../../../scripts/build/livekit-e2ee-red.ts';
 export { metaPolicy } from '../../../scripts/build/csp-meta.ts';
 export { voiceAssetDirectory, voiceAssetVersion, voiceAssetsPlugin } from '../../../scripts/build/voice-assets.ts';
 

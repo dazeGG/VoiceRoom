@@ -144,8 +144,8 @@ export const CallVoiceProof = Type.Object({ seatToken: CallId });
 export const CallVoiceJoin = Type.Object({ callId: CallId, ...CallVoiceProof.properties });
 /**
  * A call's LiveKit token request. `e2ee: 1` says the client encrypts call media end to end (protocol version 1)
- * and agrees the key over participant attributes, so its token may update them. While the server requires call
- * E2EE, a request without it is refused as `client_outdated`: a client that cannot decrypt would only hear noise.
+ * and agrees the key over participant attributes, so its token may update them. A request without it is refused
+ * as `client_outdated`: a client that cannot decrypt would only hear noise.
  */
 export const CallVoiceTokenBody = Type.Object({ ...CallVoiceProof.properties, e2ee: Type.Optional(Type.Literal(1)) });
 export type CallVoiceTokenBody = Static<typeof CallVoiceTokenBody>;

@@ -16,8 +16,11 @@ import {
   isOwnedMicrophonePublishPending,
   publishMicrophoneForJoin,
   publishMicrophoneForReplacementRoom,
+  republishCurrentMicrophone,
   type MicrophoneActionOutcome
 } from '../ui/devices';
+import { republishCallRoomE2ee, startCallRoomE2ee, stopCallRoomE2ee } from '../e2ee/call-room-e2ee';
+import { microphoneRedMismatch, setCallPeerTakesRed } from './livekit/local-publications';
 import { useStartUiStore } from '../core/start-ui.store';
 import { state } from '../core/room-runtime.store';
 import { setVoiceConnectionStatus } from '../ui/status';
@@ -368,6 +371,7 @@ async function bindLiveKitRoomEvents(room: Room, isCurrent: () => boolean): Prom
   });
   room.on(RoomEvent.Reconnected, () => {
     if (!current()) return;
+    void republishCallRoomE2ee(room);
     const generation = reconcileGeneration.capture();
     if (state.joined || state.connecting) setVoiceConnectionStatus('connected');
     recoverLiveKitRoom(room, current)
@@ -503,10 +507,37 @@ async function bindLiveKitRoomEvents(room: Room, isCurrent: () => boolean): Prom
     peer.connectionQuality = quality || 'unknown';
   });
   room.on(RoomEvent.ParticipantNameChanged, (name, participant) => {
-    if (!current()) return;
+    // A call's names come from the API roster: an E2EE call token lets a participant rename itself in LiveKit.
+    if (!current() || state.callId) return;
     updateParticipant({ id: participant.identity, name: name || participant.identity });
   });
+  if (state.callId)
+    void startCallRoomE2ee(room, current, (peerTakesRed) => followCallPeerRed(room, current, peerTakesRed));
   return true;
+}
+
+const RED_REPUBLISH_RETRY_MS = 1_000;
+const RED_REPUBLISH_ATTEMPTS = 10;
+
+// The peer's key agreement said whether it takes RED. A microphone already out with the other setting goes out
+// again, or that peer would hear nothing; another microphone action in progress gets a moment to finish first.
+function followCallPeerRed(room: Room, current: () => boolean, peerTakesRed: boolean, attempt = 0): void {
+  setCallPeerTakesRed(peerTakesRed);
+  const publication = state.localMicPublication;
+  if (!current() || !publication || !microphoneRedMismatch(publication)) return;
+  void republishCurrentMicrophone(room).then((outcome) => {
+    if (!current()) return;
+    if (outcome === 'applied') {
+      if (state.voiceConnection === 'reconnecting') setVoiceConnectionStatus('connected');
+      return;
+    }
+    if (outcome !== 'busy' && outcome !== 'coalesced') return;
+    if (attempt + 1 >= RED_REPUBLISH_ATTEMPTS) {
+      logLiveKitTransition('warn', { event: 'call_red_republish', result: 'gave_up' });
+      return;
+    }
+    setTimeout(() => followCallPeerRed(room, current, peerTakesRed, attempt + 1), RED_REPUBLISH_RETRY_MS);
+  });
 }
 
 export async function disconnectLiveKitRoom(): Promise<void> {
@@ -523,6 +554,7 @@ export async function disconnectLiveKitRoom(): Promise<void> {
 
 export async function disconnectLiveKitRoomInstance(room: Room): Promise<void> {
   reconcileGenerationFor(room).invalidate();
+  stopCallRoomE2ee(room);
   if (state.livekitRoom === room) {
     clearAllScreenSubscriptionRetries();
     state.livekitRoom = null;

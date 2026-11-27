@@ -23,6 +23,9 @@ export interface LiveKitHarness {
     serverPeerIds: Set<string>;
     serverPeerSyncReady: boolean;
     viewedScreenPeerId: string;
+    callId?: string | undefined;
+    callE2eeInitiator?: boolean;
+    callE2ee?: { phase: string; code: string[] | null; failure: string | null } | null;
     livekitRoom?: { remoteParticipants?: Map<string, unknown>; [key: string]: unknown } | null;
     self?: Peer | null;
     [key: string]: unknown;
@@ -44,6 +47,10 @@ export interface LiveKitHarness {
    * in the room's participant list, synced by its identity.
    */
   syncParticipant(participant: { identity: string }): Participant | null;
+  /** Frame keys the service installed through a call room's key provider: raw key bytes and their index. */
+  callKeys: Array<{ key: ArrayBuffer; index: number | undefined }>;
+  /** Frame-encryption workers the service started, and whether each was terminated. */
+  workers: Array<{ terminated: boolean }>;
   /** Every LiveKit Room the service created, in order. */
   rooms: Array<{
     /** Handlers the service bound, by RoomEvent name. */
@@ -53,9 +60,16 @@ export interface LiveKitHarness {
     connectedUrl: string;
     connectOptions: Record<string, unknown>;
     disconnected: boolean;
+    /** `e2ee:<enabled>` and `connect`, in the order the service called them. */
+    lifecycle: string[];
     published: Array<{ track: unknown; options: Record<string, unknown> }>;
     unpublished: unknown[];
-    localParticipant: { trackPublications: Map<string, unknown> };
+    localParticipant: {
+      trackPublications: Map<string, unknown>;
+      attributes: Record<string, string>;
+      /** Called after each attribute update the service made. */
+      onAttributes: (() => void) | undefined;
+    };
     remoteParticipants: Map<string, unknown>;
     activeSpeakers: Array<{ identity: string }>;
     /** Calls the handlers bound to a RoomEvent, as LiveKit does. */
@@ -69,6 +83,10 @@ const isStoppable = (track: unknown): track is { stop(): void } =>
   typeof track === 'object' && track !== null && 'stop' in track && typeof track.stop === 'function';
 
 const P = '@voiceroom/call/engine';
+
+function participantAttributes(): { attributes: Record<string, string>; onAttributes: (() => void) | undefined } {
+  return { attributes: {}, onAttributes: undefined };
+}
 
 export async function loadLiveKitHarness(
   options: {
@@ -130,11 +148,17 @@ export async function loadLiveKitHarness(
     connectedUrl = '';
     connectOptions: Record<string, unknown> = {};
     disconnected = false;
+    readonly lifecycle: string[] = [];
     readonly published: Array<{ track: unknown; options: Record<string, unknown> }> = [];
     readonly unpublished: unknown[] = [];
     publishGate: Promise<unknown> = Promise.resolve();
     readonly localParticipant = {
       trackPublications: new Map<string, unknown>(),
+      ...participantAttributes(),
+      setAttributes: async (attributes: Record<string, string>) => {
+        Object.assign(this.localParticipant.attributes, attributes);
+        this.localParticipant.onAttributes?.();
+      },
       publishTrack: async (track: unknown, publishOptions: Record<string, unknown>) => {
         await this.publishGate;
         await options.onPublish?.(track);
@@ -155,7 +179,18 @@ export async function loadLiveKitHarness(
     constructor(readonly roomOptions: RoomOptions = {}) {
       rooms.push(this);
     }
+    async setE2EEEnabled(enabled: boolean) {
+      this.lifecycle.push(`e2ee:${enabled}`);
+    }
+    off(event: string, handler: (...args: unknown[]) => void) {
+      this.listeners.set(
+        event,
+        (this.listeners.get(event) ?? []).filter((bound) => bound !== handler)
+      );
+      return this;
+    }
     async connect(url: string, _token: string, connectOptions: Record<string, unknown> = {}) {
+      this.lifecycle.push('connect');
       if (failingUrls.has(url)) throw new Error(`cannot reach ${url}`);
       this.connectedUrl = url;
       this.connectOptions = connectOptions;
@@ -182,8 +217,24 @@ export async function loadLiveKitHarness(
     }
   }
   const RoomEvent = new Proxy({}, { get: (_target, name) => String(name) });
+  const callKeys: LiveKitHarness['callKeys'] = [];
+  const workers: LiveKitHarness['workers'] = [];
+  class BaseKeyProvider {
+    constructor(readonly options: Record<string, unknown>) {}
+    onSetEncryptionKey(key: ArrayBuffer, _identity?: string, index?: number) {
+      callKeys.push({ key, index });
+    }
+  }
   const livekitClient = {
     Room: FakeRoom,
+    BaseKeyProvider,
+    // The real SDK imports the bytes as HKDF key material; the fake keeps them to compare.
+    createKeyMaterialFromBuffer: async (key: ArrayBuffer) => key,
+    createE2eeWorker: async () => {
+      const worker = { terminated: false, terminate: () => (worker.terminated = true) };
+      workers.push(worker);
+      return worker;
+    },
     RoomEvent,
     SubscriptionError: { SE_CODEC_UNSUPPORTED: 1 },
     // The same values as the TRACK_SOURCE fake below, so published tracks read back as their kind.
@@ -393,6 +444,8 @@ export async function loadLiveKitHarness(
     toasts,
     voiceStatuses,
     refusal: (message, code, status = 0) => new ApiError(message, status, { code }),
+    callKeys,
+    workers,
     syncParticipant: (participant) => {
       const room = (state.livekitRoom ??= {});
       (room.remoteParticipants ??= new Map()).set(participant.identity, participant);

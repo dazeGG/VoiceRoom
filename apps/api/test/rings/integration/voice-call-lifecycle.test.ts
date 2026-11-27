@@ -271,7 +271,7 @@ async function issue(api: Running, account: Account, id: string, seatToken: stri
         method: 'POST',
         pathname: `${basePath}/${id}/livekit-token`,
         cookie: account.cookie,
-        body: { seatToken }
+        body: { seatToken, e2ee: 1 }
       },
       LiveKitAdmission
     )
@@ -366,7 +366,7 @@ test('cross-dial coalesces, an accepting participant switches rooms, and late ac
         method: 'POST',
         pathname: `${basePath}/${id}/livekit-token`,
         cookie: outsider.cookie,
-        body: { seatToken: aSeat.seatToken }
+        body: { seatToken: aSeat.seatToken, e2ee: 1 }
       })
     ).status,
     404
@@ -541,8 +541,8 @@ class GateSocket extends EventEmitter {
   }
 }
 
-test('with call E2EE required, only a client that declares it gets a token, and only its token updates attributes', async (t) => {
-  const lab = await setup(t, { CALL_E2EE_REQUIRED: 'true' });
+test('only a client that declares call E2EE gets a call token, and that token may update attributes', async (t) => {
+  const lab = await setup(t);
   const api = await lab.boot();
   const [a, b] = await Promise.all([api.account('alice'), api.account('bob')]);
   await befriend(api, a, b);
@@ -573,18 +573,6 @@ test('with call E2EE required, only a client that declares it gets a token, and 
   );
   assert.equal(encrypted.status, 200);
   assert.equal(canUpdateAttributes(encrypted.body.token), true);
-});
-
-test('until call E2EE is required, a token without it stays issued and cannot update attributes', async (t) => {
-  const lab = await setup(t);
-  const api = await lab.boot();
-  const [a, b] = await Promise.all([api.account('alice'), api.account('bob')]);
-  await befriend(api, a, b);
-  const aWs = await api.socket(a.cookie);
-  const call = await start(api, a, b);
-  const seat = await enter(aWs, call);
-  const token = await issue(api, a, call.call.id, seat.seatToken);
-  assert.equal(canUpdateAttributes(token.token), false);
 });
 
 test('the gate tunnels a seated call credential and drops it when the seat leaves before upstream', async (t) => {
@@ -675,7 +663,7 @@ test('websocket leave fences token issuance and anonymizes diagnostics during a 
         method: 'POST',
         pathname: `${basePath}/${id}/livekit-token`,
         cookie: b.cookie,
-        body: { seatToken: seat.seatToken }
+        body: { seatToken: seat.seatToken, e2ee: 1 }
       })
     );
     assert.equal(duringRemoval.status, 404);

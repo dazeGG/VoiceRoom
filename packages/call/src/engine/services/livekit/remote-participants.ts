@@ -1,3 +1,4 @@
+import { isCallPublicationAllowed } from '../../e2ee/call-room-e2ee';
 import { getCallPorts, getInstalledCallPorts } from '../../ports';
 // The other people in the call as LiveKit reports them: their participants,
 // which of their tracks to subscribe to, and what to do as tracks come and go.
@@ -104,8 +105,12 @@ export function createLiveKitParticipant(participant: RemoteParticipant): Partic
     id: participant.identity,
     isLocal: participant.isLocal || participant.identity === state.peerId,
     joinedAt: participant.joinedAt ? participant.joinedAt.getTime() : Date.now(),
-    // The personal SFU gets only the opaque identity. Keep the guest name from presence.
-    name: participant.name || state.peers.get(participant.identity)?.name || participant.identity,
+    // The personal SFU gets only the opaque identity. Keep the guest name from presence. A call keeps the roster
+    // name: its E2EE token lets a participant rename itself in LiveKit.
+    name:
+      (state.callId ? state.peers.get(participant.identity)?.name : participant.name) ||
+      participant.name ||
+      participant.identity,
     screen: participant.isScreenShareEnabled || screenPresence.active,
     screenAudio: screenPresence.hasAudio
   });
@@ -336,6 +341,7 @@ async function scheduleScreenSubscriptionRetry(
     isDemanded: () => shouldSubscribeToScreen(peer),
     key: publication.trackSid,
     retry: () => {
+      if (!isCallPublicationAllowed(publication)) return;
       publication.setSubscribed(false);
       publication.setSubscribed(true);
       applyRemoteVideoVisibility(publication);
@@ -380,7 +386,9 @@ export function syncLiveKitVoiceSubscriptions(): void {
   });
 }
 
-function setRemotePublicationSubscribed(publication: RemoteTrackPublication, subscribed: boolean): void {
+function setRemotePublicationSubscribed(publication: RemoteTrackPublication, wanted: boolean): void {
+  // An E2EE call takes only encrypted media: a cleartext publication there can only be the server's.
+  const subscribed = wanted && isCallPublicationAllowed(publication);
   if (publication.isDesired === subscribed) return;
   publication.setSubscribed(subscribed);
 }

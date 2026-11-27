@@ -8,6 +8,7 @@ import { voiceAssetUrls } from '@voiceroom/call/voice-assets';
 import {
   buildVersion,
   cspMetaPlugin,
+  liveKitE2eeRedPlugin,
   precompressPlugin,
   serviceWorkerPlugin,
   versionFilePlugin,
@@ -44,6 +45,7 @@ const nodeTestFiles = [
   'test/caddy-extra-sites.test.ts',
   'test/caddy-static-cache.test.ts',
   'test/deploy-contract.test.ts',
+  'test/livekit-e2ee-red.test.ts',
   'test/features/chat/chat-drafts.test.ts',
   'test/features/chat/chat-typing.test.ts',
   'test/features/chat/composer-emoji.test.ts',
@@ -78,8 +80,11 @@ export default defineConfig({
     versionFilePlugin(APP_VERSION),
     serviceWorkerPlugin(),
     voiceAssetsPlugin(),
+    liveKitE2eeRedPlugin(),
     precompressPlugin()
   ],
+  // The dev server pre-bundles livekit-client, and the build plugins do not see that copy.
+  optimizeDeps: { rolldownOptions: { plugins: [liveKitE2eeRedPlugin()] } },
   define: {
     'import.meta.env.VITE_APP_VERSION': JSON.stringify(APP_VERSION),
     __VOICE_ASSET_URLS__: JSON.stringify(voiceAssetUrls(voiceAssetVersion()))

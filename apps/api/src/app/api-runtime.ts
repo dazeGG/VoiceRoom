@@ -326,7 +326,6 @@ export function createApiRuntime({
     const calls = createCallRingService({
       pool: services.getPool,
       enabled: config.VOICE_CALLS_ENABLED,
-      e2eeRequired: config.CALL_E2EE_REQUIRED,
       clock: realtimeNow,
       graceMs: realtimeReconnectLeaseMs,
       limits: { count: config.RING_RATE_LIMIT, windowMs: config.RING_RATE_WINDOW_MS },
