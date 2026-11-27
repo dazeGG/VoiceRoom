@@ -12,7 +12,7 @@ import {
   DialogTitle,
   DialogDescription
 } from '@voiceroom/ui-kit/components';
-import { WHATS_NEW_SLIDES, WHATS_NEW_SLIDE_MS, shouldShowWhatsNew } from '../model/whats-new';
+import { WHATS_NEW_SLIDES, WHATS_NEW_SLIDE_MS, shouldShowWhatsNew, type WhatsNewSlide } from '../model/whats-new';
 
 const props = withDefaults(defineProps<{ paused?: boolean }>(), { paused: false });
 
@@ -24,16 +24,28 @@ const emit = defineEmits<{
 
 const calls = useFriendCallStore();
 const due = ref(false);
-// Waits while a more urgent dialog, such as a new sign-in question, is up.
-const open = computed(() => due.value && calls.missedLoaded && !props.paused);
+// Waits while a more urgent dialog, such as a new sign-in question, is up. A signed-in shell also waits for the
+// calls bootstrap, which settles even when it fails, so the calls slide is decided before the story starts.
+// Where calls never start (a guest page), the story does not wait for them.
+const open = computed(() => due.value && (calls.missedLoaded || !calls.userId) && !props.paused);
 
 watch(open, (isOpen) => emit('openChange', isOpen), { immediate: true });
 
 const [callsSlide, ...otherSlides] = WHATS_NEW_SLIDES;
-const slides = computed(() => (calls.enabled ? WHATS_NEW_SLIDES : otherSlides));
+const availableSlides = () => (calls.enabled ? WHATS_NEW_SLIDES : otherSlides);
+// The set is fixed when the story first opens, so calls switching on later never reshuffles it mid-story.
+const shownSlides = shallowRef<readonly WhatsNewSlide[] | null>(null);
+const slides = computed(() => shownSlides.value ?? availableSlides());
+watch(
+  open,
+  (isOpen) => {
+    if (isOpen && !shownSlides.value) shownSlides.value = availableSlides();
+  },
+  { immediate: true }
+);
 const selectedVideo = ref<string>();
 const slide = computed(
-  () => slides.value.find((item) => item.video === selectedVideo.value) ?? (calls.enabled ? callsSlide : otherSlides[0])
+  () => slides.value.find((item) => item.video === selectedVideo.value) ?? slides.value[0] ?? callsSlide
 );
 const index = computed(() => slides.value.indexOf(slide.value));
 const last = computed(() => index.value === slides.value.length - 1);
