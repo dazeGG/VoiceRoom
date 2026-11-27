@@ -7,7 +7,8 @@ import type {
   CallIncoming,
   CallMissedSeenBody,
   CallMissedUpdated,
-  CallSnapshot
+  CallSnapshot,
+  CallVoiceTokenBody
 } from '@voiceroom/shared/contracts/rings';
 import type { ResolvedSession, SessionUser } from '../../app/context.ts';
 import { BoundedMap } from '../../lib/bounded-map.ts';
@@ -71,7 +72,7 @@ type VoicePort = {
     pendingInRoom(roomId: string): boolean;
     retry(): void;
   };
-  token(roomId: string, peerId: string, user: SessionUser): Promise<LiveKitAdmission>;
+  token(roomId: string, peerId: string, user: SessionUser, options: { e2ee: boolean }): Promise<LiveKitAdmission>;
 };
 
 function seatId(userId: string): string {
@@ -82,6 +83,11 @@ function notFound(): never {
   throw new DomainError('call_not_found', 404, 'Call not found');
 }
 
+// A client that cannot decrypt the call would hear only noise, so it does not get into the room.
+function outdated(): never {
+  throw new DomainError('client_outdated', 426, 'This client cannot join an end-to-end encrypted call');
+}
+
 function disabled(): never {
   throw new DomainError('call_disabled', 403, 'Voice calls are disabled');
 }
@@ -89,6 +95,7 @@ function disabled(): never {
 export function createCallRingService({
   pool,
   enabled,
+  e2eeRequired = false,
   clock,
   graceMs,
   limits,
@@ -98,6 +105,8 @@ export function createCallRingService({
 }: {
   pool(this: void): pg.Pool | null;
   enabled: boolean;
+  /** Refuse a call's LiveKit token to a client that does not declare call E2EE. */
+  e2eeRequired?: boolean;
   clock?: (() => number) | undefined;
   graceMs: number;
   limits: { count: number; windowMs: number };
@@ -547,12 +556,14 @@ export function createCallRingService({
     return { ok: false, code: 'reconnect_finalize_failed' };
   }
 
-  function token(user: SessionUser, sessionHash: string, id: string, proof: string) {
+  function token(user: SessionUser, sessionHash: string, id: string, body: CallVoiceTokenBody) {
     return serialize(async () => {
-      const { call, handoff } = await authorizeVoice({ userId: user.id, sessionHash }, id, proof);
+      const { call, handoff } = await authorizeVoice({ userId: user.id, sessionHash }, id, body.seatToken);
+      const e2ee = body.e2ee === 1;
+      if (e2eeRequired && !e2ee) outdated();
       const connection = voice.seat(call.roomId, handoff.peerId)?.connection;
       if (!connection || connection.closed || connection.authSessionHash !== sessionHash) return notFound();
-      const result = await voice.token(call.roomId, handoff.peerId, user);
+      const result = await voice.token(call.roomId, handoff.peerId, user, { e2ee });
       return {
         ok: true as const,
         ...result,

@@ -57,7 +57,8 @@ function createLiveKitCredentialProvider({
     canPublishMicrophone = true,
     canPublishScreen = true,
     companion,
-    call
+    call,
+    e2ee
   }: {
     roomId?: string;
     livekitRoom?: string;
@@ -69,6 +70,8 @@ function createLiveKitCredentialProvider({
     canPublishScreen?: boolean;
     companion?: CompanionCredential;
     call?: true;
+    /** A call client that agrees its E2EE key over participant attributes; only a call may ask. */
+    e2ee?: true;
   } = {}): Promise<AdmissionIssue> {
     if (
       !apiKey ||
@@ -80,7 +83,8 @@ function createLiveKitCredentialProvider({
       !principal ||
       isLiveKitOnlyIdentity(peerId) ||
       (companion && (surface !== 'main' || principal.principalType !== 'account')) ||
-      (call && (surface !== 'main' || companion || principal.principalType !== 'account'))
+      (call && (surface !== 'main' || companion || principal.principalType !== 'account')) ||
+      (e2ee && !call)
     ) {
       return { status: 'unavailable', admission: null };
     }
@@ -102,7 +106,18 @@ function createLiveKitCredentialProvider({
     const token = companion
       ? await signCompanion(apiKey, apiSecret, { roomId, livekitRoom, peerId, id: companion.id }, tokenTtl)
       : await signParticipant(
-          { apiKey, apiSecret, roomId, livekitRoom, peerId, name, surface, canPublishMicrophone, canPublishScreen },
+          {
+            apiKey,
+            apiSecret,
+            roomId,
+            livekitRoom,
+            peerId,
+            name,
+            surface,
+            canPublishMicrophone,
+            canPublishScreen,
+            canUpdateAttributes: e2ee === true
+          },
           tokenTtl
         );
     const publicUrl = new URL(normalizeLiveKitServerUrl(gateUrl));
@@ -161,11 +176,22 @@ function signParticipant(
     surface: RoomSurface;
     canPublishMicrophone: boolean;
     canPublishScreen: boolean;
+    canUpdateAttributes: boolean;
   },
   ttl: number
 ): Promise<string> {
-  const { apiKey, apiSecret, roomId, livekitRoom, peerId, name, surface, canPublishMicrophone, canPublishScreen } =
-    input;
+  const {
+    apiKey,
+    apiSecret,
+    roomId,
+    livekitRoom,
+    peerId,
+    name,
+    surface,
+    canPublishMicrophone,
+    canPublishScreen,
+    canUpdateAttributes
+  } = input;
   const token = new AccessToken(apiKey, apiSecret, {
     identity: peerId,
     metadata: JSON.stringify({ roomId }),
@@ -183,6 +209,9 @@ function signParticipant(
     canPublishData: false,
     canPublishSources,
     canSubscribe: true,
+    // A call agrees its E2EE key over participant attributes. LiveKit has no grant for attributes alone, so
+    // this also lets the participant rename itself in LiveKit; call views take names from the API roster.
+    canUpdateOwnMetadata: canUpdateAttributes,
     room: livekitRoom,
     roomJoin: true
   });

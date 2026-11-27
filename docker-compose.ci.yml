@@ -176,6 +176,7 @@ services:
       LIVEKIT_GATE_PUBLIC_URL: ${CI_GATE_PUBLIC_URL:-ws://voice-gate.test:7890}
       WIDGET_ENABLED: ${WIDGET_ENABLED:-false}
       VOICE_CALLS_ENABLED: ${VOICE_CALLS_ENABLED:-false}
+      CALL_E2EE_REQUIRED: ${CALL_E2EE_REQUIRED:-false}
       LIVEKIT_GATE_SECRET: ci-livekit-gate-secret-at-least-32-bytes
       LIVEKIT_API_KEY: devkey
       LIVEKIT_API_SECRET: devsecret

@@ -4,6 +4,7 @@ import fs from 'node:fs/promises';
 import { EventEmitter } from 'node:events';
 import net from 'node:net';
 import test, { mock, type TestContext } from 'node:test';
+import { Type } from 'typebox';
 import { Me } from '@voiceroom/shared/contracts/account';
 import { LiveKitAdmission } from '@voiceroom/shared/contracts/admission';
 import { DirectHistoryPage, DirectThread } from '@voiceroom/shared/contracts/messages';
@@ -22,6 +23,7 @@ import { createCredentialBoundaryService } from '../../../src/domains/admission/
 import { createGateCredentialRepository } from '../../../src/domains/admission/gate-credential.repository.ts';
 import { updateCallMessage } from '../../../src/domains/messaging/call-history.repository.ts';
 import { kyselyOn } from '../../../src/platform/db/kysely.ts';
+import { checked } from '../../helpers/checked.ts';
 import { createLogger } from '../../../src/lib/logger.ts';
 import { LOG_EVENTS } from '../../../src/lib/log-events.ts';
 import { createTestDatabase } from '../../db-harness.ts';
@@ -274,6 +276,14 @@ async function issue(api: Running, account: Account, id: string, seatToken: stri
       LiveKitAdmission
     )
   ).body;
+}
+
+const TokenGrant = Type.Object({ video: Type.Object({ canUpdateOwnMetadata: Type.Optional(Type.Boolean()) }) });
+
+/** Whether a LiveKit JWT lets its participant update its own attributes (the call E2EE handshake). */
+function canUpdateAttributes(jwt: string): boolean {
+  const payload: unknown = JSON.parse(Buffer.from(jwt.split('.')[1] ?? '', 'base64url').toString('utf8'));
+  return checked(TokenGrant, payload, 'the call token').video.canUpdateOwnMetadata ?? false;
 }
 
 async function until(check: () => boolean | Promise<boolean>, message: string) {
@@ -530,6 +540,52 @@ class GateSocket extends EventEmitter {
     return destination;
   }
 }
+
+test('with call E2EE required, only a client that declares it gets a token, and only its token updates attributes', async (t) => {
+  const lab = await setup(t, { CALL_E2EE_REQUIRED: 'true' });
+  const api = await lab.boot();
+  const [a, b] = await Promise.all([api.account('alice'), api.account('bob')]);
+  await befriend(api, a, b);
+  const aWs = await api.socket(a.cookie);
+  const call = await start(api, a, b);
+  const seat = await enter(aWs, call);
+  const ask = (account: Account, body: Record<string, unknown>) =>
+    request(api.socketPath, {
+      method: 'POST',
+      pathname: `${basePath}/${call.call.id}/livekit-token`,
+      cookie: account.cookie,
+      body
+    });
+  const outdated = await ask(a, { seatToken: seat.seatToken });
+  assert.deepEqual([outdated.status, outdated.body.code], [426, 'client_outdated']);
+  // The seat proof is checked first: someone else's seat token is still just not found.
+  const stranger = await ask(b, { seatToken: seat.seatToken, e2ee: 1 });
+  assert.deepEqual([stranger.status, stranger.body.code], [404, 'call_not_found']);
+  const encrypted = await request(
+    api.socketPath,
+    {
+      method: 'POST',
+      pathname: `${basePath}/${call.call.id}/livekit-token`,
+      cookie: a.cookie,
+      body: { seatToken: seat.seatToken, e2ee: 1 }
+    },
+    LiveKitAdmission
+  );
+  assert.equal(encrypted.status, 200);
+  assert.equal(canUpdateAttributes(encrypted.body.token), true);
+});
+
+test('until call E2EE is required, a token without it stays issued and cannot update attributes', async (t) => {
+  const lab = await setup(t);
+  const api = await lab.boot();
+  const [a, b] = await Promise.all([api.account('alice'), api.account('bob')]);
+  await befriend(api, a, b);
+  const aWs = await api.socket(a.cookie);
+  const call = await start(api, a, b);
+  const seat = await enter(aWs, call);
+  const token = await issue(api, a, call.call.id, seat.seatToken);
+  assert.equal(canUpdateAttributes(token.token), false);
+});
 
 test('the gate tunnels a seated call credential and drops it when the seat leaves before upstream', async (t) => {
   const lab = await setup(t);

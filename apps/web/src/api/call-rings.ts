@@ -7,7 +7,7 @@ import {
   CallMissedSeenAnswer,
   CallMissedSeenBody,
   CallStartBody,
-  CallVoiceProof
+  CallVoiceTokenBody
 } from '@voiceroom/shared/contracts/rings';
 import { api } from './client';
 
@@ -28,5 +28,5 @@ export const fetchCallVoiceToken = (callId: string, seatToken: string, signal: A
     `${callPath(callId)}/livekit-token`,
     LiveKitAdmission,
     { seatToken },
-    { bodySchema: CallVoiceProof, signal }
+    { bodySchema: CallVoiceTokenBody, signal }
   );

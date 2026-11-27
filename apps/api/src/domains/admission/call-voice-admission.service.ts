@@ -17,7 +17,7 @@ export function createCallVoiceAdmission(deps: {
   logger: Parameters<typeof revokeIssuedAdmission>[0]['log'];
   recordRevokeFailure(this: void): void;
 }) {
-  return async (roomId: string, peerId: string, user: SessionUser) => {
+  return async (roomId: string, peerId: string, user: SessionUser, { e2ee }: { e2ee: boolean }) => {
     const seat = deps.currentPeer(roomId, peerId);
     if (!seat || seat.accountUserId !== user.id) throw new DomainError('call_not_found', 404, 'Call seat not found');
     const provider = deps.provider();
@@ -33,6 +33,7 @@ export function createCallVoiceAdmission(deps: {
       peerId,
       principal,
       call: true,
+      ...(e2ee && { e2ee: true as const }),
       canPublishMicrophone: !muted,
       name: user.displayName || user.login || '',
       livekitRoom: deps.roomName(roomId)
