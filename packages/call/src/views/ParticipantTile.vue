@@ -45,6 +45,7 @@ const tile = ref<HTMLElement | null>(null);
 const cameraVideo = ref<HTMLVideoElement | null>(null);
 const connected = computed(() => state === 'connected');
 const canActivate = computed(() => connected.value && !staticTile);
+const canOpenContextMenu = computed(() => contextMenu && (connected.value || staticTile));
 const canWatch = computed(() => connected.value && !participant.isLocal && participant.screen && !viewing);
 const screenActionLabel = computed(() => (screenRequesting ? t('Подключение') : t('Смотреть экран')));
 const cameraStream = computed(() => (connected.value ? participant.cameraStream : null));
@@ -82,20 +83,20 @@ function handleScreenAction(event: MouseEvent): void {
 }
 
 function handleContextMenu(event: MouseEvent): void {
-  if (!canActivate.value || !contextMenu) return;
+  if (!canOpenContextMenu.value) return;
   event.preventDefault();
   event.stopPropagation();
   emit('contextMenu', event.clientX, event.clientY, tile.value);
 }
 
 function handleKeydown(event: KeyboardEvent): void {
-  if (!canActivate.value || event.target !== tile.value) return;
-  if (event.key === 'Enter' || event.key === ' ') {
+  if (event.target !== tile.value) return;
+  if (canActivate.value && (event.key === 'Enter' || event.key === ' ')) {
     event.preventDefault();
     emit('activate');
     return;
   }
-  if (!contextMenu) return;
+  if (!canOpenContextMenu.value) return;
   const isContextKey = event.key === 'ContextMenu' || (event.key === 'F10' && event.shiftKey);
   if (!isContextKey || !tile.value) return;
   event.preventDefault();
@@ -108,7 +109,7 @@ function handleKeydown(event: KeyboardEvent): void {
 <template>
   <div
     ref="tile"
-    :role="canActivate ? 'button' : undefined"
+    :role="canActivate ? 'button' : canOpenContextMenu ? 'group' : undefined"
     :class="[
       'participant',
       `participant--${variant}`,
@@ -122,10 +123,10 @@ function handleKeydown(event: KeyboardEvent): void {
       }
     ]"
     :data-peer-id="participant.id"
-    :tabindex="canActivate ? 0 : undefined"
-    :aria-haspopup="canActivate && contextMenu ? 'dialog' : undefined"
+    :tabindex="canActivate || canOpenContextMenu ? 0 : undefined"
+    :aria-haspopup="canOpenContextMenu ? 'menu' : undefined"
     :aria-label="
-      canActivate && contextMenu
+      canOpenContextMenu
         ? t('{p0}. Откройте контекстное меню Shift+F10 или клавишей меню.', { p0: participant.name })
         : undefined
     "

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, shallowRef } from 'vue';
 import { ParticipantTile } from '@voiceroom/call/views';
 import { state } from '@voiceroom/call/engine/core/room-runtime.store';
 import { enterScreenView } from '@voiceroom/call/engine/ui/screen-view';
@@ -7,6 +7,7 @@ import { getAvatarPresentation } from '@voiceroom/ui/avatar-presentation';
 import type { CallSnapshot } from '@voiceroom/shared/contracts/rings';
 import EmojiText from '@/shared/chat/EmojiText.vue';
 import { createLogger, errorContext } from '@/shared/log';
+import FriendCallContextMenu from './FriendCallContextMenu.vue';
 
 const { peer, self, peerStatus, hasEngine } = defineProps<{
   peer: CallSnapshot['caller'];
@@ -15,6 +16,7 @@ const { peer, self, peerStatus, hasEngine } = defineProps<{
   hasEngine: boolean;
 }>();
 const log = createLogger('friend-call:screen');
+const menu = shallowRef<{ x: number; y: number; tile: HTMLElement | null } | null>(null);
 const remote = computed(() =>
   hasEngine ? [...state.peers.values()].find((seat) => seat.accountUserId === peer.id) : undefined
 );
@@ -48,6 +50,10 @@ function watchScreen(): void {
   if (active)
     void enterScreenView(active.id).catch((error: unknown) => log.error('screen view failed', errorContext(error)));
 }
+
+function openMenu(x: number, y: number, tile: HTMLElement | null): void {
+  menu.value = { x, y, tile };
+}
 </script>
 
 <template>
@@ -69,13 +75,23 @@ function watchScreen(): void {
         :avatar="getAvatarPresentation(remoteSeat)"
         :state="remoteState"
         static-tile
+        context-menu
         :viewing="state.viewedScreenPeerId === remoteSeat.id"
         :mirrored="false"
         :screen-requesting="state.screenRequesting"
+        @context-menu="openMenu"
         @watch-screen="watchScreen"
       >
         <template #name><EmojiText :text="remoteSeat.name" /></template>
       </ParticipantTile>
     </div>
+    <FriendCallContextMenu
+      v-if="menu"
+      :key="peer.id"
+      :peer="peer"
+      :participant="remote"
+      :position="menu"
+      @close="menu = null"
+    />
   </div>
 </template>
