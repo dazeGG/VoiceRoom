@@ -105,12 +105,7 @@ export function createLiveKitParticipant(participant: RemoteParticipant): Partic
     id: participant.identity,
     isLocal: participant.isLocal || participant.identity === state.peerId,
     joinedAt: participant.joinedAt ? participant.joinedAt.getTime() : Date.now(),
-    // The personal SFU gets only the opaque identity. Keep the guest name from presence. A call keeps the roster
-    // name: its E2EE token lets a participant rename itself in LiveKit.
-    name:
-      (state.callId ? state.peers.get(participant.identity)?.name : participant.name) ||
-      participant.name ||
-      participant.identity,
+    name: liveKitParticipantName(participant),
     screen: participant.isScreenShareEnabled || screenPresence.active,
     screenAudio: screenPresence.hasAudio
   });
@@ -166,6 +161,16 @@ export function updateLiveKitPublicationState(peer: Participant, publication: Re
   if (isCameraPublication(publication)) {
     peer.camera = true;
   }
+}
+
+/**
+ * The name a LiveKit participant shows under. The personal SFU gets only the opaque identity, so the guest name
+ * comes from presence. A call takes only the roster name: its E2EE token lets a participant rename itself in LiveKit.
+ */
+export function liveKitParticipantName(participant: { identity: string; name?: string | undefined }): string {
+  const rosterName = state.peers.get(participant.identity)?.name;
+  if (state.callId) return rosterName || participant.identity;
+  return participant.name || rosterName || participant.identity;
 }
 
 export function syncLiveKitPublicationSubscription(peer: Participant, publication: RemoteTrackPublication): void {

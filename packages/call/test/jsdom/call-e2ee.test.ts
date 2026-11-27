@@ -183,3 +183,18 @@ test('the microphone sends RED in a call only while the peer takes it, and alway
   publications.setCallPeerTakesRed(null);
   expect(publications.microphoneSendsRed()).toBe(true);
 });
+
+test('a call names its peer from the roster only, while other rooms fall back to the roster when LiveKit has no name', async () => {
+  const { lk } = await callHarness();
+  const remote = await import('@voiceroom/call/engine/services/livekit/remote-participants');
+  lk.state.peers.set('c-peer', { id: 'c-peer', name: 'Ада' });
+
+  expect(remote.liveKitParticipantName({ identity: 'c-peer', name: 'Самозванец' })).toBe('Ада');
+  expect(remote.liveKitParticipantName({ identity: 'c-other', name: 'Самозванец' })).toBe('c-other');
+
+  lk.state.callId = undefined;
+  // Meet gives LiveKit an empty name and keeps the guest name in its roster.
+  expect(remote.liveKitParticipantName({ identity: 'c-peer', name: '' })).toBe('Ада');
+  expect(remote.liveKitParticipantName({ identity: 'c-peer', name: 'Ada' })).toBe('Ada');
+  expect(remote.liveKitParticipantName({ identity: 'c-other', name: '' })).toBe('c-other');
+});
