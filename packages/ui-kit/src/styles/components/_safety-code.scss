@@ -13,7 +13,7 @@
   align-items: center;
   gap: var(--space-4);
   min-width: 0;
-  padding: var(--space-8) var(--space-4);
+  padding: var(--space-8) var(--space-2);
   border-radius: var(--radius-8);
   background: var(--vr-surface-3);
 }
@@ -28,5 +28,7 @@
   color: var(--vr-text-2);
   font: 500 12px/1.2 var(--font-ui);
   text-align: center;
-  overflow-wrap: anywhere;
+  // A name wraps only between its words: «единорог» never splits into «единоро» and «г».
+  overflow-wrap: normal;
+  hyphens: manual;
 }

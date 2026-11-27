@@ -26,6 +26,7 @@ const agreeing = computed(() => peerPresent && state.callE2ee?.phase === 'agreei
       v-model:open="open"
       role="dialog"
       placement="bottom-start"
+      width="wide"
       :aria-label="t('Звонок защищён сквозным шифрованием')"
     >
       <template #trigger="{ open: shown, toggle, panelId }">

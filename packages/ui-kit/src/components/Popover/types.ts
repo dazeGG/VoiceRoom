@@ -29,6 +29,8 @@ export type PopoverProps = {
   rootClass?: string;
   panelClass?: string;
   inset?: 'standard' | 'flush';
+  /** `wide` (360 px) for content laid out in several columns, such as a SafetyCode; `standard` is 300 px. */
+  width?: 'standard' | 'wide';
   /** Keep panel in the DOM when closed (for ids the vanilla client updates). */
   keepContentMounted?: boolean;
   /** Flip vertically on open when the preferred side would leave the viewport. */

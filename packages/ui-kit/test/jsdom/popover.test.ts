@@ -39,6 +39,20 @@ describe('Popover', () => {
     expect(focused()).toBe('open A');
   });
 
+  test('a wide popover opens a wider panel and the default stays standard', async () => {
+    const wide = renderPopover({ label: 'wide', width: 'wide' });
+    await userEvent.click(wide.trigger);
+    expect((await screen.findByRole('menu', { name: 'Меню wide' })).classList.contains('popover__panel--wide')).toBe(
+      true
+    );
+    wide.unmount();
+    const standard = renderPopover({ label: 'standard' });
+    await userEvent.click(standard.trigger);
+    expect(
+      (await screen.findByRole('menu', { name: 'Меню standard' })).classList.contains('popover__panel--wide')
+    ).toBe(false);
+  });
+
   test('Escape closes the menu and returns focus to the trigger', async () => {
     const { trigger } = renderPopover();
     await userEvent.click(trigger);

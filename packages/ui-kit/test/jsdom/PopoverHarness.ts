@@ -9,6 +9,7 @@ export type PopoverHarnessProps = {
   role?: PopoverRole;
   keepContentMounted?: boolean;
   floating?: boolean;
+  width?: 'standard' | 'wide';
   onBeforeClose?: (reason: PopoverCloseReason) => boolean | void;
 };
 
@@ -27,6 +28,7 @@ export function popoverHarness(props: PopoverHarnessProps = {}) {
           role: props.role ?? 'menu',
           keepContentMounted: props.keepContentMounted ?? false,
           floating: props.floating ?? false,
+          ...(props.width ? { width: props.width } : {}),
           ...(props.onBeforeClose ? { onBeforeClose: props.onBeforeClose } : {})
         },
         {

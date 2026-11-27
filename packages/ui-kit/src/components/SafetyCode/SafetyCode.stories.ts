@@ -15,7 +15,8 @@ const meta = {
           '- Show it where the protection is explained, never as a toast.',
           '- Each emoji has its name under it, so people can read the code to each other aloud.',
           '- The order matters: keep the items in the order the protocol gives them.',
-          '- Give the list a `label` that says what the code is for.'
+          '- Give the list a `label` that says what the code is for.',
+          '- A name never breaks inside a word, so give the code at least 328 px: a wide Popover holds four columns.'
         ].join('\n')
       }
     }
