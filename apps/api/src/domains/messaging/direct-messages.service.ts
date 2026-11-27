@@ -4,7 +4,11 @@
 // order the legacy handlers ran them.
 
 import type { AccountMessage } from '../../realtime/account-events.ts';
-import type { DirectMessage as DirectMessageView, DirectRead } from '@voiceroom/shared/contracts/messages';
+import type {
+  ConversationSummary,
+  DirectMessage as DirectMessageView,
+  DirectRead
+} from '@voiceroom/shared/contracts/messages';
 import type { PublicUser } from '@voiceroom/shared/contracts/users';
 import { publicUser } from '../account/user-records.ts';
 import { isStoredDirectMessage } from '../social/social-records.ts';
@@ -32,6 +36,7 @@ type ReadResult = Omit<DirectRead, 'ok'>;
 export type DirectMessage = DirectMessageView & { idempotencyReplay?: boolean; deletedAt?: number | null };
 
 export interface DirectMessageStore {
+  listConversations(userId: string): Promise<ConversationSummary[]>;
   listThread(input: { userId: string; peerId: string }): Promise<DirectMessage[]>;
   markRead(input: { userId: string; peerId: string }): Promise<{ count: number }>;
   sendMessage(input: {
@@ -354,7 +359,9 @@ export function createDirectMessagesService(deps: DirectMessagesDeps) {
     return { status: 'edited', message };
   }
 
-  return { thread, send, respondInvite, markRead, remove, removeAsOperator, edit };
+  const listConversations = (userId: string) => deps.messages().direct.listConversations(userId);
+
+  return { listConversations, thread, send, respondInvite, markRead, remove, removeAsOperator, edit };
 }
 
 export type DirectMessagesService = ReturnType<typeof createDirectMessagesService>;

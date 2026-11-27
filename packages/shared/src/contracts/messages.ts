@@ -6,7 +6,7 @@ import { Value } from 'typebox/value';
 import { Failure, Nullable, Ok } from './http.ts';
 import { AttachmentContext, AttachmentState } from './media.ts';
 import { DirectMessageCall } from './rings.ts';
-import { PublicUser } from './users.ts';
+import { AccountBadge, PublicUser } from './users.ts';
 
 // --- the parts of a message --------------------------------------------------
 
@@ -181,6 +181,23 @@ export const DirectMessageParams = Type.Object({ userId: Type.String(), messageI
 
 export const DirectThread = Ok({ peer: PublicUser, messages: Type.Array(DirectMessage), muted: Type.Boolean() });
 export type DirectThread = Static<typeof DirectThread>;
+
+export const ConversationSummary = Type.Object({
+  peer: Type.Object({ ...PublicUser.properties, badge: Nullable(AccountBadge) }),
+  lastMessage: Type.Object({
+    preview: Type.String(),
+    kind: Type.Union([Type.Literal('text'), Type.Literal('call'), Type.Literal('attachment')]),
+    at: Type.Number(),
+    fromMe: Type.Boolean()
+  }),
+  unreadCount: Type.Integer({ minimum: 0 }),
+  isFriend: Type.Boolean(),
+  muted: Type.Boolean()
+});
+export type ConversationSummary = Static<typeof ConversationSummary>;
+
+export const ConversationList = Ok({ conversations: Type.Array(ConversationSummary) });
+export type ConversationList = Static<typeof ConversationList>;
 
 export const SendDirectMessageBody = Type.Object({
   text: Type.Optional(Type.String()),

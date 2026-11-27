@@ -4,8 +4,11 @@
 import crypto from 'node:crypto';
 import { sql } from 'kysely';
 import type pg from 'pg';
+import type { ConversationSummary } from '@voiceroom/shared/contracts/messages';
 import { transaction } from '../../platform/db/pool.ts';
 import { kyselyOn, type Database } from '../../platform/db/kysely.ts';
+import { toMillis } from '../../platform/epoch-millis.ts';
+import { cleanBadge } from '../account/user-records.ts';
 import {
   type DirectMessage,
   type Metadata,
@@ -13,6 +16,7 @@ import {
   inviteKind,
   inviteStatus,
   mapMessage,
+  mapPublicUser,
   now
 } from '../social/social-records.ts';
 
@@ -31,6 +35,95 @@ export async function unreadCountsFor(q: Database, userId: string): Promise<Reco
 export function createDmThreadRepository({ pool }: { pool: pg.Pool }) {
   const db = kyselyOn(pool);
   const getUnreadCounts = (userId: string) => unreadCountsFor(db, userId);
+
+  async function listConversations(userId: string, limit = 200): Promise<ConversationSummary[]> {
+    const low = sql<string>`least(sender_id, recipient_id)`;
+    const high = sql<string>`greatest(sender_id, recipient_id)`;
+    const latest = db
+      .selectFrom('direct_messages')
+      .innerJoin('friendships', (join) => join.on('user_a_id', '=', low).on('user_b_id', '=', high))
+      .where((eb) => eb.or([eb('sender_id', '=', userId), eb('recipient_id', '=', userId)]))
+      .where('deleted_at', 'is', null)
+      .where((eb) =>
+        eb.not(
+          eb.exists(
+            eb
+              .selectFrom('user_blocks')
+              .select('blocker_id')
+              .where((blocks) =>
+                blocks.or([
+                  blocks.and([blocks('blocker_id', '=', low), blocks('blocked_id', '=', high)]),
+                  blocks.and([blocks('blocker_id', '=', high), blocks('blocked_id', '=', low)])
+                ])
+              )
+          )
+        )
+      )
+      .distinctOn([low, high])
+      .select([
+        'direct_messages.id as message_id',
+        'direct_messages.created_at as message_at',
+        'body',
+        'sender_id',
+        sql<string | null>`direct_messages.metadata->>'kind'`.as('kind'),
+        sql<string>`case when sender_id = ${userId} then recipient_id else sender_id end`.as('peer_id'),
+        sql<number>`(count(*) filter (where recipient_id = ${userId} and read_at is null)
+          over (partition by ${low}, ${high}))::int`.as('unread_count')
+      ])
+      .orderBy(low)
+      .orderBy(high)
+      .orderBy('message_at', 'desc')
+      .orderBy('message_id', 'desc');
+
+    const rows = await db
+      .selectFrom(latest.as('latest'))
+      .innerJoin('users', 'users.id', 'latest.peer_id')
+      .leftJoin('notification_dm_mutes as mutes', (join) =>
+        join.onRef('mutes.peer_user_id', '=', 'latest.peer_id').on('mutes.user_id', '=', userId)
+      )
+      .select([
+        'users.avatar_accent',
+        'users.avatar_color_key',
+        'users.avatar_key',
+        'users.badge',
+        'users.created_at',
+        'users.display_name',
+        'users.dnd',
+        'users.id',
+        'users.login',
+        'users.presence_status'
+      ])
+      .select(['latest.body', 'latest.kind', 'latest.message_at', 'latest.sender_id', 'latest.unread_count'])
+      .select((eb) => [
+        eb('mutes.id', 'is not', null).as('muted'),
+        eb
+          .exists(
+            eb
+              .selectFrom('message_attachments')
+              .select('id')
+              .whereRef('direct_message_id', '=', 'latest.message_id')
+              .where('deleted_at', 'is', null)
+          )
+          .as('has_attachment')
+      ])
+      .orderBy('latest.message_at', 'desc')
+      .orderBy('latest.message_id', 'desc')
+      .limit(limit)
+      .execute();
+
+    return rows.map((row) => ({
+      peer: { ...mapPublicUser(row), badge: cleanBadge(row.badge) },
+      lastMessage: {
+        preview: row.body,
+        kind: row.kind === 'voice-call' ? 'call' : !row.body && row.has_attachment ? 'attachment' : 'text',
+        at: toMillis(row.message_at),
+        fromMe: row.sender_id === userId
+      },
+      unreadCount: row.unread_count,
+      isFriend: true,
+      muted: Boolean(row.muted)
+    }));
+  }
 
   // --- Direct messages ----------------------------------------------------
   async function listThread({ userId, peerId, limit = 100 }: { userId: string; peerId: string; limit?: number }) {
@@ -207,6 +300,7 @@ export function createDmThreadRepository({ pool }: { pool: pg.Pool }) {
   }
 
   return {
+    listConversations,
     listThread,
     getMessage,
     softDeleteMessage,

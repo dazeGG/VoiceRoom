@@ -6,6 +6,7 @@ export type DirectMessageRepository = Readonly<
     | 'editMessage'
     | 'expirePendingInvites'
     | 'getMessage'
+    | 'listConversations'
     | 'listThread'
     | 'markRead'
     | 'respondInvite'
@@ -21,6 +22,7 @@ function createDirectMessageRepository({ store }: { store: DirectMessageReposito
     editMessage: (...args) => store.editMessage(...args),
     expirePendingInvites: (...args) => store.expirePendingInvites(...args),
     getMessage: (...args) => store.getMessage(...args),
+    listConversations: (...args) => store.listConversations(...args),
     listThread: (...args) => store.listThread(...args),
     markRead: (...args) => store.markRead(...args),
     respondInvite: (...args) => store.respondInvite(...args),
