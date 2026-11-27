@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { SignedIn } from '@voiceroom/shared/contracts/account';
 import { FriendRequests } from '@voiceroom/shared/contracts/social';
+import { PrivacyResponse, type PrivacySettings } from '@voiceroom/shared/contracts/privacy';
 import { RoomCreated } from '@voiceroom/shared/contracts/rooms';
 import { createTestDatabase } from '../../db-harness.ts';
 import {
@@ -28,11 +29,11 @@ const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 type Account = { cookie: string; id: string };
 
-async function startServer(t: TestContext) {
+async function startServer(t: TestContext, env: Record<string, string> = {}) {
   const { dir, socketPath } = socketDir('voice-room-typing-');
   const { cleanup, databaseUrl } = await createTestDatabase(t);
   const logs: ServerLogs = { stdout: '', stderr: '' };
-  const child = spawnServer(socketPath, databaseUrl, logs, { AUTH_RATE_LIMIT: '0' });
+  const child = spawnServer(socketPath, databaseUrl, logs, { AUTH_RATE_LIMIT: '0', ...env });
   const sockets: WsSession[] = [];
   t.after(async () => {
     for (const session of sockets) session.ws.close();
@@ -43,6 +44,31 @@ async function startServer(t: TestContext) {
   await waitForHealthz(socketPath);
 
   return {
+    async send(from: Account, to: Account) {
+      const response = await request(socketPath, {
+        method: 'POST',
+        pathname: `/api/dm/${to.id}`,
+        cookie: from.cookie,
+        body: { text: 'Hello' }
+      });
+      assert.equal(response.status, 201);
+    },
+    async privacy(account: Account, body: PrivacySettings) {
+      const response = await request(
+        socketPath,
+        { method: 'PUT', pathname: '/api/privacy', cookie: account.cookie, body },
+        PrivacyResponse
+      );
+      assert.equal(response.status, 200);
+    },
+    async block(owner: Account, peer: Account) {
+      const response = await request(socketPath, {
+        method: 'PUT',
+        pathname: `/api/blocks/${peer.id}`,
+        cookie: owner.cookie
+      });
+      assert.equal(response.status, 200);
+    },
     async register(login: string) {
       const response = await request(
         socketPath,
@@ -105,12 +131,13 @@ async function startServer(t: TestContext) {
   };
 }
 
-test('typing in a direct thread reaches only a friend, at most once a second', async (t) => {
+test('typing follows message privacy and forwards at most once a second', async (t) => {
   const server = await startServer(t);
   const alice = await server.register('alice');
   const bob = await server.register('bob');
   const carol = await server.register('carol');
   await server.befriend(alice, bob, 'bob');
+  await server.privacy(bob, { messagesFrom: 'friends', callsFrom: 'friends' });
 
   const aliceWs = await server.connect(alice.cookie);
   const bobWs = await server.connect(bob.cookie);
@@ -137,6 +164,58 @@ test('typing in a direct thread reaches only a friend, at most once a second', a
   sendWs(aliceWs.ws, 'dm.typing', { userId: 'bob' });
   const rejected = await waitForWsType(aliceWs.frames, 'error');
   assert.equal(rejected.error.code, 'invalid_user_id');
+});
+
+test('privacy broadcasts to the owner and privacy or block changes invalidate a cached typing permission', async (t) => {
+  const server = await startServer(t);
+  const alice = await server.register('alice');
+  const bob = await server.register('bob');
+  const aliceWs = await server.connect(alice.cookie);
+  const bobWs = await server.connect(bob.cookie);
+  const secondBobWs = await server.connect(bob.cookie);
+
+  sendWs(aliceWs.ws, 'dm.typing', { userId: bob.id });
+  await waitForWsType(bobWs.frames, 'dm.typing');
+  await server.privacy(bob, { messagesFrom: 'friends', callsFrom: 'friends' });
+  for (const socket of [bobWs, secondBobWs]) {
+    const changed = await waitForWsType(socket.frames, 'account.privacy.updated');
+    assert.equal(changed.payload.privacy.messagesFrom, 'friends');
+  }
+  sendWs(aliceWs.ws, 'dm.typing', { userId: bob.id, activity: 'emoji' });
+  await delay(1100);
+  assert.equal(countWsType(bobWs.frames, 'dm.typing'), 1);
+  assert.equal(countWsType(aliceWs.frames, 'account.privacy.updated'), 0);
+
+  await server.privacy(bob, { messagesFrom: 'everyone', callsFrom: 'friends' });
+  sendWs(aliceWs.ws, 'dm.typing', { userId: bob.id });
+  await waitForWsType(bobWs.frames, 'dm.typing', () => countWsType(bobWs.frames, 'dm.typing') === 2);
+  await server.block(bob, alice);
+  sendWs(aliceWs.ws, 'dm.typing', { userId: bob.id, activity: 'emoji' });
+  await delay(1100);
+  assert.equal(countWsType(bobWs.frames, 'dm.typing'), 2);
+});
+
+test('the tenth new chat invalidates cached outgoing typing for an untouched pair', async (t) => {
+  const server = await startServer(t, { MESSAGE_DIRECT_EMIT_ENABLED: 'false' });
+  const [alice, untouched] = await Promise.all([server.register('alice'), server.register('untouched')]);
+  const peers = await Promise.all(Array.from({ length: 10 }, (_, i) => server.register(`peer${i}`)));
+  const tenth = peers[9];
+  assert.ok(tenth);
+  const [aliceWs, untouchedWs, tenthWs] = await Promise.all(
+    [alice, untouched, tenth].map(({ cookie }) => server.connect(cookie))
+  );
+  assert.ok(aliceWs && untouchedWs && tenthWs);
+  for (const peer of peers.slice(0, 9)) await server.send(alice, peer);
+  sendWs(aliceWs.ws, 'dm.typing', { userId: untouched.id });
+  await waitForWsType(untouchedWs.frames, 'dm.typing');
+  await delay(1050);
+
+  await server.send(alice, tenth);
+  sendWs(aliceWs.ws, 'dm.typing', { userId: untouched.id, activity: 'emoji' });
+  sendWs(aliceWs.ws, 'dm.typing', { userId: tenth.id });
+  await waitForWsType(tenthWs.frames, 'dm.typing');
+  await delay(200);
+  assert.equal(countWsType(untouchedWs.frames, 'dm.typing'), 1);
 });
 
 test('room typing reaches everyone with the chat open, named by the server and never echoed', async (t) => {

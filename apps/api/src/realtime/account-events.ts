@@ -27,6 +27,7 @@ export type AccountMessage =
   | Tagged<'notification.friend.accepted', ServerEvents['notification.friend.accepted']>
   | Tagged<'room.kicked' | 'room.banned', ServerEvents['room.kicked']>
   | Tagged<'account.login.new', ServerEvents['account.login.new']>
+  | Tagged<'account.privacy.updated', ServerEvents['account.privacy.updated']>
   | Tagged<'account.login.resolved', ServerEvents['account.login.resolved']>
   | Tagged<'admin.reports', ServerEvents['admin.reports']>;
 
@@ -111,6 +112,8 @@ function toWsAccountEvent(message: AccountMessage): ServerEnvelope {
       });
     case 'account.login.new':
       return buildServerEnvelope('account.login.new', { alert: message.alert });
+    case 'account.privacy.updated':
+      return buildServerEnvelope('account.privacy.updated', { privacy: message.privacy });
     case 'account.login.resolved':
       return buildServerEnvelope('account.login.resolved', {
         alertId: message.alertId,

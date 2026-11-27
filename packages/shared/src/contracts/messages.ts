@@ -5,6 +5,7 @@ import { Type, type Static } from 'typebox';
 import { Value } from 'typebox/value';
 import { Failure, Nullable, Ok } from './http.ts';
 import { AttachmentContext, AttachmentState } from './media.ts';
+import { ContactDecision } from './privacy.ts';
 import { DirectMessageCall } from './rings.ts';
 import { AccountBadge, PublicUser } from './users.ts';
 
@@ -179,7 +180,23 @@ export type DirectMessage = Static<typeof DirectMessage>;
 export const PeerParams = Type.Object({ userId: Type.String() });
 export const DirectMessageParams = Type.Object({ userId: Type.String(), messageId: Type.String() });
 
-export const DirectThread = Ok({ peer: PublicUser, messages: Type.Array(DirectMessage), muted: Type.Boolean() });
+export const DirectThread = Ok({
+  peer: PublicUser,
+  messages: Type.Array(DirectMessage),
+  muted: Type.Boolean(),
+  isFriend: Type.Optional(Type.Boolean()),
+  canMessage: Type.Optional(Type.Boolean()),
+  messageReason: Type.Optional(ContactDecision),
+  canCall: Type.Optional(Type.Boolean())
+});
+export const DirectContact = Type.Object({
+  peer: PublicUser,
+  isFriend: Type.Boolean(),
+  canMessage: Type.Boolean(),
+  messageReason: ContactDecision,
+  canCall: Type.Boolean()
+});
+export type DirectContact = Static<typeof DirectContact>;
 export type DirectThread = Static<typeof DirectThread>;
 
 export const ConversationSummary = Type.Object({
@@ -192,7 +209,8 @@ export const ConversationSummary = Type.Object({
   }),
   unreadCount: Type.Integer({ minimum: 0 }),
   isFriend: Type.Boolean(),
-  muted: Type.Boolean()
+  muted: Type.Boolean(),
+  canCall: Type.Optional(Type.Boolean())
 });
 export type ConversationSummary = Static<typeof ConversationSummary>;
 
@@ -336,8 +354,16 @@ function HistoryPage<Message extends typeof RoomHistoryMessage | typeof DirectHi
 export const RoomHistoryPage = HistoryPage(RoomHistoryMessage);
 export type RoomHistoryPage = Static<typeof RoomHistoryPage>;
 
-export const DirectHistoryPage = HistoryPage(DirectHistoryMessage);
+export const DirectHistoryPage = Type.Object({
+  ...HistoryPage(DirectHistoryMessage).properties,
+  contact: Type.Optional(DirectContact)
+});
 export type DirectHistoryPage = Static<typeof DirectHistoryPage>;
+
+export const DirectHistoryFailure = Type.Object({
+  ...Failure.properties,
+  messageReason: Type.Optional(ContactDecision)
+});
 
 // --- reactions ---------------------------------------------------------------------
 

@@ -170,7 +170,15 @@ export function createRealtimeHub(deps: RealtimeHubDeps) {
     return wsRegistry.isUserOnline(userId);
   }
 
+  let wsHandler: ReturnType<typeof createWsHandler> | undefined;
+  function invalidateTyping(userId: string, peerId?: string) {
+    wsHandler?.invalidateTyping(userId, peerId);
+  }
+
   function broadcastToUser(userId: string, message: AccountMessage): number {
+    if (message.type === 'account.privacy.updated') invalidateTyping(userId);
+    if (message.type === 'friend-accepted' || message.type === 'friend-removed')
+      invalidateTyping(userId, message.userId);
     return wsRegistry.broadcastAccountEvent(userId, message);
   }
 
@@ -217,7 +225,7 @@ export function createRealtimeHub(deps: RealtimeHubDeps) {
     };
     roomRuntime = startedRuntime;
 
-    const wsHandler = createWsHandler({
+    wsHandler = createWsHandler({
       registry: wsRegistry,
       roomRuntime: startedRuntime,
       joinCallVoice: options.joinCallVoice,
@@ -226,9 +234,7 @@ export function createRealtimeHub(deps: RealtimeHubDeps) {
       getFriendIds: (userId) => services.getFriendStore().getFriendIds(userId),
       isUserOnline,
       // The same relationship rule as sending a direct message.
-      canTypeToUser: async (userId, peerId) =>
-        (await services.getFriendStore().areFriends(userId, peerId)) &&
-        !(await services.getFriendStore().isBlockedBetween(userId, peerId)),
+      canTypeToUser: services.contact.typing,
       getClientIp: options.clientIp,
       logger: options.logger
     });
@@ -284,6 +290,7 @@ export function createRealtimeHub(deps: RealtimeHubDeps) {
     getRoom,
     findRoomBan,
     broadcastToUser,
+    invalidateTyping,
     isUserOnline,
     roomMembershipPresenceSnapshot,
     liveKitGatePrincipalForPeer,

@@ -495,7 +495,8 @@ test('message edit routes reuse send validation and never grant room owners an a
       return { id: 'dm-message-1', senderId: authorId, recipientId: peerId, body: 'before' };
     },
     async editMessage(input) {
-      dmEdit = input;
+      const { authorize, ...edit } = input;
+      dmEdit = { ...edit, authorized: typeof authorize === 'function' };
       return {
         id: input.messageId,
         senderId: input.senderId,
@@ -561,7 +562,8 @@ test('message edit routes reuse send validation and never grant room owners an a
     messageId: 'dm-message-1',
     senderId: authorId,
     recipientId: peerId,
-    body: ' updated \n\n\n line '
+    body: ' updated \n\n\n line ',
+    authorized: true
   });
   assert.equal(checked(DirectMessageAnswer, authorDmEdit.json()).message.editedAt, 200);
 });

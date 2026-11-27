@@ -10,8 +10,8 @@ import { shouldOpenAppPrompt } from '@/features/room/room-cta';
 import { readOpenInAppSignals, shouldOfferOpenInApp } from '@/platform/open-in-app';
 import { createLogger, errorContext } from '@/shared/log';
 import { shouldShowRecoveryCodesReminder } from './account-security';
+import type { SettingsTab } from '../components/settings/types';
 
-export type SettingsTab = 'profile' | 'sound' | 'hotkeys' | 'notifications' | 'app' | 'security' | 'appearance';
 export type SecurityHighlight = 'recovery-codes' | 'password' | null;
 
 const log = createLogger('lobby');

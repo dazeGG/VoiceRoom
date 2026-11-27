@@ -1,5 +1,6 @@
 import type {
   Attachment,
+  DirectContact,
   DirectHistoryMessage,
   DirectHistoryPage,
   InviteStatus,
@@ -67,12 +68,21 @@ type ListInput = { userId: string; peerId: string; limit: number };
 type AnchoredInput = ListInput & { anchor: CursorTuple };
 
 export interface DmHistoryRepository {
-  canReadThread(input: { userId: string; peerId: string }): Promise<boolean>;
+  threadAccess(input: { userId: string; peerId: string }): Promise<(DirectContact & { canRead: boolean }) | null>;
   getAnchor(input: { userId: string; peerId: string; messageId: string }): Promise<CursorTuple | null>;
   listLatest(input: ListInput): Promise<HistoryPage>;
   listBefore(input: AnchoredInput): Promise<HistoryPage>;
   listAfter(input: AnchoredInput): Promise<HistoryPage>;
   listAround(input: AnchoredInput): Promise<HistoryPage>;
+}
+
+export class DmHistoryForbidden extends DomainError {
+  readonly messageReason: DirectContact['messageReason'] | undefined;
+
+  constructor(messageReason: DirectContact['messageReason'] | undefined) {
+    super('thread_forbidden', 403, 'Thread is not available');
+    this.messageReason = messageReason;
+  }
 }
 
 type VisibilityPolicy = {
@@ -141,9 +151,13 @@ function createDmHistoryService({
     if (!viewer) throw new DomainError('authentication_required', 401, 'Authentication required');
     if (!peer || viewer === peer) throw new DomainError('thread_not_found', 404, 'Thread not found');
 
-    if (!(await repository.canReadThread({ userId: viewer, peerId: peer }))) {
-      throw new DomainError('thread_forbidden', 403, 'Thread is not available');
+    const access = await repository.threadAccess({ userId: viewer, peerId: peer });
+    if (!access?.canRead) {
+      const reason = access?.messageReason;
+      // Keep a blocked or inactive account indistinguishable from an unknown peer here.
+      throw new DmHistoryForbidden(reason === 'blocked' ? undefined : reason);
     }
+    const { canRead: _canRead, ...contact } = access;
 
     let normalizedQuery = query;
     if (query.mode === 'around' && !query.cursor && typeof query.messageId === 'string') {
@@ -161,7 +175,7 @@ function createDmHistoryService({
 
     const { mode, limit, cursor } = parsed.request;
     const base = { userId: viewer, peerId: peer, limit };
-    return pageHistory({
+    const page = await pageHistory({
       mode,
       cursor,
       listLatest: () => repository.listLatest(base),
@@ -176,6 +190,7 @@ function createDmHistoryService({
       project: (visible) => projectMessages({ messages: visible, userId: viewer, peerId: peer }),
       toDto: (message) => toDto(viewer, peer, message)
     });
+    return { ...page, contact };
   }
 
   return { getPage };

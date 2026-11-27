@@ -33,6 +33,10 @@ import { createPeerModerationService } from '../domains/rooms/peer-moderation.se
 import { publicPeer } from '../domains/rooms/room-views.ts';
 import { createRoomsService } from '../domains/rooms/rooms.service.ts';
 import { createFriendsService } from '../domains/social/friends.service.ts';
+import { authorizeMessage, authorizeMessageEdit } from '../domains/social/contact.service.ts';
+import { recordPairMessage } from '../domains/social/dm-pair-state.repository.ts';
+import { createPrivacyService } from '../domains/social/privacy.service.ts';
+import { kyselyOn } from '../platform/db/kysely.ts';
 import { createRingService } from '../domains/rings/ring.service.ts';
 import type { readApiConfig } from './config.ts';
 import type { LiveKit } from './livekit.ts';
@@ -164,6 +168,7 @@ export function createDomainServices(deps: DomainServiceDeps) {
   });
   const rings = createRingService({
     repository: services.getRingRepository,
+    invalidateTyping: hub.invalidateTyping,
     findUser: (userId) => services.getUserStore().getUserById(userId),
     findRoom: async (roomId) => {
       const room = await services.getRoomStore().getRoom(roomId);
@@ -180,6 +185,9 @@ export function createDomainServices(deps: DomainServiceDeps) {
   });
   const friendsService = createFriendsService({
     friends: services.getFriendStore,
+    contactStatus: services.contact.status,
+    callRefusal: services.callRefusal,
+    invalidateTyping: hub.invalidateTyping,
     ringInvitation: rings.create,
     isOnline: (userId) => hub.isUserOnline(userId),
     notifyUser: (userId, event) => hub.broadcastToUser(userId, event),
@@ -190,7 +198,13 @@ export function createDomainServices(deps: DomainServiceDeps) {
   const directMessages = createDirectMessagesService({
     messages: services.getMessageService,
     readService: () => services.getHistoryServices().read,
-    friends: services.getFriendStore,
+    contactStatus: services.contact.status,
+    authorizeMessage: (client, sender, recipient) =>
+      authorizeMessage(kyselyOn(client), sender, recipient, services.contactLimits),
+    authorizeMessageEdit: (facts) => authorizeMessageEdit(facts, services.contactLimits),
+    invalidateTyping: hub.invalidateTyping,
+    recordPairMessage: (client, sender, recipient, startedAsStrangers) =>
+      recordPairMessage(kyselyOn(client), sender, recipient, startedAsStrangers),
     findUser: (userId) => services.getUserStore().getUserById(userId),
     isDmMuted: (userId, peerUserId) => services.getNotificationPreferences().isDmMuted({ userId, peerUserId }),
     roomExists: async (roomId) => roomAllowsSurface(await hub.getRoom(roomId), 'main'),
@@ -217,6 +231,14 @@ export function createDomainServices(deps: DomainServiceDeps) {
     notifyUser: (userId, event) => hub.broadcastToUser(userId, event),
     broadcastProfileToFriends: (user, log) => hub.broadcastUserProfileToFriends(user, { log })
   });
+  const privacy = createPrivacyService(
+    () => {
+      const pool = services.getPool();
+      if (!pool) throw databaseUnavailable();
+      return kyselyOn(pool);
+    },
+    (userId, event) => hub.broadcastToUser(userId, event)
+  );
   const deviceTokens = createDeviceTokenService({
     tokens: services.getDeviceTokens,
     enabled: () => config.RUSTORE_PUSH.enabled,
@@ -358,6 +380,7 @@ export function createDomainServices(deps: DomainServiceDeps) {
     sessionCookies,
     account: accountService,
     friends: friendsService,
+    privacy,
     rings,
     directMessages,
     notificationSettings,

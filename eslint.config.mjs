@@ -310,5 +310,28 @@ export default tseslint.config(
       '@typescript-eslint/no-unnecessary-type-parameters': 'off',
       'no-restricted-syntax': 'off'
     }
+  },
+  {
+    files: ['apps/api/src/**/*.ts'],
+    ignores: ['apps/api/src/domains/social/**', 'apps/api/src/migrations/**', 'apps/api/src/app/store-overrides.ts'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: "Property[key.name='reqId'][value.type=/MemberExpression|ChainExpression/]",
+          message: 'request.log already carries reqId; do not add it again.'
+        },
+        ...OVERLOAD_CAST,
+        {
+          selector:
+            "CallExpression[callee.property.name='selectFrom'] > Literal.arguments[value=/^(friendships|user_blocks)( |$)/]",
+          message: 'Read contact facts through the social domain.'
+        }
+      ],
+      'no-restricted-imports': [
+        'error',
+        { patterns: [{ group: ['**/pair-eligibility*'], message: 'Use the contact policy.' }] }
+      ]
+    }
   }
 );

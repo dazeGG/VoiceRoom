@@ -78,6 +78,7 @@ async function setup(t: TestContext) {
   const attachments = createAttachmentRepository({ pool: counted });
   const projection = createMessageProjection({ attachments: () => attachments, replies: () => null });
   const history = createHistoryModule({
+    contactLimits: { daily: 10, unanswered: 3 },
     pool: counted,
     cursorCodec: createCursorCodec({ keys: ['h'.repeat(32)] }),
     projectMediaMany: projection.projectMediaMany,

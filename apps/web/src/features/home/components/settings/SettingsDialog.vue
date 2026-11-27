@@ -5,7 +5,7 @@ import { NavList, NavListGroup, NavListItem, Dialog } from '@voiceroom/ui-kit/co
 // another tab before saving.
 import { t } from '@/shared/i18n';
 import { readDesktopRuntime } from '@/platform/desktop-system';
-import { Bell, Keyboard, LogOut, Mic, Monitor, Palette, ShieldCheck, User } from '@lucide/vue';
+import { Bell, Keyboard, Lock, LogOut, Mic, Monitor, Palette, ShieldCheck, User } from '@lucide/vue';
 import { onBeforeUnmount, onMounted, reactive, type Component } from 'vue';
 import type { AuthUser, OwnedRoom } from '@/api/auth';
 import type { PublicUser } from '@/api/friends';
@@ -21,6 +21,7 @@ import AppearanceSettings from './AppearanceSettings.vue';
 import AppSettings from './AppSettings.vue';
 import HotkeySettings from './HotkeySettings.vue';
 import NotificationSettings from './NotificationSettings.vue';
+import PrivacySettings from './PrivacySettings.vue';
 import ProfileSettings from './ProfileSettings.vue';
 import SoundSettings from './SoundSettings.vue';
 import type { SettingsTab } from './types';
@@ -61,6 +62,13 @@ const navItems: { id: SettingsTab; label: string; icon: Component }[] = [
       return t('Безопасность');
     },
     icon: ShieldCheck
+  },
+  {
+    id: 'privacy',
+    get label() {
+      return t('Конфиденциальность');
+    },
+    icon: Lock
   },
   {
     id: 'sound',
@@ -135,7 +143,7 @@ onBeforeUnmount(profile.dispose);
             <template #icon><component :is="item.icon" /></template>
           </NavListItem>
         </NavListGroup>
-        <LegalLinks compact new-tab />
+        <LegalLinks class="settings__nav-legal" compact new-tab />
         <NavListItem
           class="settings__nav-logout"
           tone="danger"
@@ -163,6 +171,7 @@ onBeforeUnmount(profile.dispose);
           :highlight-password="securityHighlight === 'password'"
           @toast="toast"
         />
+        <PrivacySettings v-else-if="tab === 'privacy'" />
         <SoundSettings
           v-else-if="tab === 'sound'"
           :desktop-app="support.desktopApp"

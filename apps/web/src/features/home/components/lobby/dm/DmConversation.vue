@@ -34,6 +34,8 @@ import { useToastsStore } from '../../../model/toasts.store';
 import DmComposer from './DmComposer.vue';
 import DmCallEvent from './DmCallEvent.vue';
 import DmInviteCard from './DmInviteCard.vue';
+import DmContactNotice from './DmContactNotice.vue';
+import BlockContactDialog from '../BlockContactDialog.vue';
 
 const { peerId, self, peer, presence, media, quickReactions, visible } = defineProps<{
   peerId: string;
@@ -60,6 +62,33 @@ const outbox = lobby.outboxFor(peerId);
 const selfId = computed(() => self.id);
 const selfName = computed(() => displayNameOf(self));
 const peerName = computed(() => (peer ? displayNameOf(peer) : ''));
+const contact = computed(() => (lobby.thread.contact?.peer.id === peerId ? lobby.thread.contact : null));
+const requestPending = ref(false);
+const showBlock = ref(false);
+
+async function addFriend(): Promise<void> {
+  if (requestPending.value) return;
+  requestPending.value = true;
+  try {
+    await lobby.addFriendByUserId(peerId);
+    pushToast(t('Заявка в друзья отправлена'));
+  } catch (error) {
+    requestPending.value = false;
+    pushToast(error instanceof Error ? error.message : t('Не удалось отправить заявку'), { variant: 'error' });
+  }
+}
+
+async function blockContact(): Promise<void> {
+  showBlock.value = false;
+  try {
+    await lobby.blockUser(peerId);
+    pushToast(t('{p0} заблокирован', { p0: peerName.value }));
+  } catch (error) {
+    pushToast(error instanceof Error ? error.message : t('Не удалось заблокировать пользователя'), {
+      variant: 'error'
+    });
+  }
+}
 
 const scroll = useChatScroll();
 const inviteResponding = ref('');
@@ -287,6 +316,14 @@ function onMenuImage(action: (image: NonNullable<typeof menuImage.value>) => voi
 </script>
 
 <template>
+  <DmContactNotice
+    v-if="contact && !contact.isFriend"
+    class="dm-conversation__contact"
+    :contact="contact"
+    :request-pending="requestPending"
+    @add="void addFriend()"
+    @block="showBlock = true"
+  />
   <div ref="scrollElement" class="dm-conversation__scroll" @scroll="scroll.onScroll(loadOlder)">
     <div v-if="lobby.thread.loading" class="dm-conversation__loading" role="status">
       {{ t('Загружаем переписку…') }}
@@ -296,7 +333,7 @@ function onMenuImage(action: (image: NonNullable<typeof menuImage.value>) => voi
     </div>
     <EmptyState
       v-else-if="groups.length === 0 && !lobby.thread.loading && !outbox.items.length"
-      :title="t('Здесь пока пусто. Напишите первым!')"
+      :title="contact?.canMessage === false ? t('Здесь пока пусто') : t('Здесь пока пусто. Напишите первым!')"
       compact
     />
     <div v-else ref="threadElement" class="dm-conversation__thread">
@@ -373,7 +410,7 @@ function onMenuImage(action: (image: NonNullable<typeof menuImage.value>) => voi
               variant="dm-msg"
               :maxlength="2000"
               :first="bubble.id === group.bubbles[0].id"
-              :editing="menu.editingId === bubble.id"
+              :editing="contact?.canMessage !== false && menu.editingId === bubble.id"
               :menu-open="menu.opened?.message.id === bubble.id"
               :reactions="reactions"
               :user-id="selfId"
@@ -419,7 +456,16 @@ function onMenuImage(action: (image: NonNullable<typeof menuImage.value>) => voi
     </div>
   </div>
 
+  <DmContactNotice
+    v-if="contact && !contact.canMessage"
+    class="dm-conversation__contact"
+    :contact="contact"
+    composer
+    :request-pending="requestPending"
+    @add="void addFriend()"
+  />
   <DmComposer
+    v-else-if="contact || !lobby.thread.historyError"
     ref="composer"
     v-model:reply-target="menu.replyTarget"
     :peer-id="peerId"
@@ -439,15 +485,15 @@ function onMenuImage(action: (image: NonNullable<typeof menuImage.value>) => voi
     :quick-reactions="quickReactions"
     :active-reactions="menu.activeReactions"
     :can-react="Boolean(selfId)"
-    :can-edit="menuFromMe"
+    :can-edit="menuFromMe && contact?.canMessage !== false"
     :can-delete="menuFromMe"
     :on-copy-image="onMenuImage((image) => void copyMessageImage(image, pushToast))"
     :on-download-image="onMenuImage((image) => downloadAttachment(image))"
     :on-react="(emoji: string) => onMenuMessage((message) => void reactions.toggle(message.id, emoji))()"
     :on-open-reaction-picker="() => onMenuMessage((message) => scroll.openReactionPicker(message.id))()"
-    :on-reply="onMenuMessage((message) => menu.replyTo(message))"
+    :on-reply="contact?.canMessage === false ? undefined : onMenuMessage((message) => menu.replyTo(message))"
     :on-copy="onMenuMessage((message) => void copyMessageText(message.body, pushToast))"
-    :on-edit="onMenuMessage((message) => menu.edit(message.id))"
+    :on-edit="contact?.canMessage === false ? undefined : onMenuMessage((message) => menu.edit(message.id))"
     :on-delete="onMenuMessage((message) => void deleteMessage(message.id))"
     :on-report="menuFromMe ? undefined : onMenuMessage((message) => menu.report(message.id))"
     @close="menu.close()"
@@ -459,4 +505,5 @@ function onMenuImage(action: (image: NonNullable<typeof menuImage.value>) => voi
     @close="menu.closeReport()"
     @reported="(message: string) => pushToast(message)"
   />
+  <BlockContactDialog v-if="showBlock && peer" :user="peer" @close="showBlock = false" @confirm="void blockContact()" />
 </template>

@@ -3,6 +3,10 @@ import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 
 import { createFriendStore } from '../../../src/app/friend-store.ts';
+import { loadContactFacts } from '../../../src/domains/social/contact-facts.repository.ts';
+import { authorizeMessageEdit } from '../../../src/domains/social/contact.service.ts';
+import type { ContactFacts } from '../../../src/domains/social/contact.policy.ts';
+import { kyselyOn } from '../../../src/platform/db/kysely.ts';
 import { orderedPair } from '../../../src/domains/social/social-records.ts';
 import { createUserStore } from '../../../src/app/user-store.ts';
 import { runMigrations } from '../../../src/lib/migrate.ts';
@@ -18,7 +22,7 @@ async function createStores(t: TestContext) {
   t.after(async () => {
     await cleanup();
   });
-  return { users, friends };
+  return { users, friends, facts: (a: string, b: string) => loadContactFacts(kyselyOn(pool), a, b) };
 }
 
 async function makeUser(users: ReturnType<typeof createUserStore>, login: string) {
@@ -34,7 +38,7 @@ test('orderedPair is canonical regardless of argument order', () => {
 });
 
 test('sendRequest creates a pending request and lists it both ways', async (t) => {
-  const { users, friends } = await createStores(t);
+  const { users, friends, facts } = await createStores(t);
   const alice = await makeUser(users, 'alice');
   const bob = await makeUser(users, 'bob');
 
@@ -54,7 +58,7 @@ test('sendRequest creates a pending request and lists it both ways', async (t) =
   assert.equal(await friends.countIncomingRequests(bob.id), 1);
 
   // Not friends yet.
-  assert.equal(await friends.areFriends(alice.id, bob.id), false);
+  assert.equal((await facts(alice.id, bob.id))?.friends, false);
 });
 
 test('sendRequest is idempotent and rejects self/missing targets', async (t) => {
@@ -109,7 +113,7 @@ test('concurrent duplicate sendRequest does not throw and stays idempotent', asy
 });
 
 test('reverse request auto-accepts into a friendship', async (t) => {
-  const { users, friends } = await createStores(t);
+  const { users, friends, facts } = await createStores(t);
   const alice = await makeUser(users, 'alice');
   const bob = await makeUser(users, 'bob');
 
@@ -117,13 +121,13 @@ test('reverse request auto-accepts into a friendship', async (t) => {
   const reverse = await friends.sendRequest({ requesterId: bob.id, addresseeLogin: 'alice' });
   assert.equal(reverse.status, 'accepted');
 
-  assert.equal(await friends.areFriends(alice.id, bob.id), true);
+  assert.equal((await facts(alice.id, bob.id))?.friends, true);
   assert.equal((await friends.listRequests(alice.id)).outgoing.length, 0);
   assert.equal((await friends.listFriends(alice.id)).length, 1);
 });
 
 test('accept turns a request into a mutual friendship', async (t) => {
-  const { users, friends } = await createStores(t);
+  const { users, friends, facts } = await createStores(t);
   const alice = await makeUser(users, 'alice');
   const bob = await makeUser(users, 'bob');
 
@@ -133,7 +137,7 @@ test('accept turns a request into a mutual friendship', async (t) => {
   assert.equal(accepted.status, 'accepted');
   assert.equal(accepted.requesterId, alice.id);
 
-  assert.equal(await friends.areFriends(alice.id, bob.id), true);
+  assert.equal((await facts(alice.id, bob.id))?.friends, true);
   const [bobAsFriend, ...others] = await friends.listFriends(alice.id);
   assert.ok(bobAsFriend);
   assert.equal(others.length, 0);
@@ -143,7 +147,7 @@ test('accept turns a request into a mutual friendship', async (t) => {
 });
 
 test('listRequests surfaces the request id (not the joined user id) so accept works', async (t) => {
-  const { users, friends } = await createStores(t);
+  const { users, friends, facts } = await createStores(t);
   const alice = await makeUser(users, 'alice');
   const bob = await makeUser(users, 'bob');
 
@@ -166,11 +170,11 @@ test('listRequests surfaces the request id (not the joined user id) so accept wo
   // Accepting with the id the client actually has (from listRequests) succeeds.
   const accepted = await friends.respondRequest({ userId: bob.id, requestId: incoming.id, action: 'accept' });
   assert.equal(accepted.status, 'accepted');
-  assert.equal(await friends.areFriends(alice.id, bob.id), true);
+  assert.equal((await facts(alice.id, bob.id))?.friends, true);
 });
 
 test('decline and cancel leave no friendship', async (t) => {
-  const { users, friends } = await createStores(t);
+  const { users, friends, facts } = await createStores(t);
   const alice = await makeUser(users, 'alice');
   const bob = await makeUser(users, 'bob');
 
@@ -178,7 +182,7 @@ test('decline and cancel leave no friendship', async (t) => {
   assert.ok(sent.requestId);
   const declined = await friends.respondRequest({ userId: bob.id, requestId: sent.requestId, action: 'decline' });
   assert.equal(declined.status, 'declined');
-  assert.equal(await friends.areFriends(alice.id, bob.id), false);
+  assert.equal((await facts(alice.id, bob.id))?.friends, false);
 
   const resent = await friends.sendRequest({ requesterId: alice.id, addresseeLogin: 'bob' });
   assert.ok(resent.requestId);
@@ -205,7 +209,7 @@ test('respond/cancel reject requests the user does not own', async (t) => {
 });
 
 test('removeFriend deletes the friendship for both sides', async (t) => {
-  const { users, friends } = await createStores(t);
+  const { users, friends, facts } = await createStores(t);
   const alice = await makeUser(users, 'alice');
   const bob = await makeUser(users, 'bob');
 
@@ -215,7 +219,7 @@ test('removeFriend deletes the friendship for both sides', async (t) => {
 
   const removed = await friends.removeFriend({ userId: bob.id, friendId: alice.id });
   assert.equal(removed.status, 'removed');
-  assert.equal(await friends.areFriends(alice.id, bob.id), false);
+  assert.equal((await facts(alice.id, bob.id))?.friends, false);
   assert.equal((await friends.removeFriend({ userId: bob.id, friendId: alice.id })).status, 'not_found');
 });
 
@@ -289,12 +293,14 @@ test('direct messages can only be edited atomically by their original sender', a
 
   const sent = await friends.sendMessage({ senderId: alice.id, recipientId: bob.id, body: 'before' });
   assert.equal(sent.editedAt, null);
+  const authorize = (facts: ContactFacts | null) => authorizeMessageEdit(facts, { daily: 10, unanswered: 3 });
 
   const forbidden = await friends.editMessage({
     messageId: sent.id,
     senderId: bob.id,
     recipientId: alice.id,
-    body: 'hijacked'
+    body: 'hijacked',
+    authorize
   });
   assert.equal(forbidden, null);
 
@@ -302,7 +308,8 @@ test('direct messages can only be edited atomically by their original sender', a
     messageId: sent.id,
     senderId: alice.id,
     recipientId: bob.id,
-    body: 'after'
+    body: 'after',
+    authorize
   });
   assert.ok(edited);
   assert.equal(edited.body, 'after');
@@ -325,7 +332,7 @@ test('searchUsers matches login and display name, excludes self', async (t) => {
 });
 
 test('concurrent friend acceptance and blocking cannot leave a friendship behind', async (t) => {
-  const { users, friends } = await createStores(t);
+  const { users, friends, facts } = await createStores(t);
   const alice = await makeUser(users, 'race-alice');
   const bob = await makeUser(users, 'race-bob');
   const sent = await friends.sendRequest({ requesterId: alice.id, addresseeUserId: bob.id });
@@ -338,8 +345,8 @@ test('concurrent friend acceptance and blocking cannot leave a friendship behind
 
   assert.ok(['accepted', 'blocked', 'not_found'].includes(accepted.status));
   assert.ok(['blocked', 'already_blocked'].includes(blocked.status));
-  assert.equal(await friends.areFriends(alice.id, bob.id), false);
-  assert.equal(await friends.isBlockedBetween(alice.id, bob.id), true);
+  assert.equal((await facts(alice.id, bob.id))?.friends, false);
+  assert.equal((await facts(alice.id, bob.id))?.blocked, true);
 });
 
 test('blocking expires pending room invitations in both directions', async (t) => {

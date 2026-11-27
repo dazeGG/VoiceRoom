@@ -16,7 +16,7 @@ import { DomainError } from '../../platform/http/domain-error.ts';
 import { deletePrivateRoomFeedback } from '../feedback/call-feedback.repository.ts';
 import { createDmThreadRepository } from '../messaging/dm-thread.repository.ts';
 import {
-  findCallMessagePeer,
+  findCallMessageParticipants,
   listMissedCalls,
   lockCallMessage,
   markCallMissesSeen,
@@ -24,7 +24,8 @@ import {
   updateCallMessage
 } from '../messaging/call-history.repository.ts';
 import { createCallRoom, deleteCallRoom } from '../rooms/room.repository.ts';
-import { ringPairRefusal } from '../social/pair-eligibility.repository.ts';
+import { callRefusal, getCallRefusal, messageRefusal, newChatStart, withPairLock } from '../social/contact.service.ts';
+import { recordPairMessage } from '../social/dm-pair-state.repository.ts';
 import { lockUserPair, mapPublicUser, type DirectMessage } from '../social/social-records.ts';
 import { CALL_DISMISSAL_TTL_MS, CALL_MISSED_TTL_MS, enqueueCallPush } from './call-push.repository.ts';
 
@@ -153,7 +154,7 @@ function stateColumns(call: VoiceCall) {
 }
 
 type StartResult =
-  | { status: 'created'; call: VoiceCall; now: number; message: DirectMessage }
+  | { status: 'created'; call: VoiceCall; now: number; message: DirectMessage; startedAsStrangers: boolean }
   | { status: 'open' | 'replay'; call: VoiceCall; now: number }
   | { status: 'rate_limited'; retryAfterSeconds: number };
 
@@ -165,7 +166,7 @@ function firstAttemptExpired(prior: VoiceCall, current: VoiceCall, now: number):
   );
 }
 
-export function createCallRingRepository(pool: pg.Pool, clock?: () => number) {
+export function createCallRingRepository(pool: pg.Pool, clock?: () => number, dailyNewChatLimit = 0) {
   const db = kyselyOn(pool);
   const messages = createDmThreadRepository({ pool });
   const calls = (query: Database) =>
@@ -202,8 +203,9 @@ export function createCallRingRepository(pool: pg.Pool, clock?: () => number) {
   }
 
   async function messagePeer(viewer: string, callId: string) {
-    const peer = await findCallMessagePeer(db, viewer, callId);
-    return peer && !(await ringPairRefusal(db, viewer, peer)) ? peer : null;
+    const pair = await findCallMessageParticipants(db, viewer, callId);
+    if (!pair) return null;
+    return pair.sender_id === viewer ? pair.recipient_id : pair.sender_id;
   }
 
   async function updateHistory(
@@ -251,6 +253,7 @@ export function createCallRingRepository(pool: pg.Pool, clock?: () => number) {
     limits: { count: number; windowMs: number }
   ): Promise<StartResult> {
     let provisioned: VoiceCall | null = null;
+    let startedAsStrangers = false;
     const outcome = await messages.sendMessage<StartResult>({
       senderId: callerId,
       recipientId,
@@ -258,78 +261,82 @@ export function createCallRingRepository(pool: pg.Pool, clock?: () => number) {
       alreadyRead: true,
       beforeUnitOfWork: async (client) => {
         const trx = kyselyOn(client);
-        await lockXact(trx, lockKeys.ringRequest(callerId, clientRequestId));
-        await lockUserPair(trx, callerId, recipientId);
-        const stamp = await now(trx);
-        const old = await trx
-          .selectFrom('room_rings')
-          .selectAll()
-          .where('caller_user_id', '=', callerId)
-          .where('client_request_id', '=', clientRequestId)
-          .executeTakeFirst();
-        if (old) {
-          const existing = old.purpose === 'voice-call' ? toCall(old) : null;
-          if (!existing || existing.recipientId !== recipientId)
-            throw new DomainError('call_request_conflict', 409, 'Call request ID is already in use');
-          return { replay: true, message: { status: 'replay', call: existing, now: stamp } };
-        }
-        const refusal = await ringPairRefusal(trx, callerId, recipientId);
-        if (refusal)
-          throw new DomainError(refusal === 'blocked' ? 'relationship_blocked' : refusal, 403, 'Call unavailable');
-        const existing = await participants(trx, callerId)
-          .where('call_phase', '!=', 'closed')
-          .where((eb) =>
-            eb.or([
-              eb.and([eb('caller_user_id', '=', callerId), eb('recipient_user_id', '=', recipientId)]),
-              eb.and([eb('caller_user_id', '=', recipientId), eb('recipient_user_id', '=', callerId)])
-            ])
-          )
-          .executeTakeFirst();
-        const open = existing && toCall(existing);
-        if (open) return { replay: true, message: { status: 'open', call: open, now: stamp } };
-
-        if (limits.count > 0) {
-          const recent = await calls(trx)
-            .clearSelect()
-            .select(['created_at', 'recipient_user_id'])
+        return withPairLock(trx, callerId, recipientId, async (facts) => {
+          await lockXact(trx, lockKeys.ringRequest(callerId, clientRequestId));
+          const stamp = await now(trx);
+          const old = await trx
+            .selectFrom('room_rings')
+            .selectAll()
             .where('caller_user_id', '=', callerId)
-            .where('created_at', '>', new Date(stamp - limits.windowMs))
-            .orderBy('created_at', 'desc')
-            .limit(limits.count * 4)
-            .execute();
-          const pair = recent.filter((row) => row.recipient_user_id === recipientId);
-          const oldest = Math.max(
-            pair[limits.count - 1]?.created_at.getTime() ?? -Infinity,
-            recent[limits.count * 4 - 1]?.created_at.getTime() ?? -Infinity
-          );
-          if (Number.isFinite(oldest)) {
-            const retryAfterSeconds = Math.ceil((oldest + limits.windowMs - stamp) / 1_000);
-            return { replay: true, message: { status: 'rate_limited', retryAfterSeconds } };
+            .where('client_request_id', '=', clientRequestId)
+            .executeTakeFirst();
+          if (old) {
+            const existing = old.purpose === 'voice-call' ? toCall(old) : null;
+            if (!existing || existing.recipientId !== recipientId)
+              throw new DomainError('call_request_conflict', 409, 'Call request ID is already in use');
+            return { replay: true, message: { status: 'replay', call: existing, now: stamp } };
           }
-        }
+          const existing = await participants(trx, callerId)
+            .where('call_phase', '!=', 'closed')
+            .where((eb) =>
+              eb.or([
+                eb.and([eb('caller_user_id', '=', callerId), eb('recipient_user_id', '=', recipientId)]),
+                eb.and([eb('caller_user_id', '=', recipientId), eb('recipient_user_id', '=', callerId)])
+              ])
+            )
+            .executeTakeFirst();
+          const open = existing && toCall(existing);
+          if (open) return { replay: true, message: { status: 'open', call: open, now: stamp } };
+          const refusal = callRefusal(facts);
+          if (refusal)
+            throw new DomainError(refusal === 'blocked' ? 'relationship_blocked' : refusal, 403, 'Call unavailable');
+          const chat = await newChatStart(trx, facts, dailyNewChatLimit);
+          if (chat.capped) throw messageRefusal('chat_cap');
+          startedAsStrangers = chat.startedAsStrangers;
 
-        const room = await createCallRoom(trx, stamp);
-        provisioned = {
-          id: randomUUID(),
-          roomId: room.id,
-          callerId,
-          recipientId,
-          messageId: '',
-          phase: 'ringing',
-          attemptResult: 'pending',
-          attempt: 1,
-          attemptInviterUserId: callerId,
-          revision: 1,
-          startedAt: stamp,
-          ringingExpiresAt: stamp + RING_WINDOW_MS,
-          aloneDeadline: stamp + ALONE_WINDOW_MS,
-          firstConnectedAt: null,
-          endedAt: null,
-          endReason: null,
-          endedByUserId: null,
-          mutualMs: 0,
-          mutualSince: null
-        };
+          if (limits.count > 0) {
+            const recent = await calls(trx)
+              .clearSelect()
+              .select(['created_at', 'recipient_user_id'])
+              .where('caller_user_id', '=', callerId)
+              .where('created_at', '>', new Date(stamp - limits.windowMs))
+              .orderBy('created_at', 'desc')
+              .limit(limits.count * 4)
+              .execute();
+            const pair = recent.filter((row) => row.recipient_user_id === recipientId);
+            const oldest = Math.max(
+              pair[limits.count - 1]?.created_at.getTime() ?? -Infinity,
+              recent[limits.count * 4 - 1]?.created_at.getTime() ?? -Infinity
+            );
+            if (Number.isFinite(oldest)) {
+              const retryAfterSeconds = Math.ceil((oldest + limits.windowMs - stamp) / 1_000);
+              return { replay: true, message: { status: 'rate_limited', retryAfterSeconds } };
+            }
+          }
+
+          const room = await createCallRoom(trx, stamp);
+          provisioned = {
+            id: randomUUID(),
+            roomId: room.id,
+            callerId,
+            recipientId,
+            messageId: '',
+            phase: 'ringing',
+            attemptResult: 'pending',
+            attempt: 1,
+            attemptInviterUserId: callerId,
+            revision: 1,
+            startedAt: stamp,
+            ringingExpiresAt: stamp + RING_WINDOW_MS,
+            aloneDeadline: stamp + ALONE_WINDOW_MS,
+            firstConnectedAt: null,
+            endedAt: null,
+            endReason: null,
+            endedByUserId: null,
+            mutualMs: 0,
+            mutualSince: null
+          };
+        });
       },
       prepareMessage: async () => {
         if (!provisioned) throw new Error('Call room was not reserved');
@@ -339,6 +346,7 @@ export function createCallRingRepository(pool: pg.Pool, clock?: () => number) {
         if (!provisioned) throw new Error('Call room was not reserved');
         provisioned.messageId = message.id;
         const trx = kyselyOn(client);
+        await recordPairMessage(trx, callerId, recipientId, startedAsStrangers, 'call');
         await trx
           .insertInto('room_rings')
           .values({
@@ -369,7 +377,7 @@ export function createCallRingRepository(pool: pg.Pool, clock?: () => number) {
     if ('status' in outcome) return outcome;
     if (!provisioned) throw new Error('Call was not stored');
     const call: VoiceCall = provisioned;
-    return { status: 'created', call, now: call.startedAt, message: outcome };
+    return { status: 'created', call, now: call.startedAt, message: outcome, startedAsStrangers };
   }
 
   async function update<T>(
@@ -386,8 +394,15 @@ export function createCallRingRepository(pool: pg.Pool, clock?: () => number) {
       const call = row && toCall(row);
       if (!call) return null;
       const stamp = await now(trx);
-      const eligible = call.phase !== 'closed' && !(await ringPairRefusal(trx, call.callerId, call.recipientId));
+      const inviter = call.attemptInviterUserId;
+      const invitee = inviter === call.callerId ? call.recipientId : call.callerId;
+      const eligible = call.phase !== 'closed' && !(await getCallRefusal(trx, inviter, invitee));
       const next = transition(call, stamp, eligible);
+      if (next.call.attempt !== call.attempt && next.call.attemptInviterUserId !== inviter) {
+        const refusal = await getCallRefusal(trx, invitee, inviter);
+        if (refusal)
+          throw new DomainError(refusal === 'blocked' ? 'relationship_blocked' : refusal, 403, 'Call unavailable');
+      }
       const recoveredExpiry =
         eligible &&
         next.call === call &&
@@ -413,6 +428,7 @@ export function createCallRingRepository(pool: pg.Pool, clock?: () => number) {
         }
         if (updated.phase === 'ringing' && updated.attempt !== call.attempt) {
           const target = updated.attemptInviterUserId === updated.callerId ? updated.recipientId : updated.callerId;
+          await recordPairMessage(trx, updated.attemptInviterUserId, target, false, 'call');
           await enqueueCallPush(trx, 'call-incoming', updated, target, stamp, updated.ringingExpiresAt);
         }
         return { ...next, changed: true, now: stamp, ...(await updateHistory(trx, call, updated, stamp, message)) };

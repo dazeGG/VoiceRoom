@@ -4,9 +4,9 @@
 import crypto from 'node:crypto';
 import { sql } from 'kysely';
 import type pg from 'pg';
-import { kyselyOn, type Database, type Queryable } from '../../platform/db/kysely.ts';
+import { kyselyOn, withTransaction, type Database, type Queryable } from '../../platform/db/kysely.ts';
 import { escapeLike } from '../../platform/db/like.ts';
-import { friendOf, mapInvite, mapPublicUser, now, orderedPair } from './social-records.ts';
+import { friendOf, lockUserPair, mapInvite, mapPublicUser, now, orderedPair } from './social-records.ts';
 import { epochMillis } from '../../platform/epoch-millis.ts';
 import { unreadCountsFor } from '../messaging/dm-thread.repository.ts';
 import { isRecord } from '@voiceroom/shared/guards';
@@ -137,6 +137,7 @@ export function createFriendshipRepository({ pool }: { pool: pg.Pool }) {
           sql<boolean>`lower(display_name) LIKE ${pattern} ESCAPE '\\'`
         ])
       )
+      .orderBy(sql`lower(login) = ${term.toLowerCase()}`, 'desc')
       .orderBy(sql`lower(login)`)
       .limit(limit)
       .execute();
@@ -145,11 +146,10 @@ export function createFriendshipRepository({ pool }: { pool: pg.Pool }) {
 
   async function removeFriend({ userId, friendId }: { userId: string; friendId: string }) {
     const [low, high] = orderedPair(userId, friendId);
-    const result = await db
-      .deleteFrom('friendships')
-      .where('user_a_id', '=', low)
-      .where('user_b_id', '=', high)
-      .executeTakeFirst();
+    const result = await withTransaction(db, async (tx) => {
+      await lockUserPair(tx, low, high);
+      return tx.deleteFrom('friendships').where('user_a_id', '=', low).where('user_b_id', '=', high).executeTakeFirst();
+    });
     if (result.numDeletedRows === 0n) return { status: 'not_found' as const };
     return { status: 'removed' as const };
   }

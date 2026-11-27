@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { badgeOf } from '@/shared/badges';
 import { t } from '@/shared/i18n';
-import { ChevronLeft, User } from '@lucide/vue';
+import { ChevronLeft, Ellipsis, User } from '@lucide/vue';
 import { computed, onMounted, ref, shallowRef, useTemplateRef, watch } from 'vue';
 import type { AuthUser } from '@/api/auth';
 import AttachmentDropOverlay from '@/shared/chat/AttachmentDropOverlay.vue';
@@ -20,6 +20,8 @@ import { displayNameOf } from '@/shared/utils/display-name';
 import { useLobby } from '../../model/lobby-context';
 import { useToastsStore } from '../../model/toasts.store';
 import { useDmCallHeight } from '../../model/use-dm-call-height';
+import { friendMenuTarget, type FriendMenuTarget } from '../../model/friend-menu';
+import ChatContextMenu from './ChatContextMenu.vue';
 import DmConversation from './dm/DmConversation.vue';
 import DmProfilePanel from './dm/DmProfilePanel.vue';
 
@@ -65,6 +67,12 @@ const peer = computed(() => {
 const headerPeer = computed(() => peer.value ?? (stageCall.value && callPeer(stageCall.value.call, calls.userId)));
 const peerName = computed(() => (peer.value ? displayNameOf(peer.value) : (headerPeer.value?.displayName ?? '')));
 const online = computed(() => lobby.friends.find((entry) => entry.user.id === peerId.value)?.online ?? false);
+const canCompose = computed(() => lobby.thread.contact?.canMessage !== false && !lobby.thread.historyError);
+const canCall = computed(
+  () => lobby.thread.contact?.canCall ?? Boolean(lobby.friends.find((entry) => entry.user.id === peerId.value))
+);
+const stranger = computed(() => lobby.thread.contact?.isFriend === false);
+const menu = shallowRef<FriendMenuTarget | null>(null);
 const call = useCallEntry(
   () => headerPeer.value?.id,
   () => online.value
@@ -95,6 +103,16 @@ function openCall(): void {
   if (portrait && activeCall.value) mobileChat.value = false;
   else void call.value.open();
 }
+
+function openMenu(event: MouseEvent): void {
+  if (!peer.value) return;
+  const muted = lobby.conversations.find((entry) => entry.peer.id === peerId.value)?.muted ?? false;
+  menu.value = friendMenuTarget(
+    event,
+    { user: peer.value, online: online.value },
+    { muted, isFriend: !stranger.value, canCall: canCall.value }
+  );
+}
 // One compose store per conversation, kept across switches so a half-written
 // message's attachments are still there on return.
 const media = computed(() => (peerId.value ? getAttachmentComposeStore('dm', peerId.value) : null));
@@ -117,12 +135,12 @@ const drop = new AttachmentDrop({
     :class="{ 'dm-view--portrait': portrait }"
     role="region"
     :aria-label="t('Личные сообщения')"
-    @dragenter="chatVisible && drop.enter($event)"
-    @dragover="chatVisible && drop.over($event)"
+    @dragenter="chatVisible && canCompose && drop.enter($event)"
+    @dragover="chatVisible && canCompose && drop.over($event)"
     @dragleave="drop.leave"
-    @drop="chatVisible && drop.drop($event)"
+    @drop="chatVisible && canCompose && drop.drop($event)"
   >
-    <AttachmentDropOverlay v-if="chatVisible && drop.active" />
+    <AttachmentDropOverlay v-if="chatVisible && canCompose && drop.active" />
     <div class="dm-view__col">
       <div v-if="headerPeer" v-show="!mobileStage" class="dm-view__header">
         <IconButton v-if="portrait" :label="t('Назад')" :size="44" @click="back">
@@ -154,13 +172,17 @@ const drop = new AttachmentDrop({
             >
               {{
                 status?.subtitle ??
-                (call.visible && call.peerInCall ? t('в звонке') : presenceStatusLabel(presence).toLowerCase())
+                (call.visible && call.peerInCall
+                  ? t('в звонке')
+                  : stranger && peer
+                    ? t('@{login} · не в друзьях', { login: peer.login })
+                    : presenceStatusLabel(presence).toLowerCase())
               }}
             </div>
           </div>
         </Pressable>
         <IconButton
-          v-if="call.visible"
+          v-if="call.visible && (canCall || call.mode !== 'start')"
           :label="call.label"
           :tooltip-description="call.description"
           :variant="call.accent ? 'soft' : 'default'"
@@ -178,6 +200,16 @@ const drop = new AttachmentDrop({
           @click="lobby.toggleProfile"
         >
           <User aria-hidden="true" />
+        </IconButton>
+        <IconButton
+          v-if="stranger && peer"
+          :label="t('Ещё')"
+          aria-haspopup="menu"
+          :aria-expanded="Boolean(menu)"
+          :size="portrait ? 44 : 40"
+          @click="openMenu"
+        >
+          <Ellipsis aria-hidden="true" />
         </IconButton>
       </div>
 
@@ -226,5 +258,6 @@ const drop = new AttachmentDrop({
       :online="online"
       :message-count="lobby.thread.messages.length"
     />
+    <ChatContextMenu v-model="menu" @toast="pushToast($event)" />
   </div>
 </template>

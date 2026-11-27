@@ -119,6 +119,18 @@ export const ERROR_TEXTS: Record<ErrorCode, string> = {
   get not_friends() {
     return t('Вы не друзья');
   },
+  get messages_closed() {
+    return t('Пользователь ограничил личные сообщения');
+  },
+  get calls_closed() {
+    return t('Пользователь ограничил входящие звонки');
+  },
+  get chat_cap_reached() {
+    return t('Лимит новых чатов с незнакомыми людьми на сегодня исчерпан');
+  },
+  get unanswered_cap_reached() {
+    return t('Дождитесь ответа, чтобы отправить ещё одно сообщение');
+  },
   get relationship_blocked() {
     return t('Сообщение недоступно');
   },

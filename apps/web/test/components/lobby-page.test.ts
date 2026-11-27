@@ -185,9 +185,11 @@ test('the sidebar lists conversations in activity order and updates for incoming
   await vi.waitFor(() => expect(ordered()).toEqual(['Новый чат', 'Боб', 'Клеа']));
   expect(within(chats).getByRole('img', { name: '3 непрочитанных' })).toBeTruthy();
 
-  conversations = [chat(clea, 2)];
+  conversations = [{ ...chat(bob, 3, 3), isFriend: false }, chat(clea, 2)];
   realtime.receive({ type: 'friend.removed', payload: { userId: bob.id } });
-  await vi.waitFor(() => expect(ordered()).toEqual(['Новый чат', 'Клеа']));
+  const stranger = within(chats).getByRole('button', { name: 'Боб' });
+  await vi.waitFor(() => expect(stranger.querySelector('.ui-avatar__dot--online')).toBeNull());
+  expect(ordered()).toEqual(['Новый чат', 'Боб', 'Клеа']);
 });
 
 test('an empty chat list opens the new chat dialog', async () => {
@@ -226,6 +228,31 @@ test('the chat context menu marks the conversation read and updates the unread b
   await userEvent.click(within(menu).getByRole('menuitem', { name: 'Отметить прочитанным' }));
   await vi.waitFor(() => expect(within(row).queryByRole('img', { name: '2 непрочитанных' })).toBeNull());
   expect(calls.some(({ method, url }) => method === 'POST' && url === '/api/dm/bob/read')).toBe(true);
+});
+
+test('a non-friend conversation offers adding instead of removal and hides a closed call action', async () => {
+  stubLobby({
+    'GET /api/dm/conversations': {
+      body: { ok: true, conversations: [{ ...chat(bob, 1), isFriend: false, canCall: false }] }
+    }
+  });
+  await renderLobby();
+  const row = await screen.findByRole('button', { name: 'Боб' });
+  row.focus();
+  await userEvent.keyboard('{Shift>}{F10}{/Shift}');
+  const menu = within(await screen.findByRole('menu', { name: 'Действия для Боб' }));
+  expect(menu.getByText('Не друг')).toBeTruthy();
+  for (const name of [
+    'Профиль',
+    'Добавить в друзья',
+    'Отметить прочитанным',
+    'Выключить уведомления',
+    'Заблокировать'
+  ]) {
+    expect(menu.getByRole('menuitem', { name })).toBeTruthy();
+  }
+  expect(menu.queryByRole('menuitem', { name: 'Удалить из друзей' })).toBeNull();
+  expect(menu.queryByRole('menuitem', { name: 'Позвонить' })).toBeNull();
 });
 
 test('a session ended on another device signs out with a message', async () => {

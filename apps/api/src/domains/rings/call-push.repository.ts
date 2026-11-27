@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type pg from 'pg';
 import { callMetadataOf } from '@voiceroom/shared/contracts/messages';
 import { kyselyOn, withTransaction, type Database } from '../../platform/db/kysely.ts';
-import { ringPairRefusal } from '../social/pair-eligibility.repository.ts';
+import { getCallRefusal } from '../social/contact.service.ts';
 
 type Kind = 'call-incoming' | 'call-dismissal' | 'call-missed';
 export const CALL_DISMISSAL_TTL_MS = 5 * 60_000;
@@ -105,7 +105,7 @@ export function createCallPushRepository(pool: pg.Pool, clock: () => number) {
       if (row.call_revision === null || row.call_revision < job.revision) return null;
       return { peerId, attempt: job.attempt, dismissMissed: row.first_connected_at !== null };
     }
-    if (row.deleted_at || (await ringPairRefusal(db, row.caller_user_id, row.original_recipient))) return null;
+    if (row.deleted_at || (await getCallRefusal(db, peerId, job.recipient_user_id))) return null;
     if (job.kind === 'call-incoming') {
       if (
         row.current_attempt !== job.attempt ||

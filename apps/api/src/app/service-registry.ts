@@ -18,6 +18,7 @@ import { createRoomStore } from './room-store.ts';
 import { createUserStore } from './user-store.ts';
 import { createGeoLocator } from '../lib/geoip.ts';
 import { createFriendStore } from './friend-store.ts';
+import { createContactService, getCallRefusal } from '../domains/social/contact.service.ts';
 import { createNotificationPreferencesRepository } from '../domains/notifications/notification-preferences.repository.ts';
 import { createPushSubscriptionRepository } from '../domains/notifications/push-subscription.repository.ts';
 import { createDeviceTokenRepository } from '../domains/notifications/device-token.repository.ts';
@@ -94,6 +95,8 @@ export type ServiceRegistryConfig = {
   MAX_ROOM_BANS: number;
   MAX_PUSH_SUBSCRIPTIONS_PER_USER: number;
   LINK_PREVIEWS_ENABLED: boolean;
+  DM_NEW_CHAT_DAILY_LIMIT: number;
+  DM_UNANSWERED_LIMIT: number;
   /** Where avatars and preview images live; defaults to the API's uploads folder. */
   UPLOADS_DIR?: string;
   /** VAPID settings for web push; read from the process environment when absent. */
@@ -253,6 +256,8 @@ export function createServiceRegistry(config: ServiceRegistryConfig, deps: Servi
   );
   const userStore = cached(() => createUserStore({ pool: requirePool(), sessionTtlMs: SESSION_TTL_MS }));
   const friendStore = cached(() => createFriendStore({ pool: requirePool() }));
+  const contactLimits = { daily: config.DM_NEW_CHAT_DAILY_LIMIT, unanswered: config.DM_UNANSWERED_LIMIT };
+  const contact = createContactService(() => kyselyOn(requirePool()), contactLimits);
   const notificationPreferences = cached(() => createNotificationPreferencesRepository({ pool: requirePool() }));
   const pushSubscriptions = cached(() =>
     createPushSubscriptionRepository({ pool: requirePool(), maxSubscriptionsPerUser: MAX_PUSH_SUBSCRIPTIONS_PER_USER })
@@ -276,6 +281,7 @@ export function createServiceRegistry(config: ServiceRegistryConfig, deps: Servi
   const rings = pooled((pool) =>
     createRingRepository({
       pool,
+      dailyNewChatLimit: contactLimits.daily,
       isBanned: (input) => activeBans.require().isBanned(input)
     })
   );
@@ -304,6 +310,7 @@ export function createServiceRegistry(config: ServiceRegistryConfig, deps: Servi
   const history = cached(() =>
     createHistoryModule({
       pool: requirePool(),
+      contactLimits,
       cursorCodec: cursorCodec('history'),
       projectMediaMany: deps.attachMediaProjectionMany,
       canReadRoom: (roomId, userId) => roomStore.get().canUserReadRoomChat(roomId, userId)
@@ -492,6 +499,9 @@ export function createServiceRegistry(config: ServiceRegistryConfig, deps: Servi
     describeAddress,
     ipKeyOf,
     getFriendStore: () => friendStore.get(),
+    contact,
+    contactLimits,
+    callRefusal: (userId: string, peerId: string) => getCallRefusal(kyselyOn(requirePool()), userId, peerId),
     getNotificationPreferences: () => notificationPreferences.get(),
     getPushSubscriptions: () => pushSubscriptions.get(),
     getPushService: () => pushService.get(),

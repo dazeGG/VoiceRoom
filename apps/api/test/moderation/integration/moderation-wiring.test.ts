@@ -44,6 +44,8 @@ test(
         LIVEKIT_TOKEN_TTL_SECONDS: 60,
         MAX_ROOM_BANS: 10,
         MAX_PUSH_SUBSCRIPTIONS_PER_USER: 5,
+        DM_NEW_CHAT_DAILY_LIMIT: 10,
+        DM_UNANSWERED_LIMIT: 3,
         LINK_PREVIEWS_ENABLED: false
       },
       fake<ServiceRegistryDeps>({
@@ -119,6 +121,8 @@ test(
         LIVEKIT_TOKEN_TTL_SECONDS: 60,
         MAX_ROOM_BANS: 10,
         MAX_PUSH_SUBSCRIPTIONS_PER_USER: 5,
+        DM_NEW_CHAT_DAILY_LIMIT: 10,
+        DM_UNANSWERED_LIMIT: 3,
         LINK_PREVIEWS_ENABLED: false
       },
       fake<ServiceRegistryDeps>({

@@ -7,7 +7,9 @@ import { useLocalizedText } from '@/shared/i18n/localized-text';
 import { nextTick, ref, toRaw, watch } from 'vue';
 import { plainSnapshot } from '@/shared/utils/plain-snapshot';
 import { fetchThreadPage, markThreadRead, type DirectMessage } from '@/api/dm';
+import { ApiError, failureBody } from '@/api/client';
 import type { PublicUser } from '@/api/friends';
+import { DirectHistoryFailure, type DirectContact } from '@voiceroom/shared/contracts/messages';
 import { createAnchoredHistory } from '@/shared/chat/anchored-history';
 import { createHistoryCache } from '@/shared/chat/history-cache';
 import { createReadReconciliation } from '@/shared/chat/read-reconciliation';
@@ -25,6 +27,7 @@ const READ_RESYNC_DELAY_MS = 1000;
 
 export function useDmThread(isOpen: (peerId: string) => boolean, onRead: () => void = () => {}) {
   const peer = ref<PublicUser | null>(null);
+  const contact = ref<DirectContact | null>(null);
   const messages = ref<DirectMessage[]>([]);
   const loading = ref(false);
   const loadingOlder = ref(false);
@@ -37,7 +40,15 @@ export function useDmThread(isOpen: (peerId: string) => boolean, onRead: () => v
   let readReconciliation: ReturnType<typeof createReadReconciliation> | null = null;
 
   const history = createAnchoredHistory<DirectMessage>({
-    loadPage: async (peerId, request) => fetchThreadPage(peerId, request),
+    loadPage: async (peerId, request) => {
+      const page = await fetchThreadPage(peerId, request);
+      return {
+        ...page,
+        onAccepted: () => {
+          if (isOpen(peerId)) applyContact(page.contact);
+        }
+      };
+    },
     compare: (left, right) => left.createdAt - right.createdAt || left.id.localeCompare(right.id),
     reconcile: (known, incoming) =>
       known.call && (!incoming.call || known.call.revision > incoming.call.revision)
@@ -53,9 +64,16 @@ export function useDmThread(isOpen: (peerId: string) => boolean, onRead: () => v
     }
   });
 
-  /** Shows `peerId`'s thread, starting from the friend's known profile. */
+  function applyContact(next: DirectContact | undefined): void {
+    if (!next) return;
+    peer.value = next.peer;
+    contact.value = next;
+  }
+
+  /** Shows `peerId`'s thread, starting from the known profile. */
   async function open(peerId: string, knownPeer: PublicUser | null): Promise<void> {
-    if (knownPeer) peer.value = knownPeer;
+    peer.value = knownPeer;
+    contact.value = null;
     await history.open(peerId);
     if (isOpen(peerId)) noteLatestRendered();
   }
@@ -117,7 +135,7 @@ export function useDmThread(isOpen: (peerId: string) => boolean, onRead: () => v
     try {
       const page = await fetchThreadPage(peerId, { mode: 'latest' });
       if (!isOpen(peerId)) return;
-      const messages = snapshot.apply(page.messages);
+      const messages = snapshot.apply(page.messages, () => applyContact(page.contact));
       if (!messages) return;
       const firstCreatedAt = page.messages[0]?.createdAt;
       history.reconcileLatest(
@@ -126,6 +144,22 @@ export function useDmThread(isOpen: (peerId: string) => boolean, onRead: () => v
         snapshot
       );
       noteLatestRendered();
+    } catch (error) {
+      if (isOpen(peerId) && error instanceof ApiError && error.code === 'thread_forbidden') {
+        const reason = failureBody(error, DirectHistoryFailure)?.messageReason;
+        snapshot.applyMetadata(() => {
+          const currentPeer = peer.value;
+          if (!currentPeer) return;
+          applyContact({
+            peer: currentPeer,
+            isFriend: false,
+            canMessage: false,
+            messageReason: reason && reason !== 'allowed' ? reason : 'blocked',
+            canCall: reason !== undefined && reason !== 'blocked' && (contact.value?.canCall ?? false)
+          });
+        });
+      }
+      throw error;
     } finally {
       snapshot.dispose();
     }
@@ -190,7 +224,7 @@ export function useDmThread(isOpen: (peerId: string) => boolean, onRead: () => v
     void fetchThreadPage(peerId, { mode: 'latest', limit: 1 })
       .then((page) => {
         if (!isOpen(peerId)) return;
-        const messages = snapshot.apply(page.messages);
+        const messages = snapshot.apply(page.messages, () => applyContact(page.contact));
         if (!messages) return;
         const firstCreatedAt = page.messages[0]?.createdAt;
         history.reconcileLatest(
@@ -222,6 +256,7 @@ export function useDmThread(isOpen: (peerId: string) => boolean, onRead: () => v
 
   return {
     peer,
+    contact,
     messages,
     loading,
     loadingOlder,

@@ -12,7 +12,9 @@ import type {
 import type { PublicUser } from '@voiceroom/shared/contracts/users';
 import { publicUser } from '../account/user-records.ts';
 import { isStoredDirectMessage } from '../social/social-records.ts';
-import { isActiveAccount, type SocialUser } from '../social/social-views.ts';
+import type { SocialUser } from '../social/social-views.ts';
+import { messageRefusal, type authorizeMessage, type createContactService } from '../social/contact.service.ts';
+import type { ContactFacts } from '../social/contact.policy.ts';
 import { cleanMessageText, messageFingerprint, normalizeAttachmentIds } from './message-input.ts';
 import { sendUnitOfWork, type DbClient, type SendDelivery } from './message-send.ts';
 import type { DirectReplyTarget } from './reply.repository.ts';
@@ -59,6 +61,7 @@ export interface DirectMessageStore {
     senderId: string;
     recipientId: string;
     body: string;
+    authorize: (facts: ContactFacts | null) => void;
   }): Promise<DirectMessage | null>;
 }
 
@@ -73,10 +76,10 @@ export interface DirectMessagesDeps {
   readService(): {
     advanceDm(input: { cursor: string; peerId: string; userId: string }): Promise<ReadResult>;
   };
-  friends(): {
-    areFriends(a: string, b: string): Promise<boolean>;
-    isBlockedBetween(a: string, b: string): Promise<boolean>;
-  };
+  contactStatus: ReturnType<typeof createContactService>['status'];
+  authorizeMessage(client: DbClient, sender: string, recipient: string): ReturnType<typeof authorizeMessage>;
+  authorizeMessageEdit(this: void, facts: ContactFacts | null): void;
+  recordPairMessage(client: DbClient, sender: string, recipient: string, startedAsStrangers: boolean): Promise<void>;
   findUser(userId: string): Promise<SocialUser | null>;
   isDmMuted(userId: string, peerUserId: string): Promise<boolean>;
   roomExists(roomId: string): Promise<boolean>;
@@ -100,6 +103,7 @@ export interface DirectMessagesDeps {
   projectMedia: Projection;
   projectReply: Projection;
   directEmit: boolean;
+  invalidateTyping(userId: string, peerId?: string): void;
   notifyUser(userId: string, event: AccountMessage): void;
   callMessageDeleted?(recipientId: string, senderId: string): void;
   /** The recipient's notification and push, unless they muted the sender. */
@@ -141,12 +145,16 @@ export function createDirectMessagesService(deps: DirectMessagesDeps) {
     user: SocialUser,
     peerId: string
   ): Promise<
-    | { status: 'listed'; peer: PublicUser; messages: DirectMessage[]; muted: boolean }
-    | Status<'not_friends' | 'user_not_found'>
+    | ({ status: 'listed'; peer: PublicUser; messages: DirectMessage[]; muted: boolean } & Omit<
+        NonNullable<Awaited<ReturnType<DirectMessagesDeps['contactStatus']>>>,
+        'canRead'
+      >)
+    | Status<'user_not_found'>
   > {
-    if (!(await deps.friends().areFriends(user.id, peerId))) return { status: 'not_friends' };
-    const peer = await deps.findUser(peerId);
-    if (!peer) return { status: 'user_not_found' };
+    const [peer, contact] = await Promise.all([deps.findUser(peerId), deps.contactStatus(user.id, peerId)]);
+    if (!peer || !contact) return { status: 'user_not_found' };
+    const { canRead, peer: _profile, ...permissions } = contact;
+    if (!canRead && permissions.messageReason !== 'allowed') throw messageRefusal(permissions.messageReason);
     const stored = await deps.messages().direct.listThread({ userId: user.id, peerId });
     const messages = await Promise.all(
       stored.map(async (message) =>
@@ -155,7 +163,13 @@ export function createDirectMessagesService(deps: DirectMessagesDeps) {
     );
     const read = await deps.messages().direct.markRead({ userId: user.id, peerId });
     if (read.count > 0) deps.notifyUser(peerId, { type: 'dm-read', userId: user.id });
-    return { status: 'listed', peer: publicUser(peer), messages, muted: await deps.isDmMuted(user.id, peerId) };
+    return {
+      status: 'listed',
+      peer: publicUser(peer),
+      messages,
+      muted: await deps.isDmMuted(user.id, peerId),
+      ...permissions
+    };
   }
 
   async function send(
@@ -165,21 +179,10 @@ export function createDirectMessagesService(deps: DirectMessagesDeps) {
   ): Promise<
     | { status: 'sent'; message: DirectMessage }
     | RateLimited
-    | Status<
-        | 'not_friends'
-        | 'blocked'
-        | 'account_deleted'
-        | 'invalid_attachments'
-        | 'reply_unavailable'
-        | 'empty'
-        | 'media_unavailable'
-      >
+    | Status<'invalid_attachments' | 'reply_unavailable' | 'empty' | 'media_unavailable'>
   > {
     const limited = rateLimited(sender.id);
     if (limited) return limited;
-    if (!(await deps.friends().areFriends(sender.id, recipientId))) return { status: 'not_friends' };
-    if (await deps.friends().isBlockedBetween(sender.id, recipientId)) return { status: 'blocked' };
-    if (!isActiveAccount(await deps.findUser(recipientId))) return { status: 'account_deleted' };
 
     const text = cleanDmText(input.text);
     const attachmentIds = normalizeAttachmentIds(input.attachmentIds);
@@ -191,6 +194,7 @@ export function createDirectMessagesService(deps: DirectMessagesDeps) {
     const media = attachmentIds.length > 0 ? deps.media() : null;
     if (attachmentIds.length > 0 && !media) return { status: 'media_unavailable' };
     const replies = replyToMessageId ? deps.replies() : null;
+    let startedAsStrangers = false;
     const send = sendUnitOfWork({
       delivery: deps.delivery(),
       idempotencyKey,
@@ -199,6 +203,11 @@ export function createDirectMessagesService(deps: DirectMessagesDeps) {
       fingerprint: messageFingerprint({ text, attachmentIds, replyToMessageId }),
       isStored: isReplayedMessage,
       replayMissing: 'The idempotent replay holds no direct message',
+      authorize: async (client) => {
+        const authorization = await deps.authorizeMessage(client, sender.id, recipientId);
+        startedAsStrangers = authorization.startedAsStrangers;
+        return authorization.refusal;
+      },
       lockReply: replies
         ? (client) =>
             replies.lockDirectTarget({ userId: sender.id, peerId: recipientId, messageId: replyToMessageId, client })
@@ -210,7 +219,7 @@ export function createDirectMessagesService(deps: DirectMessagesDeps) {
               client
             )
         : null,
-      afterInsert: null,
+      afterInsert: (client) => deps.recordPairMessage(client, sender.id, recipientId, startedAsStrangers),
       outboxMessage: (inserted) => inserted
     });
 
@@ -222,6 +231,7 @@ export function createDirectMessagesService(deps: DirectMessagesDeps) {
       beforeUnitOfWork: send.beforeUnitOfWork,
       unitOfWork: send.unitOfWork
     });
+    if (!stored.idempotencyReplay) deps.invalidateTyping(sender.id, startedAsStrangers ? undefined : recipientId);
     const projectedBase = await deps.projectMedia('dm', stored);
     const message = stored.idempotencyReplay
       ? await deps.projectReply('dm', projectedBase, { userId: sender.id, peerId: recipientId })
@@ -348,9 +358,13 @@ export function createDirectMessagesService(deps: DirectMessagesDeps) {
     if (current.invite) return { status: 'invitation' };
     const limited = rateLimited(userId);
     if (limited) return limited;
-    const message = await deps
-      .messages()
-      .direct.editMessage({ messageId, senderId: userId, recipientId: peerId, body: text });
+    const message = await deps.messages().direct.editMessage({
+      messageId,
+      senderId: userId,
+      recipientId: peerId,
+      body: text,
+      authorize: deps.authorizeMessageEdit
+    });
     if (!message) return { status: 'not_found' };
     deps.scheduleLinkPreview({ messageId, senderId: userId, recipientId: peerId, text, edited: true });
     const event: AccountMessage = { type: 'dm.message.edited', message };

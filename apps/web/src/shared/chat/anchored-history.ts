@@ -7,6 +7,7 @@ import { keysOf, mergeById } from '@/shared/utils/collections';
 
 export interface AnchoredHistoryPage<T> {
   messages: T[];
+  onAccepted?: () => void;
   pageInfo: {
     before?: string | undefined;
     hasMoreBefore: boolean;
@@ -104,7 +105,7 @@ export function createAnchoredHistory<T extends { id: string }>(options: Anchore
           : { mode: 'latest', signal: controller.signal }
       );
       if (requestGeneration !== generation || controller.signal.aborted) return;
-      const messages = snapshot.apply(page.messages);
+      const messages = snapshot.apply(page.messages, page.onAccepted);
       if (!messages) return;
       const known = new Map(state.messages.map((item) => [item.id, item]));
       state.messages = ordered(
@@ -152,7 +153,7 @@ export function createAnchoredHistory<T extends { id: string }>(options: Anchore
       try {
         const page = await options.loadPage(requestScope, { mode: 'before', cursor, signal: requestController.signal });
         if (requestGeneration !== generation || requestScope !== scope || requestController.signal.aborted) return;
-        const messages = snapshot.apply(page.messages);
+        const messages = snapshot.apply(page.messages, page.onAccepted);
         if (!messages) return;
         merge(messages);
         state.before = page.pageInfo.before;

@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { Switch, SettingRow, SettingsGroup, Avatar, Button } from '@voiceroom/ui-kit/components';
+import { Switch, SettingRow, SettingsGroup, Avatar } from '@voiceroom/ui-kit/components';
 import { t } from '@/shared/i18n';
 import { BellOff } from '@lucide/vue';
-import { computed, onMounted, ref } from 'vue';
+import { computed, ref } from 'vue';
 import type { OwnedRoom } from '@/api/auth';
-import { fetchBlockedUsers, unblockUser, type PublicUser } from '@/api/friends';
+import type { PublicUser } from '@/api/friends';
 import { useNotificationPreferencesStore } from '@/shared/notifications/preferences.store';
 import { showBrowserNotification } from '@/shared/notifications/router';
 import EmojiText from '@/shared/chat/EmojiText.vue';
@@ -28,9 +28,6 @@ const pushNotifications = usePushNotificationsStore();
 
 const notificationSaving = ref(false);
 const notificationTargetSaving = ref('');
-const blockedUsers = ref<PublicUser[]>([]);
-const blockedUsersLoading = ref(true);
-const blockedUserSaving = ref('');
 
 const browserNotificationsEnabled = computed(() =>
   pushNotifications.supported
@@ -40,39 +37,6 @@ const browserNotificationsEnabled = computed(() =>
 const notificationToggleLabel = computed(() =>
   props.support.desktopApp ? t('Уведомления приложения') : t('Push этого браузера')
 );
-
-onMounted(() => {
-  void loadBlockedUsers();
-});
-
-function failure(error: unknown, fallback: string): string {
-  return error instanceof Error && error.message ? error.message : fallback;
-}
-
-async function loadBlockedUsers(): Promise<void> {
-  blockedUsersLoading.value = true;
-  try {
-    blockedUsers.value = await fetchBlockedUsers();
-  } catch (error) {
-    emit('toast', failure(error, t('Не удалось загрузить блокировки')), { variant: 'error' });
-  } finally {
-    blockedUsersLoading.value = false;
-  }
-}
-
-async function unblockBlockedUser(userId: string): Promise<void> {
-  if (blockedUserSaving.value) return;
-  blockedUserSaving.value = userId;
-  try {
-    await unblockUser(userId);
-    blockedUsers.value = blockedUsers.value.filter((entry) => entry.id !== userId);
-    emit('toast', t('Пользователь разблокирован'));
-  } catch (error) {
-    emit('toast', failure(error, t('Не удалось разблокировать')), { variant: 'error' });
-  } finally {
-    blockedUserSaving.value = '';
-  }
-}
 
 async function toggleBrowserNotifications(): Promise<void> {
   try {
@@ -304,39 +268,5 @@ function toggleRoomNotifications(roomId: string): Promise<void> {
         </SettingsGroup>
       </div>
     </div>
-
-    <SettingsGroup
-      :heading="t('Заблокированные пользователи')"
-      :description="t('Разблокировка не восстанавливает дружбу и историю отношений.')"
-    >
-      <div v-if="blockedUsersLoading" class="settings__notification-empty" role="status">{{ t('Загружаем…') }}</div>
-      <template v-else-if="blockedUsers.length > 0">
-        <SettingRow v-for="blocked in blockedUsers" :key="blocked.id">
-          <template #leading>
-            <Avatar
-              :name="displayNameOf(blocked)"
-              :src="blocked.avatarUrl"
-              :color-key="blocked.avatarColorKey"
-              :background="blocked.avatarAccent || undefined"
-              :size="32"
-            />
-          </template>
-          <template #title><EmojiText :text="displayNameOf(blocked)" /> </template>
-          <template v-if="blocked.login" #description>@{{ blocked.login }}</template>
-          <template #control>
-            <Button
-              variant="ghost"
-              size="sm"
-              class="settings__unblock-button"
-              :disabled="Boolean(blockedUserSaving)"
-              @click="void unblockBlockedUser(blocked.id)"
-            >
-              {{ blockedUserSaving === blocked.id ? t('Разблокируем…') : t('Разблокировать') }}
-            </Button>
-          </template>
-        </SettingRow>
-      </template>
-      <div v-else class="settings__notification-empty">{{ t('Заблокированных пользователей нет.') }}</div>
-    </SettingsGroup>
   </div>
 </template>

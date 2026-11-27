@@ -33,6 +33,7 @@ async function fixture(t: TestContext) {
     privateText = false;
   const service = createRingService({
     repository: () => repository,
+    invalidateTyping: () => {},
     findUser: async (id) => storedUser({ id, login: 'alice', displayName: 'Alice' }),
     findRoom: async () => ({ id: 'ring-room', name: 'Private Room', emoji: 'x' }),
     notifyUser: (id, event) => events.push([id, event]),

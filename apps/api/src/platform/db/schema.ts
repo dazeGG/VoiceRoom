@@ -74,6 +74,13 @@ export interface CallFeedback {
   user_id: string | null;
 }
 
+export interface ContactAllowList {
+  allowed_id: string;
+  created_at: Generated<Timestamp>;
+  kind: string;
+  owner_id: string;
+}
+
 export interface ContentReports {
   comment: Generated<string>;
   created_at: Generated<Timestamp>;
@@ -136,6 +143,16 @@ export interface DirectMessages {
   recipient_id: string;
   reply_to_message_id: string | null;
   sender_id: string;
+}
+
+export interface DmPairState {
+  first_message_at: Timestamp;
+  initiator_id: string;
+  last_sender_id: string;
+  started_as_strangers: Generated<boolean>;
+  unanswered_count: number;
+  user_high: string;
+  user_low: string;
 }
 
 export interface FriendRequests {
@@ -681,6 +698,7 @@ export interface Users {
   block_reason: Generated<string>;
   blocked_at: Timestamp | null;
   blocked_until: Timestamp | null;
+  calls_from: Generated<string>;
   created_at: Generated<Timestamp>;
   deleted_at: Timestamp | null;
   deletion_requested_at: Timestamp | null;
@@ -688,6 +706,7 @@ export interface Users {
   dnd: Generated<boolean>;
   id: string;
   login: string;
+  messages_from: Generated<string>;
   metadata: Generated<Json>;
   password_hash: string;
   presence_active_until: Timestamp | null;
@@ -800,12 +819,14 @@ export interface DB {
   account_recovery_codes: AccountRecoveryCodes;
   admin_actions: AdminActions;
   call_feedback: CallFeedback;
+  contact_allow_list: ContactAllowList;
   content_reports: ContentReports;
   device_tokens: DeviceTokens;
   direct_message_reaction_revisions: DirectMessageReactionRevisions;
   direct_message_reactions: DirectMessageReactions;
   direct_message_read_cursors: DirectMessageReadCursors;
   direct_messages: DirectMessages;
+  dm_pair_state: DmPairState;
   friend_requests: FriendRequests;
   friendships: Friendships;
   link_previews: LinkPreviews;

@@ -9,12 +9,16 @@ import { transaction } from '../../platform/db/pool.ts';
 import { kyselyOn, type Database } from '../../platform/db/kysely.ts';
 import { toMillis } from '../../platform/epoch-millis.ts';
 import { cleanBadge } from '../account/user-records.ts';
+import { contactAudience, pairBlocks } from '../social/contact-facts.repository.ts';
+import { canCall, type ContactFacts } from '../social/contact.policy.ts';
+import { withPairLock } from '../social/contact.service.ts';
 import {
   type DirectMessage,
   type Metadata,
   between,
   inviteKind,
   inviteStatus,
+  lockUserPair,
   mapMessage,
   mapPublicUser,
   now
@@ -41,30 +45,17 @@ export function createDmThreadRepository({ pool }: { pool: pg.Pool }) {
     const high = sql<string>`greatest(sender_id, recipient_id)`;
     const latest = db
       .selectFrom('direct_messages')
-      .innerJoin('friendships', (join) => join.on('user_a_id', '=', low).on('user_b_id', '=', high))
+      .leftJoin('friendships', (join) => join.on('user_a_id', '=', low).on('user_b_id', '=', high))
       .where((eb) => eb.or([eb('sender_id', '=', userId), eb('recipient_id', '=', userId)]))
       .where('deleted_at', 'is', null)
-      .where((eb) =>
-        eb.not(
-          eb.exists(
-            eb
-              .selectFrom('user_blocks')
-              .select('blocker_id')
-              .where((blocks) =>
-                blocks.or([
-                  blocks.and([blocks('blocker_id', '=', low), blocks('blocked_id', '=', high)]),
-                  blocks.and([blocks('blocker_id', '=', high), blocks('blocked_id', '=', low)])
-                ])
-              )
-          )
-        )
-      )
+      .where((eb) => eb.not(eb.exists(pairBlocks(db, low, high))))
       .distinctOn([low, high])
       .select([
         'direct_messages.id as message_id',
         'direct_messages.created_at as message_at',
         'body',
         'sender_id',
+        sql<boolean>`friendships.id is not null`.as('is_friend'),
         sql<string | null>`direct_messages.metadata->>'kind'`.as('kind'),
         sql<string>`case when sender_id = ${userId} then recipient_id else sender_id end`.as('peer_id'),
         sql<number>`(count(*) filter (where recipient_id = ${userId} and read_at is null)
@@ -86,6 +77,7 @@ export function createDmThreadRepository({ pool }: { pool: pg.Pool }) {
         'users.avatar_color_key',
         'users.avatar_key',
         'users.badge',
+        'users.calls_from',
         'users.created_at',
         'users.display_name',
         'users.dnd',
@@ -93,8 +85,32 @@ export function createDmThreadRepository({ pool }: { pool: pg.Pool }) {
         'users.login',
         'users.presence_status'
       ])
-      .select(['latest.body', 'latest.kind', 'latest.message_at', 'latest.sender_id', 'latest.unread_count'])
+      .select([
+        'latest.body',
+        'latest.kind',
+        'latest.message_at',
+        'latest.sender_id',
+        'latest.unread_count',
+        'latest.is_friend'
+      ])
       .select((eb) => [
+        eb
+          .and([
+            eb('users.deleted_at', 'is', null),
+            eb('users.deletion_requested_at', 'is', null),
+            eb.or([eb('users.blocked_at', 'is', null), eb('users.blocked_until', '<=', sql<Date>`clock_timestamp()`)])
+          ])
+          .as('active'),
+        eb
+          .exists(
+            eb
+              .selectFrom('contact_allow_list')
+              .select('allowed_id')
+              .whereRef('owner_id', '=', 'users.id')
+              .where('allowed_id', '=', userId)
+              .where('kind', '=', 'calls')
+          )
+          .as('selected_for_calls'),
         eb('mutes.id', 'is not', null).as('muted'),
         eb
           .exists(
@@ -120,7 +136,15 @@ export function createDmThreadRepository({ pool }: { pool: pg.Pool }) {
         fromMe: row.sender_id === userId
       },
       unreadCount: row.unread_count,
-      isFriend: true,
+      isFriend: row.is_friend,
+      canCall:
+        canCall({
+          friends: row.is_friend,
+          blocked: false,
+          active: Boolean(row.active),
+          callsFrom: contactAudience(row.calls_from, 'friends'),
+          selectedForCalls: Boolean(row.selected_for_calls)
+        }) === 'allowed',
       muted: Boolean(row.muted)
     }));
   }
@@ -158,7 +182,16 @@ export function createDmThreadRepository({ pool }: { pool: pg.Pool }) {
     { unitOfWork = null }: { unitOfWork?: ((client: pg.PoolClient) => Promise<void>) | null } = {}
   ): Promise<boolean> {
     return transaction(pool, async (client) => {
-      const result = await kyselyOn(client)
+      const tx = kyselyOn(client);
+      const pair = await tx
+        .selectFrom('direct_messages')
+        .select(['sender_id', 'recipient_id'])
+        .where('id', '=', messageId)
+        .where('deleted_at', 'is', null)
+        .executeTakeFirst();
+      if (!pair) return false;
+      await lockUserPair(tx, pair.sender_id, pair.recipient_id);
+      const result = await tx
         .updateTable('direct_messages')
         .set({ deleted_at: sql<Date>`now()` })
         .where('id', '=', messageId)
@@ -174,24 +207,32 @@ export function createDmThreadRepository({ pool }: { pool: pg.Pool }) {
     messageId,
     senderId,
     recipientId,
-    body
+    body,
+    authorize
   }: {
     messageId: string;
     senderId: string;
     recipientId: string;
     body: string;
+    authorize: (facts: ContactFacts | null) => void;
   }) {
-    const row = await db
-      .updateTable('direct_messages')
-      .set({ body, edited_at: now })
-      .where('id', '=', messageId)
-      .where('sender_id', '=', senderId)
-      .where('recipient_id', '=', recipientId)
-      .where('deleted_at', 'is', null)
-      .where(sql<boolean>`metadata->>'kind' IS DISTINCT FROM 'voice-call'`)
-      .returningAll()
-      .executeTakeFirst();
-    return mapMessage(row);
+    return transaction(pool, async (client) => {
+      const tx = kyselyOn(client);
+      return withPairLock(tx, senderId, recipientId, async (facts) => {
+        authorize(facts);
+        const row = await tx
+          .updateTable('direct_messages')
+          .set({ body, edited_at: now })
+          .where('id', '=', messageId)
+          .where('sender_id', '=', senderId)
+          .where('recipient_id', '=', recipientId)
+          .where('deleted_at', 'is', null)
+          .where(sql<boolean>`metadata->>'kind' IS DISTINCT FROM 'voice-call'`)
+          .returningAll()
+          .executeTakeFirst();
+        return mapMessage(row);
+      });
+    });
   }
 
   // A replay answers with the message the caller stored on the first send.

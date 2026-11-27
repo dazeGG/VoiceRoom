@@ -98,6 +98,8 @@ export function createCallRingService({
   clock,
   graceMs,
   limits,
+  dailyNewChatLimit,
+  invalidateTyping,
   voice,
   notify,
   report
@@ -107,6 +109,8 @@ export function createCallRingService({
   clock?: (() => number) | undefined;
   graceMs: number;
   limits: { count: number; windowMs: number };
+  dailyNewChatLimit: number;
+  invalidateTyping(this: void, userId: string, peerId?: string): void;
   voice: VoicePort;
   notify(this: void, userId: string, message: AccountMessage): unknown;
   report(this: void, error: unknown): void;
@@ -126,7 +130,7 @@ export function createCallRingService({
   const users = (call: VoiceCall) => [call.callerId, call.recipientId];
   const repo = () => {
     const connection = pool();
-    return connection && createCallRingRepository(connection, clock);
+    return connection && createCallRingRepository(connection, clock, dailyNewChatLimit);
   };
   const requireRepo = () => {
     const repository = repo();
@@ -391,7 +395,11 @@ export function createCallRingService({
     if (!change) return notFound();
     const { call, result, now } = change;
     if (result === 'transfer' || (result === 'leave' && call.phase !== 'closed')) fenceSeat(call, viewer.userId);
-    if (result === 'ring') intents.delete(key(call, otherParticipant(call, viewer.userId)));
+    if (result === 'ring') {
+      const peerId = otherParticipant(call, viewer.userId);
+      intents.delete(key(call, peerId));
+      invalidateTyping(viewer.userId, peerId);
+    }
     const handoff = result === 'accept' || result === 'resume' ? admission(call, viewer, now, true) : undefined;
     await publish(repository, change, result === 'ring');
     if (typeof result === 'object') return result;
@@ -421,6 +429,7 @@ export function createCallRingService({
       if (existing?.call.phase === 'closed') result = await repository.start(viewer.userId, peerId, requestId, limits);
       if (result.status === 'rate_limited') return { retryAfterSeconds: result.retryAfterSeconds };
       if (result.status === 'created') {
+        invalidateTyping(viewer.userId, result.startedAsStrangers ? undefined : peerId);
         const change = { ...result, changed: true };
         const handoff = admission(result.call, viewer, result.now, true);
         await publish(repository, change, true);

@@ -2,6 +2,7 @@
 // message with its attachments, reply preview and reactions) and read cursors.
 
 import type pg from 'pg';
+import type { ContactLimits } from '../social/contact.policy.ts';
 import type { CursorCodec } from '../../platform/cursor-codec.ts';
 import type { createMessageProjection } from './message-projection.ts';
 import { createDmHistoryRepository } from './dm-history.repository.ts';
@@ -16,6 +17,7 @@ import { createRoomHistoryService } from './room-history.service.ts';
 
 export interface HistoryModuleDeps {
   pool: pg.Pool;
+  contactLimits: ContactLimits;
   cursorCodec: CursorCodec;
   projectMediaMany: ReturnType<typeof createMessageProjection>['projectMediaMany'];
   canReadRoom: (roomId: string, userId: string) => Promise<boolean>;
@@ -35,7 +37,7 @@ export function createHistoryModule(deps: HistoryModuleDeps) {
     cursorCodec,
     dm: createDmHistoryService({
       cursorCodec,
-      repository: createDmHistoryRepository({ pool }),
+      repository: createDmHistoryRepository({ pool, limits: deps.contactLimits }),
       projectMessages: async ({ messages, peerId, userId }) => {
         const messageIds = messages.map((message) => message.id);
         const [projected, previews, summaries] = await Promise.all([

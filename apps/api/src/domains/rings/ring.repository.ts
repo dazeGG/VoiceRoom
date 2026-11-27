@@ -1,11 +1,13 @@
 // Short-lived invitation state. This is not a voice-session or missed-call history.
 import crypto from 'node:crypto';
+import { sql } from 'kysely';
 import type pg from 'pg';
 import type { RingSnapshot, RingState } from '@voiceroom/shared/contracts/rings';
 import { createDmThreadRepository } from '../messaging/dm-thread.repository.ts';
 import type { DirectMessage } from '../social/social-records.ts';
-import { isStoredDirectMessage, lockUserPair } from '../social/social-records.ts';
-import { ringPairRefusal } from '../social/pair-eligibility.repository.ts';
+import { isStoredDirectMessage, lockUserPair, tryLockUserPair } from '../social/social-records.ts';
+import { callRefusal, getCallRefusal, messageRefusal, newChatStart, withPairLock } from '../social/contact.service.ts';
+import { recordPairMessage } from '../social/dm-pair-state.repository.ts';
 import { kyselyOn } from '../../platform/db/kysely.ts';
 import { lockKeys, lockXact } from '../../platform/db/locks.ts';
 import { transaction } from '../../platform/db/pool.ts';
@@ -41,8 +43,9 @@ export type RingCreateResult =
       replay: boolean;
       message: DirectMessage | null;
       room: { name: string; emoji: string } | null;
+      startedAsStrangers: boolean;
     }
-  | { status: 'not_friends' | 'blocked' | 'account_deleted' | 'room_not_found' | 'request_conflict' }
+  | { status: 'calls_closed' | 'blocked' | 'account_deleted' | 'room_not_found' | 'request_conflict' }
   | { status: 'rate_limited'; retryAfterSeconds: number };
 export type RingAction = 'status' | 'accept' | 'decline' | 'cancel';
 export type RingBanCheck = (input: {
@@ -73,11 +76,18 @@ class CreationRejected extends Error {
     this.result = result;
   }
 }
-export function createRingRepository({ pool, isBanned }: { pool: pg.Pool; isBanned: RingBanCheck }) {
+export function createRingRepository({
+  pool,
+  isBanned,
+  dailyNewChatLimit = 0
+}: {
+  pool: pg.Pool;
+  isBanned: RingBanCheck;
+  dailyNewChatLimit?: number;
+}) {
+  const db = kyselyOn(pool);
   const messages = createDmThreadRepository({ pool });
-  async function available(client: pg.PoolClient, caller: string, recipient: string, roomId: string) {
-    const refusal = await ringPairRefusal(kyselyOn(client), caller, recipient);
-    if (refusal) return refusal;
+  async function availableRoom(client: pg.PoolClient, roomId: string) {
     const room = await client.query<{ name: string; emoji: string }>(
       `SELECT name,emoji FROM rooms WHERE id=$1 AND deleted_at IS NULL AND kind='main'`,
       [roomId]
@@ -94,7 +104,7 @@ export function createRingRepository({ pool, isBanned }: { pool: pg.Pool; isBann
   }
   async function terminal(
     client: pg.PoolClient,
-    row: RingRow,
+    ringId: string,
     state: Exclude<RingState, 'pending'>,
     reason: RingRow['reason'] = null
   ) {
@@ -103,7 +113,7 @@ export function createRingRepository({ pool, isBanned }: { pool: pg.Pool; isBann
        UPDATE room_rings SET state=CASE WHEN expires_at<=transition.at THEN 'expired' ELSE $2 END,
        revision=2,ended_at=transition.at,reason=CASE WHEN expires_at<=transition.at THEN NULL ELSE $3 END
        FROM transition WHERE id=$1 AND purpose='room-invite' AND state='pending' RETURNING room_rings.*`,
-      [row.id, state, reason]
+      [ringId, state, reason]
     );
     const result = changed.rows[0];
     if (!result) throw new Error('Locked Ring transition was lost');
@@ -124,52 +134,58 @@ export function createRingRepository({ pool, isBanned }: { pool: pg.Pool; isBann
       replay: boolean;
       room: { name: string; emoji: string } | null;
     } = { ring: null, replay: false, room: null };
+    let startedAsStrangers = false;
     try {
       const message = await messages.sendMessage({
         senderId: input.callerUserId,
         recipientId: input.recipientUserId,
         body: '',
         beforeUnitOfWork: async (client) => {
-          // Request identity spans recipient pairs. Always lock it before the
-          // relationship lock so conflicting payloads serialize without orphan DMs.
-          await lockXact(kyselyOn(client), lockKeys.ringRequest(input.callerUserId, input.clientRequestId));
-          await lockUserPair(kyselyOn(client), input.callerUserId, input.recipientUserId);
-          const old = (
-            await client.query<RingRow>(`SELECT * FROM room_rings WHERE caller_user_id=$1 AND client_request_id=$2`, [
-              input.callerUserId,
-              input.clientRequestId
-            ])
-          ).rows[0];
-          if (old) {
-            if (
-              old.purpose !== 'room-invite' ||
-              old.recipient_user_id !== input.recipientUserId ||
-              old.room_id !== input.roomId
-            )
-              throw new CreationRejected({ status: 'request_conflict' });
-            const target = await client.query<{ '?column?': number }>(
-              "SELECT 1 FROM rooms WHERE id=$1 AND kind='main' AND deleted_at IS NULL",
-              [input.roomId]
-            );
-            if (!target.rowCount) throw new CreationRejected({ status: 'room_not_found' });
-            result.ring = snapshot(old);
-            result.replay = true;
-            return { replay: true, message: { id: old.invite_message_id } };
-          }
-          const eligibility = await available(client, input.callerUserId, input.recipientUserId, input.roomId);
-          if (typeof eligibility === 'string') throw new CreationRejected({ status: eligibility });
-          if (input.cooldownMs > 0) {
-            const cooldown =
-              (
-                await client.query<{ remaining: number }>(
-                  `SELECT CASE WHEN count(*) >= $4 THEN ceil(($3::float8-extract(epoch FROM (clock_timestamp()-min(created_at)))*1000)/1000)::int ELSE 0 END AS remaining FROM room_rings WHERE purpose='room-invite' AND caller_user_id=$1 AND recipient_user_id=$2 AND created_at > clock_timestamp()-$3::float8*interval '1 millisecond'`,
-                  [input.callerUserId, input.recipientUserId, input.cooldownMs, input.limit ?? 1]
-                )
-              ).rows[0]?.remaining ?? 0;
-            if (cooldown > 0) throw new CreationRejected({ status: 'rate_limited', retryAfterSeconds: cooldown });
-          }
-          result.room = eligibility;
-          return null;
+          const tx = kyselyOn(client);
+          return withPairLock(tx, input.callerUserId, input.recipientUserId, async (facts) => {
+            await lockXact(tx, lockKeys.ringRequest(input.callerUserId, input.clientRequestId));
+            const old = (
+              await client.query<RingRow>(`SELECT * FROM room_rings WHERE caller_user_id=$1 AND client_request_id=$2`, [
+                input.callerUserId,
+                input.clientRequestId
+              ])
+            ).rows[0];
+            if (old) {
+              if (
+                old.purpose !== 'room-invite' ||
+                old.recipient_user_id !== input.recipientUserId ||
+                old.room_id !== input.roomId
+              )
+                throw new CreationRejected({ status: 'request_conflict' });
+              const target = await client.query<{ '?column?': number }>(
+                "SELECT 1 FROM rooms WHERE id=$1 AND kind='main' AND deleted_at IS NULL",
+                [input.roomId]
+              );
+              if (!target.rowCount) throw new CreationRejected({ status: 'room_not_found' });
+              result.ring = snapshot(old);
+              result.replay = true;
+              return { replay: true, message: { id: old.invite_message_id } };
+            }
+            const refusal = callRefusal(facts);
+            if (refusal) throw new CreationRejected({ status: refusal });
+            const chat = await newChatStart(tx, facts, dailyNewChatLimit);
+            if (chat.capped) throw messageRefusal('chat_cap');
+            startedAsStrangers = chat.startedAsStrangers;
+            const eligibility = await availableRoom(client, input.roomId);
+            if (typeof eligibility === 'string') throw new CreationRejected({ status: eligibility });
+            if (input.cooldownMs > 0) {
+              const cooldown =
+                (
+                  await client.query<{ remaining: number }>(
+                    `SELECT CASE WHEN count(*) >= $4 THEN ceil(($3::float8-extract(epoch FROM (clock_timestamp()-min(created_at)))*1000)/1000)::int ELSE 0 END AS remaining FROM room_rings WHERE purpose='room-invite' AND caller_user_id=$1 AND recipient_user_id=$2 AND created_at > clock_timestamp()-$3::float8*interval '1 millisecond'`,
+                    [input.callerUserId, input.recipientUserId, input.cooldownMs, input.limit ?? 1]
+                  )
+                ).rows[0]?.remaining ?? 0;
+              if (cooldown > 0) throw new CreationRejected({ status: 'rate_limited', retryAfterSeconds: cooldown });
+            }
+            result.room = eligibility;
+            return null;
+          });
         },
         prepareMessage: async () => {
           const room = result.room;
@@ -186,6 +202,13 @@ export function createRingRepository({ pool, isBanned }: { pool: pg.Pool; isBann
           };
         },
         unitOfWork: async (client, message) => {
+          await recordPairMessage(
+            kyselyOn(client),
+            input.callerUserId,
+            input.recipientUserId,
+            startedAsStrangers,
+            'call'
+          );
           const inserted = await client.query<RingRow>(
             `INSERT INTO room_rings(id,caller_user_id,recipient_user_id,room_id,client_request_id,invite_message_id,expires_at) VALUES($1,$2,$3,$4,$5,$6,clock_timestamp()+$7::float8*interval '1 millisecond') RETURNING *`,
             [
@@ -215,7 +238,8 @@ export function createRingRepository({ pool, isBanned }: { pool: pg.Pool; isBann
         ring: result.ring,
         replay: result.replay,
         message: !result.replay && isStoredDirectMessage(message) ? message : null,
-        room: result.room
+        room: result.room,
+        startedAsStrangers
       };
     } catch (error) {
       if (error instanceof CreationRejected) return error.result;
@@ -255,19 +279,21 @@ export function createRingRepository({ pool, isBanned }: { pool: pg.Pool; isBann
           row.expires_at
         ])
       ).rows[0]?.expired;
-      if (expired) row = await terminal(client, row, 'expired');
-      else if (input.action === 'cancel') row = await terminal(client, row, 'cancelled', 'caller_cancelled');
-      else if (input.action === 'decline') row = await terminal(client, row, 'declined');
+      if (expired) row = await terminal(client, row.id, 'expired');
+      else if (input.action === 'cancel') row = await terminal(client, row.id, 'cancelled', 'caller_cancelled');
+      else if (input.action === 'decline') row = await terminal(client, row.id, 'declined');
       else {
-        const eligibility = await available(client, row.caller_user_id, row.recipient_user_id, row.room_id);
+        const refusal = await getCallRefusal(kyselyOn(client), row.caller_user_id, row.recipient_user_id);
+        const eligibility = await availableRoom(client, row.room_id);
         const banned = await isBanned({
           roomId: row.room_id,
           userId: row.recipient_user_id,
           ip: input.actorUserId === row.recipient_user_id ? (input.ip ?? '') : '',
           client
         });
-        if (typeof eligibility === 'string' || banned) row = await terminal(client, row, 'cancelled', 'unavailable');
-        else if (input.action === 'accept') row = await terminal(client, row, 'accepted');
+        if (refusal || typeof eligibility === 'string' || banned)
+          row = await terminal(client, row.id, 'cancelled', 'unavailable');
+        else if (input.action === 'accept') row = await terminal(client, row.id, 'accepted');
         else {
           // Status also waits for authorization; never return pending based on
           // the wall clock observed before those awaited checks.
@@ -277,18 +303,39 @@ export function createRingRepository({ pool, isBanned }: { pool: pg.Pool; isBann
               [row.id]
             )
           ).rows[0]?.expired;
-          if (expiredAfterAuthorization) row = await terminal(client, row, 'expired');
+          if (expiredAfterAuthorization) row = await terminal(client, row.id, 'expired');
         }
       }
       return snapshot(row);
     });
   }
   async function maintenance(): Promise<void> {
+    const expired = (tx: typeof db) =>
+      tx
+        .selectFrom('room_rings')
+        .where('purpose', '=', 'room-invite')
+        .where('state', '=', 'pending')
+        .where('expires_at', '<=', sql<Date>`clock_timestamp()`);
+    const candidates = await expired(db)
+      .select(['id', 'caller_user_id', 'recipient_user_id'])
+      .orderBy('expires_at')
+      .limit(100)
+      .execute();
+    for (const candidate of candidates) {
+      // Skip busy pairs so their expiry is retried on the next delivery tick.
+      await transaction(pool, async (client) => {
+        const tx = kyselyOn(client);
+        if (!(await tryLockUserPair(tx, candidate.caller_user_id, candidate.recipient_user_id))) return;
+        const row = await expired(tx)
+          .select('id')
+          .where('id', '=', candidate.id)
+          .forUpdate()
+          .skipLocked()
+          .executeTakeFirst();
+        if (row) await terminal(client, row.id, 'expired');
+      });
+    }
     await transaction(pool, async (client) => {
-      const expired = await client.query<RingRow>(
-        `SELECT * FROM room_rings WHERE purpose='room-invite' AND state='pending' AND expires_at<=clock_timestamp() ORDER BY expires_at FOR UPDATE SKIP LOCKED LIMIT 100`
-      );
-      for (const row of expired.rows) await terminal(client, row, 'expired');
       await client.query(
         `DELETE FROM room_rings WHERE purpose='room-invite' AND created_at<clock_timestamp()-interval '24 hours'`
       );

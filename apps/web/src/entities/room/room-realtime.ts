@@ -80,6 +80,7 @@ const ROOM_OF: { [Type in ServerEventType]: ((payload: ServerEvents[Type]) => st
   'call.missed.updated': null,
   'notification.settings.updated': null,
   'account.login.new': null,
+  'account.privacy.updated': null,
   'account.login.resolved': null,
   'admin.reports': null,
   'dm.message': null,

@@ -299,10 +299,19 @@ export const useLobbyStore = defineStore('lobby', () => {
     if (!outbox) {
       outbox = markRaw(
         new Outbox<OutgoingDirectMessage, DirectMessage>({
-          deliver: ({ text, attachmentIds, replyTo }, idempotencyKey) =>
-            sendDirectMessage(peerId, text, attachmentIds, replyTo, idempotencyKey),
+          deliver: async ({ text, attachmentIds, replyTo }, idempotencyKey) => {
+            try {
+              return await sendDirectMessage(peerId, text, attachmentIds, replyTo, idempotencyKey);
+            } catch (error) {
+              if (selectedFriendId.value === peerId) void thread.resync(peerId).catch(() => {});
+              throw error;
+            }
+          },
           onSent: (message) => {
-            if (selectedFriendId.value === peerId) thread.append(message);
+            if (selectedFriendId.value === peerId) {
+              thread.append(message);
+              void thread.noteRealtimeRendered(peerId, message);
+            }
             bumpLastMessage(peerId, message);
             void conversations.refresh();
           }
@@ -347,7 +356,12 @@ export const useLobbyStore = defineStore('lobby', () => {
   function applyEditedMessage(message: DirectMessage): void {
     if (!message.call) void conversations.refresh();
     const peerId = message.senderId === selfId ? message.recipientId : message.senderId;
-    if (!message.call || (view.value === 'dm' && selectedFriendId.value === peerId)) thread.replace(message);
+    const isOpenThread = view.value === 'dm' && selectedFriendId.value === peerId;
+    if (!message.call || isOpenThread) thread.replace(message);
+    // A re-ring edits the existing card, whose sender is still the original caller.
+    if (isOpenThread && message.call?.outcome === 'live' && thread.contact?.messageReason === 'unanswered_cap') {
+      void thread.resync(peerId).catch(() => {});
+    }
     if (message.call) return;
     const friend = findFriend(peerId);
     if (friend?.lastMessage?.id === message.id) {
@@ -418,7 +432,8 @@ export const useLobbyStore = defineStore('lobby', () => {
 
   async function removeFriend(userId: string): Promise<void> {
     await apiRemoveFriend(userId);
-    dropConversation(userId);
+    void conversations.refresh();
+    if (selectedFriendId.value === userId) void thread.resync(userId).catch(() => {});
     await refreshFriends().catch(() => {});
   }
 
@@ -499,10 +514,12 @@ export const useLobbyStore = defineStore('lobby', () => {
         void refreshFriends().catch(() => {});
         void refreshRequests().catch(() => {});
         void conversations.refresh();
+        if (selectedFriendId.value === event.payload.userId) void thread.resync(event.payload.userId).catch(() => {});
         break;
       }
       case 'friend.removed': {
-        dropConversation(event.payload.userId);
+        void conversations.refresh();
+        if (selectedFriendId.value === event.payload.userId) void thread.resync(event.payload.userId).catch(() => {});
         void refreshFriends().catch(() => {});
         void refreshRequests().catch(() => {});
         break;
