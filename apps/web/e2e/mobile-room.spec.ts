@@ -1,6 +1,6 @@
 import { expect, test, type Browser, type BrowserContext, type Page } from '@playwright/test';
 import { defined } from '../test/helpers/assert';
-import { PASSWORD, boxOf, createPermanentRoom, registerViaUi, uniqueLogin } from './helpers';
+import { boxOf, createPermanentRoom, registerViaApi, registerViaUi, uniqueLogin } from './helpers';
 
 // A covered control fails fast with a named locator instead of hanging the test.
 test.use({ actionTimeout: 15_000 });
@@ -136,10 +136,7 @@ test('a signed-in phone gets the standalone room with its account, never the lob
   const context = await phone(browser, baseURL);
   try {
     const login = uniqueLogin('mobileuser');
-    const registered = await context.request.post('/api/auth/register', {
-      data: { login, password: PASSWORD, passwordConfirm: PASSWORD }
-    });
-    expect(registered.ok()).toBe(true);
+    await registerViaApi(context.request, login);
 
     const member = await context.newPage();
     await member.goto(`/r/${roomId}`);

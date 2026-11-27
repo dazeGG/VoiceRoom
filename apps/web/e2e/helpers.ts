@@ -1,10 +1,11 @@
-import { expect, type Locator, type Page } from '@playwright/test';
+import { expect, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 import { Value } from 'typebox/value';
 import { APP_HOME } from '@voiceroom/shared/app-home';
 import { Failure } from '@voiceroom/shared/contracts/http';
 import { Capabilities } from '@voiceroom/shared/contracts/ops';
 import { RoomCreated } from '@voiceroom/shared/contracts/rooms';
 import { FriendRequests } from '@voiceroom/shared/contracts/social';
+import { WHATS_NEW_RELEASE } from '../src/shared/whats-new-release';
 import { defined, parse } from '../test/helpers/assert';
 
 /** The element's box; fails when the locator's element is not rendered. */
@@ -65,6 +66,18 @@ export function uniqueLogin(prefix = 'e2e'): string {
 }
 
 export const PASSWORD = 'e2e-password-123';
+
+// Register a fresh account straight through the API. Web registration also
+// acknowledges the current "what's new" announcement, so do the same here;
+// otherwise its dialog covers the lobby.
+export async function registerViaApi(request: APIRequestContext, login: string): Promise<void> {
+  const registered = await request.post('/api/auth/register', {
+    data: { login, password: PASSWORD, passwordConfirm: PASSWORD }
+  });
+  expect(registered.ok(), `Registration failed with HTTP ${registered.status()}`).toBe(true);
+  const seen = await request.post('/api/auth/whats-new/seen', { data: { release: WHATS_NEW_RELEASE } });
+  expect(seen.ok(), `What's new acknowledgement failed with HTTP ${seen.status()}`).toBe(true);
+}
 
 function authDialog(page: Page, name: 'Вход' | 'Создать аккаунт') {
   return page.getByRole('dialog', { name });
