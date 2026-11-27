@@ -159,6 +159,40 @@ test('a message that is already gone can be dismissed but not removed again', as
   expect(calls.find((call) => call.method === 'POST')?.body).toEqual({ action: 'dismiss' });
 });
 
+test('a DM report shows the attachments captured with it after the message is gone', async () => {
+  stubApi({
+    'GET /api/admin/reports': {
+      body: {
+        ok: true,
+        reports: [
+          adminReport('r1', 'm1', {
+            kind: 'direct_message',
+            roomId: null,
+            roomName: null,
+            text: '',
+            deleted: true,
+            attachments: [
+              { id: 'a1', mimeType: 'image/jpeg', name: 'photo.jpg' },
+              { id: 'a2', mimeType: 'application/pdf', name: null }
+            ]
+          })
+        ]
+      }
+    }
+  });
+  renderAsStaff(ReportsPage, { props: { onResolved: vi.fn(), onOpenAccount: vi.fn() } }, 'moderator');
+
+  const attachments = await within(await screen.findByRole('region', { name: 'Оскорбления или угрозы' })).findByRole(
+    'list',
+    { name: 'Вложения' }
+  );
+  const items = within(attachments).getAllByRole('listitem');
+  expect(items.map((item) => item.textContent?.replace(/\s+/g, ' ').trim())).toEqual([
+    'photo.jpg image/jpeg',
+    'Без имени application/pdf'
+  ]);
+});
+
 test('a refused decision leaves the report in place and says why', async () => {
   stubApi({
     'GET /api/admin/reports': { body: { ok: true, reports: [adminReport('r1', 'm1')] } },

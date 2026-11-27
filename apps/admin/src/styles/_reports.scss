@@ -144,6 +144,21 @@
     }
   }
 
+  &__attachments {
+    display: grid;
+    gap: var(--space-4);
+    margin: var(--space-8) 0 0;
+    padding: 0;
+    list-style: none;
+    overflow-wrap: anywhere;
+
+    li {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-8);
+    }
+  }
+
   &__comments ul {
     display: grid;
     gap: var(--space-8);
