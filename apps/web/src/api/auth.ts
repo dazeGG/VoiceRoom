@@ -4,6 +4,7 @@
 // from @voiceroom/shared/contracts/account.
 
 import { t } from '../shared/i18n/runtime.ts';
+import { WHATS_NEW_RELEASE } from '../shared/whats-new-release.ts';
 import { normalizeReleaseVersion } from '@voiceroom/shared/account-security';
 import { isUuid } from '@voiceroom/shared/validation';
 import {
@@ -21,6 +22,7 @@ import {
   SessionsRevoked,
   SignedIn,
   WhatsNewAnswer,
+  WhatsNewSeenBody,
   CredentialsBody,
   CurrentPasswordBody,
   PasswordBody,
@@ -70,7 +72,9 @@ export const uploadUserAvatar = (file: Blob): Promise<AuthUser> => avatarRequest
 export const deleteUserAvatar = (): Promise<AuthUser> => avatarRequest('DELETE');
 
 export async function register(input: RegisterBody): Promise<AuthUser> {
-  return (await api.post('/api/auth/register', SignedIn, input, { bodySchema: RegisterBody })).user;
+  const { user } = await api.post('/api/auth/register', SignedIn, input, { bodySchema: RegisterBody });
+  await markWhatsNewSeen().catch(() => {});
+  return user;
 }
 
 export async function login(input: CredentialsBody): Promise<AuthUser> {
@@ -133,22 +137,20 @@ export async function snoozeRecoveryCodesReminder(): Promise<RecoveryCodesRemind
   return (await api.post('/api/auth/recovery-codes/reminder/snooze', ReminderSnoozed)).recoveryCodesReminder;
 }
 
-// Only a well-formed release number is shown or compared.
-function readWhatsNew({ whatsNew }: WhatsNewAnswer): WhatsNew {
-  return {
-    current: normalizeReleaseVersion(whatsNew.current),
-    lastSeen: normalizeReleaseVersion(whatsNew.lastSeen) || null
-  };
-}
-
 export async function fetchWhatsNew(): Promise<WhatsNew> {
-  return readWhatsNew(
-    await api.get('/api/auth/whats-new', WhatsNewAnswer, { fallback: t('Не удалось загрузить новости') })
-  );
+  const { whatsNew } = await api.get('/api/auth/whats-new', WhatsNewAnswer, {
+    fallback: t('Не удалось загрузить новости')
+  });
+  return { lastSeen: normalizeReleaseVersion(whatsNew.lastSeen) || null };
 }
 
 export async function markWhatsNewSeen(): Promise<void> {
-  await api.post('/api/auth/whats-new/seen', WhatsNewAnswer);
+  await api.post(
+    '/api/auth/whats-new/seen',
+    WhatsNewAnswer,
+    { release: WHATS_NEW_RELEASE },
+    { bodySchema: WhatsNewSeenBody }
+  );
 }
 
 export async function markAppPromptSeen(): Promise<void> {

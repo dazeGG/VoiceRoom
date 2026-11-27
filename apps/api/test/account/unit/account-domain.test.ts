@@ -101,10 +101,10 @@ function harness(
     async snoozeRecoveryCodesReminder({ userId }) {
       return userId === 'gone' ? { status: 'not_found', snoozedUntil: null } : { status: 'snoozed', snoozedUntil: 9 };
     },
-    async markWhatsNewSeen({ userId }) {
+    async markWhatsNewSeen({ userId, release }) {
       return userId === 'gone'
         ? { status: 'not_found', whatsNewSeen: null }
-        : { status: 'seen', whatsNewSeen: '9.9.9' };
+        : { status: 'seen', whatsNewSeen: release ?? '2.6.0' };
     },
     async markAppPromptSeen({ userId }) {
       return userId === 'gone'
@@ -285,10 +285,12 @@ test('profile, password, notices and recovery codes', async () => {
   });
   assert.deepEqual(await service.snoozeRecoveryCodesReminder('user-1'), { status: 'snoozed', snoozedUntil: 9 });
   assert.equal((await service.snoozeRecoveryCodesReminder('gone')).status, 'not_found');
-  assert.equal((await service.whatsNew('user-1')).lastSeen, '2.6.0');
-  const seen = await service.markWhatsNewSeen('user-1');
-  assert.ok('whatsNew' in seen);
-  assert.equal(seen.whatsNew.lastSeen, '9.9.9');
+  assert.deepEqual(await service.whatsNew('user-1'), { lastSeen: '2.6.0' });
+  assert.deepEqual(await service.markWhatsNewSeen('user-1'), { status: 'seen', whatsNew: { lastSeen: '2.6.0' } });
+  assert.deepEqual(await service.markWhatsNewSeen('user-1', 'web/1.5.0'), {
+    status: 'seen',
+    whatsNew: { lastSeen: 'web/1.5.0' }
+  });
   assert.equal((await service.markWhatsNewSeen('gone')).status, 'not_found');
   assert.equal((await service.markAppPromptSeen('user-1')).status, 'seen');
   assert.equal((await service.markAppPromptSeen('gone')).status, 'not_found');
@@ -433,8 +435,8 @@ function routeApp(
     listSessions: [],
     revokeOtherSessions: 2,
     revokeSession: { status: 'revoked' },
-    whatsNew: { current: '1', lastSeen: null },
-    markWhatsNewSeen: { status: 'seen', whatsNew: { current: '1', lastSeen: '1' } },
+    whatsNew: { lastSeen: '2.8.0' },
+    markWhatsNewSeen: { status: 'seen', whatsNew: { lastSeen: 'web/1.5.0' } },
     markAppPromptSeen: { status: 'seen' },
     loginAlerts: [],
     resolveLoginAlert: { status: 'resolved', resolution: 'confirmed' },
@@ -492,6 +494,39 @@ async function call(app: FastifyInstance, method: Method, url: string, payload?:
     retryAfter: response.headers['retry-after']
   };
 }
+
+test('announcement routes return the last seen release and validate bodies when sent', async (t) => {
+  const { app, seen } = routeApp(t, {}, { session: SIGNED_IN });
+  const pathname = '/api/auth/whats-new';
+  assert.deepEqual((await call(app, 'GET', pathname)).body, { ok: true, whatsNew: { lastSeen: '2.8.0' } });
+  const noBody = await call(app, 'POST', `${pathname}/seen`);
+  assert.equal(noBody.status, 200);
+  assert.deepEqual(noBody.body, { ok: true, whatsNew: { lastSeen: 'web/1.5.0' } });
+  assert.deepEqual(seen.markWhatsNewSeen, ['user-1', undefined]);
+
+  for (const body of [{}, { release: '2.8.0' }, { release: 'web/v1.5.0' }, { release: 150 }]) {
+    const malformed = await call(app, 'POST', `${pathname}/seen`, body);
+    assert.equal(malformed.status, 400);
+    assert.equal(malformed.body.code, 'invalid_request');
+  }
+  const jsonNull = await app.inject({
+    method: 'POST',
+    url: `${pathname}/seen`,
+    headers: { 'content-type': 'application/json' },
+    payload: 'null'
+  });
+  assert.equal(jsonNull.statusCode, 400);
+  assert.deepEqual(seen.markWhatsNewSeen, ['user-1', undefined]);
+
+  const acknowledgement = await call(app, 'POST', `${pathname}/seen`, { release: 'web/1.5.0' });
+  assert.equal(acknowledgement.status, 200);
+  assert.deepEqual(acknowledgement.body, { ok: true, whatsNew: { lastSeen: 'web/1.5.0' } });
+  assert.deepEqual(seen.markWhatsNewSeen, ['user-1', 'web/1.5.0']);
+
+  const missingAccount = routeApp(t, { markWhatsNewSeen: { status: 'not_found' } }, { session: SIGNED_IN });
+  const refusal = await call(missingAccount.app, 'POST', `${pathname}/seen`);
+  assert.deepEqual([refusal.status, refusal.body.error], [404, 'Аккаунт не найден']);
+});
 
 test('entry routes set the cookie and map every refusal', async (t) => {
   const { app, seen } = routeApp(t);
@@ -719,7 +754,6 @@ test('account refusals keep their texts', async (t) => {
       'Чтобы завершить этот сеанс, выйдите из аккаунта'
     ],
     [{ revokeSession: { status: 'not_found' } }, 'DELETE', '/api/auth/sessions/x', 404, 'Сеанс не найден'],
-    [{ markWhatsNewSeen: { status: 'not_found' } }, 'POST', '/api/auth/whats-new/seen', 404, 'Аккаунт не найден'],
     [{ markAppPromptSeen: { status: 'not_found' } }, 'POST', '/api/auth/app-prompt/seen', 404, 'Аккаунт не найден'],
     [
       { resolveLoginAlert: { status: 'not_found' } },

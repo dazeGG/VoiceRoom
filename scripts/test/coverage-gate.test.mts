@@ -1045,7 +1045,9 @@ test('G08 web TypeScript producer measures actual auth and media decision files'
     globalThis.fetch = async () => response({ ok: false, payload });
   };
 
-  answer({ ok: true, user } satisfies SignedIn);
+  const signedIn = { ok: true, user } satisfies SignedIn;
+  const announcement = { ok: true, whatsNew: { lastSeen: 'web/1.5.0' } } satisfies WhatsNewAnswer;
+  globalThis.fetch = async (url) => response({ payload: url === '/api/auth/whats-new/seen' ? announcement : signedIn });
   assert.equal((await auth.register({ login: 'user', password: 'password' })).id, 'u1');
   assert.equal((await auth.login({ login: 'user', password: 'password' })).id, 'u1');
   assert.equal((await auth.updateDisplayName('User')).id, 'u1');
@@ -1097,8 +1099,8 @@ test('G08 web TypeScript producer measures actual auth and media decision files'
   assert.deepEqual(await auth.fetchAccountSecurity(), { recoveryCodes, recoveryCodesReminder: { snoozedUntil: 20 } });
   answer({ ok: true, recoveryCodesReminder: { snoozedUntil: 42 } } satisfies ReminderSnoozed);
   assert.deepEqual(await auth.snoozeRecoveryCodesReminder(), { snoozedUntil: 42 });
-  answer({ ok: true, whatsNew: { current: '2.6.0', lastSeen: 'not-a-version' } } satisfies WhatsNewAnswer);
-  assert.deepEqual(await auth.fetchWhatsNew(), { current: '2.6.0', lastSeen: null });
+  answer({ ok: true, whatsNew: { lastSeen: 'not-a-version' } } satisfies WhatsNewAnswer);
+  assert.deepEqual(await auth.fetchWhatsNew(), { lastSeen: null });
   await auth.markWhatsNewSeen();
   answer({ ok: true, appPromptSeen: true } satisfies AppPromptSeen);
   await auth.markAppPromptSeen();

@@ -10,7 +10,7 @@ import { hashPassword, verifyPassword } from '../../lib/password.ts';
 import { cleanAvatarColorKey } from '@voiceroom/shared/validation';
 import {
   RECOVERY_CODES_REMINDER_SNOOZE_MS,
-  WHATS_NEW_VERSION,
+  hasUnseenWhatsNew,
   normalizeReleaseVersion
 } from '@voiceroom/shared/account-security';
 import { toDate } from '../../platform/epoch-millis.ts';
@@ -38,6 +38,7 @@ export function lockUser(trx: Database, column: 'id' | 'login', value: string) {
 
 export function createUserRepository({ pool }: { pool: pg.Pool }) {
   const db = kyselyOn(pool);
+  const whatsNewSeenColumn = sql<string | null>`metadata->>'whatsNewSeen'`.as('whats_new_seen');
 
   async function createUser({
     login,
@@ -58,8 +59,6 @@ export function createUserRepository({ pool }: { pool: pg.Pool }) {
     const assignedAvatarColorKey = cleanAvatarColorKey(avatarColorKey) || randomAvatarColorKey();
 
     try {
-      // "What's new" is for people who used an earlier release; a new account
-      // starts at the current announcement.
       const row = await db
         .insertInto('users')
         .values({
@@ -69,8 +68,7 @@ export function createUserRepository({ pool }: { pool: pg.Pool }) {
           password_hash: passwordHash,
           avatar_color_key: assignedAvatarColorKey,
           created_at: toDate(now),
-          updated_at: toDate(now),
-          metadata: sql`jsonb_build_object('whatsNewSeen', ${WHATS_NEW_VERSION}::text)`
+          updated_at: toDate(now)
         })
         .returningAll()
         .executeTakeFirstOrThrow();
@@ -217,10 +215,7 @@ export function createUserRepository({ pool }: { pool: pg.Pool }) {
   async function getAccountNotices(userId: string) {
     const row = await db
       .selectFrom('users')
-      .select([
-        sql<string | null>`metadata->>'whatsNewSeen'`.as('whats_new_seen'),
-        sql`metadata->'recoveryCodesReminderSnoozedUntil'`.as('reminder_snoozed_until')
-      ])
+      .select([whatsNewSeenColumn, sql`metadata->'recoveryCodesReminderSnoozedUntil'`.as('reminder_snoozed_until')])
       .where('id', '=', userId)
       .executeTakeFirst();
     const snoozedUntil = Number(row?.reminder_snoozed_until);
@@ -230,20 +225,37 @@ export function createUserRepository({ pool }: { pool: pg.Pool }) {
     };
   }
 
-  // Only the current announcement can be recorded, so a stale client cannot
-  // pin an account to an older release.
-  async function markWhatsNewSeen({ userId, now = Date.now() }: { userId: string; now?: number }) {
-    const result = await db
-      .updateTable('users')
-      .set({
-        metadata: sql`jsonb_set(metadata, '{whatsNewSeen}', to_jsonb(${WHATS_NEW_VERSION}::text), true)`,
-        updated_at: toDate(now)
-      })
-      .where('id', '=', userId)
-      .executeTakeFirst();
-    return result.numUpdatedRows === 1n
-      ? { status: 'seen' as const, whatsNewSeen: WHATS_NEW_VERSION }
-      : { status: 'not_found' as const, whatsNewSeen: null };
+  async function markWhatsNewSeen({
+    userId,
+    release,
+    now = Date.now()
+  }: {
+    userId: string;
+    release?: string | undefined;
+    now?: number;
+  }) {
+    async function record(query: Database) {
+      const user = query.selectFrom('users').select(whatsNewSeenColumn).where('id', '=', userId);
+      // Compare under the row lock so concurrent tabs cannot move the acknowledgement back.
+      const row = await (release === undefined ? user : user.forUpdate()).executeTakeFirst();
+      if (!row) return { status: 'not_found' as const, whatsNewSeen: null };
+
+      const lastSeen = normalizeReleaseVersion(row.whats_new_seen) || null;
+      if (release === undefined || !hasUnseenWhatsNew(lastSeen, release)) {
+        return { status: 'seen' as const, whatsNewSeen: lastSeen };
+      }
+      await query
+        .updateTable('users')
+        .set({
+          metadata: sql`jsonb_set(metadata, '{whatsNewSeen}', to_jsonb(${release}::text), true)`,
+          updated_at: toDate(now)
+        })
+        .where('id', '=', userId)
+        .execute();
+      return { status: 'seen' as const, whatsNewSeen: release };
+    }
+
+    return release === undefined ? record(db) : db.transaction().execute(record);
   }
 
   // The one-time post-registration app prompt: the first time it is shown or

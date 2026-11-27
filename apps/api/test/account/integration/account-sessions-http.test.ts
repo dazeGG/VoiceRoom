@@ -118,6 +118,41 @@ test('signed-in devices are listed without secrets and an ended session loses it
   assert.equal((await me(socketPath, laptop))?.login, 'ada');
 });
 
+test('announcement acknowledgement leaves a new account untouched until the web sends a release', async (t) => {
+  const socketPath = await startServer(t);
+  const cookie = await signIn(socketPath, { register: true });
+  const pathname = '/api/auth/whats-new';
+  const seenPath = `${pathname}/seen`;
+
+  assert.equal((await request(socketPath, { pathname })).status, 401);
+  const initial = await request(socketPath, { pathname, cookie }, WhatsNewAnswer);
+  assert.deepEqual(initial.body, { ok: true, whatsNew: { lastSeen: null } });
+  const oldTab = await request(socketPath, { method: 'POST', pathname: seenPath, cookie }, WhatsNewAnswer);
+  assert.equal(oldTab.status, 200);
+  assert.deepEqual(oldTab.body, initial.body);
+
+  const malformed = await request(socketPath, {
+    method: 'POST',
+    pathname: seenPath,
+    cookie,
+    body: { release: '2.8.0' }
+  });
+  assert.equal(malformed.status, 400);
+
+  const seen = await request(
+    socketPath,
+    { method: 'POST', pathname: seenPath, cookie, body: { release: 'web/1.5.0' } },
+    WhatsNewAnswer
+  );
+  assert.equal(seen.status, 200);
+  assert.deepEqual(seen.body, { ok: true, whatsNew: { lastSeen: 'web/1.5.0' } });
+  assert.deepEqual((await request(socketPath, { pathname, cookie }, WhatsNewAnswer)).body, seen.body);
+  assert.deepEqual(
+    (await request(socketPath, { method: 'POST', pathname: seenPath, cookie }, WhatsNewAnswer)).body,
+    seen.body
+  );
+});
+
 test('recovery codes restore access over HTTP and end every earlier session', async (t) => {
   const socketPath = await startServer(t);
   const cookie = await signIn(socketPath, { register: true });
@@ -126,13 +161,6 @@ test('recovery codes restore access over HTTP and end every earlier session', as
   assert.equal(initial.status, 200);
   assert.deepEqual(initial.body.recoveryCodes, { remaining: 0, generatedAt: null });
   assert.deepEqual(initial.body.recoveryCodesReminder, { snoozedUntil: null });
-
-  // A freshly registered account starts at the current announcement.
-  const whatsNew = await request(socketPath, { pathname: '/api/auth/whats-new', cookie }, WhatsNewAnswer);
-  assert.equal(whatsNew.status, 200);
-  assert.match(whatsNew.body.whatsNew.current, /^\d+\.\d+\.\d+$/);
-  assert.equal(whatsNew.body.whatsNew.lastSeen, whatsNew.body.whatsNew.current);
-  assert.equal((await request(socketPath, { pathname: '/api/auth/whats-new' })).status, 401);
 
   const wrongPassword = await request(socketPath, {
     method: 'POST',
@@ -177,19 +205,6 @@ test('recovery codes restore access over HTTP and end every earlier session', as
     (await request(socketPath, { pathname: '/api/auth/security', cookie }, Security)).body.recoveryCodesReminder,
     snoozed.body.recoveryCodesReminder
   );
-
-  const seen = await request(
-    socketPath,
-    {
-      method: 'POST',
-      pathname: '/api/auth/whats-new/seen',
-      cookie,
-      body: {}
-    },
-    WhatsNewAnswer
-  );
-  assert.equal(seen.status, 200);
-  assert.equal(seen.body.whatsNew.lastSeen, seen.body.whatsNew.current);
 
   const socket = openWs(socketPath, { cookie });
   await socket.ready;

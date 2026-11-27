@@ -4,11 +4,7 @@ import crypto from 'node:crypto';
 
 import { createUserStore } from '../../../src/app/user-store.ts';
 import { runMigrations } from '../../../src/lib/migrate.ts';
-import {
-  RECOVERY_CODES_REMINDER_SNOOZE_MS,
-  WHATS_NEW_VERSION,
-  normalizeRecoveryCode
-} from '@voiceroom/shared/account-security';
+import { RECOVERY_CODES_REMINDER_SNOOZE_MS, normalizeRecoveryCode } from '@voiceroom/shared/account-security';
 import { createTestDatabase } from '../../db-harness.ts';
 
 const SILENT = { log() {}, info() {}, warn() {}, error() {} };
@@ -246,7 +242,7 @@ test('a recovery code only opens the account it was issued for', async (t) => {
   assert.deepEqual((await store.getRecoveryCodesStatus(ada.id)).remaining, 10);
 });
 
-test('new accounts start at the current announcement and the codes reminder snoozes for three days', async (t) => {
+test('announcement acknowledgements only advance and the codes reminder snoozes for three days', async (t) => {
   const { cleanup, databaseUrl, pool } = await createTestDatabase(t);
   await runMigrations({ databaseUrl, logger: SILENT });
   const store = createUserStore({ pool, logger: SILENT });
@@ -256,31 +252,53 @@ test('new accounts start at the current announcement and the codes reminder snoo
   const { user } = await store.createUser({ login: 'ada', password: 'lovelace-1843' });
   assert.ok(user);
 
-  // Registering after a release must not greet the account with its announcement.
-  assert.deepEqual(await store.getAccountNotices(user.id), {
-    whatsNewSeen: WHATS_NEW_VERSION,
-    recoveryCodesReminderSnoozedUntil: null
-  });
-
-  // An account from before announcements existed has nothing recorded.
-  await pool.query(`UPDATE users SET metadata = '{}'::jsonb WHERE id = $1`, [user.id]);
+  const { rows } = await pool.query<{ has_seen: boolean }>(
+    `SELECT metadata ? 'whatsNewSeen' AS has_seen FROM users WHERE id = $1`,
+    [user.id]
+  );
+  assert.equal(rows[0]?.has_seen, false);
   assert.deepEqual(await store.getAccountNotices(user.id), {
     whatsNewSeen: null,
     recoveryCodesReminderSnoozedUntil: null
   });
 
+  await pool.query(`UPDATE users SET metadata = '{"whatsNewSeen":"2.8.0"}'::jsonb WHERE id = $1`, [user.id]);
+  assert.deepEqual(await store.getAccountNotices(user.id), {
+    whatsNewSeen: '2.8.0',
+    recoveryCodesReminderSnoozedUntil: null
+  });
   assert.deepEqual(await store.markWhatsNewSeen({ userId: user.id }), {
     status: 'seen',
-    whatsNewSeen: WHATS_NEW_VERSION
+    whatsNewSeen: '2.8.0'
   });
+  assert.deepEqual(await store.markWhatsNewSeen({ userId: user.id, release: 'web/1.5.0', now: 500 }), {
+    status: 'seen',
+    whatsNewSeen: 'web/1.5.0'
+  });
+  for (const release of ['web/1.4.9', 'web/1.5.0']) {
+    assert.deepEqual(await store.markWhatsNewSeen({ userId: user.id, release, now: 800 }), {
+      status: 'seen',
+      whatsNewSeen: 'web/1.5.0'
+    });
+  }
+  const { rows: updated } = await pool.query<{ updated_at: Date }>('SELECT updated_at FROM users WHERE id = $1', [
+    user.id
+  ]);
+  assert.equal(updated[0]?.updated_at.getTime(), 500);
   assert.deepEqual(await store.snoozeRecoveryCodesReminder({ userId: user.id, now: 1_000 }), {
     status: 'snoozed',
     snoozedUntil: 1_000 + RECOVERY_CODES_REMINDER_SNOOZE_MS
   });
   assert.deepEqual(await store.getAccountNotices(user.id), {
-    whatsNewSeen: WHATS_NEW_VERSION,
+    whatsNewSeen: 'web/1.5.0',
     recoveryCodesReminderSnoozedUntil: 1_000 + 3 * 24 * HOUR
   });
+
+  await Promise.all([
+    store.markWhatsNewSeen({ userId: user.id, release: 'web/1.10.0' }),
+    store.markWhatsNewSeen({ userId: user.id, release: 'web/1.9.9' })
+  ]);
+  assert.equal((await store.getAccountNotices(user.id)).whatsNewSeen, 'web/1.10.0');
 
   const ghost = crypto.randomUUID();
   assert.deepEqual(await store.markWhatsNewSeen({ userId: ghost }), { status: 'not_found', whatsNewSeen: null });

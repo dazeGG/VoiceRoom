@@ -7,7 +7,7 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, expect, test, vi, type MockInstance } from 'vitest';
 import { defineComponent, h, ref, type VNode } from 'vue';
 import { Dialog } from '@voiceroom/ui-kit/components';
-import { WHATS_NEW_VERSION } from '@voiceroom/shared/account-security';
+import { WHATS_NEW_RELEASE } from '@/shared/whats-new-release';
 import { useFriendCallStore } from '@/features/friend-call/friend-call.store';
 import WhatsNewDialog from '@/features/home/components/WhatsNewDialog.vue';
 import { WHATS_NEW_SLIDES, WHATS_NEW_SLIDE_MS } from '@/features/home/model/whats-new';
@@ -34,9 +34,9 @@ async function renderStory<C>(component: C, options?: AppRenderOptions<C>, calls
 
 function stubRelease(lastSeen: string | null) {
   return stubFetch({
-    'GET /api/auth/whats-new': { body: { ok: true, whatsNew: { current: WHATS_NEW_VERSION, lastSeen } } },
+    'GET /api/auth/whats-new': { body: { ok: true, whatsNew: { lastSeen } } },
     'POST /api/auth/whats-new/seen': {
-      body: { ok: true, whatsNew: { current: WHATS_NEW_VERSION, lastSeen: WHATS_NEW_VERSION } }
+      body: { ok: true, whatsNew: { lastSeen: WHATS_NEW_RELEASE } }
     }
   });
 }
@@ -110,7 +110,7 @@ test('the story waits for the calls bootstrap before choosing its first slide', 
   expect(await screen.findByRole('dialog', { name: WHATS_NEW_SLIDES[0].title })).toBeTruthy();
 });
 
-test('progress waits for playback and hover pauses both the video and the story', async () => {
+test('progress waits for playback and hover holds the slide while the clip keeps playing', async () => {
   stubRelease(null);
   await renderStory(WhatsNewDialog);
   const first = WHATS_NEW_SLIDES[0];
@@ -126,24 +126,26 @@ test('progress waits for playback and hover pauses both the video and the story'
   expect(fill.classList.contains('stories__fill--paused')).toBe(false);
 
   await fireEvent.pointerEnter(dialog, { pointerType: 'mouse' });
-  expect(pauseVideo.mock.contexts).toEqual([video]);
+  expect(pauseVideo).not.toHaveBeenCalled();
+  expect(video.autoplay).toBe(true);
   expect(fill.classList.contains('stories__fill--paused')).toBe(true);
   await fireEvent.pointerLeave(dialog, { pointerType: 'mouse' });
-  expect(playVideo.mock.contexts).toEqual([video, video]);
+  expect(playVideo.mock.contexts).toEqual([video]);
   expect(fill.classList.contains('stories__fill--paused')).toBe(false);
 
   await fireEvent.animationEnd(fill);
   expect(title()).toBe(WHATS_NEW_SLIDES[1].title);
 });
 
-test('focusing a control pauses the video and progress', async () => {
+test('focusing a control holds the slide while the clip keeps playing', async () => {
   stubRelease(null);
   await renderStory(WhatsNewDialog);
   await screen.findByRole('dialog');
   const video = currentVideo(WHATS_NEW_SLIDES[0].alt);
   await fireEvent.playing(video);
   await fireEvent.focusIn(screen.getByRole('button', { name: 'Далее' }));
-  expect(pauseVideo.mock.contexts).toEqual([video]);
+  expect(pauseVideo).not.toHaveBeenCalled();
+  expect(video.autoplay).toBe(true);
   expect(runningFill()?.classList.contains('stories__fill--paused')).toBe(true);
 });
 
@@ -168,7 +170,12 @@ test('Escape closes it and records the release as seen', async () => {
 
   await userEvent.keyboard('{Escape}');
   expect(screen.queryByRole('dialog')).toBeNull();
-  await vi.waitFor(() => expect(calls.some((call) => call.url === '/api/auth/whats-new/seen')).toBe(true));
+  await vi.waitFor(() =>
+    expect(calls.find((call) => call.url === '/api/auth/whats-new/seen')).toMatchObject({
+      method: 'POST',
+      body: { release: WHATS_NEW_RELEASE }
+    })
+  );
 });
 
 test('the last slide can open the appearance settings', async () => {
@@ -185,7 +192,7 @@ test('the last slide can open the appearance settings', async () => {
 });
 
 test('a release already seen is not shown', async () => {
-  stubRelease(WHATS_NEW_VERSION);
+  stubRelease(WHATS_NEW_RELEASE);
   await renderStory(WhatsNewDialog, { props: { onOpenAppearance: vi.fn() } });
   await new Promise((resolve) => setTimeout(resolve, 50));
   expect(screen.queryByRole('dialog')).toBeNull();

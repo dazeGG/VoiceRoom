@@ -8,7 +8,7 @@ import {
 } from '../../src/features/home/model/account-security.ts';
 import { loginAlertHeadline, loginAlertWhen, queueLoginAlert } from '../../src/features/home/model/login-alerts.ts';
 import { WHATS_NEW_SLIDES, shouldShowWhatsNew } from '../../src/features/home/model/whats-new.ts';
-import { WHATS_NEW_VERSION } from '@voiceroom/shared/account-security';
+import { WHATS_NEW_RELEASE } from '@/shared/whats-new-release';
 import type { AccountSecurity, LoginAlert } from '../../src/api/auth.ts';
 
 const HOUR = 60 * 60 * 1000;
@@ -71,9 +71,10 @@ test('sign-in alerts say how the account was entered, when and where, oldest fir
 });
 
 test('what is new appears once per release and has a few slides', () => {
-  expect(WHATS_NEW_VERSION).toBe('2.9.0');
-  expect(shouldShowWhatsNew({ current: WHATS_NEW_VERSION, lastSeen: '2.8.0' })).toBe(true);
-  expect(shouldShowWhatsNew({ current: WHATS_NEW_VERSION, lastSeen: WHATS_NEW_VERSION })).toBe(false);
-  expect(shouldShowWhatsNew({ current: '2.8.0', lastSeen: null })).toBe(false);
+  expect(shouldShowWhatsNew({ lastSeen: null })).toBe(true);
+  expect(shouldShowWhatsNew({ lastSeen: '2.8.0' })).toBe(true);
+  expect(shouldShowWhatsNew({ lastSeen: 'web/1.4.2' })).toBe(true);
+  expect(shouldShowWhatsNew({ lastSeen: WHATS_NEW_RELEASE })).toBe(false);
+  expect(shouldShowWhatsNew({ lastSeen: 'web/1.10.0' })).toBe(false);
   expect(WHATS_NEW_SLIDES).toHaveLength(4);
 });
