@@ -42,6 +42,24 @@ test('friends answer a DM call, return from the rail, and see the completed call
     await expect(page).toHaveURL(/[?]dm=[^&#]+$/);
     await expect(recipient).toHaveURL(/[?]dm=[^&#]+$/);
 
+    // The call is end-to-end encrypted, and both sides show the same 4-emoji code to compare.
+    const safetyCode = async (viewer: Page, peerName: string) => {
+      await stage(viewer, peerName)
+        .getByRole('button', { name: 'Звонок защищён сквозным шифрованием' })
+        .click({ timeout: 20_000 });
+      const code = viewer.getByRole('list', { name: 'Код проверки звонка' });
+      await expect(code.getByRole('listitem')).toHaveCount(4);
+      const text = await code.textContent();
+      await viewer.keyboard.press('Escape');
+      return text;
+    };
+    const [callerCode, recipientCode] = [
+      await safetyCode(page, recipientName),
+      await safetyCode(recipient, callerName)
+    ];
+    expect(callerCode).toBeTruthy();
+    expect(recipientCode).toBe(callerCode);
+
     const live = dm(page).getByRole('article');
     await expect(live).toContainText('Вы в звонке');
     const composer = dm(page).getByRole('textbox');

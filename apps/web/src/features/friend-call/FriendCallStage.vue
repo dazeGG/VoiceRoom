@@ -16,6 +16,7 @@ import ScreenStage from '@/features/room/components/ScreenStage.vue';
 import EmojiText from '@/shared/chat/EmojiText.vue';
 import { t } from '@/shared/i18n';
 import FriendCallTiles from './FriendCallTiles.vue';
+import FriendCallSecurity from './FriendCallSecurity.vue';
 import type { FriendCallStatus } from './use-friend-call-status';
 import { callPeer, useFriendCallStore } from './friend-call.store';
 
@@ -80,7 +81,16 @@ onBeforeUnmount(() => {
       </IconButton>
     </div>
 
+    <FriendCallSecurity v-if="hasEngine && !status.declined" :peer-present="peerStatus === 'present'" />
+
     <div class="friend-call__stage">
+      <Callout
+        v-if="hasEngine && state.callE2ee?.phase === 'failed'"
+        class="friend-call__countdown"
+        tone="danger"
+        :title="t('Не удалось установить защищённое соединение')"
+        :text="t('Без шифрования звонок не идёт. Завершите его и позвоните снова.')"
+      />
       <div v-if="showPlaceholder" class="friend-call__placeholder">
         <Avatar
           :name="peer.displayName"

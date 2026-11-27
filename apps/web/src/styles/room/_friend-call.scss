@@ -21,6 +21,50 @@
   inset-inline-end: var(--space-12);
 }
 
+// The lock that opens the call's safety code mirrors the expand button on the other corner.
+.friend-call__security {
+  position: absolute;
+  z-index: 2;
+  inset-block-start: var(--space-8);
+  inset-inline-start: var(--space-12);
+  display: flex;
+  align-items: center;
+  min-height: var(--size-40);
+}
+
+// Agreeing the key takes a fraction of a second; the note only appears if it takes noticeably longer.
+.friend-call__security-pending {
+  margin: 0;
+  color: var(--vr-text-2);
+  font: 500 13px/1.3 var(--font-ui);
+  opacity: 0;
+  animation: friend-call-security-reveal 1ms linear 1.5s forwards;
+}
+
+@keyframes friend-call-security-reveal {
+  to {
+    opacity: 1;
+  }
+}
+
+// The kit popover panel sets the width; the code fits four columns into it.
+.friend-call-security {
+  display: grid;
+  gap: var(--space-12);
+}
+
+.friend-call-security__title {
+  margin: 0;
+  color: var(--vr-text-1);
+  font: 600 14px/1.35 var(--font-ui);
+}
+
+.friend-call-security__hint {
+  margin: 0;
+  color: var(--vr-text-2);
+  font: 400 13px/1.4 var(--font-ui);
+}
+
 .friend-call__stage {
   flex: 1;
   display: flex;
@@ -135,6 +179,11 @@
 
 .friend-call--portrait {
   --friend-call-safe-bottom: env(safe-area-inset-bottom, 0px);
+
+  // Below the mobile top bar.
+  .friend-call__security {
+    inset-block-start: calc(var(--mc-safe-top, 0px) + var(--size-56) + var(--space-8));
+  }
 
   .friend-call__stage {
     gap: var(--space-16);

@@ -16,6 +16,7 @@ import IncomingCallStack from '@/features/friend-call/IncomingCallStack.vue';
 import { useFriendCallStore } from '@/features/friend-call/friend-call.store';
 import { useCallEntry } from '@/features/friend-call/use-call-entry';
 import { useScreenUiStore, useVoiceSessionStore } from '@voiceroom/call/engine';
+import { state as callRuntime } from '@voiceroom/call/engine/core/room-runtime.store';
 import { useToastsStore } from '@/features/home/model/toasts.store';
 import { useLobbyStore } from '@/features/home/model/lobby.store';
 import DmCallEvent from '@/features/home/components/lobby/dm/DmCallEvent.vue';
@@ -824,6 +825,61 @@ test('a connected desktop call lets its dock hide, but not before media joins or
   expect(autohides()).toBe(false);
   await fireEvent.click(within(stage()).getByRole('button', { name: 'Выбрать микрофон' }));
   expect(autohides()).toBe(true);
+});
+
+test('an encrypted call shows its safety code behind a lock, replaces it silently, and says so when the key fails', async () => {
+  const call = snapshot({
+    phase: 'connected',
+    attemptResult: 'accepted',
+    firstConnectedAt: now,
+    aloneDeadline: null,
+    seats: [
+      { userId: self.id, status: 'present', reconnectUntil: null },
+      { userId: ada.id, status: 'present', reconnectUntil: null }
+    ]
+  });
+  await start({ 'POST /api/call-rings': { body: answer(call) } });
+  await calls.dial(ada.id);
+  selectPeer(useLobbyStore(pinia));
+  mountDm();
+  useVoiceSessionStore(pinia).roomId = 'opaque-room';
+  const lock = () => within(stage()).queryByRole('button', { name: 'Звонок защищён сквозным шифрованием' });
+  try {
+    // While the key is agreed with a peer who is here, the stage says so in place, with no lock yet.
+    callRuntime.callE2ee = { phase: 'agreeing', code: null, failure: null };
+    await nextTick();
+    expect(within(stage()).getByText('Устанавливаем защищённое соединение…').getAttribute('role')).toBe('status');
+    expect(lock()).toBeNull();
+
+    callRuntime.callE2ee = { phase: 'secured', code: ['🦊', '🍉', '🚀', '🐢'], failure: null };
+    await nextTick();
+    const button = lock();
+    if (!button) throw new Error('no lock');
+    await fireEvent.click(button);
+    const code = screen.getByRole('list', { name: 'Код проверки звонка' });
+    expect(
+      within(code)
+        .getAllByRole('listitem')
+        .map((item) => item.textContent)
+    ).toEqual(['🦊лиса', '🍉арбуз', '🚀ракета', '🐢черепаха']);
+
+    // A restart agrees a new key: the open code changes in place and nothing pops up about it.
+    callRuntime.callE2ee = { phase: 'secured', code: ['🐶', '🐶', '⭐', '🎁'], failure: null };
+    await nextTick();
+    expect(within(screen.getByRole('list', { name: 'Код проверки звонка' })).getAllByRole('listitem')).toHaveLength(4);
+    expect(screen.getByRole('list', { name: 'Код проверки звонка' }).textContent).toBe(
+      '🐶собака🐶собака⭐звезда🎁подарок'
+    );
+    expect(useToastsStore(pinia).items).toEqual([]);
+
+    callRuntime.callE2ee = { phase: 'failed', code: null, failure: 'timeout' };
+    await nextTick();
+    expect(lock()).toBeNull();
+    expect(stage().textContent).toContain('Не удалось установить защищённое соединение');
+    expect(stage().textContent).toContain('Без шифрования звонок не идёт. Завершите его и позвоните снова.');
+  } finally {
+    callRuntime.callE2ee = null;
+  }
 });
 
 test('a portrait call shows the compact header, opens chat over the call, and restores the stage', async () => {

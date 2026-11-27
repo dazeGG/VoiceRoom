@@ -23,6 +23,7 @@ export * from './components/IconButton';
 export * from './components/IncomingCallCard';
 export * from './components/HoverCard';
 export * from './components/Kbd';
+export * from './components/SafetyCode';
 export * from './components/MenuCheckboxItem';
 export * from './components/MenuItem';
 export * from './components/MenuLabel';
