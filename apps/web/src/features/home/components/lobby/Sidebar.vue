@@ -3,7 +3,6 @@ import {
   Tooltip,
   IconButton,
   Avatar,
-  Button,
   DropdownMenu,
   MenuLabel,
   MenuRadioGroup,
@@ -11,28 +10,26 @@ import {
   Pressable
 } from '@voiceroom/ui-kit/components';
 import { t } from '@/shared/i18n';
-import { Bell, LayoutDashboard, Settings, UserPlus, Users } from '@lucide/vue';
+import { Bell, LayoutDashboard, Settings } from '@lucide/vue';
 import { computed, ref } from 'vue';
 import type { AuthUser } from '@/api/auth';
-import type { Friend } from '@/api/friends';
 import EmojiText from '@/shared/chat/EmojiText.vue';
 import BetaMark from '@/shared/components/BetaMark.vue';
 import { useNotificationPreferencesStore } from '@/shared/notifications/preferences.store';
 import { normalizePresenceStatus, type PresenceStatus } from '@/shared/presence';
-import { iconSm } from '@voiceroom/ui-kit/icon-defaults';
 import { displayNameOf } from '@/shared/utils/display-name';
 import type { ActiveVoice } from '../../model/active-voice';
 import type { FriendMenuTarget } from '../../model/friend-menu';
 import { useLobby } from '../../model/lobby-context';
 import SidebarDownload from '../SidebarDownload.vue';
-import FriendContextMenu from './FriendContextMenu.vue';
-import SidebarFriendRow from './SidebarFriendRow.vue';
+import ChatContextMenu from './ChatContextMenu.vue';
+import ChatNavigation from './ChatNavigation.vue';
 import VoiceCallWidget from './VoiceCallWidget.vue';
 
 const lobby = useLobby();
 const preferences = useNotificationPreferencesStore();
 const { notificationPreferences } = preferences;
-const friendMenu = defineModel<FriendMenuTarget | null>('friendMenu', { required: true });
+const chatMenu = defineModel<FriendMenuTarget | null>('chatMenu', { required: true });
 
 const props = withDefaults(
   defineProps<{
@@ -52,14 +49,11 @@ const props = withDefaults(
 const emit = defineEmits<{
   goHome: [];
   openPeople: [];
+  newChat: [];
   openSettings: [];
   openNotifications: [];
   toast: [message: string];
 }>();
-
-const sortedFriends = computed(() =>
-  [...lobby.friends].sort((a, b) => (b.lastMessage?.createdAt ?? 0) - (a.lastMessage?.createdAt ?? 0))
-);
 
 const selfName = computed(() => displayNameOf(props.user));
 const selfPresence = computed(() =>
@@ -85,23 +79,6 @@ const statusOptions = computed<ReadonlyArray<{ value: PresenceStatus; label: str
   ]
 );
 const statusSaving = ref<PresenceStatus | null>(null);
-
-function openFriendMenu(event: MouseEvent | KeyboardEvent, friend: Friend): void {
-  if (event instanceof KeyboardEvent && event.key !== 'ContextMenu' && !(event.shiftKey && event.key === 'F10')) {
-    return;
-  }
-  const anchor = event.currentTarget;
-  if (!(anchor instanceof HTMLElement)) return;
-  event.preventDefault();
-  event.stopPropagation();
-  const rect = anchor.getBoundingClientRect();
-  friendMenu.value = {
-    friend,
-    anchor,
-    x: event instanceof MouseEvent ? event.clientX : rect.left + 16,
-    y: event instanceof MouseEvent ? event.clientY : rect.bottom
-  };
-}
 
 function countLabel(count: number): string | number {
   return count > 99 ? '99+' : count;
@@ -151,38 +128,12 @@ async function selectStatus(value: string | undefined, close: () => void): Promi
     </div>
 
     <div class="sidebar__scroll">
-      <div class="sidebar__section-head">
-        <span class="sidebar__section-title"
-          >{{ t('Друзья')
-          }}<span v-if="lobby.friends.length > 0" class="sidebar__section-count">{{ lobby.friends.length }}</span></span
-        >
-        <div class="sidebar__section-actions">
-          <IconButton :label="t('Заявки и добавить друга')" :size="28" @click="emit('openPeople')">
-            <UserPlus aria-hidden="true" />
-            <span v-if="lobby.incomingRequestCount > 0" class="sidebar__mini-button-dot"></span>
-          </IconButton>
-        </div>
-      </div>
-
-      <div v-if="lobby.friends.length === 0" class="sidebar__empty">
-        <Users v-bind="iconSm" aria-hidden="true" />
-        <p>{{ t('Пока нет друзей. Откройте «Заявки», чтобы добавить по логину.') }}</p>
-        <Button variant="soft" size="sm" @click="emit('openPeople')">
-          <template #icon><UserPlus v-bind="iconSm" aria-hidden="true" /></template> {{ t('Добавить друга') }}
-        </Button>
-      </div>
-      <template v-else>
-        <SidebarFriendRow
-          v-for="entry in sortedFriends"
-          :key="entry.user.id"
-          :friend="entry"
-          :muted="notificationPreferences.mutedPeerIds.includes(entry.user.id)"
-          :selected="lobby.selectedFriendId === entry.user.id && lobby.view === 'dm'"
-          :in-call="activeVoice?.friendCall?.peerId === entry.user.id && activeVoice.friendCall.status !== 'waiting'"
-          @open="lobby.openDm(entry.user.id)"
-          @menu="openFriendMenu($event, entry)"
-        />
-      </template>
+      <ChatNavigation
+        v-model="chatMenu"
+        :active-voice="activeVoice"
+        @open-people="emit('openPeople')"
+        @new-chat="emit('newChat')"
+      />
     </div>
 
     <VoiceCallWidget v-if="activeVoice" :voice="activeVoice" />
@@ -250,6 +201,6 @@ async function selectStatus(value: string | undefined, close: () => void): Promi
         </IconButton>
       </div>
     </div>
-    <FriendContextMenu v-model="friendMenu" @toast="emit('toast', $event)" />
+    <ChatContextMenu v-model="chatMenu" @toast="emit('toast', $event)" />
   </aside>
 </template>

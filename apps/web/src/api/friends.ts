@@ -9,6 +9,7 @@ import {
   FriendList,
   FriendRequestAnswered,
   FriendRequests,
+  FriendSearch,
   FriendRequestSent,
   SendFriendRequestBody,
   type IncomingRequest,
@@ -32,6 +33,15 @@ export type { PublicUser } from '@voiceroom/shared/contracts/users';
 export async function fetchFriends(): Promise<Pick<FriendList, 'friends' | 'incomingRequestCount'>> {
   const { friends, incomingRequestCount } = await api.get('/api/friends', FriendList);
   return { friends, incomingRequestCount };
+}
+
+export async function searchPeople(query: string, signal: AbortSignal): Promise<FriendSearch['results']> {
+  const params = new URLSearchParams({ q: query });
+  const { results } = await api.get(`/api/friends/search?${params}`, FriendSearch, {
+    signal,
+    fallback: t('Не удалось найти людей')
+  });
+  return results;
 }
 
 export async function fetchRequests(): Promise<{ incoming: IncomingRequest[]; outgoing: OutgoingRequest[] }> {

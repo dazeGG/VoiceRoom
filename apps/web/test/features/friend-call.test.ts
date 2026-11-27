@@ -641,13 +641,22 @@ test('only the visible DM acknowledges a watermark and both devices clear the mi
   const mountSidebar = (device: Pinia) => {
     const lobby = useLobbyStore(device);
     lobby.friends = [{ user: ada, online: true, unreadCount: 0, lastMessage: null, friendsSince: null }];
+    lobby.conversations = [
+      {
+        peer: { ...ada, badge: null },
+        lastMessage: { preview: 'Voice call', kind: 'call', at: now, fromMe: false },
+        unreadCount: 0,
+        isFriend: true,
+        muted: false
+      }
+    ];
     return render(
       defineComponent(() => {
         provideLobby(lobby);
         return () =>
           h(Sidebar, {
             user: self,
-            friendMenu: null
+            chatMenu: null
           });
       }),
       { global: { plugins: [device] } }

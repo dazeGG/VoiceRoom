@@ -1,0 +1,19 @@
+.chat-row__activity {
+  display: grid;
+  justify-items: end;
+  gap: var(--space-4);
+}
+
+.chat-row__time {
+  color: var(--vr-text-muted);
+  font: 500 0.6875rem / 1 var(--font-mono);
+}
+
+.chat-row__badges {
+  display: flex;
+  gap: var(--space-4);
+
+  &:empty {
+    display: none;
+  }
+}

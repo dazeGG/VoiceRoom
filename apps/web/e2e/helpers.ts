@@ -4,7 +4,7 @@ import { APP_HOME } from '@voiceroom/shared/app-home';
 import { Failure } from '@voiceroom/shared/contracts/http';
 import { Capabilities } from '@voiceroom/shared/contracts/ops';
 import { RoomCreated } from '@voiceroom/shared/contracts/rooms';
-import { FriendRequests } from '@voiceroom/shared/contracts/social';
+import { FriendList, FriendRequests } from '@voiceroom/shared/contracts/social';
 import { WHATS_NEW_RELEASE } from '../src/shared/whats-new-release';
 import { defined, parse } from '../test/helpers/assert';
 
@@ -31,6 +31,33 @@ export async function incomingFriendRequestIds(page: Page): Promise<string[]> {
   const response = await page.context().request.get('/api/friends/requests');
   expect(response.ok()).toBe(true);
   return parse(FriendRequests, await response.json()).incoming.map((request) => request.id);
+}
+
+/** Opens a friend's thread even before the first message or call. */
+export async function openFriendChat(page: Page, login: string): Promise<void> {
+  const sidebar = page.locator('#lobby-sidebar');
+  await sidebar.getByRole('button', { name: /^Друзья/ }).click();
+  const friends = page.getByRole('region', { name: 'Друзья', exact: true });
+  const row = friends.getByRole('listitem').filter({ hasText: `@${login}` });
+  await row.hover();
+  await row.getByRole('button', { name: 'Написать', exact: true }).click();
+}
+
+export function chatRow(page: Page, name: string): Locator {
+  return page.getByRole('region', { name: 'Чаты', exact: true }).getByRole('button', { name, exact: true });
+}
+
+/** Creates conversation activity for a test that starts on the chats list. */
+export async function seedFriendChat(page: Page, login: string): Promise<void> {
+  const request = page.context().request;
+  const response = await request.get('/api/friends');
+  expect(response.ok()).toBe(true);
+  const { friends } = parse(FriendList, await response.json());
+  const peer = defined(
+    friends.find(({ user }) => user.login === login),
+    `friend ${login}`
+  );
+  expect((await request.post(`/api/dm/${peer.user.id}`, { data: { text: 'Hello' } })).ok()).toBe(true);
 }
 
 export async function waitForHttpReady(

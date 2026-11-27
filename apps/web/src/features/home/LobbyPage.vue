@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { IconButton, Badge, Splitter, type SplitterSize, Avatar } from '@voiceroom/ui-kit/components';
+import { IconButton, Splitter, type SplitterSize } from '@voiceroom/ui-kit/components';
 import { PanelLeftClose, PanelLeftOpen } from '@lucide/vue';
 import { t } from '@/shared/i18n';
 import type { InboxItem } from '@voiceroom/shared/contracts/notifications';
@@ -20,10 +20,7 @@ import { useFriendCallStore } from '@/features/friend-call/friend-call.store';
 import { useRoute } from 'vue-router';
 import { useSessionStore } from '@/features/auth/session.store';
 import { usePageStore } from '@/stores/page.store';
-import { useNotificationPreferencesStore } from '@/shared/notifications/preferences.store';
 import { DM_CALL_CHAT_HASH } from '@/shared/app-home';
-import { effectivePresenceStatus } from '@/shared/presence';
-import { displayNameOf } from '@/shared/utils/display-name';
 import { extractRoomId } from '@/shared/utils/room';
 import CreateRoomDialog from './components/CreateRoomDialog.vue';
 import LobbyAccountDialogs from './components/LobbyAccountDialogs.vue';
@@ -32,10 +29,12 @@ import OpenInAppScreen from './components/OpenInAppScreen.vue';
 import RoomSwitchDialog from './components/RoomSwitchDialog.vue';
 import DmView from './components/lobby/DmView.vue';
 import LobbyRoomSettingsDialog from './components/lobby/LobbyRoomSettingsDialog.vue';
+import NewChatDialog from './components/lobby/NewChatDialog.vue';
 import PeopleView from './components/lobby/PeopleView.vue';
 import RoomBrowseView from './components/lobby/RoomBrowseView.vue';
 import RoomPreviewView from './components/lobby/RoomPreviewView.vue';
 import Sidebar from './components/lobby/Sidebar.vue';
+import SidebarRail from './components/lobby/SidebarRail.vue';
 import VoiceHome from './components/lobby/VoiceHome.vue';
 import { ProfileCardHost } from './components/profile-card';
 import { useActiveFriendCall, type ActiveVoice } from './model/active-voice';
@@ -95,15 +94,21 @@ const portrait = usePortraitCallLayout();
 const portraitDm = computed(() => portrait.value && lobby.mode === 'friends' && lobby.view === 'dm' && calls.enabled);
 const staff = useStaffAccess(toast);
 const notifications = useLobbyNotifications();
-const preferences = useNotificationPreferencesStore();
 const { list: roomList } = rooms;
 const { pendingRoomSwitchId, openInAppRoomId, previewAnchor } = routing;
 const { adminUrl, openReports } = staff;
 const { open: notificationsOpen } = notifications;
 const { profileCardUi } = useProfileCardUiStore();
-const friendMenu = shallowRef<FriendMenuTarget | null>(null);
-const sidebar = useLobbySidebar(() =>
-  Boolean(friendMenu.value || (profileCardUi.open && profileCardUi.restoreFocus?.closest('#lobby-sidebar')))
+const chatMenu = shallowRef<FriendMenuTarget | null>(null);
+const newChatOpen = ref(false);
+const sidebar = useLobbySidebar(
+  () =>
+    Boolean(
+      chatMenu.value ||
+      newChatOpen.value ||
+      (profileCardUi.open && profileCardUi.restoreFocus?.closest('#lobby-sidebar'))
+    ),
+  () => portrait.value
 );
 const {
   visible: sidebarVisible,
@@ -144,7 +149,7 @@ const connectedVoiceRoomId = computed(() => navigation.getActiveVoiceRoomId());
 const prompts = useAccountPrompts({
   user: () => props.user,
   voiceActive: () => Boolean(calls.voice || connectedVoiceRoomId.value || navigation.joinIntentRoomId),
-  lobbyDialogOpen: () => createDialogOpen.value,
+  lobbyDialogOpen: () => createDialogOpen.value || newChatOpen.value,
   onToast: (message, options) => toast(message, options)
 });
 const { recoveryCodesReminder } = prompts;
@@ -176,18 +181,10 @@ const activeVoice = computed<ActiveVoice | null>(
         }
       : null)
 );
-const sortedFriends = computed(() =>
-  [...lobby.friends].sort((a, b) => (b.lastMessage?.createdAt ?? 0) - (a.lastMessage?.createdAt ?? 0))
-);
-const notificationUsers = computed(() => sortedFriends.value.map((entry) => entry.user));
-const sidebarFriends = computed(() =>
-  sortedFriends.value.map(({ user, online, unreadCount }) => ({
-    user,
-    unreadCount,
-    missedCount: calls.missedForPeer(user.id)?.count ?? 0,
-    presence: effectivePresenceStatus(online, user.presenceStatus, user.doNotDisturb),
-    muted: preferences.notificationPreferences.mutedPeerIds.includes(user.id)
-  }))
+const notificationUsers = computed(() =>
+  [...lobby.friends]
+    .sort((a, b) => (b.lastMessage?.createdAt ?? 0) - (a.lastMessage?.createdAt ?? 0))
+    .map((entry) => entry.user)
 );
 const embeddedRoomVisible = computed(() => navigation.embeddedRoomIsVisible(lobby.mode));
 const previewAnchorOfSelected = computed(() =>
@@ -280,8 +277,13 @@ async function handleCreate(payload: { name: string; isStatic: boolean }): Promi
 }
 
 function openPeople(): void {
-  lobby.mode = 'friends';
   lobby.showPeople();
+}
+
+function openNewChat(userId: string): void {
+  newChatOpen.value = false;
+  sidebar.hidePreview();
+  void lobby.openDm(userId);
 }
 
 function openNotification(item: InboxItem): void {
@@ -315,7 +317,7 @@ function roomDeleted(): void {
       'lobby-shell--sidebar-peeking': sidebarPeeking,
       'lobby-shell--resizing': sidebarDragging,
       'lobby-shell--portrait': portrait,
-      'lobby-shell--portrait-focus': portraitDm
+      'lobby-shell--portrait-focus': portraitDm || (portrait && lobby.mode === 'friends' && lobby.view === 'people')
     }"
     :style="{ '--lv-side-w': `${dragWidth ?? sidebarWidth}px` }"
     :size="sidebarWidth"
@@ -330,44 +332,13 @@ function roomDeleted(): void {
   >
     <template #side>
       <div class="lobby-shell__sidebar" @pointerenter="sidebar.showPreview" @pointerleave="sidebar.hidePreview">
-        <div v-if="sidebarLayoutCollapsed" class="lobby-shell__sidebar-rail" aria-hidden="true">
-          <div class="lobby-shell__sidebar-brand">
-            <span class="sidebar__brand-mark"></span>
-          </div>
-          <div class="lobby-shell__sidebar-avatars">
-            <div v-for="friend in sidebarFriends" :key="friend.user.id" class="lobby-shell__sidebar-avatar">
-              <Avatar
-                :name="displayNameOf(friend.user)"
-                :src="friend.user.avatarUrl"
-                :color-key="friend.user.avatarColorKey"
-                :background="friend.user.avatarAccent || undefined"
-                :online="friend.presence === 'online'"
-                :afk="friend.presence === 'away'"
-                :dnd="friend.presence === 'dnd'"
-                :size="32"
-                show-dot
-                ring="var(--vr-surface)"
-              />
-              <Badge
-                v-if="friend.missedCount > 0 || friend.unreadCount > 0"
-                class="lobby-shell__sidebar-unread"
-                :tone="friend.missedCount > 0 ? 'danger' : friend.muted ? 'muted' : 'accent'"
-                :count="friend.missedCount || friend.unreadCount"
-                size="sm"
-                ring
-              />
-            </div>
-          </div>
-          <div class="lobby-shell__sidebar-account">
-            <Avatar
-              :name="displayNameOf(user)"
-              :src="user.avatarUrl"
-              :color-key="user.avatarColorKey"
-              :background="user.avatarAccent || undefined"
-              :size="32"
-            />
-          </div>
-        </div>
+        <SidebarRail
+          v-if="sidebarLayoutCollapsed"
+          :inert="sidebarVisible"
+          :user="user"
+          :active-voice="activeVoice"
+          @open-people="openPeople"
+        />
         <IconButton
           ref="sidebarToggle"
           class="lobby-shell__sidebar-toggle"
@@ -386,7 +357,7 @@ function roomDeleted(): void {
           <Sidebar
             v-show="sidebarVisible"
             id="lobby-sidebar"
-            v-model:friend-menu="friendMenu"
+            v-model:chat-menu="chatMenu"
             :aria-hidden="!sidebarVisible"
             :inert="!sidebarVisible"
             :user="user"
@@ -397,6 +368,7 @@ function roomDeleted(): void {
             :active-voice="activeVoice"
             @go-home="routing.goHome"
             @open-people="openPeople"
+            @new-chat="newChatOpen = true"
             @open-settings="prompts.openSettings"
             @open-notifications="notifications.toggle"
             @toast="(message: string) => toast(message)"
@@ -479,6 +451,8 @@ function roomDeleted(): void {
       />
     </aside>
   </Splitter>
+
+  <NewChatDialog v-if="newChatOpen" @close="newChatOpen = false" @open="openNewChat" />
 
   <CreateRoomDialog
     :open="createDialogOpen"

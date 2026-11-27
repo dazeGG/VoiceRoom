@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Ban, Bell, BellOff, MessageSquare, UserRound, UserMinus } from '@lucide/vue';
+import { Ban, Bell, BellOff, CheckCheck, MessageSquare, UserRound, UserMinus } from '@lucide/vue';
 import { computed, ref } from 'vue';
 import type { Friend } from '@/api/friends';
 import CallEntryIcon from '@/features/friend-call/CallEntryIcon.vue';
@@ -14,6 +14,7 @@ import { useFriendMenuCall, type FriendMenuTarget } from '../../model/friend-men
 import { useLobby } from '../../model/lobby-context';
 
 const target = defineModel<FriendMenuTarget | null>({ required: true });
+const { onMarkRead = null } = defineProps<{ onMarkRead?: ((userId: string) => Promise<void>) | null }>();
 const emit = defineEmits<{ toast: [message: string] }>();
 const lobby = useLobby();
 const preferences = useNotificationPreferencesStore();
@@ -21,7 +22,11 @@ const { openProfileCardFor } = useProfileCardUiStore();
 const blockTarget = ref<Friend['user'] | null>(null);
 const friend = computed(() => target.value?.friend.user);
 const name = computed(() => (friend.value ? displayNameOf(friend.value) : ''));
-const muted = computed(() => Boolean(friend.value && preferences.isPeerNotificationsMuted(friend.value.id)));
+const muted = computed(() =>
+  preferences.notificationPreferences.loaded
+    ? preferences.isPeerNotificationsMuted(friend.value?.id)
+    : Boolean(target.value?.muted)
+);
 const call = useFriendMenuCall(() => target.value);
 
 function openCall(close: () => void): void {
@@ -58,6 +63,13 @@ function profile(close: (restoreFocus?: boolean) => void): void {
       anchor
     )
   );
+}
+
+function markRead(close: () => void): void {
+  const userId = friend.value?.id;
+  if (!userId || !onMarkRead) return;
+  close();
+  void run(() => onMarkRead(userId), t('Не удалось отметить прочитанное'));
 }
 
 function toggleMute(close: () => void): void {
@@ -108,7 +120,7 @@ function confirmBlock(): void {
   >
     <template #default="{ close }">
       <MenuLabel :text="name" />
-      <MenuItem :label="t('Написать')" @select.prevent="message(close)">
+      <MenuItem v-if="!onMarkRead" :label="t('Написать')" @select.prevent="message(close)">
         <template #icon><MessageSquare v-bind="iconSm" /></template>
       </MenuItem>
       <MenuItem
@@ -123,6 +135,9 @@ function confirmBlock(): void {
       </MenuItem>
       <MenuItem :label="t('Профиль')" @select.prevent="profile(close)">
         <template #icon><UserRound v-bind="iconSm" /></template>
+      </MenuItem>
+      <MenuItem v-if="onMarkRead" :label="t('Отметить прочитанным')" @select.prevent="markRead(close)">
+        <template #icon><CheckCheck v-bind="iconSm" /></template>
       </MenuItem>
       <MenuItem
         :label="muted ? t('Включить уведомления') : t('Выключить уведомления')"

@@ -1,5 +1,12 @@
 import { expect, test } from '@playwright/test';
-import { createPermanentRoom, enterRoom, incomingFriendRequestIds, registerViaUi, uniqueLogin } from './helpers';
+import {
+  createPermanentRoom,
+  enterRoom,
+  incomingFriendRequestIds,
+  openFriendChat,
+  registerViaUi,
+  uniqueLogin
+} from './helpers';
 
 test('a friend sees typing and emoji browsing under the message field, until the message arrives', async ({
   browser,
@@ -22,13 +29,13 @@ test('a friend sees typing and emoji browsing under the message field, until the
     );
 
     await page.goto('/app');
-    await page.locator('.sidebar__row', { hasText: writerLogin }).first().click();
+    await openFriendChat(page, writerLogin);
     const typing = page.locator('.dm-composer .typing-indicator');
     await expect(page.locator('.dm-view__head-status')).toBeVisible();
     await expect(typing).toHaveText('');
 
     await writer.goto('/app');
-    await writer.locator('.sidebar__row', { hasText: readerLogin }).first().click();
+    await openFriendChat(writer, readerLogin);
     const composer = writer.getByPlaceholder('Написать сообщение…');
     await composer.fill('секунду, пишу');
     await expect(typing).toHaveText(/ печатает…$/);

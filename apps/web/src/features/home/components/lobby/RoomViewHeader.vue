@@ -8,7 +8,7 @@ import { RoomMenu } from '@/shared/components/room-menu';
 import { useLobby } from '../../model/lobby-context';
 import { roomDisplayName } from '../../model/rooms';
 
-const lobby = useLobby();
+const { roomSocial } = useLobby();
 
 const props = withDefaults(
   defineProps<{
@@ -40,7 +40,7 @@ const name = computed(() => roomDisplayName(props.room));
       title-class="room-view-header__name"
       chevron-class="room-view-header__chevron"
       :relationship="room.relationship"
-      :friends="lobby.friends"
+      :friends="roomSocial.friends()"
       :present-user-ids="presentUserIds"
       :on-open-settings="onOpenSettings"
       @rooms-changed="$emit('roomsChanged')"

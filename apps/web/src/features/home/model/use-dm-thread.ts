@@ -23,7 +23,7 @@ const dmHistoryCache = createHistoryCache<DirectMessage>((messages) =>
 /** `isOpen` answers whether the lobby still shows this peer's thread. */
 const READ_RESYNC_DELAY_MS = 1000;
 
-export function useDmThread(isOpen: (peerId: string) => boolean) {
+export function useDmThread(isOpen: (peerId: string) => boolean, onRead: () => void = () => {}) {
   const peer = ref<PublicUser | null>(null);
   const messages = ref<DirectMessage[]>([]);
   const loading = ref(false);
@@ -66,6 +66,7 @@ export function useDmThread(isOpen: (peerId: string) => boolean) {
       scope: `dm:${peerId}`,
       commit: async (cursor) => {
         await markThreadRead(peerId, cursor);
+        onRead();
       }
     });
     readReconciliation = reconciliation;

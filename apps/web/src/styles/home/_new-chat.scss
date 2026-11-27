@@ -1,0 +1,9 @@
+.new-chat {
+  display: grid;
+  gap: var(--space-12);
+}
+
+.new-chat__results {
+  display: grid;
+  gap: var(--space-4);
+}

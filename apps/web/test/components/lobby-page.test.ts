@@ -8,10 +8,12 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import LobbyPage from '@/features/home/LobbyPage.vue';
 import type { ToastOptions } from '@/features/home/model/toasts.store';
+import type { ConversationSummary } from '@voiceroom/shared/contracts/messages';
 import { useSessionStore } from '@/features/auth/session.store';
 import { state as roomClientState } from '@voiceroom/call/engine/core/room-runtime.store';
 import { useVoiceSessionStore } from '@voiceroom/call/engine/core/voice-session.store';
 import { stubFetch } from '../fixtures/fetch.ts';
+import { directMessage, publicUser } from '../fixtures/answers.ts';
 import { FakeWebSocket, installFakeWebSocket } from '../fixtures/fake-websocket.ts';
 import { authUser } from '../fixtures/users.ts';
 import { defined } from '../helpers/assert.ts';
@@ -24,6 +26,21 @@ stubOverlayDom();
 
 const user = authUser({ id: 'ada', login: 'ada', displayName: 'Ада' });
 const bob = authUser({ id: 'bob', login: 'bob', displayName: 'Боб' });
+const clea = publicUser({ id: 'clea', login: 'clea', displayName: 'Клеа' });
+
+function chat(
+  peer: Pick<ConversationSummary['peer'], 'id' | 'login' | 'displayName'>,
+  at: number,
+  unreadCount = 0
+): ConversationSummary {
+  return {
+    peer: { ...publicUser({ ...peer, presenceStatus: 'online' }), badge: null },
+    lastMessage: { at, kind: 'text', preview: 'Hello', fromMe: false },
+    unreadCount,
+    isFriend: true,
+    muted: false
+  };
+}
 
 beforeEach(() => {
   installFakeWebSocket();
@@ -39,6 +56,7 @@ afterEach(() => {
 
 function stubLobby(extra: Parameters<typeof stubFetch>[0] = {}) {
   return stubFetch({
+    'GET /api/dm/conversations': { body: { ok: true, conversations: [chat(bob, 1, 2)] } },
     ...extra,
     'GET /api/auth/rooms': { body: { ok: true, rooms: [] } },
     'GET /api/friends': {
@@ -116,12 +134,10 @@ test('the sidebar clamps drag widths, cancels interrupted drags and restores its
   view.unmount();
   const reopened = await renderLobby();
   const rail = defined(reopened.container.querySelector('.lobby-shell__sidebar'), 'sidebar rail');
-  expect(rail.querySelector('.lobby-shell__sidebar-rail .sidebar__brand-mark')).toBeTruthy();
-  expect(rail.querySelector('.lobby-shell__sidebar-account .ui-avatar')).toBeTruthy();
-  await vi.waitFor(() =>
-    expect(rail.querySelector('.lobby-shell__sidebar-avatars .ui-avatar__dot--online')).toBeTruthy()
-  );
-  expect(rail.querySelector('.lobby-shell__sidebar-unread')?.textContent).toBe('2');
+  expect(rail.querySelector('.sidebar-rail .sidebar__brand-mark')).toBeTruthy();
+  expect(rail.querySelector('.sidebar-rail__account .ui-avatar')).toBeTruthy();
+  await vi.waitFor(() => expect(rail.querySelector('.sidebar-rail__chats .ui-avatar__dot--online')).toBeTruthy());
+  expect(rail.querySelector('.sidebar-rail__badge')?.textContent).toBe('2');
   expect(screen.queryByRole('separator')).toBeNull();
   await fireEvent.pointerEnter(rail, { pointerType: 'mouse' });
   expect(screen.getByRole('complementary')).toBeTruthy();
@@ -143,6 +159,73 @@ test('the sidebar clamps drag widths, cancels interrupted drags and restores its
   expect(restored.getAttribute('aria-valuetext')).toBe('336 px');
   await userEvent.click(screen.getByRole('button', { name: 'Свернуть боковую панель' }));
   expect(screen.queryByRole('separator')).toBeNull();
+});
+
+test('the sidebar lists conversations in activity order and updates for incoming messages and unfriending', async () => {
+  let conversations = [chat(clea, 2), chat(bob, 1, 2)];
+  stubLobby({ 'GET /api/dm/conversations': () => ({ body: { ok: true, conversations } }) });
+  await renderLobby();
+  const sidebar = screen.getByRole('complementary');
+  const friends = within(sidebar).getByRole('button', { name: /^Друзья/ });
+  const chats = within(sidebar).getByRole('region', { name: 'Чаты' });
+  expect(friends.compareDocumentPosition(chats) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  const ordered = () =>
+    within(chats)
+      .getAllByRole('button')
+      .map((button) => button.getAttribute('aria-label'));
+  await within(chats).findByRole('button', { name: 'Клеа' });
+  expect(ordered()).toEqual(['Новый чат', 'Клеа', 'Боб']);
+
+  const realtime = await socket();
+  conversations = [chat(bob, 3, 3), chat(clea, 2)];
+  realtime.receive({
+    type: 'dm.message',
+    payload: { message: directMessage({ senderId: bob.id, recipientId: user.id, createdAt: 3 }) }
+  });
+  await vi.waitFor(() => expect(ordered()).toEqual(['Новый чат', 'Боб', 'Клеа']));
+  expect(within(chats).getByRole('img', { name: '3 непрочитанных' })).toBeTruthy();
+
+  conversations = [chat(clea, 2)];
+  realtime.receive({ type: 'friend.removed', payload: { userId: bob.id } });
+  await vi.waitFor(() => expect(ordered()).toEqual(['Новый чат', 'Клеа']));
+});
+
+test('an empty chat list opens the new chat dialog', async () => {
+  stubLobby({ 'GET /api/dm/conversations': { body: { ok: true, conversations: [] } } });
+  await renderLobby();
+  expect(await screen.findByText('Пока нет чатов')).toBeTruthy();
+  await userEvent.click(defined(screen.getAllByRole('button', { name: 'Новый чат' })[1], 'empty state action'));
+  expect(screen.getByRole('dialog', { name: 'Новый чат' })).toBeTruthy();
+});
+
+test('the chat context menu marks the conversation read and updates the unread badge', async () => {
+  let unreadCount = 2;
+  const { calls } = stubLobby({
+    'GET /api/dm/conversations': () => ({ body: { ok: true, conversations: [chat(bob, 1, unreadCount)] } }),
+    'POST /api/dm/bob/read': () => {
+      unreadCount = 0;
+      return { body: { ok: true, count: 2 } };
+    }
+  });
+  await renderLobby();
+  const row = await screen.findByRole('button', { name: 'Боб' });
+  expect(within(row).getByRole('img', { name: '2 непрочитанных' })).toBeTruthy();
+  expect(row.querySelector('.ui-avatar__dot--online')).toBeTruthy();
+  row.focus();
+  await userEvent.keyboard('{Shift>}{F10}{/Shift}');
+  const menu = await screen.findByRole('menu', { name: 'Действия для Боб' });
+  for (const name of [
+    'Профиль',
+    'Отметить прочитанным',
+    'Выключить уведомления',
+    'Удалить из друзей',
+    'Заблокировать'
+  ]) {
+    expect(within(menu).getByRole('menuitem', { name })).toBeTruthy();
+  }
+  await userEvent.click(within(menu).getByRole('menuitem', { name: 'Отметить прочитанным' }));
+  await vi.waitFor(() => expect(within(row).queryByRole('img', { name: '2 непрочитанных' })).toBeNull());
+  expect(calls.some(({ method, url }) => method === 'POST' && url === '/api/dm/bob/read')).toBe(true);
 });
 
 test('a session ended on another device signs out with a message', async () => {

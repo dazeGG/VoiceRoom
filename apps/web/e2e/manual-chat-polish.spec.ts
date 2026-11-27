@@ -15,6 +15,7 @@ import {
   enableCapabilities,
   enterRoom,
   incomingFriendRequestIds,
+  openFriendChat,
   registerViaApi,
   uniqueLogin
 } from './helpers';
@@ -81,7 +82,7 @@ test('manual polish renders direct messages with the shared flat chat row and ar
     expect(accepted.ok()).toBe(true);
 
     await page.reload();
-    await page.locator('.sidebar__row', { hasText: secondLogin }).first().click();
+    await openFriendChat(page, secondLogin);
     const composer = page.getByPlaceholder('Написать сообщение…');
     await expect(composer).toBeVisible();
     await composer.fill('flat direct message');
@@ -457,7 +458,7 @@ test('room members panel releases navigation, switches to chat, collapses, and k
     expect(speakingStyle.ringTransitionDuration).toBe('0s');
     expect(speakingStyle.ringTransform).toBe('none');
 
-    await page.locator('.sidebar__row', { hasText: friendLogin }).first().click();
+    await openFriendChat(page, friendLogin);
     await expect(page.getByPlaceholder('Написать сообщение…')).toBeVisible();
     await expect(page.locator('body')).toHaveClass(/\bscreen--start\b/);
 
