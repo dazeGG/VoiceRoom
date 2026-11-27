@@ -69,6 +69,217 @@ function createController(overrides: Partial<RealtimeRecoveryOptions> & { clock?
   return { controller, clock, snapshots, attempts, transitions };
 }
 
+test('a terminal failure waits for a later app socket epoch before trying once with its snapshot', async () => {
+  const terminal = classifyRecoveryFailure({ status: 403, code: 'invalid_session' });
+  const outcomes: ReplacementOutcome[] = [terminal, terminal, { ok: true }];
+  const attempts: number[] = [];
+  const { controller, clock, snapshots } = createController({
+    attemptReplacement: ({ epoch }) => {
+      attempts.push(epoch);
+      return outcomes.shift() ?? terminal;
+    }
+  });
+  const snapshot = (appEpoch: number) => controller.appSnapshotApplied({ appEpoch, active: true, hasLocalPeer: true });
+
+  controller.livekitDisconnected();
+  snapshot(4);
+  await Promise.resolve();
+  const failed = controller.getSnapshot().epoch;
+  for (const appEpoch of [4, 5]) {
+    assert.equal(controller.getSnapshot().phase, 'failed');
+    assert.equal(clock.pending(), 0);
+    clock.advance(60_000);
+    controller.appWsRestored(appEpoch);
+    snapshot(appEpoch);
+    assert.equal(controller.getSnapshot().epoch, failed + appEpoch - 4);
+    assert.deepEqual(attempts, appEpoch === 4 ? [failed] : [failed, failed + 1]);
+
+    controller.appWsLost(appEpoch);
+    controller.appWsRestored(appEpoch + 1);
+    controller.appWsRestored(appEpoch + 1);
+    assert.equal(controller.getSnapshot().epoch, failed + appEpoch - 3);
+    assert.equal(controller.getSnapshot().phase, 'waiting-app-snapshot');
+    assert.equal(snapshots.length, 1, 'the app socket already replays the join');
+    assert.equal(snapshot(appEpoch), false);
+    assert.equal(attempts.length, appEpoch - 3);
+    snapshot(appEpoch + 1);
+    snapshot(appEpoch + 1);
+    await Promise.resolve();
+  }
+  assert.deepEqual(attempts, [failed, failed + 1, failed + 2]);
+  assert.equal(controller.getSnapshot().phase, 'healthy');
+});
+
+test('a real online edge rearms a terminal failure once on the connected app socket', async () => {
+  const terminal = classifyRecoveryFailure({ status: 403, code: 'invalid_session' });
+  const { controller, clock, snapshots } = createController({ attemptReplacement: () => terminal });
+  const snapshot = () => controller.appSnapshotApplied({ appEpoch: 4, active: true, hasLocalPeer: true });
+  controller.livekitDisconnected();
+  snapshot();
+  await Promise.resolve();
+  const failed = controller.getSnapshot().epoch;
+  controller.networkOnline();
+  assert.equal(controller.getSnapshot().epoch, failed);
+
+  controller.networkOffline();
+  controller.networkOnline();
+  controller.networkOnline();
+  assert.equal(controller.getSnapshot().epoch, failed + 1);
+  assert.deepEqual(snapshots, [
+    { epoch: failed, appEpoch: 4 },
+    { epoch: failed + 1, appEpoch: 4 }
+  ]);
+  snapshot();
+  await Promise.resolve();
+  assert.equal(controller.getSnapshot().phase, 'failed');
+  controller.networkOnline();
+  assert.equal(controller.getSnapshot().epoch, failed + 1);
+  assert.equal(clock.pending(), 0);
+});
+
+test('a later socket epoch rearms with its replay snapshot once the pending replacement fails', async () => {
+  const pending = deferred();
+  const attempts: number[] = [];
+  const { controller } = createController({
+    attemptReplacement: ({ epoch }) => {
+      attempts.push(epoch);
+      return attempts.length === 1 ? pending.promise : { ok: true };
+    }
+  });
+  controller.livekitDisconnected();
+  controller.appSnapshotApplied({ appEpoch: 4, active: true, hasLocalPeer: true });
+  const failedEpoch = controller.getSnapshot().epoch;
+  controller.appSnapshotRequestFailed({ code: 'invalid_session' });
+  assert.equal(controller.getSnapshot().phase, 'failed');
+
+  controller.appWsRestored(5);
+  controller.appSnapshotApplied({ appEpoch: 5, active: true, hasLocalPeer: true });
+  assert.deepEqual(attempts, [failedEpoch]);
+  pending.resolve({ retryable: false, code: 'invalid_session' });
+  await Promise.resolve();
+  assert.deepEqual(attempts, [failedEpoch, failedEpoch + 1]);
+  await Promise.resolve();
+  assert.equal(controller.getSnapshot().phase, 'healthy');
+});
+
+test.each([
+  { retryable: false, code: 'invalid_session' },
+  { retryable: true, code: 'transport_error' }
+])('an online edge rearms once after a pending replacement fails with $code', async (outcome) => {
+  const pending = deferred();
+  const attempts: number[] = [];
+  const { controller, clock, snapshots } = createController({
+    attemptReplacement: ({ epoch }) => {
+      attempts.push(epoch);
+      return attempts.length === 1 ? pending.promise : { retryable: false, code: 'invalid_session' };
+    }
+  });
+  const snapshot = () => controller.appSnapshotApplied({ appEpoch: 4, active: true, hasLocalPeer: true });
+  controller.livekitDisconnected();
+  snapshot();
+  const failedEpoch = controller.getSnapshot().epoch;
+  controller.appSnapshotRequestFailed({ code: 'invalid_session' });
+
+  controller.networkOffline();
+  controller.networkOnline();
+  assert.equal(controller.getSnapshot().phase, 'failed');
+  assert.equal(controller.getSnapshot().epoch, failedEpoch);
+  assert.equal(controller.getSnapshot().inFlight, true);
+  assert.deepEqual(snapshots, [{ epoch: failedEpoch, appEpoch: 4 }]);
+
+  pending.resolve(outcome);
+  await Promise.resolve();
+  assert.equal(controller.getSnapshot().phase, 'waiting-app-snapshot');
+  assert.equal(controller.getSnapshot().epoch, failedEpoch + 1);
+  assert.deepEqual(snapshots, [
+    { epoch: failedEpoch, appEpoch: 4 },
+    { epoch: failedEpoch + 1, appEpoch: 4 }
+  ]);
+  assert.deepEqual(attempts, [failedEpoch]);
+
+  snapshot();
+  await Promise.resolve();
+  controller.networkOnline();
+  clock.advance(60_000);
+  assert.equal(controller.getSnapshot().phase, 'failed');
+  assert.equal(controller.getSnapshot().epoch, failedEpoch + 1);
+  assert.deepEqual(attempts, [failedEpoch, failedEpoch + 1]);
+  assert.equal(snapshots.length, 2);
+  assert.equal(clock.pending(), 0);
+});
+
+test('an exhausted cooldown does not wait for a pending replacement before a fresh socket recovers', async () => {
+  const pending = deferred();
+  const attempts: number[] = [];
+  const { controller, clock } = createController({
+    cooldownMs: 1_000,
+    attemptReplacement: ({ epoch }) => {
+      attempts.push(epoch);
+      return attempts.length === 1 ? pending.promise : { ok: true };
+    }
+  });
+  controller.livekitDisconnected();
+  controller.appSnapshotApplied({ appEpoch: 4, active: true, hasLocalPeer: true });
+  assert.equal(attempts.length, 1);
+  controller.appSnapshotRequestFailed({ code: 'transport_error' });
+  assert.equal(controller.getSnapshot().phase, 'failed');
+
+  controller.appWsLost(4);
+  controller.appWsRestored(5);
+  controller.appSnapshotApplied({ appEpoch: 5, active: true, hasLocalPeer: true });
+  clock.advance(1_000);
+
+  controller.appWsLost(5);
+  controller.appWsRestored(6);
+  controller.appSnapshotApplied({ appEpoch: 6, active: true, hasLocalPeer: true });
+  await Promise.resolve();
+  assert.equal(attempts.length, 2);
+  assert.equal(controller.getSnapshot().phase, 'healthy');
+});
+
+test('a late terminal refusal keeps an exhausted cooldown and its fresh replay', async () => {
+  const pending = deferred();
+  const attempts: number[] = [];
+  const { controller, clock } = createController({
+    cooldownMs: 1_000,
+    attemptReplacement: ({ epoch }) => {
+      attempts.push(epoch);
+      return attempts.length === 1 ? pending.promise : { ok: true };
+    }
+  });
+  controller.livekitDisconnected();
+  controller.appSnapshotApplied({ appEpoch: 4, active: true, hasLocalPeer: true });
+  controller.appSnapshotRequestFailed({ code: 'transport_error' });
+  assert.equal(controller.getSnapshot().phase, 'failed');
+
+  controller.appWsLost(4);
+  controller.appWsRestored(5);
+  controller.appSnapshotApplied({ appEpoch: 5, active: true, hasLocalPeer: true });
+  pending.resolve({ retryable: false, status: 403, code: 'invalid_session' });
+  await Promise.resolve();
+  await Promise.resolve();
+  assert.equal(controller.getSnapshot().phase, 'failed');
+
+  clock.advance(1_000);
+  await Promise.resolve();
+  assert.equal(attempts.length, 2);
+  assert.equal(controller.getSnapshot().phase, 'healthy');
+});
+
+test('a terminal refusal during an exhausted cooldown keeps one cooldown probe, as on main', () => {
+  const { controller, clock, snapshots } = createController({ cooldownMs: 1_000 });
+  controller.livekitDisconnected();
+  controller.appSnapshotRequestFailed({ code: 'transport_error' });
+  controller.appSnapshotRequestFailed({ code: 'invalid_session' });
+
+  const failedEpoch = controller.getSnapshot().epoch;
+  clock.advance(1_000);
+  assert.equal(controller.getSnapshot().epoch, failedEpoch + 1);
+  assert.equal(controller.getSnapshot().phase, 'waiting-app-snapshot');
+  assert.equal(snapshots.length, 2);
+  assert.equal(clock.pending(), 0);
+});
+
 test('activation is not healthy before either bootstrap authority is ready', () => {
   const { controller } = createController();
   assert.equal(controller.getSnapshot().phase, 'waiting-app-snapshot');

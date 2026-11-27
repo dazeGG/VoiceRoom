@@ -16,6 +16,36 @@ import {
 } from '@voiceroom/call/engine/ui/devices';
 import { installWebCallPortsForTest } from '../../../../apps/web/test/helpers/call-ports';
 
+const cue = vi.hoisted(() => {
+  const frequency = vi.fn<(frequency: number, startedAt: number) => void>();
+  const oscillatorTypes: string[] = [];
+  const createOscillator = () => ({
+    set type(value: string) {
+      oscillatorTypes.push(value);
+    },
+    frequency: { setValueAtTime: frequency },
+    connect() {},
+    start() {},
+    stop() {},
+    addEventListener() {}
+  });
+  return { frequency, oscillatorTypes, createOscillator, connect: vi.fn(), bus: {} };
+});
+vi.mock('@voiceroom/call/engine/services/media-playback-service', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  getSharedAudioContext: () => ({
+    state: 'running',
+    currentTime: 0,
+    createOscillator: cue.createOscillator,
+    createGain: () => ({ gain: { setValueAtTime() {}, exponentialRampToValueAtTime() {} }, connect: cue.connect })
+  }),
+  isAppPlaybackMuted: () => false
+}));
+vi.mock('@voiceroom/call/engine/services/audio-bus', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  getAudioBusInput: () => cue.bus
+}));
+
 vi.mock('@/entities/room/room-realtime', () => ({
   requestActiveVoiceResync: vi.fn(() => true),
   setActiveVoiceResyncFailureHandler: vi.fn()
@@ -25,7 +55,7 @@ vi.mock('@/shared/log', async (importOriginal) => ({
   reportClientLogs: vi.fn(async () => true)
 }));
 
-const { reportClientLogs } = await import('@/shared/log');
+const { reportClientLogs, clearLogBuffer, readLogBuffer } = await import('@/shared/log');
 const recovery = await import('@voiceroom/call/engine/recovery/room-recovery');
 
 beforeEach(() => vi.mocked(reportClientLogs).mockClear());
@@ -64,6 +94,84 @@ test('a terminal failure is reported with its code', async () => {
   expect(reportClientLogs).toHaveBeenCalledWith('room recovery failed: room_banned');
 });
 
+test('failed epochs report once, show voice loss and play a rate-limited cue', async () => {
+  vi.useFakeTimers();
+  vi.setSystemTime(Date.now() + 60_000);
+  cue.frequency.mockClear();
+  cue.oscillatorTypes.length = 0;
+  cue.connect.mockClear();
+  clearLogBuffer();
+
+  const terminal = { retryable: false, code: 'invalid_session', status: 403 };
+  const attempt = vi.fn<() => Promise<ReplacementOutcome>>().mockResolvedValue(terminal);
+  recovery.setRoomRecoveryLiveKitAdapter({ attemptFreshReplacement: attempt });
+  recovery.startRoomRecovery(1, true);
+  const snapshot = (appEpoch: number) =>
+    recovery.notifyRoomSnapshotApplied({ appEpoch, active: true, hasLocalPeer: true });
+  const flush = () => vi.advanceTimersByTimeAsync(0);
+  const transitions = () =>
+    readLogBuffer()
+      .filter(({ ns }) => ns === 'room:recovery')
+      .map(({ ctx }) => ctx);
+
+  recovery.notifyLiveKitDisconnected();
+  snapshot(1);
+  await flush();
+  recovery.notifyRoomAppConnection(true, 1);
+  snapshot(1);
+  expect(cue.frequency.mock.calls.map(([frequency]) => frequency)).toEqual([620, 410, 250]);
+  expect(cue.oscillatorTypes).toEqual(['triangle', 'triangle', 'triangle']);
+  expect(cue.connect).toHaveBeenCalledWith(cue.bus);
+  expect(state.voiceRecoveryFailed).toBe(true);
+  expect(reportClientLogs).toHaveBeenCalledTimes(1);
+
+  await vi.advanceTimersByTimeAsync(59_999);
+  recovery.notifyRoomAppConnection(true, 2);
+  snapshot(2);
+  await flush();
+  expect(cue.frequency).toHaveBeenCalledTimes(3);
+  expect(reportClientLogs).toHaveBeenCalledTimes(2);
+  expect(transitions()).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ trigger: 'app_epoch', result: 'rearm_pending', appEpoch: 2 }),
+      expect.objectContaining({ trigger: 'rearmed', result: 'accepted', appEpoch: 2 }),
+      expect.objectContaining({ trigger: 'recovery_failed', result: 'terminal', appEpoch: 2, code: 'invalid_session' })
+    ])
+  );
+
+  await vi.advanceTimersByTimeAsync(1);
+  recovery.notifyRoomAppConnection(true, 3);
+  snapshot(3);
+  await flush();
+  expect(cue.frequency).toHaveBeenCalledTimes(6);
+  expect(reportClientLogs).toHaveBeenCalledTimes(3);
+
+  await vi.advanceTimersByTimeAsync(60_000);
+  attempt.mockResolvedValueOnce({ ok: true });
+  recovery.notifyRoomAppConnection(true, 4);
+  snapshot(4);
+  await flush();
+  expect(state.voiceRecoveryFailed).toBe(false);
+  expect(transitions()).toContainEqual(
+    expect.objectContaining({ trigger: 'replacement_succeeded', result: 'succeeded', appEpoch: 4 })
+  );
+  const optional = recovery.requestLiveKitReplacement();
+  snapshot(4);
+  await expect(optional).resolves.toBe(false);
+  recovery.cancelRoomRecovery();
+  expect(cue.frequency).toHaveBeenCalledTimes(6);
+  expect(reportClientLogs).toHaveBeenCalledTimes(3);
+
+  recovery.startRoomRecovery(5, true);
+  recovery.notifyLiveKitDisconnected();
+  snapshot(5);
+  await flush();
+  expect(state.voiceRecoveryFailed).toBe(true);
+  recovery.cancelRoomRecovery();
+  expect(state.voiceRecoveryFailed).toBe(false);
+  expect(cue.frequency).toHaveBeenCalledTimes(9);
+});
+
 test('without a LiveKit adapter recovery fails closed instead of hanging', async () => {
   const phases: string[] = [];
   recovery.subscribeRoomRecoveryTransitions((event) => phases.push(String(event.phase)));
@@ -93,6 +201,82 @@ function healthyCall(outcome: ReplacementOutcome) {
   return { attemptFreshReplacement, phases, unsubscribe };
 }
 const snapshot = () => recovery.notifyRoomSnapshotApplied({ appEpoch: 1, active: true, hasLocalPeer: true });
+
+test('an in-place LiveKit recovery can reconcile before the same-epoch snapshot clears voice failure', async () => {
+  const { setActiveVoiceResyncFailureHandler } = await import('@/entities/room/room-realtime');
+  const { attemptFreshReplacement, phases, unsubscribe } = healthyCall({ retryable: false, code: 'invalid_session' });
+
+  try {
+    recovery.notifyLiveKitDisconnected();
+    const refuseSnapshot = vi.mocked(setActiveVoiceResyncFailureHandler).mock.lastCall?.[0];
+    if (!refuseSnapshot) throw new Error('Missing snapshot refusal handler');
+    refuseSnapshot({ code: 'invalid_session', requestId: 'resync' });
+    expect(phases.at(-1)).toBe('failed');
+    expect(state.voiceRecoveryFailed).toBe(true);
+
+    recovery.notifyLiveKitReconnecting();
+    recovery.notifyLiveKitReconciled();
+    expect(state.voiceRecoveryFailed).toBe(true);
+    snapshot();
+    expect(phases.at(-1)).toBe('healthy');
+    expect(state.voiceRecoveryFailed).toBe(false);
+    expect(attemptFreshReplacement).not.toHaveBeenCalled();
+  } finally {
+    unsubscribe();
+  }
+});
+
+test.each(['online edge', 'later socket epoch'])(
+  'a pending replacement restores voice with a pending %s',
+  async (edge) => {
+    const { requestActiveVoiceResync, setActiveVoiceResyncFailureHandler } =
+      await import('@/entities/room/room-realtime');
+    const requestSnapshot = vi.mocked(requestActiveVoiceResync).mockClear();
+    const candidateReady = Promise.withResolvers<void>();
+    const attemptFreshReplacement = vi
+      .fn<(context: { epoch: number; attempt: number }) => Promise<ReplacementOutcome>>()
+      .mockResolvedValue({ retryable: false, code: 'invalid_session' })
+      .mockImplementationOnce(async ({ epoch }) => {
+        await candidateReady.promise;
+        // A candidate that lost its recovery epoch cannot commit in the LiveKit service.
+        return recovery.isCurrentRoomRecoveryEpoch(epoch) ? { ok: true } : { retryable: true, code: 'transport_error' };
+      });
+    recovery.setRoomRecoveryLiveKitAdapter({ attemptFreshReplacement });
+    const phases: string[] = [];
+    const unsubscribe = recovery.subscribeRoomRecoveryTransitions(({ phase }) => phases.push(phase));
+
+    try {
+      const epoch = recovery.startRoomRecovery(1, true);
+      recovery.notifyLiveKitDisconnected();
+      snapshot();
+      expect(attemptFreshReplacement).toHaveBeenCalledExactlyOnceWith({ epoch, attempt: 1 });
+      const refuseSnapshot = vi.mocked(setActiveVoiceResyncFailureHandler).mock.lastCall?.[0];
+      if (!refuseSnapshot) throw new Error('Missing snapshot refusal handler');
+      refuseSnapshot({ code: 'invalid_session', requestId: 'newer-resync' });
+      expect(phases.at(-1)).toBe('failed');
+      expect(state.voiceRecoveryFailed).toBe(true);
+
+      if (edge === 'online edge') {
+        recovery.notifyRoomNetworkOffline();
+        recovery.notifyRoomNetworkOnline();
+      } else {
+        recovery.notifyRoomAppConnection(false, 1);
+        recovery.notifyRoomAppConnection(true, 2);
+        recovery.notifyRoomSnapshotApplied({ appEpoch: 2, active: true, hasLocalPeer: true });
+      }
+      candidateReady.resolve();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(phases.at(-1)).toBe('healthy');
+      expect(state.voiceRecoveryFailed).toBe(false);
+      expect(recovery.isCurrentRoomRecoveryEpoch(epoch)).toBe(true);
+      expect(requestSnapshot).toHaveBeenCalledExactlyOnceWith(epoch, 1);
+      expect(attemptFreshReplacement).toHaveBeenCalledExactlyOnceWith({ epoch, attempt: 1 });
+    } finally {
+      unsubscribe();
+    }
+  }
+);
 
 test('asking to replace a standing connection replaces it and says when it is over', async () => {
   const { attemptFreshReplacement, phases, unsubscribe } = healthyCall({ ok: true });

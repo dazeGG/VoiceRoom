@@ -161,13 +161,16 @@ export function createWidgetSession({
 
   const phase = computed(() => controller.value?.phase.value);
   const joined = computed(() => phase.value === 'call' || phase.value === 'reconnecting');
+  const voiceRecoveryFailed = computed(() => joined.value && state.voiceRecoveryFailed);
   const entry = reactive({
     name: '',
     joined,
     busy,
     cameraAllowed,
+    voiceRecoveryFailed,
     roomId: computed(() => controller.value?.room.value?.roomId ?? ''),
     status: computed(() => {
+      if (voiceRecoveryFailed.value) return 'Голос отключён';
       if (phase.value === 'reconnecting') return 'Связь потеряна. Переподключение…';
       if (joined.value) return 'В комнате';
       return busy.value ? 'Подключение' : 'Готов к подключению';
