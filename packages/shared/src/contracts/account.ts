@@ -2,6 +2,7 @@
 // settings, devices, sign-in alerts, notices and deletion.
 
 import { Type, type Static } from 'typebox';
+import { WHATS_NEW_RELEASE_PATTERN } from '../account-security.ts';
 import { Failure, Nullable, Ok } from './http.ts';
 import { PublicUser } from './users.ts';
 
@@ -69,11 +70,17 @@ export type Sessions = Static<typeof Sessions>;
 export const SessionsRevoked = Ok({ revoked: Type.Number() });
 export type SessionsRevoked = Static<typeof SessionsRevoked>;
 
-export const WhatsNew = Type.Object({ current: Type.String(), lastSeen: Nullable(Type.String()) });
+export const WhatsNew = Type.Object({ lastSeen: Nullable(Type.String()) });
 export type WhatsNew = Static<typeof WhatsNew>;
 
 export const WhatsNewAnswer = Ok({ whatsNew: WhatsNew });
 export type WhatsNewAnswer = Static<typeof WhatsNewAnswer>;
+
+export const WhatsNewSeenBody = Type.Object(
+  { release: Type.String({ pattern: WHATS_NEW_RELEASE_PATTERN.source }) },
+  { additionalProperties: false }
+);
+export type WhatsNewSeenBody = Static<typeof WhatsNewSeenBody>;
 
 export const AppPromptSeen = Ok({ appPromptSeen: Type.Literal(true) });
 export type AppPromptSeen = Static<typeof AppPromptSeen>;

@@ -65,10 +65,9 @@ main site; it talks to the API's admin routes.
 - Android HTTP, WebSocket and Ring delivery use the Android app version and
   the operator's `ANDROID_MIN_VERSION`. HTTP and WebSocket read the agent
   string. Ring delivery reads the version saved on the native push token.
-- `WHATS_NEW_VERSION` is an ordered revision for the announcement slides and
-  the account's `whatsNewSeen` value. Keep the existing `2.8.0` revision until
-  there is new content, and advance this revision independently of web and
-  API versions so existing read acknowledgements stay valid.
+- `WHATS_NEW_RELEASE` identifies the web release that ships the announcement
+  slides. The API stores the account's newest acknowledgement in
+  `whatsNewSeen`. Bare legacy versions predate every `web/X.Y.Z` announcement.
 - Wire and data markers such as widget loader v1, native push payload v1 and
   `contractVersion` describe their protocols and schemas independently of
   package versions.

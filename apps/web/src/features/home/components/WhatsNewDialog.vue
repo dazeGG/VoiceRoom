@@ -61,10 +61,8 @@ const playing = ref(false);
 const stageEl = ref<HTMLElement | null>(null);
 const videoEl = shallowRef<HTMLVideoElement | null>(null);
 
-const canPlay = computed(
-  () => !reducedMotion.value && !hovered.value && !held.value && !focused.value && !hiddenTab.value
-);
-const running = computed(() => canPlay.value && playing.value);
+const canPlay = computed(() => !reducedMotion.value && !held.value && !hiddenTab.value);
+const running = computed(() => canPlay.value && playing.value && !hovered.value && !focused.value);
 
 watch(
   [videoEl, canPlay],
@@ -89,7 +87,7 @@ function onOpenAutoFocus(event: Event): void {
   event.preventDefault();
   if (!previousFocus?.isConnected)
     previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-  // Let the story start after the dialog takes focus. Subsequent focus pauses it.
+  // Let the story start after the dialog takes focus. Subsequent focus pauses slide advance.
   focusingStage = true;
   stageEl.value?.focus();
   focusingStage = false;

@@ -15,15 +15,12 @@ import {
   enableCapabilities,
   enterRoom,
   incomingFriendRequestIds,
-  PASSWORD,
+  registerViaApi,
   uniqueLogin
 } from './helpers';
 
 async function openLobbyAsNewAccount(page: Page, login: string): Promise<void> {
-  const response = await page.context().request.post('/api/auth/register', {
-    data: { login, password: PASSWORD, passwordConfirm: PASSWORD }
-  });
-  expect(response.ok(), `Registration failed with HTTP ${response.status()}`).toBe(true);
+  await registerViaApi(page.context().request, login);
 
   await page.goto('/app');
   await expect(page.getByRole('button', { name: 'Создать комнату' })).toBeVisible({ timeout: 15_000 });

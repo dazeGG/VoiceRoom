@@ -16,10 +16,6 @@ export const RECOVERY_CODE_GROUP_LENGTH = 4 as const;
 // usual look-alike mistakes; 16 symbols carry 80 bits.
 export const RECOVERY_CODE_ALPHABET: string = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
 const RECOVERY_CODE_PATTERN = /^[0-9A-HJKMNP-TV-Z]{16}$/;
-// The release whose "what's new" announcement the web client shows. Accounts
-// remember the last announcement they saw and new accounts start at this one,
-// so only people who used an earlier release are shown it.
-export const WHATS_NEW_VERSION: string = '2.9.0';
 export const RECOVERY_CODES_REMINDER_SNOOZE_MS: number = 3 * 24 * 60 * 60 * 1000;
 // A sign-in from a device and city the account has not used within this window
 // asks the account whether it was them; an unanswered question expires after
@@ -33,7 +29,9 @@ export const DELETED_ACCOUNT_NAME: string = 'Удалённый аккаунт';
 // Finished deletions free their row's login under this prefix, so no new
 // account may take it.
 export const DELETED_LOGIN_PREFIX: string = 'deleted-';
-const RELEASE_VERSION_PATTERN = /^(0|[1-9]\d{0,3})\.(0|[1-9]\d{0,3})\.(0|[1-9]\d{0,3})$/;
+const RELEASE_VERSION_CORE = String.raw`(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)`;
+const RELEASE_VERSION_PATTERN = new RegExp(`^${RELEASE_VERSION_CORE}$`);
+export const WHATS_NEW_RELEASE_PATTERN = new RegExp(`^web/(${RELEASE_VERSION_CORE})$`);
 // The VoiceRoom Android app says "VoiceRoom-Android/<x.y.z>". It is checked before
 // the desktop pattern, which also matches "VoiceRoom". client-version.ts writes
 // the same pattern, and a shared test pins both to the same user agents.
@@ -85,29 +83,37 @@ export function formatRecoveryCode(value: unknown): string {
 
 export function normalizeReleaseVersion(value: unknown): string {
   const version = typeof value === 'string' ? value.trim() : '';
-  return RELEASE_VERSION_PATTERN.test(version) ? version : '';
+  return parseWhatsNewRelease(version) ? version : '';
 }
 
 // -1, 0 or 1 like a sort comparator; null when either side is not a version.
 export function compareReleaseVersions(left: unknown, right: unknown): -1 | 0 | 1 | null {
-  const a = normalizeReleaseVersion(left);
-  const b = normalizeReleaseVersion(right);
-  if (!a || !b) return null;
-  const leftParts = a.split('.').map(Number);
-  const rightParts = b.split('.').map(Number);
+  const a = typeof left === 'string' ? left.trim() : '';
+  const b = typeof right === 'string' ? right.trim() : '';
+  if (!RELEASE_VERSION_PATTERN.test(a) || !RELEASE_VERSION_PATTERN.test(b)) return null;
+  const leftParts = a.split('.');
+  const rightParts = b.split('.');
   for (let index = 0; index < 3; index += 1) {
-    const leftPart = leftParts[index] ?? 0;
-    const rightPart = rightParts[index] ?? 0;
+    const leftPart = leftParts[index] ?? '';
+    const rightPart = rightParts[index] ?? '';
+    if (leftPart.length !== rightPart.length) return leftPart.length < rightPart.length ? -1 : 1;
     if (leftPart !== rightPart) return leftPart < rightPart ? -1 : 1;
   }
   return 0;
 }
 
-// An account that never recorded an announcement predates them all.
-export function hasUnseenWhatsNew(lastSeen: unknown, current: string = WHATS_NEW_VERSION): boolean {
-  if (!normalizeReleaseVersion(current)) return false;
-  const order = compareReleaseVersions(lastSeen, current);
-  return order === null || order < 0;
+export function parseWhatsNewRelease(value: unknown): { app: 'web'; version: string } | 'legacy' | null {
+  if (typeof value !== 'string') return null;
+  const version = WHATS_NEW_RELEASE_PATTERN.exec(value)?.[1];
+  if (version) return { app: 'web', version };
+  return RELEASE_VERSION_PATTERN.test(value) ? 'legacy' : null;
+}
+
+export function hasUnseenWhatsNew(lastSeen: unknown, current: string): boolean {
+  const release = parseWhatsNewRelease(current);
+  if (!release || release === 'legacy') return false;
+  const seen = parseWhatsNewRelease(lastSeen);
+  return !seen || seen === 'legacy' || compareReleaseVersions(seen.version, release.version) === -1;
 }
 
 export function isRecoveryCodesReminderDue(

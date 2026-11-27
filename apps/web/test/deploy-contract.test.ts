@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 import { brotliDecompressSync } from 'node:zlib';
 import { build, createServer } from 'vite';
 import { voiceAssetUrls } from '@voiceroom/call/voice-assets';
-import { WHATS_NEW_VERSION } from '@voiceroom/shared/account-security';
+import { WHATS_NEW_SLIDES } from '@/features/home/model/whats-new';
 
 import { metaPolicy, versionFile, voiceAssetDirectory, voiceAssetVersion } from '../scripts/deploy-contract.ts';
 import { buildHeaderPolicy, readMetaPolicy } from '../scripts/emit-caddy-csp.ts';
@@ -24,7 +24,6 @@ const mediaPaths = [
   '/rnnoise/rnnoise.wasm',
   '/rnnoise/rnnoise.worklet.js'
 ];
-const whatsNewMedia = ['calls', 'dock', 'chat', 'languages'].map((name) => `/whats-new/${WHATS_NEW_VERSION}/${name}`);
 
 test('the meta policy quotes keywords, not schemes, and leaves out what a meta tag ignores', () => {
   const policy = metaPolicy({
@@ -137,9 +136,9 @@ function verifyDeployArtifacts(outDir: string) {
   // public/ is served from the root, next to index.html.
   assert.ok(readdirSync(outDir).includes('voiceroom-icon.svg'));
   assert.ok(readdirSync(join(outDir, 'rnnoise')).includes('rnnoise.wasm'));
-  for (const path of whatsNewMedia) {
-    assert.ok(statSync(join(outDir, `${path}.mp4`)).size > 0, path);
-    assert.ok(statSync(join(outDir, `${path}.webp`)).size > 0, path);
+  for (const { video, poster } of WHATS_NEW_SLIDES) {
+    assert.ok(statSync(join(outDir, video)).size > 0, video);
+    assert.ok(statSync(join(outDir, poster)).size > 0, poster);
   }
 }
 
@@ -222,12 +221,12 @@ test('the dev server serves audio and story video at browser module and fetch UR
       assert.equal(response.headers['content-type'], path.endsWith('.wasm') ? 'application/wasm' : 'text/javascript');
       assert.deepEqual(bytes, readFileSync(join(voiceAssetDirectory, path)));
     }
-    for (const path of whatsNewMedia) {
-      const response = await getAsset(`${path}.mp4`);
-      assert.equal(response.statusCode, 200, path);
-      assert.equal(response.headers['content-type'], 'video/mp4', path);
+    for (const { video } of WHATS_NEW_SLIDES) {
+      const response = await getAsset(video);
+      assert.equal(response.statusCode, 200, video);
+      assert.equal(response.headers['content-type'], 'video/mp4', video);
       const bytes = await buffer(response);
-      assert.equal(bytes.toString('ascii', 4, 8), 'ftyp', path);
+      assert.equal(bytes.toString('ascii', 4, 8), 'ftyp', video);
     }
   } finally {
     await new Promise<void>((resolve, reject) => http.close((error) => (error ? reject(error) : resolve())));

@@ -12,6 +12,33 @@ vi.mock('../../src/features/home/model/push-notifications.store', () => ({
 
 beforeEach(() => localStorage.clear());
 
+test('registration acknowledges the announcement before returning even if the acknowledgement fails', async () => {
+  const user = authUser();
+  const { calls, fetchMock } = stubFetch({
+    'POST /api/auth/register': { status: 201, body: { ok: true, user } },
+    'POST /api/auth/whats-new/seen': { status: 500, body: { ok: false, error: 'unavailable' } }
+  });
+  const acknowledgement = Promise.withResolvers<void>();
+  vi.stubGlobal('fetch', async (url: RequestInfo | URL, init?: RequestInit) => {
+    const reply = await fetchMock(url, init);
+    if (url === '/api/auth/whats-new/seen') await acknowledgement.promise;
+    return reply;
+  });
+  const { register } = await import('../../src/api/auth.ts');
+  const input = { login: user.login, password: 'password123', passwordConfirm: 'password123' };
+  const onRegistered = vi.fn<(value: typeof user) => void>();
+  const registered = register(input).then(onRegistered);
+  await vi.waitFor(() => expect(calls).toHaveLength(2));
+  expect(onRegistered).not.toHaveBeenCalled();
+  acknowledgement.resolve();
+  await registered;
+  expect(onRegistered).toHaveBeenCalledWith(user);
+  expect(calls).toEqual([
+    { method: 'POST', url: '/api/auth/register', body: input },
+    { method: 'POST', url: '/api/auth/whats-new/seen', body: { release: 'web/1.5.0' } }
+  ]);
+});
+
 test('a failing room list is an error, not an empty list', async () => {
   stubFetch({ '/api/auth/rooms': { status: 500 } });
   const { fetchOwnedRooms } = await import('../../src/api/auth.ts');

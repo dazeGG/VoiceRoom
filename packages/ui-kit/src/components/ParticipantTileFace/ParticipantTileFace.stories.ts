@@ -15,7 +15,8 @@ const meta = {
           'The shared avatar, name and status content inside a participant tile.',
           '',
           '- Pass the participant name and initials, and provide `avatarSrc` when an image is available.',
-          '- Mark the current participant with `local` and use `statusLabel` for the status line.',
+          '- Set `local` to identify the current participant in the accessible heading. The visible heading shows the participant name.',
+          '- Use `statusLabel` for the status line.',
           '- Use the `name` and `badge` slots to extend the heading. The surrounding tile controls the visibility of the muted and deafened marks.',
           '- Set `state` to `reconnecting` or `absent` for a placeholder without live media status or actions.'
         ].join('\n')
@@ -34,7 +35,7 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {};
-export const Local: Story = { args: { local: true } };
+export const Local: Story = { name: 'Current Participant', args: { local: true } };
 export const WithStatus: Story = { args: { statusLabel: 'Слушает' } };
 export const Speaking: Story = {
   args: { statusLabel: 'Говорит' },

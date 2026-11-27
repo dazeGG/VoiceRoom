@@ -29,11 +29,13 @@ import {
   SessionsRevoked,
   SignedIn,
   type SelfUser,
-  WhatsNewAnswer
+  WhatsNewAnswer,
+  WhatsNewSeenBody
 } from '@voiceroom/shared/contracts/account';
 import { Done } from '@voiceroom/shared/contracts/http';
 import { parseAndroidAppVersion } from '@voiceroom/shared/client-version';
 import { cleanDisplayName, normalizeLogin } from '@voiceroom/shared/validation';
+import { Value } from 'typebox/value';
 import type { ApiContext, ResolvedSession, SessionRecord, SessionUser } from '../../app/context.ts';
 import { selfUser } from './user-records.ts';
 import { failure, optionalJsonBody } from '../../platform/http/http-kit.ts';
@@ -376,7 +378,10 @@ export function registerAccountRoutes(root: FastifyInstance, ctx: ApiContext, de
   app.post('/api/auth/whats-new/seen', { schema: { response: answers(WhatsNewAnswer) } }, async (request, reply) => {
     const me = await signedIn(request, reply);
     if (!me) return reply;
-    const result = await account.markWhatsNewSeen(me.user.id);
+    const body = request.body;
+    if (body !== undefined && !Value.Check(WhatsNewSeenBody, body))
+      return reply.code(400).send(failure('Invalid request', { code: 'invalid_request' }));
+    const result = await account.markWhatsNewSeen(me.user.id, body?.release);
     if (result.status === 'not_found') return reply.code(404).send(ACCOUNT_NOT_FOUND);
     return { ok: true as const, whatsNew: result.whatsNew };
   });

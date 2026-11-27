@@ -3,12 +3,18 @@
 // version it is set to. account-security.ts writes the same pattern for
 // clientKind; a shared test pins both to the same user agents.
 
-import { compareReleaseVersions, normalizeReleaseVersion } from './account-security.ts';
+import { compareReleaseVersions } from './account-security.ts';
 
 /** The product token the Android app puts in its user agent, before "/<x.y.z>". */
 export const ANDROID_APP_PRODUCT = 'VoiceRoom-Android';
 
 const ANDROID_APP_PATTERN = /VoiceRoom-Android\/(\S*)/i;
+const ANDROID_VERSION_PATTERN = /^(0|[1-9]\d{0,3})\.(0|[1-9]\d{0,3})\.(0|[1-9]\d{0,3})$/;
+
+export function normalizeAndroidVersion(value: unknown): string {
+  const version = typeof value === 'string' ? value.trim() : '';
+  return ANDROID_VERSION_PATTERN.test(version) ? version : '';
+}
 
 export function isAndroidAppUserAgent(userAgent: string | null | undefined): boolean {
   return parseAndroidAppVersion(userAgent) !== null;
@@ -21,7 +27,7 @@ export function isAndroidAppUserAgent(userAgent: string | null | undefined): boo
 export function parseAndroidAppVersion(userAgent: string | null | undefined): string | null {
   if (!userAgent) return null;
   const match = ANDROID_APP_PATTERN.exec(userAgent);
-  return match ? normalizeReleaseVersion(match[1]) : null;
+  return match ? normalizeAndroidVersion(match[1]) : null;
 }
 
 /**
@@ -29,8 +35,8 @@ export function parseAndroidAppVersion(userAgent: string | null | undefined): st
  * a minimum is set. An empty or malformed minimum sets no bound.
  */
 export function isVersionBelow(version: string | null | undefined, minVersion: string): boolean {
-  if (!normalizeReleaseVersion(minVersion)) return false;
-  const order = compareReleaseVersions(version, minVersion);
+  if (!normalizeAndroidVersion(minVersion)) return false;
+  const order = compareReleaseVersions(normalizeAndroidVersion(version), minVersion);
   return order === null || order < 0;
 }
 

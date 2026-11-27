@@ -86,7 +86,7 @@ const vCamera: Directive<HTMLVideoElement, CameraBinding> = {
   }
 };
 
-// The plate is drawn for the eye; the button under it says the same aloud.
+// The button also identifies my tile for assistive technology.
 const spokenLabel = computed(() =>
   [
     participant.name,
@@ -146,7 +146,6 @@ function watchScreen(event: MouseEvent): void {
     <Pressable inset class="mobile-call-tile__hit" :aria-label="spokenLabel" @click="emit('tap')"></Pressable>
     <div class="mobile-call-tile__name" aria-hidden="true">
       <span class="mobile-call-tile__name-text"><EmojiText :text="participant.name" /></span>
-      <span v-if="participant.isLocal" class="mobile-call-tile__you">{{ t('вы') }}</span>
       <span v-if="participant.muted" class="mobile-call-tile__icon"><MicOff /></span>
       <span v-if="participant.deafened" class="mobile-call-tile__icon"><HeadphoneOff /></span>
     </div>

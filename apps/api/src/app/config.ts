@@ -3,7 +3,7 @@
 // what it is.
 
 import crypto from 'node:crypto';
-import { normalizeReleaseVersion } from '@voiceroom/shared/account-security';
+import { normalizeAndroidVersion } from '@voiceroom/shared/client-version';
 import type { NativeVoiceStage } from '@voiceroom/shared/contracts/admission';
 import { SESSION_ENDED_CLOSE_CODE } from '@voiceroom/shared/realtime';
 import { cleanLiveKitUrl } from '@voiceroom/shared/validation';
@@ -139,7 +139,7 @@ export function readRuStorePushConfig(env: Env = process.env): RuStorePushConfig
 // refusing nothing.
 function readAndroidMinVersion(env: Env, key = 'ANDROID_MIN_VERSION'): string {
   const value = String(env[key] || '').trim();
-  if (value && !normalizeReleaseVersion(value)) throw new Error(`${key} must be a version like 1.2.0`);
+  if (value && !normalizeAndroidVersion(value)) throw new Error(`${key} must be a version like 1.2.0`);
   return value;
 }
 

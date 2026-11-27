@@ -1,6 +1,7 @@
 import { t } from '@/shared/i18n';
-import { WHATS_NEW_VERSION, hasUnseenWhatsNew } from '@voiceroom/shared/account-security';
-import type { WhatsNew } from '@/api/auth';
+import { WHATS_NEW_RELEASE } from '@/shared/whats-new-release';
+import { hasUnseenWhatsNew } from '@voiceroom/shared/account-security';
+import type { WhatsNew } from '@voiceroom/shared/contracts/account';
 
 export interface WhatsNewSlide {
   video: string;
@@ -12,12 +13,11 @@ export interface WhatsNewSlide {
 }
 
 function slideMedia(name: string): Pick<WhatsNewSlide, 'video' | 'poster'> {
-  const path = `/whats-new/${WHATS_NEW_VERSION}/${name}`;
+  const path = `/whats-new/2.9.0/${name}`;
   return { video: `${path}.mp4`, poster: `${path}.webp` };
 }
 
-// Keep the clips and their first-frame posters in public/whats-new/<version>/.
-// Replacing the slides advances the content revision independently of package versions.
+// The media paths identify the recorded clips and their first-frame posters.
 export const WHATS_NEW_SLIDES: readonly [WhatsNewSlide, WhatsNewSlide, ...WhatsNewSlide[]] = [
   {
     ...slideMedia('calls'),
@@ -81,5 +81,5 @@ export const WHATS_NEW_SLIDES: readonly [WhatsNewSlide, WhatsNewSlide, ...WhatsN
 export const WHATS_NEW_SLIDE_MS = 8000;
 
 export function shouldShowWhatsNew(state: WhatsNew): boolean {
-  return state.current === WHATS_NEW_VERSION && hasUnseenWhatsNew(state.lastSeen, state.current);
+  return hasUnseenWhatsNew(state.lastSeen, WHATS_NEW_RELEASE);
 }
