@@ -104,6 +104,7 @@ test('every alphabet symbol survives normalization', () => {
 });
 
 test('what is new is compared by release version, not by string order', async () => {
+  assert.equal(accountSecurity.WHATS_NEW_VERSION, '2.9.0');
   assert.equal(
     accountSecurity.normalizeReleaseVersion(accountSecurity.WHATS_NEW_VERSION),
     accountSecurity.WHATS_NEW_VERSION

@@ -121,6 +121,8 @@ test('the call agrees its key with the roster peer and installs it; both sides s
   );
   expect(lk.state.callE2ee?.phase).toBe('agreeing');
   await until(() => lk.state.callE2ee?.phase === 'secured', 'the call never secured its key');
+  // The caller derives the key as it reveals; the callee only after the reveal reaches it.
+  await until(() => peerKeys.length > 0, 'the callee never derived its key');
   callee.stop();
   e2ee.stopCallRoomE2ee(room);
 

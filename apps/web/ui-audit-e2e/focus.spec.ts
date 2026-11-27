@@ -1,4 +1,5 @@
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { WHATS_NEW_VERSION } from '@voiceroom/shared/account-security';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test, expect, chromium, type BrowserContext, type Route } from '@playwright/test';
@@ -11,9 +12,11 @@ function isolateNetwork(route: Route) {
   const url = new URL(route.request().url());
   if (url.pathname.startsWith('/api/')) {
     if (url.pathname === '/api/auth/whats-new')
-      return route.fulfill({ json: { ok: true, whatsNew: { current: '2.8.0', lastSeen: null } } });
+      return route.fulfill({ json: { ok: true, whatsNew: { current: WHATS_NEW_VERSION, lastSeen: null } } });
     if (url.pathname === '/api/auth/whats-new/seen')
-      return route.fulfill({ json: { ok: true, whatsNew: { current: '2.8.0', lastSeen: '2.8.0' } } });
+      return route.fulfill({
+        json: { ok: true, whatsNew: { current: WHATS_NEW_VERSION, lastSeen: WHATS_NEW_VERSION } }
+      });
     return route.fulfill({ status: 503, json: { ok: false, error: 'Isolated fixture' } });
   }
   if (url.hostname === '127.0.0.1' && ['15180', '15181', '15182'].includes(url.port)) return route.continue();

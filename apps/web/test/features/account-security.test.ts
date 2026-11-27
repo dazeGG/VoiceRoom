@@ -71,9 +71,9 @@ test('sign-in alerts say how the account was entered, when and where, oldest fir
 });
 
 test('what is new appears once per release and has a few slides', () => {
-  expect(shouldShowWhatsNew({ current: WHATS_NEW_VERSION, lastSeen: '2.5.0' })).toBe(true);
+  expect(WHATS_NEW_VERSION).toBe('2.9.0');
+  expect(shouldShowWhatsNew({ current: WHATS_NEW_VERSION, lastSeen: '2.8.0' })).toBe(true);
   expect(shouldShowWhatsNew({ current: WHATS_NEW_VERSION, lastSeen: WHATS_NEW_VERSION })).toBe(false);
-  expect(shouldShowWhatsNew({ current: '9.9.9', lastSeen: '2.5.0' })).toBe(false);
-  expect(WHATS_NEW_SLIDES.length).toBeGreaterThanOrEqual(2);
-  expect(WHATS_NEW_SLIDES.length).toBeLessThanOrEqual(4);
+  expect(shouldShowWhatsNew({ current: '2.8.0', lastSeen: null })).toBe(false);
+  expect(WHATS_NEW_SLIDES).toHaveLength(4);
 });

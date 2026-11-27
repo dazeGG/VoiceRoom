@@ -1,8 +1,9 @@
 <script setup lang="ts">
 // Keep the story chrome while Reka owns modal focus and dismissal.
 import { t } from '@/shared/i18n';
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue';
 import { fetchWhatsNew, markWhatsNewSeen } from '@/api/auth';
+import { useFriendCallStore } from '@/features/friend-call/friend-call.store';
 import {
   Button,
   DialogRoot,
@@ -11,7 +12,7 @@ import {
   DialogTitle,
   DialogDescription
 } from '@voiceroom/ui-kit/components';
-import { WHATS_NEW_SLIDES, WHATS_NEW_SLIDE_MS, shouldShowWhatsNew } from '../model/whats-new';
+import { WHATS_NEW_SLIDES, WHATS_NEW_SLIDE_MS, shouldShowWhatsNew, type WhatsNewSlide } from '../model/whats-new';
 
 const props = withDefaults(defineProps<{ paused?: boolean }>(), { paused: false });
 
@@ -21,38 +22,77 @@ const emit = defineEmits<{
   openChange: [open: boolean];
 }>();
 
+const calls = useFriendCallStore();
 const due = ref(false);
-// Waits while a more urgent dialog, such as a new sign-in question, is up.
-const open = computed(() => due.value && !props.paused);
+// Waits while a more urgent dialog, such as a new sign-in question, is up. A signed-in shell also waits for the
+// calls bootstrap, which settles even when it fails, so the calls slide is decided before the story starts.
+// Where calls never start (a guest page), the story does not wait for them.
+const open = computed(() => due.value && (calls.missedLoaded || !calls.userId) && !props.paused);
 
 watch(open, (isOpen) => emit('openChange', isOpen), { immediate: true });
 
-const index = ref(0);
+const [callsSlide, ...otherSlides] = WHATS_NEW_SLIDES;
+const availableSlides = () => (calls.enabled ? WHATS_NEW_SLIDES : otherSlides);
+// The set is fixed when the story first opens, so calls switching on later never reshuffles it mid-story.
+const shownSlides = shallowRef<readonly WhatsNewSlide[] | null>(null);
+const slides = computed(() => shownSlides.value ?? availableSlides());
+watch(
+  open,
+  (isOpen) => {
+    if (isOpen && !shownSlides.value) shownSlides.value = availableSlides();
+  },
+  { immediate: true }
+);
+const selectedVideo = ref<string>();
+const slide = computed(
+  () => slides.value.find((item) => item.video === selectedVideo.value) ?? slides.value[0] ?? callsSlide
+);
+const index = computed(() => slides.value.indexOf(slide.value));
+const last = computed(() => index.value === slides.value.length - 1);
 // The last slide has run its time and stays up until the reader closes it.
 const ended = ref(false);
 const hovered = ref(false);
 const held = ref(false);
+const focused = ref(false);
 const hiddenTab = ref(false);
 const reducedMotion = ref(false);
+const playing = ref(false);
 
 const stageEl = ref<HTMLElement | null>(null);
+const videoEl = shallowRef<HTMLVideoElement | null>(null);
 
-const slide = computed(() => WHATS_NEW_SLIDES[index.value] ?? WHATS_NEW_SLIDES[0]);
-const last = computed(() => index.value === WHATS_NEW_SLIDES.length - 1);
-// Slides turn by themselves like stories, but hold still while pointed at,
-// pressed or in a background tab. With reduced motion they only turn by hand:
-// the global rule shortens every animation, which would flick through them all.
-const running = computed(() => !hovered.value && !held.value && !hiddenTab.value);
+const canPlay = computed(
+  () => !reducedMotion.value && !hovered.value && !held.value && !focused.value && !hiddenTab.value
+);
+const running = computed(() => canPlay.value && playing.value);
+
+watch(
+  [videoEl, canPlay],
+  ([video, allowed]) => {
+    if (!video) return;
+    if (allowed) void video.play().catch(() => {});
+    else video.pause();
+  },
+  { flush: 'post' }
+);
+
+watch([due, slides], ([isDue, available]) => {
+  if (isDue) for (const item of available) new Image().src = item.poster;
+});
 
 let pointerStart: { x: number; y: number; at: number } | null = null;
 let previousFocus: HTMLElement | null = null;
 let openingAppearance = false;
+let focusingStage = false;
 
 function onOpenAutoFocus(event: Event): void {
   event.preventDefault();
   if (!previousFocus?.isConnected)
     previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  // Let the story start after the dialog takes focus. Subsequent focus pauses it.
+  focusingStage = true;
   stageEl.value?.focus();
+  focusingStage = false;
 }
 
 function onCloseAutoFocus(event: Event): void {
@@ -61,6 +101,16 @@ function onCloseAutoFocus(event: Event): void {
     previousFocus?.focus();
     previousFocus = null;
   }
+}
+
+function onFocusOut(event: FocusEvent): void {
+  if (
+    event.currentTarget instanceof HTMLElement &&
+    event.relatedTarget instanceof Node &&
+    event.currentTarget.contains(event.relatedTarget)
+  )
+    return;
+  focused.value = false;
 }
 
 // The card can disappear under a more urgent dialog while the pointer is over
@@ -72,6 +122,8 @@ watch(
     if (isOpen) return;
     hovered.value = false;
     held.value = false;
+    focused.value = false;
+    playing.value = false;
     pointerStart = null;
   },
   { flush: 'post' }
@@ -82,6 +134,7 @@ let motion: MediaQueryList | null = null;
 
 function onMotionChange(): void {
   reducedMotion.value = motion?.matches ?? false;
+  if (reducedMotion.value) playing.value = false;
 }
 
 function onVisibilityChange(): void {
@@ -92,8 +145,6 @@ onMounted(() => {
   void fetchWhatsNew()
     .then((state) => {
       if (cancelled || !shouldShowWhatsNew(state)) return;
-      // Every picture is fetched up front, so a slide never opens on an empty frame.
-      for (const item of WHATS_NEW_SLIDES) new Image().src = item.image;
       due.value = true;
     })
     .catch(() => {
@@ -130,9 +181,10 @@ function finish(openAppearance: boolean): void {
 }
 
 function step(delta: number): void {
-  const next = index.value + delta;
-  if (next < 0 || next >= WHATS_NEW_SLIDES.length) return;
-  index.value = next;
+  const next = slides.value[index.value + delta];
+  if (!next) return;
+  selectedVideo.value = next.video;
+  playing.value = false;
   ended.value = false;
 }
 
@@ -199,9 +251,11 @@ function onHover(event: PointerEvent, value: boolean): void {
           @interact-outside.prevent
           @pointerenter="onHover($event, true)"
           @pointerleave="onHover($event, false)"
+          @focusin="focused = !focusingStage"
+          @focusout="onFocusOut"
         >
           <div class="stories__progress" aria-hidden="true">
-            <span v-for="(item, i) in WHATS_NEW_SLIDES" :key="item.image" class="stories__segment">
+            <span v-for="(item, i) in slides" :key="item.video" class="stories__segment">
               <span
                 v-if="i < index || (i === index && (ended || reducedMotion))"
                 class="stories__fill stories__fill--full"
@@ -218,7 +272,7 @@ function onHover(event: PointerEvent, value: boolean): void {
 
           <div class="stories__head">
             <span class="stories__kicker"
-              >{{ t('Что нового в VoiceRoom ·') }} {{ index + 1 }} {{ t('из') }} {{ WHATS_NEW_SLIDES.length }}</span
+              >{{ t('Что нового в VoiceRoom ·') }} {{ index + 1 }} {{ t('из') }} {{ slides.length }}</span
             >
             <Button v-if="!last" variant="plain" size="inline" class="stories__quiet" @click="finish(false)">
               {{ t('Пропустить') }}
@@ -226,14 +280,23 @@ function onHover(event: PointerEvent, value: boolean): void {
           </div>
 
           <div ref="stageEl" class="stories__stage" tabindex="0" @pointerdown="onPointerDown">
-            <div :key="index" class="stories__slide">
-              <img
+            <div :key="slide.video" class="stories__slide">
+              <video
+                :key="String(reducedMotion)"
+                ref="videoEl"
                 class="stories__image"
-                :src="slide.image"
-                :alt="slide.alt"
-                width="1088"
-                height="816"
-                draggable="false"
+                :src="reducedMotion ? undefined : slide.video"
+                :poster="slide.poster"
+                :aria-label="slide.alt"
+                :autoplay="canPlay"
+                :preload="reducedMotion ? 'none' : 'auto'"
+                width="816"
+                height="612"
+                muted
+                loop
+                playsinline
+                @playing="playing = true"
+                @waiting="playing = false"
               />
               <DialogTitle as="h2" class="stories__title">{{ slide.title }}</DialogTitle>
               <DialogDescription as="p" class="stories__text">{{ slide.text }}</DialogDescription>
@@ -245,7 +308,7 @@ function onHover(event: PointerEvent, value: boolean): void {
               t('Назад')
             }}</Button>
             <span class="stories__spacer"></span>
-            <Button v-if="last && slide.action === 'appearance'" variant="ghost" type="button" @click="finish(true)">
+            <Button v-if="slide.action === 'appearance'" variant="ghost" type="button" @click="finish(true)">
               {{ t('Настроить') }}
             </Button>
             <Button v-if="last" variant="primary" type="button" @click="finish(false)">{{ t('Понятно') }}</Button>
