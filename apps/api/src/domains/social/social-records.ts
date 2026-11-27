@@ -8,7 +8,7 @@ import { cleanAvatarColorKey, cleanPresenceStatus } from '@voiceroom/shared/vali
 import { normalizeLinkPreview } from '@voiceroom/shared/link-preview';
 import { isRecord } from '@voiceroom/shared/guards';
 import { Nullable } from '@voiceroom/shared/contracts/http';
-import { DirectMessage as DirectMessageView, ReplyPointer } from '@voiceroom/shared/contracts/messages';
+import { callMetadataOf, DirectMessage as DirectMessageView, ReplyPointer } from '@voiceroom/shared/contracts/messages';
 import { Type, type Static } from 'typebox';
 import { Value } from 'typebox/value';
 import type { DB, DirectMessages, Users } from '../../platform/db/schema.ts';
@@ -90,6 +90,7 @@ export function mapMessage(row: Selectable<DirectMessages> | null | undefined): 
   if (!row) return null;
   const metadata = isRecord(row.metadata) ? row.metadata : null;
   const linkPreview = normalizeLinkPreview(metadata?.linkPreview);
+  const call = callMetadataOf(metadata);
   return {
     id: row.id,
     senderId: row.sender_id,
@@ -99,6 +100,7 @@ export function mapMessage(row: Selectable<DirectMessages> | null | undefined): 
     editedAt: epochMillis(row.edited_at),
     readAt: epochMillis(row.read_at),
     invite: mapInvite(metadata),
+    ...(call ? { call } : {}),
     ...(linkPreview ? { linkPreview } : {}),
     ...(row.reply_to_message_id ? { replyTo: { messageId: row.reply_to_message_id } } : {}),
     // deletedAt kept internal; callers filter before map

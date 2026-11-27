@@ -13,6 +13,9 @@ export type AccountMessage =
   | { type: 'friend-request' }
   | Tagged<'friend-accepted' | 'friend-removed', { userId: string }>
   | Tagged<'ring.incoming', ServerEvents['ring.incoming']>
+  | Tagged<'call.incoming', ServerEvents['call.incoming']>
+  | Tagged<'call.state', ServerEvents['call.state']>
+  | Tagged<'call.missed.updated', ServerEvents['call.missed.updated']>
   | Tagged<'user-updated', ServerEvents['friend.updated']>
   | Tagged<'notification-settings-updated', ServerEvents['notification.settings.updated']>
   | Tagged<'dm-message' | 'dm.message.edited', ServerEvents['dm.message']>
@@ -46,6 +49,16 @@ function toWsAccountEvent(message: AccountMessage): ServerEnvelope {
         room: message.room,
         expiresAt: message.expiresAt
       });
+    case 'call.incoming': {
+      const { callId, fromUser, attempt, revision, ringingExpiresAt, serverNow } = message;
+      return buildServerEnvelope('call.incoming', { callId, fromUser, attempt, revision, ringingExpiresAt, serverNow });
+    }
+    case 'call.state':
+      return buildServerEnvelope('call.state', { call: message.call });
+    case 'call.missed.updated': {
+      const { count, peerUserId, revision, serverNow, watermark } = message;
+      return buildServerEnvelope('call.missed.updated', { count, peerUserId, revision, serverNow, watermark });
+    }
     case 'user-updated':
       return buildServerEnvelope('friend.updated', { user: message.user });
     case 'notification-settings-updated':

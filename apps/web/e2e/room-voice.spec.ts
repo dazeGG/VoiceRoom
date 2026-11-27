@@ -120,7 +120,11 @@ test('a shared screen plays on a second peer and closes when the publisher stops
       .toBeGreaterThan(0);
 
     await viewer.locator('#screenVideo').hover();
-    await viewer.getByRole('button', { name: 'Выключить звук стрима' }).hover();
+    // The overlay hides after a second of pointer inactivity. Move onto the
+    // control like a viewer, rather than waiting for it to accept a hover.
+    const mute = await viewer.getByRole('button', { name: 'Выключить звук стрима' }).boundingBox();
+    if (!mute) throw new Error('Missing stream mute control');
+    await viewer.mouse.move(mute.x + mute.width / 2, mute.y + mute.height / 2, { steps: 5 });
     const volume = viewer.getByRole('slider', { name: 'Громкость стрима' });
     await expect(volume).toBeVisible();
     await expect(volume).toHaveAttribute('aria-orientation', 'vertical');

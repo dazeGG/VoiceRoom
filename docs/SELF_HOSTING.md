@@ -668,4 +668,4 @@ The scenario checks the main persistence contract without joining voice:
 
 6. Open `/r/<room-id>` again and check that the room exists, the static flag is still set, and the message that was sent is still in the chat history.
 
-The automated counterpart is the test `manual static-room chat scenario survives API restart without voice join` in `apps/api/test/chat.test.ts`.
+The automated counterpart is the test `manual static-room chat scenario survives API restart without voice join` in `apps/api/test/messaging/integration/chat.test.ts`.

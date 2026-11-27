@@ -23,6 +23,7 @@
 @use 'pkg:@voiceroom/ui-kit/styles/components/toggle';
 @use 'pkg:@voiceroom/ui-kit/styles/components/tooltip';
 @use 'pkg:@voiceroom/ui-kit/styles/components/kbd';
+@use 'pkg:@voiceroom/ui-kit/styles/components/safety-code';
 @use 'pkg:@voiceroom/ui-kit/styles/components/spinner';
 @use 'pkg:@voiceroom/ui-kit/styles/components/skeleton';
 @use 'pkg:@voiceroom/ui-kit/styles/components/menu';
@@ -51,6 +52,8 @@
 @use 'pkg:@voiceroom/ui-kit/styles/components/brand-icon';
 @use 'pkg:@voiceroom/ui-kit/styles/components/tag';
 @use 'pkg:@voiceroom/ui-kit/styles/components/progress';
+@use 'pkg:@voiceroom/ui-kit/styles/components/incoming-call-card';
+@use 'pkg:@voiceroom/ui-kit/styles/components/call-event-row';
 @use 'pkg:@voiceroom/ui-kit/styles/components/empty';
 
 * {

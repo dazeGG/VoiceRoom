@@ -34,16 +34,20 @@
     "build": "npm run build:app && npm --workspace @voiceroom/site run build",
     "build:app": "npm --workspace @voiceroom/web run build && npm --workspace @voiceroom/admin run build && npm --workspace @voiceroom/meet run build && npm --workspace @voiceroom/widget run build",
     "check": "npm run check:app && npm run check:site && npm run format:check",
-    "check:app": "npm --workspace @voiceroom/shared run check && npm --workspace @voiceroom/ui-kit run check && npm --workspace @voiceroom/ui run check && npm --workspace @voiceroom/call run check && npm --workspace @voiceroom/api run check && npm --workspace @voiceroom/web run check && npm --workspace @voiceroom/meet run check && npm --workspace @voiceroom/widget run check && npm --workspace @voiceroom/admin run check && tsc -p scripts/tsconfig.json && node scripts/check-web-palette.mts && node scripts/check-web-styles.mts && node scripts/check-kit-usage.mts && node scripts/check-test-source-reads.mts --app && node scripts/check-type-coverage.mts --app && npm run lint -- --ignore-pattern \"apps/site/**\" && prettier --check apps/admin apps/api apps/meet apps/web apps/widget packages scripts --log-level warn --cache --cache-location node_modules/.cache/prettier/",
+    "check:app": "npm run check:app:types && npm run check:app:conventions && npm run check:app:lint",
+    "check:app:types": "npm --workspace @voiceroom/shared run check && npm --workspace @voiceroom/ui-kit run check && npm --workspace @voiceroom/ui run check && npm --workspace @voiceroom/call run check && npm --workspace @voiceroom/api run check && npm --workspace @voiceroom/web run check && npm --workspace @voiceroom/meet run check && npm --workspace @voiceroom/widget run check && npm --workspace @voiceroom/admin run check && tsc -p scripts/tsconfig.json",
+    "check:app:conventions": "node scripts/check-web-palette.mts && node scripts/check-web-styles.mts && node scripts/check-kit-usage.mts && node scripts/check-test-source-reads.mts --app && node scripts/check-type-coverage.mts --app && prettier --check apps/admin apps/api apps/meet apps/web apps/widget packages scripts --log-level warn --cache --cache-location node_modules/.cache/prettier/",
+    "check:app:lint": "npm run lint -- --ignore-pattern \"apps/site/**\"",
     "check:site": "npm --workspace @voiceroom/site run check && node scripts/check-test-source-reads.mts --site && node scripts/check-type-coverage.mts --site && eslint apps/site --cache --cache-location node_modules/.cache/eslint-site/ && prettier --check apps/site --log-level warn --cache --cache-location node_modules/.cache/prettier/",
     "lint": "node --max-old-space-size=8192 node_modules/eslint/bin/eslint.js . --cache --cache-location node_modules/.cache/eslint/",
     "format": "prettier --write .",
     "format:check": "prettier --check . --log-level warn --cache --cache-location node_modules/.cache/prettier/",
     "lint:baseline": "eslint . --suppress-all",
-    "test": "npm --workspace @voiceroom/shared run test && npm --workspace @voiceroom/api run test && npm --workspace @voiceroom/web run test && npm --workspace @voiceroom/meet run test && npm --workspace @voiceroom/widget run test && npm --workspace @voiceroom/admin run test && npm run test:site && node --test scripts/test/*.test.mts",
+    "test": "npm --workspace @voiceroom/shared run test && npm --workspace @voiceroom/api run test && npm --workspace @voiceroom/web run test && npm --workspace @voiceroom/ui-kit run test && npm --workspace @voiceroom/call run test && npm --workspace @voiceroom/meet run test && npm --workspace @voiceroom/widget run test && npm --workspace @voiceroom/admin run test && npm run test:site && node --test \"scripts/test/**/*.test.mts\"",
     "test:site": "npm --workspace @voiceroom/site run test && node scripts/test/web-text-contrast.test.mts --site",
     "e2e": "npm --workspace @voiceroom/web run e2e",
-    "coverage:g08": "node scripts/coverage/run-g08.mts"
+    "coverage:g08": "node scripts/coverage/run-g08.mts",
+    "test:api": "node scripts/ci/api-tests.mts"
   },
   "packageManager": "npm@11.16.0",
   "engines": {
@@ -59,6 +63,7 @@
     "prettier": "^3.9.9",
     "type-coverage": "2.29.7",
     "typescript-eslint": "^8.70.1",
-    "vue-eslint-parser": "^10.4.1"
+    "vue-eslint-parser": "^10.4.1",
+    "yaml": "^2.9.1"
   }
 }

@@ -10,6 +10,7 @@ import { fileURLToPath } from 'node:url';
 import { brotliDecompressSync } from 'node:zlib';
 import { build, createServer } from 'vite';
 import { voiceAssetUrls } from '@voiceroom/call/voice-assets';
+import { WHATS_NEW_SLIDES } from '@/features/home/model/whats-new';
 
 import { metaPolicy, versionFile, voiceAssetDirectory, voiceAssetVersion } from '../scripts/deploy-contract.ts';
 import { buildHeaderPolicy, readMetaPolicy } from '../scripts/emit-caddy-csp.ts';
@@ -72,6 +73,7 @@ function verifyDeployArtifacts(outDir: string) {
   assert.ok(readMetaPolicy(html).includes(`wss://${livekitDomain}`));
   const policy = buildHeaderPolicy(readMetaPolicy(html));
   assert.match(policy, /script-src 'self' 'wasm-unsafe-eval'/);
+  assert.match(policy, /media-src 'self'/);
   // The policy governs only what follows it.
   const meta = html.indexOf('http-equiv="content-security-policy"');
   assert.ok(meta !== -1);
@@ -134,6 +136,10 @@ function verifyDeployArtifacts(outDir: string) {
   // public/ is served from the root, next to index.html.
   assert.ok(readdirSync(outDir).includes('voiceroom-icon.svg'));
   assert.ok(readdirSync(join(outDir, 'rnnoise')).includes('rnnoise.wasm'));
+  for (const { video, poster } of WHATS_NEW_SLIDES) {
+    assert.ok(statSync(join(outDir, video)).size > 0, video);
+    assert.ok(statSync(join(outDir, poster)).size > 0, poster);
+  }
 }
 
 // CI verifies the regular build in its build job. Local runs use a temporary build.
@@ -188,7 +194,7 @@ test.skipIf(deployContractMode === 'checked')(
   () => verifyProductionBuild(widgetRoot, verifyWidgetArtifacts)
 );
 
-test('the dev server serves audio assets at browser module and fetch URLs', { timeout: 60_000 }, async () => {
+test('the dev server serves audio and story video at browser module and fetch URLs', { timeout: 60_000 }, async () => {
   const server = await createServer({
     root: webRoot,
     logLevel: 'silent',
@@ -201,17 +207,26 @@ test('the dev server serves audio assets at browser module and fetch URLs', { ti
     await new Promise<void>((done) => http.listen(0, '127.0.0.1', done));
     const address = http.address();
     assert.ok(address && typeof address !== 'string');
+    const getAsset = (path: string) =>
+      new Promise<IncomingMessage>((resolve, reject) => {
+        get(`http://127.0.0.1:${address.port}${path}`, resolve).once('error', reject);
+      });
     assert.deepEqual(Object.values(voiceAssetUrls()), mediaPaths);
     for (const path of mediaPaths) {
       const request = path.endsWith('.mjs') ? `${path}?import` : path;
-      const response = await new Promise<IncomingMessage>((resolve, reject) => {
-        get(`http://127.0.0.1:${address.port}${request}`, resolve).once('error', reject);
-      });
+      const response = await getAsset(request);
       const bytes = await buffer(response);
       assert.equal(response.statusCode, 200, path);
       assert.equal(response.headers['cache-control'], 'no-cache');
       assert.equal(response.headers['content-type'], path.endsWith('.wasm') ? 'application/wasm' : 'text/javascript');
       assert.deepEqual(bytes, readFileSync(join(voiceAssetDirectory, path)));
+    }
+    for (const { video } of WHATS_NEW_SLIDES) {
+      const response = await getAsset(video);
+      assert.equal(response.statusCode, 200, video);
+      assert.equal(response.headers['content-type'], 'video/mp4', video);
+      const bytes = await buffer(response);
+      assert.equal(bytes.toString('ascii', 4, 8), 'ftyp', video);
     }
   } finally {
     await new Promise<void>((resolve, reject) => http.close((error) => (error ? reject(error) : resolve())));

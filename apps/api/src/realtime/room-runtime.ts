@@ -103,7 +103,13 @@ function clearViewedScreenPeerReferences(room: PresenceRoom | null | undefined, 
   return clearedViewers;
 }
 
-function createRoomRealtimeRuntime(deps: RoomRuntimeDeps) {
+function createRoomRealtimeRuntime(
+  deps: RoomRuntimeDeps,
+  calls?: {
+    reconnecting(roomId: string, userId: string): void;
+    scheduleRemoval(roomId: string, userId: string, peerId: string, liveSeat: boolean): void;
+  }
+) {
   const {
     presenceRooms,
     wsRegistry,
@@ -165,7 +171,7 @@ function createRoomRealtimeRuntime(deps: RoomRuntimeDeps) {
     leases,
     summaries,
     nativeVoiceCapability: nativeVoice?.capability,
-    buildRoomSnapshot: (roomId, mode) => buildRoomSnapshot(roomId, mode),
+    buildRoomSnapshot,
     leaveVoiceRoom: (connection, payload, options) => leaveVoiceRoom(connection, payload, options)
   });
   const { cancelConnectionVoiceJoin, joinVoiceRoom } = voiceJoin;
@@ -179,6 +185,10 @@ function createRoomRealtimeRuntime(deps: RoomRuntimeDeps) {
     peer: Peer;
     reason: LeaseReason;
   }): Promise<{ finalized: true }> {
+    if (isCallRoom(record.roomId) && calls) {
+      closePeer(record.roomId, record.peerId, record.transportId, leaveReasonOf(reason));
+      return { finalized: true };
+    }
     if (credentialBoundary) {
       await credentialBoundary.revokePeer({
         roomId: record.roomId,
@@ -209,12 +219,12 @@ function createRoomRealtimeRuntime(deps: RoomRuntimeDeps) {
 
   async function buildRoomSnapshot(
     roomId: string,
-    mode: RoomSnapshot['mode'] = 'preview'
+    mode: RoomSnapshot['mode'] = 'preview',
+    scope?: 'call'
   ): Promise<RoomSnapshot | null> {
     const dbRoom = await getRoomStore().getRoom(roomId);
-    if (!dbRoom) return null;
-    const recentMessages =
-      readHistory && roomAllowsChat(dbRoom, dbRoom.kind ?? 'main') ? await readHistory(dbRoom) : [];
+    if (!dbRoom || (dbRoom.kind === 'call') !== (scope === 'call' && mode === 'active')) return null;
+    const recentMessages = readHistory && roomAllowsChat(dbRoom, 'main') ? await readHistory(dbRoom) : [];
     // Presence is the last synchronous read: no awaited work may let this
     // snapshot overwrite a newer peer update that was already broadcast.
     const presence = presenceRooms.get(roomId);
@@ -343,7 +353,7 @@ function createRoomRealtimeRuntime(deps: RoomRuntimeDeps) {
     if (!principal) return { ok: false, code: 'principal_unavailable', disconnected: 0 };
     const room = presenceRooms.get(roomId);
     const peers = [...(room?.peers?.values?.() || [])].filter((peer) => peer.accountUserId === userId);
-    let principalRevocationPromise: ReturnType<RuntimeCredentialBoundary['revokePrincipal']> | null = null;
+    let principalRevocationPromise: Promise<{ status: string }> | null = null;
     const revokePrincipalOnce = () => {
       principalRevocationPromise ||= boundary.revokePrincipal({ roomId, principal });
       return principalRevocationPromise;
@@ -363,8 +373,10 @@ function createRoomRealtimeRuntime(deps: RoomRuntimeDeps) {
             error.code = 'revoke_failed';
             throw error;
           }
-          if (!ownershipFinalized) closePeer(roomId, peer.id, peer.transport?.id, reason);
-          if (!ownershipFinalized) await removeLiveKitParticipant(roomId, peer.id);
+          if (!ownershipFinalized) {
+            closePeer(roomId, peer.id, peer.transport?.id, reason);
+            await removeLiveKitParticipant(roomId, peer.id);
+          }
         }
       });
     } catch {
@@ -384,6 +396,21 @@ function createRoomRealtimeRuntime(deps: RoomRuntimeDeps) {
     return { ok: true, disconnected: peers.length };
   }
 
+  function isCallRoom(roomId: string): boolean {
+    return presenceRooms.get(roomId)?.kind === 'call';
+  }
+
+  function fenceCallSeat(roomId: string, userId: string, peerId: string): void {
+    const peer = presenceRooms.get(roomId)?.peers.get(peerId);
+    if (peer) peer.closed = true;
+    calls?.scheduleRemoval(roomId, userId, peerId, Boolean(peer));
+    if (!peer) return;
+    const transportId = peer.transport?.id;
+    closePeer(roomId, peerId, transportId, 'left-room');
+    wsRegistry.sendToUser(userId, buildServerEnvelope('room.left', { roomId, peerId, reason: 'left-room' }));
+    wsRegistry.detachVoicePeer(roomId, peerId, transportId);
+  }
+
   // The peer behind a command that speaks for a voice session: it must be the
   // session this connection holds right now.
   function activePeer(
@@ -392,7 +419,7 @@ function createRoomRealtimeRuntime(deps: RoomRuntimeDeps) {
   ): { ok: true; room: PresenceRoom; peer: Peer } | { ok: false; code: ErrorCode } {
     const room = presenceRooms.get(roomId);
     const peer = room?.peers.get(peerId);
-    if (!room || !peer || !tokensMatch(peer.sessionToken, sessionToken)) {
+    if (!room || !peer || (room.kind === 'call' && peer.closed) || !tokensMatch(peer.sessionToken, sessionToken)) {
       return { ok: false, code: 'invalid_session' };
     }
     if (
@@ -472,12 +499,13 @@ function createRoomRealtimeRuntime(deps: RoomRuntimeDeps) {
     const accepted = reportsNative && acceptNativeVoiceReport(active.peer);
     if (accepted && nativeReport) noteStayNativeVoice(active.peer, nativeReport, now());
     if (stayEvent && mic && (mic.reopens > 0 || mic.replacements > 0)) {
+      const privateCall = active.room.kind === 'call';
       logger.warn(
         {
           evt: LOG_EVENTS.ROOM_MIC_STALL_RECOVERY,
-          connId: connection.id,
-          userId: connection.userId || undefined,
-          roomId: connection.roomSurface === 'widget' ? undefined : roomId,
+          connId: privateCall ? undefined : connection.id,
+          userId: privateCall ? undefined : connection.userId || undefined,
+          roomId: privateCall || connection.roomSurface === 'widget' ? undefined : roomId,
           mic
         },
         'a client recovered a stalled microphone'
@@ -551,6 +579,9 @@ function createRoomRealtimeRuntime(deps: RoomRuntimeDeps) {
           // and reaches nobody until the rejoin.
           peer.transport = { id: peer.transport?.id ?? activeVoice.transportId, connection: null };
           lease.peer = peer;
+          if (peer.accountUserId && presenceRooms.get(activeVoice.roomId)?.kind === 'call') {
+            calls?.reconnecting(activeVoice.roomId, peer.accountUserId);
+          }
         }
       }
       connection.activeVoice = null;
@@ -569,6 +600,20 @@ function createRoomRealtimeRuntime(deps: RoomRuntimeDeps) {
     finalizePendingReconnectLease: leases.finalizePending,
     finalizeReconnectPeers: leases.finalizePeers,
     joinVoiceRoom,
+    joinCallVoice: voiceJoin.joinCallVoice,
+    isCallRoom,
+    fenceCallSeat,
+    callSeat(roomId: string, peerId: string) {
+      const peer = presenceRooms.get(roomId)?.peers.get(peerId);
+      if (!peer || peer.closed) return null;
+      return { connection: peer.transport?.connection ?? null, reconnectUntil: leases.deadline(roomId, peer) };
+    },
+    async revokeCallSeat(roomId: string, userId: string, peerId: string) {
+      const result = credentialBoundary
+        ? await credentialBoundary.revokePeer({ roomId, accountUserId: userId })
+        : await getRoomStore().revokeLiveKitGatePeer({ roomId, peerId, accountUserId: userId, now: now() });
+      if (result.status !== 'revoked') throw new Error('Previous call credential revocation failed');
+    },
     leaveVoiceRoom,
     reportVoice,
     requestMedia,

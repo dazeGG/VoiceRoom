@@ -70,6 +70,8 @@ export interface FriendsDeps {
   ringInvitation: RingService['create'];
   isOnline(userId: string): boolean;
   notifyUser(userId: string, event: AccountMessage): void;
+  invalidateCalls?(userId: string, peerId: string): void;
+  refreshCallMisses?(userId: string, peerId: string): void;
   queuePush(userId: string, payload: PushPayload, context?: Record<string, unknown>): Promise<unknown>;
 }
 
@@ -105,6 +107,12 @@ export function createFriendsService(deps: FriendsDeps) {
       context
     });
     friendPush(requesterId, 'friend.accepted', accepter, dedupeKey);
+    refreshCallMisses(requesterId, accepter.id);
+  }
+
+  function refreshCallMisses(userId: string, peerId: string): void {
+    deps.refreshCallMisses?.(userId, peerId);
+    deps.refreshCallMisses?.(peerId, userId);
   }
 
   async function list(userId: string) {
@@ -205,7 +213,9 @@ export function createFriendsService(deps: FriendsDeps) {
   async function remove(userId: string, friendId: string): Promise<Status<'removed' | 'not_found'>> {
     const result = await deps.friends().removeFriend({ userId, friendId });
     if (result.status === 'not_found') return { status: 'not_found' };
+    deps.invalidateCalls?.(userId, friendId);
     deps.notifyUser(friendId, { type: 'friend-removed', userId });
+    refreshCallMisses(userId, friendId);
     return { status: 'removed' };
   }
 
@@ -226,7 +236,11 @@ export function createFriendsService(deps: FriendsDeps) {
     const result = await deps.friends().blockUser({ userId, targetId });
     if (result.status === 'not_found') return { status: 'not_found' };
     if (result.status === 'invalid') return { status: 'invalid' };
-    if (result.unfriended) deps.notifyUser(targetId, { type: 'friend-removed', userId });
+    deps.invalidateCalls?.(userId, targetId);
+    if (result.unfriended) {
+      deps.notifyUser(targetId, { type: 'friend-removed', userId });
+      refreshCallMisses(userId, targetId);
+    }
     return { status: 'applied', result: result.status };
   }
 

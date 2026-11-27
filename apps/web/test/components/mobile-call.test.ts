@@ -297,7 +297,7 @@ test('two people: a tap beside my grown picture shrinks it back instead of hidin
   expect(screen.queryByRole('button', { name: /^На (основную|фронтальную)/ })).toBeNull();
 });
 
-test('four people fill the screen in two rows with me last', async () => {
+test('four people fill the screen in two rows with me first', async () => {
   enterRoom(3, { camera: true });
   await mount();
   const cells = [...document.querySelectorAll<HTMLElement>('.mobile-call-grid__cell')].map((cell) => [
@@ -306,15 +306,24 @@ test('four people fill the screen in two rows with me last', async () => {
   ]);
   // Two rows of two: each tile spans half of the six columns.
   expect(cells).toEqual([
+    ['me', 'span 3'],
     ['p1', 'span 3'],
     ['p2', 'span 3'],
-    ['p3', 'span 3'],
-    ['me', 'span 3']
+    ['p3', 'span 3']
   ]);
   expect(document.querySelector<HTMLElement>('.mobile-call-grid__page')?.style.gridTemplateRows).toContain(
     'repeat(2, minmax(0, 1fr))'
   );
   expect(document.querySelector('.mobile-call-grid__dots')).toBeNull();
+});
+
+test('my tile shows my name and identifies me in its accessible name', async () => {
+  enterRoom(3);
+  await mount();
+  const self = within(tile('me'));
+  expect(self.getByText('Кирилл')).toBeTruthy();
+  expect(self.queryByText('вы')).toBeNull();
+  expect(self.getByRole('button', { name: 'Кирилл, вы' })).toBeTruthy();
 });
 
 test('ten people page the grid, with dots to move between pages', async () => {

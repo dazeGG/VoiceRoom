@@ -6,6 +6,9 @@ withDefaults(defineProps<BadgeProps>(), { size: 'md', tone: 'accent', variant: '
 
 <template>
   <span
+    :role="label ? 'img' : undefined"
+    :aria-label="label"
+    :aria-hidden="variant === 'dot' && !label ? true : undefined"
     :class="[
       'ui-badge',
       `ui-badge--${size}`,

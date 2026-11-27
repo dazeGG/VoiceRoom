@@ -45,8 +45,10 @@ const AREAS: ReadonlyArray<{ folder: string; project: string; ignore?: readonly 
   { folder: 'packages/shared/src', project: '../tsconfig.test.json', ignore: ['emoji.ts'] },
   { folder: 'packages/shared/test', project: '../tsconfig.test.json' },
   { folder: 'packages/ui-kit/src', project: '../tsconfig.json' },
+  { folder: 'packages/ui-kit', project: 'tsconfig.test.json', ignore: ['src/**'] },
   { folder: 'packages/ui/src', project: '../tsconfig.json' },
   { folder: 'packages/call/src', project: '../tsconfig.json' },
+  { folder: 'packages/call', project: 'tsconfig.test.json', ignore: ['src/**'] },
   { folder: 'scripts', project: 'tsconfig.json' }
 ];
 

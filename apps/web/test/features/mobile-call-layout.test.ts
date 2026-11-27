@@ -25,17 +25,17 @@ test('the grid fills rows from the top: a single tile leads odd counts, wider ro
   ]);
 });
 
-test('I am the last tile of the first page, and the tenth person on goes to the next page', () => {
+test('I lead the first page, and the tenth person on goes to the next page', () => {
   expect(gridPages('me', others(3))).toEqual([
     [
-      ['p1', 'p2'],
-      ['p3', 'me']
+      ['me', 'p1'],
+      ['p2', 'p3']
     ]
   ]);
 
   const pages = gridPages('me', others(11));
   expect(pages).toHaveLength(2);
-  expect(defined(pages[0], 'pages[0]').flat()).toEqual(['p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7', 'p8', 'me']);
+  expect(defined(pages[0], 'pages[0]').flat()).toEqual(['me', 'p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7', 'p8']);
   expect(pages[0]).toHaveLength(3);
   expect(pages[1]).toEqual([['p9'], ['p10', 'p11']]);
 

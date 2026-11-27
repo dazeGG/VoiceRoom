@@ -1,6 +1,7 @@
 {
   // Tests, build scripts and config files run on Node (Vitest, Vite), so they
-  // get Node's types on top of the app's settings.
+  // get Node's types on top of the app's settings. The package-owned suites
+  // have separate test projects in packages/call and packages/ui-kit.
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "lib": ["ES2024", "DOM", "DOM.Iterable"],

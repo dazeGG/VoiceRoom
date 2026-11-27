@@ -6,6 +6,7 @@ import { publicLobbyRoom, publicPeer } from '../domains/rooms/room-views.ts';
 import { tokensMatch } from '../platform/crypto/tokens-match.ts';
 import type { Timer } from '../platform/types.ts';
 import type { MeetChat } from '../realtime/meet-chat.ts';
+import { createCallSeatCleanup } from '../realtime/call-seat-cleanup.ts';
 import { createConnectionRegistry } from '../realtime/registry.ts';
 import { createRoomPresence, type OccupancyStore, type RoomPresenceDeps } from '../realtime/room-presence.ts';
 import {
@@ -45,15 +46,21 @@ export function createCallRealtime(deps: {
   config: CallConfig;
   getRoomStore(this: void): CallRoomStore & OccupancyStore;
   getCredentialBoundary(): RuntimeCredentialBoundary | null;
-  liveKit: Pick<LiveKit, 'removeParticipant'>;
+  liveKit: Pick<LiveKit, 'removeParticipant' | 'removeCallParticipant'>;
   logger(this: void): FastifyBaseLogger;
   findRoomBan?: RoomRuntimeDeps['findRoomBan'];
   maxGuestConnections?: number;
+  onCallDeparture?(roomId: string, userId: string): void;
   accountPresence?: Pick<Parameters<typeof createConnectionRegistry>[0], 'getFriendIds' | 'onPresenceChange'>;
   presenceEffects?: Pick<RoomPresenceDeps, 'previewSubscribers' | 'onPeerLeft' | 'onRosterChange'>;
 }) {
   const { config, getRoomStore } = deps;
   let roomRuntime: RoomRealtimeRuntime | null = null;
+  const seatCleanup = createCallSeatCleanup({
+    revoke: (roomId, userId, peerId) => runtime().revokeCallSeat(roomId, userId, peerId),
+    remove: deps.liveKit.removeCallParticipant,
+    reportFailure: () => deps.logger().warn('call seat cleanup failed')
+  });
 
   const registry = createConnectionRegistry({
     ...deps.accountPresence,
@@ -65,6 +72,14 @@ export function createCallRealtime(deps: {
   });
   const presence = createRoomPresence({
     ...deps.presenceEffects,
+    onPeerLeft(room, peer) {
+      if (room.kind !== 'call') {
+        deps.presenceEffects?.onPeerLeft?.(room, peer);
+      } else if (peer.accountUserId && !seatCleanup.has(room.id, peer.id)) {
+        seatCleanup.schedule(room.id, peer.accountUserId, peer.id, true);
+        deps.onCallDeparture?.(room.id, peer.accountUserId);
+      }
+    },
     store: getRoomStore,
     sockets: registry,
     logger: deps.logger,
@@ -82,35 +97,42 @@ export function createCallRealtime(deps: {
     effects?: Pick<
       RoomRuntimeDeps,
       'summaries' | 'readHistory' | 'mediaMinute' | 'stayEvent' | 'sessionAvatarColorKey' | 'nativeVoice'
-    >
+    >,
+    callReconnecting?: (roomId: string, userId: string) => void
   ): RoomRealtimeRuntime {
-    roomRuntime = createRoomRealtimeRuntime({
-      ...effects,
-      presenceRooms: presence.rooms,
-      wsRegistry: registry,
-      getRoomStore,
-      getRoom,
-      publicPeer,
-      publicLobbyRoom: (room) => publicLobbyRoom(room, presence.rooms.get(room.id)?.peers.size ?? 0),
-      publishRoomEvent: presence.publish,
-      closePeer: presence.closePeer,
-      avatarColorForPeerId,
-      MAX_ROOM_PEERS: config.MAX_ROOM_PEERS,
-      MAX_VOICE_PEERS: config.MAX_VOICE_PEERS,
-      MEDIA_BUDGET_MBPS: config.MEDIA_BUDGET_MBPS,
-      MEDIA_BUDGET_VOICE_PEERS: config.MEDIA_BUDGET_VOICE_PEERS,
-      MAX_ROOM_SCREENS: config.MAX_ROOM_SCREENS,
-      tokensMatch,
-      queueRoomOccupancyTransition: presence.queueOccupancy,
-      findRoomBan: deps.findRoomBan ?? (async () => null),
-      credentialBoundary: deps.getCredentialBoundary(),
-      removeLiveKitParticipant: deps.liveKit.removeParticipant,
-      logger: options.logger,
-      reconnectLeaseMs: options.reconnectLeaseMs,
-      now: options.now,
-      setTimeout: options.setTimeout,
-      clearTimeout: options.clearTimeout
-    });
+    roomRuntime = createRoomRealtimeRuntime(
+      {
+        ...effects,
+        presenceRooms: presence.rooms,
+        wsRegistry: registry,
+        getRoomStore,
+        getRoom,
+        publicPeer,
+        publicLobbyRoom: (room) => publicLobbyRoom(room, presence.rooms.get(room.id)?.peers.size ?? 0),
+        publishRoomEvent: presence.publish,
+        closePeer: presence.closePeer,
+        avatarColorForPeerId,
+        MAX_ROOM_PEERS: config.MAX_ROOM_PEERS,
+        MAX_VOICE_PEERS: config.MAX_VOICE_PEERS,
+        MEDIA_BUDGET_MBPS: config.MEDIA_BUDGET_MBPS,
+        MEDIA_BUDGET_VOICE_PEERS: config.MEDIA_BUDGET_VOICE_PEERS,
+        MAX_ROOM_SCREENS: config.MAX_ROOM_SCREENS,
+        tokensMatch,
+        queueRoomOccupancyTransition: presence.queueOccupancy,
+        findRoomBan: deps.findRoomBan ?? (async () => null),
+        credentialBoundary: deps.getCredentialBoundary(),
+        removeLiveKitParticipant: deps.liveKit.removeParticipant,
+        logger: options.logger,
+        reconnectLeaseMs: options.reconnectLeaseMs,
+        now: options.now,
+        setTimeout: options.setTimeout,
+        clearTimeout: options.clearTimeout
+      },
+      {
+        reconnecting: (roomId, userId) => callReconnecting?.(roomId, userId),
+        scheduleRemoval: (roomId, userId, peerId, liveSeat) => seatCleanup.schedule(roomId, userId, peerId, liveSeat)
+      }
+    );
     return roomRuntime;
   }
 
@@ -148,5 +170,5 @@ export function createCallRealtime(deps: {
     });
   }
 
-  return { registry, presence, presenceRooms: presence.rooms, getRoom, runtime, start, guestHandler };
+  return { registry, presence, presenceRooms: presence.rooms, getRoom, runtime, start, guestHandler, seatCleanup };
 }

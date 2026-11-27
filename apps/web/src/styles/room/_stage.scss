@@ -22,3 +22,33 @@ body.screen-view--open {
     padding: 0 var(--space-32) calc(var(--space-64) + var(--space-40));
   }
 }
+
+.stage__dock {
+  position: absolute;
+  inset: auto 0 0;
+  z-index: 3;
+  pointer-events: none;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  html:not(.platform--mobile) .room-layout--dock-autohide > .stage {
+    &:not(:hover):not(:has(:focus-visible)) {
+      padding-block-end: var(--space-20);
+
+      > .stage__dock {
+        opacity: 0;
+        transform: translateY(var(--space-12));
+      }
+    }
+
+    @media (prefers-reduced-motion: no-preference) {
+      transition: padding-block-end 220ms var(--ease-out);
+
+      > .stage__dock {
+        transition:
+          opacity 180ms var(--ease-out),
+          transform 220ms var(--ease-out);
+      }
+    }
+  }
+}

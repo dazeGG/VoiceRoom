@@ -3,6 +3,8 @@ import type { MicrophoneMode, NoiseMode } from './config';
 import type { Participant } from '../model/participants';
 import type { LobbyRoom } from '@voiceroom/shared/contracts/rooms';
 import type { VoiceVerdict } from '@voiceroom/shared/voice-quality';
+import type { KeyAgreementFailure } from '../e2ee/key-agreement';
+import type { SafetyEmoji } from '../e2ee/safety-code';
 export type { Participant, PeerInfo } from '../model/participants';
 
 export type ScreenStreamMode = 'games' | 'text';
@@ -140,10 +142,21 @@ export interface ScreenSourceRequest {
   reject: (error: Error) => void;
 }
 
+export interface CallE2eeState {
+  phase: 'agreeing' | 'secured' | 'failed';
+  code: SafetyEmoji[] | null;
+  failure: KeyAgreementFailure | null;
+}
+
 export interface RoomSessionState {
   joined: boolean;
   peerId: string;
   roomId: string;
+  callId: string | undefined;
+  /** A 1:1 call's caller starts its E2EE key agreement; the callee answers it. */
+  callE2eeInitiator: boolean;
+  /** The call's end-to-end encryption: agreeing the key, secured with this code, or failed (no cleartext fallback). */
+  callE2ee: CallE2eeState | null;
   roomAvatarUrl: string;
   roomName: string;
   /** Permanent rooms survive being empty; temporary ones are deleted once idle. */

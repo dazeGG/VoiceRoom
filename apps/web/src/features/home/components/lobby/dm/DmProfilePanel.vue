@@ -10,8 +10,10 @@ import type { PresenceStatus } from '@/shared/presence';
 import { iconMd } from '@voiceroom/ui-kit/icon-defaults';
 import { displayNameOf } from '@/shared/utils/display-name';
 import { useLobby } from '../../../model/lobby-context';
+import { useCallEntry } from '@/features/friend-call/use-call-entry';
+import CallEntryIcon from '@/features/friend-call/CallEntryIcon.vue';
 
-const { peer } = defineProps<{
+const { peer, online } = defineProps<{
   peer: PublicUser;
   presence: PresenceStatus;
   online: boolean;
@@ -19,6 +21,10 @@ const { peer } = defineProps<{
 }>();
 
 const lobby = useLobby();
+const call = useCallEntry(
+  () => peer.id,
+  () => online
+);
 const preferences = useNotificationPreferencesStore();
 const muteSaving = ref(false);
 const muted = computed(() => preferences.isPeerNotificationsMuted(peer.id));
@@ -56,6 +62,7 @@ async function toggleMute(): Promise<void> {
       />
       <div class="dm-profile__name"><EmojiText :text="displayNameOf(peer)" /></div>
       <div class="dm-profile__handle">@{{ peer.login }}</div>
+      <p v-if="call.visible && call.peerInCall && !call.connectedCaption">{{ t('в звонке') }}</p>
 
       <div class="dm-profile__stats">
         <div class="dm-profile__stat">
@@ -68,6 +75,20 @@ async function toggleMute(): Promise<void> {
         </div>
       </div>
 
+      <div v-if="call.visible" class="dm-profile__call">
+        <Button
+          size="lg"
+          fill
+          :variant="call.accent ? 'soft' : 'primary'"
+          :disabled="call.disabled"
+          @click="void call.open()"
+        >
+          <template #icon><CallEntryIcon :mode="call.mode" /></template>
+          {{ call.label }}
+        </Button>
+        <p v-if="call.connectedCaption" role="timer">{{ call.connectedCaption }}</p>
+        <p v-if="call.description">{{ call.description }}</p>
+      </div>
       <Button variant="ghost" size="sm" class="dm-profile__action" :disabled="muteSaving" @click="toggleMute">
         <BellOff v-if="muted" v-bind="iconMd" aria-hidden="true" />
         <Bell v-else v-bind="iconMd" aria-hidden="true" />

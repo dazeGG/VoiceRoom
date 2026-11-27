@@ -48,3 +48,21 @@ versioned URL manifest to the call host. Caddy applies the existing revalidation
 Cues are synthesized in the browser.
 
 ESLint enforces the call package boundary for static imports, re-exports and literal dynamic imports.
+
+## End-to-end encrypted 1:1 calls
+
+A friend call room (`state.callId`) is always end-to-end encrypted. There is no setting and no cleartext fallback.
+
+- **Encryption before connect.** `services/livekit/transport.ts` creates every call room candidate with LiveKit
+  frame encryption and calls `setE2EEEnabled(true)` before `connect`. Until a key exists the SDK drops every
+  outgoing frame, so a microphone published while the peer is still ringing leaks nothing.
+- **Key agreement.** `e2ee/call-room-e2ee.ts` runs the per-call agreement from `e2ee/key-agreement.ts` over LiveKit
+  participant attributes, with the peer the API roster seated (`state.serverPeerIds`). It installs each agreed key
+  at its index and exposes `state.callE2ee`: `agreeing`, `secured` with the 4-emoji code, or `failed`.
+- **What the call accepts from LiveKit.** It subscribes only to encrypted publications (`isCallPublicationAllowed`)
+  and takes participant names from the roster, never from LiveKit.
+- **RED.** The microphone sends RED only while the peer's agreement state says its receiver takes RED; a mismatch
+  republishes the microphone (`republishCurrentMicrophone`). The web build patches the SDK so an explicit
+  `red: true` is honoured under E2EE (`scripts/build/livekit-e2ee-red.ts`).
+- **Native receive.** The desktop helper cannot decrypt yet, so `syncNativeVoiceReceive` leaves call rooms to the
+  browser path.

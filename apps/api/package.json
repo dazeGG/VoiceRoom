@@ -1,18 +1,17 @@
 {
   "name": "@voiceroom/api",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "private": true,
   "type": "module",
   "scripts": {
     "start": "node src/server.ts",
     "dev": "node --watch src/server.ts",
     "check": "node ../../scripts/check-js-syntax.mts src/migrations && tsc -p tsconfig.json",
-    "test": "node --test --test-concurrency=4 test/*.test.ts",
-    "test:g05": "node --test test/livekit-boundary.test.ts",
+    "test": "node ../../scripts/ci/api-tests.mts",
+    "test:g05": "node --test test/admission/unit/livekit-boundary.test.ts",
     "db:migrate": "node src/scripts/migrate.ts up",
     "db:rollback": "node src/scripts/migrate.ts down",
-    "db:types": "kysely-codegen --dialect postgres --out-file src/platform/db/schema.ts --exclude-pattern \"{pgmigrations,voiceroom_migration_guard,analytics.*}\"",
-    "pretest": "node test/require-test-database-url.ts"
+    "db:types": "kysely-codegen --dialect postgres --out-file src/platform/db/schema.ts --exclude-pattern \"{pgmigrations,voiceroom_migration_guard,analytics.*}\""
   },
   "dependencies": {
     "@fastify/cookie": "^11.0.2",

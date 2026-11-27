@@ -22,8 +22,8 @@ session-ending side effects by authentication generation. Its release dependency
 must include this server change: JavaScript-only guards do not prevent cookie-jar
 mutation from an older backend response. No production deployment is implied.
 
-Regression coverage lives in `apps/api/test/account-deletion-http.test.ts` and
-`apps/api/test/account-domain.test.ts`: native success has no `Set-Cookie`, both
+Regression coverage lives in `apps/api/test/account/integration/account-deletion-http.test.ts` and
+`apps/api/test/account/unit/account-domain.test.ts`: native success has no `Set-Cookie`, both
 old account tokens are unusable, a replacement account stays authenticated,
 browser/malformed-native success still clears, and user-agent spoofing cannot
 bypass session or password checks.

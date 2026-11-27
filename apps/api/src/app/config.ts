@@ -3,7 +3,7 @@
 // what it is.
 
 import crypto from 'node:crypto';
-import { normalizeReleaseVersion } from '@voiceroom/shared/account-security';
+import { normalizeAndroidVersion } from '@voiceroom/shared/client-version';
 import type { NativeVoiceStage } from '@voiceroom/shared/contracts/admission';
 import { SESSION_ENDED_CLOSE_CODE } from '@voiceroom/shared/realtime';
 import { cleanLiveKitUrl } from '@voiceroom/shared/validation';
@@ -137,9 +137,9 @@ export function readRuStorePushConfig(env: Env = process.env): RuStorePushConfig
 // The oldest Android app version the server still serves (`x.y.z`); empty sets
 // no bound. A malformed value stops the process at start instead of silently
 // refusing nothing.
-function readAndroidMinVersion(env: Env): string {
-  const value = String(env.ANDROID_MIN_VERSION || '').trim();
-  if (value && !normalizeReleaseVersion(value)) throw new Error('ANDROID_MIN_VERSION must be a version like 1.2.0');
+function readAndroidMinVersion(env: Env, key = 'ANDROID_MIN_VERSION'): string {
+  const value = String(env[key] || '').trim();
+  if (value && !normalizeAndroidVersion(value)) throw new Error(`${key} must be a version like 1.2.0`);
   return value;
 }
 
@@ -267,6 +267,7 @@ export function readApiConfig(env: Env = process.env) {
     RETENTION_KEEP_DELETED_MS: int('RETENTION_KEEP_DELETED_MS', 30 * 24 * 60 * 60 * 1000, 60000),
     // A link preview makes the API open a URL a user posted, so it is opt-in.
     LINK_PREVIEWS_ENABLED: readEnvBool('LINK_PREVIEWS_ENABLED', false, env),
+    VOICE_CALLS_ENABLED: readEnvBool('VOICE_CALLS_ENABLED', false, env),
     UPLOADS_DIR: readUploadsDir(env),
     MEDIA_STORAGE_DIR: readMediaStorageDir(env),
     MEDIA_MIN_FREE_BYTES: int('MEDIA_MIN_FREE_BYTES', 2 * 1024 * 1024 * 1024, 1),
@@ -276,6 +277,7 @@ export function readApiConfig(env: Env = process.env) {
     PUSH: readPushConfig(env),
     RUSTORE_PUSH: readRuStorePushConfig(env),
     ANDROID_MIN_VERSION: readAndroidMinVersion(env),
+    ANDROID_CALL_PUSH_MIN_VERSION: readAndroidMinVersion(env, 'ANDROID_CALL_PUSH_MIN_VERSION'),
     LIVEKIT_METRICS_URL: readLiveKitMetricsUrl(env),
     // Desktop downloads come from the latest GitHub release; the metadata is
     // cached so visitors never hit GitHub's per-IP rate limit.

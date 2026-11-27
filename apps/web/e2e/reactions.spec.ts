@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page, type Locator } from '@playwright/test';
 import {
   ReactionBody,
   type ReactionSet,
@@ -9,6 +9,11 @@ import { parse } from '../test/helpers/assert';
 import { createPermanentRoom, enableCapabilities, enterRoom, registerViaUi, uniqueLogin } from './helpers';
 
 const enableReactions = (target: Page) => enableCapabilities(target, ['reactions']);
+
+async function messageActions(page: Page, message: Locator) {
+  await message.click({ button: 'right' });
+  return page.getByRole('menu', { name: 'Действия с сообщением' });
+}
 
 test('G70 supplemental mocked keyboard and pagination rendering remains deterministic', async ({ page }) => {
   const allReactors = Array.from({ length: 120 }, (_, index) => ({
@@ -61,8 +66,13 @@ test('G70 supplemental mocked keyboard and pagination rendering remains determin
   const search = page.getByPlaceholder('Поиск реакции');
   await expect(search).toBeFocused();
   await search.press('Tab');
-  await expect(page.getByRole('tab', { name: 'Часто используемые' })).toBeFocused();
+  await expect(page.getByRole('button', { name: 'Цвет кожи по умолчанию' })).toBeFocused();
   await page.keyboard.press('Tab');
+  const sections = page.getByRole('toolbar', { name: 'Разделы реакций' });
+  await expect(sections.getByRole('button', { name: 'Часто используемые' })).toBeFocused();
+  // Categories scroll one grid instead of swapping tab panels.
+  const sectionCount = await sections.getByRole('button').count();
+  for (let i = 0; i < sectionCount; i++) await page.keyboard.press('Tab');
   const firstCell = grid.getByRole('gridcell').first();
   await expect(firstCell).toBeFocused();
   await firstCell.press('ArrowRight');
@@ -108,16 +118,20 @@ test('G70-A03 late reaction response cannot revive a deleted message', async ({ 
   await input.press('Enter');
   const message = page.locator('.message-bubble', { hasText: 'hostile reaction race' });
   await expect(message).toBeVisible();
-  await message.hover();
+  const menu = await messageActions(page, message);
   const mutationRequest = page.waitForRequest(
     (request) => request.method() === 'PUT' && request.url().includes('/api/reactions/')
   );
-  await Promise.all([mutationRequest, message.getByRole('button', { name: 'Добавить быструю реакцию 👍' }).click()]);
+  await Promise.all([mutationRequest, menu.getByRole('button', { name: 'Реакция 👍', exact: true }).click()]);
   // The mutation is now in flight and intentionally held by the route.
-  await message.getByRole('button', { name: 'Удалить' }).click();
+  const reopened = await messageActions(page, message);
+  await reopened.getByRole('menuitem', { name: 'Удалить' }).click();
   await expect(message).toHaveCount(0);
+  const lateResponse = page.waitForResponse(
+    (response) => response.request().method() === 'PUT' && response.url().includes('/api/reactions/')
+  );
   releaseMutation();
-  await page.waitForTimeout(100);
+  expect(await (await lateResponse).finished()).toBeNull();
   await expect(page.getByText('hostile reaction race')).toHaveCount(0);
   await expect(page.locator('.reaction-summary .ui-tag')).toHaveCount(0);
 });
@@ -146,7 +160,7 @@ test('G70-A04 two accounts and a guest enforce the real mutation boundary across
   await guest.goto(`/r/${roomId}`);
   const guestDialog = guest.getByRole('dialog', { name: 'Как вас зовут?' });
   await guestDialog.getByPlaceholder('Ваше имя').fill('Reaction Guest');
-  await guestDialog.getByRole('button', { name: 'Войти в комнату' }).click();
+  await guestDialog.getByRole('button', { name: 'Войти', exact: true }).click();
   await expect(guest.locator('body')).toHaveClass(/\bscreen--room\b/);
   for (const target of [page, member, guest]) await target.getByRole('button', { name: 'Чат', exact: true }).click();
   const input = page.getByPlaceholder('Написать в комнату…');
@@ -156,12 +170,11 @@ test('G70-A04 two accounts and a guest enforce the real mutation boundary across
   const guestMessage = guest.locator('.message-bubble', { hasText: 'three-context reaction boundary' });
   await expect(memberMessage).toBeVisible();
   await expect(guestMessage).toBeVisible();
-  await memberMessage.hover();
-  await expect(memberMessage.getByRole('button', { name: /Добавить быструю реакцию/ }).first()).toBeVisible();
+  const memberMenu = await messageActions(member, memberMessage);
   const mutationResponse = member.waitForResponse(
     (response) => response.request().method() === 'PUT' && response.url().includes('/api/reactions/')
   );
-  await memberMessage.getByRole('button', { name: 'Добавить быструю реакцию 👍' }).click();
+  await memberMenu.getByRole('button', { name: 'Реакция 👍', exact: true }).click();
   const mutation = await mutationResponse;
   expect(mutation.ok(), await mutation.text()).toBe(true);
   await expect(
@@ -176,8 +189,10 @@ test('G70-A04 two accounts and a guest enforce the real mutation boundary across
     guest.locator('.reaction-summary .ui-tag').getByText('1'),
     'guest receives read-only reaction.updated'
   ).toBeVisible();
-  await guestMessage.hover();
-  await expect(guestMessage.getByRole('button', { name: /Добавить быструю реакцию/ })).toHaveCount(0);
+  const guestMenu = await messageActions(guest, guestMessage);
+  await expect(guestMenu).toBeVisible();
+  await expect(guestMenu.getByRole('toolbar', { name: 'Быстрые реакции' })).toHaveCount(0);
+  await guest.keyboard.press('Escape');
   await member.close();
   const reconnected = await memberContext.newPage();
   await enableReactions(reconnected);
@@ -190,8 +205,8 @@ test('G70-A04 two accounts and a guest enforce the real mutation boundary across
       .getByText('1')
   ).toBeVisible();
   const ownerMessage = page.locator('.message-bubble', { hasText: 'three-context reaction boundary' });
-  await ownerMessage.hover();
-  await ownerMessage.getByRole('button', { name: 'Добавить быструю реакцию 👍' }).click();
+  const ownerMenu = await messageActions(page, ownerMessage);
+  await ownerMenu.getByRole('button', { name: 'Реакция 👍', exact: true }).click();
   for (const target of [page, reconnected, guest])
     await expect(target.locator('.reaction-summary .ui-tag').getByText('2')).toBeVisible();
   await memberContext.close();

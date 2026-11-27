@@ -1,2 +1,2 @@
 export { default as Splitter } from './Splitter.vue';
-export type { SplitterProps, SplitterWidth } from './types';
+export type { SplitterProps, SplitterSize } from './types';

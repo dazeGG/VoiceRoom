@@ -1,0 +1,54 @@
+@use 'pkg:@voiceroom/ui-kit/styles/mixins' as *;
+
+.incoming-call-stack {
+  position: fixed;
+  z-index: 130;
+  inset-block-start: calc(var(--vr-room-head-h) + var(--space-12));
+  inset-inline-end: var(--space-24);
+  display: grid;
+  gap: var(--space-8);
+  width: min(360px, calc(100vw - var(--space-48)));
+  max-height: calc(100dvh - var(--vr-room-head-h) - var(--space-24));
+  overflow: auto;
+  pointer-events: auto;
+}
+
+.incoming-call-stack__announcement {
+  @include visually-hidden;
+}
+
+@media (orientation: portrait) {
+  @include below($bp-phone) {
+    .incoming-call-stack {
+      --incoming-call-top: calc(env(safe-area-inset-top, 0px) + var(--size-56) + var(--space-8));
+      inset-block-start: var(--incoming-call-top);
+      inset-inline: var(--space-16);
+      inline-size: auto;
+      max-block-size: calc(100dvh - var(--incoming-call-top) - env(safe-area-inset-bottom, 0px) - var(--space-8));
+    }
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .incoming-call-stack__primary {
+    animation: incoming-call-promote 120ms var(--ease-out);
+  }
+
+  .incoming-call-enter-active {
+    transition:
+      opacity 120ms var(--ease-out),
+      transform 120ms var(--ease-out);
+  }
+
+  .incoming-call-enter-from {
+    opacity: 0;
+    transform: translateY(var(--space-4));
+  }
+
+  @keyframes incoming-call-promote {
+    from {
+      opacity: 0;
+      transform: translateY(var(--space-4));
+    }
+  }
+}

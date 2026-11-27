@@ -1,7 +1,7 @@
 // Typed query builder over the process's pg pool.
 //
 // `DB` is generated from a migrated database with `npm run db:types`, and
-// test/db-schema-types.test.ts fails when it no longer matches the migrations.
+// The db-schema-types test fails when it no longer matches the migrations.
 //
 // Repositories build their queries on one `Database` made from the pool.
 // Code that still drives a transaction on a raw pg client hands that client

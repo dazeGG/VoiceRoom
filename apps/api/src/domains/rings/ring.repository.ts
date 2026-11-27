@@ -5,12 +5,14 @@ import type { RingSnapshot, RingState } from '@voiceroom/shared/contracts/rings'
 import { createDmThreadRepository } from '../messaging/dm-thread.repository.ts';
 import type { DirectMessage } from '../social/social-records.ts';
 import { isStoredDirectMessage, lockUserPair } from '../social/social-records.ts';
+import { ringPairRefusal } from '../social/pair-eligibility.repository.ts';
 import { kyselyOn } from '../../platform/db/kysely.ts';
 import { lockKeys, lockXact } from '../../platform/db/locks.ts';
 import { transaction } from '../../platform/db/pool.ts';
 
 interface RingRow {
   id: string;
+  purpose: 'room-invite' | 'voice-call';
   caller_user_id: string;
   recipient_user_id: string;
   room_id: string;
@@ -74,22 +76,8 @@ class CreationRejected extends Error {
 export function createRingRepository({ pool, isBanned }: { pool: pg.Pool; isBanned: RingBanCheck }) {
   const messages = createDmThreadRepository({ pool });
   async function available(client: pg.PoolClient, caller: string, recipient: string, roomId: string) {
-    const active = await client.query<{ count: number }>(
-      `SELECT count(*)::int AS count FROM users WHERE id=ANY($1::varchar[]) AND deleted_at IS NULL AND deletion_requested_at IS NULL AND (blocked_at IS NULL OR (blocked_until IS NOT NULL AND blocked_until <= clock_timestamp()))`,
-      [[caller, recipient]]
-    );
-    if (active.rows[0]?.count !== 2) return 'account_deleted' as const;
-    const [low, high] = [caller, recipient].sort();
-    const friendship = await client.query<{ one: number }>(
-      `SELECT 1 AS one FROM friendships WHERE user_a_id=$1 AND user_b_id=$2`,
-      [low, high]
-    );
-    const block = await client.query<{ one: number }>(
-      `SELECT 1 AS one FROM user_blocks WHERE (blocker_id=$1 AND blocked_id=$2) OR (blocker_id=$2 AND blocked_id=$1)`,
-      [caller, recipient]
-    );
-    if (!friendship.rowCount) return 'not_friends' as const;
-    if (block.rowCount) return 'blocked' as const;
+    const refusal = await ringPairRefusal(kyselyOn(client), caller, recipient);
+    if (refusal) return refusal;
     const room = await client.query<{ name: string; emoji: string }>(
       `SELECT name,emoji FROM rooms WHERE id=$1 AND deleted_at IS NULL AND kind='main'`,
       [roomId]
@@ -114,7 +102,7 @@ export function createRingRepository({ pool, isBanned }: { pool: pg.Pool; isBann
       `WITH transition AS MATERIALIZED (SELECT clock_timestamp() AS at)
        UPDATE room_rings SET state=CASE WHEN expires_at<=transition.at THEN 'expired' ELSE $2 END,
        revision=2,ended_at=transition.at,reason=CASE WHEN expires_at<=transition.at THEN NULL ELSE $3 END
-       FROM transition WHERE id=$1 AND state='pending' RETURNING room_rings.*`,
+       FROM transition WHERE id=$1 AND purpose='room-invite' AND state='pending' RETURNING room_rings.*`,
       [row.id, state, reason]
     );
     const result = changed.rows[0];
@@ -153,7 +141,11 @@ export function createRingRepository({ pool, isBanned }: { pool: pg.Pool; isBann
             ])
           ).rows[0];
           if (old) {
-            if (old.recipient_user_id !== input.recipientUserId || old.room_id !== input.roomId)
+            if (
+              old.purpose !== 'room-invite' ||
+              old.recipient_user_id !== input.recipientUserId ||
+              old.room_id !== input.roomId
+            )
               throw new CreationRejected({ status: 'request_conflict' });
             const target = await client.query<{ '?column?': number }>(
               "SELECT 1 FROM rooms WHERE id=$1 AND kind='main' AND deleted_at IS NULL",
@@ -170,7 +162,7 @@ export function createRingRepository({ pool, isBanned }: { pool: pg.Pool; isBann
             const cooldown =
               (
                 await client.query<{ remaining: number }>(
-                  `SELECT CASE WHEN count(*) >= $4 THEN ceil(($3::float8-extract(epoch FROM (clock_timestamp()-min(created_at)))*1000)/1000)::int ELSE 0 END AS remaining FROM room_rings WHERE caller_user_id=$1 AND recipient_user_id=$2 AND created_at > clock_timestamp()-$3::float8*interval '1 millisecond'`,
+                  `SELECT CASE WHEN count(*) >= $4 THEN ceil(($3::float8-extract(epoch FROM (clock_timestamp()-min(created_at)))*1000)/1000)::int ELSE 0 END AS remaining FROM room_rings WHERE purpose='room-invite' AND caller_user_id=$1 AND recipient_user_id=$2 AND created_at > clock_timestamp()-$3::float8*interval '1 millisecond'`,
                   [input.callerUserId, input.recipientUserId, input.cooldownMs, input.limit ?? 1]
                 )
               ).rows[0]?.remaining ?? 0;
@@ -241,7 +233,8 @@ export function createRingRepository({ pool, isBanned }: { pool: pg.Pool; isBann
       // row lock follows it, matching creation and relationship changes.
       const hint = (
         await client.query<RingRow>(
-          `SELECT rr.* FROM room_rings rr WHERE rr.id=$1 AND NOT EXISTS (SELECT 1 FROM rooms room WHERE room.id=rr.room_id AND room.kind='widget')`,
+          `SELECT rr.* FROM room_rings rr WHERE rr.id=$1 AND rr.purpose='room-invite'
+           AND NOT EXISTS (SELECT 1 FROM rooms room WHERE room.id=rr.room_id AND room.kind<>'main')`,
           [input.ringId]
         )
       ).rows[0];
@@ -250,8 +243,11 @@ export function createRingRepository({ pool, isBanned }: { pool: pg.Pool; isBann
         return null;
       if (input.action === 'cancel' && hint.caller_user_id !== input.actorUserId) return null;
       await lockUserPair(kyselyOn(client), hint.caller_user_id, hint.recipient_user_id);
-      let row = (await client.query<RingRow>(`SELECT * FROM room_rings WHERE id=$1 FOR UPDATE`, [input.ringId]))
-        .rows[0];
+      let row = (
+        await client.query<RingRow>(`SELECT * FROM room_rings WHERE id=$1 AND purpose='room-invite' FOR UPDATE`, [
+          input.ringId
+        ])
+      ).rows[0];
       if (!row) return null;
       if (row.state !== 'pending') return snapshot(row);
       const expired = (
@@ -290,17 +286,27 @@ export function createRingRepository({ pool, isBanned }: { pool: pg.Pool; isBann
   async function maintenance(): Promise<void> {
     await transaction(pool, async (client) => {
       const expired = await client.query<RingRow>(
-        `SELECT * FROM room_rings WHERE state='pending' AND expires_at<=clock_timestamp() ORDER BY expires_at FOR UPDATE SKIP LOCKED LIMIT 100`
+        `SELECT * FROM room_rings WHERE purpose='room-invite' AND state='pending' AND expires_at<=clock_timestamp() ORDER BY expires_at FOR UPDATE SKIP LOCKED LIMIT 100`
       );
       for (const row of expired.rows) await terminal(client, row, 'expired');
-      await client.query(`DELETE FROM room_rings WHERE created_at<clock_timestamp()-interval '24 hours'`);
-      await client.query(`DELETE FROM ring_delivery_outbox WHERE deadline<=clock_timestamp()`);
+      await client.query(
+        `DELETE FROM room_rings WHERE purpose='room-invite' AND created_at<clock_timestamp()-interval '24 hours'`
+      );
+      await client.query(
+        `DELETE FROM ring_delivery_outbox WHERE purpose='room-invite' AND deadline<=clock_timestamp()`
+      );
     });
   }
   async function claim(): Promise<RingDeliveryJob | null> {
     const token = crypto.randomUUID();
     const rows = await pool.query<RingDeliveryJob>(
-      `UPDATE ring_delivery_outbox SET claim_token=$1,claimed_until=clock_timestamp()+interval '30 seconds',attempts=attempts+1 WHERE (ring_id,revision,recipient_user_id) IN (SELECT ring_id,revision,recipient_user_id FROM ring_delivery_outbox WHERE available_at<=clock_timestamp() AND deadline>clock_timestamp() AND (claimed_until IS NULL OR claimed_until<=clock_timestamp()) ORDER BY available_at FOR UPDATE SKIP LOCKED LIMIT 1) RETURNING *`,
+      `UPDATE ring_delivery_outbox SET claim_token=$1,claimed_until=clock_timestamp()+interval '30 seconds',attempts=attempts+1
+       WHERE purpose='room-invite' AND (ring_id,revision,recipient_user_id,kind) IN (
+         SELECT ring_id,revision,recipient_user_id,kind FROM ring_delivery_outbox
+         WHERE purpose='room-invite' AND available_at<=clock_timestamp() AND deadline>clock_timestamp()
+           AND (claimed_until IS NULL OR claimed_until<=clock_timestamp())
+         ORDER BY available_at FOR UPDATE SKIP LOCKED LIMIT 1
+       ) RETURNING *`,
       [token]
     );
     return rows.rows[0] ?? null;
@@ -308,7 +314,13 @@ export function createRingRepository({ pool, isBanned }: { pool: pg.Pool; isBann
   async function current(job: RingDeliveryJob): Promise<RingSnapshot | null> {
     const row = (
       await pool.query<RingRow>(
-        `SELECT r.* FROM room_rings r JOIN rooms room ON room.id=r.room_id AND room.kind='main' AND room.deleted_at IS NULL JOIN ring_delivery_outbox j ON j.ring_id=r.id WHERE r.id=$1 AND j.revision=$2 AND j.recipient_user_id=$3 AND j.claim_token=$4 AND j.claimed_until>clock_timestamp() AND j.deadline>clock_timestamp() AND (($5='incoming' AND r.state='pending' AND r.expires_at>clock_timestamp()) OR ($5='terminal' AND r.revision=$2 AND r.state<>'pending'))`,
+        `SELECT r.* FROM room_rings r JOIN rooms room ON room.id=r.room_id AND room.kind='main' AND room.deleted_at IS NULL
+         JOIN ring_delivery_outbox j ON j.ring_id=r.id
+         WHERE r.id=$1 AND r.purpose='room-invite' AND j.purpose='room-invite'
+           AND j.revision=$2 AND j.recipient_user_id=$3 AND j.claim_token=$4 AND j.kind=$5
+           AND j.claimed_until>clock_timestamp() AND j.deadline>clock_timestamp()
+           AND (($5='incoming' AND r.state='pending' AND r.expires_at>clock_timestamp())
+             OR ($5='terminal' AND r.revision=$2 AND r.state<>'pending'))`,
         [job.ring_id, job.revision, job.recipient_user_id, job.claim_token, job.kind]
       )
     ).rows[0];
@@ -317,7 +329,8 @@ export function createRingRepository({ pool, isBanned }: { pool: pg.Pool; isBann
   async function finish(job: RingDeliveryJob, retry = false): Promise<void> {
     if (retry)
       await pool.query(
-        `UPDATE ring_delivery_outbox SET claim_token=NULL,claimed_until=NULL,available_at=clock_timestamp()+$5::float8*interval '1 second' WHERE ring_id=$1 AND revision=$2 AND recipient_user_id=$3 AND claim_token=$4`,
+        `UPDATE ring_delivery_outbox SET claim_token=NULL,claimed_until=NULL,available_at=clock_timestamp()+$5::float8*interval '1 second'
+         WHERE ring_id=$1 AND revision=$2 AND recipient_user_id=$3 AND claim_token=$4 AND purpose='room-invite'`,
         [
           job.ring_id,
           job.revision,
@@ -328,7 +341,8 @@ export function createRingRepository({ pool, isBanned }: { pool: pg.Pool; isBann
       );
     else
       await pool.query(
-        `DELETE FROM ring_delivery_outbox WHERE ring_id=$1 AND revision=$2 AND recipient_user_id=$3 AND claim_token=$4`,
+        `DELETE FROM ring_delivery_outbox WHERE ring_id=$1 AND revision=$2 AND recipient_user_id=$3 AND claim_token=$4
+         AND purpose='room-invite'`,
         [job.ring_id, job.revision, job.recipient_user_id, job.claim_token]
       );
   }

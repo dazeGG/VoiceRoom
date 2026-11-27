@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
-import { APP_HOME } from '@voiceroom/shared/app-home';
 import {
   createPermanentRoom,
+  deleteRoomViaSettings,
   enterRoom,
   registerViaUi,
   roomHeading,
@@ -26,7 +26,7 @@ test('a rename by the owner propagates live to another participant without reloa
 
   // Context B: a second authenticated participant opens the same room URL.
   // (Authenticated rather than guest to skip the guest-name prompt — the
-  // realtime path under test is the chat-stream SSE, identical for both.)
+  // room updates use the same realtime connection for both.)
   const guestCtx = await browser.newContext();
   const guestPage = await guestCtx.newPage();
   await registerViaUi(guestPage, guestLogin);
@@ -42,7 +42,7 @@ test('a rename by the owner propagates live to another participant without reloa
   await expect(dialog).toBeHidden({ timeout: 15_000 });
   await expect(roomHeading(ownerPage)).toHaveText(newName, { timeout: 15_000 });
 
-  // Context B sees the new name pushed over SSE without a page reload.
+  // Context B sees the new name without a page reload.
   await expect(roomHeading(guestPage)).toHaveText(newName, { timeout: 20_000 });
 
   await ownerCtx.close();
@@ -66,12 +66,7 @@ test('an owner delete propagates live to another participant without reload', as
   await enterRoom(guestPage, roomId);
   await expect(roomHeading(guestPage)).toHaveText(roomName, { timeout: 15_000 });
 
-  await openRoomSettings(ownerPage);
-  const dialog = settingsDialog(ownerPage);
-  await expect(dialog).toBeVisible();
-  await dialog.getByRole('button', { name: 'Удалить комнату' }).click();
-  await dialog.getByRole('button', { name: 'Удалить навсегда' }).click();
-  await ownerPage.waitForURL((url) => url.pathname === APP_HOME, { timeout: 15_000 });
+  await deleteRoomViaSettings(ownerPage, roomName);
 
   await expect(guestPage.locator('body')).toHaveClass(/\bscreen--not-found\b/, { timeout: 20_000 });
   await expect(guestPage.locator('#notFoundScreen')).toBeVisible();

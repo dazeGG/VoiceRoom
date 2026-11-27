@@ -11,12 +11,12 @@ import type {
   AccountSession,
   LoginAlert as LoginAlertView,
   RecoveryCodesStatus,
-  SelfUser
+  SelfUser,
+  WhatsNew
 } from '@voiceroom/shared/contracts/account';
 import type { Logger } from 'pino';
 import {
   ACCOUNT_DELETION_GRACE_MS,
-  WHATS_NEW_VERSION,
   formatRecoveryCode,
   isDeletedAccountLogin
 } from '@voiceroom/shared/account-security';
@@ -76,6 +76,7 @@ export interface AccountDeps {
   };
   /** Ends what the given sessions still hold open: sockets and voice seats. */
   endSessionConnections(input: { userId?: string | null; tokenHashes?: string[] | null }): Promise<void>;
+  invalidateCalls?(userId: string): void;
   notifyUser(userId: string, event: AccountMessage): void;
   queuePush(userId: string, payload: PushPayload, options: { ignorePreferences: boolean }): Promise<unknown>;
   /** Refreshes the user's live room peers after a profile change. */
@@ -295,17 +296,18 @@ export function createAccountService(deps: AccountDeps) {
       : { status: 'not_found' };
   }
 
-  async function whatsNew(userId: string) {
+  async function whatsNew(userId: string): Promise<WhatsNew> {
     const notices = await deps.users().getAccountNotices(userId);
-    return { current: WHATS_NEW_VERSION, lastSeen: notices.whatsNewSeen };
+    return { lastSeen: notices.whatsNewSeen };
   }
 
   async function markWhatsNewSeen(
-    userId: string
-  ): Promise<{ status: 'seen'; whatsNew: { current: string; lastSeen: string | null } } | NotFound> {
-    const result = await deps.users().markWhatsNewSeen({ userId });
+    userId: string,
+    release?: string
+  ): Promise<{ status: 'seen'; whatsNew: WhatsNew } | NotFound> {
+    const result = await deps.users().markWhatsNewSeen({ userId, release });
     if (result.status !== 'seen') return { status: 'not_found' };
-    return { status: 'seen', whatsNew: { current: WHATS_NEW_VERSION, lastSeen: result.whatsNewSeen } };
+    return { status: 'seen', whatsNew: { lastSeen: result.whatsNewSeen } };
   }
 
   async function markAppPromptSeen(userId: string): Promise<Status<'seen'> | NotFound> {
@@ -432,6 +434,7 @@ export function createAccountService(deps: AccountDeps) {
     if (result.status === 'not_found') return { status: 'not_found' };
     if (result.status === 'already_requested')
       return { status: 'already_requested', deletionScheduledFor: result.scheduledFor };
+    deps.invalidateCalls?.(userId);
     await deps.endSessionConnections({ userId });
     const hidden = await deps.users().getUserById(userId);
     if (hidden) await deps.broadcastProfileToFriends(hidden, log);

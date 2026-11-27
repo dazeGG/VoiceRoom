@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { t } from '@voiceroom/ui-kit/i18n';
-import { Button, ParticipantTileFace } from '@voiceroom/ui-kit/components';
+import { Button, ParticipantTileFace, type ParticipantTileFaceProps } from '@voiceroom/ui-kit/components';
 import { MonitorPlay } from '@lucide/vue';
 import { computed, ref, watch } from 'vue';
 import type { Participant } from '../engine/core/types';
@@ -10,9 +10,11 @@ import type { CallAvatar } from './types';
 const {
   participant,
   variant = 'grid',
+  state = 'connected',
   screenRequesting,
   viewing,
-  contextMenu
+  contextMenu,
+  staticTile
 } = defineProps<{
   participant: Pick<
     Participant,
@@ -20,10 +22,12 @@ const {
   >;
   avatar: CallAvatar;
   variant?: 'grid' | 'focus' | 'strip';
+  state?: ParticipantTileFaceProps['state'];
   viewing: boolean;
   mirrored: boolean;
   screenRequesting: boolean;
   contextMenu?: boolean;
+  staticTile?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -39,9 +43,12 @@ defineSlots<{
 
 const tile = ref<HTMLElement | null>(null);
 const cameraVideo = ref<HTMLVideoElement | null>(null);
-const canWatch = computed(() => !participant.isLocal && participant.screen && !viewing);
+const connected = computed(() => state === 'connected');
+const canActivate = computed(() => connected.value && !staticTile);
+const canOpenContextMenu = computed(() => contextMenu && (connected.value || staticTile));
+const canWatch = computed(() => connected.value && !participant.isLocal && participant.screen && !viewing);
 const screenActionLabel = computed(() => (screenRequesting ? t('Подключение') : t('Смотреть экран')));
-const cameraStream = computed(() => participant.cameraStream);
+const cameraStream = computed(() => (connected.value ? participant.cameraStream : null));
 
 watch(
   [cameraVideo, cameraStream],
@@ -65,6 +72,7 @@ watch(
 );
 
 function handleTileClick(event: MouseEvent): void {
+  if (!canActivate.value) return;
   if (event.target instanceof Element && event.target.closest('button, select, input, a')) return;
   emit('activate');
 }
@@ -75,7 +83,7 @@ function handleScreenAction(event: MouseEvent): void {
 }
 
 function handleContextMenu(event: MouseEvent): void {
-  if (!contextMenu) return;
+  if (!canOpenContextMenu.value) return;
   event.preventDefault();
   event.stopPropagation();
   emit('contextMenu', event.clientX, event.clientY, tile.value);
@@ -83,12 +91,12 @@ function handleContextMenu(event: MouseEvent): void {
 
 function handleKeydown(event: KeyboardEvent): void {
   if (event.target !== tile.value) return;
-  if (event.key === 'Enter' || event.key === ' ') {
+  if (canActivate.value && (event.key === 'Enter' || event.key === ' ')) {
     event.preventDefault();
     emit('activate');
     return;
   }
-  if (!contextMenu) return;
+  if (!canOpenContextMenu.value) return;
   const isContextKey = event.key === 'ContextMenu' || (event.key === 'F10' && event.shiftKey);
   if (!isContextKey || !tile.value) return;
   event.preventDefault();
@@ -101,24 +109,24 @@ function handleKeydown(event: KeyboardEvent): void {
 <template>
   <div
     ref="tile"
-    role="button"
+    :role="canActivate ? 'button' : canOpenContextMenu ? 'group' : undefined"
     :class="[
       'participant',
       `participant--${variant}`,
       {
         'participant--local': participant.isLocal,
-        'participant--deafened': participant.deafened,
-        'participant--muted': participant.muted,
-        'participant--screen': participant.screen,
+        'participant--deafened': connected && participant.deafened,
+        'participant--muted': connected && participant.muted,
+        'participant--screen': connected && participant.screen,
         'participant--camera': cameraStream,
-        'participant--speaking': participant.speaking
+        'participant--speaking': connected && participant.speaking
       }
     ]"
     :data-peer-id="participant.id"
-    tabindex="0"
-    :aria-haspopup="contextMenu ? 'dialog' : undefined"
+    :tabindex="canActivate || canOpenContextMenu ? 0 : undefined"
+    :aria-haspopup="canOpenContextMenu ? 'menu' : undefined"
     :aria-label="
-      contextMenu
+      canOpenContextMenu
         ? t('{p0}. Откройте контекстное меню Shift+F10 или клавишей меню.', { p0: participant.name })
         : undefined
     "
@@ -141,6 +149,7 @@ function handleKeydown(event: KeyboardEvent): void {
       :avatar-src="avatar.src"
       :local="participant.isLocal"
       :status-label="participant.statusLabel"
+      :state="state"
     >
       <template #name
         ><slot name="name">{{ participant.name }}</slot></template

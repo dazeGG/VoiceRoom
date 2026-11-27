@@ -6,17 +6,21 @@ import { join } from 'node:path';
 import { test } from 'node:test';
 import { validateRelease } from '../cd/validate-release.mts';
 
-test('release validation uses the component manifest and first-parent history of main', (t) => {
+test('release validation uses the component manifest and first-parent history of main', async (t) => {
   const directory = mkdtempSync(join(tmpdir(), 'voice-release-'));
   t.after(() => rmSync(directory, { recursive: true, force: true }));
   const git = (...args: string[]) => execFileSync('git', args, { cwd: directory, encoding: 'utf8' }).trim();
   git('init', '-q', '-b', 'main');
   git('config', 'user.name', 'Release Test');
   git('config', 'user.email', 'release-test@example.test');
-  mkdirSync(join(directory, 'apps/web'), { recursive: true });
+  mkdirSync(join(directory, 'apps/web/src/shared'), { recursive: true });
   mkdirSync(join(directory, 'apps/api'), { recursive: true });
   writeFileSync(join(directory, 'apps/web/package.json'), '{"version":"1.0.1"}');
   writeFileSync(join(directory, 'apps/api/package.json'), '{"version":"1.0.0"}');
+  const releaseSource = join(directory, 'apps/web/src/shared/whats-new-release.ts');
+  const writeAnnouncement = (release: string) =>
+    writeFileSync(releaseSource, `export const WHATS_NEW_RELEASE = '${release}';\n`);
+  writeAnnouncement('web/1.0.0');
   git('add', '.');
   git('commit', '-qm', 'chore: initialize versions');
   const initial = git('rev-parse', 'HEAD');
@@ -40,4 +44,19 @@ test('release validation uses the component manifest and first-parent history of
   assert.equal(validateRelease(directory, 'web', 'web/v1.0.1', initial), '1.0.1');
   git('checkout', '-q', '--detach', branchCommit);
   assert.throws(() => validateRelease(directory, 'web', 'web/v1.0.1', branchCommit), /first-parent/);
+
+  git('checkout', '-q', '--detach', releaseCommit);
+  await t.test('web announcements cannot be ahead of the web package', () => {
+    writeAnnouncement('web/1.0.1');
+    assert.equal(validateRelease(directory, 'web', 'web/v1.0.1', releaseCommit), '1.0.1');
+
+    writeAnnouncement('web/1.0.10');
+    assert.throws(() => validateRelease(directory, 'web', 'web/v1.0.1', releaseCommit), /newer than/);
+    assert.equal(validateRelease(directory, 'api', 'api/v1.0.0', releaseCommit), '1.0.0');
+
+    for (const release of ['1.0.0', 'api/1.0.0', 'web/1.00.0', 'web/1.0.0-beta']) {
+      writeAnnouncement(release);
+      assert.throws(() => validateRelease(directory, 'web', 'web/v1.0.1', releaseCommit), /must be web\/X\.Y\.Z/);
+    }
+  });
 });

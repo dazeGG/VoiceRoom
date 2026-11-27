@@ -32,15 +32,17 @@ import { useLobby } from '../../../model/lobby-context';
 import type { OutgoingDirectMessage } from '../../../model/lobby.store';
 import { useToastsStore } from '../../../model/toasts.store';
 import DmComposer from './DmComposer.vue';
+import DmCallEvent from './DmCallEvent.vue';
 import DmInviteCard from './DmInviteCard.vue';
 
-const { peerId, self, peer, presence, media, quickReactions } = defineProps<{
+const { peerId, self, peer, presence, media, quickReactions, visible } = defineProps<{
   peerId: string;
   self: AuthUser;
   peer: PublicUser | null;
   presence: PresenceStatus;
   media: AttachmentComposeStore | null;
   quickReactions: string[];
+  visible: boolean;
 }>();
 
 interface Group {
@@ -81,7 +83,7 @@ const groups = computed<Group[]>(() => {
     const fromMe = message.senderId === selfId.value;
     const newDay = !prev || !isSameDay(prev.createdAt, message.createdAt);
     const lastGroup = result.at(-1);
-    if (lastGroup && prev && !newDay && prev.senderId === message.senderId) {
+    if (lastGroup && prev && !newDay && prev.senderId === message.senderId && !prev.call && !message.call) {
       lastGroup.bubbles.push(message);
     } else {
       result.push({
@@ -97,7 +99,6 @@ const groups = computed<Group[]>(() => {
 });
 
 let stopReactions = (): void => {};
-let stopReader = (): void => {};
 
 onMounted(() => {
   stopReactions = getAppRealtime().subscribe((event) => {
@@ -105,19 +106,23 @@ onMounted(() => {
     if (event.payload.conversation.id !== peerId) return;
     reactions.applyServer(event.payload.messageId, event.payload.summary);
   });
-  // Read receipts follow the conversation on screen: unmounting stops them.
-  stopReader = lobby.thread.attachReader(peerId);
 });
 
-onBeforeUnmount(() => {
-  stopReactions();
-  stopReader();
-});
+onBeforeUnmount(() => stopReactions());
 
-// Invitations carry no reactions.
+// Keep the composer and scroll state while hiding the chat, and read only while it is on screen.
+watch(
+  () => visible,
+  (isVisible, _, onCleanup) => {
+    if (isVisible) onCleanup(lobby.thread.attachReader(peerId));
+  },
+  { immediate: true, flush: 'post' }
+);
+
+// System messages have their own actions.
 const menu = new MessageMenuState<DirectMessage>({
   reactions,
-  messages: () => lobby.thread.messages.filter((message) => !message.invite)
+  messages: () => lobby.thread.messages.filter(isOrdinaryMessage)
 });
 onBeforeUnmount(() => menu.dispose());
 
@@ -222,8 +227,12 @@ function openProfile(event: MouseEvent, fromMe: boolean): void {
 
 function editLastOwnMessage(): boolean {
   return menu.editLast(
-    lobby.thread.messages.findLast((message) => message.senderId === selfId.value && !message.invite)
+    lobby.thread.messages.findLast((message) => message.senderId === selfId.value && isOrdinaryMessage(message))
   );
+}
+
+function isOrdinaryMessage(message: DirectMessage): boolean {
+  return !message.invite && !message.call;
 }
 
 async function deleteMessage(messageId: string): Promise<void> {
@@ -241,7 +250,7 @@ async function deleteMessage(messageId: string): Promise<void> {
 // Invitations are interactive cards with their own buttons; a context menu on
 // top of them would offer actions that do not apply.
 function openMessageMenu(message: DirectMessage, event: MouseEvent): void {
-  if (!message.invite) menu.open(message, event);
+  if (isOrdinaryMessage(message)) menu.open(message, event);
 }
 
 async function respondToInvite(message: DirectMessage, action: 'accept' | 'decline'): Promise<void> {
@@ -306,7 +315,15 @@ function onMenuImage(action: (image: NonNullable<typeof menuImage.value>) => voi
         <div v-if="group.dayLabel" class="dm-conversation__day-divider">
           <span class="dm-conversation__day-label">{{ group.dayLabel }}</span>
         </div>
-        <div class="dm-group">
+        <DmCallEvent
+          v-if="group.bubbles[0].call"
+          :projection="group.bubbles[0].call"
+          :from-me="group.fromMe"
+          :peer-id="peerId"
+          :peer-name="peerName"
+          :created-at="group.bubbles[0].createdAt"
+        />
+        <div v-else class="dm-group">
           <Pressable
             display="inline-flex"
             class="dm-group__avatar-button dm-group__trigger"

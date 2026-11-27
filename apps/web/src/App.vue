@@ -16,16 +16,19 @@ import { reloadNavigationsOnUpdate } from '@/features/app-update/update-navigati
 import { createVersionCheck } from '@/features/app-update/version-check';
 import { useCallFeedbackStore } from '@/features/call-feedback/call-feedback.store';
 import CallFeedbackPrompt from '@/features/call-feedback/CallFeedbackPrompt.vue';
+import FriendCallHost from '@/features/friend-call/FriendCallHost.vue';
 import { useToastsStore } from '@/features/home/model/toasts.store';
 import { useLeaveScreenStore } from '@/features/room/leave-screen.store';
 import { applyDesktopBoundaryToDocument } from '@/platform/desktop-boundary';
 import { syncDesktopCallState } from '@/platform/desktop-call';
 import { bindDesktopSystem } from '@/platform/desktop-system';
 import { isMobileRoute } from '@/platform/mobile-routes';
+import { useAppearanceStore } from '@/shared/appearance/appearance.store';
 import { useCallActivityStore } from '@/shared/call-activity.store';
 import { installEmojiCopy } from '@/shared/chat/emoji-copy';
 import EmojiText from '@/shared/chat/EmojiText.vue';
 import { useThemeStore } from '@/shared/theme/theme.store';
+import { LEGACY_APP_HOME } from '@/shared/app-home';
 
 const route = useRoute();
 const router = useRouter();
@@ -34,6 +37,7 @@ const callActivity = useCallActivityStore();
 const callFeedback = useCallFeedbackStore();
 const leaveScreen = useLeaveScreenStore();
 const theme = useThemeStore();
+const appearance = useAppearanceStore();
 const toasts = useToastsStore();
 const roomToasts = useToastUiStore();
 const voiceSession = useVoiceSessionStore();
@@ -52,6 +56,9 @@ const roomClientAllowed = ref(false);
 // Phones get only the routes in mobile-routes.ts; the rest keep the block
 // screen below.
 const allowed = computed(() => desktopAllowed.value || (roomClientAllowed.value && isMobileRoute(route.meta.routeId)));
+const showFriendCalls = computed(
+  () => desktopAllowed.value || route.meta.routeId === LEGACY_APP_HOME || route.meta.routeId === '/r/[roomId]'
+);
 
 // The build marker belongs to web. The desktop shell reports its own updates through the bridge.
 const versionCheck = createVersionCheck({
@@ -99,6 +106,7 @@ watchEffect(() => {
 
 onMounted(() => {
   theme.initTheme();
+  appearance.initAppearance();
   // "How was the call?" asked by a leave on the page before this load.
   callFeedback.restorePendingCallFeedback();
   const policy = applyDesktopBoundaryToDocument();
@@ -160,6 +168,7 @@ onBeforeUnmount(() => {
   </main>
   <template v-else-if="allowed">
     <RouterView />
+    <FriendCallHost v-if="showFriendCalls" :mobile="!desktopAllowed" />
     <Toast id="toast" viewport-class="app-toast-viewport" :toasts="toastItems" :on-dismiss="dismissToast">
       <template #message="{ message }"><EmojiText :text="message" /></template>
     </Toast>

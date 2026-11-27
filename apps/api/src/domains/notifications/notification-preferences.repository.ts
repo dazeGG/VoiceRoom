@@ -315,6 +315,7 @@ function createNotificationPreferencesRepository({
         .selectFrom('rooms')
         .select('is_static')
         .where('id', '=', roomId)
+        .where('kind', '!=', 'call')
         .where('deleted_at', 'is', null)
         .executeTakeFirst();
       if (!room) {
@@ -364,6 +365,7 @@ function createNotificationPreferencesRepository({
         .selectFrom('rooms')
         .select('id')
         .where('id', '=', roomId)
+        .where('kind', '!=', 'call')
         .where('deleted_at', 'is', null)
         .limit(1)
         .executeTakeFirst();

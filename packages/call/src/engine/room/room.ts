@@ -179,12 +179,12 @@ function showRoomModerationScreen(reason: 'banned' | 'kicked'): void {
   document.title = reason === 'banned' ? t('Доступ к комнате закрыт · VoiceRoom') : t('Вы исключены · VoiceRoom');
 }
 
-export async function joinRoom(event?: Event): Promise<void> {
+export async function joinRoom(event?: Event, onMissingMicrophone?: () => void): Promise<void> {
   event?.preventDefault();
   if (state.joined || state.connecting) return;
 
   const generation = ++joinAttemptGeneration;
-  const attempt = performJoinRoom(generation);
+  const attempt = performJoinRoom(generation, onMissingMicrophone);
   activeJoinAttempt = attempt;
   try {
     await attempt;
@@ -215,14 +215,14 @@ export async function reconnectRoomVoice(): Promise<void> {
   }
 }
 
-async function performJoinRoom(generation: number): Promise<void> {
+async function performJoinRoom(generation: number, onMissingMicrophone?: () => void): Promise<void> {
   const isCurrent = (): boolean => isCurrentJoinAttempt(generation);
   const reconnectingVoice = voiceReconnectGeneration === generation;
   let pendingMicrophoneCapture: MicrophoneCapture | null = null;
   const startedAt = performance.now();
   // Keep the original attempt's context if navigation or sign-in changes while
   // the microphone/network is pending. Reuse the guest id already sent on joins.
-  const roomId = state.roomId;
+  const roomId = state.callId ? '' : state.roomId;
   const reportedGuestId = getCallPorts().identity.current().feedbackGuestId || '';
   let reported = false;
   const reportOutcome = (outcome: 'success' | 'failure' | 'cancel'): void => {
@@ -232,7 +232,7 @@ async function performJoinRoom(generation: number): Promise<void> {
       outcome,
       elapsedMs: Math.round(performance.now() - startedAt),
       stage: lastJoinStage(),
-      roomId,
+      ...(roomId && { roomId }),
       ...(reportedGuestId ? { reportedGuestId } : {})
     });
     if (finishJoinTelemetry === finishPending) finishJoinTelemetry = null;
@@ -262,8 +262,9 @@ async function performJoinRoom(generation: number): Promise<void> {
     loadLiveKitClient().catch(() => {});
     // Side by side: every step that waits for another is one more round trip
     // for a visitor far from the server.
-    const roomCheck = roomCheckIsFresh(state.roomId) ? Promise.resolve(true) : checkRoomExists(state.roomId);
-    const openingMicrophone = openJoinMicrophone(isCurrent);
+    const roomCheck =
+      state.callId || roomCheckIsFresh(state.roomId) ? Promise.resolve(true) : checkRoomExists(state.roomId);
+    const openingMicrophone = openJoinMicrophone(isCurrent, onMissingMicrophone);
     const discardMicrophone = () =>
       openingMicrophone.then((capture) => {
         if (capture) disposePreparedMicrophoneForJoin(capture);
@@ -291,6 +292,7 @@ async function performJoinRoom(generation: number): Promise<void> {
     markJoinStage('microphoneMs');
     if (!microphoneCapture) {
       state.microphoneMissing = true;
+      onMissingMicrophone?.();
     }
     await refreshDevices().catch((error: unknown) => log.warn('device list failed', errorContext(error)));
     if (!isCurrent()) return;
@@ -337,12 +339,7 @@ async function performJoinRoom(generation: number): Promise<void> {
       detachConnState();
       detachVoiceEvents();
     };
-    realtime.join({
-      roomId: state.roomId,
-      peerId: state.peerId,
-      sessionToken: state.sessionToken,
-      name
-    });
+    realtime.join({ roomId: state.roomId, peerId: state.peerId, sessionToken: state.sessionToken, name }, state.callId);
     voiceJoinSent = true;
     setServerConnectionStatus('connecting');
 
@@ -440,16 +437,25 @@ async function performJoinRoom(generation: number): Promise<void> {
  * A missing or refused microphone does not keep anyone out of the call: they
  * join to listen, and the microphone button or a plugged-in device adds it.
  */
-async function openJoinMicrophone(isCurrent: () => boolean): Promise<MicrophoneCapture | null> {
+async function openJoinMicrophone(
+  isCurrent: () => boolean,
+  onMissingMicrophone: (() => void) | undefined
+): Promise<MicrophoneCapture | null> {
   try {
     return await acquireMicrophoneForJoin(
       isCurrent,
-      () => showToast(t('Микрофон не ответил вовремя: вы в комнате без микрофона'), { duration: 8000 }),
-      () => showToast(t('Микрофон ещё занят прошлой операцией: вы в комнате без микрофона'), { duration: 8000 })
+      () => {
+        if (!onMissingMicrophone)
+          showToast(t('Микрофон не ответил вовремя: вы в комнате без микрофона'), { duration: 8000 });
+      },
+      () => {
+        if (!onMissingMicrophone)
+          showToast(t('Микрофон ещё занят прошлой операцией: вы в комнате без микрофона'), { duration: 8000 });
+      }
     );
   } catch (error) {
     log.warn('joining without a microphone', errorContext(error));
-    if (isCurrent())
+    if (isCurrent() && !onMissingMicrophone)
       showToast(t('{p0}: вы в комнате без микрофона', { p0: describeMicrophoneError(error) }), {
         duration: 8000
       });
@@ -523,7 +529,8 @@ export function leaveRoom(): void {
   stopCpuPressureWatch();
   stopCallStrainWatch();
   stopMicSendWatch();
-  noteFinishedCall(disconnectedRoomId, finishCallQuality());
+  const quality = finishCallQuality();
+  if (!state.callId) noteFinishedCall(disconnectedRoomId, quality);
 
   state.muted = false;
   state.microphoneMissing = false;

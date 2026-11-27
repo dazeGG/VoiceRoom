@@ -16,7 +16,11 @@ export function keysOf<T>(items: readonly T[], key: (item: T) => string): Readon
  * new item's defined fields over the current ones, an unknown id is added.
  * Items without an id are skipped.
  */
-export function mergeById<T extends { id: string }>(current: readonly T[], items: readonly T[]): T[] {
+export function mergeById<T extends { id: string }>(
+  current: readonly T[],
+  items: readonly T[],
+  reconcile?: (known: T, incoming: T) => T
+): T[] {
   const byId = new Map(current.map((item) => [item.id, item]));
   for (const item of items) {
     if (!item?.id) continue;
@@ -25,7 +29,8 @@ export function mergeById<T extends { id: string }>(current: readonly T[], items
       byId.set(item.id, item);
       continue;
     }
-    const defined = Object.fromEntries(Object.entries<unknown>(item).filter(([, value]) => value !== undefined));
+    const incoming = reconcile ? reconcile(known, item) : item;
+    const defined = Object.fromEntries(Object.entries<unknown>(incoming).filter(([, value]) => value !== undefined));
     byId.set(item.id, { ...known, ...defined });
   }
   return Array.from(byId.values());

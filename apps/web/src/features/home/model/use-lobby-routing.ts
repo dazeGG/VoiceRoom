@@ -5,7 +5,9 @@
 import { ref } from 'vue';
 import { useRouter, type Router } from 'vue-router';
 import { useVoiceSessionStore } from '@voiceroom/call/engine';
+import { isRecord } from '@voiceroom/shared/guards';
 import { useRoomUiStore } from '@/features/room/room-ui.store';
+import { useFriendCallStore } from '@/features/friend-call/friend-call.store';
 import { bindDesktopLinks, type DesktopLink } from '@/platform/desktop-links';
 import {
   buildAppRoomLink,
@@ -14,7 +16,7 @@ import {
   readOpenInAppSignals,
   shouldOfferOpenInApp
 } from '@/platform/open-in-app';
-import { APP_HOME } from '@/shared/app-home';
+import { APP_HOME, dmPath, DM_CALL_CHAT_HASH } from '@/shared/app-home';
 import { usePageStore } from '@/stores/page.store';
 import { extractRoomId } from '@/shared/utils/room';
 import { shallowPush, shallowReplace } from '@/shared/utils/shallow-routing';
@@ -27,7 +29,7 @@ import {
   shouldConfirmRoomSwitch
 } from './room-switch-confirmation';
 
-type RoutingLobby = Pick<LobbyStore, 'mode' | 'openDm' | 'showHome'>;
+type RoutingLobby = Pick<LobbyStore, 'mode' | 'openDm' | 'showHome' | 'view' | 'selectedFriendId'>;
 type RoutingRooms = Pick<LobbyRooms, 'left'>;
 
 const roomPath = (roomId: string): string => `/r/${encodeURIComponent(roomId)}`;
@@ -49,6 +51,7 @@ function restoreLobbyDocumentState(): void {
 export function useLobbyRouting(lobby: RoutingLobby, rooms: RoutingRooms, router: Router = useRouter()) {
   const navigation = useRoomNavigationStore();
   const voiceSession = useVoiceSessionStore();
+  const calls = useFriendCallStore();
 
   /** Room waiting for "switch rooms?" while voice is connected elsewhere. */
   const pendingRoomSwitchId = ref('');
@@ -76,7 +79,9 @@ export function useLobbyRouting(lobby: RoutingLobby, rooms: RoutingRooms, router
     // temporary rooms (absent from "Мои комнаты") leave the user stranded on the
     // rooms home with the route still pointing at the room.
     const initialRoomId = extractRoomId(window.location.pathname);
-    if (initialRoomId && shouldOfferOpenInApp(readOpenInAppSignals()) && !consumeInAppRoomNavigation()) {
+    if (initialRoomId && calls.voice) {
+      previewRoom(initialRoomId);
+    } else if (initialRoomId && shouldOfferOpenInApp(readOpenInAppSignals()) && !consumeInAppRoomNavigation()) {
       // The browser cannot tell whether the desktop app picked the link up, so
       // it waits for an explicit choice instead of joining voice twice.
       openInAppRoomId.value = initialRoomId;
@@ -88,8 +93,14 @@ export function useLobbyRouting(lobby: RoutingLobby, rooms: RoutingRooms, router
     }
     const initialParams = new URLSearchParams(window.location.search);
     const initialDmId = initialParams.get('dm');
+    let clearingInitialDm = false;
     if (!initialRoomId && initialDmId) {
-      replaceState(APP_HOME);
+      if (!calls.voice) {
+        clearingInitialDm = true;
+        void shallowReplace(router, APP_HOME).finally(() => {
+          clearingInitialDm = false;
+        });
+      }
       void lobby.openDm(initialDmId);
     }
     // A mention link — from the bell or from a push — lands here rather than on
@@ -101,10 +112,30 @@ export function useLobbyRouting(lobby: RoutingLobby, rooms: RoutingRooms, router
       openRoomMessage(linkedRoomId, linkedMessageId);
     }
 
+    const stopDmHandoff = router.afterEach((to, from, failure) => {
+      if (
+        !failure &&
+        typeof to.query.dm === 'string' &&
+        to.query.dm !== from.query.dm &&
+        (lobby.view !== 'dm' || lobby.selectedFriendId !== to.query.dm)
+      ) {
+        void lobby.openDm(to.query.dm);
+      } else if (
+        !failure &&
+        !clearingInitialDm &&
+        from.query.dm &&
+        to.fullPath === APP_HOME &&
+        lobby.mode === 'friends' &&
+        lobby.view === 'dm'
+      ) {
+        lobby.showHome();
+      }
+    });
     const teardownDesktopLinks = bindDesktopLinks(openDesktopLink);
     window.addEventListener('popstate', onPopState);
     return () => {
       teardownDesktopLinks();
+      stopDmHandoff();
       window.removeEventListener('popstate', onPopState);
     };
   }
@@ -114,20 +145,20 @@ export function useLobbyRouting(lobby: RoutingLobby, rooms: RoutingRooms, router
   const requestEnterRoom = (roomId: string): void => {
     const needsConfirmation = shouldConfirmRoomSwitch({
       confirmEnabled: readRoomSwitchConfirmEnabled(),
-      connectedRoomId: navigation.getActiveVoiceRoomId(),
+      connectedRoomId: voiceSession.roomId,
       targetRoomId: roomId
     });
     if (needsConfirmation) {
       pendingRoomSwitchId.value = roomId;
       return;
     }
-    enterRoom(roomId);
+    void enterRoom(roomId);
   };
 
   const resolveRoomSwitch = (proceed: boolean, dontAskAgain = false): void => {
     const roomId = pendingRoomSwitchId.value;
     pendingRoomSwitchId.value = '';
-    if (roomId && applyRoomSwitchDecision({ dontAskAgain, proceed })) enterRoom(roomId);
+    if (roomId && applyRoomSwitchDecision({ dontAskAgain, proceed })) void enterRoom(roomId);
   };
 
   const openRoomInApp = (): void => {
@@ -210,7 +241,11 @@ export function useLobbyRouting(lobby: RoutingLobby, rooms: RoutingRooms, router
 
   // Explicit voice enter/switch path. Browsing a room uses previewRoom(); this
   // path may remount the room client because the user chose to enter voice here.
-  function enterRoom(roomId: string): void {
+  async function enterRoom(roomId: string): Promise<void> {
+    if (calls.voice) {
+      await calls.leave();
+      if (calls.voice) return;
+    }
     navigation.selectRoomForVoiceEntry(roomId);
     lobby.mode = 'rooms';
     pushState(roomPath(roomId));
@@ -248,6 +283,8 @@ export function useLobbyRouting(lobby: RoutingLobby, rooms: RoutingRooms, router
     // The back button out of the lobby (to /login, /privacy, ...): that page
     // takes over, and rewriting its entry would swallow the move.
     if (!roomId && window.location.pathname !== APP_HOME) return;
+    const params = new URLSearchParams(window.location.search);
+    if (!roomId && params.has('dm')) return;
     if (roomId) {
       navigation.setViewedRoomFromRoute(roomId);
       lobby.mode = 'rooms';
@@ -258,6 +295,24 @@ export function useLobbyRouting(lobby: RoutingLobby, rooms: RoutingRooms, router
     if (transition.closeEmbeddedRoom) closeEmbeddedRoom({ replaceUrl: false });
     replaceUrlWithActiveVoiceRoom();
   };
+
+  function browseFromLinkedDm(peerId?: string): void {
+    const dm = router.currentRoute.value.query.dm;
+    if (typeof dm !== 'string' || dm === peerId) return;
+    const target = peerId ? dmPath(peerId) : APP_HOME;
+    pushState(target);
+  }
+
+  function setMobileCallChat(open: boolean): void {
+    if (lobby.view !== 'dm' || !lobby.selectedFriendId) return;
+    const path = dmPath(lobby.selectedFriendId);
+    if (open) pushState(path + DM_CALL_CHAT_HASH);
+    else {
+      const history: { readonly state: unknown } = window.history;
+      if (isRecord(history.state) && history.state.back === path) router.back();
+      else replaceState(path);
+    }
+  }
 
   return {
     pendingRoomSwitchId,
@@ -274,7 +329,9 @@ export function useLobbyRouting(lobby: RoutingLobby, rooms: RoutingRooms, router
     closeLeftRoom,
     openConnectedVoiceRoom,
     leaveConnectedVoiceRoom,
-    openRoomMessage
+    openRoomMessage,
+    browseFromLinkedDm,
+    setMobileCallChat
   };
 }
 

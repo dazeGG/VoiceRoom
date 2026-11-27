@@ -81,12 +81,96 @@ npm run dev
 
 ```bash
 npm run check   # tsc, vue-tsc, ESLint и Prettier
-TEST_DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55432/postgres npm test
+npm run test:api -- --fixture unit  # no PostgreSQL or database URL needed
+docker compose -f docker-compose.dev.yml up -d postgres
+export TEST_DATABASE_URL=postgres://voice_room:voice_room_dev@127.0.0.1:5432/voice_room_dev
+npm run test:api -- --fixture integration
+npm run test:api -- rooms                # весь домен, включая интеграционные тесты
+npm run test:api -- rooms --fixture unit # только без БД
+npm -w @voiceroom/ui-kit test
+npm -w @voiceroom/call test
+npm test        # both API groups and the other workspaces
 npm run build
 npm run e2e     # Playwright, нужен запущенный dev-стек
 ```
 
-API-тестам нужна PostgreSQL в `TEST_DATABASE_URL`: на каждый тест создаётся отдельная временная база.
+API-тест лежит в `apps/api/test/<домен>/<фикстура>/`. Домен выбирается по поведению,
+которое проверяет тест, а не по первому импорту или транспорту запроса: например,
+создание комнаты через HTTP относится к `rooms`. Обычно это одноимённый каталог
+в `apps/api/src/domains/`. Для сквозных проверок используются `platform` (сборка
+приложения, общая инфраструктура и миграции нескольких доменов), `realtime`
+(сам транспорт, реестр соединений и доставка кадров) и `ops` (эксплуатация и метрики).
+Общие стенды, фейки, фикстуры и вспомогательные функции остаются в `apps/api/test/`.
+
+Без фильтра `npm run test:api` запускает обе группы всех доменов. Для `integration`
+нужен доступный PostgreSQL с правом создания тестовых баз. Новый или смешанный тест
+помещается в `integration`. Чтобы перенести его в `unit`, проверьте тот же набор
+кандидатов (один путь от корня репозитория на строку) в двух окружениях:
+
+```bash
+# With TEST_DATABASE_URL pointing at a real test PostgreSQL:
+node scripts/ci/api-tests.mts report --files candidates.txt --out db.json
+# On an isolated runner without PostgreSQL, reachable sockets or either database URL:
+node scripts/ci/api-tests.mts report --files candidates.txt --out no-db.json
+node scripts/ci/api-tests.mts compare-fixtures db.json no-db.json
+```
+
+В `unit` допускаются только файлы с одинаковыми прошедшими сценариями, без
+пропусков, условных сценариев и попыток подключения к БД. Для CI деления на
+домены нет: если выбран API, выполняются все домены.
+
+Поведение компонентов кита проверяется в `packages/ui-kit/test/`, движка звонков —
+в `packages/call/test/`. Тесты оболочек приложения остаются в Web; независимые
+тесты функций сгруппированы в `apps/web/test/features/`. Проверки Caddy, edge и
+контрактов публикации остаются рядом с их Web-фикстурами. Команды пакетов сохраняют
+исходное окружение каждого файла (Node или jsdom).
+
+Для проверки массового переноса сравните полные отчёты раннеров из двух рабочих
+деревьев: `node scripts/ci/compare-test-files.mts --before before.json --after after.json --base <до> --tested <после>`.
+Формат отчёта: Git `tree` (результат `git rev-parse 'HEAD^{tree}'`) и массив `files`.
+Каждая запись содержит путь `file` от корня, `project`, `environment`, `fixture` и
+счётчики `tests`, `passed`, `skipped` (включая todo). Берите счётчики из событий
+`test:summary` Node и из `assertionResults` JSON-репортера Vitest; сохраняйте проект и
+окружение, а не имя нового каталога. Включите и отдельный node:test Personal Compose:
+его отчёт снимается на чистом стеке Personal, а не через `npm test`. Сравнение сверяет обе выборки с Git, а затем
+проверяет каждый файл по парам переименований. Это проверка переноса, не источник
+для отбора тестов в CI.
+
+### CI verification and reuse
+
+On a PR into `develop`, CI compares the base tree with the tested merge tree. An
+Admin leaf keeps repository checks and the Admin workspace test step; an API edit
+runs both API fixtures, the coverage verdict and G05. CI follows the measured
+non-API sources' imports in both Git trees; a neighbouring chat component alone
+does not trigger API coverage. A frontend unit test file selects its workspace,
+not a browser fixture. Non-test helpers can still be browser inputs. Shared configuration,
+unknown paths and unresolved inputs select the full inventory. The changes job
+reports the reason, selected workspaces and browser groups. Reproduce a decision
+locally with `node scripts/ci/changed-components.mts <base-sha> <tested-sha>`.
+
+On a full run, **Voice room join smoke** runs the original 10 specs (including
+`room-voice`), while **Voice feature journeys** runs the other eight in parallel
+on a separate runner. Each job starts its own CI Compose stack with a real SFU
+and disposable PostgreSQL. On develop PRs, the second job runs only when paths
+select context menus, reactions, room lifecycle, localization, desktop
+boundaries or microphone stalls. Shared inputs can select both jobs. Widget and Meet
+keep their isolated stacks. Changes to the kit, styles, focus surfaces or the audit
+fixture also select **Cross-browser UI audit**: Chromium, WebKit and Firefox on
+one runner. Run it locally with
+`npm -w @voiceroom/web run e2e -- --config playwright.ui-audit.config.ts --workers=1`.
+
+The final **Git Flow policy** checks actual job results and completed test groups.
+PRs into `main` and unverified pushes to `develop` require a fixed full suite.
+A matching same-repository PR marker binds the parent, tested tree, successful
+attempt and versioned selection digest; a hit still runs applicable installer,
+Site and Docs checks. Publication requires a successful push policy **and** a
+changed component. A full verification does not request a full deployment.
+
+For review only, run `node scripts/ci/replay-test-routing.mts --repo dazeGG/VoiceRoom --base develop --last-merged 20`.
+Its timing estimates are not hosted measurements. Compare the first real UI-only
+PR against #345 (8:07); if it is not faster, route all changes to the full
+inventory and bump the selector version before investigating. Keep policy and
+publication guards in place.
 
 API, Web, Admin, Widget и Meet выпускаются отдельными сериями. Ветки, коммиты и теги описаны в [`docs/GIT_FLOW.md`](./docs/GIT_FLOW.md). Изменения по версиям — в [GitHub Releases](https://github.com/dazeGG/VoiceRoom/releases).
 

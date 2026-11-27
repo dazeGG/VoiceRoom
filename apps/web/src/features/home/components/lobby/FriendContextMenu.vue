@@ -2,6 +2,7 @@
 import { Ban, Bell, BellOff, MessageSquare, UserRound, UserMinus } from '@lucide/vue';
 import { computed, ref } from 'vue';
 import type { Friend } from '@/api/friends';
+import CallEntryIcon from '@/features/friend-call/CallEntryIcon.vue';
 import { useProfileCardUiStore } from '@/entities/profile-card/profile-card-ui.store';
 import { t } from '@/shared/i18n';
 import { useNotificationPreferencesStore } from '@/shared/notifications/preferences.store';
@@ -9,7 +10,7 @@ import { effectivePresenceStatus } from '@/shared/presence';
 import { Button, ContextMenu, Dialog, MenuSeparator, MenuItem, MenuLabel } from '@voiceroom/ui-kit/components';
 import { iconSm } from '@voiceroom/ui-kit/icon-defaults';
 import { displayNameOf } from '@/shared/utils/display-name';
-import type { FriendMenuTarget } from '../../model/friend-menu';
+import { useFriendMenuCall, type FriendMenuTarget } from '../../model/friend-menu';
 import { useLobby } from '../../model/lobby-context';
 
 const target = defineModel<FriendMenuTarget | null>({ required: true });
@@ -21,6 +22,13 @@ const blockTarget = ref<Friend['user'] | null>(null);
 const friend = computed(() => target.value?.friend.user);
 const name = computed(() => (friend.value ? displayNameOf(friend.value) : ''));
 const muted = computed(() => Boolean(friend.value && preferences.isPeerNotificationsMuted(friend.value.id)));
+const call = useFriendMenuCall(() => target.value);
+
+function openCall(close: () => void): void {
+  const open = call.value.open;
+  close();
+  void open();
+}
 
 async function run(action: () => Promise<void>, failure: string): Promise<void> {
   try {
@@ -102,6 +110,16 @@ function confirmBlock(): void {
       <MenuLabel :text="name" />
       <MenuItem :label="t('Написать')" @select.prevent="message(close)">
         <template #icon><MessageSquare v-bind="iconSm" /></template>
+      </MenuItem>
+      <MenuItem
+        v-if="call.visible"
+        :label="call.menuLabel"
+        :hint="call.menuHint"
+        :tone="call.accent ? 'accent' : 'default'"
+        :disabled="call.disabled"
+        @select.prevent="openCall(close)"
+      >
+        <template #icon><CallEntryIcon :mode="call.mode" v-bind="iconSm" /></template>
       </MenuItem>
       <MenuItem :label="t('Профиль')" @select.prevent="profile(close)">
         <template #icon><UserRound v-bind="iconSm" /></template>

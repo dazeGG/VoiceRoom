@@ -6,7 +6,7 @@ import type { Database } from '../../platform/db/kysely.ts';
 import type { Rooms } from '../../platform/db/schema.ts';
 import { createRoomId, createRowId } from '../../platform/db/ids.ts';
 import { toDate, toMillis } from '../../platform/epoch-millis.ts';
-import type { RoomKind } from './room-surface.policy.ts';
+import type { RoomKind, RoomSurface } from './room-surface.policy.ts';
 
 /** A room row, plus the per-user columns some listings add. */
 export type RoomRow = Omit<Selectable<Rooms>, 'kind' | 'widget_chat_enabled'> &
@@ -26,7 +26,7 @@ export function normalizePositiveInt(value: unknown, fallback: number): number {
 
 function storedRoomKind(kind: string | undefined): RoomKind {
   if (kind === undefined) return 'main';
-  if (kind === 'main' || kind === 'widget' || kind === 'meet') return kind;
+  if (kind === 'main' || kind === 'widget' || kind === 'meet' || kind === 'call') return kind;
   throw new Error('Invalid stored room kind');
 }
 
@@ -87,6 +87,7 @@ async function countTemporaryRoomsForIp(db: Database, creatorIp: string): Promis
     .where('creator_ip', '=', creatorIp)
     .where('deleted_at', 'is', null)
     .where('is_static', '=', false)
+    .where('kind', '!=', 'call')
     .executeTakeFirst();
   return row?.count || 0;
 }
@@ -102,6 +103,7 @@ async function countLiveTemporaryRooms(db: Database): Promise<number> {
     .select(countAll)
     .where('deleted_at', 'is', null)
     .where('is_static', '=', false)
+    .where('kind', '!=', 'call')
     .executeTakeFirst();
   return row?.count || 0;
 }
@@ -136,6 +138,26 @@ function insertRoom(db: Database, room: NewRoom) {
     .executeTakeFirstOrThrow();
 }
 
+/** Uses the caller's transaction so the private room and its Ring are reserved together. */
+export async function createCallRoom(db: Database, now = Date.now()): Promise<StoredRoom> {
+  return mapRoom(
+    await insertRoom(db, {
+      id: createRowId(),
+      kind: 'call',
+      widgetChatEnabled: false,
+      isStatic: false,
+      creatorIp: '',
+      ownerId: null,
+      name: '',
+      at: toDate(now)
+    })
+  );
+}
+
+export async function deleteCallRoom(db: Database, roomId: string): Promise<void> {
+  await db.deleteFrom('rooms').where('id', '=', roomId).where('kind', '=', 'call').execute();
+}
+
 export function createRoomRepository({ db, roomIdleTtlMs = 15 * 60 * 1000 }: { db: Database; roomIdleTtlMs?: number }) {
   async function createRoom({
     roomId = createRoomId(),
@@ -149,7 +171,7 @@ export function createRoomRepository({ db, roomIdleTtlMs = 15 * 60 * 1000 }: { d
   }: {
     roomId?: string;
     creatorIp?: unknown;
-    kind?: RoomKind;
+    kind?: RoomSurface;
     widgetChatEnabled?: boolean;
     isStatic?: boolean;
     ownerId?: string | null;
@@ -189,7 +211,7 @@ export function createRoomRepository({ db, roomIdleTtlMs = 15 * 60 * 1000 }: { d
   }: {
     roomId?: string;
     creatorIp?: unknown;
-    kind?: RoomKind;
+    kind?: RoomSurface;
     widgetChatEnabled?: boolean;
     isStatic?: boolean;
     ownerId?: string | null;
@@ -389,6 +411,7 @@ export function createRoomRepository({ db, roomIdleTtlMs = 15 * 60 * 1000 }: { d
       .set({ deleted_at: nowDate, updated_at: nowDate })
       .where('deleted_at', 'is', null)
       .where('is_static', '=', false)
+      .where('kind', '!=', 'call')
       .where('empty_since', 'is not', null)
       .where('empty_since', '<=', toDate(now - roomIdleTtlMs))
       .executeTakeFirst();
@@ -402,6 +425,7 @@ export function createRoomRepository({ db, roomIdleTtlMs = 15 * 60 * 1000 }: { d
       .set({ empty_since: at, updated_at: at })
       .where('deleted_at', 'is', null)
       .where('is_static', '=', false)
+      .where('kind', '!=', 'call')
       .where('empty_since', 'is', null)
       .executeTakeFirst();
     return Number(result.numUpdatedRows);
@@ -424,6 +448,7 @@ export function createRoomRepository({ db, roomIdleTtlMs = 15 * 60 * 1000 }: { d
       .selectAll('r')
       .where('rm.user_id', '=', ownerId)
       .where('rm.role', '=', 'owner')
+      .where('r.kind', '=', 'main')
       .where('r.deleted_at', 'is', null)
       .orderBy('r.created_at', 'desc')
       .execute();
@@ -484,6 +509,7 @@ export function createRoomRepository({ db, roomIdleTtlMs = 15 * 60 * 1000 }: { d
           eb
             .selectFrom('rooms')
             .select('id')
+            .where('kind', '!=', 'call')
             .where('deleted_at', 'is not', null)
             .where('deleted_at', '<', cutoff)
             .orderBy('deleted_at', 'asc')

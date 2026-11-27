@@ -1,0 +1,34 @@
+.ui-safety-code {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-8);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ui-safety-code__item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-4);
+  min-width: 0;
+  padding: var(--space-8) var(--space-2);
+  border-radius: var(--radius-8);
+  background: var(--vr-surface-3);
+}
+
+.ui-safety-code__emoji {
+  font-size: 32px;
+  line-height: 1;
+}
+
+.ui-safety-code__name {
+  max-width: 100%;
+  color: var(--vr-text-2);
+  font: 500 12px/1.2 var(--font-ui);
+  text-align: center;
+  // A name wraps only between its words: «единорог» never splits into «единоро» and «г».
+  overflow-wrap: normal;
+  hyphens: manual;
+}

@@ -7,7 +7,7 @@ const MAX_PENDING_SNAPSHOTS = 4;
 const MAX_SNAPSHOT_CHANGES = 1000;
 type SnapshotLane = 'open' | 'older' | 'latest' | 'cursor' | 'recent';
 
-export function createHistorySnapshots<T extends { id: string }>() {
+export function createHistorySnapshots<T extends { id: string }>(reconcile?: (known: T, incoming: T) => T) {
   type Change = { item: T; append: boolean } | null;
   type Pending = { id: number; lane: SnapshotLane; valid: boolean; changes: Map<string, Change> };
   const pending = new Set<Pending>();
@@ -34,7 +34,7 @@ export function createHistorySnapshots<T extends { id: string }>() {
         const current =
           change && previous
             ? {
-                item: mergeById([previous.item], [change.item])[0] ?? change.item,
+                item: mergeById([previous.item], [change.item], reconcile)[0] ?? change.item,
                 append: change.append || previous.append
               }
             : change;
@@ -64,7 +64,7 @@ export function createHistorySnapshots<T extends { id: string }>() {
           if (change === null) removed.add(id);
           else if (change.append || ids.has(id)) updates.push(change.item);
         }
-        const result = mergeById(items, updates).filter((item) => !removed.has(item.id));
+        const result = mergeById(items, updates, reconcile).filter((item) => !removed.has(item.id));
         appliedIds.set(lane, snapshot.id);
         accepted = true;
         dispose(snapshot);

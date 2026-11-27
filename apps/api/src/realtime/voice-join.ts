@@ -54,7 +54,7 @@ export interface VoiceJoinDeps {
   logger: RuntimeLogger;
   leases: ReconnectLeases;
   summaries?: Pick<ReturnType<typeof createRoomSummaries>, 'invalidateRecipients' | 'schedule'> | undefined;
-  buildRoomSnapshot: (roomId: string, mode: RoomSnapshot['mode']) => Promise<RoomSnapshot | null>;
+  buildRoomSnapshot: (roomId: string, mode: RoomSnapshot['mode'], scope?: 'call') => Promise<RoomSnapshot | null>;
   nativeVoiceCapability?: ((roomId: string, peerId: string) => RoomSnapshot['nativeVoice']) | undefined;
   leaveVoiceRoom: (
     connection: WsConnection,
@@ -194,7 +194,8 @@ export function createVoiceJoin(deps: VoiceJoinDeps) {
     payload: ClientCommands['room.join'],
     sessionUser: JoinUser,
     clientIp = '',
-    requestId = ''
+    requestId = '',
+    scope: 'room' | 'call' = 'room'
   ): Promise<JoinResult> {
     if (connection.roomSurface === 'widget' && connection.widgetQuiesced) return { ok: false, code: 'room_not_found' };
     const joinRequestSequence = ++joinRequestSequenceCounter;
@@ -260,7 +261,11 @@ export function createVoiceJoin(deps: VoiceJoinDeps) {
       if (!isCurrentConnectionVoiceJoin(connection, connectionJoinIntent)) {
         return supersededVoiceJoin(connection, roomId);
       }
-      if (!roomAllowsSurface(room, connection.roomSurface ?? 'main')) {
+      if (
+        scope === 'call'
+          ? room?.kind !== 'call' || !sessionUser
+          : !roomAllowsSurface(room, connection.roomSurface ?? 'main')
+      ) {
         terminalClaimFailure = true;
         wsRegistry.sendToConnection(connection, buildServerEnvelope('room.not_found', { roomId }));
         return { ok: false, code: 'room_not_found' };
@@ -285,13 +290,18 @@ export function createVoiceJoin(deps: VoiceJoinDeps) {
         return { ok: false, code: 'invalid_session', message: INVALID_PEER_SESSION };
       }
 
-      const identityResult = await getRoomStore().getOrCreatePeerIdentity({
-        roomId,
-        peerId,
-        sessionToken,
-        displayName: name,
-        avatarColorKey: sessionAvatarColorKey(sessionUser)
-      });
+      // Account-only call seats use short-lived session proof. The normal
+      // room identity persists a fixed peer token across visits.
+      const identityResult =
+        scope === 'call'
+          ? { status: 'claimed' as const, identity: null }
+          : await getRoomStore().getOrCreatePeerIdentity({
+              roomId,
+              peerId,
+              sessionToken,
+              displayName: name,
+              avatarColorKey: sessionAvatarColorKey(sessionUser)
+            });
       if (claimedSessionWasTerminated()) {
         return { ok: false, code: 'superseded_join', message: SESSION_TERMINATED };
       }
@@ -323,6 +333,12 @@ export function createVoiceJoin(deps: VoiceJoinDeps) {
         return supersededVoiceJoin(connection, roomId);
       }
 
+      if (scope === 'call' && sessionUser) {
+        for (const socket of wsRegistry.findAccountConnections(sessionUser.id)) {
+          if (socket === connection || !socket.activeVoice || socket.activeVoice.roomId === roomId) continue;
+          await leaveVoiceRoom(socket, socket.activeVoice, { cancelPendingJoin: false });
+        }
+      }
       if (
         connection.activeVoice &&
         (connection.activeVoice.roomId !== roomId || connection.activeVoice.peerId !== peerId)
@@ -346,11 +362,9 @@ export function createVoiceJoin(deps: VoiceJoinDeps) {
       }
       const reconnecting = Boolean(previous);
 
-      if (!reconnecting && room.peers.size >= MAX_ROOM_PEERS) {
-        wsRegistry.sendToConnection(
-          connection,
-          buildServerEnvelope('room.full', { roomId, maxRoomPeers: MAX_ROOM_PEERS })
-        );
+      const maxRoomPeers = scope === 'call' ? 2 : MAX_ROOM_PEERS;
+      if (!reconnecting && room.peers.size >= maxRoomPeers) {
+        wsRegistry.sendToConnection(connection, buildServerEnvelope('room.full', { roomId, maxRoomPeers }));
         return { ok: false, code: 'room_full' };
       }
 
@@ -448,7 +462,7 @@ export function createVoiceJoin(deps: VoiceJoinDeps) {
       }
 
       try {
-        await queueRoomOccupancyTransition(roomId);
+        if (scope !== 'call') await queueRoomOccupancyTransition(roomId);
       } catch (error) {
         // Presence was already committed in memory. Keep the resync protocol
         // live by delivering the authoritative snapshot even when the
@@ -485,7 +499,7 @@ export function createVoiceJoin(deps: VoiceJoinDeps) {
         return { ok: false, code: 'room_banned', message: 'Вы заблокированы в этой комнате' };
       }
 
-      const snapshot = await buildRoomSnapshot(roomId, 'active');
+      const snapshot = await buildRoomSnapshot(roomId, 'active', scope === 'call' ? 'call' : undefined);
       if (
         !isCurrentConnectionVoiceJoin(connection, connectionJoinIntent) ||
         room.peers.get(peerId)?.transport?.id !== transport.id
@@ -518,7 +532,28 @@ export function createVoiceJoin(deps: VoiceJoinDeps) {
   return {
     /** The latest join request's sequence number. */
     sequence: () => joinRequestSequenceCounter,
-    joinVoiceRoom,
+    joinVoiceRoom: (
+      connection: WsConnection,
+      payload: ClientCommands['room.join'],
+      user: JoinUser,
+      ip?: string,
+      requestId?: string
+    ) => joinVoiceRoom(connection, payload, user, ip, requestId),
+    joinCallVoice: (
+      connection: WsConnection,
+      target: { roomId: string; peerId: string; seatToken: string },
+      user: NonNullable<JoinUser>,
+      ip: string,
+      requestId?: string
+    ) =>
+      joinVoiceRoom(
+        connection,
+        { roomId: target.roomId, peerId: target.peerId, sessionToken: target.seatToken, name: '' },
+        user,
+        ip,
+        requestId,
+        'call'
+      ),
     cancelConnectionVoiceJoin
   };
 }

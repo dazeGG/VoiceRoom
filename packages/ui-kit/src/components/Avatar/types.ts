@@ -12,4 +12,6 @@ export interface AvatarProps {
   dnd?: boolean | undefined;
   afk?: boolean | undefined;
   ring?: string | undefined;
+  /** Decorative call halo. Adjacent text carries the call state. */
+  ringing?: 'ringing' | 'silenced' | undefined;
 }

@@ -5,6 +5,8 @@
 import type { InboxItem, InboxPage, NotificationLevel, NotificationReason } from './contracts/notifications.ts';
 import { isArray, isOneOf, isRecord, pageInfoOf, trimmedText } from './guards.ts';
 import type { NotificationCopy } from './notification-text.ts';
+import { Type, type Static } from 'typebox';
+import { Value } from 'typebox/value';
 
 const NOTIFICATION_CONTRACT_VERSION = 1 as const;
 export const NOTIFICATION_DEFAULT_LIMIT = 50 as const;
@@ -26,9 +28,74 @@ export type PushPayload = {
   notificationId?: string | undefined;
   revision?: number | undefined;
   type?: string | undefined;
+  dismissMissed?: boolean | undefined;
+  contractVersion?: number | undefined;
+  callId?: string | undefined;
+  attempt?: number | undefined;
   /** Epoch milliseconds; the service worker drops the push after it. */
   expiresAt?: number | undefined;
 };
+
+const CALL_PUSH_TYPES = ['call.incoming', 'call.state', 'call.missed'] as const;
+export function isCallPushType(type: unknown): type is (typeof CALL_PUSH_TYPES)[number] {
+  return isOneOf(CALL_PUSH_TYPES, type);
+}
+
+const CallPushPayload = Type.Object({
+  contractVersion: Type.Literal(NOTIFICATION_CONTRACT_VERSION),
+  type: Type.Union([Type.Literal('call.incoming'), Type.Literal('call.state'), Type.Literal('call.missed')]),
+  callId: Type.String({ format: 'uuid' }),
+  attempt: Type.Integer({ minimum: 1 }),
+  revision: Type.Integer({ minimum: 1 }),
+  expiresAt: Type.Integer({ minimum: 0 }),
+  tag: Type.String({ minLength: 1 }),
+  dedupeKey: Type.String({ minLength: 1 }),
+  url: Type.String({ pattern: '^/(?![/\\\\])[^\\\\\\s]*$' }),
+  dismissMissed: Type.Optional(Type.Boolean()),
+  title: Type.Optional(Type.String()),
+  body: Type.Optional(Type.String())
+});
+export type CallPushPayload = Static<typeof CallPushPayload> & Pick<PushPayload, 'copy' | 'notificationPrivate'>;
+
+export function callNotificationRoute(callId: string, peerUserId?: string): string {
+  return peerUserId === undefined ? `/?call=${encodeURIComponent(callId)}` : `/?dm=${encodeURIComponent(peerUserId)}`;
+}
+
+export function callPushTag(callId: string, kind: number | 'missed'): string {
+  return `call:${callId}:${kind}`;
+}
+
+export function parseCallPushPayload(input: unknown): CallPushPayload | null {
+  if (!Value.Check(CallPushPayload, input)) return null;
+  const {
+    contractVersion,
+    type,
+    callId,
+    attempt,
+    revision,
+    expiresAt,
+    tag,
+    dedupeKey,
+    url,
+    title,
+    body,
+    dismissMissed
+  } = input;
+  return {
+    contractVersion,
+    type,
+    callId,
+    attempt,
+    revision,
+    expiresAt,
+    tag,
+    dedupeKey,
+    url,
+    ...(title === undefined ? {} : { title }),
+    ...(body === undefined ? {} : { body }),
+    ...(dismissMissed === undefined ? {} : { dismissMissed })
+  };
+}
 /** The mention/reply push the notification outbox queues. */
 export type ProviderPayload = Required<
   Pick<PushPayload, 'notificationId' | 'revision' | 'dedupeKey' | 'title' | 'body' | 'url'>
@@ -153,7 +220,7 @@ export function parsePushPayload(input: unknown): PushPayload {
     const value = fields.get(key);
     return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
   };
-  return {
+  const payload = {
     title: text('title'),
     body: text('body'),
     tag: text('tag'),
@@ -165,4 +232,6 @@ export function parsePushPayload(input: unknown): PushPayload {
     type: text('type'),
     expiresAt: finite('expiresAt')
   };
+  if (!isCallPushType(payload.type)) return payload;
+  return parseCallPushPayload(input) ?? {};
 }

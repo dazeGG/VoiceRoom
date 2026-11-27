@@ -14,6 +14,8 @@ import {
   Italic,
   KeyRound,
   Mic,
+  Phone,
+  PhoneOff,
   Plus,
   Search,
   ThumbsDown,
@@ -37,6 +39,8 @@ defineProps<{
     | 'italic'
     | 'key-round'
     | 'mic'
+    | 'phone'
+    | 'phone-off'
     | 'plus'
     | 'search'
     | 'thumbs-down'
@@ -59,6 +63,8 @@ const icons = {
   italic: Italic,
   'key-round': KeyRound,
   mic: Mic,
+  phone: Phone,
+  'phone-off': PhoneOff,
   plus: Plus,
   search: Search,
   'thumbs-down': ThumbsDown,

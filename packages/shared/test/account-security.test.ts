@@ -4,7 +4,7 @@ import test from 'node:test';
 import { Value } from 'typebox/value';
 
 import * as accountSecurity from '../src/account-security.ts';
-import { AccountSession, LoginAlert } from '../src/contracts/account.ts';
+import { AccountSession, LoginAlert, WhatsNewAnswer, WhatsNewSeenBody } from '../src/contracts/account.ts';
 import { ClientKind } from '../src/contracts/admin.ts';
 import { defined } from './helpers/assert-defined.ts';
 
@@ -103,31 +103,39 @@ test('every alphabet symbol survives normalization', () => {
   );
 });
 
-test('what is new is compared by release version, not by string order', async () => {
-  assert.equal(
-    accountSecurity.normalizeReleaseVersion(accountSecurity.WHATS_NEW_VERSION),
-    accountSecurity.WHATS_NEW_VERSION
-  );
+test('what is new distinguishes web releases from legacy acknowledgements', () => {
+  assert.deepEqual(accountSecurity.parseWhatsNewRelease('web/1.5.0'), { app: 'web', version: '1.5.0' });
+  assert.equal(accountSecurity.parseWhatsNewRelease('2.8.0'), 'legacy');
+  for (const invalid of [null, 123, 'api/1.5.0', 'web/01.5.0', 'web/v1.5.0', 'web/1.5', 'web/1.5.0 ']) {
+    assert.equal(accountSecurity.parseWhatsNewRelease(invalid), null);
+  }
+  assert.equal(accountSecurity.normalizeReleaseVersion('web/1.5.0'), 'web/1.5.0');
+  assert.equal(accountSecurity.normalizeReleaseVersion('2.8.0'), '2.8.0');
 
-  // A malformed last-seen version counts as never seen.
   for (const [lastSeen, current, expected] of [
-    ['2.6.0', '2.6.0', false],
-    ['2.5.8', '2.6.0', true],
-    ['2.10.0', '2.9.9', false],
-    ['2.9.9', '2.10.0', true],
-    ['10.0.0', '9.99.99', false],
-    ['2.6', '2.6.0', true],
-    ['v2.6.0', '2.6.0', true]
+    [null, 'web/1.5.0', true],
+    ['2.8.0', 'web/1.5.0', true],
+    ['web/1.4.99', 'web/1.5.0', true],
+    ['web/1.5.0', 'web/1.5.0', false],
+    ['web/1.10.0', 'web/1.9.9', false],
+    ['web/1.9.9', 'web/1.10.0', true],
+    ['web/9007199254740992.0.0', 'web/9007199254740993.0.0', true],
+    ['unknown', 'web/1.5.0', true],
+    [null, '1.5.0', false],
+    [null, 'api/1.5.0', false]
   ] as const) {
     assert.equal(accountSecurity.hasUnseenWhatsNew(lastSeen, current), expected, `${lastSeen} vs ${current}`);
   }
+});
 
-  // Accounts that never recorded an announcement predate every release.
-  assert.equal(accountSecurity.hasUnseenWhatsNew(null, '2.6.0'), true);
-  assert.equal(accountSecurity.hasUnseenWhatsNew('2.5.0', '2.6.0'), true);
-  assert.equal(accountSecurity.hasUnseenWhatsNew('2.6.0', '2.6.0'), false);
-  assert.equal(accountSecurity.hasUnseenWhatsNew('2.7.0', '2.6.0'), false);
-  assert.equal(accountSecurity.hasUnseenWhatsNew(null, 'not-a-version'), false);
+test('the announcement response accepts legacy and web values, and acknowledgements require a web release', () => {
+  for (const lastSeen of [null, '2.8.0', 'web/1.5.0']) {
+    assert.equal(Value.Check(WhatsNewAnswer, { ok: true, whatsNew: { lastSeen } }), true);
+  }
+  assert.equal(Value.Check(WhatsNewSeenBody, { release: 'web/1.5.0' }), true);
+  for (const body of [null, {}, { release: 123 }, { release: '2.8.0' }, { release: 'web/1.5.0-beta' }]) {
+    assert.equal(Value.Check(WhatsNewSeenBody, body), false);
+  }
 });
 
 test('the recovery codes reminder is due only without codes and outside its snooze', async () => {

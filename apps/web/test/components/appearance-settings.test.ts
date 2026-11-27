@@ -1,8 +1,10 @@
 import { screen, within } from '@testing-library/vue';
+import { createPinia } from 'pinia';
 import { defineComponent, h } from 'vue';
 import userEvent from '@testing-library/user-event';
 import { afterEach, expect, test } from 'vitest';
 import AppearanceSettings from '@/features/home/components/settings/AppearanceSettings.vue';
+import { DOCK_AUTOHIDE_STORAGE_KEY, useAppearanceStore } from '@/shared/appearance/appearance.store';
 import { THEMES, THEME_STORAGE_KEY } from '@/shared/theme/theme.store';
 import { renderWithApp } from '../helpers/render.ts';
 import { stubOverlayDom } from '../helpers/overlay-dom';
@@ -23,6 +25,25 @@ test('picking a theme applies it to the whole app and remembers it', async () =>
   expect(document.documentElement.classList.contains('theme--graphite-coral')).toBe(true);
   expect(localStorage.getItem(THEME_STORAGE_KEY)).toBe('graphite-coral');
   expect(screen.getByRole('radio', { name: /Coral/, checked: true })).toBeTruthy();
+});
+
+test('the call dock starts pinned and a new store restores the choice made with the switch', async () => {
+  await renderWithApp(AppearanceSettings);
+  const name = 'Скрывать панель звонка';
+  const toggle = screen.getByRole('switch', { name, checked: false });
+  expect(screen.getByText('Панель управления появляется, когда вы наводите курсор на звонок')).toBeTruthy();
+
+  await userEvent.click(toggle);
+  expect(screen.getByRole('switch', { name, checked: true })).toBe(toggle);
+  expect(localStorage.getItem(DOCK_AUTOHIDE_STORAGE_KEY)).toBe('true');
+  const fresh = useAppearanceStore(createPinia());
+  fresh.initAppearance();
+  expect(fresh.dockAutoHide).toBe(true);
+
+  await userEvent.click(toggle);
+  expect(screen.getByRole('switch', { name, checked: false })).toBe(toggle);
+  fresh.initAppearance();
+  expect(fresh.dockAutoHide).toBe(false);
 });
 
 test('language remains recognizable and changing it preserves the chosen theme', async () => {

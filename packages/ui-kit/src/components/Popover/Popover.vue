@@ -190,7 +190,8 @@ const closedAndKept = computed(() => props.keepContentMounted && !open.value);
                 {
                   'popover__panel--closed': closedAndKept,
                   'popover__panel--floating': floating,
-                  'popover__panel--flush': inset === 'flush'
+                  'popover__panel--flush': inset === 'flush',
+                  'popover__panel--wide': width === 'wide'
                 }
               ]"
               :data-overlay-id="panelId"

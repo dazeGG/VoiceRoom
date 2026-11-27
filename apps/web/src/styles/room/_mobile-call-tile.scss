@@ -9,7 +9,6 @@
 //   .mc-tile-avatar                       -> .mobile-call-tile__avatar
 //   .mc-tile-name                         -> .mobile-call-tile__name
 //   .mc-tile-name-text                    -> .mobile-call-tile__name-text
-//   .mc-tile-you                          -> .mobile-call-tile__you
 //   .mc-tile-icon                         -> .mobile-call-tile__icon
 //   .mc-tile-screen                       -> .mobile-call-tile__screen
 //
@@ -193,11 +192,6 @@
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-.mobile-call-tile__you {
-  flex: none;
-  color: var(--vr-text);
 }
 
 .mobile-call-tile__icon {

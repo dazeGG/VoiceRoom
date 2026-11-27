@@ -163,6 +163,8 @@ function readSettings(): Settings {
 
 export function syncNativeVoiceReceive({ devicesChanged = false } = {}): void {
   if (fellBack || !state.joined || !state.livekitRoom || capability?.stage !== 'receive') return;
+  // The desktop helper cannot decrypt an E2EE call yet; the browser path plays it, encrypted as well.
+  if (state.callId) return;
   const ports = getInstalledCallPorts();
   if (ports?.platform.desktop.nativeVoicePreference === 'off') {
     if (session) fallback(session, 'preference_disabled');

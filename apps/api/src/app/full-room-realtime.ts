@@ -42,6 +42,7 @@ export function createFullRoomRealtime(
       return;
     }
     for (const room of rooms) {
+      if (room.kind === 'call') continue;
       const presence = presenceRooms.get(room.id);
       const peers = presence ? Array.from(presence.peers.values()).map(deps.publicPeer) : [];
       const unreadCount = Number.isFinite(room.unreadCount)

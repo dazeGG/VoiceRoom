@@ -65,10 +65,9 @@ main site; it talks to the API's admin routes.
 - Android HTTP, WebSocket and Ring delivery use the Android app version and
   the operator's `ANDROID_MIN_VERSION`. HTTP and WebSocket read the agent
   string. Ring delivery reads the version saved on the native push token.
-- `WHATS_NEW_VERSION` is an ordered revision for the announcement slides and
-  the account's `whatsNewSeen` value. Keep the existing `2.8.0` revision until
-  there is new content, and advance this revision independently of web and
-  API versions so existing read acknowledgements stay valid.
+- `WHATS_NEW_RELEASE` identifies the web release that ships the announcement
+  slides. The API stores the account's newest acknowledgement in
+  `whatsNewSeen`. Bare legacy versions predate every `web/X.Y.Z` announcement.
 - Wire and data markers such as widget loader v1, native push payload v1 and
   `contractVersion` describe their protocols and schemas independently of
   package versions.
@@ -281,6 +280,40 @@ styles/                 SCSS: tokens, mixins and one partial per BEM block
   `npm run check` fails a test that reads a code file under `src/`.
 - API tests run against a real PostgreSQL (`test/db-harness.ts`) where the
   behaviour touches SQL.
+- G08 has two patch checks, configured in
+  `config/coverage/release-250-thresholds.json`. The v1-eligible
+  `businessPathPatterns` (admission, the two media repositories, Web auth
+  and call screen-receiver demand), at the extensions measured by v1, keep
+  `changedBusinessCode` floors of
+  **90% lines / 85% V8 blocks per changed file**. A changed member of the
+  auth-admission or media strict group must also retain 95% whole-file blocks.
+- `pooledBusinessCode` sets **90% lines / 85% V8 blocks for one PR-wide
+  pool**. Its `pathPatterns` cover `apps/api/src/` and `packages/shared/src/`
+  minus the per-file scope. Thus an admission `.mts` file, an extension not
+  measured in v1, joins the pool. For each metric, sum covered/eligible
+  counts on the patch, not percentages. An unloaded file contributes zero
+  covered lines against its measurable changed lines. A 0/0 metric adds
+  nothing; a 0/0-only patch is N/A. Blocks must intersect measurable
+  changed lines. No protected file contributes to the pool or borrows its
+  coverage. A rename within the pool or a mode-only change contributes no
+  unchanged lines. A pure rename into scope still checks the promoted file.
+- The CI artifact `coverage/release-250-patch.json` records the pooled verdict
+  and every eligible changed file's
+  covered/eligible lines and blocks, worst first (lower non-N/A patch
+  percentage; N/A-only files last). The protected-base ratchet rejects lower
+  floors in either check, a narrower scope, moving a protected path to the
+  pool, or new exclusions.
+- The collector inventories source files independently of what V8 loaded.
+  The summary lists excluded paths with reasons and unloaded eligible files;
+  their measurable lines are uncovered. A zero denominator is N/A (JSON
+  `null`), not 100%. Lines are a source-line proxy: strip erasable TypeScript,
+  ignore comments, blank lines and brace-only lines, then use the shortest
+  overlapping V8 range. Blocks are observed V8 ranges, not AST decisions.
+- CI merges the complete API/shared/G08 producer inventory, then checks the
+  protected-base policy and base-to-tested patch. Locally, run
+  `npm run coverage:g08 -- --base <revision>` with PostgreSQL and a committed
+  test tree; without a base it measures the whole suite, not a PR diff.
+  See the [v2 measurement and calibration](testing/g08-v2-calibration.md).
 - Critical user flows have Playwright coverage under `apps/web/e2e`.
 
 ## 7. Runtime state and scaling

@@ -21,6 +21,7 @@ import {
   type RevocableAttachments
 } from '../media/attachment-revocation.service.ts';
 import type { RateCheck } from '../../lib/rate-limit.ts';
+import { DomainError } from '../../platform/http/domain-error.ts';
 
 type Status<T extends string> = T extends string ? { status: T } : never;
 type RateLimited = { status: 'rate_limited'; retryAfterSeconds: number };
@@ -95,6 +96,7 @@ export interface DirectMessagesDeps {
   projectReply: Projection;
   directEmit: boolean;
   notifyUser(userId: string, event: AccountMessage): void;
+  callMessageDeleted?(recipientId: string, senderId: string): void;
   /** The recipient's notification and push, unless they muted the sender. */
   notifyRecipient(recipientId: string, sender: SocialUser, message: DirectMessage): Promise<unknown>;
   scheduleLinkPreview(input: {
@@ -297,6 +299,7 @@ export function createDirectMessagesService(deps: DirectMessagesDeps) {
     if (!(await softDelete(messageId))) return { status: 'not_found' };
     deps.notifyUser(peerId, { type: 'dm.message.deleted', messageId, peerUserId: userId });
     deps.notifyUser(userId, { type: 'dm.message.deleted', messageId, peerUserId: peerId });
+    if (current.call) deps.callMessageDeleted?.(peerId, userId);
     return { status: 'deleted' };
   }
 
@@ -317,6 +320,7 @@ export function createDirectMessagesService(deps: DirectMessagesDeps) {
     if (!(await softDelete(messageId))) return { status: 'not_found' };
     deps.notifyUser(recipientId, { type: 'dm.message.deleted', messageId, peerUserId: senderId });
     deps.notifyUser(senderId, { type: 'dm.message.deleted', messageId, peerUserId: recipientId });
+    if (current.call) deps.callMessageDeleted?.(recipientId, senderId);
     return { status: 'deleted' };
   }
 
@@ -335,6 +339,7 @@ export function createDirectMessagesService(deps: DirectMessagesDeps) {
     const current = await deps.messages().direct.getMessage(userId, peerId, messageId);
     if (!current) return { status: 'not_found' };
     if (!isDirectSender(current, userId)) return { status: 'not_sender' };
+    if (current.call) throw new DomainError('message_edit_forbidden', 403, 'Voice call entries cannot be edited');
     if (current.invite) return { status: 'invitation' };
     const limited = rateLimited(userId);
     if (limited) return limited;

@@ -12,6 +12,7 @@ import { requestLiveKitToken, type LiveKitCredentials } from '../../net/api';
 import { loadLiveKitClient } from '../../media/livekit-runtime';
 import { createSignalReconnectPolicy } from './reconnect-policy';
 import { createLogger } from '../../diagnostics';
+import { createCallRoomEncryption } from '../../e2ee/call-room-e2ee';
 
 const log = createLogger('room:livekit');
 
@@ -26,12 +27,10 @@ const NOT_IN_ROOM_RETRY_DELAYS_MS = [500, 1_000, 2_000];
 export async function requestLiveKitCredentials(name: string, isCurrent: () => boolean): Promise<LiveKitCredentials> {
   for (let attempt = 0; ; attempt += 1) {
     try {
-      return await requestLiveKitToken({
-        name,
-        peerId: state.peerId,
-        roomId: state.roomId,
-        sessionToken: state.sessionToken
-      });
+      return await requestLiveKitToken(
+        { name, peerId: state.peerId, roomId: state.roomId, sessionToken: state.sessionToken },
+        state.callId
+      );
     } catch (error) {
       const delay = NOT_IN_ROOM_RETRY_DELAYS_MS[attempt];
       if (getCallPorts().transport.failure(error)?.code !== 'not_in_room' || delay === undefined) throw error;
@@ -71,16 +70,25 @@ export async function connectLiveKitWithFallback(
   const urls = [...new Set(configuredUrls.flatMap(getLiveKitConnectUrls))];
   for (const [candidateIndex, url] of urls.entries()) {
     if (!isCurrent()) return null;
+    // A 1:1 call encrypts every frame end to end; other rooms do not.
+    const encryption = state.callId ? await createCallRoomEncryption() : null;
+    if (!isCurrent()) {
+      encryption?.dispose();
+      return null;
+    }
     const room = new Room({
       adaptiveStream: false,
       dynacast: true,
       reconnectPolicy: createSignalReconnectPolicy(),
       // Every capture is stopped by its owner. A room the server dropped would
       // otherwise stop the microphone its replacement is already publishing.
-      stopLocalTrackOnUnpublish: false
+      stopLocalTrackOnUnpublish: false,
+      ...(encryption && { encryption: encryption.options })
     });
 
     try {
+      // On before connecting: a track published later never leaves this device in clear.
+      if (encryption) await room.setE2EEEnabled(true);
       await room.connect(url, credentials.token, {
         autoSubscribe: false,
         ...(isForcedRelayDiagnostic() ? { rtcConfig: { iceTransportPolicy: 'relay' as const } } : {})
@@ -88,8 +96,10 @@ export async function connectLiveKitWithFallback(
       if (!isCurrent()) {
         // Never bound or committed, so there is no room state to unwind.
         await room.disconnect(false).catch(() => {});
+        encryption?.dispose();
         return null;
       }
+      encryption?.bind(room);
       logLiveKitTransition('info', {
         event: 'candidate_connect',
         candidateIndex,
@@ -105,6 +115,7 @@ export async function connectLiveKitWithFallback(
         result: 'failed'
       });
       await room.disconnect(false).catch(() => {});
+      encryption?.dispose();
       if (!isCurrent()) return null;
     }
   }

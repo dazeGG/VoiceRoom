@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia';
 import { reactive, toRefs } from 'vue';
 import { useVoiceSessionStore } from '@voiceroom/call/engine';
+import { useFriendCallStore } from '@/features/friend-call/friend-call.store';
 
 export type RoomShellMode = 'friends' | 'rooms';
 
@@ -24,7 +25,8 @@ export const useRoomNavigationStore = defineStore('room-navigation', () => {
   });
 
   function getActiveVoiceRoomId(): string | null {
-    return useVoiceSessionStore().roomId;
+    const roomId = useVoiceSessionStore().roomId;
+    return roomId === useFriendCallStore().voice?.roomId ? null : roomId;
   }
 
   function connectedRoomIsViewed(mode: RoomShellMode): boolean {

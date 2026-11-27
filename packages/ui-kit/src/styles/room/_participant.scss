@@ -1,4 +1,6 @@
 @use '../components/avatar';
+@use '../components/spinner';
+@use '../components/participant-tile-face';
 
 .participant {
   --participant-pastel: var(--vr-surface-3);
@@ -32,6 +34,20 @@
 
 .participant--speaking {
   --participant-outline: inset 0 0 0 var(--space-2) var(--vr-accent);
+}
+
+.participant:has(> .ui-participant-tile-face__ring--placeholder) {
+  --participant-outline: inset 0 0 0 calc(var(--space-2) / 2) var(--vr-line);
+
+  cursor: default;
+
+  &:hover {
+    background: var(--participant-tile-bg);
+  }
+}
+
+.participant:has(> .ui-participant-tile-face__ring--absent) {
+  --participant-tile-bg: var(--vr-surface-2);
 }
 
 .participant__camera {
@@ -136,10 +152,6 @@
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-.participant__you {
-  flex: none;
 }
 
 .participant__muted-icon,
