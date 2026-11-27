@@ -27,13 +27,11 @@ export function gridRows(count: number): number[] {
 }
 
 /**
- * The grid's pages, each split into rows. Everyone else comes first and I am
- * the last tile of the first page; whoever does not fit goes to the next pages.
+ * The grid's pages, each split into rows. I lead the first page, then everyone
+ * else fills the remaining places in order.
  */
 export function gridPages(selfId: string, otherIds: string[]): string[][][] {
-  const order = selfId
-    ? [...otherIds.slice(0, GRID_PAGE_SIZE - 1), selfId, ...otherIds.slice(GRID_PAGE_SIZE - 1)]
-    : [...otherIds];
+  const order = selfId ? [selfId, ...otherIds] : otherIds;
   const pages: string[][][] = [];
   for (let start = 0; start < order.length; start += GRID_PAGE_SIZE) {
     const page = order.slice(start, start + GRID_PAGE_SIZE);

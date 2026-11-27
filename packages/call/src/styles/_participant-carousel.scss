@@ -79,8 +79,7 @@
   // Carousel tiles stay minimal: no watch/status chrome, just the tile itself.
   .stream-tile__actions,
   .participant__status,
-  .participant__screen-action,
-  .participant__you {
+  .participant__screen-action {
     display: none;
   }
 

@@ -54,6 +54,17 @@ function watchScreen(): void {
   <div v-show="!state.viewedScreenPeerId || !hasEngine" class="friend-call__tiles">
     <div class="friend-call__tile-grid">
       <ParticipantTile
+        :participant="ownSeat"
+        :avatar="getAvatarPresentation(ownSeat)"
+        :state="own ? 'connected' : 'reconnecting'"
+        static-tile
+        :viewing="false"
+        :mirrored="state.cameraFacing !== 'environment'"
+        :screen-requesting="false"
+      >
+        <template #name><EmojiText :text="ownSeat.name" /></template>
+      </ParticipantTile>
+      <ParticipantTile
         :participant="remoteSeat"
         :avatar="getAvatarPresentation(remoteSeat)"
         :state="remoteState"
@@ -64,17 +75,6 @@ function watchScreen(): void {
         @watch-screen="watchScreen"
       >
         <template #name><EmojiText :text="remoteSeat.name" /></template>
-      </ParticipantTile>
-      <ParticipantTile
-        :participant="ownSeat"
-        :avatar="getAvatarPresentation(ownSeat)"
-        :state="own ? 'connected' : 'reconnecting'"
-        static-tile
-        :viewing="false"
-        :mirrored="state.cameraFacing !== 'environment'"
-        :screen-requesting="false"
-      >
-        <template #name><EmojiText :text="ownSeat.name" /></template>
       </ParticipantTile>
     </div>
   </div>

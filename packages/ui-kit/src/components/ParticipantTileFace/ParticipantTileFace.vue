@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { HeadphoneOff, MicOff, WifiOff } from '@lucide/vue';
+import { VisuallyHidden } from 'reka-ui';
 import { computed } from 'vue';
 import { t } from '../../i18n';
 import Avatar from '../Avatar/Avatar.vue';
@@ -45,7 +46,7 @@ defineSlots<{
         ><slot name="name">{{ name }}</slot></span
       >
       <slot v-if="state === 'connected'" name="badge" />
-      <span v-if="local" class="participant__you">{{ t('вы') }}</span>
+      <VisuallyHidden v-if="local">{{ ` (${t('вы')})` }}</VisuallyHidden>
       <template v-if="state === 'connected'">
         <span class="participant__muted-icon" :aria-label="t('Микрофон выключен')" :title="t('Микрофон выключен')">
           <MicOff aria-hidden="true" />

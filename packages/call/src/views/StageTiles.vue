@@ -14,15 +14,17 @@ const props = defineProps<{
 }>();
 
 defineSlots<{
-  participants(props: { participants: Participant[]; variant: 'grid' | 'strip' }): unknown;
+  participants(props: { participants: Participant[]; variant: 'grid' | 'strip'; key?: string }): unknown;
   streams(): unknown;
   contextMenu?(): unknown;
 }>();
 
 const totalCount = computed(() => props.participants.length + props.streamCount);
-const stripParticipants = computed(() =>
+const regularParticipants = computed(() =>
   props.participants.filter((participant) => participant.id !== props.focusedParticipant?.id)
 );
+const localParticipants = computed(() => regularParticipants.value.filter((participant) => participant.isLocal));
+const remoteParticipants = computed(() => regularParticipants.value.filter((participant) => !participant.isLocal));
 const carousel = ref<HTMLDivElement | null>(null);
 const grid = ref<HTMLDivElement | null>(null);
 const canScrollLeft = ref(false);
@@ -128,8 +130,9 @@ watch(
         </IconButton>
         <div ref="carousel" class="participant-carousel__viewport" @scroll="updateCarouselNav">
           <div class="participant-carousel__strip">
+            <slot key="local-tiles" name="participants" :participants="localParticipants" variant="strip" />
             <slot name="streams" />
-            <slot name="participants" :participants="stripParticipants" variant="strip" />
+            <slot name="participants" :participants="remoteParticipants" variant="strip" />
           </div>
         </div>
         <IconButton
@@ -163,8 +166,9 @@ watch(
       </IconButton>
       <div ref="carousel" class="participant-carousel__viewport" @scroll="updateCarouselNav">
         <div class="participant-carousel__strip">
+          <slot key="local-tiles" name="participants" :participants="localParticipants" variant="strip" />
           <slot name="streams" />
-          <slot name="participants" :participants="participants" variant="strip" />
+          <slot name="participants" :participants="remoteParticipants" variant="strip" />
         </div>
       </div>
       <IconButton
@@ -187,8 +191,9 @@ watch(
       :class="['tile-grid', { 'tile-grid--scroll': gridScrolls, 'tile-grid--empty': totalCount === 0 }]"
       aria-live="polite"
     >
+      <slot key="local-tiles" name="participants" :participants="localParticipants" variant="grid" />
       <slot name="streams" />
-      <slot name="participants" :participants="participants" variant="grid" />
+      <slot name="participants" :participants="remoteParticipants" variant="grid" />
     </div>
   </div>
   <slot name="contextMenu" />
