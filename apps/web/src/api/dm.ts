@@ -1,6 +1,7 @@
 // Direct (one-to-one) messages. Mirrors the /api/dm/:userId routes.
 
 import { t } from '@/shared/i18n';
+import { NoContent } from '@voiceroom/shared/contracts/http';
 import {
   ConversationList,
   DirectHistoryPage,
@@ -28,6 +29,12 @@ export async function fetchConversations(signal?: AbortSignal): Promise<Conversa
     fallback: t('Не удалось загрузить чаты')
   });
   return conversations;
+}
+
+export async function deleteDirectConversation(peerId: string): Promise<void> {
+  await api.delete(`/api/dm/${encodeURIComponent(peerId)}`, NoContent, undefined, {
+    fallback: t('Не удалось удалить переписку')
+  });
 }
 
 // A room invitation embedded in a message: rendered as an actionable card in

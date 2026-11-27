@@ -4,6 +4,7 @@
 import { t } from '@/shared/i18n';
 import {
   BlockApplied,
+  BlockBody,
   BlockList,
   Done,
   FriendList,
@@ -92,8 +93,8 @@ export async function fetchBlockedUsers(): Promise<PublicUser[]> {
   return (await api.get('/api/blocks', BlockList)).users;
 }
 
-export async function blockUser(userId: string): Promise<BlockApplied['status']> {
-  return (await api.put(blockUrl(userId), BlockApplied)).status;
+export async function blockUser(userId: string, deleteConversation = false): Promise<BlockApplied['status']> {
+  return (await api.put(blockUrl(userId), BlockApplied, { deleteConversation }, { bodySchema: BlockBody })).status;
 }
 
 export async function unblockUser(userId: string): Promise<void> {

@@ -143,6 +143,7 @@ export async function request<Schema extends TSchema>(
     if (signal?.aborted || (error instanceof DOMException && error.name === 'AbortError')) throw error;
     throw new ApiError(ERROR_TEXTS.unavailable, 0, { code: 'unavailable' });
   }
+  if (response.status === 204) return checkedAnswer(schema, undefined, response.status, url);
   const payload = await readBody(response, signal);
   if (!response.ok) {
     logFailure(url, response);

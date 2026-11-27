@@ -254,6 +254,15 @@ export function useDmThread(isOpen: (peerId: string) => boolean, onRead: () => v
     history.close();
   }
 
+  function forget(peerId: string): void {
+    dmHistoryCache.write(peerId, []);
+    if (peer.value?.id !== peerId) return;
+    peer.value = null;
+    contact.value = null;
+    messages.value = [];
+    profileOpen.value = false;
+  }
+
   return {
     peer,
     contact,
@@ -275,6 +284,7 @@ export function useDmThread(isOpen: (peerId: string) => boolean, onRead: () => v
     noteRealtimeRendered,
     toggleProfile,
     closeProfile,
-    close
+    close,
+    forget
   };
 }

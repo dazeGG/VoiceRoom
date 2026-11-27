@@ -77,6 +77,13 @@ export class BrowserNotificationRouting {
     for (const event of events) this.handle(event);
   };
 
+  /** The conversation with `peerId` was deleted: its waiting message notices are dropped. */
+  forgetPeer(peerId: string): void {
+    this.#pending = this.#pending.filter(
+      ({ event }) => !(event.type === 'notification.dm.message' && event.payload.peer.id === peerId)
+    );
+  }
+
   stop(): void {
     if (this.#retryTimer) {
       clearTimeout(this.#retryTimer);

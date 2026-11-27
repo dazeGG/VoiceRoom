@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Ban, Bell, BellOff, CheckCheck, MessageSquare, UserRound, UserMinus, UserPlus } from '@lucide/vue';
+import { Ban, Bell, BellOff, CheckCheck, MessageSquare, Trash2, UserRound, UserMinus, UserPlus } from '@lucide/vue';
 import { computed, ref } from 'vue';
 import type { Friend } from '@/api/friends';
 import CallEntryIcon from '@/features/friend-call/CallEntryIcon.vue';
@@ -13,6 +13,7 @@ import { displayNameOf } from '@/shared/utils/display-name';
 import { useFriendMenuCall, type FriendMenuTarget } from '../../model/friend-menu';
 import { useLobby } from '../../model/lobby-context';
 import BlockContactDialog from './BlockContactDialog.vue';
+import DeleteConversationDialog from './DeleteConversationDialog.vue';
 
 const target = defineModel<FriendMenuTarget | null>({ required: true });
 const { onMarkRead = null } = defineProps<{ onMarkRead?: ((userId: string) => Promise<void>) | null }>();
@@ -21,6 +22,7 @@ const lobby = useLobby();
 const preferences = useNotificationPreferencesStore();
 const { openProfileCardFor } = useProfileCardUiStore();
 const blockTarget = ref<Friend['user'] | null>(null);
+const deleteTarget = ref<Friend['user'] | null>(null);
 const friend = computed(() => target.value?.friend.user);
 const name = computed(() => (friend.value ? displayNameOf(friend.value) : ''));
 const isFriend = computed(() => target.value?.isFriend !== false);
@@ -109,14 +111,26 @@ function requestBlock(close: (restoreFocus?: boolean) => void): void {
   close(false);
 }
 
-function confirmBlock(): void {
+function confirmBlock(deleteConversation: boolean): void {
   const user = blockTarget.value;
   blockTarget.value = null;
   if (!user) return;
   void run(async () => {
-    await lobby.blockUser(user.id);
+    await lobby.blockUser(user.id, deleteConversation);
     emit('toast', t('{p0} заблокирован', { p0: displayNameOf(user) }));
   }, t('Не удалось заблокировать пользователя'));
+}
+
+function requestDelete(close: (restoreFocus?: boolean) => void): void {
+  if (!friend.value) return;
+  deleteTarget.value = friend.value;
+  close(false);
+}
+
+function confirmDelete(): void {
+  const user = deleteTarget.value;
+  deleteTarget.value = null;
+  if (user) void run(() => lobby.deleteConversation(user.id), t('Не удалось удалить переписку'));
 }
 </script>
 
@@ -161,6 +175,9 @@ function confirmBlock(): void {
         <template #icon><component :is="muted ? BellOff : Bell" v-bind="iconSm" /></template>
       </MenuItem>
       <MenuSeparator />
+      <MenuItem v-if="onMarkRead" :label="t('Удалить переписку')" tone="danger" @select.prevent="requestDelete(close)">
+        <template #icon><Trash2 v-bind="iconSm" /></template>
+      </MenuItem>
       <MenuItem v-if="isFriend" :label="t('Удалить из друзей')" tone="danger" @select.prevent="remove(close)">
         <template #icon><UserMinus v-bind="iconSm" /></template>
       </MenuItem>
@@ -171,4 +188,10 @@ function confirmBlock(): void {
   </ContextMenu>
 
   <BlockContactDialog v-if="blockTarget" :user="blockTarget" @close="blockTarget = null" @confirm="confirmBlock" />
+  <DeleteConversationDialog
+    v-if="deleteTarget"
+    :login="deleteTarget.login"
+    @close="deleteTarget = null"
+    @confirm="confirmDelete"
+  />
 </template>

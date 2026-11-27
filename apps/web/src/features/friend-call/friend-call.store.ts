@@ -451,6 +451,10 @@ export const useFriendCallStore = defineStore('friend-call', () => {
     startSession,
     callForPeer,
     missedForPeer: (peerId: string): CallMissedCount | undefined => missed.get(peerId),
+    clearPeerMisses(peerId: string): void {
+      const prior = missed.get(peerId);
+      if (prior) missed.set(peerId, { ...prior, count: 0, watermark: null });
+    },
     missedLoaded,
     acknowledgeMissed,
     record: (id: string) => records.get(id),

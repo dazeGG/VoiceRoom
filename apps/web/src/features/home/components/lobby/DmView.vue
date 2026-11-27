@@ -202,7 +202,7 @@ const drop = new AttachmentDrop({
           <User aria-hidden="true" />
         </IconButton>
         <IconButton
-          v-if="stranger && peer"
+          v-if="peer"
           :label="t('Ещё')"
           aria-haspopup="menu"
           :aria-expanded="Boolean(menu)"

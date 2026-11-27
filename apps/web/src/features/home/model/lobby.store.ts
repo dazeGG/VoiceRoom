@@ -25,6 +25,7 @@ import {
   unblockUser as apiUnblockUser
 } from '@/api/friends';
 import {
+  deleteDirectConversation,
   deleteDirectMessage,
   directMessageFromView,
   editDirectMessage,
@@ -47,6 +48,7 @@ import { useFriendPresence } from './use-friend-presence';
 import { useConversations } from './use-conversations';
 import { BrowserNotificationRouting } from './browser-notification-routing';
 import type { RoomSocial } from '@/features/room/social';
+import { useFriendCallStore } from '@/features/friend-call/friend-call.store';
 
 export type LobbyMode = 'friends' | 'rooms';
 export type LobbyView = 'home' | 'dm' | 'people';
@@ -111,6 +113,17 @@ export const useLobbyStore = defineStore('lobby', () => {
     return friends.value.find((entry) => entry.user.id === userId);
   }
 
+  // Every applied conversation deletion takes the next epoch. A friends
+  // snapshot requested before it must not bring back the deleted chat's
+  // unread count and last message, and a cleanup that the realtime event
+  // already did must not run again over a conversation reopened meanwhile.
+  let deletionEpoch = 0;
+  const conversationDeletedAt = new Map<string, number>();
+
+  function deletedSince(userId: string, epoch: number): boolean {
+    return (conversationDeletedAt.get(userId) ?? 0) > epoch;
+  }
+
   function isFriendOnline(userId: string): boolean {
     return presence.onlineOr(userId, findFriend(userId)?.online);
   }
@@ -150,15 +163,20 @@ export const useLobbyStore = defineStore('lobby', () => {
   // --- Loading ------------------------------------------------------------
 
   async function refreshFriends(): Promise<void> {
+    const epoch = deletionEpoch;
     const { friends: fetched, incomingRequestCount: incomingCount } = await fetchFriends();
     // A friend created after the last `ready` snapshot is not represented in the
     // presence cache yet. Seed that one relationship from the fresh HTTP result;
     // subsequent presence events remain authoritative.
     presence.seed(fetched.map((friend) => ({ userId: friend.user.id, online: friend.online })));
-    friends.value = fetched.map((friend) => ({
-      ...friend,
-      online: presence.onlineOr(friend.user.id, friend.online)
-    }));
+    friends.value = fetched.map((friend) => {
+      const merged = { ...friend, online: presence.onlineOr(friend.user.id, friend.online) };
+      if (!deletedSince(friend.user.id, epoch)) return merged;
+      // The server built this snapshot before a deletion applied here; what the
+      // deletion and the live events since left locally is newer.
+      const current = findFriend(friend.user.id);
+      return { ...merged, unreadCount: current?.unreadCount ?? 0, lastMessage: current?.lastMessage ?? null };
+    });
     incomingRequestCount.value = incomingCount;
     loaded.value = true;
   }
@@ -179,6 +197,7 @@ export const useLobbyStore = defineStore('lobby', () => {
     peopleTab.value = 'all';
     selectedFriendId.value = null;
     outboxes.clear();
+    conversationDeletedAt.clear();
     selfId = '';
   }
 
@@ -297,7 +316,7 @@ export const useLobbyStore = defineStore('lobby', () => {
   function outboxFor(peerId: string): Outbox<OutgoingDirectMessage, DirectMessage> {
     let outbox = outboxes.get(peerId);
     if (!outbox) {
-      outbox = markRaw(
+      const created = markRaw(
         new Outbox<OutgoingDirectMessage, DirectMessage>({
           deliver: async ({ text, attachmentIds, replyTo }, idempotencyKey) => {
             try {
@@ -308,6 +327,7 @@ export const useLobbyStore = defineStore('lobby', () => {
             }
           },
           onSent: (message) => {
+            if (outboxes.get(peerId) !== created) return;
             if (selectedFriendId.value === peerId) {
               thread.append(message);
               void thread.noteRealtimeRendered(peerId, message);
@@ -317,6 +337,7 @@ export const useLobbyStore = defineStore('lobby', () => {
           }
         })
       );
+      outbox = created;
       outboxes.set(peerId, outbox);
     }
     return outbox;
@@ -357,7 +378,7 @@ export const useLobbyStore = defineStore('lobby', () => {
     if (!message.call) void conversations.refresh();
     const peerId = message.senderId === selfId ? message.recipientId : message.senderId;
     const isOpenThread = view.value === 'dm' && selectedFriendId.value === peerId;
-    if (!message.call || isOpenThread) thread.replace(message);
+    if (isOpenThread) thread.replace(message);
     // A re-ring edits the existing card, whose sender is still the original caller.
     if (isOpenThread && message.call?.outcome === 'live' && thread.contact?.messageReason === 'unanswered_cap') {
       void thread.resync(peerId).catch(() => {});
@@ -439,10 +460,35 @@ export const useLobbyStore = defineStore('lobby', () => {
 
   // Blocking is server-side a superset of unfriending, so the local cleanup is the
   // same: leave the DM view if it was open on them, then resync.
-  async function blockUser(userId: string): Promise<void> {
-    await apiBlockUser(userId);
-    dropConversation(userId);
+  async function blockUser(userId: string, deleteConversation = false): Promise<void> {
+    const epoch = deletionEpoch;
+    await apiBlockUser(userId, deleteConversation);
+    if (!deleteConversation) dropConversation(userId);
+    else if (!deletedSince(userId, epoch)) applyConversationDeleted(userId);
     await Promise.all([refreshFriends().catch(() => {}), refreshRequests().catch(() => {})]);
+  }
+
+  function applyConversationDeleted(userId: string): void {
+    conversationDeletedAt.set(userId, ++deletionEpoch);
+    browserNotifications.forgetPeer(userId);
+    const friend = findFriend(userId);
+    if (friend) {
+      friend.unreadCount = 0;
+      friend.lastMessage = null;
+    }
+    const outbox = outboxes.get(userId);
+    if (outbox) outbox.items = [];
+    outboxes.delete(userId);
+    dmTyping.clear(userId);
+    useFriendCallStore().clearPeerMisses(userId);
+    dropConversation(userId);
+    thread.forget(userId);
+  }
+
+  async function deleteConversation(userId: string): Promise<void> {
+    const epoch = deletionEpoch;
+    await deleteDirectConversation(userId);
+    if (!deletedSince(userId, epoch)) applyConversationDeleted(userId);
   }
 
   function dropConversation(userId: string): void {
@@ -587,6 +633,9 @@ export const useLobbyStore = defineStore('lobby', () => {
         }
         break;
       }
+      case 'dm.conversation.deleted':
+        applyConversationDeleted(event.payload.peerId);
+        break;
       case 'dm.typing': {
         if (event.payload?.userId && event.payload.userId !== selfId) {
           dmTyping.note(event.payload.userId, '', typingActivityOf(event.payload.activity));
@@ -646,6 +695,7 @@ export const useLobbyStore = defineStore('lobby', () => {
     respondRoomInvitation,
     outboxFor,
     deleteMessage,
+    deleteConversation,
     editMessage,
     getFriendRelationship,
     getKnownLogin,
