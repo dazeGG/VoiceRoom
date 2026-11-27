@@ -948,7 +948,7 @@ test('a re-ring from the peer resets the unanswered cap while an outgoing call l
   assert.equal((await send()).status, 201);
   assert.equal((await send()).body.code, 'unanswered_cap_reached');
   const seat = await enter(aliceWs, live);
-  await enter(bobWs, await action(api, bob, live.call.id, 'accept'));
+  const bobSeat = await enter(bobWs, await action(api, bob, live.call.id, 'accept'));
   await state(bobWs, live.call.id, 'connected');
   const left = await action(api, alice, live.call.id, 'leave', 1, seat.seatToken);
   assert.equal(left.call.phase, 'alone');
@@ -957,6 +957,13 @@ test('a re-ring from the peer resets the unanswered cap while an outgoing call l
   assert.equal(rerung.call.attemptInviterUserId, bob.id);
   await waitForWsType(aliceWs.frames, 'call.incoming', (frame) => frame.payload.attempt === 2);
   assert.equal((await send()).status, 201);
+
+  // The gate judges the current attempt from its inviter: Bob now rings Alice,
+  // so Alice's call setting decides whether Bob's seat may reach the room.
+  const bobToken = await issue(api, bob, live.call.id, bobSeat.seatToken);
+  assert.equal((await lab.gate.authorize(new URL(bobToken.url).search)).ok, true);
+  await setCallAudience(api, alice, 'friends');
+  assert.equal((await lab.gate.authorize(new URL(bobToken.url).search)).ok, false);
 });
 
 test('a participant can open a stored private missed-call target after closing calls to strangers', async (t) => {
