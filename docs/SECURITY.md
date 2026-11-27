@@ -25,3 +25,27 @@ Persistent rooms are no longer counted against the IP quota: only authenticated 
 Chat history is stored in PostgreSQL indefinitely: messages do not expire and are not trimmed by count, and there is no setting for that. A message disappears only if its author or the owner of the persistent room deleted it, or if the room itself was deleted. After `RETENTION_KEEP_DELETED_MS` that message is erased from the database, its attachments are marked deleted, and media cleanup removes their files. Sending chat is limited by `ROOM_CHAT_RATE_LIMIT` per IP+room pair over `ROOM_CHAT_RATE_WINDOW_MS`. In production, back up the `postgres_data` and `uploads` volumes together, and do not lose `DATABASE_URL` or the credentials. Cleanup of idle dynamic rooms runs on a process-local `ROOM_PRUNE_INTERVAL_MS` timer; old soft-deleted rows are physically purged by `RETENTION_PURGE_INTERVAL_MS` after `RETENTION_KEEP_DELETED_MS`. API currently assumes exactly one running instance: presence (including peer IP for moderation), WebSocket registry, Ring, POW challenges, cleanup timers and non-durable rate-limit state are process-local. Durable rooms/messages/users, bans and push subscriptions live in PostgreSQL, avatar files live on the API `uploads` volume, and room quota/capacity enforcement is transactional in PostgreSQL at room creation time. Horizontal scaling requires sticky WebSocket routing, shared avatar storage such as S3 and moving other process-local state to shared storage such as Redis/pub-sub.
 
 LiveKit takes the mesh load off the browsers: each participant publishes the microphone and the screen once to the SFU, and the other clients subscribe to tracks through LiveKit.
+
+## End-to-end encrypted 1:1 calls
+
+Every 1:1 friend call is end-to-end encrypted, with no setting and no cleartext fallback. The protection covers call media only: voice, camera and screen share, including screen audio. The server still sees the metadata: who called whom, when and for how long, the display names, and the DMs, which stay plaintext on the server. Rooms, Meet and the widget are not end-to-end encrypted.
+
+**Key agreement.** The two main participants of the call room agree a fresh 32-byte media key for each call, over their LiveKit participant attributes (`vr.e2ee`, `packages/call/src/engine/e2ee/key-agreement.ts`).
+- The exchange is ZRTP-style. The caller commits to `SHA-256` of its ephemeral X25519 public key, the callee answers with its own, then the caller reveals.
+- `HKDF-SHA256` over the X25519 secret and a transcript gives the media key and 24 bits for the safety code. The transcript binds the call id, the agreement id, both page-instance ids and both public keys.
+- The server relays the states but cannot derive the key. The private keys are non-extractable WebCrypto keys and are discarded after each agreement, so a later compromise does not expose past calls.
+- A reload on either side runs a new agreement at the next LiveKit key index, so a switch causes no audible gap.
+
+**Safety code.** Both sides show 4 emoji from a fixed 64-emoji table behind the lock in the call («Звонок защищён сквозным шифрованием»). Because the caller commits first, a relay that substitutes keys cannot choose matching codes: they match only by chance, 1 in 16.7 million per call. Comparing the code is optional. A call nobody compared is safe from a passive server, not from an active one.
+
+**Media.**
+- **Before the key.** LiveKit frame encryption (AES-GCM, frame key from HKDF) is switched on before the room connects. Until the key exists, the SDK drops every outgoing frame, so nothing leaves the device in clear.
+- **Only the roster peer.** A call subscribes only to encrypted publications, and it agrees keys only with the participant the API roster seated. Names come from the roster, never from LiveKit.
+- **RED.** RED audio redundancy stays on while the peer's receiver takes it, because the SFU cannot strip encrypted RED for a subscriber that does not. A build plugin lets `livekit-client` send RED under E2EE when the app asks for it (`scripts/build/livekit-e2ee-red.ts`).
+
+**Admission.** A call's LiveKit token (`POST /api/call-rings/:callId/livekit-token`) is issued only to a client that declares `e2ee: 1`; any other gets `426 client_outdated`. A client without the key would hear noise, so it must not get into the room at all. Only these tokens may update their own participant attributes (`canUpdateOwnMetadata`).
+
+**Not covered.**
+- The Android app does not take part in calls yet.
+- The desktop native voice helper is never used for calls; the encrypted browser path plays them.
+- A failed agreement shows «Не удалось установить защищённое соединение» and the call stays silent.
