@@ -11,6 +11,7 @@ import { participant } from '../fixtures/participant';
 
 const platform = vi.hoisted(() => ({ platformClass: 'mobile' }));
 const camera = vi.hoisted(() => ({ flipCamera: vi.fn(), toggleCamera: vi.fn() }));
+const reconnect = vi.hoisted(() => vi.fn(async () => {}));
 
 vi.mock('@/platform/desktop-boundary', async (importOriginal) => ({
   ...(await importOriginal<object>()),
@@ -19,6 +20,10 @@ vi.mock('@/platform/desktop-boundary', async (importOriginal) => ({
 vi.mock('@voiceroom/call/engine/services/camera-service', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   ...camera
+}));
+vi.mock('@voiceroom/call/engine/room/room', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  reconnectRoomVoice: reconnect
 }));
 
 const { default: MobileCallStage } = await import('@/features/room/components/MobileCallStage.vue');
@@ -132,6 +137,7 @@ afterEach(() => {
   state.peers.clear();
   state.self = null;
   state.joined = false;
+  state.voiceRecoveryFailed = false;
   state.viewedScreenPeerId = '';
   state.localCameraStream = null;
 });
@@ -141,6 +147,23 @@ test('a desktop keeps its own room stage', async () => {
   enterRoom(1);
   await mount();
   expect(call()).toBeNull();
+});
+
+test('the phone shows the reconnect action even after the call controls hide', async () => {
+  vi.useFakeTimers();
+  enterRoom(2);
+  await mount();
+  await vi.advanceTimersByTimeAsync(5_000);
+  expect(chrome()).toBe('hidden');
+
+  state.voiceRecoveryFailed = true;
+  await nextTick();
+  const stage = within(defined(call(), 'mobile call'));
+  const message = stage.getByRole('status');
+  expect(message.textContent).toContain('Голос отключён');
+  expect(message.closest('.mobile-call__chrome')).toBeNull();
+  await fireEvent.click(stage.getByRole('button', { name: 'Подключиться снова' }));
+  expect(reconnect).toHaveBeenCalledOnce();
 });
 
 test('two people, a camera on: the other fills the screen and my own picture floats in a corner', async () => {

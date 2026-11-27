@@ -1,15 +1,30 @@
 import { webcrypto } from 'node:crypto';
-import { createPinia, setActivePinia } from 'pinia';
+import { createPinia, getActivePinia, setActivePinia } from 'pinia';
+import { render, screen } from '@testing-library/vue';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { nextTick } from 'vue';
 import { callPageState } from '@voiceroom/call/engine/core/call-page.store';
 import { state } from '@voiceroom/call/engine/core/room-runtime.store';
 import { mountGuestRoomClient } from '@voiceroom/call/engine/main';
+import { installCallPorts } from '@voiceroom/call/engine/ports';
+import {
+  cancelRoomRecovery,
+  notifyLiveKitDisconnected,
+  notifyLiveKitReconciled,
+  notifyRoomNetworkOffline,
+  notifyRoomNetworkOnline,
+  notifyRoomSnapshotApplied,
+  setRoomRecoveryLiveKitAdapter,
+  startRoomRecovery
+} from '@voiceroom/call/engine/recovery/room-recovery';
 import { joinRoom } from '@voiceroom/call/engine/room/room';
+import * as playback from '@voiceroom/call/engine/services/media-playback-service';
 import type { RoomCapabilities } from '@voiceroom/shared/contracts/rooms';
 import type { ServerFrame } from '@voiceroom/shared/contracts/realtime';
+import { defaultWidgetConfig } from '@voiceroom/shared/contracts/widget';
 import { buildServerEnvelope, parseClientEnvelope } from '@voiceroom/shared/realtime';
-import { createWidgetSession } from '../src/session';
+import { createWidgetSession, widgetSessionKey } from '../src/session';
+import WidgetShell from '../src/WidgetShell.vue';
 
 vi.mock('@voiceroom/call/engine/main', () => ({ mountGuestRoomClient: vi.fn() }));
 vi.mock('@voiceroom/call/engine/room/room', () => ({ joinRoom: vi.fn() }));
@@ -60,7 +75,7 @@ class FakeSocket extends EventTarget {
   }
 
   attachRoster(peer: { peerId: string; name: string }) {
-    const request = this.commands().find(({ type }) => type === 'room.join');
+    const request = this.commands().findLast(({ type }) => type === 'room.join');
     if (!request?.id) throw new Error('Missing correlatable room join request');
     this.receive(
       buildServerEnvelope(
@@ -360,6 +375,101 @@ test('reconnecting keeps the frame in call until an explicit leave', async () =>
   await nextTick();
   expect(session.entry.joined).toBe(false);
   expect(unmount).toHaveBeenCalledOnce();
+});
+
+test('a terminal voice replacement failure overrides good quality in the widget until recovery', async () => {
+  const pinia = getActivePinia();
+  if (!pinia) throw new Error('Missing test Pinia');
+  vi.stubGlobal('WebSocket', FakeSocket);
+  const admit = vi
+    .fn<() => Response>()
+    .mockReturnValueOnce(Response.json({ code: 'invalid_session' }, { status: 403 }))
+    .mockImplementation(() => admissionResponse(true));
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (path: string) => {
+      if (path === roomPath) return status();
+      if (path === tokenPath) return admit();
+      throw new Error(`Unexpected request: ${path}`);
+    })
+  );
+  const { session } = setup();
+  const uninstall = installCallPorts(session.ports, pinia);
+  const { transport, identity } = session.ports;
+  const { realtime } = transport;
+  const membership = { ...identity.credentials(roomId), roomId, name: 'Гость' };
+  const unsubscribe = realtime.subscribeRoom(roomId, (event) => {
+    if (event.type !== 'room.snapshot') return;
+    notifyRoomSnapshotApplied({
+      appEpoch: realtime.getConnectionEpoch(),
+      active: event.payload.mode === 'active',
+      hasLocalPeer: event.payload.peers.some(({ id }) => id === membership.peerId)
+    });
+  });
+  const audioContext = vi.spyOn(playback, 'getSharedAudioContext');
+  const view = render(WidgetShell, {
+    props: {
+      bootstrap: { config: defaultWidgetConfig, parentOrigin: 'https://game.test', nonce: 'ab'.repeat(24) }
+    },
+    global: { plugins: [pinia], provide: { [widgetSessionKey]: session } }
+  });
+
+  try {
+    await session.join(roomId);
+    realtime.join(membership);
+    const socket = sockets[0];
+    if (!socket) throw new Error('Missing widget socket');
+    socket.receive(buildServerEnvelope('ready', { guest: true }));
+    startRoomRecovery(realtime.getConnectionEpoch(), realtime.isConnected());
+    socket.attachRoster(membership);
+    notifyLiveKitReconciled();
+    state.localConnectionQuality = 'good';
+    state.localAppAudioSuppressed = true;
+    await nextTick();
+    expect(screen.getByRole('status').textContent).toBe('В комнате');
+    expect(screen.getByRole('img', { name: 'Хорошая связь' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Включить звук' })).toBeTruthy();
+
+    setRoomRecoveryLiveKitAdapter({
+      async attemptFreshReplacement() {
+        await transport.requestLiveKitToken(membership);
+        state.voiceConnection = 'connected';
+        return { ok: true };
+      }
+    });
+    state.voiceConnection = 'lost';
+    notifyLiveKitDisconnected();
+    socket.attachRoster(membership);
+    await vi.waitFor(() => expect(state.voiceRecoveryFailed).toBe(true));
+    expect(admit).toHaveBeenCalledOnce();
+    expect(realtime.isConnected()).toBe(true);
+    expect(state.localConnectionQuality).toBe('good');
+    expect(audioContext).not.toHaveBeenCalled();
+    expect(screen.getByRole('status').textContent).toBe('Голос отключён');
+    expect(screen.getByText('Голос отключён', { selector: 'p' })).toBeTruthy();
+    expect(screen.getByRole('img', { name: 'Голос отключён' }).classList.contains('room-dock__connection--error')).toBe(
+      true
+    );
+    expect(screen.queryByRole('img', { name: 'Хорошая связь' })).toBeNull();
+
+    notifyRoomNetworkOffline();
+    notifyRoomNetworkOnline();
+    socket.attachRoster(membership);
+    await vi.waitFor(() => expect(state.voiceRecoveryFailed).toBe(false));
+    expect(admit).toHaveBeenCalledTimes(2);
+    expect(sockets).toHaveLength(1);
+    expect(screen.getByRole('status').textContent).toBe('В комнате');
+    expect(screen.queryByText('Голос отключён')).toBeNull();
+    expect(screen.queryByRole('img', { name: 'Голос отключён' })).toBeNull();
+    expect(screen.getByRole('img', { name: 'Хорошая связь' })).toBeTruthy();
+  } finally {
+    cancelRoomRecovery();
+    setRoomRecoveryLiveKitAdapter(null);
+    unsubscribe();
+    view.unmount();
+    uninstall();
+    state.localAppAudioSuppressed = false;
+  }
 });
 
 test('operator recovery tears down the frame session without retrying admission', async () => {

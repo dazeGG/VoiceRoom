@@ -75,6 +75,7 @@ import { isMicrophoneShownMuted } from '../core/microphone-mute';
 import type { MicrophoneCapture } from '../core/types';
 import {
   cancelRoomRecovery,
+  markRoomVoiceFailed,
   abandonOptionalLiveKitReplacement,
   notifyRoomAppConnection,
   notifyRoomNetworkOffline,
@@ -91,13 +92,16 @@ const log = createLogger('room');
 let voiceJoinSent = false;
 let stopVideoVisibilitySync: (() => void) | null = null;
 let joinAttemptGeneration = 0;
+let voiceReconnectGeneration: number | null = null;
 let activeJoinAttempt: Promise<void> | null = null;
 let finishJoinTelemetry: ((outcome: 'failure' | 'cancel') => void) | null = null;
 
 const handleVoiceEvent = createVoiceEventHandler({
   leaveRoom: () => {
+    const retryFailed = state.connecting && voiceReconnectGeneration === joinAttemptGeneration;
     finishJoinTelemetry?.('failure');
     leaveRoom();
+    if (retryFailed) markRoomVoiceFailed();
   },
   showModeration: (reason) => showRoomModerationScreen(reason),
   showNotFound: () => showRoomNotFound()
@@ -189,8 +193,31 @@ export async function joinRoom(event?: Event, onMissingMicrophone?: () => void):
   }
 }
 
+export async function reconnectRoomVoice(): Promise<void> {
+  if (!state.voiceRecoveryFailed || state.connecting || callPageState().screen !== 'room') return;
+
+  const roomId = state.roomId;
+  leaveRoom();
+  state.voiceRecoveryFailed = true;
+  const generation = joinAttemptGeneration + 1;
+  voiceReconnectGeneration = generation;
+  try {
+    await joinRoom();
+  } finally {
+    if (voiceReconnectGeneration === generation) voiceReconnectGeneration = null;
+    if (
+      isCurrentJoinAttempt(generation) &&
+      state.roomId === roomId &&
+      callPageState().screen === 'room' &&
+      !state.joined
+    )
+      markRoomVoiceFailed();
+  }
+}
+
 async function performJoinRoom(generation: number, onMissingMicrophone?: () => void): Promise<void> {
   const isCurrent = (): boolean => isCurrentJoinAttempt(generation);
+  const reconnectingVoice = voiceReconnectGeneration === generation;
   let pendingMicrophoneCapture: MicrophoneCapture | null = null;
   const startedAt = performance.now();
   // Keep the original attempt's context if navigation or sign-in changes while
@@ -305,7 +332,8 @@ async function performJoinRoom(generation: number, onMissingMicrophone?: () => v
     window.addEventListener('offline', handleOffline);
     window.addEventListener('online', handleOnline);
     state.voiceRealtimeTeardown = () => {
-      cancelRoomRecovery();
+      // The normal join tears down its recovery on refusal. Keep the retry action visible.
+      cancelRoomRecovery(reconnectingVoice);
       window.removeEventListener('offline', handleOffline);
       window.removeEventListener('online', handleOnline);
       detachConnState();
@@ -325,6 +353,7 @@ async function performJoinRoom(generation: number, onMissingMicrophone?: () => v
     attachMeter(state.self, state.localStream);
     notifyLiveKitReconciled();
     state.joined = true;
+    state.voiceRecoveryFailed = false;
     syncNativeVoiceReceive();
     startMicrophoneCall();
     startCaptureDiagnostics();
@@ -393,6 +422,7 @@ async function performJoinRoom(generation: number, onMissingMicrophone?: () => v
     state.serverPeerIds.clear();
     state.serverPeerSyncReady = false;
     await disconnectLiveKitRoom();
+    if (reconnectingVoice && !isCurrent()) return;
     state.self = null;
     stopLocalStream();
     if (banned) showRoomModerationScreen('banned');

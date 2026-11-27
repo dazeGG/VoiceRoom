@@ -198,6 +198,7 @@ export interface RoomConnectionState {
   serverPeerIds: Set<string>;
   serverPeerSyncReady: boolean;
   voiceConnection: VoiceConnection;
+  voiceRecoveryFailed: boolean;
 }
 
 export interface RoomParticipantState {

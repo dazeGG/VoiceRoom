@@ -125,6 +125,7 @@ export class RealtimeRecoveryController {
   rearmNeedsSnapshotRequest: boolean;
   rearmSnapshotReady: boolean;
   failedAppEpoch: number;
+  private terminalFailure = false;
   isNetworkOnline: boolean;
   hasSeenAppConnection: boolean;
 
@@ -385,6 +386,7 @@ export class RealtimeRecoveryController {
     if (!this.active || this.isNetworkOnline) return;
     this.isNetworkOnline = true;
     if (this.phase === 'failed') {
+      if (this.terminalFailure && !this.appConnected) return;
       this.markMeaningfulRearm('network_online', true);
       return;
     }
@@ -440,6 +442,9 @@ export class RealtimeRecoveryController {
     this.optionalReplacement = false;
     this.attempts = 0;
     this.cooldownCycles = 0;
+    this.meaningfulRearm = false;
+    this.rearmNeedsSnapshotRequest = false;
+    this.rearmSnapshotReady = false;
     this.setPhase('healthy', trigger, 'succeeded');
   }
 
@@ -489,10 +494,13 @@ export class RealtimeRecoveryController {
     const status = outcome.status !== undefined && Number.isInteger(outcome.status) ? outcome.status : 0;
     this.emit('replacement_attempt', outcome.retryable ? 'retryable' : 'terminal', attempt, status, code);
     const failure = { status, code };
-    if (!outcome.retryable) {
-      this.fail('terminal', failure);
+    const rearmPending = this.phase === 'failed' && this.terminalFailure && this.meaningfulRearm;
+    if (!outcome.retryable) this.fail('terminal', failure, rearmPending);
+    if (rearmPending) {
+      this.tryRearm();
       return;
     }
+    if (!outcome.retryable) return;
     if (this.attempts >= this.maxAttempts) {
       this.enterCooldown(failure);
       return;
@@ -507,13 +515,30 @@ export class RealtimeRecoveryController {
 
   // The failed transition carries the reason, so a failure report says why
   // recovery gave up instead of "unknown_error".
-  fail(result: 'terminal' | 'exhausted', failure: { status?: number; code?: string } = {}): void {
+  fail(
+    result: 'terminal' | 'exhausted',
+    failure: { status?: number; code?: string } = {},
+    preservePendingRearm = false
+  ): void {
     if (this.optionalReplacement) {
       this.keepStandingConnection(result, failure);
       return;
     }
+    // A terminal outcome that lands while an exhausted failure is already waiting
+    // keeps main's exhausted rearm: its cooldown and recorded edge stay intact.
+    const keepExhausted = result === 'terminal' && this.phase === 'failed' && !this.terminalFailure;
     this.clearRetryTimer();
     this.failedAppEpoch = this.appEpoch;
+    if (!keepExhausted) this.terminalFailure = result === 'terminal';
+    if (this.terminalFailure) {
+      // Terminal failures skip the cooldown but still require a real reconnect event.
+      this.cooldownComplete = true;
+      if (!preservePendingRearm) {
+        this.meaningfulRearm = false;
+        this.rearmNeedsSnapshotRequest = false;
+        this.rearmSnapshotReady = false;
+      }
+    }
     this.phase = 'failed';
     this.emit('recovery_failed', result, this.attempts, failure.status ?? 0, failure.code ?? 'unknown_error');
   }
@@ -552,7 +577,7 @@ export class RealtimeRecoveryController {
     this.cooldownCycles += 1;
     this.cooldownTimer = this.schedule(() => {
       this.cooldownTimer = null;
-      if (!this.isCurrent(failedEpoch)) return;
+      if (!this.isCurrent(failedEpoch) || this.terminalFailure) return;
       this.cooldownComplete = true;
       if (this.isNetworkOnline && this.appConnected && this.replacementRequired) {
         this.markMeaningfulRearm('cooldown_probe', true);
@@ -570,12 +595,20 @@ export class RealtimeRecoveryController {
   }
 
   tryRearm(): void {
-    if (this.phase !== 'failed' || !this.cooldownComplete || !this.meaningfulRearm) return;
+    // A replacement authorized before a terminal failure may still restore voice in this epoch.
+    // The exhausted cooldown keeps main's behaviour and does not wait for it.
+    if (
+      this.phase !== 'failed' ||
+      (this.terminalFailure && this.inFlight) ||
+      !this.cooldownComplete ||
+      !this.meaningfulRearm
+    )
+      return;
     this.effectGeneration += 1;
     this.epoch += 1;
     this.startedAt = this.now();
     this.attempts = 0;
-    this.snapshotReady = this.rearmSnapshotReady;
+    this.snapshotReady = this.snapshotReady && this.rearmSnapshotReady;
     this.cooldownComplete = false;
     this.meaningfulRearm = false;
     const requestSnapshot = this.rearmNeedsSnapshotRequest;

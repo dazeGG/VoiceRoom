@@ -101,6 +101,7 @@ export function createInitialRoomState(): AppState {
     sessionToken: '',
     sharedScreenPeerId: '',
     voiceConnection: 'idle',
+    voiceRecoveryFailed: false,
     viewedScreenPeerId: ''
   };
 }
