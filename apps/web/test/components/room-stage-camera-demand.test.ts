@@ -2,14 +2,18 @@
 // and also when a peer's LiveKit participant changes without the head count changing.
 
 import { createPinia, setActivePinia } from 'pinia';
-import { render } from '@testing-library/vue';
+import { render, screen } from '@testing-library/vue';
 import { nextTick } from 'vue';
-import { beforeEach, expect, test, vi } from 'vitest';
+import { beforeEach, expect, onTestFinished, test, vi } from 'vitest';
+import { useCallPageStore } from '@voiceroom/call/engine/core/call-page.store';
+import { useRoomDeviceUiStore } from '@voiceroom/call/engine/core/room-device-ui.store';
+import { useScreenSourceUiStore } from '@voiceroom/call/engine/core/screen-source-ui.store';
 import { state } from '@voiceroom/call/engine/core/room-runtime.store';
 import { createInitialRoomState } from '@voiceroom/call/engine/model/room-state';
 import { createParticipant } from '@voiceroom/call/engine/room/participants';
 import RoomStage from '@/features/room/components/RoomStage.vue';
 import { useParticipantsUiStore } from '@voiceroom/call/engine/core/participants-ui.store';
+import { useAppearanceStore, DOCK_AUTOHIDE_STORAGE_KEY } from '@/shared/appearance/appearance.store';
 
 const demand = vi.hoisted(() => ({ runs: 0, seen: '' }));
 
@@ -29,9 +33,9 @@ beforeEach(() => {
   demand.runs = 0;
 });
 
-function renderStage() {
+function renderStage(pinia = createPinia()) {
   return render(RoomStage, {
-    global: { plugins: [createPinia()], stubs: { RoomChat: Stub, RoomDock: Stub, ScreenStage: Stub, StageTiles: Stub } }
+    global: { plugins: [pinia], stubs: { RoomChat: Stub, RoomDock: Stub, ScreenStage: Stub, StageTiles: Stub } }
   });
 }
 
@@ -54,4 +58,56 @@ test('they are re-picked when a field of a peer it reads changes without the hea
   anna.statusLabel = 'x';
   await nextTick();
   expect(demand.runs).toBeGreaterThan(afterMount);
+});
+
+test('the room dock follows the appearance setting and stays pinned during media setup or a picker', async () => {
+  const pinia = createPinia();
+  useCallPageStore(pinia).screen = 'room';
+  const appearance = useAppearanceStore(pinia);
+  const devices = useRoomDeviceUiStore(pinia);
+  const screenSource = useScreenSourceUiStore(pinia);
+  renderStage(pinia);
+  const autoHides = () => screen.getByRole('main').classList.contains('room-layout--dock-autohide');
+  onTestFinished(() => localStorage.removeItem(DOCK_AUTOHIDE_STORAGE_KEY));
+
+  state.joined = true;
+  state.voiceConnection = 'connected';
+  await nextTick();
+  expect(autoHides()).toBe(false);
+
+  appearance.setDockAutoHide(true);
+  await nextTick();
+  expect(autoHides()).toBe(true);
+
+  state.voiceConnection = 'reconnecting';
+  await nextTick();
+  expect(autoHides()).toBe(false);
+  state.voiceConnection = 'connected';
+
+  state.joined = false;
+  await nextTick();
+  expect(autoHides()).toBe(false);
+  state.joined = true;
+  await nextTick();
+  expect(autoHides()).toBe(true);
+
+  for (const menu of ['devicePopoverOpen', 'outputPopoverOpen', 'cameraPopoverOpen'] as const) {
+    devices[menu] = true;
+    await nextTick();
+    expect(autoHides()).toBe(false);
+    devices[menu] = false;
+    await nextTick();
+    expect(autoHides()).toBe(true);
+  }
+
+  screenSource.open = true;
+  await nextTick();
+  expect(autoHides()).toBe(false);
+  screenSource.open = false;
+  state.screenStarting = true;
+  await nextTick();
+  expect(autoHides()).toBe(false);
+  state.screenStarting = false;
+  await nextTick();
+  expect(autoHides()).toBe(true);
 });

@@ -665,6 +665,9 @@ export const english = {
   Перейти: 'Go',
   Тема: 'Theme',
   'Цветовая тема': 'Color Theme',
+  'Скрывать панель звонка': 'Hide call controls',
+  'Панель управления появляется, когда вы наводите курсор на звонок':
+    'Call controls appear when you hover over the call',
   'Не удалось открыть папку логов': 'Failed to open log folder',
   'Не удалось скопировать информацию о системе': 'Failed to copy system information',
   'Не удалось сохранить оверлей': 'Failed to save overlay',
@@ -2504,6 +2507,9 @@ export const french: Record<MessageKey, string> = {
   Перейти: 'Aller',
   Тема: 'Thème',
   'Цветовая тема': 'Thème de couleur',
+  'Скрывать панель звонка': 'Masquer les commandes d’appel',
+  'Панель управления появляется, когда вы наводите курсор на звонок':
+    'Les commandes apparaissent lorsque vous survolez l’appel',
   'Не удалось открыть папку логов': "Échec de l'ouverture du dossier des journaux",
   'Не удалось скопировать информацию о системе': 'Échec de la copie des informations système',
   'Не удалось сохранить оверлей': "Échec de l'enregistrement de la superposition",
