@@ -4,6 +4,8 @@ import { useCallEntry } from '@/features/friend-call/use-call-entry';
 export interface FriendMenuTarget {
   friend: Pick<Friend, 'user' | 'online'>;
   muted?: boolean;
+  isFriend?: boolean;
+  canCall?: boolean;
   anchor: HTMLElement;
   x: number;
   y: number;
@@ -18,7 +20,7 @@ export const useFriendMenuCall = (target: () => FriendMenuTarget | null) =>
 export function friendMenuTarget(
   event: MouseEvent | KeyboardEvent,
   friend: FriendMenuTarget['friend'],
-  muted = false
+  chat?: { muted: boolean; isFriend: boolean; canCall: boolean }
 ): FriendMenuTarget | null {
   if (event instanceof KeyboardEvent && event.key !== 'ContextMenu' && !(event.shiftKey && event.key === 'F10')) {
     return null;
@@ -29,5 +31,5 @@ export function friendMenuTarget(
   event.stopPropagation();
   const rect = anchor.getBoundingClientRect();
   const pointer = event instanceof MouseEvent && event.type === 'contextmenu' && (event.clientX || event.clientY);
-  return { friend, muted, anchor, x: pointer ? event.clientX : rect.left, y: pointer ? event.clientY : rect.bottom };
+  return { friend, ...chat, anchor, x: pointer ? event.clientX : rect.left, y: pointer ? event.clientY : rect.bottom };
 }

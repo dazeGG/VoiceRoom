@@ -5,6 +5,7 @@ import type { AuthUser } from '@/api/auth';
 import SettingsModal from '@/features/home/components/SettingsModal.vue';
 import { useSessionStore } from '@/features/auth/session.store';
 import { stubFetch } from '../fixtures/fetch.ts';
+import { installFakeWebSocket } from '../fixtures/fake-websocket.ts';
 import { authUser } from '../fixtures/users.ts';
 import { stubOverlayDom } from '../helpers/overlay-dom.ts';
 import { stubCanvasAndImages } from '../helpers/fake-canvas.ts';
@@ -131,7 +132,13 @@ test('saving without changes just closes, and a refused save keeps the settings 
 });
 
 test('unsaved edits survive another tab, and reopening the settings starts from what is saved', async () => {
-  stubFetch({ 'GET /api/blocks': { body: { ok: true, blocked: [], users: [] } } });
+  installFakeWebSocket();
+  stubFetch({
+    'GET /api/blocks': { body: { ok: true, blocked: [], users: [] } },
+    'GET /api/privacy': {
+      body: { ok: true, privacy: { messagesFrom: 'everyone', callsFrom: 'friends', allowList: [] } }
+    }
+  });
   const view = await renderSettings();
   const { props } = view;
 
@@ -139,7 +146,7 @@ test('unsaved edits survive another tab, and reopening the settings starts from 
   await userEvent.type(screen.getByLabelText('Имя'), 'Черновик');
   await userEvent.click(screen.getByRole('button', { name: 'Удалить аватар' }));
 
-  await view.rerender({ ...props, tab: 'notifications' });
+  await view.rerender({ ...props, tab: 'privacy' });
   expect(await screen.findByText('Заблокированных пользователей нет.')).toBeTruthy();
   await view.rerender({ ...props, tab: 'profile' });
   expect(screen.getByLabelText('Имя')).toHaveProperty('value', 'Черновик');

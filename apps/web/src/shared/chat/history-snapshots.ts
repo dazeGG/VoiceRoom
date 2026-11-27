@@ -13,6 +13,7 @@ export function createHistorySnapshots<T extends { id: string }>(reconcile?: (kn
   const pending = new Set<Pending>();
   let nextId = 0;
   let epoch = 0;
+  let latestAppliedId = 0;
   const appliedIds = new Map<SnapshotLane, number>();
 
   function dispose(snapshot: Pending): void {
@@ -51,8 +52,15 @@ export function createHistorySnapshots<T extends { id: string }>(reconcile?: (kn
     const requestEpoch = epoch;
     let accepted = false;
     pending.add(snapshot);
+
+    function applyMetadata(onCurrent?: () => void): void {
+      if (!snapshot.valid || snapshot.id <= latestAppliedId) return;
+      latestAppliedId = snapshot.id;
+      onCurrent?.();
+    }
+
     return {
-      apply(items: T[]): T[] | null {
+      apply(items: T[], onCurrent?: () => void): T[] | null {
         if (!snapshot.valid || snapshot.id < (appliedIds.get(lane) ?? 0)) {
           dispose(snapshot);
           return null;
@@ -67,9 +75,12 @@ export function createHistorySnapshots<T extends { id: string }>(reconcile?: (kn
         const result = mergeById(items, updates, reconcile).filter((item) => !removed.has(item.id));
         appliedIds.set(lane, snapshot.id);
         accepted = true;
+        // Messages reconcile within each lane. Page metadata is shared by every lane.
+        applyMetadata(onCurrent);
         dispose(snapshot);
         return result;
       },
+      applyMetadata,
       dispose: () => dispose(snapshot),
       upsert: (item: T) => {
         if (accepted && requestEpoch === epoch) record(item.id, { item, append: true }, snapshot.id);

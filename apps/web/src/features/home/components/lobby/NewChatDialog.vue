@@ -8,6 +8,7 @@ import EmojiText from '@/shared/chat/EmojiText.vue';
 import { t } from '@/shared/i18n';
 import { displayNameOf } from '@/shared/utils/display-name';
 import { useLobby } from '../../model/lobby-context';
+import { contactReason } from '../../model/contact-reason';
 
 const emit = defineEmits<{ close: []; open: [userId: string] }>();
 const lobby = useLobby();
@@ -16,9 +17,9 @@ const term = computed(() => query.value.trim().replace(/^@/, ''));
 const matches = ref<SearchResult[]>([]);
 const searched = ref('');
 const failed = ref(false);
-const results = computed(() => {
+const results = computed<SearchResult[]>(() => {
   if (term.value) return searched.value === term.value ? matches.value : [];
-  return lobby.friends.slice(0, 20).map(({ user, online }) => ({ user, online, relationship: 'friend' as const }));
+  return lobby.friends.slice(0, 20).map(({ user, online }) => ({ user, online, relationship: 'friend' }));
 });
 
 async function runSearch(value: string, signal: AbortSignal): Promise<void> {
@@ -45,8 +46,12 @@ watch(term, (value, _previous, onCleanup) => {
   });
 });
 
+function reasonFor(result: SearchResult) {
+  return result.messageReason ?? (result.relationship === 'friend' ? 'allowed' : 'friends_only');
+}
+
 function select(result: SearchResult): void {
-  if (result.relationship === 'friend') emit('open', result.user.id);
+  if (reasonFor(result) === 'allowed') emit('open', result.user.id);
 }
 </script>
 
@@ -77,8 +82,8 @@ function select(result: SearchResult): void {
           v-for="result in results"
           :key="result.user.id"
           interactive
-          :disabled="result.relationship !== 'friend'"
-          :caption="result.relationship === 'friend' ? t('Можно написать') : t('Только друзьям')"
+          :disabled="reasonFor(result) !== 'allowed'"
+          :caption="term ? contactReason(reasonFor(result), result.user.login) : ''"
           @activate="select(result)"
         >
           <template #leading>
@@ -91,7 +96,7 @@ function select(result: SearchResult): void {
             />
           </template>
           <template #title><EmojiText :text="displayNameOf(result.user)" /> @{{ result.user.login }}</template>
-          <template v-if="result.relationship !== 'friend'" #meta><Lock v-bind="iconSm" aria-hidden="true" /></template>
+          <template v-if="reasonFor(result) !== 'allowed'" #meta><Lock v-bind="iconSm" aria-hidden="true" /></template>
         </ListItem>
       </div>
     </div>

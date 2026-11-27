@@ -10,6 +10,10 @@
 //   .chat-day-divider                     -> .dm-conversation__day-divider (its <span> -> __day-label)
 // The room chat shares .chat-day-divider in Svelte; it names its own (room-chat-panel__day-divider).
 
+.dm-conversation__contact {
+  margin: var(--space-12) var(--space-16);
+}
+
 .dm-conversation__scroll {
   position: relative;
   flex: 1;

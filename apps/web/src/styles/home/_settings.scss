@@ -246,6 +246,17 @@
   padding-top: var(--space-2);
 }
 
+.settings__privacy-controls,
+.settings__privacy-form {
+  display: grid;
+  gap: var(--space-8);
+}
+
+.settings__privacy-form {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+}
+
 .settings__notification-ignore > div:first-child .settings__section-title {
   margin-bottom: 0;
 }
@@ -326,6 +337,24 @@
   .settings__nav-main {
     flex: 1;
     flex-direction: row;
+  }
+
+  .settings__body:not(.settings__body--room) .settings__nav {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .settings__body:not(.settings__body--room) .settings__nav-main {
+    grid-column: 1 / -1;
+    flex-wrap: wrap;
+  }
+
+  .settings__nav-legal {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    gap: var(--space-4) var(--space-12);
   }
 
   .settings__nav .settings__nav-logout {

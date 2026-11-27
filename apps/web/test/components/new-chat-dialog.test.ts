@@ -9,7 +9,7 @@ import { publicUser } from '../fixtures/answers';
 import { stubFetch } from '../fixtures/fetch';
 import { stubOverlayDom } from '../helpers/overlay-dom';
 
-test('the new chat search offers friends and disables other accounts', async () => {
+test('the new chat search opens an allowed stranger and shows why another cannot be messaged', async () => {
   stubOverlayDom();
   const olga = publicUser({ id: 'olga', login: 'olga', displayName: 'Ольга' });
   const oleg = publicUser({ id: 'oleg', login: 'oleg', displayName: 'Олег' });
@@ -18,8 +18,8 @@ test('the new chat search offers friends and disables other accounts', async () 
       body: {
         ok: true,
         results: [
-          { user: olga, relationship: 'none', online: false },
-          { user: oleg, relationship: 'friend', online: true }
+          { user: olga, relationship: 'none', online: false, messageReason: 'not_selected' },
+          { user: oleg, relationship: 'none', online: false, messageReason: 'allowed' }
         ]
       }
     }
@@ -35,7 +35,7 @@ test('the new chat search offers friends and disables other accounts', async () 
   await userEvent.type(search, '@ol');
   const blocked = await within(dialog).findByRole('button', { name: /Ольга/ });
   expect(blocked).toHaveProperty('disabled', true);
-  expect(within(blocked).getByText('Только друзьям')).toBeTruthy();
+  expect(within(blocked).getByText('@olga принимает сообщения только от выбранных пользователей')).toBeTruthy();
   await userEvent.click(blocked);
   expect(onOpen).not.toHaveBeenCalled();
   await userEvent.click(within(dialog).getByRole('button', { name: /Олег/ }));

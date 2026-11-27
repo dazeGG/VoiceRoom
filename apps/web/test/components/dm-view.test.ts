@@ -9,7 +9,7 @@ import { useLobbyStore, type LobbyStore } from '@/features/home/model/lobby.stor
 import { useToastsStore } from '@/features/home/model/toasts.store';
 import type { DirectMessage } from '@/api/dm';
 import { loadChatDraft } from '@/shared/chat/chat-drafts';
-import { SendDirectMessageBody } from '@voiceroom/shared/contracts/messages';
+import { SendDirectMessageBody, type DirectContact } from '@voiceroom/shared/contracts/messages';
 import { stubFetch } from '../fixtures/fetch.ts';
 import { FakeWebSocket, installFakeWebSocket } from '../fixtures/fake-websocket.ts';
 import { authUser } from '../fixtures/users.ts';
@@ -59,6 +59,115 @@ async function renderDm(peer = ada, messages: DirectMessage[] = []): Promise<Lob
 }
 
 const composer = () => screen.getByRole('textbox', { name: /Написать сообщение|^$/ });
+
+const allowedContact: DirectContact = {
+  peer: ada,
+  isFriend: false,
+  canMessage: true,
+  messageReason: 'allowed',
+  canCall: false
+};
+
+function emptyHistory(contact: DirectContact) {
+  return {
+    contractVersion: 1,
+    mode: 'latest',
+    messages: [],
+    pageInfo: { hasMoreBefore: false, hasMoreAfter: false },
+    contact
+  };
+}
+
+test('a send refusal closes the composer when the empty thread can no longer be read', async () => {
+  let closed = false;
+  stubFetch({
+    'GET /api/dm/ada/history?mode=latest&limit=50': () =>
+      closed
+        ? {
+            status: 403,
+            body: {
+              ok: false,
+              code: 'thread_forbidden',
+              error: 'Thread is not available',
+              messageReason: 'not_selected'
+            }
+          }
+        : { body: emptyHistory(allowedContact) },
+    'POST /api/dm/ada': { status: 403, body: { ok: false, code: 'messages_closed', error: 'Messages closed' } }
+  });
+  const lobby = useLobbyStore(pinia);
+  await lobby.openDm(ada.id);
+  mount(lobby);
+  expect(composer()).toBeTruthy();
+
+  closed = true;
+  await userEvent.type(composer(), 'первое сообщение{Enter}');
+  expect(await screen.findByText('@ada принимает сообщения только от выбранных пользователей')).toBeTruthy();
+  expect(screen.queryByRole('textbox', { name: /Написать сообщение|^$/ })).toBeNull();
+});
+
+test('a live call card edit refreshes the open composer after a peer re-ring', async () => {
+  let contact: DirectContact = { ...allowedContact, canMessage: false, messageReason: 'unanswered_cap' };
+  stubFetch({ 'GET /api/dm/ada/history?mode=latest&limit=50': () => ({ body: emptyHistory(contact) }) });
+  const lobby = useLobbyStore(pinia);
+  const stop = lobby.init(self.id);
+  try {
+    const socket = FakeWebSocket.latest();
+    socket.open();
+    socket.receive({ type: 'ready', payload: { userId: self.id } });
+    await lobby.openDm(ada.id);
+    mount(lobby);
+    expect(await screen.findByText('Дождитесь ответа, чтобы отправить ещё одно сообщение')).toBeTruthy();
+
+    contact = allowedContact;
+    socket.receive({
+      type: 'dm.message.edited',
+      payload: {
+        message: message('call', self.id, '', {
+          call: {
+            callId: '52bc51a6-b4f9-4149-bc0b-c3aced36e223',
+            revision: 4,
+            outcome: 'live',
+            startedAt: 1_000,
+            firstConnectedAt: 2_000,
+            endedAt: null,
+            durationMs: 0,
+            endReason: null,
+            endedByUserId: null,
+            missedAt: null,
+            missedRevision: null,
+            missedSeenRevision: null
+          }
+        })
+      }
+    });
+    expect(await screen.findByRole('textbox', { name: /Написать сообщение|^$/ })).toBeTruthy();
+  } finally {
+    stop();
+  }
+});
+
+test('a stranger sees the contact actions and a refusal replaces the composer without hiding history', async () => {
+  const lobby = await renderDm(ada, [message('m1', 'ada', 'предыдущее сообщение')]);
+  lobby.thread.contact = { peer: ada, isFriend: false, canMessage: true, messageReason: 'allowed', canCall: false };
+  expect(await screen.findByText('Ада не в ваших друзьях')).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Добавить в друзья' })).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Заблокировать' })).toBeTruthy();
+  expect(composer()).toBeTruthy();
+  lobby.thread.contact = {
+    peer: ada,
+    isFriend: false,
+    canMessage: false,
+    messageReason: 'friends_only',
+    canCall: false
+  };
+  expect(await screen.findByText('@ada принимает сообщения только от друзей')).toBeTruthy();
+  expect(screen.getByText('Ада не в ваших друзьях')).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Заблокировать' })).toBeTruthy();
+  expect(screen.getAllByRole('button', { name: 'Добавить в друзья' })).toHaveLength(2);
+  expect(screen.queryByRole('textbox', { name: /Написать сообщение|^$/ })).toBeNull();
+  expect(screen.getByText('предыдущее сообщение')).toBeTruthy();
+});
 
 test('ArrowUp in an empty composer edits the latest own message, and Escape leaves it as it was', async () => {
   await renderDm(ada, [
@@ -110,8 +219,8 @@ test('switching threads closes an open editor', async () => {
   expect(screen.queryByRole('textbox', { name: 'Текст сообщения' })).toBeNull();
 });
 
-test('only the author is offered edit and delete in the message menu', async () => {
-  await renderDm(ada, [message('m1', 'ada', 'от Ады'), message('m2', 'me', 'от меня')]);
+test('the author is offered delete, with edit available only when messaging is allowed', async () => {
+  const lobby = await renderDm(ada, [message('m1', 'ada', 'от Ады'), message('m2', 'me', 'от меня')]);
 
   const menuItems = async (text: string): Promise<string[]> => {
     const row = instanceOf(screen.getByText(text).closest('[data-message-id]'), HTMLElement, 'message row');
@@ -131,6 +240,12 @@ test('only the author is offered edit and delete in the message menu', async () 
   const mine = await menuItems('от меня');
   expect(mine.some((label) => label.includes('Изменить'))).toBe(true);
   expect(mine.some((label) => label.includes('Удалить'))).toBe(true);
+
+  lobby.thread.contact = { peer: ada, isFriend: false, canCall: false, canMessage: false, messageReason: 'blocked' };
+  await nextTick();
+  const readOnly = await menuItems('от меня');
+  expect(readOnly.some((label) => label.includes('Изменить'))).toBe(false);
+  expect(readOnly.some((label) => label.includes('Удалить'))).toBe(true);
 });
 
 test('an invitation is answered from the card by the invited side only', async () => {

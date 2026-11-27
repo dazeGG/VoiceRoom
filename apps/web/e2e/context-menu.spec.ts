@@ -1,4 +1,6 @@
 import { expect, test } from '@playwright/test';
+import { Me } from '@voiceroom/shared/contracts/account';
+import { defined, parse } from '../test/helpers/assert';
 import {
   boxOf,
   chatRow,
@@ -179,6 +181,75 @@ test('friend rows open an actions menu with a context click or keyboard and open
     await expect(friendRow).toHaveCount(0);
   } finally {
     await secondContext.close();
+  }
+});
+
+test('a stranger can open a chat and see privacy changes in search and the conversation', async ({
+  browser,
+  page,
+  baseURL
+}) => {
+  const alice = uniqueLogin('alice');
+  const bob = uniqueLogin('bob');
+  await registerViaUi(page, alice);
+  const second = await browser.newContext(baseURL ? { baseURL } : {});
+  try {
+    const secondPage = await second.newPage();
+    await registerViaUi(secondPage, bob);
+    const requester = page.context().request;
+    const peerResponse = await second.request.get('/api/auth/me');
+    expect(peerResponse.ok()).toBe(true);
+    const peer = defined(parse(Me, await peerResponse.json()).user, 'Bob has a session');
+    expect(peer.login).toBe(bob);
+
+    const search = async () => {
+      await page.getByRole('region', { name: 'Чаты', exact: true }).getByLabel('Новый чат', { exact: true }).click();
+      const dialog = page.getByRole('dialog', { name: 'Новый чат' });
+      await dialog.getByRole('searchbox', { name: 'Логин или имя' }).fill(bob);
+      return dialog.getByRole('button', { name: new RegExp(bob) });
+    };
+    await (await search()).click();
+    await expect(page.getByText(`${bob} не в ваших друзьях`)).toBeVisible();
+    const composer = page.getByPlaceholder('Написать сообщение…');
+    await expect(composer).toBeVisible();
+    expect((await requester.post(`/api/dm/${peer.id}`, { data: { text: 'Hello' } })).ok()).toBe(true);
+    const row = chatRow(page, bob);
+    await expect(row).toBeVisible();
+    await row.click({ button: 'right' });
+    const menu = page.getByRole('menu', { name: `Действия для ${bob}` });
+    await expect(menu.getByRole('menuitem', { name: 'Добавить в друзья' })).toBeVisible();
+    await expect(menu.getByRole('menuitem', { name: 'Позвонить' })).toHaveCount(0);
+    await page.keyboard.press('Escape');
+
+    await secondPage.getByRole('button', { name: 'Открыть настройки' }).click();
+    await secondPage.getByRole('button', { name: 'Конфиденциальность' }).click();
+    const save = secondPage.waitForResponse(
+      (response) => response.request().method() === 'PUT' && response.url().endsWith('/api/privacy')
+    );
+    await secondPage
+      .getByRole('radiogroup', { name: 'Кто может мне писать' })
+      .getByRole('radio', { name: 'Только друзья' })
+      .click();
+    expect((await save).ok()).toBe(true);
+    await secondPage.setViewportSize({ width: 390, height: 844 });
+    const settings = secondPage.getByRole('dialog', { name: 'Настройки' });
+    const tabs = await boxOf(settings.locator('.settings__nav-main'));
+    const legal = await boxOf(settings.getByRole('navigation', { name: 'Правовая информация' }));
+    const logout = await boxOf(settings.getByRole('button', { name: /^Выйти/ }));
+    expect(tabs.y + tabs.height).toBeLessThanOrEqual(legal.y);
+    expect(legal.x + legal.width).toBeLessThanOrEqual(logout.x);
+
+    await page.reload();
+    await row.click();
+    const reason = `@${bob} принимает сообщения только от друзей`;
+    await expect(page.getByText(reason)).toBeVisible();
+    await expect(composer).toHaveCount(0);
+    await expect(page.getByText('Hello', { exact: true }).last()).toBeVisible();
+    const refused = await search();
+    await expect(refused).toBeDisabled();
+    await expect(refused.getByText(reason)).toBeVisible();
+  } finally {
+    await second.close();
   }
 });
 

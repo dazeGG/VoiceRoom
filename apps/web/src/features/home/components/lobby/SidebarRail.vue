@@ -18,12 +18,12 @@ const lobby = useLobby();
 const calls = useFriendCallStore();
 const preferences = useNotificationPreferencesStore();
 const chats = computed(() =>
-  lobby.conversations.map(({ peer, unreadCount, muted }) => ({
+  lobby.conversations.map(({ peer, unreadCount, muted, isFriend }) => ({
     peer,
     unreadCount,
     muted: preferences.notificationPreferences.loaded ? preferences.isPeerNotificationsMuted(peer.id) : muted,
     missedCount: calls.missedForPeer(peer.id)?.count ?? 0,
-    presence: effectivePresenceStatus(lobby.isFriendOnline(peer.id), peer.presenceStatus, peer.doNotDisturb)
+    presence: effectivePresenceStatus(isFriend && lobby.isFriendOnline(peer.id), peer.presenceStatus, peer.doNotDisturb)
   }))
 );
 </script>

@@ -82,9 +82,7 @@ export async function removeFriend(userId: string): Promise<void> {
   await api.delete(`/api/friends/${encodeURIComponent(userId)}`, Done);
 }
 
-// Blocking ends the friendship, cancels pending friend requests in both
-// directions, and — because DM and room invites both require an active
-// friendship — stops those too. It does not prevent sharing a room.
+// Blocking ends the friendship, cancels pending requests and stops direct contact.
 
 function blockUrl(userId: string): string {
   return `/api/blocks/${encodeURIComponent(userId)}`;

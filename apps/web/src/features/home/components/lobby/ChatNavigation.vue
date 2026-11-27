@@ -23,7 +23,15 @@ function muted(chat: ConversationSummary): boolean {
 }
 
 function openMenu(event: MouseEvent | KeyboardEvent, chat: ConversationSummary): void {
-  const entry = friendMenuTarget(event, { user: chat.peer, online: lobby.isFriendOnline(chat.peer.id) }, muted(chat));
+  const entry = friendMenuTarget(
+    event,
+    { user: chat.peer, online: chat.isFriend && lobby.isFriendOnline(chat.peer.id) },
+    {
+      muted: muted(chat),
+      isFriend: chat.isFriend,
+      canCall: chat.canCall ?? chat.isFriend
+    }
+  );
   if (entry) menu.value = entry;
 }
 </script>
@@ -73,7 +81,11 @@ function openMenu(event: MouseEvent | KeyboardEvent, chat: ConversationSummary):
       :key="chat.peer.id"
       :conversation="chat"
       :presence="
-        effectivePresenceStatus(lobby.isFriendOnline(chat.peer.id), chat.peer.presenceStatus, chat.peer.doNotDisturb)
+        effectivePresenceStatus(
+          chat.isFriend && lobby.isFriendOnline(chat.peer.id),
+          chat.peer.presenceStatus,
+          chat.peer.doNotDisturb
+        )
       "
       :muted="muted(chat)"
       :selected="lobby.mode === 'friends' && lobby.view === 'dm' && lobby.selectedFriendId === chat.peer.id"
