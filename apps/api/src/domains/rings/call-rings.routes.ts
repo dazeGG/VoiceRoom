@@ -13,7 +13,7 @@ import {
   CallMissedSeenBody,
   CallNotificationTarget,
   CallStartBody,
-  CallVoiceProof
+  CallVoiceTokenBody
 } from '@voiceroom/shared/contracts/rings';
 import { requireSession, type ApiContext } from '../../app/context.ts';
 import { sendRateLimited } from '../../platform/http/http-kit.ts';
@@ -101,14 +101,14 @@ export function registerCallRingRoutes(root: FastifyInstance, ctx: ApiContext, c
     {
       schema: {
         params: CallIdParams,
-        body: CallVoiceProof,
+        body: CallVoiceTokenBody,
         response: { 200: LiveKitAdmission, '4xx': Failure, 503: Failure }
       }
     },
     async (request, reply) => {
       reply.header('Cache-Control', 'no-store');
       const { user, session } = await requireSession(ctx, request);
-      return calls.token(user, session.tokenHash, request.params.callId, request.body.seatToken);
+      return calls.token(user, session.tokenHash, request.params.callId, request.body);
     }
   );
 }

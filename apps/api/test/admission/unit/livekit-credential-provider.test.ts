@@ -200,3 +200,41 @@ test('widget media grant contains microphone/camera only and preserves server mu
     );
   }
 });
+
+test('only an E2EE call token may update its own participant attributes', async () => {
+  const provider = createLiveKitCredentialProvider({
+    apiKey: 'key',
+    apiSecret: 'secret',
+    gateUrl: 'wss://gate.example',
+    boundary: {
+      async issueCredential() {
+        return issued('call-credential', 'call-value');
+      }
+    }
+  });
+  const Grant = Type.Object({ video: Type.Object({ canUpdateOwnMetadata: Type.Optional(Type.Boolean()) }) });
+  const grant = (token: string) =>
+    checked(Grant, JSON.parse(Buffer.from(token.split('.')[1] ?? '', 'base64url').toString('utf8')), 'the grant').video
+      .canUpdateOwnMetadata ?? false;
+  const room = {
+    roomId: 'call-room',
+    livekitRoom: 'voice-call-room',
+    peerId: 'c-peer',
+    principal: { principalId: 'alice', principalType: 'account' as const }
+  };
+  const call = { ...room, call: true as const };
+
+  const encrypted = await provider.issueAdmission({ ...call, e2ee: true });
+  assert.ok(encrypted.admission);
+  assert.equal(grant(encrypted.admission.token), true);
+
+  const plain = await provider.issueAdmission(call);
+  assert.ok(plain.admission);
+  assert.equal(grant(plain.admission.token), false);
+
+  const roomToken = await provider.issueAdmission(room);
+  assert.ok(roomToken.admission);
+  assert.equal(grant(roomToken.admission.token), false);
+
+  assert.deepEqual(await provider.issueAdmission({ ...room, e2ee: true }), { status: 'unavailable', admission: null });
+});
