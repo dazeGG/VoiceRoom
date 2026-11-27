@@ -1,6 +1,7 @@
 // New HTTP endpoints only: the existing ring.incoming event and legacy Done
 // response keep their previously released shapes.
 import { Type, type Static } from 'typebox';
+import { Value } from 'typebox/value';
 import { Nullable, Ok } from './http.ts';
 import { PublicUser } from './users.ts';
 
@@ -202,3 +203,43 @@ export const DirectMessageCall = Type.Object({
   missedSeenRevision: Nullable(CallRevision)
 });
 export type DirectMessageCall = Static<typeof DirectMessageCall>;
+
+// The E2EE key agreement of a 1:1 call. Each main participant publishes one of these, as JSON, in its LiveKit
+// participant attribute `vr.e2ee`; the server relays it unread (packages/call engine/e2ee/key-agreement.ts).
+export const CALL_KEY_AGREEMENT_ATTRIBUTE = 'vr.e2ee';
+/** LiveKit keeps this many keys per participant, so an agreement's key index stays below it. */
+export const CALL_KEY_RING_SIZE = 16;
+const Hex16 = Type.String({ pattern: '^[0-9a-f]{32}$' });
+const Hex32 = Type.String({ pattern: '^[0-9a-f]{64}$' });
+export const CallKeyAgreementState = Type.Object({
+  v: Type.Literal(1),
+  /** The page instance; a new one means that side lost its keys. */
+  sid: Hex16,
+  /** Whether this side's receiver takes audio/red. */
+  red: Type.Boolean(),
+  /** The agreement, chosen by the initiator. */
+  hs: Type.Optional(Hex16),
+  /** Initiator: the responder instance addressed, the key index, the commitment and then the reveal. */
+  to: Type.Optional(Hex16),
+  index: Type.Optional(Type.Integer({ minimum: 0, maximum: CALL_KEY_RING_SIZE - 1 })),
+  commit: Type.Optional(Hex32),
+  reveal: Type.Optional(Hex32),
+  /** Responder: its ephemeral public key. */
+  hello: Type.Optional(Hex32)
+});
+export type CallKeyAgreementState = Static<typeof CallKeyAgreementState>;
+const VersionedState = Type.Object({ v: Type.Number() });
+
+/** A peer's published state: valid, from a newer protocol (`unsupported`), or nothing usable. */
+export function parseCallKeyAgreementState(raw: string | undefined): CallKeyAgreementState | 'unsupported' | undefined {
+  if (!raw) return undefined;
+  let value: unknown;
+  try {
+    value = JSON.parse(raw);
+  } catch {
+    return undefined;
+  }
+  if (Value.Check(CallKeyAgreementState, value)) return value;
+  if (Value.Check(VersionedState, value) && value.v > 1) return 'unsupported';
+  return undefined;
+}
