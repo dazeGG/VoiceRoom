@@ -38,7 +38,13 @@ test(
       ('m04', 'c', 'a', 'Voice call', '{"kind":"voice-call"}', '2026-11-25T17:00Z', NULL, NULL),
       ('m05', 'b', 'a', 'Deleted', '{}', '2026-11-25T18:00Z', NULL, '2026-11-25T19:00Z'),
       ('m06', 'd', 'a', 'Former friend', '{}', '2026-11-25T20:00Z', NULL, NULL),
-      ('m07', 'a', 'e', 'Blocked account', '{}', '2026-11-25T21:00Z', NULL, NULL);
+      ('m07', 'a', 'e', 'Blocked account', '{}', '2026-11-25T21:00Z', NULL, NULL),
+      ('m08', 'f', 'a', '', '{}', '2026-11-25T22:00Z', NULL, NULL);
+    INSERT INTO message_attachments (id, owner_id, context, state, mime_type, original_bytes, processed_bytes,
+      preview_bytes, width, height, original_storage_key, processed_storage_key, preview_storage_key, ready_at,
+      bound_at, direct_message_id, attachment_order)
+    VALUES ('7f1c2d3e-4b5a-4c6d-8e9f-a0b1c2d3e4f5', 'f', 'dm', 'ready', 'image/jpeg', 10, 8, 4, 2, 2, 'photo/original',
+      'photo/processed', 'photo/preview', now(), now(), 'm08', 0);
   `);
 
     const direct = createDmThreadRepository({ pool });
@@ -84,6 +90,14 @@ test(
       })),
       [
         {
+          id: 'f',
+          badge: null,
+          lastMessage: { at: Date.parse('2026-11-25T22:00Z'), fromMe: false, kind: 'attachment', preview: '' },
+          unreadCount: 1,
+          muted: false,
+          isFriend: true
+        },
+        {
           id: 'c',
           badge: null,
           lastMessage: { at: Date.parse('2026-11-25T17:00Z'), fromMe: false, kind: 'call', preview: 'Voice call' },
@@ -103,12 +117,12 @@ test(
     );
     assert.deepEqual(
       (await direct.listConversations('a', 1)).map(({ peer }) => peer.id),
-      ['c']
+      ['f']
     );
     await direct.markRead({ userId: 'a', peerId: 'b' });
     assert.deepEqual(
       (await fetchList()).map(({ unreadCount }) => unreadCount),
-      [1, 0]
+      [1, 1, 0]
     );
   }
 );
