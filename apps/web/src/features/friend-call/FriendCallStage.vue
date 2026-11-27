@@ -4,7 +4,6 @@ import { Maximize2, Minimize2, Mic, MicOff, Phone, PhoneOff } from '@lucide/vue'
 import { Avatar, Button, Callout, IconButton } from '@voiceroom/ui-kit/components';
 import { useVoiceSessionStore } from '@voiceroom/call/engine';
 import { useScreenUiStore } from '@voiceroom/call/engine/core/screen-ui.store';
-import { useRoomDeviceUiStore } from '@voiceroom/call/engine/core/room-device-ui.store';
 import { state } from '@voiceroom/call/engine/core/room-runtime.store';
 import { isMicrophoneShownMuted } from '@voiceroom/call/engine/core/microphone-mute';
 import { closeScreenView } from '@voiceroom/call/engine/ui/screen-view';
@@ -13,6 +12,7 @@ import type { CallSnapshot } from '@voiceroom/shared/contracts/rings';
 import RoomDock from '@/features/room/components/RoomDock.vue';
 import MobileCallTopbar from '@/features/room/components/MobileCallTopbar.vue';
 import ScreenStage from '@/features/room/components/ScreenStage.vue';
+import { useDockAutoHide } from '@/features/room/use-dock-auto-hide';
 import EmojiText from '@/shared/chat/EmojiText.vue';
 import { t } from '@/shared/i18n';
 import FriendCallTiles from './FriendCallTiles.vue';
@@ -30,7 +30,7 @@ const emit = defineEmits<{ back: []; messages: []; toggleExpanded: [] }>();
 const calls = useFriendCallStore();
 const voice = useVoiceSessionStore();
 const screen = useScreenUiStore();
-const devices = useRoomDeviceUiStore();
+const canAutoHideDock = useDockAutoHide();
 const peer = computed(() => callPeer(call, calls.userId));
 const self = computed(() => (call.caller.id === calls.userId ? call.caller : call.recipient));
 const peerSeat = computed(() => call.seats?.find((seat) => seat.userId === peer.value.id));
@@ -41,17 +41,8 @@ const showPlaceholder = computed(
   () => status.declined || status.ringing || (status.noAnswer && call.firstConnectedAt === null)
 );
 const canRingAgain = computed(() => call.allowedActions.includes('re-ring'));
-// On a desktop call the dock steps aside until the pointer or keyboard focus enters the call; the styles
-// own the reveal. It stays put while a device menu is open, before the call connects, and over a countdown.
 const dockAutoHides = computed(
-  () =>
-    !portrait &&
-    hasEngine.value &&
-    !showPlaceholder.value &&
-    status.deadline === undefined &&
-    !devices.devicePopoverOpen &&
-    !devices.outputPopoverOpen &&
-    !devices.cameraPopoverOpen
+  () => canAutoHideDock.value && !portrait && hasEngine.value && !showPlaceholder.value && status.deadline === undefined
 );
 
 watchEffect(() => {

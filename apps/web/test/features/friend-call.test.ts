@@ -2,7 +2,7 @@ import { render, screen, fireEvent, within } from '@testing-library/vue';
 import { createPinia, setActivePinia, type Pinia } from 'pinia';
 import { defineComponent, h, nextTick, ref } from 'vue';
 import userEvent from '@testing-library/user-event';
-import { afterEach, beforeEach, expect, test, vi } from 'vitest';
+import { afterEach, beforeEach, expect, onTestFinished, test, vi } from 'vitest';
 import type {
   CallAnswer,
   CallBootstrap,
@@ -28,6 +28,7 @@ import { usePortraitCallLayout } from '@/features/room/mobile-call-layout';
 import { PORTRAIT_PHONE_QUERY } from '@/features/room/mobile-call-ui.store';
 import { clockTime } from '@/shared/utils/date-format';
 import { useLocaleStore } from '@/shared/i18n';
+import { useAppearanceStore } from '@/shared/appearance/appearance.store';
 import { FakeWebSocket, installFakeWebSocket } from '../fixtures/fake-websocket';
 import { stubFetch, type Reply } from '../fixtures/fetch';
 import { authUser } from '../fixtures/users';
@@ -796,7 +797,7 @@ test('the desktop call remembers a resized height through screen share, expansio
   expect(splitter().getAttribute('aria-valuetext')).toBe(resized);
 });
 
-test('a connected desktop call lets its dock hide, but not before media joins or while a device menu is open', async () => {
+test('a desktop call only lets its dock hide when enabled, with media connected and no menu or countdown', async () => {
   const call = snapshot({
     phase: 'connected',
     attemptResult: 'accepted',
@@ -807,10 +808,17 @@ test('a connected desktop call lets its dock hide, but not before media joins or
       { userId: ada.id, status: 'present', reconnectUntil: null }
     ]
   });
-  await start({ 'POST /api/call-rings': { body: answer(call) } });
+  const { socket } = await start({ 'POST /api/call-rings': { body: answer(call) } });
   await calls.dial(ada.id);
   selectPeer(useLobbyStore(pinia));
   mountDm();
+  const appearance = useAppearanceStore(pinia);
+  const previousVoiceConnection = callRuntime.voiceConnection;
+  onTestFinished(() => {
+    callRuntime.voiceConnection = previousVoiceConnection;
+  });
+  appearance.setDockAutoHide(true);
+  callRuntime.voiceConnection = 'connecting';
   await nextTick();
   const autohides = () => stage().classList.contains('friend-call--dock-autohide');
   expect(within(stage()).getByRole('button', { name: 'Завершить' })).toBeTruthy();
@@ -818,13 +826,27 @@ test('a connected desktop call lets its dock hide, but not before media joins or
 
   useVoiceSessionStore(pinia).roomId = 'opaque-room';
   await nextTick();
+  expect(autohides()).toBe(false);
+
+  appearance.setDockAutoHide(false);
+  callRuntime.voiceConnection = 'connected';
+  await nextTick();
   expect(within(stage()).getByRole('group', { name: 'Управление звонком' })).toBeTruthy();
+  expect(autohides()).toBe(false);
+
+  appearance.setDockAutoHide(true);
+  await nextTick();
   expect(autohides()).toBe(true);
 
   await fireEvent.click(within(stage()).getByRole('button', { name: 'Выбрать микрофон' }));
   expect(autohides()).toBe(false);
   await fireEvent.click(within(stage()).getByRole('button', { name: 'Выбрать микрофон' }));
   expect(autohides()).toBe(true);
+
+  realtimeState(socket, { ...call, revision: 2, phase: 'alone', aloneDeadline: now + 60_000 });
+  await flush();
+  expect(within(stage()).getByText('Ада покидает звонок')).toBeTruthy();
+  expect(autohides()).toBe(false);
 });
 
 test('an encrypted call shows its safety code behind a lock, replaces it silently, and says so when the key fails', async () => {

@@ -23,6 +23,7 @@ import { applyDesktopBoundaryToDocument } from '@/platform/desktop-boundary';
 import { syncDesktopCallState } from '@/platform/desktop-call';
 import { bindDesktopSystem } from '@/platform/desktop-system';
 import { isMobileRoute } from '@/platform/mobile-routes';
+import { useAppearanceStore } from '@/shared/appearance/appearance.store';
 import { useCallActivityStore } from '@/shared/call-activity.store';
 import { installEmojiCopy } from '@/shared/chat/emoji-copy';
 import EmojiText from '@/shared/chat/EmojiText.vue';
@@ -36,6 +37,7 @@ const callActivity = useCallActivityStore();
 const callFeedback = useCallFeedbackStore();
 const leaveScreen = useLeaveScreenStore();
 const theme = useThemeStore();
+const appearance = useAppearanceStore();
 const toasts = useToastsStore();
 const roomToasts = useToastUiStore();
 const voiceSession = useVoiceSessionStore();
@@ -104,6 +106,7 @@ watchEffect(() => {
 
 onMounted(() => {
   theme.initTheme();
+  appearance.initAppearance();
   // "How was the call?" asked by a leave on the page before this load.
   callFeedback.restorePendingCallFeedback();
   const policy = applyDesktopBoundaryToDocument();
