@@ -780,6 +780,40 @@ export async function ensureCurrentMicrophonePublication(expectedRoom?: Room): P
 }
 
 /**
+ * Publishes the committed microphone again with the options the room needs now, under the same owner as device
+ * actions. A 1:1 call uses it when the peer turns out not to take RED. While another microphone action runs it
+ * does nothing and says `busy`, so the caller tries again later.
+ */
+export async function republishCurrentMicrophone(room: Room): Promise<MicrophoneActionOutcome> {
+  const stream = state.localStream;
+  const publication = state.localMicPublication;
+  if (state.livekitRoom !== room || !stream || !publication?.track) return 'stale';
+  if (mutationSlot || captureSlot || currentAction) return 'busy';
+  currentAction = true;
+  const version = actionVersion;
+  const isCurrent = () =>
+    version === actionVersion && state.livekitRoom === room && state.localStream === stream && state.joined;
+  try {
+    await room.localParticipant.unpublishTrack(publication.track, false);
+    if (state.localMicPublication === publication) state.localMicPublication = null;
+    const result = await mutateCandidate(
+      room,
+      null,
+      getLocalMicrophoneCapture(),
+      isCurrent,
+      performance.now() + MIC_ACTION_TIMEOUT_MS,
+      { republishCommitted: true }
+    );
+    if (result.outcome === 'applied' && result.publication && isCurrent()) {
+      state.localMicPublication = result.publication;
+    }
+    return result.outcome;
+  } finally {
+    currentAction = false;
+  }
+}
+
+/**
  * The room could not take the committed microphone back and no new connection
  * carried it: the call goes on listen-only, said so, instead of a live microphone
  * button nobody hears. Leaves it alone while another owner is still working on it.

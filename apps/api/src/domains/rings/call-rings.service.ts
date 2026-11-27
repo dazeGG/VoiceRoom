@@ -72,7 +72,7 @@ type VoicePort = {
     pendingInRoom(roomId: string): boolean;
     retry(): void;
   };
-  token(roomId: string, peerId: string, user: SessionUser, options: { e2ee: boolean }): Promise<LiveKitAdmission>;
+  token(roomId: string, peerId: string, user: SessionUser): Promise<LiveKitAdmission>;
 };
 
 function seatId(userId: string): string {
@@ -95,7 +95,6 @@ function disabled(): never {
 export function createCallRingService({
   pool,
   enabled,
-  e2eeRequired = false,
   clock,
   graceMs,
   limits,
@@ -105,8 +104,6 @@ export function createCallRingService({
 }: {
   pool(this: void): pg.Pool | null;
   enabled: boolean;
-  /** Refuse a call's LiveKit token to a client that does not declare call E2EE. */
-  e2eeRequired?: boolean;
   clock?: (() => number) | undefined;
   graceMs: number;
   limits: { count: number; windowMs: number };
@@ -559,11 +556,10 @@ export function createCallRingService({
   function token(user: SessionUser, sessionHash: string, id: string, body: CallVoiceTokenBody) {
     return serialize(async () => {
       const { call, handoff } = await authorizeVoice({ userId: user.id, sessionHash }, id, body.seatToken);
-      const e2ee = body.e2ee === 1;
-      if (e2eeRequired && !e2ee) outdated();
+      if (body.e2ee !== 1) outdated();
       const connection = voice.seat(call.roomId, handoff.peerId)?.connection;
       if (!connection || connection.closed || connection.authSessionHash !== sessionHash) return notFound();
-      const result = await voice.token(call.roomId, handoff.peerId, user, { e2ee });
+      const result = await voice.token(call.roomId, handoff.peerId, user);
       return {
         ok: true as const,
         ...result,

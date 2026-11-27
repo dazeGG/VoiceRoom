@@ -104,7 +104,7 @@ function setup(overrides: {
       calls.failures++;
     }
   });
-  return { admit: (e2ee = false) => admit('call-room', 'peer-1', USER, { e2ee }), calls };
+  return { admit: () => admit('call-room', 'peer-1', USER), calls };
 }
 
 async function refusal(promise: Promise<unknown>): Promise<{ code: string; status: number }> {
@@ -124,6 +124,7 @@ test('the seat holder gets a call credential for the call room, muted when the s
     { ...open.calls.issued[0], principal: undefined, peerId: undefined, roomId: undefined },
     {
       call: true,
+      e2ee: true,
       canPublishMicrophone: true,
       livekitRoom: 'vr-call-room',
       name: 'Alice',
@@ -136,16 +137,6 @@ test('the seat holder gets a call credential for the call room, muted when the s
   const muted = setup({ muted: true });
   await muted.admit();
   assert.equal(muted.calls.issued[0]?.canPublishMicrophone, false);
-});
-
-test('only a client that declares call E2EE asks for the attribute-updating credential', async () => {
-  const encrypted = setup({});
-  await encrypted.admit(true);
-  assert.equal(encrypted.calls.issued[0]?.e2ee, true);
-
-  const plain = setup({});
-  await plain.admit(false);
-  assert.equal('e2ee' in (plain.calls.issued[0] ?? {}), false);
 });
 
 test('no seat, another account’s seat or a lost seat before issue gets no credential', async () => {

@@ -26,6 +26,7 @@ export function useFriendCallEngine(): void {
           embedded: true,
           friendCall: {
             callId,
+            initiator: call.caller.id === calls.userId,
             name: callPeer(call, calls.userId).displayName,
             session: { peerId, sessionToken: seatToken },
             onMissingMicrophone: () =>

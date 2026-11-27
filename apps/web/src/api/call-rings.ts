@@ -27,6 +27,7 @@ export const fetchCallVoiceToken = (callId: string, seatToken: string, signal: A
   api.post(
     `${callPath(callId)}/livekit-token`,
     LiveKitAdmission,
-    { seatToken },
+    // Every 1:1 call is end-to-end encrypted (protocol 1); the server refuses a client that cannot say so.
+    { seatToken, e2ee: 1 },
     { bodySchema: CallVoiceTokenBody, signal }
   );

@@ -20,9 +20,32 @@ import { isMicrophoneShownMuted } from '../../core/microphone-mute';
 import { UserFacingError } from '../../core/utils';
 
 import { isCameraPublication, isMicrophonePublication } from './publication-kinds';
+import { receiverTakesRed } from '../../e2ee/call-room-e2ee';
 
 // Keep detached captures available for retry without holding on to a room after it goes away.
 const cameraUnpublishes = new WeakMap<Room, Map<LocalTrack | MediaStreamTrack, 'pending' | 'failed'>>();
+
+// Under E2EE the SFU cannot strip RED for a subscriber that does not take it, and that subscriber then hears
+// nothing. So a 1:1 call sends RED only while its peer takes it: as this device does until the key agreement
+// says otherwise, then as the peer reported.
+let callPeerTakesRed: boolean | null = null;
+const publishedRed = new WeakMap<LocalTrackPublication, boolean>();
+
+/** The peer's RED capability from its key agreement state, or null when no call or not yet known. */
+export function setCallPeerTakesRed(takesRed: boolean | null): void {
+  callPeerTakesRed = takesRed;
+}
+
+/** Whether the microphone should go out with RED in this room now. */
+export function microphoneSendsRed(): boolean {
+  return state.callId ? (callPeerTakesRed ?? receiverTakesRed()) : true;
+}
+
+/** Whether a microphone publication went out with a RED setting other than the one the call needs now. */
+export function microphoneRedMismatch(publication: LocalTrackPublication): boolean {
+  const red = publishedRed.get(publication);
+  return red !== undefined && red !== microphoneSendsRed();
+}
 
 /** A stale published track could not be detached; callers must retain quarantine. */
 export class MicrophonePublicationCleanupError extends Error {}
@@ -45,14 +68,16 @@ export async function publishLocalMicrophoneForRoom(
   if (!track) throw new UserFacingError(t('Браузер не отдал аудио-трек'));
   const { Track } = await loadLiveKitClient();
 
+  const red = microphoneSendsRed();
   const publication = await room.localParticipant.publishTrack(track, {
     // On a short uplink the voice goes first; screens and cameras send at the default low priority.
     audioPreset: { maxBitrate: MICROPHONE_AUDIO_BITRATE, priority: 'high' },
     dtx: true,
     name: 'microphone',
-    red: true,
+    red,
     source: Track.Source.Microphone
   });
+  publishedRed.set(publication, red);
   const unpublish = async () => {
     try {
       await room.localParticipant.unpublishTrack(publication.track ?? track, false);

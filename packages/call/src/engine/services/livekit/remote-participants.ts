@@ -1,3 +1,4 @@
+import { isCallPublicationAllowed } from '../../e2ee/call-room-e2ee';
 import { getCallPorts, getInstalledCallPorts } from '../../ports';
 // The other people in the call as LiveKit reports them: their participants,
 // which of their tracks to subscribe to, and what to do as tracks come and go.
@@ -104,8 +105,7 @@ export function createLiveKitParticipant(participant: RemoteParticipant): Partic
     id: participant.identity,
     isLocal: participant.isLocal || participant.identity === state.peerId,
     joinedAt: participant.joinedAt ? participant.joinedAt.getTime() : Date.now(),
-    // The personal SFU gets only the opaque identity. Keep the guest name from presence.
-    name: participant.name || state.peers.get(participant.identity)?.name || participant.identity,
+    name: liveKitParticipantName(participant),
     screen: participant.isScreenShareEnabled || screenPresence.active,
     screenAudio: screenPresence.hasAudio
   });
@@ -161,6 +161,16 @@ export function updateLiveKitPublicationState(peer: Participant, publication: Re
   if (isCameraPublication(publication)) {
     peer.camera = true;
   }
+}
+
+/**
+ * The name a LiveKit participant shows under. The personal SFU gets only the opaque identity, so the guest name
+ * comes from presence. A call takes only the roster name: its E2EE token lets a participant rename itself in LiveKit.
+ */
+export function liveKitParticipantName(participant: { identity: string; name?: string | undefined }): string {
+  const rosterName = state.peers.get(participant.identity)?.name;
+  if (state.callId) return rosterName || participant.identity;
+  return participant.name || rosterName || participant.identity;
 }
 
 export function syncLiveKitPublicationSubscription(peer: Participant, publication: RemoteTrackPublication): void {
@@ -336,6 +346,7 @@ async function scheduleScreenSubscriptionRetry(
     isDemanded: () => shouldSubscribeToScreen(peer),
     key: publication.trackSid,
     retry: () => {
+      if (!isCallPublicationAllowed(publication)) return;
       publication.setSubscribed(false);
       publication.setSubscribed(true);
       applyRemoteVideoVisibility(publication);
@@ -380,7 +391,9 @@ export function syncLiveKitVoiceSubscriptions(): void {
   });
 }
 
-function setRemotePublicationSubscribed(publication: RemoteTrackPublication, subscribed: boolean): void {
+function setRemotePublicationSubscribed(publication: RemoteTrackPublication, wanted: boolean): void {
+  // An E2EE call takes only encrypted media: a cleartext publication there can only be the server's.
+  const subscribed = wanted && isCallPublicationAllowed(publication);
   if (publication.isDesired === subscribed) return;
   publication.setSubscribed(subscribed);
 }
