@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Callout } from '@voiceroom/ui-kit/components';
 // The app entry shows the lobby or landing on desktop. Phones with a signed-in
-// call session can open the lobby and everyone else can start a temporary room.
+// call session use the same lobby with its compact chat navigation.
 import { t } from '@/shared/i18n';
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';

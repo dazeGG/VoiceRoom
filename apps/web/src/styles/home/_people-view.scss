@@ -1,122 +1,68 @@
-// PeopleView (features/home/components/lobby/PeopleView.vue): "Друзья и заявки", adding a friend by
-// login and answering requests. Rules were split across PeopleView's own <style>, lobby-v2.css and
-// friends.css; the request card and its buttons are elements of this block.
-//
-// Svelte class -> BEM class
-//   .lv-main-scroll                       -> .people-view
-//   .lr-section-link.people-back          -> .people-view__back
-//   .lr-title.people-title                -> .people-view__title
-//   .lr-eyebrow.people-section-label      -> .people-view__label (+ --add / --requests)
-//   .lr-add-bar                           -> .people-view__add-bar
-//   .lr-add-hint                          -> .people-view__hint
-//   .lr-add-copy                          -> .people-view__copy
-//   .lr-grid-2                            -> .people-view__columns
-//   .lr-eyebrow.people-column-label       -> .people-view__column-label
-//   .people-count                         -> .people-view__count
+@use 'pkg:@voiceroom/ui-kit/styles/mixins' as kit;
 
 .people-view {
   flex: 1;
+  min-width: 0;
   overflow: auto;
-  padding: var(--space-32) var(--space-40);
 }
 
-.people-view__back {
-  display: flex;
-  align-items: center;
-  gap: var(--space-4);
-  margin-bottom: var(--space-16);
-  padding: 0;
-  border: none;
-  background: transparent;
-  color: var(--vr-text-2);
-  font-family: var(--font-ui);
-  font-size: 0.8125rem;
-  font-weight: 600;
-  cursor: pointer;
-
-  &:hover {
-    color: var(--vr-accent);
-  }
-}
-
-.people-view__title {
-  margin-top: var(--space-6);
-  margin-bottom: var(--space-4);
-  color: var(--vr-text);
-  font-size: 1.625rem;
-  font-weight: 800;
-  letter-spacing: -0.015em;
-}
-
-.people-view__label,
-.people-view__column-label {
-  color: var(--vr-text-2);
-  font-family: var(--font-ui);
-  font-size: 0.8125rem;
-  font-weight: 500;
-}
-
-.people-view__label--add {
-  margin: var(--space-24) 0 var(--space-12);
-}
-
-.people-view__label--requests {
-  margin: var(--space-32) 0 var(--space-12);
-}
-
-.people-view__column-label {
-  margin-bottom: var(--space-12);
-}
-
-.people-view__count {
-  margin-left: var(--space-6);
-  color: var(--vr-text-muted);
-  font-family: var(--font-mono);
-  font-size: 12px;
-  font-weight: 400;
-}
-
-.people-view__add-bar {
-  max-width: calc(var(--space-64) * 8 + var(--space-8));
-}
-
-.people-view__hint {
+.people-view__header {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: var(--space-6);
-  margin-top: var(--space-12);
-  color: var(--vr-text-muted);
-  font-size: 13px;
-
-  code {
-    color: var(--vr-text-2);
-    font-family: var(--font-mono);
-    font-size: 13px;
-  }
-}
-
-.people-view__copy {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-4);
-  padding: var(--space-2) var(--space-4);
-  border: none;
-  border-radius: var(--radius-6);
-  background: transparent;
-  color: var(--vr-accent);
-  font-family: var(--font-ui);
-  font-size: 0.75rem;
-  font-weight: 600;
-  cursor: pointer;
-
-  &:hover {
-    background: var(--vr-accent-soft);
-  }
-}
-
-.people-view__columns {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
   gap: var(--space-12);
+  padding: var(--space-16) var(--space-24);
+  border-bottom: 1px solid var(--vr-line);
+
+  h1 {
+    margin: 0;
+    font-size: 1.125rem;
+    font-weight: 600;
+  }
+}
+
+.people-view__add {
+  margin-inline-start: auto;
+}
+
+.people-view__body {
+  display: grid;
+  gap: var(--space-12);
+  padding: var(--space-16) var(--space-24);
+
+  h2 {
+    margin: 0;
+    font-size: 0.875rem;
+  }
+}
+
+.people-view__request {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-4) var(--space-12);
+
+  > :first-child {
+    flex: 1 1 auto;
+  }
+}
+
+.people-view__friends {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.people-view__request-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  margin-inline-start: auto;
+}
+
+@media (max-width: kit.$bp-phone) {
+  .people-view__header,
+  .people-view__body {
+    padding-inline: var(--space-12);
+  }
 }

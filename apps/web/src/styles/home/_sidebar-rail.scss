@@ -1,0 +1,44 @@
+.sidebar-rail {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-4);
+  min-height: 0;
+  background: var(--vr-surface);
+}
+
+.sidebar-rail__brand,
+.sidebar-rail__account {
+  display: grid;
+  flex: none;
+  inline-size: 100%;
+  place-items: center;
+  padding-block: var(--space-12);
+}
+
+.sidebar-rail__brand {
+  min-block-size: calc(var(--size-32) + var(--space-24));
+  border-block-end: 1px solid var(--vr-line);
+}
+
+.sidebar-rail__chats {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-4);
+  inline-size: 100%;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+
+.sidebar-rail__badge {
+  position: absolute;
+  inset-block-start: var(--space-2);
+  inset-inline-end: var(--space-2);
+}
+
+.sidebar-rail__account {
+  border-block-start: 1px solid var(--vr-line);
+}

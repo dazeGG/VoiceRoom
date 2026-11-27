@@ -90,6 +90,9 @@ function harness(options: HarnessOptions = {}) {
     return message;
   };
   const direct: DirectMessageStore = {
+    async listConversations() {
+      return [];
+    },
     async listThread() {
       return [
         directMessage({ id: 'm1', senderId: 'user-1', recipientId: PEER }),

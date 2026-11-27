@@ -11,18 +11,7 @@
 //   .lv-brand-name              -> .sidebar__brand-name
 //   .lv-notification-count      -> .sidebar__count
 //   .lv-side-scroll             -> .sidebar__scroll
-//   .lv-sec-head                -> .sidebar__section-head
-//   .lv-sec-title               -> .sidebar__section-title
-//   .lv-sec-count               -> .sidebar__section-count
-//   .lv-sec-actions             -> .sidebar__section-actions
 //   .lv-mini-btn                -> .sidebar__mini-button
-//   .lv-mini-btn-dot            -> .sidebar__mini-button-dot
-//   .lv-empty                   -> .sidebar__empty
-//   .lv-row                     -> .sidebar__row
-//   .lv-row-body                -> .sidebar__row-body
-//   .lv-notification-title      -> .sidebar__row-title
-//   .lv-row-name                -> .sidebar__row-name
-//   .lv-notification-muted      -> .sidebar__row-muted
 //   .lv-profile                 -> .sidebar__profile
 //   .lv-profile-user            -> .sidebar__profile-user
 //   .lv-profile-names           -> .sidebar__profile-names
@@ -32,7 +21,6 @@
 //   .lv-status-dot              -> .sidebar__status-dot
 //
 // [data-*] and state classes -> aria or modifier
-//   .lv-row.is-active                    -> .sidebar__row[aria-current='true']
 //   .lv-status-dot[data-status='online'] -> .sidebar__status-dot--online (--away, --dnd)
 // Not here: .lobby-gear on the download trigger (SidebarDownload) is that component's.
 
@@ -122,148 +110,6 @@
   flex: 1;
   overflow: auto;
   padding: var(--space-4) var(--space-8);
-}
-
-.sidebar__section-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: var(--space-8) var(--space-8) var(--space-6);
-  color: var(--vr-text-2);
-  font-size: 13px;
-  font-weight: 500;
-}
-
-.sidebar__section-title {
-  display: flex;
-  align-items: center;
-  gap: var(--space-6);
-}
-
-.sidebar__section-count {
-  color: var(--vr-text-muted);
-  font-family: var(--font-mono);
-  font-size: 12px;
-  font-weight: 400;
-}
-
-.sidebar__section-actions {
-  display: flex;
-  gap: var(--space-2);
-}
-
-.sidebar__mini-button-dot {
-  position: absolute;
-  top: 3px;
-  right: 3px;
-  width: var(--space-6);
-  height: var(--space-6);
-  border-radius: 50%;
-  background: var(--vr-accent);
-  box-shadow: 0 0 0 2px var(--vr-surface);
-}
-
-.sidebar__empty {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: var(--space-12);
-  margin: var(--space-4) var(--space-4) 0;
-  padding: var(--space-16);
-  border: 1px dashed var(--vr-line-strong);
-  border-radius: var(--radius-12);
-  color: var(--vr-text-2);
-
-  p {
-    margin: 0;
-    color: var(--vr-text-2);
-    font-size: 0.8125rem;
-    line-height: 1.45;
-  }
-}
-
-.sidebar__row {
-  display: flex;
-  align-items: center;
-  gap: var(--space-8);
-  width: 100%;
-  border: none;
-  background: transparent;
-  cursor: pointer;
-  text-align: left;
-  color: inherit;
-  height: var(--size-40);
-  border-radius: var(--radius-10);
-  padding: var(--lv-row-pad);
-  font-family: var(--font-ui);
-  transition: background 0.13s ease;
-
-  &:hover {
-    background: var(--vr-hover);
-  }
-
-  &[aria-current='true'] {
-    background: var(--vr-accent-soft);
-  }
-}
-
-.sidebar__row-body {
-  flex: 1;
-  min-width: 0;
-}
-
-.sidebar__row--missed {
-  height: auto;
-  min-height: var(--size-48);
-
-  .sidebar__row-name {
-    font-weight: 600;
-  }
-}
-
-.sidebar__row-missed,
-.sidebar__row-call {
-  display: flex;
-  align-items: center;
-  gap: var(--space-4);
-}
-
-.sidebar__row-missed {
-  color: var(--vr-text-2);
-  font-size: 0.75rem;
-
-  svg {
-    flex: none;
-    color: var(--vr-danger);
-  }
-}
-
-.sidebar__row-call {
-  color: var(--vr-accent);
-}
-
-.sidebar__row-title {
-  display: flex;
-  align-items: center;
-  gap: var(--space-6);
-  min-width: 0;
-}
-
-.sidebar__row-name {
-  flex: 0 1 auto;
-  min-width: 0;
-  font-size: 0.875rem;
-  font-weight: 400;
-  color: var(--vr-text);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.sidebar__row-muted {
-  display: inline-flex;
-  flex: none;
-  color: var(--vr-text-muted);
 }
 
 .sidebar__profile {

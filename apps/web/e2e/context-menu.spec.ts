@@ -1,5 +1,13 @@
 import { expect, test } from '@playwright/test';
-import { boxOf, createPermanentRoom, incomingFriendRequestIds, registerViaUi, uniqueLogin } from './helpers';
+import {
+  boxOf,
+  chatRow,
+  createPermanentRoom,
+  incomingFriendRequestIds,
+  registerViaUi,
+  seedFriendChat,
+  uniqueLogin
+} from './helpers';
 
 test('room context menu supports pointer, keyboard navigation, focus restore, and viewport edges', async ({ page }) => {
   const login = uniqueLogin('context');
@@ -99,14 +107,16 @@ test('friend rows open an actions menu with a context click or keyboard and open
     });
     expect(acceptResponse.ok()).toBe(true);
 
+    await seedFriendChat(secondPage, firstLogin);
     await page.reload();
-    const friendRow = page.locator('.sidebar__row', { hasText: secondLogin }).first();
+    const friendRow = chatRow(page, secondLogin);
     await expect(friendRow).toBeVisible();
 
     const profile = page.getByRole('dialog', { name: `Профиль ${secondLogin}` });
     const menu = page.getByRole('menu', { name: `Действия для ${secondLogin}` });
     await friendRow.click({ button: 'right' });
-    await expect(menu.getByRole('menuitem', { name: 'Написать', exact: true })).toBeFocused();
+    await expect(menu.getByRole('menuitem').first()).toBeFocused();
+    await expect(menu.getByRole('menuitem', { name: 'Отметить прочитанным' })).toBeVisible();
     await expect(menu.getByRole('menuitem', { name: 'Удалить из друзей' })).toBeVisible();
     await expect(menu.getByRole('menuitem', { name: 'Выключить уведомления' })).toBeVisible();
     await expect(menu.getByRole('menuitem', { name: 'Заблокировать' })).toBeVisible();
@@ -146,18 +156,18 @@ test('friend rows open an actions menu with a context click or keyboard and open
 
     await page.getByRole('button', { name: 'Свернуть боковую панель' }).click();
     await expect(separator).toBeHidden();
-    await page.locator('.lobby-shell__sidebar-rail').locator('.sidebar__brand-mark').hover({ force: true });
+    await page.locator('.sidebar-rail').locator('.sidebar__brand-mark').hover({ force: true });
     await expect(page.locator('#lobby-sidebar')).toHaveCSS('opacity', '1');
     await friendRow.click({ button: 'right' });
     await expect(menu).toBeVisible();
     await expect(separator).toBeHidden();
     await menu.hover();
     await expect(friendRow).toBeVisible();
-    await menu.getByRole('menuitem', { name: 'Написать', exact: true }).click();
+    await menu.getByRole('menuitem', { name: 'Отметить прочитанным' }).click();
     await expect(menu).toBeHidden();
     await expect(friendRow).toBeHidden();
 
-    await page.locator('.lobby-shell__sidebar-rail').hover({ force: true, position: { x: 24, y: 28 } });
+    await page.locator('.sidebar-rail').hover({ force: true, position: { x: 24, y: 28 } });
     await expect(page.locator('#lobby-sidebar')).toHaveCSS('opacity', '1');
     await friendRow.click({ button: 'right' });
     await menu.getByRole('menuitem', { name: 'Заблокировать' }).click();

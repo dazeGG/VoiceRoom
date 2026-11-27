@@ -28,6 +28,7 @@ import {
   deleteDirectMessage,
   directMessageFromView,
   editDirectMessage,
+  markThreadRead,
   respondRoomInvite,
   sendDirectMessage,
   type DirectMessage
@@ -43,11 +44,13 @@ import { startSystemPresenceIdleTracking } from '@/shared/presence-idle';
 import { useDmThread } from './use-dm-thread';
 import { Outbox } from '@/shared/chat/outbox';
 import { useFriendPresence } from './use-friend-presence';
+import { useConversations } from './use-conversations';
 import { BrowserNotificationRouting } from './browser-notification-routing';
 import type { RoomSocial } from '@/features/room/social';
 
 export type LobbyMode = 'friends' | 'rooms';
 export type LobbyView = 'home' | 'dm' | 'people';
+export type PeopleTab = 'online' | 'all' | 'requests';
 
 // Invitations used to be mirrored per device in localStorage; they now live in
 // the DM thread itself, so stale local copies are just cleaned up.
@@ -68,8 +71,15 @@ export const useLobbyStore = defineStore('lobby', () => {
   const requests = ref<{ incoming: IncomingRequest[]; outgoing: OutgoingRequest[] }>({ incoming: [], outgoing: [] });
   const mode = ref<LobbyMode>('friends');
   const view = ref<LobbyView>('home');
+  const peopleTab = ref<PeopleTab>('all');
   const selectedFriendId = ref<string | null>(null);
-  const thread = reactive(useDmThread((peerId) => view.value === 'dm' && selectedFriendId.value === peerId));
+  const conversations = useConversations();
+  const thread = reactive(
+    useDmThread(
+      (peerId) => view.value === 'dm' && selectedFriendId.value === peerId,
+      () => void conversations.refresh()
+    )
+  );
   /** Friends currently typing to this account, keyed by their user id. */
   const dmTyping = createTypingTracker();
 
@@ -101,6 +111,10 @@ export const useLobbyStore = defineStore('lobby', () => {
     return friends.value.find((entry) => entry.user.id === userId);
   }
 
+  function isFriendOnline(userId: string): boolean {
+    return presence.onlineOr(userId, findFriend(userId)?.online);
+  }
+
   function applyOnlineToFriends(): void {
     if (!presence.ready.value) return;
     for (const friend of friends.value) {
@@ -118,6 +132,8 @@ export const useLobbyStore = defineStore('lobby', () => {
   // copy — the friend list, pending requests, and the open DM header.
   function applyFriendProfile(user: PublicUser | undefined): void {
     if (!user?.id) return;
+    const conversation = conversations.entries.value.find(({ peer }) => peer.id === user.id);
+    if (conversation) conversation.peer = { ...conversation.peer, ...user };
     const friend = findFriend(user.id);
     if (friend) friend.user = { ...friend.user, ...user };
     requests.value.incoming = requests.value.incoming.map((request) =>
@@ -160,6 +176,7 @@ export const useLobbyStore = defineStore('lobby', () => {
     requests.value = { incoming: [], outgoing: [] };
     mode.value = 'friends';
     view.value = 'home';
+    peopleTab.value = 'all';
     selectedFriendId.value = null;
     outboxes.clear();
     selfId = '';
@@ -180,6 +197,7 @@ export const useLobbyStore = defineStore('lobby', () => {
       preferences.prepareNotificationPreferences(currentUserId, initialDoNotDisturb, initialPresenceStatus);
     }
     stopRealtime = getAppRealtime().subscribe(handleRealtimeEvent);
+    conversations.start();
     void Promise.all([refreshFriends(), refreshRequests()]).catch(() => {
       loaded.value = true;
     });
@@ -203,6 +221,7 @@ export const useLobbyStore = defineStore('lobby', () => {
       presence.reset();
       browserNotifications.stop();
       thread.close();
+      conversations.stop();
       reset();
       preferences.resetNotificationPreferences();
     };
@@ -220,8 +239,10 @@ export const useLobbyStore = defineStore('lobby', () => {
     view.value = 'home';
   }
 
-  function showPeople(): void {
+  function showPeople(tab: PeopleTab = 'all'): void {
     onBrowse();
+    mode.value = 'friends';
+    peopleTab.value = tab;
     view.value = 'people';
     void refreshRequests().catch(() => {});
   }
@@ -234,7 +255,13 @@ export const useLobbyStore = defineStore('lobby', () => {
     // Locally clear the unread badge; the GET also marks read server-side.
     const friend = findFriend(userId);
     if (friend) friend.unreadCount = 0;
-    await thread.open(userId, friend?.user ?? null);
+    const peer = conversations.entries.value.find((entry) => entry.peer.id === userId)?.peer;
+    await thread.open(userId, friend?.user ?? peer ?? null);
+  }
+
+  async function markConversationRead(userId: string): Promise<void> {
+    await markThreadRead(userId);
+    void conversations.refresh();
   }
 
   async function resyncOpenThread(): Promise<void> {
@@ -277,6 +304,7 @@ export const useLobbyStore = defineStore('lobby', () => {
           onSent: (message) => {
             if (selectedFriendId.value === peerId) thread.append(message);
             bumpLastMessage(peerId, message);
+            void conversations.refresh();
           }
         })
       );
@@ -292,6 +320,7 @@ export const useLobbyStore = defineStore('lobby', () => {
     // Remove locally; the realtime delete will also arrive for other tabs. Refresh
     // the summary so last-message ordering and unread badges reflect soft-deletes.
     thread.remove(messageId);
+    void conversations.refresh();
     await refreshFriends().catch(() => {});
   }
 
@@ -316,6 +345,7 @@ export const useLobbyStore = defineStore('lobby', () => {
   }
 
   function applyEditedMessage(message: DirectMessage): void {
+    if (!message.call) void conversations.refresh();
     const peerId = message.senderId === selfId ? message.recipientId : message.senderId;
     if (!message.call || (view.value === 'dm' && selectedFriendId.value === peerId)) thread.replace(message);
     if (message.call) return;
@@ -358,18 +388,21 @@ export const useLobbyStore = defineStore('lobby', () => {
 
   async function addFriendByLogin(login: string): Promise<{ status: SendRequestStatus; user: PublicUser }> {
     const result = await sendFriendRequest(login);
+    if (result.status === 'accepted') void conversations.refresh();
     await Promise.all([refreshFriends().catch(() => {}), refreshRequests().catch(() => {})]);
     return result;
   }
 
   async function addFriendByUserId(userId: string): Promise<{ status: SendRequestStatus; user: PublicUser }> {
     const result = await sendFriendRequestByUserId(userId);
+    if (result.status === 'accepted') void conversations.refresh();
     await Promise.all([refreshFriends().catch(() => {}), refreshRequests().catch(() => {})]);
     return result;
   }
 
   async function acceptRequest(requestId: string): Promise<void> {
     await acceptFriendRequest(requestId);
+    void conversations.refresh();
     await Promise.all([refreshFriends().catch(() => {}), refreshRequests().catch(() => {})]);
   }
 
@@ -385,10 +418,7 @@ export const useLobbyStore = defineStore('lobby', () => {
 
   async function removeFriend(userId: string): Promise<void> {
     await apiRemoveFriend(userId);
-    if (selectedFriendId.value === userId) {
-      view.value = 'home';
-      selectedFriendId.value = null;
-    }
+    dropConversation(userId);
     await refreshFriends().catch(() => {});
   }
 
@@ -396,11 +426,17 @@ export const useLobbyStore = defineStore('lobby', () => {
   // same: leave the DM view if it was open on them, then resync.
   async function blockUser(userId: string): Promise<void> {
     await apiBlockUser(userId);
-    if (selectedFriendId.value === userId) {
-      view.value = 'home';
-      selectedFriendId.value = null;
-    }
+    dropConversation(userId);
     await Promise.all([refreshFriends().catch(() => {}), refreshRequests().catch(() => {})]);
+  }
+
+  function dropConversation(userId: string): void {
+    conversations.remove(userId);
+    if (selectedFriendId.value === userId) {
+      if (view.value === 'dm') view.value = 'home';
+      selectedFriendId.value = null;
+      thread.close();
+    }
   }
 
   async function unblockUser(userId: string): Promise<void> {
@@ -444,6 +480,7 @@ export const useLobbyStore = defineStore('lobby', () => {
         // friend list carries each chat's unread count and last message, and the
         // open thread is re-fetched so its bodies and editedAt markers converge.
         void refreshFriends().catch(() => {});
+        void conversations.refresh();
         void resyncOpenThread().catch(() => {});
         break;
       }
@@ -461,15 +498,18 @@ export const useLobbyStore = defineStore('lobby', () => {
         if (preferences.areNotificationPreferencesLoadedFor(selfId)) playFriendAcceptedCue();
         void refreshFriends().catch(() => {});
         void refreshRequests().catch(() => {});
+        void conversations.refresh();
         break;
       }
       case 'friend.removed': {
+        dropConversation(event.payload.userId);
         void refreshFriends().catch(() => {});
         void refreshRequests().catch(() => {});
         break;
       }
       case 'friend.updated': {
         applyFriendProfile(event.payload.user);
+        void conversations.refresh();
         break;
       }
       case 'ring.incoming': {
@@ -482,8 +522,13 @@ export const useLobbyStore = defineStore('lobby', () => {
       case 'dm.message': {
         const message = directMessageFromView(event.payload.message);
         const peerId = message.senderId === selfId ? message.recipientId : message.senderId;
+        void conversations.refresh();
         if (message.call) {
-          if (view.value === 'dm' && selectedFriendId.value === peerId) thread.append(message);
+          if (view.value === 'dm' && selectedFriendId.value === peerId) {
+            thread.append(message);
+            if (message.senderId !== selfId && message.readAt == null)
+              void thread.noteRealtimeRendered(peerId, message);
+          }
           break;
         }
         // The message itself ends that friend's "typing" state.
@@ -520,6 +565,7 @@ export const useLobbyStore = defineStore('lobby', () => {
         const mid = event.payload?.messageId;
         if (mid) {
           thread.remove(mid);
+          void conversations.refresh();
           void refreshFriends().catch(() => {});
         }
         break;
@@ -559,8 +605,14 @@ export const useLobbyStore = defineStore('lobby', () => {
     requests,
     mode,
     view,
+    peopleTab,
     selectedFriendId,
     thread,
+    conversations: conversations.entries,
+    conversationsLoaded: conversations.loaded,
+    conversationsFailed: conversations.failed,
+    markConversationRead,
+    isFriendOnline,
     dmTyping,
     roomSocial,
     configure,

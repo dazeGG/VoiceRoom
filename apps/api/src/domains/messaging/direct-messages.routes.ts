@@ -2,6 +2,7 @@
 
 import type { TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
 import {
+  ConversationList,
   DirectMessageAnswer,
   DirectMessageParams,
   DirectRead,
@@ -46,6 +47,12 @@ export function registerDirectMessageRoutes(root: FastifyInstance, ctx: ApiConte
     reply.code(401).send(failure('Требуется вход', { code: 'authentication_required' }));
     return null;
   }
+
+  app.get('/api/dm/conversations', { schema: { response: answers(ConversationList) } }, async (request, reply) => {
+    const user = await signedIn(request, reply);
+    if (!user) return reply;
+    return { ok: true as const, conversations: await dms.listConversations(user.id) };
+  });
 
   app.get(
     '/api/dm/:userId',

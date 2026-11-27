@@ -2,6 +2,7 @@
 
 import { t } from '@/shared/i18n';
 import {
+  ConversationList,
   DirectHistoryPage,
   DirectMessageAnswer,
   DirectRead,
@@ -20,6 +21,14 @@ import { normalizeLinkPreview } from '@voiceroom/shared/link-preview';
 import type { ReplyTarget } from '@/shared/chat/reply-store';
 import type { HistoryPageRequest } from './rooms';
 import { api } from './client';
+
+export async function fetchConversations(signal?: AbortSignal): Promise<ConversationList['conversations']> {
+  const { conversations } = await api.get('/api/dm/conversations', ConversationList, {
+    signal,
+    fallback: t('Не удалось загрузить чаты')
+  });
+  return conversations;
+}
 
 // A room invitation embedded in a message: rendered as an actionable card in
 // the thread instead of a text bubble. Status changes arrive as message edits.

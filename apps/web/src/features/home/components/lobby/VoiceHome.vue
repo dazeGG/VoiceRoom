@@ -205,7 +205,7 @@ function closeRoomContextMenu(): void {
           </span>
           <span class="voice-home__callout-sub">{{ t('Откройте, чтобы принять или отклонить') }}</span>
         </span>
-        <Button variant="primary" size="sm" @click="lobby.showPeople">{{ t('Открыть') }}</Button>
+        <Button variant="primary" size="sm" @click="lobby.showPeople('requests')">{{ t('Открыть') }}</Button>
         <IconButton :size="28" :label="t('Скрыть')" @click="dismissRequestBanner"><X aria-hidden="true" /></IconButton>
       </div>
 

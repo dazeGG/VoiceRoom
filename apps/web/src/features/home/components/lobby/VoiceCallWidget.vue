@@ -9,13 +9,13 @@ import {
   useCallClock
 } from '@voiceroom/ui-kit/components';
 import { t } from '@/shared/i18n';
-import { HeadphoneOff, Headphones, Mic, MicOff, PhoneOff } from '@lucide/vue';
+import { HeadphoneOff, Headphones, Mic, MicOff, Phone, PhoneOff } from '@lucide/vue';
 import { computed, useId } from 'vue';
 import RoomCallTimer from '@/features/room/components/RoomCallTimer.vue';
 import EmojiText from '@/shared/chat/EmojiText.vue';
 import type { ActiveVoice } from '../../model/active-voice';
 
-const props = defineProps<{ voice: ActiveVoice }>();
+const props = defineProps<{ voice: ActiveVoice; compact?: boolean }>();
 
 const statusId = useId();
 const openLabel = computed(() =>
@@ -39,7 +39,10 @@ const status = computed(() => {
 </script>
 
 <template>
-  <section class="voice-call-widget" :aria-label="voice.friendCall ? t('Активный звонок') : t('Активный голос')">
+  <IconButton v-if="compact" :label="openLabel" :size="40" variant="soft" @click="voice.open">
+    <Phone aria-hidden="true" />
+  </IconButton>
+  <section v-else class="voice-call-widget" :aria-label="voice.friendCall ? t('Активный звонок') : t('Активный голос')">
     <Tooltip :text="openLabel"
       ><Pressable
         class="voice-call-widget__head"

@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { boxOf, incomingFriendRequestIds, registerViaUi, uniqueLogin } from './helpers';
+import { boxOf, chatRow, incomingFriendRequestIds, openFriendChat, registerViaUi, uniqueLogin } from './helpers';
 
 async function befriend(caller: Page, recipient: Page) {
   const callerName = uniqueLogin('callhost');
@@ -16,7 +16,6 @@ async function befriend(caller: Page, recipient: Page) {
   return { callerName, recipientName };
 }
 
-const friend = (page: Page, name: string) => page.locator('.sidebar__row', { hasText: name });
 const dm = (page: Page) => page.getByRole('region', { name: 'Личные сообщения' });
 const stage = (page: Page, name: string) => dm(page).getByRole('region', { name: `Звонок: ${name}` });
 const dmHeader = (page: Page) => dm(page).locator('.dm-view__header');
@@ -31,7 +30,7 @@ test('friends answer a DM call, return from the rail, and see the completed call
   try {
     const recipient = await context.newPage();
     const { callerName, recipientName } = await befriend(page, recipient);
-    await friend(page, recipientName).click();
+    await openFriendChat(page, recipientName);
     await dm(page).getByRole('button', { name: 'Позвонить', exact: true }).click();
     await recipient
       .getByRole('region', { name: `${callerName} звонит вам` })
@@ -101,16 +100,16 @@ test('an expired attempt shows one missed call while the caller can still wait',
   try {
     const recipient = await context.newPage();
     const { callerName, recipientName } = await befriend(page, recipient);
-    await friend(page, recipientName).click();
+    await openFriendChat(page, recipientName);
     await dm(page).getByRole('button', { name: 'Позвонить', exact: true }).click();
     const card = recipient.getByRole('region', { name: `${callerName} звонит вам` });
     await expect(card).toBeVisible();
-    const missedBadge = friend(recipient, callerName).getByRole('img', { name: '1 пропущенный звонок' });
+    const missedBadge = chatRow(recipient, callerName).getByRole('img', { name: '1 пропущенный звонок' });
     await expect(missedBadge).toBeVisible({ timeout: 55_000 });
     await expect(card).toBeHidden();
     await expect(stage(page, recipientName).getByRole('button', { name: 'Позвонить снова' })).toBeVisible();
 
-    await friend(recipient, callerName).click();
+    await chatRow(recipient, callerName).click();
     const missed = dm(recipient).getByRole('article');
     await expect(missed).toContainText('Пропущенный звонок');
     await expect(missedBadge).toBeHidden();

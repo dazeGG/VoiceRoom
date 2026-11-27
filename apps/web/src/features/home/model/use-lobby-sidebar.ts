@@ -8,12 +8,20 @@ const DEFAULT_WIDTH = 280;
 const MIN_WIDTH = 240;
 const MAX_WIDTH = 420;
 
-export function useLobbySidebar(keepPreviewOpen: () => boolean) {
+export function useLobbySidebar(keepPreviewOpen: () => boolean, compact: () => boolean = () => false) {
   const savedWidth = Number(readStorage(WIDTH_KEY));
   const preferredWidth = ref(
     savedWidth >= MIN_WIDTH && savedWidth <= MAX_WIDTH ? Math.round(savedWidth) : DEFAULT_WIDTH
   );
-  const collapsed = ref(readStorage(COLLAPSED_KEY) === 'true');
+  const desktopCollapsed = ref(readStorage(COLLAPSED_KEY) === 'true');
+  const compactCollapsed = ref(true);
+  const collapsed = computed({
+    get: () => (compact() ? compactCollapsed.value : desktopCollapsed.value),
+    set: (value) => {
+      if (compact()) compactCollapsed.value = value;
+      else desktopCollapsed.value = value;
+    }
+  });
   const viewportWidth = ref(window.innerWidth);
   const maxWidth = computed(() => Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, Math.floor(viewportWidth.value * 0.45))));
   const dragging = ref(false);
@@ -43,7 +51,7 @@ export function useLobbySidebar(keepPreviewOpen: () => boolean) {
   function setCollapsed(value: boolean): void {
     hidePreview();
     collapsed.value = value;
-    writeStorage(COLLAPSED_KEY, String(value));
+    if (!compact()) writeStorage(COLLAPSED_KEY, String(value));
   }
 
   function toggle(): void {
@@ -70,7 +78,7 @@ export function useLobbySidebar(keepPreviewOpen: () => boolean) {
   }
 
   function commit(next: SplitterSize): void {
-    if (!next.collapsed) {
+    if (!next.collapsed && !compact()) {
       preferredWidth.value = next.size;
       writeStorage(WIDTH_KEY, String(next.size));
     }

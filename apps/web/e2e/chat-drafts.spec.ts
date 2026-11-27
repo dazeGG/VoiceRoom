@@ -1,5 +1,5 @@
 import { expect, test, type Browser, type BrowserContext, type Page } from '@playwright/test';
-import { createPermanentRoom, incomingFriendRequestIds, registerViaUi, uniqueLogin } from './helpers';
+import { createPermanentRoom, incomingFriendRequestIds, openFriendChat, registerViaUi, uniqueLogin } from './helpers';
 
 async function registerFriend(
   browser: Browser,
@@ -40,7 +40,7 @@ test('unsent direct message text stays with its own thread across switches and p
 
     const composer = page.getByPlaceholder('Написать сообщение…');
     const openThread = async (login: string) => {
-      await page.locator('.sidebar__row', { hasText: login }).first().click();
+      await openFriendChat(page, login);
       await expect(composer).toBeVisible();
     };
 
