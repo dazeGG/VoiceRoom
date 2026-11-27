@@ -61,6 +61,7 @@
         "apps/api/src/domains/account/session.repository.ts",
         "apps/api/src/domains/account/account-standing.repository.ts",
         "apps/api/src/domains/notifications/notification-preferences.repository.ts",
+        "apps/api/src/domains/social/privacy.repository.ts",
         "apps/api/src/domains/staff/staff.repository.ts"
       ],
       "staff_sessions": ["apps/api/src/domains/staff/staff.repository.ts"],
