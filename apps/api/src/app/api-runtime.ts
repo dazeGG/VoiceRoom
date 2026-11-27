@@ -329,6 +329,8 @@ export function createApiRuntime({
       clock: realtimeNow,
       graceMs: realtimeReconnectLeaseMs,
       limits: { count: config.RING_RATE_LIMIT, windowMs: config.RING_RATE_WINDOW_MS },
+      dailyNewChatLimit: services.contactLimits.daily,
+      invalidateTyping: hub.invalidateTyping,
       notify: hub.broadcastToUser,
       report: (err) => appLogger.warn({ err }, 'call reconciliation failed'),
       voice: {

@@ -40,7 +40,7 @@ async function setup(t: TestContext) {
   await pool.query(`UPDATE room_messages SET deleted_at = now() WHERE id = 'm9'`);
   return {
     rooms: createRoomHistoryRepository({ pool }),
-    dms: createDmHistoryRepository({ pool })
+    dms: createDmHistoryRepository({ pool, limits: { daily: 10, unanswered: 3 } })
   };
 }
 
@@ -79,9 +79,13 @@ test('a room page opens around a message and pages forward from it', { skip }, a
 
 test('a DM thread pages around a message across both senders', { skip }, async (t) => {
   const { dms } = await setup(t);
-  assert.equal(await dms.canReadThread({ userId: 'b', peerId: 'a' }), true);
-  assert.equal(await dms.canReadThread({ userId: 'a', peerId: 'c' }), false, 'only friends read a thread');
-  assert.equal(await dms.canReadThread({ userId: 'a', peerId: 'a' }), false);
+  assert.equal((await dms.threadAccess({ userId: 'b', peerId: 'a' }))?.isFriend, true);
+  assert.equal(
+    (await dms.threadAccess({ userId: 'a', peerId: 'c' }))?.canRead,
+    true,
+    'an allowed stranger can open a thread'
+  );
+  assert.equal(await dms.threadAccess({ userId: 'a', peerId: 'a' }), null);
 
   const anchor = { id: 'm2', createdAtMicros: String(Date.parse('2026-08-01T12:00:00Z') * 1000 + 2) };
   const around = await dms.listAround({ userId: 'a', peerId: 'b', anchor, limit: 4 });

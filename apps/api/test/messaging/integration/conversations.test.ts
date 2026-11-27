@@ -98,6 +98,14 @@ test(
           isFriend: true
         },
         {
+          id: 'd',
+          badge: null,
+          lastMessage: { at: Date.parse('2026-11-25T20:00Z'), fromMe: false, kind: 'text', preview: 'Former friend' },
+          unreadCount: 1,
+          muted: false,
+          isFriend: false
+        },
+        {
           id: 'c',
           badge: null,
           lastMessage: { at: Date.parse('2026-11-25T17:00Z'), fromMe: false, kind: 'call', preview: 'Voice call' },
@@ -122,7 +130,7 @@ test(
     await direct.markRead({ userId: 'a', peerId: 'b' });
     assert.deepEqual(
       (await fetchList()).map(({ unreadCount }) => unreadCount),
-      [1, 1, 0]
+      [1, 1, 1, 0]
     );
   }
 );

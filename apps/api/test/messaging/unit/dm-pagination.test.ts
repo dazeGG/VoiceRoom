@@ -8,7 +8,7 @@ import {
   type StoredDirectMessage
 } from '../../../src/domains/messaging/dm-history.service.ts';
 import { createMessageVisibilityService } from '../../../src/domains/messaging/message-visibility.service.ts';
-import { fake } from '../../fakes/index.ts';
+import { publicUser, fake } from '../../fakes/index.ts';
 
 const pageDeps = {
   visibilityPolicy: createMessageVisibilityService(),
@@ -23,7 +23,14 @@ test('G27-A01 DM cursor context is canonical and GET invokes only read repositor
   assert.deepEqual(canonicalParticipants('z', 'a'), ['a', 'z']);
   const writes: unknown[] = [];
   const repository = fake<DmHistoryRepository>({
-    canReadThread: async () => true,
+    threadAccess: async ({ peerId }) => ({
+      canRead: true,
+      peer: publicUser(peerId),
+      isFriend: true,
+      canCall: true,
+      canMessage: true,
+      messageReason: 'allowed'
+    }),
     listLatest: async (input) => {
       writes.push(input);
       return { messages: [message('a', 10), message('b', 10)], hasMoreBefore: false, hasMoreAfter: false };
@@ -40,13 +47,13 @@ test('G27-A01 DM cursor context is canonical and GET invokes only read repositor
     ['a', 'b']
   );
   assert.equal(writes.length, 1);
-  assert.deepEqual(Object.keys(repository).sort(), ['canReadThread', 'listLatest']);
+  assert.deepEqual(Object.keys(repository).sort(), ['listLatest', 'threadAccess']);
 });
 
 test('G27-A02 unauthorized and cross-thread cursors fail without disclosure', async () => {
   const codec = createCursorCodec({ keys: ['d'.repeat(32)] });
   const denied = createDmHistoryService({
-    repository: fake<DmHistoryRepository>({ canReadThread: async () => false }),
+    repository: fake<DmHistoryRepository>({ threadAccess: async () => null }),
     cursorCodec: codec,
     ...pageDeps
   });
@@ -55,7 +62,14 @@ test('G27-A02 unauthorized and cross-thread cursors fail without disclosure', as
 
 test('a DM page sends its times as epoch milliseconds', async () => {
   const repository = fake<DmHistoryRepository>({
-    canReadThread: async () => true,
+    threadAccess: async ({ peerId }) => ({
+      canRead: true,
+      peer: publicUser(peerId),
+      isFriend: true,
+      canCall: true,
+      canMessage: true,
+      messageReason: 'allowed'
+    }),
     listLatest: async () => ({
       messages: [
         {

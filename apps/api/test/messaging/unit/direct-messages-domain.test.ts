@@ -3,6 +3,7 @@
 // HTTP and realtime suites cover the database.
 
 import test, { type TestContext } from 'node:test';
+import { DomainError } from '../../../src/platform/http/domain-error.ts';
 import assert from 'node:assert/strict';
 import fastify, { type FastifyInstance } from 'fastify';
 
@@ -131,7 +132,8 @@ function harness(options: HarnessOptions = {}) {
     async softDeleteMessage() {
       return options.deleteResult ?? true;
     },
-    async editMessage({ messageId, body }) {
+    async editMessage({ messageId, body, authorize }) {
+      authorize(null);
       return options.editResult === null ? null : { ...stored(messageId), body };
     }
   };
@@ -180,10 +182,23 @@ function harness(options: HarnessOptions = {}) {
           return { cursor: input.cursor, readThrough: 3 };
         }
       },
-    friends: () => ({
-      areFriends: async () => options.friends ?? true,
-      isBlockedBetween: async () => options.blocked ?? false
+    contactStatus: async (_userId, peerId) => ({
+      peer: publicUser(peerId),
+      canRead: options.friends ?? true,
+      canMessage: options.friends ?? true,
+      messageReason: options.friends === false ? 'friends_only' : 'allowed',
+      isFriend: options.friends ?? true,
+      canCall: true
     }),
+    authorizeMessage: async () => {
+      if (options.friends === false) throw new DomainError('messages_closed', 403, 'Messages closed');
+      if (options.blocked) throw new DomainError('relationship_blocked', 403, 'Blocked');
+      if (options.deleted) throw new DomainError('account_deleted', 403, 'Deleted');
+      return { startedAsStrangers: false, refusal: null };
+    },
+    recordPairMessage: async () => {},
+    authorizeMessageEdit: () => {},
+    invalidateTyping: () => {},
     findUser: async (userId) =>
       options.noPeer
         ? null
@@ -253,8 +268,8 @@ function harness(options: HarnessOptions = {}) {
   return { calls, service };
 }
 
-test('the thread needs a friendship and a live account, and marks the thread read', async () => {
-  assert.equal((await harness({ friends: false }).service.thread(ME, PEER)).status, 'not_friends');
+test('the thread requires read permission and marks the thread read', async () => {
+  await assert.rejects(harness({ friends: false }).service.thread(ME, PEER), { code: 'messages_closed' });
   assert.equal((await harness({ noPeer: true }).service.thread(ME, PEER)).status, 'user_not_found');
   const { calls, service } = harness();
   const listed = await service.thread(ME, PEER);
@@ -280,12 +295,9 @@ const sendBase: SendInput = {
   idempotencyKey: ''
 };
 
-test('send refuses in the legacy order', async () => {
+test('send validates input and authorizes inside the write transaction', async () => {
   const cases: Array<[HarnessOptions, Partial<SendInput>, string]> = [
     [{ rate: { allowed: false, retryAfterSeconds: 3 } }, {}, 'rate_limited'],
-    [{ friends: false }, {}, 'not_friends'],
-    [{ blocked: true }, {}, 'blocked'],
-    [{ deleted: true }, {}, 'account_deleted'],
     [{}, { attachmentIds: 'x' }, 'invalid_attachments'],
     [{}, { replyTo: {} }, 'reply_unavailable'],
     [{}, { text: '  ' }, 'empty'],
@@ -298,6 +310,9 @@ test('send refuses in the legacy order', async () => {
       JSON.stringify(input)
     );
   }
+  await assert.rejects(harness({ friends: false }).service.send(ME, PEER, sendBase), { code: 'messages_closed' });
+  await assert.rejects(harness({ blocked: true }).service.send(ME, PEER, sendBase), { code: 'relationship_blocked' });
+  await assert.rejects(harness({ deleted: true }).service.send(ME, PEER, sendBase), { code: 'account_deleted' });
   const limited = await harness({ rate: { allowed: false, retryAfterSeconds: 0 } }).service.send(ME, PEER, sendBase);
   assert.ok('retryAfterSeconds' in limited);
   assert.equal(limited.retryAfterSeconds, 0);
@@ -327,8 +342,8 @@ test('a send binds attachments, locks the reply and records delivery in one unit
 
   const plain = harness({ delivery: false });
   await plain.service.send(ME, PEER, sendBase);
-  assert.equal(plain.calls.sent[0]?.unitOfWork, null);
-  assert.equal(plain.calls.sent[0].beforeUnitOfWork, null);
+  assert.equal(typeof plain.calls.sent[0]?.unitOfWork, 'function');
+  assert.equal(typeof plain.calls.sent[0]?.beforeUnitOfWork, 'function');
 
   const relayed = harness({ directEmit: false });
   await relayed.service.send(ME, PEER, sendBase);
@@ -491,7 +506,16 @@ function routeApp(
   const app = fastify();
   registerHttpKit(app, { securityHeaders: () => ({}), recordRequest() {}, logRequest() {}, logHandlerFailure() {} });
   const { service, seen } = recordingService<DirectMessagesService>({
-    thread: { status: 'listed', peer: publicUser(PEER), messages: [], muted: false },
+    thread: {
+      status: 'listed',
+      peer: publicUser(PEER),
+      messages: [],
+      muted: false,
+      isFriend: true,
+      canMessage: true,
+      messageReason: 'allowed',
+      canCall: true
+    },
     send: {
       status: 'sent',
       message: directMessage({ id: 'm', senderId: 'user-1', recipientId: PEER })
@@ -579,11 +603,7 @@ test('every DM route needs a session, a valid peer and answers', async (t) => {
 test('DM refusals keep their texts and codes', async (t) => {
   const post: Route = ['POST', `/api/dm/${PEER}`, { text: 'x' }];
   const cases: Array<[Answers<DirectMessagesService>, Route, number, string]> = [
-    [{ thread: { status: 'not_friends' } }, ['GET', `/api/dm/${PEER}`], 403, 'Вы не друзья'],
     [{ thread: { status: 'user_not_found' } }, ['GET', `/api/dm/${PEER}`], 404, 'Пользователь не найден'],
-    [{ send: { status: 'not_friends' } }, post, 403, 'Вы не друзья'],
-    [{ send: { status: 'blocked' } }, post, 403, 'Сообщение недоступно'],
-    [{ send: { status: 'account_deleted' } }, post, 403, 'Аккаунт удалён'],
     [{ send: { status: 'invalid_attachments' } }, post, 400, 'Invalid attachments'],
     [{ send: { status: 'reply_unavailable' } }, post, 409, 'Reply target is unavailable'],
     [{ send: { status: 'empty' } }, post, 400, 'Пустое сообщение'],
@@ -663,8 +683,6 @@ test('DM refusals keep their texts and codes', async (t) => {
   }
   const limited = await call(routeApp(t, { send: { status: 'rate_limited', retryAfterSeconds: 5 } }).app, ...post);
   assert.deepEqual([limited.retryAfter, limited.body.retryAfterSeconds], ['5', 5]);
-  const blocked = await call(routeApp(t, { send: { status: 'blocked' } }).app, ...post);
-  assert.equal(blocked.body.code, 'relationship_blocked');
 });
 
 test('a failing DM read store answers 500 without its text; a bad cursor still answers 400', async (t) => {

@@ -4,9 +4,16 @@
 import type { TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
 import type { FastifyInstance } from 'fastify';
 import { Failure, RoomIdParams } from '@voiceroom/shared/contracts/http';
-import { DirectHistoryPage, HistoryQuery, PeerParams, RoomHistoryPage } from '@voiceroom/shared/contracts/messages';
+import {
+  DirectHistoryFailure,
+  DirectHistoryPage,
+  HistoryQuery,
+  PeerParams,
+  RoomHistoryPage
+} from '@voiceroom/shared/contracts/messages';
 import type { ApiContext } from '../../app/context.ts';
 import { failure } from '../../platform/http/http-kit.ts';
+import { DmHistoryForbidden } from './dm-history.service.ts';
 
 type Query = Record<string, string | undefined>;
 
@@ -45,13 +52,28 @@ export function registerHistoryRoutes(root: FastifyInstance, ctx: ApiContext, de
 
   app.get(
     '/api/dm/:userId/history',
-    { config, schema: { params: PeerParams, querystring: HistoryQuery, response: answers(DirectHistoryPage) } },
+    {
+      config,
+      schema: {
+        params: PeerParams,
+        querystring: HistoryQuery,
+        response: { ...answers(DirectHistoryPage), 403: DirectHistoryFailure }
+      }
+    },
     async (request, reply) => {
       const userId = (await ctx.resolveSession(request.raw))?.user?.id;
       if (!userId) {
         return reply.code(401).send(failure('Authentication required', { code: 'authentication_required' }));
       }
-      return await deps.directs.getPage({ userId, peerId: request.params.userId.trim(), query: request.query });
+      try {
+        return await deps.directs.getPage({ userId, peerId: request.params.userId.trim(), query: request.query });
+      } catch (error) {
+        if (!(error instanceof DmHistoryForbidden)) throw error;
+        return reply.code(403).send({
+          ...failure(error.message, { code: error.code }),
+          ...(error.messageReason === undefined ? {} : { messageReason: error.messageReason })
+        });
+      }
     }
   );
 }

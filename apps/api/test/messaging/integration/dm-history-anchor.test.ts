@@ -35,7 +35,7 @@ async function setup(t: TestContext) {
     INSERT INTO direct_messages (id, sender_id, recipient_id, body)
     VALUES ('foreign', 'a', 'c', 'private');
   `);
-  const repository = createDmHistoryRepository({ pool });
+  const repository = createDmHistoryRepository({ pool, limits: { daily: 10, unanswered: 3 } });
   const service = () => createDmHistoryService({ repository, cursorCodec: codec, visibilityPolicy, projectMessages });
   const app = fastify({ logger: false });
   t.after(() => app.close());
@@ -138,32 +138,29 @@ test(
   }
 );
 
-test(
-  'DM anchor auth and friendship denial precede target lookup, including block and new account',
-  { skip },
-  async (t) => {
-    const { pool, request } = await setup(t);
-    for (const messageId of ['m04', 'missing', 'foreign']) {
-      const query = `mode=around&messageId=${messageId}`;
-      assert.equal((await request(query, 'session=none')).statusCode, 401);
-      assert.equal((await request(query, 'session=c')).statusCode, 403);
-    }
-    await createUserBlockRepository({ pool }).blockUser({ userId: 'b', targetId: 'a' });
-    assert.equal((await request('mode=around&messageId=m04')).statusCode, 403);
-    await pool.query(`DELETE FROM user_blocks`);
-    assert.equal(
-      (await request('mode=around&messageId=m04')).statusCode,
-      403,
-      'unblocking does not restore friendship'
-    );
+test('DM anchor checks privacy before lookup and preserves pre-existing history after a block', { skip }, async (t) => {
+  const { pool, request } = await setup(t);
+  await pool.query(`UPDATE users SET messages_from = 'friends' WHERE id = 'b'`);
+  for (const messageId of ['m04', 'missing', 'foreign']) {
+    const query = `mode=around&messageId=${messageId}`;
+    assert.equal((await request(query, 'session=none')).statusCode, 401);
+    assert.equal((await request(query, 'session=c')).statusCode, 403);
   }
-);
+  await createUserBlockRepository({ pool }).blockUser({ userId: 'b', targetId: 'a' });
+  assert.equal((await request('mode=around&messageId=m04')).statusCode, 200);
+  await pool.query(`DELETE FROM user_blocks`);
+  assert.equal(
+    (await request('mode=around&messageId=m04')).statusCode,
+    200,
+    'reading the history remains allowed after unblock'
+  );
+});
 
 test('DM service does not look up any target before authorization', async () => {
   let lookups = 0;
   const service = createDmHistoryService({
     repository: fake<DmHistoryRepository>({
-      canReadThread: async () => false,
+      threadAccess: async () => null,
       getAnchor: async () => {
         lookups++;
         return null;

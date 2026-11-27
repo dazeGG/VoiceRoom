@@ -71,7 +71,7 @@ test(
     }
     assert.deepEqual(seenRoom, ids);
 
-    const dms = createDmHistoryRepository({ pool });
+    const dms = createDmHistoryRepository({ pool, limits: { daily: 10, unanswered: 3 } });
     const seenDm: string[] = [];
     let dmPage = await dms.listLatest({ userId: 'a', peerId: 'b', limit: 3 });
     seenDm.unshift(...dmPage.messages.map((message) => message.id));

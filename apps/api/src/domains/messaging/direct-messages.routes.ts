@@ -26,7 +26,6 @@ const answers = <Success>(success: Success) => ({ 200: success, '4xx': MessageFa
 const THREAD_NOT_FOUND = failure('Диалог не найден', { code: 'thread_not_found' });
 const MESSAGE_NOT_FOUND = failure('Сообщение не найдено', { code: 'message_not_found' });
 const EMPTY_MESSAGE = failure('Пустое сообщение', { code: 'empty_message' });
-const NOT_FRIENDS = failure('Вы не друзья', { code: 'not_friends' });
 
 function tooMany(reply: FastifyReply, retryAfterSeconds: number) {
   return reply
@@ -63,10 +62,10 @@ export function registerDirectMessageRoutes(root: FastifyInstance, ctx: ApiConte
       const peerId = cleanUuid(request.params.userId);
       if (!peerId || peerId === user.id) return reply.code(404).send(THREAD_NOT_FOUND);
       const result = await dms.thread(user, peerId);
-      if (result.status === 'not_friends') return reply.code(403).send(NOT_FRIENDS);
       if (result.status === 'user_not_found')
         return reply.code(404).send(failure('Пользователь не найден', { code: 'user_not_found' }));
-      return { ok: true as const, peer: result.peer, messages: result.messages, muted: result.muted };
+      const { peer, messages, muted, isFriend, canMessage, messageReason, canCall } = result;
+      return { ok: true as const, peer, messages, muted, isFriend, canMessage, messageReason, canCall };
     }
   );
 
@@ -97,12 +96,6 @@ export function registerDirectMessageRoutes(root: FastifyInstance, ctx: ApiConte
       switch (result.status) {
         case 'rate_limited':
           return tooMany(reply, result.retryAfterSeconds);
-        case 'not_friends':
-          return reply.code(403).send(NOT_FRIENDS);
-        case 'blocked':
-          return reply.code(403).send(failure('Сообщение недоступно', { code: 'relationship_blocked' }));
-        case 'account_deleted':
-          return reply.code(403).send(failure('Аккаунт удалён', { code: 'account_deleted' }));
         case 'invalid_attachments':
           return reply.code(400).send(failure('Invalid attachments', { code: 'invalid_attachments' }));
         case 'reply_unavailable':

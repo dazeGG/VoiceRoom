@@ -4,6 +4,10 @@
 import { Type, type Static } from 'typebox';
 import { Nullable } from './http.ts';
 
+export const UserId = Type.String({
+  pattern: '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
+});
+
 export const PresenceStatus = Type.Union([
   Type.Literal('online'),
   Type.Literal('away'),

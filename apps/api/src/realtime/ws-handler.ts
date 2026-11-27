@@ -138,8 +138,7 @@ function createWsHandler({
     );
   }
 
-  // Direct typing notices reach only a friend when neither side blocked the
-  // other. The check is cached per connection and thread for a short while so
+  // Direct typing follows the message policy. The check is cached per connection and thread for a short while so
   // a burst of typing costs one lookup, and notices to a thread go through the
   // typing throttle.
   const DM_TYPING_PERMISSION_TTL_MS = 30_000;
@@ -178,6 +177,7 @@ function createWsHandler({
       if (!lookups.check(userId, now()).allowed) return;
       entry.allowed = Boolean(await canTypeToUser(userId, peerId));
       entry.checkedAt = now();
+      if (cache.get(peerId) !== entry) return;
     }
     if (!entry.allowed || connection.closed) return;
     registry.sendToUser(peerId, buildServerEnvelope('dm.typing', { userId, activity }));
@@ -662,9 +662,18 @@ function createWsHandler({
     enqueueMessage(connection, envelope.type, () => handleMessage(connection, envelope, req));
   }
 
-  return {
-    handleConnection
-  };
+  function invalidateTyping(userId: string, peerId?: string) {
+    for (const connection of registry.allConnections()) {
+      if (connection.userId === userId) {
+        if (peerId) connection.dmTypingPermission?.delete(peerId);
+        else connection.dmTypingPermission?.clear();
+      } else if (!peerId || connection.userId === peerId) {
+        connection.dmTypingPermission?.delete(userId);
+      }
+    }
+  }
+
+  return { handleConnection, invalidateTyping };
 }
 
 export type WsHandler = ReturnType<typeof createWsHandler>;

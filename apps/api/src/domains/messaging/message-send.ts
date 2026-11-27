@@ -35,6 +35,7 @@ interface SendUnitOfWorkOptions<Message extends { id: string }, ReplyTarget> {
   /** Whether a replayed answer holds a message of this conversation's shape. */
   isStored(value: unknown): value is Message;
   replayMissing: string;
+  authorize?: (client: DbClient) => Promise<Error | null>;
   /** Locks the quoted message in the transaction; null when the send is no reply. */
   lockReply: ((client: DbClient) => Promise<ReplyTarget | null>) | null;
   bindAttachments: ((client: DbClient, inserted: Message) => Promise<unknown>) | null;
@@ -52,8 +53,13 @@ export function sendUnitOfWork<Message extends { id: string }, ReplyTarget>(
   let replyPreview: ReplyPreview | null = null;
 
   const beforeUnitOfWork =
-    options.idempotencyKey && delivery
+    options.authorize || (options.idempotencyKey && delivery)
       ? async (client: DbClient) => {
+          const refusal = await options.authorize?.(client);
+          if (!options.idempotencyKey || !delivery) {
+            if (refusal) throw refusal;
+            return null;
+          }
           const reservation = await delivery.idempotency.reserve(client, {
             actorType: options.actor.type,
             actorId: options.actor.id,
@@ -66,6 +72,7 @@ export function sendUnitOfWork<Message extends { id: string }, ReplyTarget>(
             if (!options.isStored(message)) throw new Error(options.replayMissing);
             return { replay: true as const, message };
           }
+          if (refusal) throw refusal;
           ledgerKey = reservation.ledgerKey;
           return null;
         }

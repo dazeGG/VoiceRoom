@@ -19,6 +19,7 @@ import { AdminReportsEvent } from './admin.ts';
 import { Nullable } from './http.ts';
 import { DirectMessage, DirectMessageInvite, PinnedMessage, ReactionSummary, RoomMessage } from './messages.ts';
 import { NotificationPreferences } from './notifications.ts';
+import { AccountPrivacy } from './privacy.ts';
 import { CallIncoming, CallMissedUpdated, CallSnapshot, CallVoiceJoin } from './rings.ts';
 import {
   CpuPressure,
@@ -29,7 +30,7 @@ import {
   RoomRelationship,
   VoiceCause
 } from './rooms.ts';
-import { PublicUser } from './users.ts';
+import { PublicUser, UserId } from './users.ts';
 
 /** The room or direct conversation a message belongs to. */
 export const ConversationRef = Type.Object({
@@ -48,9 +49,6 @@ function Frame<const Type extends string, Payload extends TSchema>(type: Type, p
 const RoomId = Type.String({ pattern: '^[A-Za-z0-9_-]{3,48}$' });
 const PeerId = Type.String({ pattern: '^[A-Za-z0-9_-]{8,80}$' });
 const SessionToken = Type.String({ pattern: '^[A-Za-z0-9_-]{32,128}$' });
-const UserId = Type.String({
-  pattern: '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
-});
 
 export const TypingActivity = Type.Union([Type.Literal('typing'), Type.Literal('emoji')]);
 export type TypingActivity = Static<typeof TypingActivity>;
@@ -465,6 +463,7 @@ export const ServerEventFrames = {
     Type.Object({ preferences: NotificationPreferences })
   ),
   'account.login.new': Frame('account.login.new', Type.Object({ alert: LoginAlert })),
+  'account.privacy.updated': Frame('account.privacy.updated', Type.Object({ privacy: AccountPrivacy })),
   'account.login.resolved': Frame(
     'account.login.resolved',
     Type.Object({

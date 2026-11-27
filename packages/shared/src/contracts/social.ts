@@ -4,6 +4,7 @@ import { Type, type Static } from 'typebox';
 import { Done, Nullable, Ok } from './http.ts';
 import { PublicUser } from './users.ts';
 import { DirectMessageInvite } from './messages.ts';
+import { ContactDecision } from './privacy.ts';
 
 export const FriendLastMessage = Type.Object({
   id: Type.String(),
@@ -36,7 +37,12 @@ export const Relationship = Type.Union([
 ]);
 export type Relationship = Static<typeof Relationship>;
 
-export const SearchResult = Type.Object({ user: PublicUser, online: Type.Boolean(), relationship: Relationship });
+export const SearchResult = Type.Object({
+  user: PublicUser,
+  online: Type.Boolean(),
+  relationship: Relationship,
+  messageReason: Type.Optional(ContactDecision)
+});
 export type SearchResult = Static<typeof SearchResult>;
 
 export const FriendSearchQuery = Type.Object({ q: Type.Optional(Type.String()) });

@@ -21,7 +21,7 @@ import { createMessageVisibilityService } from '../../../src/domains/messaging/m
 import { DomainError } from '../../../src/platform/http/domain-error.ts';
 import { createCursorCodec } from '../../../src/platform/cursor-codec.ts';
 import { registerHttpKit } from '../../../src/platform/http/http-kit.ts';
-import { fake, storedUser } from '../../fakes/index.ts';
+import { publicUser, fake, storedUser } from '../../fakes/index.ts';
 import { DirectHistoryPage, RoomHistoryPage } from '@voiceroom/shared/contracts/messages';
 import { checked } from '../../helpers/checked.ts';
 
@@ -66,7 +66,26 @@ const directs = createDmHistoryService({
   projectMessages: ({ messages }: { messages: StoredDirectMessage[] }) => messages,
   cursorCodec: codec,
   repository: fake<DmHistoryRepository>({
-    canReadThread: async ({ peerId }) => peerId === 'friend',
+    threadAccess: async ({ peerId }) =>
+      peerId === 'friend'
+        ? {
+            peer: publicUser(peerId),
+            canRead: true,
+            isFriend: true,
+            canCall: true,
+            canMessage: true,
+            messageReason: 'allowed'
+          }
+        : peerId === 'blocked'
+          ? {
+              peer: publicUser(peerId),
+              canRead: false,
+              isFriend: false,
+              canCall: false,
+              canMessage: false,
+              messageReason: 'blocked'
+            }
+          : null,
     listLatest: async () => ({
       messages: [
         {
@@ -146,7 +165,10 @@ test('history refusals keep their status and code; a server failure stays privat
       code: 'authentication_required'
     }
   });
-  assert.equal((await historyApp(t)('/api/dm/stranger/history')).status, 403);
+  const history = historyApp(t);
+  const unknown = await history('/api/dm/stranger/history');
+  assert.equal(unknown.status, 403);
+  assert.deepEqual(await history('/api/dm/blocked/history'), unknown);
 
   const broken = historyApp(t, {
     directs: {

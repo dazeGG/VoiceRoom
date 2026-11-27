@@ -35,8 +35,10 @@ export function registerRingRoutes(root: FastifyInstance, ctx: ApiContext, rings
           });
       case 'room_not_found':
         return reply.code(404).send(failure('Room not found', { code: 'room_not_found' }));
-      case 'not_friends':
-        return reply.code(403).send(failure('You are not friends', { code: 'not_friends' }));
+      case 'calls_closed':
+        return reply
+          .code(403)
+          .send(failure('Recipient does not accept calls from this account', { code: 'calls_closed' }));
       case 'blocked':
         return reply.code(403).send(failure('Invite is unavailable', { code: 'relationship_blocked' }));
       case 'account_deleted':

@@ -8,6 +8,7 @@ import { Type } from 'typebox';
 import { Me } from '@voiceroom/shared/contracts/account';
 import { LiveKitAdmission } from '@voiceroom/shared/contracts/admission';
 import { DirectHistoryPage, DirectThread } from '@voiceroom/shared/contracts/messages';
+import { PrivacyResponse } from '@voiceroom/shared/contracts/privacy';
 import {
   CallAnswer,
   CallBootstrap,
@@ -238,6 +239,20 @@ async function callEntry(api: Running, viewer: Account, peer: Account, messageId
 
 async function missedCounts(api: Running, account: Account) {
   return (await request(api.socketPath, { pathname: basePath, cookie: account.cookie }, CallBootstrap)).body.missed;
+}
+
+async function setCallAudience(api: Running, account: Account, callsFrom: 'everyone' | 'friends') {
+  const { status } = await request(
+    api.socketPath,
+    {
+      method: 'PUT',
+      pathname: '/api/privacy',
+      cookie: account.cookie,
+      body: { messagesFrom: 'everyone', callsFrom }
+    },
+    PrivacyResponse
+  );
+  assert.equal(status, 200);
 }
 
 async function enter(socket: WsSession, answer: CallAnswer) {
@@ -915,6 +930,59 @@ test('block, unfriend, and account deletion close a call as unavailable', async 
   }
 });
 
+test('a re-ring from the peer resets the unanswered cap while an outgoing call leaves it intact', async (t) => {
+  const lab = await setup(t);
+  const api = await lab.boot();
+  const [alice, bob] = await Promise.all([api.account('alice'), api.account('bob')]);
+  await Promise.all([setCallAudience(api, alice, 'everyone'), setCallAudience(api, bob, 'everyone')]);
+  const send = () =>
+    request(api.socketPath, {
+      method: 'POST',
+      pathname: `/api/dm/${bob.id}`,
+      cookie: alice.cookie,
+      body: { text: 'Hello' }
+    });
+  for (let i = 0; i < 2; i++) assert.equal((await send()).status, 201);
+  const [aliceWs, bobWs] = await Promise.all([api.socket(alice.cookie), api.socket(bob.cookie)]);
+  const live = await start(api, alice, bob);
+  assert.equal((await send()).status, 201);
+  assert.equal((await send()).body.code, 'unanswered_cap_reached');
+  const seat = await enter(aliceWs, live);
+  await enter(bobWs, await action(api, bob, live.call.id, 'accept'));
+  await state(bobWs, live.call.id, 'connected');
+  const left = await action(api, alice, live.call.id, 'leave', 1, seat.seatToken);
+  assert.equal(left.call.phase, 'alone');
+  const rerung = await action(api, bob, live.call.id, 're-ring');
+  assert.equal(rerung.call.attempt, 2);
+  assert.equal(rerung.call.attemptInviterUserId, bob.id);
+  await waitForWsType(aliceWs.frames, 'call.incoming', (frame) => frame.payload.attempt === 2);
+  assert.equal((await send()).status, 201);
+});
+
+test('a participant can open a stored private missed-call target after closing calls to strangers', async (t) => {
+  const lab = await setup(t);
+  const api = await lab.boot();
+  const [alice, bob, outsider] = await Promise.all([api.account('alice'), api.account('bob'), api.account('outsider')]);
+  await setCallAudience(api, bob, 'everyone');
+  const privacy = await request(api.socketPath, {
+    method: 'PUT',
+    pathname: '/api/notifications/privacy',
+    cookie: bob.cookie,
+    body: { privateNotifications: true }
+  });
+  assert.equal(privacy.status, 200);
+  const bobWs = await api.socket(bob.cookie);
+  const { call } = await start(api, alice, bob);
+  lab.advance(45_000);
+  await details(api, bob, call.id);
+  await waitForWsType(bobWs.frames, 'call.missed.updated', (frame) => frame.payload.count === 1);
+  await setCallAudience(api, bob, 'friends');
+  const pathname = `${basePath}/notification/${call.id}`;
+  const target = await request(api.socketPath, { pathname, cookie: bob.cookie }, CallNotificationTarget);
+  assert.equal(target.body.peerUserId, alice.id);
+  assert.equal((await request(api.socketPath, { pathname, cookie: outsider.cookie })).status, 404);
+});
+
 test('restart gives an empty call one lease of grace and disabling calls preserves existing actions', async (t) => {
   const lab = await setup(t);
   const original = await lab.boot();
@@ -1006,7 +1074,7 @@ test('the start quota ignores replays and the caller can cancel a ringing attemp
       cookie: a.cookie,
       body: { peerUserId: peer.id, clientRequestId }
     });
-  assert.equal((await tryStart(stranger)).body.code, 'not_friends');
+  assert.equal((await tryStart(stranger)).body.code, 'calls_closed');
   await befriend(api, a, b);
   const aWs = await api.socket(a.cookie);
   const requestId = randomUUID();
@@ -1029,6 +1097,44 @@ test('the start quota ignores replays and the caller can cancel a ringing attemp
   lab.advance(30_000);
   assert.equal((await start(api, a, b, coalescedRequestId)).call.id, call.call.id);
   assert.notEqual((await start(api, a, b)).call.id, call.call.id);
+});
+
+test('non-friends can call with permission, record missed calls and lose admission when privacy changes', async (t) => {
+  const lab = await setup(t);
+  const api = await lab.boot();
+  const [alice, bob] = await Promise.all([api.account('alice'), api.account('bob')]);
+  const privacy = (callsFrom: 'friends' | 'everyone') =>
+    request(api.socketPath, {
+      method: 'PUT',
+      pathname: '/api/privacy',
+      cookie: bob.cookie,
+      body: { messagesFrom: 'everyone', callsFrom }
+    });
+  assert.equal((await privacy('everyone')).status, 200);
+  const socket = await api.socket(alice.cookie);
+  const first = await start(api, alice, bob);
+  const firstSeat = await enter(socket, first);
+  await action(api, alice, first.call.id, 'leave', 1, firstSeat.seatToken);
+  const { body: bootstrap } = await request(api.socketPath, { pathname: basePath, cookie: bob.cookie }, CallBootstrap);
+  assert.equal(bootstrap.missed.find((entry) => entry.peerUserId === alice.id)?.count, 1);
+
+  const message = () =>
+    request(api.socketPath, {
+      method: 'POST',
+      pathname: `/api/dm/${alice.id}`,
+      cookie: bob.cookie,
+      body: { text: 'Message' }
+    });
+  for (let count = 0; count < 3; count++) assert.equal((await message()).status, 201);
+  assert.equal((await message()).body.code, 'unanswered_cap_reached');
+
+  const second = await start(api, alice, bob);
+  assert.equal((await message()).status, 201, 'a call from the peer resets the unanswered count');
+  const secondSeat = await enter(socket, second);
+  const token = await issue(api, alice, second.call.id, secondSeat.seatToken);
+  assert.equal((await lab.gate.authorize(new URL(token.url).search)).ok, true);
+  assert.equal((await privacy('friends')).status, 200);
+  assert.equal((await lab.gate.authorize(new URL(token.url).search)).ok, false);
 });
 
 test('misses acknowledge only through an issued watermark on both devices and clear on connection', async (t) => {
@@ -1176,16 +1282,16 @@ test('voice call history cannot be edited, quoted or reacted to and supports del
     ).status,
     200
   );
-  const hidden = await waitForWsType(
+  const retained = await waitForWsType(
     bWs.frames,
     'call.missed.updated',
-    (frame) => frame.payload.revision > mark.payload.revision && frame.payload.count === 0
+    (frame) => frame.payload.revision > mark.payload.revision && frame.payload.count === 1
   );
   await befriend(api, a, b);
   const restored = await waitForWsType(
     bWs.frames,
     'call.missed.updated',
-    (frame) => frame.payload.revision > hidden.payload.revision && frame.payload.count === 1
+    (frame) => frame.payload.revision > retained.payload.revision && frame.payload.count === 1
   );
   assert.equal(
     (

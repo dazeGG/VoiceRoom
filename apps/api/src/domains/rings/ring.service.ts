@@ -11,6 +11,7 @@ import type { RingRepository, RingAction } from './ring.repository.ts';
 
 export interface RingServiceDeps {
   repository(): RingRepository;
+  invalidateTyping(userId: string, peerId?: string): void;
   findUser(userId: string): Promise<SocialUser | null>;
   findRoom(roomId: string): Promise<{ id: string; name?: string; emoji?: string } | null>;
   notifyUser(userId: string, event: AccountMessage): void;
@@ -49,6 +50,7 @@ export function createRingService(deps: RingServiceDeps) {
       limit: deps.maxCount
     });
     if (result.status !== 'rung' || result.replay) return result;
+    deps.invalidateTyping(caller.id, result.startedAsStrangers ? undefined : userId);
     const room = result.room;
     // The transaction has committed. Failures here must not undo the stored
     // invitation; clients can replay its request ID to recover the snapshot.

@@ -1,7 +1,10 @@
 import test, { type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
+import { setTimeout as delay } from 'node:timers/promises';
 import { createRingRepository } from '../../../src/domains/rings/ring.repository.ts';
+import { lockUserPair } from '../../../src/domains/social/social-records.ts';
+import { kyselyOn } from '../../../src/platform/db/kysely.ts';
 import { createTestDatabase } from '../../db-harness.ts';
 
 async function fixture(t: TestContext) {
@@ -240,7 +243,7 @@ test(
     assert.equal((await create()).status, 'blocked');
     await pool.query('DELETE FROM user_blocks');
     await pool.query('DELETE FROM friendships');
-    assert.equal((await create()).status, 'not_friends');
+    assert.equal((await create()).status, 'calls_closed');
     const [low, high] = [a, b].sort();
     await pool.query(`INSERT INTO friendships(id,user_a_id,user_b_id) VALUES($1,$2,$3)`, [
       crypto.randomUUID(),
@@ -280,6 +283,89 @@ test(
     assert.ok(job);
     // Incoming jobs are never delivered after cancellation.
     if (job.kind === 'incoming') assert.equal(await repo.current(job), null);
+  }
+);
+
+test(
+  'Ring expiry and terminal delivery progress for another pair while the oldest pair is locked',
+  { skip: !process.env.TEST_DATABASE_URL },
+  async (t) => {
+    const { pool, a, b, repo } = await fixture(t);
+    const db = kyselyOn(pool);
+    const c = crypto.randomUUID();
+    const d = crypto.randomUUID();
+    await db
+      .insertInto('users')
+      .values([
+        { id: c, login: 'ring-c', password_hash: 'x' },
+        { id: d, login: 'ring-d', password_hash: 'x', calls_from: 'everyone' }
+      ])
+      .execute();
+    const input = { roomId: 'ring-room', ttlMs: 30_000, cooldownMs: 0 };
+    const oldest = await repo.create({
+      ...input,
+      callerUserId: a,
+      recipientUserId: b,
+      clientRequestId: crypto.randomUUID()
+    });
+    const other = await repo.create({
+      ...input,
+      callerUserId: c,
+      recipientUserId: d,
+      clientRequestId: crypto.randomUUID()
+    });
+    assert.ok(oldest.status === 'rung' && other.status === 'rung');
+    const oldestId = oldest.ring.id;
+    const otherId = other.ring.id;
+    const now = Date.now();
+    await db
+      .updateTable('room_rings')
+      .set({ created_at: new Date(now - 60_000), expires_at: new Date(now - 30_000) })
+      .where('id', '=', oldestId)
+      .execute();
+    await db
+      .updateTable('room_rings')
+      .set({ created_at: new Date(now - 60_000), expires_at: new Date(now - 15_000) })
+      .where('id', '=', otherId)
+      .execute();
+    await db
+      .updateTable('ring_delivery_outbox')
+      .set({ deadline: new Date(now - 1_000) })
+      .execute();
+
+    const timeout = new AbortController();
+    let sweep: Promise<void> | undefined;
+    try {
+      await db.transaction().execute(async (tx) => {
+        await lockUserPair(tx, a, b);
+        sweep = repo.maintenance();
+        await Promise.race([
+          sweep,
+          delay(5_000, undefined, { signal: timeout.signal }).then(() =>
+            assert.fail('invite sweep waited for the held pair')
+          )
+        ]);
+        assert.equal(
+          (await db.selectFrom('room_rings').select('state').where('id', '=', oldestId).executeTakeFirstOrThrow())
+            .state,
+          'pending'
+        );
+        const job = await repo.claim();
+        assert.ok(job);
+        assert.equal(job.ring_id, otherId);
+        assert.equal(job.kind, 'terminal');
+        assert.equal((await repo.current(job))?.state, 'expired');
+      });
+    } finally {
+      timeout.abort();
+      await sweep;
+    }
+
+    await repo.maintenance();
+    assert.equal(
+      (await db.selectFrom('room_rings').select('state').where('id', '=', oldestId).executeTakeFirstOrThrow()).state,
+      'expired'
+    );
   }
 );
 

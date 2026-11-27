@@ -1,6 +1,6 @@
 import { sql } from 'kysely';
 import type { Database } from '../../platform/db/kysely.ts';
-import { ringPairRefusal } from '../social/pair-eligibility.repository.ts';
+import { getCallRefusal } from '../social/contact.service.ts';
 import type { GateClaims } from './gate-credential-signer.ts';
 
 export async function callGateAllows(
@@ -9,7 +9,7 @@ export async function callGateAllows(
 ): Promise<boolean> {
   const call = await db
     .selectFrom('room_rings')
-    .select(['caller_user_id', 'recipient_user_id'])
+    .select(['caller_user_id', 'recipient_user_id', 'attempt_inviter_user_id'])
     .where('room_id', '=', room)
     .where('purpose', '=', 'voice-call')
     .where('started_at', 'is not', null)
@@ -17,7 +17,10 @@ export async function callGateAllows(
     .where((eb) => eb.or([eb('alone_deadline', 'is', null), eb('alone_deadline', '>', sql<Date>`clock_timestamp()`)]))
     .where((eb) => eb.or([eb('caller_user_id', '=', pId), eb('recipient_user_id', '=', pId)]))
     .executeTakeFirst();
-  if (!call || (await ringPairRefusal(db, call.caller_user_id, call.recipient_user_id))) return false;
+  if (!call) return false;
+  const inviter = call.attempt_inviter_user_id ?? call.caller_user_id;
+  const invitee = inviter === call.caller_user_id ? call.recipient_user_id : call.caller_user_id;
+  if (await getCallRefusal(db, inviter, invitee)) return false;
   // The standalone gate shares the durable revocation with the API. Recheck it
   // after the call and friendship reads, since a seat can leave during either.
   return Boolean(

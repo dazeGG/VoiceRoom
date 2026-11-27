@@ -51,16 +51,7 @@ function unreadMisses(db: Database, userId: string, peerId?: string) {
     .where('deleted_at', 'is', null)
     .where(inviteKind, '=', 'voice-call')
     .where(sql<boolean>`jsonb_typeof(metadata#>'{call,missedAt}') = 'number'`)
-    .where(sql<boolean>`metadata#>>'{call,missedSeenRevision}' IS NULL`)
-    .where((eb) =>
-      eb.exists(
-        eb
-          .selectFrom('friendships')
-          .select('id')
-          .where('user_a_id', '=', sql<string>`least(sender_id, recipient_id)`)
-          .where('user_b_id', '=', sql<string>`greatest(sender_id, recipient_id)`)
-      )
-    );
+    .where(sql<boolean>`metadata#>>'{call,missedSeenRevision}' IS NULL`);
   if (peerId !== undefined) query = query.where('sender_id', '=', peerId);
   return query;
 }
@@ -109,7 +100,7 @@ export async function markCallMissesSeen(
     .execute();
 }
 
-export async function findCallMessagePeer(db: Database, userId: string, callId: string) {
+export async function findCallMessageParticipants(db: Database, userId: string, callId: string) {
   const row = await db
     .selectFrom('direct_messages')
     .select(['sender_id', 'recipient_id'])
@@ -118,5 +109,5 @@ export async function findCallMessagePeer(db: Database, userId: string, callId: 
     .where(sql<string>`metadata#>>'{call,callId}'`, '=', callId)
     .where('deleted_at', 'is', null)
     .executeTakeFirst();
-  return row ? (row.sender_id === userId ? row.recipient_id : row.sender_id) : null;
+  return row ?? null;
 }

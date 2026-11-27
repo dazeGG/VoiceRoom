@@ -96,17 +96,21 @@ function harness(store: Partial<FriendStore> = {}) {
     async unblockUser() {
       return { status: 'unblocked' };
     },
-    async areFriends() {
-      return true;
-    },
-    async isBlockedBetween() {
-      return false;
-    },
     ...store
   };
   const service = createFriendsService({
     friends: () => friends,
-    ringInvitation: async () => ({ status: 'not_friends' as const }),
+    contactStatus: async (_userId, peerId) => ({
+      peer: publicUser(peerId),
+      canRead: true,
+      canCall: true,
+      canMessage: true,
+      isFriend: peerId === 'f1',
+      messageReason: 'allowed'
+    }),
+    callRefusal: async () => null,
+    invalidateTyping: () => {},
+    ringInvitation: async () => ({ status: 'calls_closed' as const }),
     isOnline: (userId) => userId === 'f1',
     notifyUser: (userId, event) => calls.events.push([userId, event.type]),
     queuePush: async (userId, payload, context) => {
@@ -287,7 +291,7 @@ test('responding, cancelling, removing, blocking and unblocking', async () => {
 
 test('legacy friends ring delegates to the persisted invitation operation', async () => {
   const { service } = harness();
-  assert.deepEqual(await service.ring(ME, 'team', FRIEND_ID), { status: 'not_friends' });
+  assert.deepEqual(await service.ring(ME, 'team', FRIEND_ID), { status: 'calls_closed' });
 });
 
 // --- routes ---------------------------------------------------------------------
@@ -460,9 +464,9 @@ test('social refusals keep their texts and codes', async (t) => {
       'POST',
       '/api/rooms/room-1/ring',
       { userId: FRIEND_ID },
-      { ring: { status: 'not_friends' } },
+      { ring: { status: 'calls_closed' } },
       403,
-      'You are not friends'
+      'Recipient does not accept calls from this account'
     ],
     [
       'POST',

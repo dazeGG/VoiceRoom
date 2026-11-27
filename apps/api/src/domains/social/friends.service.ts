@@ -14,6 +14,7 @@ import type {
 import type { PublicUser } from '@voiceroom/shared/contracts/users';
 import type { PushPayload } from '../notifications/notification-dispatch.ts';
 import { notificationActor, type SocialUser } from './social-views.ts';
+import type { callRefusal, createContactService } from './contact.service.ts';
 
 type Status<T extends string> = T extends string ? { status: T } : never;
 
@@ -61,12 +62,13 @@ export interface FriendStore {
     targetId: string;
   }): Promise<Status<'not_found' | 'invalid'> | { status: 'blocked' | 'already_blocked'; unfriended: boolean }>;
   unblockUser(input: { userId: string; targetId: string }): Promise<Status<'unblocked' | 'not_found' | 'invalid'>>;
-  areFriends(a: string, b: string): Promise<boolean>;
-  isBlockedBetween(a: string, b: string): Promise<boolean>;
 }
 
 export interface FriendsDeps {
   friends(): FriendStore;
+  contactStatus: ReturnType<typeof createContactService>['status'];
+  callRefusal(userId: string, peerId: string): Promise<ReturnType<typeof callRefusal>>;
+  invalidateTyping(userId: string, peerId?: string): void;
   ringInvitation: RingService['create'];
   isOnline(userId: string): boolean;
   notifyUser(userId: string, event: AccountMessage): void;
@@ -143,11 +145,14 @@ export function createFriendsService(deps: FriendsDeps) {
     const incoming = new Set(requests.incoming.map((row) => row.user.id));
     const relationship = (id: string): Relationship =>
       friendSet.has(id) ? 'friend' : outgoing.has(id) ? 'outgoing' : incoming.has(id) ? 'incoming' : 'none';
-    return results.map((candidate) => ({
-      user: candidate,
-      online: deps.isOnline(candidate.id),
-      relationship: relationship(candidate.id)
-    }));
+    return Promise.all(
+      results.map(async (candidate) => ({
+        user: candidate,
+        online: deps.isOnline(candidate.id),
+        relationship: relationship(candidate.id),
+        messageReason: (await deps.contactStatus(userId, candidate.id))?.messageReason ?? ('blocked' as const)
+      }))
+    );
   }
 
   async function requests(userId: string) {
@@ -236,6 +241,7 @@ export function createFriendsService(deps: FriendsDeps) {
     const result = await deps.friends().blockUser({ userId, targetId });
     if (result.status === 'not_found') return { status: 'not_found' };
     if (result.status === 'invalid') return { status: 'invalid' };
+    deps.invalidateTyping(userId, targetId);
     deps.invalidateCalls?.(userId, targetId);
     if (result.unfriended) {
       deps.notifyUser(targetId, { type: 'friend-removed', userId });
@@ -246,15 +252,14 @@ export function createFriendsService(deps: FriendsDeps) {
 
   async function unblock(userId: string, targetId: string): Promise<Status<'unblocked' | 'not_found'>> {
     const result = await deps.friends().unblockUser({ userId, targetId });
+    if (result.status === 'unblocked') deps.invalidateTyping(userId, targetId);
     return { status: result.status === 'not_found' ? 'not_found' : 'unblocked' };
   }
 
   // The persisted operation is also used by the new HTTP lifecycle routes.
   async function ring(caller: SocialUser, roomId: string, targetUserId: string) {
-    // Keep the legacy early relationship refusal even on an app using test
-    // stores; the persisted operation repeats the checks under its pair lock.
-    if (!(await deps.friends().areFriends(caller.id, targetUserId))) return { status: 'not_friends' as const };
-    if (await deps.friends().isBlockedBetween(caller.id, targetUserId)) return { status: 'blocked' as const };
+    const refusal = await deps.callRefusal(caller.id, targetUserId);
+    if (refusal) return { status: refusal };
     const result = await deps.ringInvitation(caller, roomId, targetUserId);
     return result.status === 'rung' ? { status: 'rung' as const } : result;
   }

@@ -8,7 +8,7 @@ import { createFriendRequestRepository } from '../domains/social/friend-request.
 import { createFriendshipRepository } from '../domains/social/friendship.repository.ts';
 import { createUserBlockRepository } from '../domains/social/user-block.repository.ts';
 
-function createFriendStore({ pool }: { pool: pg.Pool }) {
+function composeFriendStore({ pool }: { pool: pg.Pool }) {
   return {
     ...createFriendshipRepository({ pool }),
     ...createFriendRequestRepository({ pool }),
@@ -17,5 +17,5 @@ function createFriendStore({ pool }: { pool: pg.Pool }) {
   };
 }
 
-export { createFriendStore };
-export type FriendStore = ReturnType<typeof createFriendStore>;
+export type FriendStore = Omit<ReturnType<typeof composeFriendStore>, 'areFriends' | 'isBlockedBetween'>;
+export const createFriendStore: (options: { pool: pg.Pool }) => FriendStore = composeFriendStore;

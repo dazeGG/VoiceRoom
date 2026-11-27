@@ -5,6 +5,9 @@ import { fromMicros, microsOf } from '../../platform/db/micros.ts';
 import type { Json, JsonObject } from '../../platform/db/schema.ts';
 import type { CursorTuple } from '../../platform/cursor-codec.ts';
 import { epochMillis, toMillis } from '../../platform/epoch-millis.ts';
+import { loadContactFacts } from '../social/contact-facts.repository.ts';
+import { canRead, type ContactLimits } from '../social/contact.policy.ts';
+import { projectContact } from '../social/contact.service.ts';
 
 type Direction = 'before' | 'after' | 'at-or-after';
 
@@ -110,21 +113,14 @@ function mapDirectMessage(row: DirectMessageRow): HistoryDirectMessage {
   };
 }
 
-function createDmHistoryRepository({ pool }: { pool: pg.Pool }) {
+function createDmHistoryRepository({ pool, limits }: { pool: pg.Pool; limits: ContactLimits }) {
   const db = kyselyOn(pool);
   const toMessages = (rows: DirectMessageRow[]) => rows.map(mapDirectMessage);
 
-  async function canReadThread({ userId, peerId }: { userId: string; peerId: string }): Promise<boolean> {
-    if (!userId || !peerId || userId === peerId) return false;
-    const [low, high] = userId < peerId ? [userId, peerId] : [peerId, userId];
-    const row = await db
-      .selectFrom('friendships')
-      .select('id')
-      .where('user_a_id', '=', low)
-      .where('user_b_id', '=', high)
-      .limit(1)
-      .executeTakeFirst();
-    return Boolean(row);
+  async function threadAccess({ userId, peerId }: { userId: string; peerId: string }) {
+    if (!userId || !peerId || userId === peerId) return null;
+    const facts = await loadContactFacts(db, userId, peerId);
+    return facts ? { ...projectContact(facts, limits), canRead: canRead(facts, limits) === 'allowed' } : null;
   }
 
   // Keep tombstone tuples addressable, as room history does: the surrounding
@@ -260,7 +256,7 @@ function createDmHistoryRepository({ pool }: { pool: pg.Pool }) {
     return { messages: [...before, ...after], hasMoreBefore, hasMoreAfter };
   }
 
-  return { canReadThread, getAnchor, listAfter, listAround, listBefore, listLatest };
+  return { threadAccess, getAnchor, listAfter, listAround, listBefore, listLatest };
 }
 
 export { createDmHistoryRepository };
