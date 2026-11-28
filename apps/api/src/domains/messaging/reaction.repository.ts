@@ -6,7 +6,8 @@ import type { RoomMessageReactionRevisions, RoomMessageReactions } from '../../p
 import { transaction as runInTransaction } from '../../platform/db/pool.ts';
 import { fromMicros, microsOf } from '../../platform/db/micros.ts';
 import { avatarUrl } from '../../lib/avatar-url.ts';
-import { between } from '../social/social-records.ts';
+import { between, lockUserPair } from '../social/social-records.ts';
+import { DomainError } from '../../platform/http/domain-error.ts';
 
 // Room and DM reactions live in tables with the same columns.
 type ReactionTable = 'room_message_reactions' | 'direct_message_reactions';
@@ -148,9 +149,24 @@ function createReactionRepository({ client }: { client?: ReactionPool | null } =
     emoji,
     userId,
     active,
+    peerId,
     client: override
-  }: Target & { userId: string; active?: boolean } & Override): Promise<{ changed: boolean; revision: string }> {
+  }: Target & { userId: string; active?: boolean; peerId?: string } & Override): Promise<{
+    changed: boolean;
+    revision: string;
+  }> {
     const db = on(override);
+    if (type === 'dm' && peerId) {
+      await lockUserPair(db, userId, peerId);
+      const message = await db
+        .selectFrom('direct_messages')
+        .select('id')
+        .where('id', '=', messageId)
+        .where(between(userId, peerId))
+        .where('deleted_at', 'is', null)
+        .executeTakeFirst();
+      if (!message) throw new DomainError('message_not_visible', 404, 'Message is not visible');
+    }
     const { reactions, revisions } = contextTables(type);
     const currentRevision = await ensureRevision({ type, messageId, emoji, client: override });
     const currentActive = await getActive({ type, messageId, emoji, userId, client: override });

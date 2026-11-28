@@ -33,6 +33,8 @@ export function Ok<const Properties extends TProperties>(properties: Properties)
 export const Done = Ok({});
 export type Done = Static<typeof Done>;
 
+export const NoContent = Type.Undefined();
+
 export const Nullable = <Schema extends TSchema>(schema: Schema) => Type.Union([schema, Type.Null()]);
 
 export const IdParams = Type.Object({ id: Type.String() });

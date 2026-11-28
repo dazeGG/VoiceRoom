@@ -46,7 +46,16 @@ export const AdminReport = Type.Object({
     text: Type.String(),
     sentAt: Nullable(Type.Number()),
     /** The message is already gone (deleted by its author, a room owner or an earlier report). */
-    deleted: Type.Boolean()
+    deleted: Type.Boolean(),
+    /**
+     * The attachments the reported DM carried, as captured with the report;
+     * their files may already be purged. Room messages and reports filed
+     * before snapshots existed carry none. Optional for an admin tab served
+     * by an older API.
+     */
+    attachments: Type.Optional(
+      Type.Array(Type.Object({ id: Type.String(), mimeType: Type.String(), name: Nullable(Type.String()) }))
+    )
   })
 });
 export type AdminReport = Static<typeof AdminReport>;

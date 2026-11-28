@@ -231,6 +231,9 @@ export const ERROR_TEXTS: Record<ErrorCode, string> = {
   get call_disabled() {
     return t(VOICE_UNAVAILABLE);
   },
+  get conversation_call_active() {
+    return t('Завершите звонок перед удалением переписки');
+  },
   get call_rate_limited() {
     return t(TRY_LATER);
   },

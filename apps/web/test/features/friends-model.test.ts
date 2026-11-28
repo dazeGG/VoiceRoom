@@ -140,3 +140,69 @@ test('signing out clears what the lobby held, so the next account sees none of i
   });
   expect(lobby.outboxFor('anna')).not.toBe(queued);
 });
+
+// Holds the next request to `path` until released; every other request passes through.
+function holdRequest(path: string) {
+  const passThrough = globalThis.fetch;
+  let release = () => {};
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  vi.stubGlobal('fetch', async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = input instanceof Request ? input.url : input instanceof URL ? input.href : input;
+    if (url === path) await held;
+    return passThrough(input, init);
+  });
+  return release;
+}
+
+const unreadAnna = {
+  body: {
+    ok: true,
+    friends: [
+      friend({
+        user: user('anna'),
+        unreadCount: 3,
+        lastMessage: { id: 'm1', body: 'Секрет', createdAt: 1, fromMe: false }
+      }),
+      friend({ user: user('boris'), unreadCount: 1 })
+    ],
+    incomingRequestCount: 0
+  }
+};
+
+test('a friends snapshot built before a conversation deletion does not restore its badge', async () => {
+  const lobby = await startLobby(unreadAnna);
+  expect(lobby.friends.find((entry) => entry.user.id === 'anna')?.unreadCount).toBe(3);
+
+  const release = holdRequest('/api/friends');
+  const refreshing = lobby.refreshFriends();
+  emit({ type: 'dm.conversation.deleted', payload: { peerId: 'anna' } });
+  release();
+  await refreshing;
+
+  const anna = lobby.friends.find((entry) => entry.user.id === 'anna');
+  expect(anna?.unreadCount).toBe(0);
+  expect(anna?.lastMessage).toBeNull();
+  expect(lobby.friends.find((entry) => entry.user.id === 'boris')?.unreadCount).toBe(1);
+});
+
+test('the deleting tab keeps a conversation reopened after the realtime event beat its answer', async () => {
+  const lobby = await startLobby(unreadAnna);
+  stubFetch({ 'DELETE /api/dm/anna': { status: 204 } });
+  const release = holdRequest('/api/dm/anna');
+  const deleting = lobby.deleteConversation('anna');
+  emit({ type: 'dm.conversation.deleted', payload: { peerId: 'anna' } });
+  expect(lobby.friends.find((entry) => entry.user.id === 'anna')?.unreadCount).toBe(0);
+
+  // Reopened and written to before the DELETE answer arrives.
+  lobby.view = 'dm';
+  lobby.selectedFriendId = 'anna';
+  const outbox = lobby.outboxFor('anna');
+  release();
+  await deleting;
+
+  expect(lobby.view).toBe('dm');
+  expect(lobby.selectedFriendId).toBe('anna');
+  expect(lobby.outboxFor('anna')).toBe(outbox);
+});

@@ -477,6 +477,7 @@ export const ServerEventFrames = {
   // Direct messages
   'dm.message': Frame('dm.message', Type.Object({ message: DirectMessage })),
   'dm.message.edited': Frame('dm.message.edited', Type.Object({ message: DirectMessage })),
+  'dm.conversation.deleted': Frame('dm.conversation.deleted', Type.Object({ peerId: Type.String() })),
   'dm.message.deleted': Frame(
     'dm.message.deleted',
     Type.Object({ messageId: Type.String(), peerUserId: Type.Optional(Type.String()) })

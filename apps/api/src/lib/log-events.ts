@@ -81,6 +81,7 @@ const LOG_EVENTS = Object.freeze({
   MESSAGE_DELIVERY_FAILED: 'msg.delivery_failed',
   MESSAGE_PIN_REFRESH_FAILED: 'msg.pin_refresh_failed',
   MESSAGE_AUTHOR_PROFILE_FAILED: 'msg.author_profile_failed',
+  MESSAGE_FENCE_FAILED: 'msg.fence_failed',
 
   // Notifications and push.
   NOTIFICATION_DELIVERY_FAILED: 'notify.delivery_failed',

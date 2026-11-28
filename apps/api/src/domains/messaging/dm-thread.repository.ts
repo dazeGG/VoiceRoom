@@ -21,7 +21,8 @@ import {
   lockUserPair,
   mapMessage,
   mapPublicUser,
-  now
+  now,
+  orderedPair
 } from '../social/social-records.ts';
 
 export async function unreadCountsFor(q: Database, userId: string): Promise<Record<string, number>> {
@@ -262,12 +263,15 @@ export function createDmThreadRepository({ pool }: { pool: pg.Pool }) {
     const id = crypto.randomUUID();
     // A raw pg transaction: the hooks run their own SQL on the same client.
     return transaction(pool, async (client) => {
+      const tx = kyselyOn(client);
+      // The application hook takes this lock as part of authorization.
+      if (!beforeUnitOfWork) await lockUserPair(tx, senderId, recipientId);
       if (beforeUnitOfWork) {
         const prepared = await beforeUnitOfWork(client);
         if (prepared?.replay) return { ...prepared.message, idempotencyReplay: true };
       }
       const preparedMessage = prepareMessage ? await prepareMessage(client) : { body, metadata };
-      const row = await kyselyOn(client)
+      const row = await tx
         .insertInto('direct_messages')
         .values({
           id,
@@ -298,46 +302,83 @@ export function createDmThreadRepository({ pool }: { pool: pg.Pool }) {
     recipientId: string;
     status: 'accepted' | 'declined';
   }) {
-    const row = await db
-      .updateTable('direct_messages')
-      .set({ metadata: sql`jsonb_set(metadata, '{status}', to_jsonb(${status}::text))` })
-      .where('id', '=', messageId)
-      .where('recipient_id', '=', recipientId)
-      .where(inviteKind, '=', 'room-invite')
-      .where(inviteStatus, '=', 'pending')
-      .where('deleted_at', 'is', null)
-      .returningAll()
-      .executeTakeFirst();
-    return mapMessage(row);
+    return db.transaction().execute(async (tx) => {
+      const invite = await tx
+        .selectFrom('direct_messages')
+        .select('sender_id')
+        .where('id', '=', messageId)
+        .where('recipient_id', '=', recipientId)
+        .executeTakeFirst();
+      if (!invite) return null;
+      await lockUserPair(tx, invite.sender_id, recipientId);
+      const row = await tx
+        .updateTable('direct_messages')
+        .set({ metadata: sql`jsonb_set(metadata, '{status}', to_jsonb(${status}::text))` })
+        .where('id', '=', messageId)
+        .where('recipient_id', '=', recipientId)
+        .where(inviteKind, '=', 'room-invite')
+        .where(inviteStatus, '=', 'pending')
+        .where('deleted_at', 'is', null)
+        .returningAll()
+        .executeTakeFirst();
+      return mapMessage(row);
+    });
   }
 
   // Expires pending invitations for a room. Omitting senderId expires every
   // sender's invitations, which is what a deleted room needs.
   async function expirePendingInvites({ senderId = null, roomId }: { senderId?: string | null; roomId: string }) {
-    let query = db
-      .updateTable('direct_messages')
-      .set({ metadata: sql`jsonb_set(metadata, '{status}', to_jsonb('expired'::text))` })
-      .where(inviteKind, '=', 'room-invite')
-      .where(sql<string>`metadata->>'roomId'`, '=', roomId)
-      .where(inviteStatus, '=', 'pending')
-      .where('deleted_at', 'is', null);
-    if (senderId) query = query.where('sender_id', '=', senderId);
-    const rows = await query.returningAll().execute();
-    return rows.map((row) => mapMessage(row));
+    return db.transaction().execute(async (tx) => {
+      let query = tx
+        .selectFrom('direct_messages')
+        .select(['id', 'sender_id', 'recipient_id'])
+        .where(inviteKind, '=', 'room-invite')
+        .where(sql<string>`metadata->>'roomId'`, '=', roomId)
+        .where(inviteStatus, '=', 'pending')
+        .where('deleted_at', 'is', null);
+      if (senderId) query = query.where('sender_id', '=', senderId);
+      const pending = await query.execute();
+      const pairs = new Map<string, [string, string]>();
+      for (const invite of pending) {
+        const pair = orderedPair(invite.sender_id, invite.recipient_id);
+        pairs.set(pair.join(':'), pair);
+      }
+      for (const key of [...pairs.keys()].sort()) {
+        const pair = pairs.get(key);
+        if (pair) await lockUserPair(tx, ...pair);
+      }
+      if (!pending.length) return [];
+      const rows = await tx
+        .updateTable('direct_messages')
+        .set({ metadata: sql`jsonb_set(metadata, '{status}', to_jsonb('expired'::text))` })
+        .where(
+          'id',
+          'in',
+          pending.map(({ id }) => id)
+        )
+        .where(inviteStatus, '=', 'pending')
+        .where('deleted_at', 'is', null)
+        .returningAll()
+        .execute();
+      return rows.map((row) => mapMessage(row));
+    });
   }
 
   // Mark every message from peer -> user as read. Returns the number marked so
   // the caller can decide whether to broadcast a read receipt.
   async function markRead({ userId, peerId }: { userId: string; peerId: string }) {
-    const result = await db
-      .updateTable('direct_messages')
-      .set({ read_at: now })
-      .where('recipient_id', '=', userId)
-      .where('sender_id', '=', peerId)
-      .where('read_at', 'is', null)
-      .where('deleted_at', 'is', null)
-      .executeTakeFirst();
-    return { count: Number(result.numUpdatedRows) };
+    return db.transaction().execute(async (tx) => {
+      await lockUserPair(tx, userId, peerId);
+      const result = await tx
+        .updateTable('direct_messages')
+        .set({ read_at: now })
+        .where('recipient_id', '=', userId)
+        .where('sender_id', '=', peerId)
+        .where('read_at', 'is', null)
+        .where('deleted_at', 'is', null)
+        .executeTakeFirst();
+      return { count: Number(result.numUpdatedRows) };
+    });
   }
 
   return {

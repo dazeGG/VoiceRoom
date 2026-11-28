@@ -17,7 +17,7 @@ export function stubFetch(routes: Record<string, Reply>) {
     if (!route)
       return new Response(JSON.stringify({ ok: false, error: `no stub for ${method} ${url}` }), { status: 500 });
     const reply = typeof route === 'function' ? route(init) : route;
-    return new Response(JSON.stringify(reply.body ?? {}), {
+    return new Response(reply.status === 204 ? null : JSON.stringify(reply.body ?? {}), {
       status: reply.status ?? 200,
       headers: { 'content-type': 'application/json' }
     });

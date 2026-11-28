@@ -2,6 +2,7 @@ import { sql } from 'kysely';
 import type pg from 'pg';
 import { kyselyOn } from '../../platform/db/kysely.ts';
 import { fromMicros } from '../../platform/db/micros.ts';
+import { lockUserPair } from '../social/social-records.ts';
 
 type ReadTuple = { id: string; createdAtMicros: string | number | bigint };
 type ReadCursorRow = { last_read_message_created_at: unknown; last_read_message_id: string | null };
@@ -88,6 +89,7 @@ function createMessageReadRepository({ pool }: { pool: pg.Pool }): MessageReadRe
   }): Promise<ReadAdvance> {
     const at = fromMicros(tuple.createdAtMicros);
     return db.transaction().execute(async (trx): Promise<ReadAdvance> => {
+      await lockUserPair(trx, userId, peerId);
       const target = await trx
         .selectFrom('direct_messages')
         .select('id')

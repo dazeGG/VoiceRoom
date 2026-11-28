@@ -187,6 +187,46 @@ test('a report reaches the platform administrator, who removes the message or di
   // A removed message can no longer be reported.
   assert.equal((await report(eve, { kind: 'direct_message', messageId: 'dm-2' })).status, 404);
   assert.equal((await report(alice, roomMessage)).status, 404);
+
+  // A new open report captures the DM as it was when reported.
+  const attachmentId = 'e023cd93-1b2e-4ec3-9144-a60844c862c1';
+  await pool.query(
+    `INSERT INTO message_attachments (id, owner_id, context, state, mime_type, original_bytes, processed_bytes,
+      preview_bytes, width, height, original_storage_key, processed_storage_key, preview_storage_key,
+      ready_at, bound_at, direct_message_id, attachment_order, metadata)
+    VALUES ($1, $2, 'dm', 'ready', 'image/jpeg', 10, 8, 4, 2, 2, 'original', 'processed', 'preview',
+      now(), now(), 'dm-1', 0, '{"originalName":"evidence.jpg"}')`,
+    [attachmentId, bobId]
+  );
+  assert.equal((await report(alice, { kind: 'direct_message', messageId: 'dm-1' }, 'abuse')).status, 201);
+  // The rollback build (api/v1.5.0) files reports with its own insert shape,
+  // which has no snapshot column.
+  await pool.query(
+    `INSERT INTO direct_messages (id, sender_id, recipient_id, body) VALUES ('dm-legacy', $1, $2, 'старый клиент')`,
+    [bobId, aliceId]
+  );
+  await pool.query(
+    `INSERT INTO content_reports (reporter_user_id, target_kind, room_id, message_id, reason, comment)
+      VALUES ($1, 'direct_message', NULL, 'dm-legacy', 'spam', '')`,
+    [aliceId]
+  );
+  const [captured, legacy] = await list();
+  assert.ok(captured && legacy);
+  assert.equal(legacy.target.text, 'старый клиент');
+  await pool.query(`UPDATE direct_messages SET body = 'edited' WHERE id IN ('dm-1', 'dm-legacy')`);
+  assert.equal(
+    (await request(socketPath, { method: 'DELETE', pathname: `/api/dm/${bobId}`, cookie: alice })).status,
+    204
+  );
+  const [retained, retainedLegacy] = await list();
+  assert.ok(retained && retainedLegacy);
+  assert.deepEqual(retained.target, { ...captured.target, deleted: true });
+  assert.equal(retained.target.text, 'грубость');
+  assert.deepEqual(retained.target.attachments, [{ id: attachmentId, mimeType: 'image/jpeg', name: 'evidence.jpg' }]);
+  assert.deepEqual(retainedLegacy.target, { ...legacy.target, deleted: true });
+  assert.equal(retainedLegacy.target.text, 'старый клиент');
+  assert.equal(retainedLegacy.target.authorUserId, bobId);
+  assert.ok(retainedLegacy.target.authorName);
 });
 
 test('reports are rate limited per account', async (t) => {

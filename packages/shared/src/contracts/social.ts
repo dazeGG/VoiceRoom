@@ -92,6 +92,9 @@ export type FriendRequestAnswered = Static<typeof FriendRequestAnswered>;
 export const BlockList = Ok({ blocked: Type.Array(Type.String()), users: Type.Array(PublicUser) });
 export type BlockList = Static<typeof BlockList>;
 
+export const BlockBody = Type.Object({ deleteConversation: Type.Optional(Type.Boolean()) });
+export type BlockBody = Static<typeof BlockBody>;
+
 export const BlockApplied = Ok({ status: Type.Union([Type.Literal('blocked'), Type.Literal('already_blocked')]) });
 export type BlockApplied = Static<typeof BlockApplied>;
 

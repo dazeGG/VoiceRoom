@@ -18,6 +18,7 @@ import type { AccountMessage } from '../../realtime/account-events.ts';
 import type { WsConnection } from '../../realtime/registry.ts';
 import type { JoinResult } from '../../realtime/voice-join.ts';
 import type { LiveKitAdmission } from '../admission/livekit-credential-provider.ts';
+import { directMessageFence } from '../messaging/dm-message-fence.repository.ts';
 import type { DirectMessage } from '../social/social-records.ts';
 import {
   advanceCall,
@@ -132,6 +133,7 @@ export function createCallRingService({
     const connection = pool();
     return connection && createCallRingRepository(connection, clock, dailyNewChatLimit);
   };
+  const fenceDirectMessage = directMessageFence(pool, report);
   const requireRepo = () => {
     const repository = repo();
     if (!repository) throw new DomainError('internal_error', 503, 'Call storage unavailable');
@@ -223,7 +225,11 @@ export function createCallRingService({
     if (!change.changed) return;
     if (message) {
       const event: AccountMessage = { type: call.revision === 1 ? 'dm-message' : 'dm.message.edited', message };
-      for (const userId of users(call)) notify(userId, event);
+      // A conversation deletion may commit right after this transition; its
+      // call entry must not reappear in a thread reopened meanwhile.
+      await fenceDirectMessage(message, () => {
+        for (const userId of users(call)) notify(userId, event);
+      });
     }
     if (missed) notify(call.recipientId, { type: 'call.missed.updated', ...missed });
     const state = await snapshot(repository, call, call.callerId, now);

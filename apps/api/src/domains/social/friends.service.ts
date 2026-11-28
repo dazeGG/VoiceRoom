@@ -66,6 +66,7 @@ export interface FriendStore {
 
 export interface FriendsDeps {
   friends(): FriendStore;
+  blockAndDelete: FriendStore['blockUser'];
   contactStatus: ReturnType<typeof createContactService>['status'];
   callRefusal(userId: string, peerId: string): Promise<ReturnType<typeof callRefusal>>;
   invalidateTyping(userId: string, peerId?: string): void;
@@ -236,9 +237,12 @@ export function createFriendsService(deps: FriendsDeps) {
   // applied: their UI simply shows the person is no longer a friend.
   async function block(
     userId: string,
-    targetId: string
+    targetId: string,
+    deleteConversation = false
   ): Promise<{ status: 'applied'; result: 'blocked' | 'already_blocked' } | Status<'not_found' | 'invalid'>> {
-    const result = await deps.friends().blockUser({ userId, targetId });
+    const result = await (deleteConversation
+      ? deps.blockAndDelete({ userId, targetId })
+      : deps.friends().blockUser({ userId, targetId }));
     if (result.status === 'not_found') return { status: 'not_found' };
     if (result.status === 'invalid') return { status: 'invalid' };
     deps.invalidateTyping(userId, targetId);

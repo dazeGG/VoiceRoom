@@ -4,12 +4,18 @@ import { createPinia, setActivePinia, type Pinia } from 'pinia';
 import { nextTick } from 'vue';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import DmView from '@/features/home/components/lobby/DmView.vue';
+import ChatContextMenu from '@/features/home/components/lobby/ChatContextMenu.vue';
+import { useFriendCallStore } from '@/features/friend-call/friend-call.store';
 import { LOBBY_KEY } from '@/features/home/model/lobby-context';
 import { useLobbyStore, type LobbyStore } from '@/features/home/model/lobby.store';
 import { useToastsStore } from '@/features/home/model/toasts.store';
 import type { DirectMessage } from '@/api/dm';
 import { loadChatDraft } from '@/shared/chat/chat-drafts';
-import { SendDirectMessageBody, type DirectContact } from '@voiceroom/shared/contracts/messages';
+import {
+  SendDirectMessageBody,
+  type ConversationSummary,
+  type DirectContact
+} from '@voiceroom/shared/contracts/messages';
 import { stubFetch } from '../fixtures/fetch.ts';
 import { FakeWebSocket, installFakeWebSocket } from '../fixtures/fake-websocket.ts';
 import { authUser } from '../fixtures/users.ts';
@@ -77,6 +83,108 @@ function emptyHistory(contact: DirectContact) {
     contact
   };
 }
+
+function conversation(isFriend: boolean): ConversationSummary {
+  return {
+    peer: { ...ada, badge: null },
+    lastMessage: { preview: 'Old message', kind: 'text', at: 1000, fromMe: false },
+    unreadCount: 2,
+    isFriend,
+    muted: false
+  };
+}
+
+test('the DM header offers a delete confirmation and closes the deleted conversation', async () => {
+  const { calls } = stubFetch({ 'DELETE /api/dm/ada': { status: 204 } });
+  const lobby = await renderDm(ada, [message('old-message', ada.id, 'Old message')]);
+  lobby.conversations = [conversation(true)];
+  const user = userEvent.setup();
+  await user.click(screen.getByRole('button', { name: 'Ещё' }));
+  await user.click(screen.getByRole('menuitem', { name: 'Удалить переписку' }));
+  const dialog = screen.getByRole('alertdialog', { name: 'Удалить переписку?' });
+  expect(dialog.textContent).toContain('Все сообщения и файлы исчезнут у вас и у @ada. Отменить это нельзя.');
+  await user.click(within(dialog).getByRole('button', { name: 'Отмена' }));
+  expect(calls.some(({ method }) => method === 'DELETE')).toBe(false);
+  await user.click(screen.getByRole('button', { name: 'Ещё' }));
+  await user.click(screen.getByRole('menuitem', { name: 'Удалить переписку' }));
+  await user.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Удалить' }));
+  expect(calls).toContainEqual({ method: 'DELETE', url: '/api/dm/ada', body: undefined });
+  expect(lobby.selectedFriendId).toBeNull();
+  expect(lobby.conversations).toEqual([]);
+});
+
+test.each([true, false])('chat row menu offers deletion and block confirmation (friend: %s)', async (isFriend) => {
+  const { calls } = stubFetch({ 'PUT /api/blocks/ada': { body: { ok: true, status: 'blocked' } } });
+  const lobby = useLobbyStore(pinia);
+  const anchor = document.createElement('button');
+  render(ChatContextMenu, {
+    props: { modelValue: { anchor, x: 0, y: 0, isFriend, friend: { user: ada, online: false } } },
+    global: { plugins: [pinia], provide: { [LOBBY_KEY]: lobby } }
+  });
+  expect(await screen.findByRole('menuitem', { name: 'Удалить переписку' })).toBeTruthy();
+  const user = userEvent.setup();
+  await user.click(screen.getByRole('menuitem', { name: 'Заблокировать' }));
+  const dialog = screen.getByRole('alertdialog', { name: 'Заблокировать пользователя?' });
+  expect(within(dialog).getByText('@ada')).toBeTruthy();
+  const checkbox = within(dialog).getByRole('checkbox', { name: 'Удалить переписку' });
+  expect(checkbox.getAttribute('aria-checked')).toBe('false');
+  expect(within(dialog).getByRole('button', { name: /^Заблокировать$/ })).toBeTruthy();
+  expect(within(dialog).queryByRole('button', { name: 'Заблокировать и удалить' })).toBeNull();
+  await user.click(checkbox);
+  await user.click(within(dialog).getByRole('button', { name: 'Заблокировать и удалить' }));
+  expect(calls).toContainEqual({ method: 'PUT', url: '/api/blocks/ada', body: { deleteConversation: true } });
+});
+
+test('the deletion event closes the peer thread and clears its unread and missed-call badges', async () => {
+  let deleted = false;
+  stubFetch({
+    '/api/dm/conversations': { body: { ok: true, conversations: [] } },
+    'GET /api/dm/ada/history?mode=latest&limit=50': () => ({
+      body: { ...emptyHistory(allowedContact), messages: deleted ? [] : [historyMessage('old-message', 'c1')] }
+    }),
+    '/api/call-rings': { body: { ok: true, enabled: true, activeCalls: [], incoming: [], missed: [], serverNow: 0 } }
+  });
+  const lobby = useLobbyStore(pinia);
+  const calls = useFriendCallStore(pinia);
+  const stop = lobby.init(self.id);
+  const stopCalls = calls.startSession(self.id, { prepareVoice: async () => {}, openCall: () => {} });
+  try {
+    const socket = FakeWebSocket.latest();
+    socket.open();
+    socket.receive({ type: 'ready', payload: { userId: self.id } });
+    await lobby.openDm(ada.id);
+    expect(lobby.thread.messages.map(({ id }) => id)).toEqual(['old-message']);
+    lobby.conversations = [conversation(true)];
+    lobby.friends = [{ user: ada, unreadCount: 2, online: false, friendsSince: null, lastMessage: null }];
+    socket.receive({
+      type: 'call.missed.updated',
+      payload: {
+        peerUserId: ada.id,
+        count: 1,
+        revision: 4,
+        serverNow: 1000,
+        watermark: { missedAt: 1000, messageId: 'e023cd93-1b2e-4ec3-9144-a60844c862c1' }
+      }
+    });
+    expect(calls.missedForPeer(ada.id)?.count).toBe(1);
+
+    deleted = true;
+    socket.receive({ type: 'dm.conversation.deleted', payload: { peerId: ada.id } });
+
+    expect(lobby.view).toBe('home');
+    expect(lobby.selectedFriendId).toBeNull();
+    expect(lobby.thread.messages).toEqual([]);
+    expect(lobby.conversations).toEqual([]);
+    expect(lobby.friends[0]?.unreadCount).toBe(0);
+    expect(calls.missedForPeer(ada.id)?.count).toBe(0);
+    const reopening = lobby.openDm(ada.id);
+    expect(lobby.thread.messages).toEqual([]);
+    await reopening;
+  } finally {
+    stopCalls();
+    stop();
+  }
+});
 
 test('a send refusal closes the composer when the empty thread can no longer be read', async () => {
   let closed = false;

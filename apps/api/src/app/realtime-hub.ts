@@ -4,6 +4,7 @@
 // previews, delivery relay, room and account lifecycles).
 
 import type { FastifyBaseLogger } from 'fastify';
+import type { DirectMessage } from '@voiceroom/shared/contracts/messages';
 import type { IncomingMessage } from 'node:http';
 import type { AccountMessage } from '../realtime/account-events.ts';
 import { createWsHandler } from '../realtime/ws-handler.ts';
@@ -29,6 +30,8 @@ import { createVoiceStays } from '../realtime/voice-stays.ts';
 import { createCallRealtime, type CallRealtimeStartOptions } from './call-realtime.ts';
 import { createFullRoomRealtime, type FullRoomRealtimeRuntime } from './full-room-realtime.ts';
 import { sessionAvatarColorKey, sessionDisplayName } from './session.ts';
+import { directMessageFence } from '../domains/messaging/dm-message-fence.repository.ts';
+import { LOG_EVENTS } from '../lib/log-events.ts';
 
 export interface RealtimeHubDeps {
   config: ReturnType<typeof readApiConfig>;
@@ -97,8 +100,15 @@ export function createRealtimeHub(deps: RealtimeHubDeps) {
       return pool ? createReplyRepository({ client: pool }) : null;
     }
   });
+  // Projection, the outbox and push preferences may load a message just before
+  // its conversation is deleted; every DM fan-out passes this fence last.
+  const fenceDirectMessage = directMessageFence(
+    () => services.getPool(),
+    (error) => deps.logger().error({ evt: LOG_EVENTS.MESSAGE_FENCE_FAILED, err: error }, 'direct message fence failed')
+  );
   const notificationDispatch = createNotificationDispatch({
     push: () => services.getPushDelivery(),
+    whileMessageLive: fenceDirectMessage,
     preferences: (userId) => services.getNotificationPreferences().getPreferences(userId),
     notifyUser: (userId, event) => broadcastToUser(userId, event),
     logger: () => deps.logger()
@@ -112,7 +122,7 @@ export function createRealtimeHub(deps: RealtimeHubDeps) {
     publicChatMessage,
     broadcastRoomEdit: (roomId, message) =>
       runtime().broadcastRoomDetail(roomId, buildServerEnvelope('room.chat.edited', { roomId, message })),
-    notifyUser: (userId, event) => broadcastToUser(userId, event)
+    broadcastDirectEdit: (message) => broadcastDirectMessage(message, 'dm.message.edited')
   });
   const messageDeliveryRelay = createMessageDeliveryRelay({
     enabled: config.MESSAGE_DELIVERY_LISTEN_ENABLED,
@@ -120,7 +130,7 @@ export function createRealtimeHub(deps: RealtimeHubDeps) {
     outbox: () => services.getMessageDeliveryServices()?.outbox ?? null,
     projection: messageProjection,
     broadcastChatMessage: (roomId, message) => runtime().broadcastChatMessage(roomId, message),
-    notifyUser: (userId, event) => broadcastToUser(userId, event),
+    broadcastDirectMessage,
     findUser: (userId) => services.getUserStore().getUserById(userId),
     broadcastDmNotification: (recipientId, sender, message) =>
       notificationDispatch.broadcastDmNotification(recipientId, sender, message),
@@ -130,7 +140,7 @@ export function createRealtimeHub(deps: RealtimeHubDeps) {
     presence: roomPresence,
     runtime: () => roomRuntime,
     invitations: () => services.invitationStore(),
-    notifyUser: (userId, event) => broadcastToUser(userId, event),
+    broadcastDirectEdit: (message) => broadcastDirectMessage(message, 'dm.message.edited'),
     credentials: () => services.getCredentialBoundary(),
     removeParticipant: (roomId, peerId) => deps.liveKit.removeParticipant(roomId, peerId),
     removeAvatar: (key, log) => deps.removeAvatar(key, log),
@@ -173,6 +183,17 @@ export function createRealtimeHub(deps: RealtimeHubDeps) {
   let wsHandler: ReturnType<typeof createWsHandler> | undefined;
   function invalidateTyping(userId: string, peerId?: string) {
     wsHandler?.invalidateTyping(userId, peerId);
+  }
+
+  /** Sends a new or edited direct message to both participants unless its conversation was deleted. */
+  function broadcastDirectMessage(
+    message: DirectMessage,
+    type: 'dm-message' | 'dm.message.edited' = 'dm-message'
+  ): Promise<boolean> {
+    return fenceDirectMessage(message, () => {
+      broadcastToUser(message.recipientId, { type, message });
+      broadcastToUser(message.senderId, { type, message });
+    });
   }
 
   function broadcastToUser(userId: string, message: AccountMessage): number {
@@ -290,12 +311,14 @@ export function createRealtimeHub(deps: RealtimeHubDeps) {
     getRoom,
     findRoomBan,
     broadcastToUser,
+    broadcastDirectMessage,
     invalidateTyping,
     isUserOnline,
     roomMembershipPresenceSnapshot,
     liveKitGatePrincipalForPeer,
     projection: messageProjection,
     notifications: notificationDispatch,
+    fenceDirectMessage,
     linkPreviews: linkPreviewEvents,
     deliveryRelay: messageDeliveryRelay,
     roomLifecycle,

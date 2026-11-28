@@ -141,7 +141,9 @@ function roomHarness({
             }
           }
         : null,
-    notifyUser: (userId, event) => calls.notified.push([userId, event.type]),
+    broadcastDirectEdit: async (message) => {
+      calls.notified.push(['fenced edit', message.id]);
+    },
     credentials: () => ({
       async revokePeer(input) {
         if (revokeFails) throw new Error('revoke');
@@ -202,10 +204,7 @@ test('room invitations expire only with a store that can', async () => {
   const { calls, lifecycle } = roomHarness();
   assert.deepEqual(await lifecycle.expireRoomInvitations('s', ''), []);
   assert.equal((await lifecycle.expireRoomInvitations(null, 'r1')).length, 1);
-  assert.deepEqual(calls.notified, [
-    ['s', 'dm.message.edited'],
-    ['r', 'dm.message.edited']
-  ]);
+  assert.deepEqual(calls.notified, [['fenced edit', 'm-1']]);
   assert.deepEqual(await roomHarness({ invitations: false }).lifecycle.expireRoomInvitations('s', 'r1'), []);
 });
 
@@ -225,10 +224,7 @@ test('deleting a room tells everyone, frees every seat and removes the avatar', 
   assert.equal(roster.rooms.get('r1')?.peers.size, 0);
   assert.deepEqual(calls.leaseResults.slice(0, 2), [{ finalized: false }, { finalized: true }]);
   assert.deepEqual(calls.avatars, ['room.webp']);
-  assert.deepEqual(calls.notified, [
-    ['s', 'dm.message.edited'],
-    ['r', 'dm.message.edited']
-  ]);
+  assert.deepEqual(calls.notified, [['fenced edit', 'm-1']]);
 });
 
 test('a room deletion with failing cleanup still finishes and only warns', async () => {
@@ -258,7 +254,7 @@ test('a room deletion with failing cleanup still finishes and only warns', async
         throw new Error('db');
       }
     }),
-    notifyUser() {},
+    async broadcastDirectEdit() {},
     credentials: () => ({ async revokePeer() {} }),
     removeParticipant: async () => {},
     removeAvatar: async () => {},

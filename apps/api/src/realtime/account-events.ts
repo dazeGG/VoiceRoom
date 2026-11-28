@@ -21,6 +21,7 @@ export type AccountMessage =
   | Tagged<'dm-message' | 'dm.message.edited', ServerEvents['dm.message']>
   | Tagged<'dm-read', ServerEvents['dm.read']>
   | Tagged<'dm.message.deleted', ServerEvents['dm.message.deleted']>
+  | Tagged<'dm.conversation.deleted', ServerEvents['dm.conversation.deleted']>
   | Tagged<'notification.dm.message', ServerEvents['notification.dm.message']>
   | Tagged<'notification.room.message', ServerEvents['notification.room.message']>
   | Tagged<'notification.friend.request', ServerEvents['notification.friend.request']>
@@ -104,6 +105,8 @@ function toWsAccountEvent(message: AccountMessage): ServerEnvelope {
       return buildServerEnvelope('dm.message.edited', {
         message: message.message
       });
+    case 'dm.conversation.deleted':
+      return buildServerEnvelope(message.type, { peerId: message.peerId });
     case 'room.kicked':
     case 'room.banned':
       return buildServerEnvelope(message.type, {

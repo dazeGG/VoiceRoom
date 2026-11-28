@@ -78,10 +78,10 @@ async function addFriend(): Promise<void> {
   }
 }
 
-async function blockContact(): Promise<void> {
+async function blockContact(deleteConversation: boolean): Promise<void> {
   showBlock.value = false;
   try {
-    await lobby.blockUser(peerId);
+    await lobby.blockUser(peerId, deleteConversation);
     pushToast(t('{p0} заблокирован', { p0: peerName.value }));
   } catch (error) {
     pushToast(error instanceof Error ? error.message : t('Не удалось заблокировать пользователя'), {
@@ -505,5 +505,10 @@ function onMenuImage(action: (image: NonNullable<typeof menuImage.value>) => voi
     @close="menu.closeReport()"
     @reported="(message: string) => pushToast(message)"
   />
-  <BlockContactDialog v-if="showBlock && peer" :user="peer" @close="showBlock = false" @confirm="void blockContact()" />
+  <BlockContactDialog
+    v-if="showBlock && peer"
+    :user="peer"
+    @close="showBlock = false"
+    @confirm="void blockContact($event)"
+  />
 </template>

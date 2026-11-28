@@ -75,6 +75,7 @@ export interface ApiRouteDeps {
     rings: Parameters<typeof registerRingRoutes>[2];
     callRings: Parameters<typeof registerCallRingRoutes>[2];
     directMessages: Parameters<typeof registerDirectMessageRoutes>[2];
+    deleteConversation: Parameters<typeof registerDirectMessageRoutes>[3];
     notificationSettings: Parameters<typeof registerNotificationSettingsRoutes>[2];
     deviceTokens: Parameters<typeof registerDeviceTokenRoutes>[2];
     avatars: Parameters<typeof registerAvatarRoutes>[2]['avatars'];
@@ -154,7 +155,7 @@ export function registerApiRoutes(app: FastifyInstance, ctx: ApiContext, deps: A
   registerPrivacyRoutes(app, ctx, deps.domain.privacy);
   registerRingRoutes(app, ctx, deps.domain.rings);
   registerCallRingRoutes(app, ctx, deps.domain.callRings);
-  registerDirectMessageRoutes(app, ctx, deps.domain.directMessages);
+  registerDirectMessageRoutes(app, ctx, deps.domain.directMessages, deps.domain.deleteConversation);
   registerNotificationSettingsRoutes(app, ctx, deps.domain.notificationSettings);
   registerDeviceTokenRoutes(app, ctx, deps.domain.deviceTokens);
   registerAvatarRoutes(app, ctx, {

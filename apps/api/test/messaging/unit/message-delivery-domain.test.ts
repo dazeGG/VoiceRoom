@@ -123,6 +123,7 @@ type RelayOptions = {
   pool?: boolean;
   outbox?: boolean;
   findUserFails?: boolean;
+  dmPresent?: boolean;
   event?: unknown;
   missed?: unknown[];
 };
@@ -132,6 +133,7 @@ function relayHarness({
   pool = true,
   outbox = true,
   findUserFails = false,
+  dmPresent = true,
   event = null,
   missed = []
 }: RelayOptions = {}) {
@@ -198,7 +200,10 @@ function relayHarness({
         : null,
     projection: projection().projection,
     broadcastChatMessage: (roomId, message) => calls.chat.push([roomId, idOf(message)]),
-    notifyUser: (userId, event) => calls.events.push([userId, event.type]),
+    broadcastDirectMessage: async ({ senderId, recipientId }) => {
+      if (dmPresent) calls.events.push([senderId, 'dm-message'], [recipientId, 'dm-message']);
+      return dmPresent;
+    },
     findUser: async (userId) => {
       if (findUserFails) throw new Error('users');
       return storedUser({ id: userId });
@@ -257,6 +262,17 @@ test('relayed room and DM messages reach sockets and raise the DM notification',
     message: storedDirectMessage('m', { senderId: 'u1', recipientId: 'u2' })
   });
   assert.deepEqual(noSender.calls.dm, []);
+});
+
+test('an outbox event already loaded for a deleted DM does not notify its recipients', async () => {
+  const { calls, relay } = relayHarness({ dmPresent: false });
+  await relay.dispatch({
+    type: 'message.created',
+    conversation: { type: 'dm', id: 'u2' },
+    message: storedDirectMessage('m', { senderId: 'u1', recipientId: 'u2' })
+  });
+  assert.deepEqual(calls.events, []);
+  assert.deepEqual(calls.dm, []);
 });
 
 test('a stored message that does not fit its contract is logged, not delivered', async () => {
@@ -494,7 +510,7 @@ test('a relayed room invitation DM gets Web Push only, as a directly sent one do
     outbox: () => null,
     projection: projection().projection,
     broadcastChatMessage: () => {},
-    notifyUser: () => {},
+    broadcastDirectMessage: async () => true,
     findUser: async (userId) => storedUser({ id: userId }),
     broadcastDmNotification: (recipientId, sender, message) =>
       dispatch.broadcastDmNotification(recipientId, sender, message),
@@ -535,7 +551,10 @@ test('link previews are scheduled only when a link may be affected and arrive as
     projection: projection().projection,
     publicChatMessage: (message) => roomMessage(idOf(message) ?? ''),
     broadcastRoomEdit: (roomId, message) => calls.edits.push([roomId, idOf(message)]),
-    notifyUser: (userId, event) => calls.events.push([userId, event.type])
+    broadcastDirectEdit: async (message) => {
+      calls.events.push([message.recipientId, message.senderId, message.id]);
+      return true;
+    }
   });
   events.scheduleRoomLinkPreview('r1', 'm1', 'no link here');
   events.scheduleRoomLinkPreview('r1', 'm2', 'see https://example.com');
@@ -555,10 +574,7 @@ test('link previews are scheduled only when a link may be affected and arrive as
   await events.broadcastDirectLinkPreview({ messageId: 'gone', senderId: 'a', recipientId: 'b' });
   await events.broadcastDirectLinkPreview({ messageId: 'd2', senderId: 'a', recipientId: 'b' });
   assert.deepEqual(calls.edits, [['r1', 'm2']]);
-  assert.deepEqual(calls.events, [
-    ['b', 'dm.message.edited'],
-    ['a', 'dm.message.edited']
-  ]);
+  assert.deepEqual(calls.events, [['b', 'a', 'd2']]);
 
   const disabled = createLinkPreviewEvents(fake<LinkPreviewEventsDeps>({ previews: () => null }));
   disabled.scheduleRoomLinkPreview('r1', 'm', 'https://example.com');

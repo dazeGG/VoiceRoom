@@ -157,12 +157,13 @@ test('a draft moves through upload, processing, failure and deletion', { skip },
   assert.equal((await repository.listOwnerDrafts(ownerId, 'dm', { limit: 999 })).length, 1);
   assert.equal((await repository.findByClientRequest(ownerId, 'room', 'request-1'))?.id, draft.id);
 
-  const uploaded = await repository.markUploaded(draft.id, UPLOAD);
+  const uploaded = await repository.markUploaded(draft.id, { ...UPLOAD, originalName: 'sample.jpg' });
   assert.deepEqual(
     [uploaded?.state, uploaded?.originalBytes, uploaded?.storageKeys.original, uploaded?.reservedBytes],
     ['processing', 20, 'original', null]
   );
   assert.equal(await repository.markUploaded(draft.id, UPLOAD), null, 'only an uploading draft takes an upload');
+  assert.deepEqual(uploaded?.metadata, { source: 'test', originalName: 'sample.jpg' });
   assert.equal(await repository.retryProcessing(draft.id), null, 'only a failed attachment is retried');
 
   const failed = await repository.markFailed(draft.id, ' processing_failed ');

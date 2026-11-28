@@ -156,6 +156,16 @@ async function decide(action: 'remove_message' | 'dismiss'): Promise<void> {
           >
             {{ current.latest.target.text || '(без текста)' }}
           </p>
+          <ul
+            v-if="current.latest.target.attachments?.length"
+            class="admin-report-detail__attachments"
+            aria-label="Вложения"
+          >
+            <li v-for="attachment in current.latest.target.attachments" :key="attachment.id">
+              {{ attachment.name || 'Без имени' }}
+              <span class="admin-metric-mono">{{ attachment.mimeType }}</span>
+            </li>
+          </ul>
         </div>
       </div>
 

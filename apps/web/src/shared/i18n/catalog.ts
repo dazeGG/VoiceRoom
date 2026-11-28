@@ -1,5 +1,18 @@
 /** Static app-owned whole-phrase catalogs. User data is only interpolated, never translated. */
 export const english = {
+  'Заблокировать пользователя?': 'Block this user?',
+  'Он не сможет писать, звонить и звать вас в комнаты. Если вы друзья, дружба будет разорвана.':
+    'They will no longer be able to message you, call you, or invite you to rooms. If you are friends, they will be removed from your friends list.',
+  'Заблокировать и удалить': 'Block and delete',
+  'Удалить переписку': 'Delete conversation',
+  'Удалить переписку?': 'Delete this conversation?',
+  'Сообщения и файлы исчезнут у вас и у @{login}. Отменить это нельзя.':
+    'Messages and files will be deleted for you and @{login}. This cannot be undone.',
+  'Все сообщения и файлы исчезнут у вас и у @{login}. Отменить это нельзя.':
+    'All messages and files will be deleted for you and @{login}. This cannot be undone.',
+  'Разблокировать можно в «Настройки → Конфиденциальность».': 'You can unblock this person in Settings → Privacy.',
+  'Не удалось удалить переписку': 'Could not delete the conversation',
+  'Завершите звонок перед удалением переписки': 'End the call before deleting the conversation',
   Позвонить: 'Call',
   Конфиденциальность: 'Privacy',
   'Кто может мне писать': 'Who can message me',
@@ -1879,6 +1892,20 @@ export const english = {
 export type MessageKey = keyof typeof english;
 
 export const french: Record<MessageKey, string> = {
+  'Заблокировать пользователя?': 'Bloquer cette personne ?',
+  'Он не сможет писать, звонить и звать вас в комнаты. Если вы друзья, дружба будет разорвана.':
+    'Cette personne ne pourra plus vous écrire, vous appeler ni vous inviter dans des salons. Si elle figure dans votre liste d’amis, elle en sera retirée.',
+  'Заблокировать и удалить': 'Bloquer et supprimer',
+  'Удалить переписку': 'Supprimer la conversation',
+  'Удалить переписку?': 'Supprimer cette conversation ?',
+  'Сообщения и файлы исчезнут у вас и у @{login}. Отменить это нельзя.':
+    'Les messages et fichiers seront supprimés pour vous et @{login}. Cette action est irréversible.',
+  'Все сообщения и файлы исчезнут у вас и у @{login}. Отменить это нельзя.':
+    'Tous les messages et fichiers seront supprimés pour vous et @{login}. Cette action est irréversible.',
+  'Разблокировать можно в «Настройки → Конфиденциальность».':
+    'Vous pouvez débloquer cette personne dans Paramètres → Confidentialité.',
+  'Не удалось удалить переписку': 'Impossible de supprimer la conversation',
+  'Завершите звонок перед удалением переписки': 'Terminez l’appel avant de supprimer la conversation',
   Позвонить: 'Appeler',
   Конфиденциальность: 'Confidentialité',
   'Кто может мне писать': 'Qui peut m’écrire',

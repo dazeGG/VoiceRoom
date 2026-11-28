@@ -86,6 +86,7 @@ const ROOM_OF: { [Type in ServerEventType]: ((payload: ServerEvents[Type]) => st
   'dm.message': null,
   'dm.message.edited': null,
   'dm.message.deleted': null,
+  'dm.conversation.deleted': null,
   'dm.read': null,
   'dm.typing': null,
   'notification.dm.message': null,

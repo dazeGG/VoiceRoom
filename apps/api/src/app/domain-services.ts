@@ -20,6 +20,7 @@ import type { AdmissionService } from '../domains/admission/admission.service.ts
 import { createAvatarsService } from '../domains/media/avatars.service.ts';
 import { createContentRepository } from '../domains/messaging/content.repository.ts';
 import { createDirectMessagesService } from '../domains/messaging/direct-messages.service.ts';
+import { createDmConversationDeleteService } from '../domains/messaging/dm-conversation-delete.service.ts';
 import { createReplyRepository } from '../domains/messaging/reply.repository.ts';
 import { createRoomChatService } from '../domains/messaging/room-chat.service.ts';
 import { createNotificationSettingsService } from '../domains/notifications/notification-settings.service.ts';
@@ -37,6 +38,7 @@ import { authorizeMessage, authorizeMessageEdit } from '../domains/social/contac
 import { recordPairMessage } from '../domains/social/dm-pair-state.repository.ts';
 import { createPrivacyService } from '../domains/social/privacy.service.ts';
 import { kyselyOn } from '../platform/db/kysely.ts';
+import { transaction } from '../platform/db/pool.ts';
 import { createRingService } from '../domains/rings/ring.service.ts';
 import type { readApiConfig } from './config.ts';
 import type { LiveKit } from './livekit.ts';
@@ -176,15 +178,36 @@ export function createDomainServices(deps: DomainServiceDeps) {
     },
     notifyUser: (userId, event) => hub.broadcastToUser(userId, event),
     answerInvitation: (input) => services.getMessageService().direct.respondInvite(input),
-    queueWebPush: (userId, payload, context) => hub.notifications.queuePush(userId, payload, context),
+    prepareWebPush: (userId, payload, context) => hub.notifications.preparedPush(userId, payload, context),
+    whileMessageLive: hub.fenceDirectMessage,
     nativePush: (userId, payload, context) => services.getNativePushService().sendToUser(userId, payload, context),
     preferences: (userId) => services.getNotificationPreferences().getPreferences(userId),
     ttlMs: config.RING_TTL_MS,
     windowMs: config.RING_RATE_WINDOW_MS,
     maxCount: config.RING_RATE_LIMIT
   });
+  const conversationPool = () => {
+    const pool = services.getPool();
+    if (!pool) throw databaseUnavailable();
+    return pool;
+  };
+  const conversationDeletion = createDmConversationDeleteService({
+    pool: conversationPool,
+    notifyUser: (userId, event) => hub.broadcastToUser(userId, event),
+    refreshCallMisses: (userId, peerId) => deps.refreshCallMisses?.(userId, peerId)
+  });
   const friendsService = createFriendsService({
     friends: services.getFriendStore,
+    blockAndDelete: async (input) => {
+      const { userId, targetId } = input;
+      const { result, deleted } = await transaction(conversationPool(), async (client) => {
+        const result = await services.getFriendStore().blockUser(input, client);
+        const deleted = 'unfriended' in result && (await conversationDeletion.removeLocked(client, userId, targetId));
+        return { result, deleted };
+      });
+      if (deleted) conversationDeletion.publish(userId, targetId);
+      return result;
+    },
     contactStatus: services.contact.status,
     callRefusal: services.callRefusal,
     invalidateTyping: hub.invalidateTyping,
@@ -216,6 +239,7 @@ export function createDomainServices(deps: DomainServiceDeps) {
     projectMedia: hub.projection.projectMedia,
     projectReply: hub.projection.projectReply,
     directEmit: config.MESSAGE_DIRECT_EMIT_ENABLED,
+    broadcastDirectMessage: hub.broadcastDirectMessage,
     notifyUser: (userId, event) => hub.broadcastToUser(userId, event),
     ...(deps.refreshCallMisses ? { callMessageDeleted: deps.refreshCallMisses } : {}),
     notifyRecipient: (recipientId, sender, message) =>
@@ -383,6 +407,7 @@ export function createDomainServices(deps: DomainServiceDeps) {
     privacy,
     rings,
     directMessages,
+    deleteConversation: conversationDeletion.remove,
     notificationSettings,
     deviceTokens,
     avatars: avatarsService,

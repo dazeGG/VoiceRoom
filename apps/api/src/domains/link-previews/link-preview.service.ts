@@ -133,7 +133,7 @@ function createLinkPreviewService({
   async function previewDirectMessage({ messageId, senderId, recipientId, text }: DirectTarget): Promise<void> {
     const url = firstPreviewableUrl(text);
     const preview = url ? await resolvePreview(url) : null;
-    if (await repository.setDirectMessagePreview({ messageId, senderId, text, preview })) {
+    if (await repository.setDirectMessagePreview({ messageId, senderId, recipientId, text, preview })) {
       await onDirectPreview({ messageId, senderId, recipientId });
     }
   }

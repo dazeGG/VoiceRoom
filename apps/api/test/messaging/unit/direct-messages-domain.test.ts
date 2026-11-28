@@ -259,6 +259,10 @@ function harness(options: HarnessOptions = {}) {
     projectMedia: async (context, message) => ({ ...message, attachments: [] }),
     projectReply: async (context, message) => (message.replyTo ? { ...message, replyPreview: QUOTE } : message),
     directEmit: options.directEmit ?? true,
+    broadcastDirectMessage: async ({ senderId, recipientId }, type = 'dm-message') => {
+      calls.events.push([recipientId, type], [senderId, type]);
+      return true;
+    },
     notifyUser: (userId, event) => calls.events.push([userId, event.type]),
     notifyRecipient: async (recipientId) => {
       calls.recipients.push(recipientId);
@@ -427,9 +431,10 @@ test('answering a room invitation', async () => {
   const answered = await service.respondInvite(ME, PEER, 'inv', 'accepted');
   assert.ok('message' in answered);
   assert.equal(answered.message.invite?.status, 'accepted');
+  // The answered invitation goes out through the fenced fan-out: recipient, then sender.
   assert.deepEqual(calls.events, [
-    [PEER, 'dm.message.edited'],
-    ['user-1', 'dm.message.edited']
+    ['user-1', 'dm.message.edited'],
+    [PEER, 'dm.message.edited']
   ]);
 });
 
@@ -537,7 +542,8 @@ function routeApp(
       resolveSession: async () => (signedIn ? { user: ME } : null),
       hashIp: (ip: string) => ip
     },
-    service
+    service,
+    async () => {}
   );
   t.after(() => app.close());
   return { app, seen };
@@ -723,7 +729,8 @@ test('a failing DM read store answers 500 without its text; a bad cursor still a
       resolveSession: async () => ({ user: ME }),
       hashIp: (ip: string) => ip
     },
-    service
+    service,
+    async () => {}
   );
   t.after(() => app.close());
 

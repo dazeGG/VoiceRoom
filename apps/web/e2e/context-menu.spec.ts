@@ -119,6 +119,7 @@ test('friend rows open an actions menu with a context click or keyboard and open
     await friendRow.click({ button: 'right' });
     await expect(menu.getByRole('menuitem').first()).toBeFocused();
     await expect(menu.getByRole('menuitem', { name: 'Отметить прочитанным' })).toBeVisible();
+    await expect(menu.getByRole('menuitem', { name: 'Удалить переписку' })).toBeVisible();
     await expect(menu.getByRole('menuitem', { name: 'Удалить из друзей' })).toBeVisible();
     await expect(menu.getByRole('menuitem', { name: 'Выключить уведомления' })).toBeVisible();
     await expect(menu.getByRole('menuitem', { name: 'Заблокировать' })).toBeVisible();
@@ -141,8 +142,12 @@ test('friend rows open an actions menu with a context click or keyboard and open
     await friendRow.click({ button: 'right' });
     await expect(menu.getByRole('menuitem', { name: 'Включить уведомления' })).toBeVisible();
     await menu.getByRole('menuitem', { name: 'Заблокировать' }).click();
-    const confirm = page.getByRole('dialog', { name: `Заблокировать ${secondLogin}?` });
+    const confirm = page.getByRole('alertdialog', { name: 'Заблокировать пользователя?' });
     await expect(confirm.getByRole('button', { name: 'Отмена' })).toBeFocused();
+    const deleteOnBlock = confirm.getByRole('checkbox', { name: 'Удалить переписку' });
+    await expect(deleteOnBlock).not.toBeChecked();
+    await deleteOnBlock.check();
+    await expect(confirm.getByRole('button', { name: 'Заблокировать и удалить' })).toBeVisible();
     await confirm.getByRole('button', { name: 'Отмена' }).click();
     await expect(confirm).toBeHidden();
     await friendRow.click();
@@ -218,6 +223,7 @@ test('a stranger can open a chat and see privacy changes in search and the conve
     await row.click({ button: 'right' });
     const menu = page.getByRole('menu', { name: `Действия для ${bob}` });
     await expect(menu.getByRole('menuitem', { name: 'Добавить в друзья' })).toBeVisible();
+    await expect(menu.getByRole('menuitem', { name: 'Удалить переписку' })).toBeVisible();
     await expect(menu.getByRole('menuitem', { name: 'Позвонить' })).toHaveCount(0);
     await page.keyboard.press('Escape');
 
@@ -248,6 +254,27 @@ test('a stranger can open a chat and see privacy changes in search and the conve
     const refused = await search();
     await expect(refused).toBeDisabled();
     await expect(refused.getByText(reason)).toBeVisible();
+    await page.keyboard.press('Escape');
+
+    const peerRow = chatRow(secondPage, alice);
+    // The compact layout starts with the chats sidebar collapsed; the chat row
+    // is clicked in the desktop layout.
+    await secondPage.setViewportSize({ width: 1280, height: 720 });
+    await secondPage.reload();
+    await peerRow.click();
+    await expect(secondPage.getByText('Hello', { exact: true }).last()).toBeVisible();
+    await page.getByRole('button', { name: 'Ещё', exact: true }).click();
+    await menu.getByRole('menuitem', { name: 'Удалить переписку' }).click();
+    const deletion = page.getByRole('alertdialog', { name: 'Удалить переписку?' });
+    await expect(deletion).toContainText(`Все сообщения и файлы исчезнут у вас и у @${bob}.`);
+    const erased = page.waitForResponse(
+      (response) => response.request().method() === 'DELETE' && response.url().endsWith(`/api/dm/${peer.id}`)
+    );
+    await deletion.getByRole('button', { name: 'Удалить', exact: true }).click();
+    expect((await erased).status()).toBe(204);
+    await expect(row).toHaveCount(0);
+    await expect(peerRow).toHaveCount(0);
+    await expect(secondPage.getByText('Hello', { exact: true })).toHaveCount(0);
   } finally {
     await second.close();
   }
