@@ -230,7 +230,14 @@ export function createDirectMessagesService(deps: DirectMessagesDeps) {
       bindAttachments: media
         ? (client, inserted) =>
             media.attachments.bindReady(
-              { ownerId: sender.id, context: 'dm', messageId: inserted.id, attachmentIds },
+              {
+                ownerId: sender.id,
+                context: 'dm',
+                messageId: inserted.id,
+                attachmentIds,
+                // The diagnostics file goes to VoiceRoom and nowhere else.
+                allowFiles: recipientId === deps.officialAccountId
+              },
               client
             )
         : null,

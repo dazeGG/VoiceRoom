@@ -1,15 +1,22 @@
 import type pg from 'pg';
 import sharp from 'sharp';
-import type { AttachmentDraft } from '@voiceroom/shared/contracts/media';
+import { isDiagnosticsReport } from '@voiceroom/shared/contracts/diagnostics';
+import {
+  DIAGNOSTICS_FILE_NAME_PATTERN,
+  DIAGNOSTICS_MAX_BYTES,
+  DIAGNOSTICS_MIME_TYPE,
+  type AttachmentDraft
+} from '@voiceroom/shared/contracts/media';
 import { epochMillis } from '../../platform/epoch-millis.ts';
 import { codeOf } from '../../platform/error-code.ts';
+import { kyselyOn, withTransaction } from '../../platform/db/kysely.ts';
 import { DomainError } from '../../platform/http/domain-error.ts';
 import type { Attachment, AttachmentRepository } from './attachment.repository.ts';
 import type { MediaJobRepository } from './media-job.repository.ts';
 import type { MediaPressureService } from './media-pressure.service.ts';
 import type { MediaQuotaService } from './media-quota.service.ts';
 import { chunkBuffer, type ByteChunks, type MediaStorage } from './storage.ts';
-import { ownsAttachment } from './attachment.policy.ts';
+import { attachmentFileName, isDiagnosticsAttachment, ownsAttachment } from './attachment.policy.ts';
 
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 const MAX_INPUT_PIXELS = 40 * 1024 * 1024;
@@ -26,6 +33,10 @@ type UploadStream = ByteChunks & { resume?: () => unknown };
 
 export type PublicAttachment = Readonly<AttachmentDraft>;
 
+const fileTooLarge = () => new DomainError('media_too_large', 413, 'The diagnostics file exceeds 512 KiB');
+const invalidDiagnostics = (message: string) => new DomainError('media_diagnostics_invalid', 400, message);
+const strictUtf8 = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
+
 function publicAttachment(attachment: Attachment | null | undefined): PublicAttachment | null {
   if (!attachment) return null;
   return Object.freeze({
@@ -38,17 +49,23 @@ function publicAttachment(attachment: Attachment | null | undefined): PublicAtta
     height: attachment.height,
     failureCode: attachment.failureCode,
     createdAt: epochMillis(attachment.createdAt),
-    updatedAt: epochMillis(attachment.updatedAt)
+    updatedAt: epochMillis(attachment.updatedAt),
+    kind: isDiagnosticsAttachment(attachment) ? 'diagnostics' : 'image',
+    name: attachmentFileName(attachment)
   });
 }
 
-async function readBounded(stream: ByteChunks, maxBytes: number): Promise<Buffer> {
+async function readBounded(
+  stream: ByteChunks,
+  maxBytes: number,
+  tooLarge = () => new DomainError('media_too_large', 413, 'Image exceeds 10 MiB')
+): Promise<Buffer> {
   const chunks: Buffer[] = [];
   let bytes = 0;
   for await (const chunk of stream) {
     const value = chunkBuffer(chunk);
     bytes += value.length;
-    if (bytes > maxBytes) throw new DomainError('media_too_large', 413, 'Image exceeds 10 MiB');
+    if (bytes > maxBytes) throw tooLarge();
     chunks.push(value);
   }
   return Buffer.concat(chunks, bytes);
@@ -95,6 +112,7 @@ function createMediaService({
     | 'findById'
     | 'markUploaded'
     | 'markFailed'
+    | 'markFileReady'
     | 'markDeleted'
     | 'retryProcessing'
     | 'withAttachmentLock'
@@ -128,13 +146,14 @@ function createMediaService({
     context,
     clientRequestId,
     bytes,
-    metadata = {}
+    kind
   }: {
     ownerId: string;
     context?: unknown;
     clientRequestId?: unknown;
     bytes?: unknown;
-    metadata?: unknown;
+    /** `diagnostics` for the diagnostics file; otherwise absent or `image`. */
+    kind?: unknown;
   }): Promise<PublicAttachment | null> {
     await pressureService.assertAcceptingUploads();
     if (context !== 'room' && context !== 'dm')
@@ -142,13 +161,19 @@ function createMediaService({
     if (typeof clientRequestId !== 'string' || !clientRequestId.trim()) {
       throw new DomainError('media_request_id_required', 400, 'Client request id is required');
     }
+    if (kind !== undefined && kind !== 'image' && kind !== 'diagnostics')
+      throw new DomainError('media_type_unsupported', 415, 'Only images and the diagnostics file are supported');
+    const diagnostics = kind === 'diagnostics';
+    // The diagnostics file goes only into a direct message (to VoiceRoom).
+    if (diagnostics && context !== 'dm') throw invalidDiagnostics('The diagnostics file belongs in a direct message');
+    if (diagnostics && Number(bytes) > DIAGNOSTICS_MAX_BYTES) throw fileTooLarge();
     if (Number(bytes) > maxUploadBytes) throw new DomainError('media_too_large', 413, 'Image exceeds 10 MiB');
     const attachment = await quotas.reserve({
       ownerId,
       context,
       clientRequestId: clientRequestId.trim(),
       bytes,
-      metadata
+      metadata: diagnostics ? { kind: 'diagnostics' } : {}
     });
     return publicAttachment(attachment);
   }
@@ -187,6 +212,58 @@ function createMediaService({
     return { height, mimeType, width };
   }
 
+  // Only the versioned UTF-8 report is accepted, before making the file ready.
+  async function acceptFile(
+    attachment: Attachment,
+    body: UploadStream,
+    mimeType: string | undefined,
+    originalName: string | undefined,
+    client: pg.PoolClient
+  ): Promise<PublicAttachment | null> {
+    const { id } = attachment;
+    try {
+      const saved = await files.save(id, 'original', body, { maxBytes: DIAGNOSTICS_MAX_BYTES });
+      if (saved.bytes === 0) throw invalidDiagnostics('The diagnostics file is empty');
+      if (attachment.reservedBytes && saved.bytes > attachment.reservedBytes) {
+        throw new DomainError('media_size_mismatch', 413, 'The file exceeds its reserved size');
+      }
+      const claimed = (mimeType ?? '').split(';')[0]?.trim().toLowerCase();
+      if (claimed !== DIAGNOSTICS_MIME_TYPE) throw invalidDiagnostics('The diagnostics file must be plain text');
+      const name = originalName?.split(/[\\/]/).at(-1)?.trim() ?? '';
+      if (!DIAGNOSTICS_FILE_NAME_PATTERN.test(name)) throw invalidDiagnostics('Unexpected diagnostics file name');
+      const opened = await files.openRead(id, 'original');
+      const content = await readBounded(opened.stream, DIAGNOSTICS_MAX_BYTES, fileTooLarge);
+      let report: string;
+      try {
+        report = strictUtf8.decode(content);
+      } catch (cause) {
+        throw new DomainError('media_diagnostics_invalid', 400, 'The diagnostics file is not UTF-8 text', { cause });
+      }
+      if (!isDiagnosticsReport(report))
+        throw invalidDiagnostics('The file does not match the VoiceRoom diagnostics format');
+
+      // The advisory lock holds a dedicated connection outside a transaction.
+      const ready = await withTransaction(kyselyOn(client), async (tx) => {
+        const accepted = await attachments.markFileReady(
+          id,
+          { bytes: saved.bytes, originalStorageKey: saved.key, originalName: name },
+          tx
+        );
+        if (!accepted) throw new DomainError('media_state_conflict', 409, 'Attachment upload was superseded');
+        return accepted;
+      });
+      return publicAttachment(ready);
+    } catch (error) {
+      const code = codeOf(error);
+      await files.removeAttachment(id).catch(() => {});
+      await attachments
+        .markFailed(id, code === 'MEDIA_TOO_LARGE' ? 'media_too_large' : code || 'media_diagnostics_invalid', client)
+        .catch(() => {});
+      if (code === 'MEDIA_TOO_LARGE') throw fileTooLarge();
+      throw error;
+    }
+  }
+
   async function upload({
     id,
     ownerId,
@@ -213,6 +290,7 @@ function createMediaService({
         body.resume?.();
         throw new DomainError('media_state_conflict', 409, 'Attachment cannot be uploaded in its current state');
       }
+      if (isDiagnosticsAttachment(attachment)) return acceptFile(attachment, body, mimeType, originalName, client);
       try {
         const saved = await files.save(id, 'original', body, { maxBytes: maxUploadBytes });
         if (attachment.reservedBytes && saved.bytes > attachment.reservedBytes) {

@@ -3,6 +3,8 @@
 
 import type { AttachmentContext, AttachmentState } from '@voiceroom/shared/contracts/media';
 import type { Attachment, ReplyPreview } from '@voiceroom/shared/contracts/messages';
+import { isRecord } from '@voiceroom/shared/guards';
+import { attachmentFileName } from '../media/attachment.policy.ts';
 
 type Context = 'room' | 'dm';
 
@@ -34,9 +36,22 @@ export interface MessageProjectionDeps {
   } | null;
 }
 
+/** Where a ready attachment opens: an image's preview, or the diagnostics file's download. */
+export function attachmentUrl(attachment: Pick<StoredAttachment, 'id' | 'state'>, file: boolean): string | null {
+  if (attachment.state !== 'ready') return null;
+  return `/api/media/attachments/${encodeURIComponent(attachment.id)}/${file ? 'file' : 'preview'}`;
+}
+
+/** The diagnostics file's name when the attachment is one, else null. */
+export function storedFileName(attachment: StoredAttachment): string | null {
+  return isRecord(attachment.metadata) ? attachmentFileName({ metadata: attachment.metadata }) : null;
+}
+
 // Never the owner or storage keys: an attachment is visible to everyone who
-// can read the message.
+// can read the message. A diagnostics file also carries its name, so the
+// client can show the file row.
 export function publicAttachment(attachment: StoredAttachment): Attachment {
+  const name = storedFileName(attachment);
   return {
     id: attachment.id,
     context: attachment.context,
@@ -46,7 +61,9 @@ export function publicAttachment(attachment: StoredAttachment): Attachment {
     width: attachment.width ?? null,
     height: attachment.height ?? null,
     state: attachment.state,
-    url: attachment.state === 'ready' ? `/api/media/attachments/${encodeURIComponent(attachment.id)}/preview` : null
+    url: attachmentUrl(attachment, name !== null),
+    kind: name === null ? 'image' : 'diagnostics',
+    name
   };
 }
 

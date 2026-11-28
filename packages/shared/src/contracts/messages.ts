@@ -4,7 +4,7 @@
 import { Type, type Static } from 'typebox';
 import { Value } from 'typebox/value';
 import { Failure, Nullable, Ok } from './http.ts';
-import { AttachmentContext, AttachmentState } from './media.ts';
+import { AttachmentContext, AttachmentKind, AttachmentState } from './media.ts';
 import { ContactDecision } from './privacy.ts';
 import { DirectMessageCall } from './rings.ts';
 import { AccountBadge, PublicUser } from './users.ts';
@@ -26,7 +26,10 @@ export type MessageContent = Static<typeof MessageContent>;
 /** The most images one message carries. */
 export const MAX_ATTACHMENTS = 4;
 
-/** An image on a message: public fields only; `url` is set once it is ready. */
+/**
+ * A file on a message: public fields only. `url` is set once it is ready: an
+ * image's preview, or the diagnostics file's download.
+ */
 export const Attachment = Type.Object({
   id: Type.String(),
   context: AttachmentContext,
@@ -36,7 +39,11 @@ export const Attachment = Type.Object({
   width: Nullable(Type.Number()),
   height: Nullable(Type.Number()),
   state: AttachmentState,
-  url: Nullable(Type.String())
+  url: Nullable(Type.String()),
+  /** Absent from servers before 1.6.0, where every attachment is an image. */
+  kind: Type.Optional(AttachmentKind),
+  /** The diagnostics file's name; null for an image. */
+  name: Type.Optional(Nullable(Type.String()))
 });
 export type Attachment = Static<typeof Attachment>;
 

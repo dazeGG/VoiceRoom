@@ -5,6 +5,7 @@
 
 import { Type, type Static } from 'typebox';
 import { Nullable, Ok } from './http.ts';
+import { AttachmentKind } from './media.ts';
 
 export const SUPPORT_STATUSES = ['open', 'resolved'] as const;
 export type SupportStatus = (typeof SUPPORT_STATUSES)[number];
@@ -78,12 +79,19 @@ export type SupportThreadList = Static<typeof SupportThreadList>;
 export const SupportUnread = Ok({ openUnread: Type.Number() });
 export type SupportUnread = Static<typeof SupportUnread>;
 
-/** An image in the conversation; `url` opens it through the support route, null while it is not ready. */
+/**
+ * An image or the person's diagnostics file; `url` opens the image or downloads
+ * the file through the support route, null while it is not ready.
+ */
 export const SupportAttachment = Type.Object({
   id: Type.String(),
+  kind: Type.Optional(AttachmentKind),
   mimeType: Nullable(Type.String()),
   width: Nullable(Type.Number()),
   height: Nullable(Type.Number()),
+  /** The diagnostics file's name and size; null for an image. */
+  name: Type.Optional(Nullable(Type.String())),
+  bytes: Type.Optional(Nullable(Type.Number())),
   url: Nullable(Type.String())
 });
 export type SupportAttachment = Static<typeof SupportAttachment>;

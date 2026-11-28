@@ -16,7 +16,7 @@ import { isUuid } from '@voiceroom/shared/validation';
 import type { ApiContext } from '../../app/context.ts';
 import { failure, optionalJsonBody } from '../../platform/http/http-kit.ts';
 import type { MediaService, PublicAttachment } from './media.service.ts';
-import type { OpenedMedia } from './media-visibility.service.ts';
+import { openedMediaHeaders, type OpenedMedia } from './media-visibility.service.ts';
 
 export interface MediaRoutesDeps {
   media: MediaService;
@@ -78,8 +78,12 @@ export function registerMediaRoutes(root: FastifyInstance, ctx: ApiContext, deps
     async (request, reply) => {
       const ownerId = await signedIn(request, reply);
       if (!ownerId) return reply;
-      const { context, clientRequestId, bytes } = request.body;
-      return answer(reply, () => media.createSlot({ ownerId, context, clientRequestId, bytes }), 201);
+      const { context, clientRequestId, bytes, kind } = request.body;
+      return answer(
+        reply,
+        () => media.createSlot({ ownerId, context, clientRequestId, bytes, ...(kind !== undefined && { kind }) }),
+        201
+      );
     }
   );
 
@@ -144,7 +148,8 @@ export function registerMediaRoutes(root: FastifyInstance, ctx: ApiContext, deps
 
   const { visibility } = deps;
   if (!visibility) return;
-  // The image itself is binary, so the route has no response schema.
+  // The image or file itself is binary, so the route has no response schema.
+  // `file` is the diagnostics file, always sent as a download.
   app.get(
     '/api/media/attachments/:id/:variant',
     {
@@ -160,7 +165,6 @@ export function registerMediaRoutes(root: FastifyInstance, ctx: ApiContext, deps
       const id = attachmentId(request.params.id, reply);
       if (!id) return reply;
       const opened = await visibility.open({ attachmentId: id, variant: request.params.variant, viewerId });
-      const disposition = request.query.download === '1' ? 'attachment' : 'inline';
       // A variant never changes once made. The browser keeps it but asks each
       // time, so a viewer who lost access or a deleted image still gets the 404
       // above, and an unchanged image costs a round trip instead of a download.
@@ -170,11 +174,7 @@ export function registerMediaRoutes(root: FastifyInstance, ctx: ApiContext, deps
         opened.stream.destroy();
         return reply.code(304).send();
       }
-      return reply
-        .header('Content-Disposition', `${disposition}; filename="image.${opened.extension}"`)
-        .header('Content-Length', String(opened.bytes))
-        .type(opened.mimeType)
-        .send(opened.stream);
+      return reply.headers(openedMediaHeaders(opened, request.query.download === '1')).send(opened.stream);
     }
   );
 }

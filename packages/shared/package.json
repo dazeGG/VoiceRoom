@@ -46,6 +46,7 @@
     "./contracts/messages": "./src/contracts/messages.ts",
     "./contracts/notifications": "./src/contracts/notifications.ts",
     "./contracts/media": "./src/contracts/media.ts",
+    "./contracts/diagnostics": "./src/contracts/diagnostics.ts",
     "./contracts/ops": "./src/contracts/ops.ts",
     "./contracts/admission": "./src/contracts/admission.ts",
     "./contracts/errors": "./src/contracts/errors.ts",
