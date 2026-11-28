@@ -40,3 +40,20 @@ test('a disabled row does not activate and a static row can show a caption and t
   expect(screen.getByText('В сети')).toBeTruthy();
   expect(screen.getByText('12:00')).toBeTruthy();
 });
+
+test('a selected row is the current one of its list and still activates', async () => {
+  const activate = vi.fn();
+  const view = render(ListItem, {
+    props: { text: 'Кира', caption: 'Помогите', interactive: true, selected: true, onActivate: activate },
+    slots: { meta: '<span>не прочитано</span>' }
+  });
+  const row = screen.getByRole('button', { name: 'Кира', description: 'Помогите не прочитано' });
+  expect(row.getAttribute('aria-current')).toBe('true');
+  await userEvent.click(row);
+  expect(activate).toHaveBeenCalledOnce();
+
+  await view.rerender({ selected: false });
+  expect(screen.getByRole('button', { name: 'Кира' }).hasAttribute('aria-current')).toBe(false);
+  await view.rerender({ interactive: false, selected: true });
+  expect(screen.getByText('Кира').closest('[aria-current="true"]')).toBeTruthy();
+});

@@ -23,6 +23,7 @@ function describe(hasCaption: boolean, hasMeta: boolean): string | undefined {
       :aria-describedby="
         interactive ? describe(Boolean(caption || $slots.caption), Boolean(time || $slots.meta)) : undefined
       "
+      :aria-current="selected ? 'true' : undefined"
       v-bind="$attrs"
       class="ui-list-item__body"
       :type="interactive ? 'button' : undefined"
