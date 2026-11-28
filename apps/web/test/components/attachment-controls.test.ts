@@ -46,6 +46,24 @@ test('photos still open and offer retry and removal as their state changes', asy
   expect(remove).toHaveBeenCalledWith(expect.objectContaining({ id: 'photo-ready' }));
 });
 
+test('each photo draft carries its upload state as a modifier, a failed upload as failed', () => {
+  const store = new AttachmentComposeStore('dm', 'photo-states');
+  store.drafts = [
+    draft('ready', { previewUrl: '/preview' }),
+    draft('processing', { state: 'processing' }),
+    draft('offline', { state: 'uploading', error: 'Offline' })
+  ];
+  const { container } = render(AttachmentComposer, { props: { store } });
+  const states = [...container.querySelectorAll('.attachment-composer__draft')].map((item) =>
+    [...item.classList].find((name) => name.startsWith('attachment-composer__draft--'))
+  );
+  expect(states).toEqual([
+    'attachment-composer__draft--ready',
+    'attachment-composer__draft--processing',
+    'attachment-composer__draft--failed'
+  ]);
+});
+
 test('a failed diagnostics draft can be removed without an image or a download', async () => {
   const store = new AttachmentComposeStore('dm', 'diagnostics-controls');
   store.drafts = [

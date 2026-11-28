@@ -43,7 +43,11 @@ function view(draft: Draft): void {
       <li
         v-for="(draft, index) in store.drafts"
         :key="draft.id"
-        :class="draft.kind === 'diagnostics' ? 'attachment-composer__file' : 'attachment-composer__draft'"
+        :class="
+          draft.kind === 'diagnostics'
+            ? 'attachment-composer__file'
+            : ['attachment-composer__draft', `attachment-composer__draft--${draft.error ? 'failed' : draft.state}`]
+        "
       >
         <template v-if="draft.kind === 'diagnostics'">
           <FileAttachment
