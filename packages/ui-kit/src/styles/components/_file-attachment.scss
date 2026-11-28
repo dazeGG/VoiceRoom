@@ -1,0 +1,47 @@
+.ui-file-attachment {
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+  min-inline-size: 0;
+  min-block-size: var(--size-56);
+  padding: var(--space-8) var(--space-8) var(--space-8) var(--space-12);
+  border: 1px solid var(--vr-line-strong);
+  border-radius: var(--radius-12);
+  background: var(--vr-surface-2);
+
+  &__icon {
+    display: grid;
+    flex: none;
+    place-items: center;
+    inline-size: var(--size-36);
+    block-size: var(--size-36);
+    border-radius: var(--radius-10);
+    background: var(--vr-surface-3);
+    color: var(--vr-text-2);
+
+    svg {
+      inline-size: var(--icon-18);
+      block-size: var(--icon-18);
+    }
+  }
+
+  &__text {
+    display: grid;
+    flex: 1;
+    gap: var(--space-2);
+    min-inline-size: 0;
+  }
+
+  &__name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 14px;
+    font-weight: 500;
+  }
+
+  &__caption {
+    color: var(--vr-text-muted);
+    font-size: 12px;
+  }
+}
