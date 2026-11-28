@@ -19,6 +19,7 @@ import {
 import { stubFetch } from '../fixtures/fetch.ts';
 import { FakeWebSocket, installFakeWebSocket } from '../fixtures/fake-websocket.ts';
 import { authUser } from '../fixtures/users.ts';
+import { OFFICIAL_ACCOUNT_ID } from '@voiceroom/shared/official-account';
 import { instanceOf, parse, defined } from '../helpers/assert.ts';
 
 const self = authUser({ id: 'me', login: 'me', displayName: 'Я' });
@@ -631,4 +632,34 @@ test('a hidden conversation reports nothing as read, and a shown one does again'
   arrive('m3');
   await vi.waitFor(() => expect(reads()).toBeGreaterThan(1));
   stop();
+});
+
+const voiceroom = authUser({ id: OFFICIAL_ACCOUNT_ID, login: 'voiceroom', displayName: 'VoiceRoom' });
+
+test('the official VoiceRoom chat opens without call, profile, friendship or block actions', async () => {
+  const lobby = await renderDm(voiceroom, [
+    message('m1', OFFICIAL_ACCOUNT_ID, 'Спасибо, чиним', { recipientId: 'me' }),
+    message('m2', 'me', 'Жду', { recipientId: OFFICIAL_ACCOUNT_ID })
+  ]);
+  lobby.thread.contact = {
+    peer: voiceroom,
+    isFriend: false,
+    canMessage: true,
+    messageReason: 'allowed',
+    canCall: false
+  };
+  expect(await screen.findByText('Спасибо, чиним')).toBeTruthy();
+  expect(screen.getByText('@voiceroom')).toBeTruthy();
+  expect(screen.queryByText('VoiceRoom не в ваших друзьях')).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Профиль' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Добавить в друзья' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Заблокировать' })).toBeNull();
+  expect(screen.queryByRole('button', { name: /Позвонить/ })).toBeNull();
+  expect(composer()).toBeTruthy();
+  const user = userEvent.setup();
+  await user.click(screen.getByRole('button', { name: 'Ещё' }));
+  const menu = await screen.findByRole('menu');
+  expect(within(menu).getByRole('menuitem', { name: 'Удалить переписку' })).toBeTruthy();
+  for (const name of ['Профиль', 'Добавить в друзья', 'Заблокировать', 'Позвонить'])
+    expect(within(menu).queryByRole('menuitem', { name })).toBeNull();
 });

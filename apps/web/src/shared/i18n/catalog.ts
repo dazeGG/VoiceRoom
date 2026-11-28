@@ -1,6 +1,10 @@
 /** Static app-owned whole-phrase catalogs. User data is only interpolated, never translated. */
 export const english = {
   'Заблокировать пользователя?': 'Block this user?',
+  'Это служебный аккаунт VoiceRoom': 'This is the VoiceRoom service account',
+  'Обращение не найдено': 'Support conversation not found',
+  'Человек удалил переписку': 'The person deleted the conversation',
+  'Человек написал снова, обновите переписку': 'The person wrote again, refresh the conversation',
   'Он не сможет писать, звонить и звать вас в комнаты. Если вы друзья, дружба будет разорвана.':
     'They will no longer be able to message you, call you, or invite you to rooms. If you are friends, they will be removed from your friends list.',
   'Заблокировать и удалить': 'Block and delete',
@@ -1893,6 +1897,10 @@ export type MessageKey = keyof typeof english;
 
 export const french: Record<MessageKey, string> = {
   'Заблокировать пользователя?': 'Bloquer cette personne ?',
+  'Это служебный аккаунт VoiceRoom': 'C’est le compte de service VoiceRoom',
+  'Обращение не найдено': 'Demande d’assistance introuvable',
+  'Человек удалил переписку': 'La personne a supprimé la conversation',
+  'Человек написал снова, обновите переписку': 'La personne a réécrit, actualisez la conversation',
   'Он не сможет писать, звонить и звать вас в комнаты. Если вы друзья, дружба будет разорвана.':
     'Cette personne ne pourra plus vous écrire, vous appeler ni vous inviter dans des salons. Si elle figure dans votre liste d’amis, elle en sera retirée.',
   'Заблокировать и удалить': 'Bloquer et supprimer',

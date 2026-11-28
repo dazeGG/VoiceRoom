@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { isOfficialAccount } from '@voiceroom/shared/official-account';
 import { badgeOf } from '@/shared/badges';
 import { t } from '@/shared/i18n';
 import { ChevronLeft, Ellipsis, User } from '@lucide/vue';
@@ -72,6 +73,8 @@ const canCall = computed(
   () => lobby.thread.contact?.canCall ?? Boolean(lobby.friends.find((entry) => entry.user.id === peerId.value))
 );
 const stranger = computed(() => lobby.thread.contact?.isFriend === false);
+// The official VoiceRoom account has no profile, friendship, block or calls.
+const official = computed(() => (headerPeer.value ? isOfficialAccount(headerPeer.value) : false));
 const menu = shallowRef<FriendMenuTarget | null>(null);
 const call = useCallEntry(
   () => headerPeer.value?.id,
@@ -146,7 +149,7 @@ const drop = new AttachmentDrop({
         <IconButton v-if="portrait" :label="t('Назад')" :size="44" @click="back">
           <ChevronLeft aria-hidden="true" />
         </IconButton>
-        <Pressable class="dm-view__head" :disabled="!peer" @click="lobby.toggleProfile">
+        <Pressable class="dm-view__head" :disabled="!peer || official" @click="lobby.toggleProfile">
           <Avatar
             :name="peerName"
             :src="headerPeer.avatarUrl"
@@ -172,17 +175,19 @@ const drop = new AttachmentDrop({
             >
               {{
                 status?.subtitle ??
-                (call.visible && call.peerInCall
-                  ? t('в звонке')
-                  : stranger && peer
-                    ? t('@{login} · не в друзьях', { login: peer.login })
-                    : presenceStatusLabel(presence).toLowerCase())
+                (official && peer
+                  ? '@' + peer.login
+                  : call.visible && call.peerInCall
+                    ? t('в звонке')
+                    : stranger && peer
+                      ? t('@{login} · не в друзьях', { login: peer.login })
+                      : presenceStatusLabel(presence).toLowerCase())
               }}
             </div>
           </div>
         </Pressable>
         <IconButton
-          v-if="call.visible && (canCall || call.mode !== 'start')"
+          v-if="!official && call.visible && (canCall || call.mode !== 'start')"
           :label="call.label"
           :tooltip-description="call.description"
           :variant="call.accent ? 'soft' : 'default'"
@@ -193,6 +198,7 @@ const drop = new AttachmentDrop({
           <CallEntryIcon :mode="call.mode" />
         </IconButton>
         <IconButton
+          v-if="!official"
           :label="t('Профиль')"
           :aria-pressed="lobby.thread.profileOpen"
           :size="portrait ? 44 : 40"
@@ -252,7 +258,7 @@ const drop = new AttachmentDrop({
     </div>
 
     <DmProfilePanel
-      v-if="chatVisible && lobby.thread.profileOpen && peer"
+      v-if="chatVisible && lobby.thread.profileOpen && peer && !official"
       :peer="peer"
       :presence="presence"
       :online="online"
