@@ -70,3 +70,7 @@ export const useRoomRuntimeStore = defineStore('room-runtime', () => ({ state })
 export function clientRoomName(roomId: string | null): string {
   return (state.roomId === roomId && state.roomName) || '';
 }
+
+export function isLocalSpeaking(): boolean {
+  return Boolean(state.self?.speaking);
+}
