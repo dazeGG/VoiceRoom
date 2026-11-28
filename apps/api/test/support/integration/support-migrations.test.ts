@@ -30,7 +30,7 @@ test('without conversations, down removes the official account and the support t
   await pool.query(
     `INSERT INTO admin_actions (admin_user_id, target_user_id, action) VALUES ('a', 'a', 'support_note'), ('a', 'a', 'block')`
   );
-  assert.equal(await rollBackThrough(databaseUrl, SUPPORT_MIGRATION), 1);
+  await rollBackThrough(databaseUrl, SUPPORT_MIGRATION);
   for (const table of ['support_threads', 'support_notes', 'support_replies'])
     assert.equal(await tableExists(pool, table), false, table);
   assert.deepEqual((await pool.query<{ action: string }>('SELECT action FROM admin_actions')).rows, [

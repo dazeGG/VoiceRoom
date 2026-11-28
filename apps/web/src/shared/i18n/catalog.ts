@@ -1,5 +1,28 @@
 /** Static app-owned whole-phrase catalogs. User data is only interpolated, never translated. */
 export const english = {
+  'Как вам VoiceRoom?': 'How is VoiceRoom working for you?',
+  'Расскажите, что улучшить или чего не хватает. Если что-то работает не так, тоже пишите.':
+    'Tell us what could be better, what is missing or what is not working.',
+  'Написать нам': 'Contact us',
+  'Официальный аккаунт': 'Official account',
+  'Здравствуйте, это команда VoiceRoom': 'Hello, we are the VoiceRoom team',
+  'Расскажите, что улучшить, чего не хватает или что работает не так. Можно приложить скриншот или диагностику. Мы ответим здесь же.':
+    'Tell us what could be better, what is missing or what is not working. You can attach a screenshot or a diagnostic report. We will reply here.',
+  'Напишите, что улучшить или что работает не так…': 'Tell us what could improve or what is not working…',
+  'VoiceRoom никогда не просит пароли и коды.': 'VoiceRoom never asks for passwords or codes.',
+  Подробнее: 'Learn more',
+  'Приложить диагностику': 'Attach diagnostics',
+  'Версия, система и журнал приложения': 'Version, system and app log',
+  'Не удалось приложить диагностику': 'Could not attach diagnostics',
+  'Некорректный файл диагностики. Создайте новый в чате с VoiceRoom.':
+    'Invalid diagnostics file. Create a new one in the VoiceRoom chat.',
+  'Диагностику можно отправить только в чат с VoiceRoom': 'You can only send diagnostics in the VoiceRoom chat',
+  'Диагностика · {size} Б': 'Diagnostics · {size} B',
+  'Диагностика · {size} КБ': 'Diagnostics · {size} KB',
+  'Скачать файл': 'Download file',
+  'Удалить файл': 'Remove file',
+  'Загрузка диагностики': 'Uploading diagnostics',
+  'Вложения к сообщению': 'Message attachments',
   'Заблокировать пользователя?': 'Block this user?',
   'Это служебный аккаунт VoiceRoom': 'This is the VoiceRoom service account',
   'Обращение не найдено': 'Support conversation not found',
@@ -1896,6 +1919,31 @@ export const english = {
 export type MessageKey = keyof typeof english;
 
 export const french: Record<MessageKey, string> = {
+  'Как вам VoiceRoom?': 'Que pensez-vous de VoiceRoom ?',
+  'Расскажите, что улучшить или чего не хватает. Если что-то работает не так, тоже пишите.':
+    'Dites-nous ce qui pourrait être amélioré, ce qui manque ou ce qui ne fonctionne pas.',
+  'Написать нам': 'Nous contacter',
+  'Официальный аккаунт': 'Compte officiel',
+  'Здравствуйте, это команда VoiceRoom': 'Bonjour, nous sommes l’équipe VoiceRoom',
+  'Расскажите, что улучшить, чего не хватает или что работает не так. Можно приложить скриншот или диагностику. Мы ответим здесь же.':
+    'Dites-nous ce qui pourrait être amélioré, ce qui manque ou ce qui ne fonctionne pas. Vous pouvez joindre une capture d’écran ou un rapport de diagnostic. Nous vous répondrons ici.',
+  'Напишите, что улучшить или что работает не так…':
+    'Dites-nous ce qui pourrait être amélioré ou ce qui ne fonctionne pas…',
+  'VoiceRoom никогда не просит пароли и коды.': 'VoiceRoom ne demande jamais de mots de passe ni de codes.',
+  Подробнее: 'En savoir plus',
+  'Приложить диагностику': 'Joindre un rapport de diagnostic',
+  'Версия, система и журнал приложения': 'Version, système et journal de l’application',
+  'Не удалось приложить диагностику': 'Impossible de joindre le rapport de diagnostic',
+  'Некорректный файл диагностики. Создайте новый в чате с VoiceRoom.':
+    'Fichier de diagnostic non valide. Créez-en un nouveau dans le chat VoiceRoom.',
+  'Диагностику можно отправить только в чат с VoiceRoom':
+    'Le rapport de diagnostic peut uniquement être envoyé dans le chat VoiceRoom',
+  'Диагностика · {size} Б': 'Diagnostic · {size} o',
+  'Диагностика · {size} КБ': 'Diagnostic · {size} Ko',
+  'Скачать файл': 'Télécharger le fichier',
+  'Удалить файл': 'Retirer le fichier',
+  'Загрузка диагностики': 'Téléversement du rapport de diagnostic',
+  'Вложения к сообщению': 'Pièces jointes au message',
   'Заблокировать пользователя?': 'Bloquer cette personne ?',
   'Это служебный аккаунт VoiceRoom': 'C’est le compte de service VoiceRoom',
   'Обращение не найдено': 'Demande d’assistance introuvable',

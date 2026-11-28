@@ -40,6 +40,7 @@ export default defineConfig({
         },
         { label: 'Приложение для компьютера', slug: 'desktop/install' },
         { label: 'Аккаунт и безопасность', slug: 'account/security' },
+        { label: 'Поддержка VoiceRoom', slug: 'account/support' },
         {
           label: 'Решение проблем',
           items: [

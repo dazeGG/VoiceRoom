@@ -1,8 +1,10 @@
 import crypto from 'node:crypto';
 import { sql, type Selectable } from 'kysely';
 import type pg from 'pg';
+import { DIAGNOSTICS_MIME_TYPE } from '@voiceroom/shared/contracts/media';
 import type { Connectable } from '../../platform/db/connectable.ts';
-import { kyselyOn, type Database } from '../../platform/db/kysely.ts';
+import { kyselyOn, type Database, type DatabaseTransaction } from '../../platform/db/kysely.ts';
+import { DomainError } from '../../platform/http/domain-error.ts';
 import type { MessageAttachments } from '../../platform/db/schema.ts';
 import { isArray, isRecord } from '@voiceroom/shared/guards';
 
@@ -59,7 +61,7 @@ const CONTEXTS = new Set<string>(['room', 'dm']);
 const STATES: ReadonlySet<string> = new Set<AttachmentState>(['uploading', 'processing', 'ready', 'failed', 'deleted']);
 // The table's CHECK constraints keep both columns to these values.
 const isState = (value: string): value is AttachmentState => STATES.has(value);
-const MIME_TYPES = new Set<unknown>(['image/jpeg', 'image/png', 'image/webp']);
+const IMAGE_MIME_TYPES = new Set<unknown>(['image/jpeg', 'image/png', 'image/webp']);
 // Uploads that never finished, failures, and ready files nobody sent.
 const CLEANUP_CANDIDATE_PREDICATE = sql<boolean>`(
   (state = 'uploading' AND updated_at <= current_timestamp - interval '1 hour') OR
@@ -222,7 +224,7 @@ function createAttachmentRepository({ pool: base }: { pool: AttachmentPool }) {
     },
     client?: Client
   ): Promise<Attachment | null> {
-    if (!MIME_TYPES.has(mimeType)) throw new TypeError('Invalid attachment MIME type');
+    if (!IMAGE_MIME_TYPES.has(mimeType)) throw new TypeError('Invalid attachment MIME type');
     return row(
       on(client)
         .updateTable('message_attachments')
@@ -244,6 +246,49 @@ function createAttachmentRepository({ pool: base }: { pool: AttachmentPool }) {
         .where('id', '=', id)
         .where('state', '=', 'uploading')
         .where('bound_at', 'is', null)
+        .returningAll()
+        .executeTakeFirst()
+    );
+  }
+
+  // A diagnostics file has nothing to process: it is accepted and made ready in
+  // the caller's transaction (the state trigger allows only uploading →
+  // processing → ready), so it never waits for the media worker.
+  async function markFileReady(
+    id: string,
+    { bytes, originalStorageKey, originalName }: { bytes: number; originalStorageKey: string; originalName: string },
+    trx: DatabaseTransaction
+  ): Promise<Attachment | null> {
+    const key = requiredText(originalStorageKey, 'original storage key', 512);
+    const name = requiredText(originalName, 'file name', 255);
+    const accepted = await trx
+      .updateTable('message_attachments')
+      .set({
+        state: 'processing',
+        mime_type: DIAGNOSTICS_MIME_TYPE,
+        original_bytes: bytes,
+        width: null,
+        height: null,
+        original_storage_key: key,
+        metadata: sql`metadata || jsonb_build_object('originalName', ${name}::text)`,
+        uploaded_at: now,
+        failure_code: null,
+        failed_at: null,
+        reserved_bytes: null,
+        reservation_expires_at: null,
+        updated_at: now
+      })
+      .where('id', '=', id)
+      .where('state', '=', 'uploading')
+      .where('bound_at', 'is', null)
+      .returning('id')
+      .executeTakeFirst();
+    if (!accepted) return null;
+    return row(
+      trx
+        .updateTable('message_attachments')
+        .set({ state: 'ready', ready_at: now, updated_at: now })
+        .where('id', '=', id)
         .returningAll()
         .executeTakeFirst()
     );
@@ -331,18 +376,21 @@ function createAttachmentRepository({ pool: base }: { pool: AttachmentPool }) {
   }
 
   // Binds every requested ready draft of the owner to one message, in the
-  // requested order, or none of them.
+  // requested order, or none of them. A diagnostics file binds only where the
+  // caller allows files (a conversation with the official account).
   async function bindReady(
     {
       ownerId,
       context,
       messageId,
-      attachmentIds
+      attachmentIds,
+      allowFiles = false
     }: {
       ownerId: string;
       context: string;
       messageId: string;
       attachmentIds: unknown;
+      allowFiles?: boolean;
     },
     client?: Client
   ): Promise<Attachment[]> {
@@ -356,6 +404,23 @@ function createAttachmentRepository({ pool: base }: { pool: AttachmentPool }) {
     if (ids.length !== attachmentIds.length) throw new TypeError('Attachment ids must be strings');
     const messageColumn = context === 'room' ? 'room_message_id' : context === 'dm' ? 'direct_message_id' : null;
     if (!messageColumn) throw new TypeError('Invalid attachment context');
+    if (!allowFiles) {
+      const file = await on(client)
+        .selectFrom('message_attachments')
+        .select('id')
+        .where('id', 'in', ids)
+        .where('owner_id', '=', ownerId)
+        .where(sql`metadata->>'kind'`, '=', 'diagnostics')
+        .limit(1)
+        .executeTakeFirst();
+      if (file) {
+        throw new DomainError(
+          'media_diagnostics_official_only',
+          403,
+          'A diagnostics file can only be sent to the VoiceRoom account'
+        );
+      }
+    }
     const result = await sql<AttachmentRow>`
       WITH requested AS MATERIALIZED (
         SELECT id::uuid, ordinality - 1 AS attachment_order
@@ -366,6 +431,7 @@ function createAttachmentRepository({ pool: base }: { pool: AttachmentPool }) {
         JOIN requested ON requested.id = attachment.id
         WHERE attachment.owner_id = ${ownerId} AND attachment.context = ${context}
           AND attachment.state = 'ready' AND attachment.bound_at IS NULL
+          AND (${allowFiles} OR attachment.mime_type <> ${DIAGNOSTICS_MIME_TYPE})
         FOR UPDATE OF attachment
       )
       UPDATE message_attachments AS attachment
@@ -376,7 +442,7 @@ function createAttachmentRepository({ pool: base }: { pool: AttachmentPool }) {
         AND (SELECT count(*) FROM candidates) = (SELECT count(*) FROM requested)
       RETURNING attachment.*`.execute(on(client));
     if (result.rows.length !== ids.length) {
-      throw new Error('One or more attachments cannot be bound');
+      throw new DomainError('invalid_attachments', 400, 'One or more attachments cannot be bound');
     }
     return result.rows.map(attachmentFromRow).sort((left, right) => left.order - right.order);
   }
@@ -607,6 +673,7 @@ function createAttachmentRepository({ pool: base }: { pool: AttachmentPool }) {
     markDeleted,
     markCleanupDeleted,
     markFailed,
+    markFileReady,
     markReady,
     markUploaded,
     markUnavailable,

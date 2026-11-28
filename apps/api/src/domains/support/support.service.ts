@@ -63,9 +63,10 @@ export interface SupportDeps {
 
 const officialId = OFFICIAL_ACCOUNT_ID;
 
-/** Where the admin app opens an image of a support conversation. */
-export function supportAttachmentUrl(attachmentId: string): string {
-  return `/api/admin/support/attachments/${encodeURIComponent(attachmentId)}/preview`;
+/** Where the admin app opens an image, or downloads the diagnostics file, of a support conversation. */
+export function supportAttachmentUrl(attachmentId: string, kind: 'image' | 'diagnostics' = 'image'): string {
+  const variant = kind === 'diagnostics' ? 'file' : 'preview';
+  return `/api/admin/support/attachments/${encodeURIComponent(attachmentId)}/${variant}`;
 }
 
 function personOf(person: StoredThread['person']): SupportPerson {
@@ -85,13 +86,17 @@ function supportMessage(message: DirectMessage, userId: string, staffName: strin
     fromPerson: message.senderId === userId,
     body: message.body,
     createdAt: message.createdAt,
-    attachments: (message.attachments ?? []).map((attachment) => ({
-      id: attachment.id,
-      mimeType: attachment.mimeType,
-      width: attachment.width,
-      height: attachment.height,
-      url: attachment.url ? supportAttachmentUrl(attachment.id) : null
-    })),
+    attachments: (message.attachments ?? []).map((attachment) => {
+      const kind = attachment.kind ?? 'image';
+      return {
+        id: attachment.id,
+        mimeType: attachment.mimeType,
+        width: attachment.width,
+        height: attachment.height,
+        url: attachment.url ? supportAttachmentUrl(attachment.id, kind) : null,
+        ...(kind === 'diagnostics' && { kind, name: attachment.name ?? null, bytes: attachment.bytes })
+      };
+    }),
     staffName: message.senderId === userId ? null : staffName
   };
 }

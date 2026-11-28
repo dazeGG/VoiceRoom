@@ -59,6 +59,11 @@
   list-style: none;
 }
 
+.attachment-composer__file {
+  flex: 1 1 100%;
+  min-width: 0;
+}
+
 .attachment-composer__draft {
   --attachment-draft-size: calc(var(--size-56) + var(--space-16));
   position: relative;

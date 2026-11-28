@@ -59,6 +59,10 @@
   padding: var(--space-20) var(--space-24);
 }
 
+.dm-conversation__support-greeting {
+  margin-block: auto;
+}
+
 .dm-conversation__empty {
   flex: 1;
   display: flex;

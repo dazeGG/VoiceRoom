@@ -2,6 +2,11 @@
 // when an upload fails, and how drafts survive a reload.
 
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
+import { createPinia, setActivePinia } from 'pinia';
+import { useSessionStore } from '@/features/auth/session.store';
+import { clearAttachmentComposeStores, getAttachmentComposeStore } from '@/shared/chat/attachment-compose-stores';
+import { OFFICIAL_ACCOUNT_ID } from '@voiceroom/shared/official-account';
+import { authUser } from '../fixtures/users';
 
 let nextId = 0;
 const uploads = new Map<string, 'ready' | 'fail'>();
@@ -25,8 +30,13 @@ const { AttachmentComposeStore, dataTransferHasImages, imageFilesFromDataTransfe
   await import('@/shared/chat/attachment-compose');
 
 const image = (name = 'a.png', type = 'image/png', size = 100) => new File([new Uint8Array(size)], name, { type });
+const report = new File(['VoiceRoom diagnostics'], 'voiceroom-diagnostics-2026-11-28-1421.txt', {
+  type: 'text/plain'
+});
 
 beforeEach(() => {
+  setActivePinia(createPinia());
+  clearAttachmentComposeStores();
   localStorage.clear();
   nextId = 0;
   uploads.clear();
@@ -59,7 +69,7 @@ test('a failed upload removes its draft, deletes the slot and reports the error'
   await store.addFiles([image()]);
   expect(store.drafts).toEqual([]);
   expect(store.lastError).toBe('Сеть недоступна');
-  expect(api.deleteAttachment).toHaveBeenCalledWith('att-1');
+  expect(api.deleteAttachment).toHaveBeenCalledWith('att-1', expect.any(AbortSignal));
   expect(localStorage.getItem('voice-room:attachment-drafts:dm:peer-1')).toBeNull();
 });
 
@@ -104,4 +114,99 @@ test('drag and drop recognises image files only', () => {
       })
     )
   ).toBe(false);
+});
+
+test('a generated report is reserved as diagnostics, stays out of the image preview and is ready to send', async () => {
+  const store = new AttachmentComposeStore('dm', 'support');
+
+  await expect(store.addFiles([report])).rejects.toThrow();
+  const upload = store.addDiagnostics(async () => report);
+  expect(store.busy).toBe(true);
+  await store.addFiles([image()]);
+  const duplicate = vi.fn(async () => report);
+  await store.addDiagnostics(duplicate);
+  await upload;
+  expect(duplicate).not.toHaveBeenCalled();
+  expect(api.createAttachmentSlot).toHaveBeenCalledWith(
+    expect.objectContaining({ context: 'dm', kind: 'diagnostics' }),
+    expect.any(AbortSignal)
+  );
+  expect(api.uploadAttachmentContent).toHaveBeenCalledWith(
+    'att-1',
+    report,
+    expect.any(Function),
+    expect.any(AbortSignal)
+  );
+  expect(store.drafts[0]).toMatchObject({ kind: 'diagnostics', state: 'ready', previewUrl: null });
+  expect(store.readyIds).toEqual(['att-1']);
+  expect(store.busy).toBe(false);
+});
+
+test('switching accounts during a deferred report build prevents all later requests and draft storage', async () => {
+  const session = useSessionStore();
+  session.setUser(authUser({ id: 'account-a' }));
+  const first = getAttachmentComposeStore('dm', OFFICIAL_ACCOUNT_ID, 'account-a');
+  const deferred = Promise.withResolvers<File>();
+  const build = vi.fn((_signal: AbortSignal) => deferred.promise);
+  const operation = first.addDiagnostics(build);
+  expect(first.busy).toBe(true);
+  session.clearSession();
+  session.setUser(authUser({ id: 'account-b' }));
+  const second = getAttachmentComposeStore('dm', OFFICIAL_ACCOUNT_ID, 'account-b');
+  deferred.resolve(report);
+  await operation;
+  expect(build.mock.calls[0]?.[0].aborted).toBe(true);
+  expect(api.createAttachmentSlot).not.toHaveBeenCalled();
+  expect(api.uploadAttachmentContent).not.toHaveBeenCalled();
+  expect(first.busy).toBe(false);
+  expect(second.drafts).toEqual([]);
+  expect(Object.keys(localStorage).filter((key) => key.startsWith('voice-room:attachment-drafts:'))).toEqual([]);
+});
+
+test.each(['reservation', 'upload'])('a direct account switch aborts the active diagnostics %s', async (phase) => {
+  const session = useSessionStore();
+  session.setUser(authUser({ id: 'account-a' }));
+  const store = getAttachmentComposeStore('dm', OFFICIAL_ACCOUNT_ID, 'account-a');
+  const started = Promise.withResolvers<AbortSignal | undefined>();
+  const waitForAbort = (signal: AbortSignal | undefined) =>
+    new Promise<never>((_resolve, reject) => {
+      signal?.addEventListener('abort', () => reject(new DOMException('Upload aborted', 'AbortError')), { once: true });
+      started.resolve(signal);
+    });
+  if (phase === 'reservation') {
+    vi.mocked(api.createAttachmentSlot).mockImplementationOnce((_input, signal) => waitForAbort(signal));
+  } else {
+    vi.mocked(api.uploadAttachmentContent).mockImplementationOnce((_id, _file, _progress, signal) =>
+      waitForAbort(signal)
+    );
+  }
+  const upload = store.addDiagnostics(async () => report);
+  const signal = await started.promise;
+  session.setUser(authUser({ id: 'account-b' }));
+  await upload;
+  expect(signal?.aborted).toBe(true);
+  if (phase === 'reservation') expect(api.uploadAttachmentContent).not.toHaveBeenCalled();
+  expect(api.deleteAttachment).not.toHaveBeenCalled();
+  expect(store.drafts).toEqual([]);
+  expect(Object.keys(localStorage).filter((key) => key.startsWith('voice-room:attachment-drafts:'))).toEqual([]);
+});
+
+test('opening the same chat as another account does not restore the first account’s draft', async () => {
+  const first = getAttachmentComposeStore('dm', OFFICIAL_ACCOUNT_ID, 'account-a');
+  await first.addDiagnostics(async () => report);
+  expect(localStorage.getItem(`voice-room:attachment-drafts:account:account-a:dm:${OFFICIAL_ACCOUNT_ID}`)).toBe(
+    '["att-1"]'
+  );
+  const second = getAttachmentComposeStore('dm', OFFICIAL_ACCOUNT_ID, 'account-b');
+  expect(second.drafts).toEqual([]);
+  expect(api.getAttachmentStatus).not.toHaveBeenCalled();
+});
+
+test('an empty, oversized or non-text report never reserves a slot', async () => {
+  const store = new AttachmentComposeStore('dm', 'support');
+  for (const report of [image(), image('empty.txt', 'text/plain', 0), image('large.txt', 'text/plain', 524289)]) {
+    await expect(store.addDiagnostics(async () => report)).rejects.toThrow('Не удалось приложить диагностику');
+    expect(store.busy).toBe(false);
+  }
+  expect(api.createAttachmentSlot).not.toHaveBeenCalled();
 });

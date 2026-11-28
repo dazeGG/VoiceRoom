@@ -126,7 +126,7 @@ const { timeline, scroll, reactions, outbox, isOwnMessage, typingLabel } = chat;
 // stage, so it closes with a cross instead of collapsing to the right.
 const mobile = ref(false);
 const media = computed<AttachmentComposeStore | null>(() =>
-  props.roomId ? getAttachmentComposeStore('room', props.roomId) : null
+  props.roomId ? getAttachmentComposeStore('room', props.roomId, sessionStore.user?.id) : null
 );
 const quickReactions = ref<string[]>([...DEFAULT_FREQUENT_REACTIONS]);
 const draft = useChatDraft({ type: 'room', id: props.roomId });

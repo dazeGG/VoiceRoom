@@ -24,6 +24,7 @@ export const ERROR_TEXTS = {
   support_thread_not_found: 'Обращение не найдено',
   support_conversation_deleted: 'Человек удалил переписку, ответить уже нельзя',
   support_thread_changed: 'Человек написал снова, обновите переписку',
+  media_diagnostics_invalid: 'Файл не соответствует формату диагностики VoiceRoom',
   account_deleted: 'Аккаунт удалён или заблокирован, ответить нельзя',
   idempotency_conflict: 'Этот ответ уже отправлен с другим текстом',
   empty_message: 'Напишите текст',

@@ -184,6 +184,8 @@ export const ERROR_CODES = [
   'media_too_large',
   'media_type_mismatch',
   'media_type_unsupported',
+  'media_diagnostics_invalid',
+  'media_diagnostics_official_only',
   'avatar_field_required',
   'avatar_too_large',
   'upload_rate_limited',

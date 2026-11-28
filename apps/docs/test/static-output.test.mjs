@@ -17,6 +17,14 @@ test('the home links to the published Russian installation guide', () => {
   assert.doesNotMatch(guide, /<script\b[^>]*\bsrc="https:\/\/voiceroom\.ru\/widget\/v1\/loader\.js"/);
 });
 
+test('the sidebar links to the support guide and the guide explains the chat and diagnostics', () => {
+  assert.match(readPage('index.html'), /href="\/account\/support"/);
+  const guide = readPage('account/support/index.html');
+  for (const phrase of ['Написать нам', 'Официальный аккаунт', 'пароль', '300 записей']) {
+    assert.ok(guide.includes(phrase));
+  }
+});
+
 test('internal navigation resolves to generated pages', () => {
   const pages = globSync('**/*.html', { cwd: dist });
   assert.ok(pages.length >= 2, 'The docs build must include its home and an article');

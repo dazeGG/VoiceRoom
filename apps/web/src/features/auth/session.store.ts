@@ -70,9 +70,10 @@ export const useSessionStore = defineStore('session', () => {
   function isCurrent(captured: AuthContext): boolean {
     return captured.generation === generation && captured.userId === (user.value?.id ?? null);
   }
-  function invalidate(): void {
+  function invalidate(clearAttachmentStorage = false): void {
     generation++;
     inflight = null;
+    clearAttachmentComposeStores(clearAttachmentStorage);
     membership.resetViewer(null, generation);
   }
   function publishInvalidation(): void {
@@ -190,9 +191,8 @@ export const useSessionStore = defineStore('session', () => {
     // The session ended on this device (sign-out, password change, deletion or a
     // revoked session): unsent texts must not outlive it on a shared computer.
     clearChatDrafts();
-    clearAttachmentComposeStores();
     clearHistoryCache();
-    invalidate();
+    invalidate(true);
     publishInvalidation();
     user.value = null;
     loaded.value = true;

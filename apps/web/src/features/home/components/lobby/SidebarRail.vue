@@ -11,6 +11,7 @@ import { displayNameOf } from '@/shared/utils/display-name';
 import type { ActiveVoice } from '../../model/active-voice';
 import { useLobby } from '../../model/lobby-context';
 import VoiceCallWidget from './VoiceCallWidget.vue';
+import SupportShortcut from './SupportShortcut.vue';
 
 defineProps<{ user: AuthUser; activeVoice: ActiveVoice | null }>();
 const emit = defineEmits<{ openPeople: [] }>();
@@ -79,6 +80,7 @@ const chats = computed(() =>
       </IconButton>
     </div>
     <VoiceCallWidget v-if="activeVoice" :voice="activeVoice" compact />
+    <SupportShortcut :user-id="user.id" compact />
     <div class="sidebar-rail__account">
       <Avatar
         :name="displayNameOf(user)"

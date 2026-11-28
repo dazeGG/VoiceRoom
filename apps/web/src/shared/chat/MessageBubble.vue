@@ -7,6 +7,7 @@
 // `content` slot renders the text, and `card` replaces every part for a
 // message that is a card of its own (a direct-message invitation).
 import { computed } from 'vue';
+import { FileAttachment } from '@voiceroom/ui-kit/components';
 import type { Attachment } from '@voiceroom/shared/contracts/messages';
 import type { LinkPreview } from '@voiceroom/shared/link-preview';
 import AttachmentMosaic from './AttachmentMosaic.vue';
@@ -60,6 +61,8 @@ defineSlots<{
 }>();
 
 const dm = computed(() => props.variant === 'dm-msg');
+const images = computed(() => props.message.attachments?.filter((attachment) => attachment.kind !== 'diagnostics'));
+const files = computed(() => props.message.attachments?.filter((attachment) => attachment.kind === 'diagnostics'));
 </script>
 
 <template>
@@ -91,10 +94,18 @@ const dm = computed(() => props.variant === 'dm-msg');
           interactive
           @jump="(messageId: string) => emit('jump', messageId)"
         />
-        <AttachmentMosaic v-if="dm && message.attachments?.length" :attachments="message.attachments" />
+        <AttachmentMosaic v-if="dm && images?.length" :attachments="images" />
+        <template v-for="file in files" :key="file.id">
+          <FileAttachment
+            v-if="file.name && file.bytes !== null"
+            :name="file.name"
+            :bytes="file.bytes"
+            :url="file.url"
+          />
+        </template>
         <slot name="content" />
         <LinkPreviewCard v-if="message.linkPreview" :preview="message.linkPreview" />
-        <AttachmentMosaic v-if="!dm && message.attachments?.length" :attachments="message.attachments" />
+        <AttachmentMosaic v-if="!dm && images?.length" :attachments="images" />
         <ReactionSummary :store="reactions" :message-id="message.id" :can-mutate="Boolean(userId)" />
       </div>
       <MessageHoverActions

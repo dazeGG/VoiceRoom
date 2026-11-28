@@ -4,8 +4,10 @@ import { createPinia, setActivePinia, type Pinia } from 'pinia';
 import { nextTick } from 'vue';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import DmView from '@/features/home/components/lobby/DmView.vue';
+import SupportShortcut from '@/features/home/components/lobby/SupportShortcut.vue';
 import ChatContextMenu from '@/features/home/components/lobby/ChatContextMenu.vue';
 import { useFriendCallStore } from '@/features/friend-call/friend-call.store';
+import { useSessionStore } from '@/features/auth/session.store';
 import { LOBBY_KEY } from '@/features/home/model/lobby-context';
 import { useLobbyStore, type LobbyStore } from '@/features/home/model/lobby.store';
 import { useToastsStore } from '@/features/home/model/toasts.store';
@@ -20,6 +22,8 @@ import { stubFetch } from '../fixtures/fetch.ts';
 import { FakeWebSocket, installFakeWebSocket } from '../fixtures/fake-websocket.ts';
 import { authUser } from '../fixtures/users.ts';
 import { OFFICIAL_ACCOUNT_ID } from '@voiceroom/shared/official-account';
+import { AttachmentAnswer } from '@voiceroom/shared/contracts/media';
+import type { Attachment } from '@voiceroom/shared/contracts/messages';
 import { instanceOf, parse, defined } from '../helpers/assert.ts';
 
 const self = authUser({ id: 'me', login: 'me', displayName: 'Я' });
@@ -112,6 +116,16 @@ test('the DM header offers a delete confirmation and closes the deleted conversa
   expect(calls).toContainEqual({ method: 'DELETE', url: '/api/dm/ada', body: undefined });
   expect(lobby.selectedFriendId).toBeNull();
   expect(lobby.conversations).toEqual([]);
+});
+
+test('the interactive DM header uses the kit hover state and opens the profile with the keyboard', async () => {
+  const lobby = await renderDm();
+  const header = screen.getByRole('button', { name: /^Ада/ });
+  expect(header.classList.contains('ui-pressable--hoverable')).toBe(true);
+  await vi.waitFor(() => expect(document.activeElement).toBe(composer()));
+  header.focus();
+  await userEvent.setup().keyboard('{Enter}');
+  expect(lobby.thread.profileOpen).toBe(true);
 });
 
 test.each([true, false])('chat row menu offers deletion and block confirmation (friend: %s)', async (isFriend) => {
@@ -649,17 +663,184 @@ test('the official VoiceRoom chat opens without call, profile, friendship or blo
     canCall: false
   };
   expect(await screen.findByText('Спасибо, чиним')).toBeTruthy();
-  expect(screen.getByText('@voiceroom')).toBeTruthy();
+  expect(screen.getByText('Официальный аккаунт')).toBeTruthy();
+  expect(screen.getByRole('img', { name: 'Официальный аккаунт VoiceRoom' })).toBeTruthy();
   expect(screen.queryByText('VoiceRoom не в ваших друзьях')).toBeNull();
   expect(screen.queryByRole('button', { name: 'Профиль' })).toBeNull();
   expect(screen.queryByRole('button', { name: 'Добавить в друзья' })).toBeNull();
   expect(screen.queryByRole('button', { name: 'Заблокировать' })).toBeNull();
   expect(screen.queryByRole('button', { name: /Позвонить/ })).toBeNull();
-  expect(composer()).toBeTruthy();
+  expect(screen.getByPlaceholderText('Напишите, что улучшить или что работает не так…')).toBeTruthy();
   const user = userEvent.setup();
   await user.click(screen.getByRole('button', { name: 'Ещё' }));
   const menu = await screen.findByRole('menu');
-  expect(within(menu).getByRole('menuitem', { name: 'Удалить переписку' })).toBeTruthy();
+  expect(
+    within(menu)
+      .getAllByRole('menuitem')
+      .map((item) => item.getAttribute('aria-label'))
+  ).toEqual(['Отметить прочитанным', 'Выключить уведомления', 'Удалить переписку']);
   for (const name of ['Профиль', 'Добавить в друзья', 'Заблокировать', 'Позвонить'])
     expect(within(menu).queryByRole('menuitem', { name })).toBeNull();
+});
+
+test.each([false, true])('the shortcut opens empty support without pinning it (rail: %s)', async (compact) => {
+  const lobby = useLobbyStore(pinia);
+  const { calls } = stubFetch({
+    ['GET /api/dm/' + OFFICIAL_ACCOUNT_ID + '/history?mode=latest&limit=50']: {
+      body: emptyHistory({ ...allowedContact, peer: voiceroom })
+    }
+  });
+  const shortcut = render(SupportShortcut, {
+    props: { userId: self.id, compact },
+    global: { plugins: [pinia], provide: { [LOBBY_KEY]: lobby } }
+  });
+  const label = compact ? 'Как вам VoiceRoom?' : 'Написать нам';
+  if (!compact) {
+    expect(screen.getByRole('heading', { name: 'Как вам VoiceRoom?' })).toBeTruthy();
+    expect(screen.getByText(/Расскажите, что улучшить или чего не хватает/)).toBeTruthy();
+  }
+  const user = userEvent.setup();
+  await user.click(screen.getByRole('button', { name: label }));
+  await vi.waitFor(() => expect(lobby.thread.peer?.id).toBe(OFFICIAL_ACCOUNT_ID));
+  expect(calls.some((call) => call.url.startsWith('/api/dm/' + OFFICIAL_ACCOUNT_ID))).toBe(true);
+  expect(lobby.conversations).toEqual([]);
+  await shortcut.rerender({ userId: OFFICIAL_ACCOUNT_ID });
+  expect(screen.queryByRole('button', { name: label })).toBeNull();
+});
+
+test('the empty support chat shows the greeting and links to the help page', async () => {
+  await renderDm(voiceroom);
+  expect(screen.getByText('Здравствуйте, это команда VoiceRoom')).toBeTruthy();
+  expect(screen.getByText(/Мы ответим здесь же/)).toBeTruthy();
+  expect(screen.getByText('VoiceRoom никогда не просит пароли и коды.')).toBeTruthy();
+  expect(screen.getByRole('link', { name: 'Подробнее' }).getAttribute('href')).toBe(
+    'https://docs.voiceroom.ru/account/support/'
+  );
+});
+
+test('regular chats only offer photo uploads', async () => {
+  await renderDm();
+  const user = userEvent.setup();
+  await user.click(screen.getByRole('button', { name: 'Добавить вложение' }));
+  expect(screen.getAllByRole('menuitem').map((item) => item.getAttribute('aria-label'))).toEqual(['Загрузить фото']);
+  expect(screen.queryByText('VoiceRoom никогда не просит пароли и коды.')).toBeNull();
+});
+
+test.each(['send', 'switch accounts'])('the support composer can %s with a diagnostics upload', async (action) => {
+  const id = '00000000-0000-4000-8000-000000000018';
+  const name = 'voiceroom-diagnostics-2026-11-28-1200.txt';
+  const fileUrl = '/api/media/attachments/' + id + '/file';
+  const slot = parse(AttachmentAnswer, {
+    ok: true,
+    attachment: {
+      id,
+      context: 'dm',
+      state: 'pending',
+      mimeType: null,
+      bytes: null,
+      width: null,
+      height: null,
+      failureCode: null,
+      createdAt: 1,
+      updatedAt: 1,
+      kind: 'diagnostics',
+      name: null
+    }
+  });
+  const file: Attachment = {
+    id,
+    context: 'dm',
+    order: 0,
+    state: 'ready',
+    mimeType: 'text/plain',
+    bytes: 18432,
+    width: null,
+    height: null,
+    kind: 'diagnostics',
+    name,
+    url: fileUrl
+  };
+  const { calls } = stubFetch({
+    'POST /api/media/attachments': { body: slot },
+    ['POST /api/dm/' + OFFICIAL_ACCOUNT_ID]: {
+      body: {
+        ok: true,
+        message: message('diagnostics', self.id, '', { recipientId: OFFICIAL_ACCOUNT_ID, attachments: [file] })
+      }
+    },
+    ['POST /api/dm/' + OFFICIAL_ACCOUNT_ID + '/read']: { body: { ok: true } }
+  });
+  const uploaded = vi.fn();
+  const aborted = vi.fn();
+  let finishUpload: (() => void) | undefined;
+  vi.stubGlobal(
+    'XMLHttpRequest',
+    class {
+      upload = {};
+      status = 200;
+      responseText = JSON.stringify({
+        ...slot,
+        attachment: { ...slot.attachment, state: 'ready', mimeType: 'text/plain', bytes: 18432, name }
+      });
+      onload?: () => void;
+      onabort?: () => void;
+      open = uploaded;
+      setRequestHeader() {}
+      abort() {
+        aborted();
+        this.onabort?.();
+      }
+      send(body: FormData) {
+        const content = body.get('file');
+        expect(content).toBeInstanceOf(File);
+        if (content instanceof File) {
+          expect(content.type).toBe('text/plain');
+          expect(content.name).toMatch(/^voiceroom-diagnostics-/);
+        }
+        finishUpload = () => this.onload?.();
+      }
+    }
+  );
+  const session = useSessionStore(pinia);
+  session.setUser(self);
+  const lobby = await renderDm(voiceroom);
+  const user = userEvent.setup();
+  await user.click(screen.getByRole('button', { name: 'Добавить вложение' }));
+  expect(screen.getAllByRole('menuitem').map((item) => item.getAttribute('aria-label'))).toEqual([
+    'Загрузить фото',
+    'Приложить диагностику'
+  ]);
+  expect(screen.getByText('Версия, система и журнал приложения')).toBeTruthy();
+  await user.click(screen.getByRole('menuitem', { name: 'Приложить диагностику' }));
+  expect(await screen.findByRole('progressbar', { name: 'Загрузка диагностики' })).toBeTruthy();
+  expect(screen.queryByRole('link', { name: 'Скачать файл' })).toBeNull();
+  if (action === 'switch accounts') {
+    session.setUser(bob);
+    expect(aborted).toHaveBeenCalledOnce();
+    expect(Object.keys(localStorage).filter((key) => key.startsWith('voice-room:attachment-drafts:'))).toEqual([]);
+    expect(calls.every((call) => call.method !== 'DELETE')).toBe(true);
+    expect(calls.every((call) => call.url !== '/api/dm/' + OFFICIAL_ACCOUNT_ID)).toBe(true);
+    return;
+  }
+  await user.click(screen.getByPlaceholderText('Напишите, что улучшить или что работает не так…'));
+  await user.keyboard('Журнал{Enter}');
+  expect(calls.some((call) => call.url === '/api/dm/' + OFFICIAL_ACCOUNT_ID)).toBe(false);
+  expect(finishUpload).toBeTypeOf('function');
+  finishUpload?.();
+  const draft = await screen.findByRole('link', { name: 'Скачать файл' });
+  expect(draft.getAttribute('href')).toBe(fileUrl);
+  expect(screen.getByText(name)).toBeTruthy();
+  expect(uploaded).toHaveBeenCalledWith('PUT', '/api/media/attachments/' + id + '/content');
+  expect(calls.find((call) => call.url === '/api/media/attachments')?.body).toMatchObject({ kind: 'diagnostics' });
+
+  await user.click(screen.getByRole('button', { name: 'Отправить' }));
+  await vi.waitFor(() => {
+    expect(calls.find((call) => call.url === '/api/dm/' + OFFICIAL_ACCOUNT_ID)?.body).toMatchObject({
+      attachmentIds: [id]
+    });
+  });
+  expect(screen.queryByRole('button', { name: 'Удалить файл' })).toBeNull();
+  await vi.waitFor(() => expect(lobby.thread.messages[0]?.attachments).toEqual([file]));
+  expect((await screen.findByRole('link', { name: 'Скачать файл' })).getAttribute('href')).toBe(fileUrl);
+  expect(screen.queryByRole('button', { name: /Открыть изображение/ })).toBeNull();
 });

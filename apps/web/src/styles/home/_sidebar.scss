@@ -112,6 +112,28 @@
   padding: var(--space-4) var(--space-8);
 }
 
+.sidebar__support {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-8);
+  margin: 0 var(--space-12) var(--space-12);
+
+  h3,
+  p {
+    margin: 0;
+  }
+
+  h3 {
+    font-size: 14px;
+    font-weight: 600;
+  }
+
+  p {
+    color: var(--vr-text-2);
+    font-size: 13px;
+  }
+}
+
 .sidebar__profile {
   display: flex;
   align-items: center;

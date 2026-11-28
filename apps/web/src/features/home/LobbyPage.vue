@@ -331,7 +331,7 @@ function roomDeleted(): void {
     @commit="commitSidebar"
   >
     <template #side>
-      <div class="lobby-shell__sidebar" @pointerenter="sidebar.showPreview" @pointerleave="sidebar.hidePreview">
+      <div class="lobby-shell__sidebar" @pointerover="sidebar.showPreview" @pointerleave="sidebar.hidePreview">
         <SidebarRail
           v-if="sidebarLayoutCollapsed"
           :inert="sidebarVisible"

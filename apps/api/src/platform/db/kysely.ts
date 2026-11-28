@@ -37,8 +37,8 @@ const bound = new WeakMap<Queryable, Database>();
 
 /**
  * A Database that runs on `client`: over a pool, one per pool; over a single
- * connection, the typed queries share it (never start a transaction on that
- * one, the caller already holds it).
+ * connection, the typed queries share it. Only the owner of a dedicated
+ * connection may start a transaction after establishing it is outside one.
  */
 export function kyselyOn(client: Queryable): Database {
   let db = bound.get(client);

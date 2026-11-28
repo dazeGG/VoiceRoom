@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { IconButton, Progress, Pressable } from '@voiceroom/ui-kit/components';
+import { FileAttachment, IconButton, Progress, Pressable } from '@voiceroom/ui-kit/components';
 import { t } from '@/shared/i18n';
 import { Image as ImageIcon, RotateCcw, X } from '@lucide/vue';
 import { computed, ref } from 'vue';
@@ -24,7 +24,9 @@ function draftSource(draft: Draft): string {
 
 // The moment you most want a closer look at a pasted screenshot is before you
 // send it, so a pending image opens in the same viewer a sent one does.
-const viewable = computed(() => store.drafts.filter((draft) => Boolean(draft.previewUrl) || draft.state === 'ready'));
+const viewable = computed(() =>
+  store.drafts.filter((draft) => draft.kind !== 'diagnostics' && (Boolean(draft.previewUrl) || draft.state === 'ready'))
+);
 const items = computed(() =>
   viewable.value.map((draft) => ({ src: draftSource(draft), alt: draft.file?.name || t('Изображение') }))
 );
@@ -36,56 +38,81 @@ function view(draft: Draft): void {
 </script>
 
 <template>
-  <section v-if="store.drafts.length" class="attachment-composer" :aria-label="t('Изображения к сообщению')">
+  <section v-if="store.drafts.length" class="attachment-composer" :aria-label="t('Вложения к сообщению')">
     <ol class="attachment-composer__list">
       <li
         v-for="(draft, index) in store.drafts"
         :key="draft.id"
-        class="attachment-composer__draft"
-        :class="`attachment-composer__draft--${draft.error ? 'failed' : draft.state}`"
+        :class="
+          draft.kind === 'diagnostics'
+            ? 'attachment-composer__file'
+            : ['attachment-composer__draft', `attachment-composer__draft--${draft.error ? 'failed' : draft.state}`]
+        "
       >
-        <Pressable
-          v-if="draft.previewUrl || draft.state === 'ready'"
-          class="attachment-composer__open"
-          :aria-label="t('Открыть изображение {p0}', { p0: index + 1 })"
-          @click="view(draft)"
-        >
-          <img :src="draftSource(draft)" :alt="draft.file?.name || t('Изображение {p0}', { p0: index + 1 })" />
-        </Pressable>
-        <span v-else class="attachment-composer__placeholder"><ImageIcon v-bind="iconSm" aria-hidden="true" /></span>
+        <template v-if="draft.kind === 'diagnostics'">
+          <FileAttachment
+            :name="draft.name ?? draft.file?.name ?? t('Диагностика')"
+            :bytes="draft.bytes ?? draft.file?.size ?? 0"
+            :url="draft.state === 'ready' ? attachmentVariantUrl(draft.id, 'file') : undefined"
+          >
+            <template #actions>
+              <IconButton :label="t('Удалить файл')" :disabled="disabled || store.busy" @click="remove(draft)">
+                <X aria-hidden="true" />
+              </IconButton>
+            </template>
+          </FileAttachment>
+          <Progress
+            v-if="draft.state !== 'ready'"
+            hide-label
+            :label="t('Загрузка диагностики')"
+            :value="Math.round(draft.progress * 100)"
+            :error="Boolean(draft.error) || draft.state === 'failed'"
+          />
+        </template>
+        <template v-else>
+          <Pressable
+            v-if="draft.previewUrl || draft.state === 'ready'"
+            class="attachment-composer__open"
+            :aria-label="t('Открыть изображение {p0}', { p0: index + 1 })"
+            @click="view(draft)"
+          >
+            <img :src="draftSource(draft)" :alt="draft.file?.name || t('Изображение {p0}', { p0: index + 1 })" />
+          </Pressable>
+          <span v-else class="attachment-composer__placeholder"><ImageIcon v-bind="iconSm" aria-hidden="true" /></span>
 
-        <Progress
-          v-if="draft.state !== 'ready'"
-          class="attachment-composer__loading"
-          hide-label
-          :label="draft.state === 'processing' ? t('Обработка изображения') : t('Загрузка изображения')"
-          :value="draft.state === 'processing' ? null : Math.round(draft.progress * 100)"
-          :error="Boolean(draft.error) || draft.state === 'failed'"
-        />
+          <Progress
+            v-if="draft.state !== 'ready'"
+            class="attachment-composer__loading"
+            hide-label
+            :label="draft.state === 'processing' ? t('Обработка изображения') : t('Загрузка изображения')"
+            :value="draft.state === 'processing' ? null : Math.round(draft.progress * 100)"
+            :error="Boolean(draft.error) || draft.state === 'failed'"
+          />
 
-        <IconButton
-          v-if="draft.error || draft.state === 'failed'"
-          class="attachment-composer__retry"
-          :label="t('Повторить загрузку')"
-          :aria-description="draft.error || t('Не удалось обработать изображение')"
-          :disabled="disabled"
-          :size="28"
-          variant="filled"
-          @click="void store.retry(draft)"
-        >
-          <RotateCcw aria-hidden="true" />
-        </IconButton>
+          <IconButton
+            v-if="draft.error || draft.state === 'failed'"
+            class="attachment-composer__retry"
+            :label="t('Повторить загрузку')"
+            :aria-description="draft.error || t('Не удалось обработать изображение')"
+            :disabled="disabled"
+            :size="28"
+            variant="filled"
+            @click="void store.retry(draft)"
+          >
+            <RotateCcw aria-hidden="true" />
+          </IconButton>
 
-        <IconButton
-          class="attachment-composer__remove"
-          :label="t('Удалить изображение {p0}', { p0: index + 1 })"
-          :disabled="disabled"
-          :size="24"
-          variant="filled"
-          @click="remove(draft)"
-        >
-          <X aria-hidden="true" />
-        </IconButton>
+          <IconButton
+            class="attachment-composer__remove"
+            :label="t('Удалить изображение {p0}', { p0: index + 1 })"
+            :disabled="disabled"
+            :size="24"
+            variant="filled"
+            @click="remove(draft)"
+          >
+            <X aria-hidden="true" />
+          </IconButton>
+        </template>
       </li>
     </ol>
   </section>

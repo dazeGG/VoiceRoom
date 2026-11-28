@@ -20,6 +20,7 @@ import {
 import type { ApiContext } from '../../app/context.ts';
 import { failure, optionalJsonBody } from '../../platform/http/http-kit.ts';
 import { requestIdempotencyKey } from '../messaging/message-input.ts';
+import { openedMediaHeaders } from '../media/media-visibility.service.ts';
 import type { SupportService } from './support.service.ts';
 
 const SUPPORT_REQUIRED = failure('Support access required', { code: 'forbidden' });
@@ -160,7 +161,7 @@ export function registerSupportRoutes(root: FastifyInstance, _ctx: ApiContext, d
     }
   );
 
-  // The image itself is binary, so the route has no response schema.
+  // The image or the diagnostics file is binary, so the route has no response schema.
   app.get(
     '/api/admin/support/attachments/:id/:variant',
     { schema: { params: SupportAttachmentParams } },
@@ -172,9 +173,7 @@ export function registerSupportRoutes(root: FastifyInstance, _ctx: ApiContext, d
       const { opened } = result;
       return reply
         .header('Cache-Control', 'private, no-store')
-        .header('Content-Disposition', `inline; filename="image.${opened.extension}"`)
-        .header('Content-Length', String(opened.bytes))
-        .type(opened.mimeType)
+        .headers(openedMediaHeaders(opened, false))
         .send(opened.stream);
     }
   );

@@ -2,6 +2,7 @@ export * from './components/Avatar';
 export * from './components/AvatarStack';
 export * from './components/Badge';
 export * from './components/ListItem';
+export * from './components/FileAttachment';
 export * from './components/Button';
 export * from './components/Pressable';
 export * from './components/ColorField';

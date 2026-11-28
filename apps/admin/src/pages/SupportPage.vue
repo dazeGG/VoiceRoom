@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Check, UserRound } from '@lucide/vue';
-import { AccountBadge as OfficialMark, Field, Textarea } from '@voiceroom/ui-kit/components';
+import { AccountBadge as OfficialMark, Field, FileAttachment, Textarea } from '@voiceroom/ui-kit/components';
 import { computed, ref, useId, watch } from 'vue';
 import {
   SUPPORT_TEXT_MAX_LENGTH,
@@ -378,10 +378,18 @@ const avatarOf = (who: {
                   </span>
                 </span>
                 <p v-if="entry.message.body" class="admin-support-message__text">{{ entry.message.body }}</p>
-                <span v-if="entry.message.attachments.length" class="admin-support-message__images">
+                <div v-if="entry.message.attachments.length" class="admin-support-message__images">
                   <template v-for="attachment in entry.message.attachments" :key="attachment.id">
+                    <FileAttachment
+                      v-if="
+                        attachment.kind === 'diagnostics' && attachment.name && typeof attachment.bytes === 'number'
+                      "
+                      :name="attachment.name"
+                      :bytes="attachment.bytes"
+                      :url="attachment.url"
+                    />
                     <img
-                      v-if="attachment.url"
+                      v-else-if="attachment.url && attachment.kind !== 'diagnostics'"
                       class="admin-support-message__image"
                       :src="attachment.url"
                       :width="attachment.width ?? undefined"
@@ -390,7 +398,7 @@ const avatarOf = (who: {
                       loading="lazy"
                     />
                   </template>
-                </span>
+                </div>
               </div>
             </div>
           </li>

@@ -26,9 +26,9 @@ const blockTarget = ref<Friend['user'] | null>(null);
 const deleteTarget = ref<Friend['user'] | null>(null);
 const friend = computed(() => target.value?.friend.user);
 const name = computed(() => (friend.value ? displayNameOf(friend.value) : ''));
-const isFriend = computed(() => target.value?.isFriend !== false);
 // The official VoiceRoom account: no call, profile, friendship or block.
 const official = computed(() => isOfficialAccount(friend.value));
+const isFriend = computed(() => !official.value && target.value?.isFriend !== false);
 const muted = computed(() =>
   preferences.notificationPreferences.loaded
     ? preferences.isPeerNotificationsMuted(friend.value?.id)
@@ -148,7 +148,7 @@ function confirmDelete(): void {
     @close="target = null"
   >
     <template #default="{ close }">
-      <MenuLabel :text="isFriend ? name : t('Не друг')" />
+      <MenuLabel :text="official || isFriend ? name : t('Не друг')" />
       <MenuItem v-if="!onMarkRead" :label="t('Написать')" @select.prevent="message(close)">
         <template #icon><MessageSquare v-bind="iconSm" /></template>
       </MenuItem>

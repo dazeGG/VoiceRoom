@@ -2,6 +2,7 @@ import { t } from '@/shared/i18n';
 import { currentErrorMessage } from '@/shared/i18n/localized-text';
 import { markRaw, ref } from 'vue';
 import { isArray } from '@voiceroom/shared/guards';
+import { DIAGNOSTICS_MAX_BYTES, DIAGNOSTICS_MIME_TYPE, type AttachmentKind } from '@voiceroom/shared/contracts/media';
 import {
   createAttachmentSlot,
   deleteAttachment,
@@ -31,18 +32,23 @@ export class AttachmentComposeStore {
   readonly #drafts = ref<ComposeDraft[]>([]);
   readonly #busy = ref(false);
   readonly #lastError = ref<string | null | (() => string)>(null);
+  readonly #lifetime = new AbortController();
 
   private readonly storageKey: string;
 
   constructor(
     readonly context: AttachmentContext,
-    readonly contextId: string
+    readonly contextId: string,
+    readonly ownerId?: string
   ) {
     markRaw(this);
-    this.storageKey = `voice-room:attachment-drafts:${context}:${contextId}`;
+    const scope = ownerId ? `account:${ownerId}:` : '';
+    this.storageKey = `voice-room:attachment-drafts:${scope}${context}:${contextId}`;
     try {
       const ids: unknown = JSON.parse(readStorage(this.storageKey) || '[]');
-      if (isArray(ids) && ids.length) void this.resume(ids.filter((id): id is string => typeof id === 'string'));
+      if (isArray(ids) && ids.length) {
+        void this.resume(ids.filter((id): id is string => typeof id === 'string')).catch(() => {});
+      }
     } catch {
       removeStorage(this.storageKey);
     }
@@ -75,6 +81,7 @@ export class AttachmentComposeStore {
   }
 
   async addFiles(files: Iterable<File, unknown, unknown>): Promise<void> {
+    if (this.busy || this.#lifetime.signal.aborted) return;
     this.lastError = null;
     const candidates = Array.from(files).slice(0, Math.max(0, 4 - this.drafts.length));
     for (const file of candidates) {
@@ -85,19 +92,47 @@ export class AttachmentComposeStore {
     }
   }
 
-  private async upload(file: File): Promise<void> {
+  async addDiagnostics(build: (signal: AbortSignal) => Promise<File>): Promise<void> {
+    // This store belongs to one owner and one authentication generation.
+    const signal = this.#lifetime.signal;
+    if (signal.aborted || this.busy || this.drafts.length >= 4) return;
+    this.lastError = null;
+    this.busy = true;
+    try {
+      const file = await build(signal);
+      if (signal.aborted) return;
+      if (file.type !== DIAGNOSTICS_MIME_TYPE || file.size < 1 || file.size > DIAGNOSTICS_MAX_BYTES) {
+        throw new Error(t('Не удалось приложить диагностику'));
+      }
+      await this.upload(file, 'diagnostics');
+    } catch (error) {
+      if (!signal.aborted) throw error;
+    } finally {
+      this.busy = false;
+    }
+  }
+
+  private async upload(file: File, kind: AttachmentKind = 'image'): Promise<void> {
+    const signal = this.#lifetime.signal;
+    if (signal.aborted) return;
     this.busy = true;
     let draft: ComposeDraft | null = null;
     try {
-      const slot = await createAttachmentSlot({
-        context: this.context,
-        bytes: file.size,
-        clientRequestId: newId()
-      });
+      const slot = await createAttachmentSlot(
+        {
+          context: this.context,
+          bytes: file.size,
+          clientRequestId: newId(),
+          ...(kind === 'diagnostics' && { kind })
+        },
+        signal
+      );
+      if (signal.aborted) return;
       this.drafts.push({
         ...slot,
+        kind,
         file,
-        previewUrl: URL.createObjectURL(file),
+        previewUrl: kind === 'image' ? URL.createObjectURL(file) : null,
         progress: 0,
         error: null
       });
@@ -106,18 +141,22 @@ export class AttachmentComposeStore {
       if (!added) return;
       draft = added;
       this.persist();
-      Object.assign(
-        added,
-        await uploadAttachmentContent(slot.id, file, (progress) => {
+      const uploaded = await uploadAttachmentContent(
+        slot.id,
+        file,
+        (progress) => {
           added.progress = progress;
-        }),
-        { progress: 1 }
+        },
+        signal
       );
+      if (signal.aborted) return;
+      Object.assign(added, uploaded, { progress: 1 });
       await this.waitUntilTerminal(added);
     } catch (error) {
+      if (signal.aborted) return;
       if (draft && draft.state !== 'ready') {
         this.lastError = () => (error instanceof Error ? currentErrorMessage(error) : t('Ошибка загрузки'));
-        await deleteAttachment(draft.id).catch(() => {});
+        await deleteAttachment(draft.id, signal).catch(() => {});
         disposePreview(draft);
         this.drafts = this.drafts.filter((item) => item.id !== draft?.id);
         this.persist();
@@ -128,14 +167,19 @@ export class AttachmentComposeStore {
   }
 
   async waitUntilTerminal(draft: ComposeDraft): Promise<void> {
+    const signal = this.#lifetime.signal;
     for (let attempt = 0; attempt < 120 && (draft.state === 'pending' || draft.state === 'processing'); attempt += 1) {
       await new Promise((resolve) => setTimeout(resolve, 1_000));
-      Object.assign(draft, await getAttachmentStatus(draft.id));
+      if (signal.aborted) return;
+      Object.assign(draft, await getAttachmentStatus(draft.id, signal));
     }
   }
 
   async resume(ids: string[]): Promise<void> {
-    const statuses = await Promise.all(ids.slice(0, 4).map(getAttachmentStatus));
+    const signal = this.#lifetime.signal;
+    if (signal.aborted) return;
+    const statuses = await Promise.all(ids.slice(0, 4).map((id) => getAttachmentStatus(id, signal)));
+    if (signal.aborted) return;
     this.drafts = statuses
       .filter((draft) => draft.context === this.context && draft.state !== 'deleted')
       .map((draft) => ({
@@ -162,19 +206,24 @@ export class AttachmentComposeStore {
   }
 
   async retry(draft: ComposeDraft): Promise<void> {
+    const signal = this.#lifetime.signal;
+    if (signal.aborted) return;
     draft.error = null;
-    Object.assign(draft, await retryAttachment(draft.id));
+    Object.assign(draft, await retryAttachment(draft.id, signal));
     await this.waitUntilTerminal(draft);
   }
 
   async remove(draft: ComposeDraft): Promise<void> {
-    await deleteAttachment(draft.id);
+    const signal = this.#lifetime.signal;
+    if (signal.aborted) return;
+    await deleteAttachment(draft.id, signal);
     disposePreview(draft);
     this.drafts = this.drafts.filter((item) => item.id !== draft.id);
     this.persist();
   }
 
   private persist(): void {
+    if (this.#lifetime.signal.aborted) return;
     if (this.drafts.length) writeStorage(this.storageKey, JSON.stringify(this.drafts.map((draft) => draft.id)));
     else removeStorage(this.storageKey);
   }
@@ -192,6 +241,13 @@ export class AttachmentComposeStore {
     }
     this.drafts = [];
     this.persist();
+  }
+
+  invalidate(): void {
+    this.#lifetime.abort();
+    this.clearBound();
+    this.busy = false;
+    removeStorage(this.storageKey);
   }
 }
 
