@@ -138,9 +138,9 @@ async function selectStatus(value: string | undefined, close: () => void): Promi
       />
     </div>
 
-    <VoiceCallWidget v-if="activeVoice" :voice="activeVoice" />
-
     <SupportShortcut :user-id="user.id" />
+
+    <VoiceCallWidget v-if="activeVoice" :voice="activeVoice" />
     <div class="sidebar__profile">
       <DropdownMenu side="top" align="start" :aria-label="t('Статус пользователя')" focus-checked>
         <template #trigger>
