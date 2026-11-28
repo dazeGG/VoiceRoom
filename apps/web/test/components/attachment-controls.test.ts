@@ -51,7 +51,7 @@ test('each photo draft carries its upload state as a modifier, a failed upload a
   store.drafts = [
     draft('ready', { previewUrl: '/preview' }),
     draft('processing', { state: 'processing' }),
-    draft('offline', { state: 'uploading', error: 'Offline' })
+    draft('offline', { state: 'pending', error: 'Offline' })
   ];
   const { container } = render(AttachmentComposer, { props: { store } });
   const states = [...container.querySelectorAll('.attachment-composer__draft')].map((item) =>
