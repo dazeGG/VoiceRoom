@@ -81,5 +81,11 @@ export function describeAction(entry: AdminActionEntry): string {
       return describeBadge(entry.badge);
     case 'staff_role':
       return entry.role ? `Выдана роль: ${STAFF_ROLE_LABELS[entry.role]}` : 'Роль снята';
+    case 'support_reply':
+      return 'Ответ в поддержке от имени VoiceRoom';
+    case 'support_note':
+      return 'Заметка в поддержке';
+    case 'support_resolve':
+      return 'Обращение в поддержку отмечено решённым';
   }
 }

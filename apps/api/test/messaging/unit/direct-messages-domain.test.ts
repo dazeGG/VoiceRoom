@@ -62,6 +62,7 @@ type HarnessOptions = {
   media?: null;
   directEmit?: boolean;
   replyTargetGone?: boolean;
+  officialRefusal?: Error;
 };
 
 // The stores hand the unit-of-work callbacks a transaction marker, not a client.
@@ -82,7 +83,11 @@ function harness(options: HarnessOptions = {}) {
     outbox: new Array<unknown>(),
     completed: new Array<string>(),
     expired: new Array<unknown[]>(),
-    sent: new Array<Parameters<DirectMessageStore['sendMessage']>[0]>()
+    sent: new Array<Parameters<DirectMessageStore['sendMessage']>[0]>(),
+    limiterKeys: new Array<string>(),
+    afterSend: new Array<string>(),
+    pairs: new Array<string>(),
+    reservedBy: new Array<unknown>()
   };
   const messages = options.messages || {};
   const stored = (messageId: string) => {
@@ -142,7 +147,8 @@ function harness(options: HarnessOptions = {}) {
       ? null
       : {
           idempotency: {
-            async reserve() {
+            async reserve(_client, input) {
+              calls.reservedBy.push(input.actorId);
               return options.replay
                 ? {
                     kind: 'replay',
@@ -196,7 +202,14 @@ function harness(options: HarnessOptions = {}) {
       if (options.deleted) throw new DomainError('account_deleted', 403, 'Deleted');
       return { startedAsStrangers: false, refusal: null };
     },
-    recordPairMessage: async () => {},
+    recordPairMessage: async (_client, sender, recipient) => {
+      calls.pairs.push(`${sender}->${recipient}`);
+    },
+    afterDirectMessage: async (_client, message) => {
+      calls.afterSend.push(message.id);
+    },
+    officialAccountId: 'official',
+    authorizeOfficialReply: async () => options.officialRefusal ?? null,
     authorizeMessageEdit: () => {},
     invalidateTyping: () => {},
     findUser: async (userId) =>
@@ -214,7 +227,12 @@ function harness(options: HarnessOptions = {}) {
     expireRoomInvitations: async (senderId, roomId) => {
       calls.expired.push([senderId, roomId]);
     },
-    limiter: { check: () => options.rate || { allowed: true, retryAfterSeconds: 0 } },
+    limiter: {
+      check: (key) => {
+        calls.limiterKeys.push(key);
+        return options.rate || { allowed: true, retryAfterSeconds: 0 };
+      }
+    },
     media: () =>
       options.media === null
         ? null
@@ -746,4 +764,103 @@ test('a failing DM read store answers 500 without its text; a bad cursor still a
     [bad.status, bad.body],
     [400, { ok: false, error: 'Invalid read cursor', code: 'invalid_read_cursor' }]
   );
+});
+
+test('a person send runs the injected after-send hook inside the unit of work', async () => {
+  const { calls, service } = harness();
+  assert.equal((await service.send(ME, PEER, sendBase)).status, 'sent');
+  assert.deepEqual(calls.afterSend, ['dm-new']);
+  assert.deepEqual(calls.pairs, [`user-1->${PEER}`]);
+});
+
+test('staff answer as the official account: limited per staff member, authorized, delivered like any DM', async () => {
+  const limited = harness({ rate: { allowed: false, retryAfterSeconds: 4 } });
+  const refused = await limited.service.sendAsOfficial({ staffId: 'staff-1', recipientId: PEER, body: 'hi' });
+  assert.deepEqual(refused, { status: 'rate_limited', retryAfterSeconds: 4 });
+  assert.deepEqual(limited.calls.limiterKeys, ['staff:staff-1']);
+  assert.equal(
+    (await harness().service.sendAsOfficial({ staffId: 'staff-1', recipientId: PEER, body: '  ' })).status,
+    'empty'
+  );
+  assert.equal(
+    (await harness({ noPeer: true }).service.sendAsOfficial({ staffId: 'staff-1', recipientId: PEER, body: 'hi' }))
+      .status,
+    'official_missing'
+  );
+  await assert.rejects(
+    harness({ officialRefusal: new DomainError('support_conversation_deleted', 409, 'gone') }).service.sendAsOfficial({
+      staffId: 'staff-1',
+      recipientId: PEER,
+      body: 'hi'
+    }),
+    { code: 'support_conversation_deleted' }
+  );
+
+  const { calls, service } = harness();
+  const replied = new Array<string>();
+  const sent = await service.sendAsOfficial({
+    staffId: 'staff-1',
+    recipientId: PEER,
+    body: 'Thanks for the log',
+    afterInsert: async (_client, inserted) => {
+      replied.push(inserted.id);
+    }
+  });
+  assert.equal(sent.status, 'sent');
+  assert.ok('message' in sent);
+  assert.equal(sent.message.senderId, 'official');
+  assert.equal(JSON.stringify(sent.message).includes('staff-1'), false);
+  assert.deepEqual(replied, ['dm-new']);
+  assert.deepEqual(calls.afterSend, []);
+  assert.deepEqual(calls.pairs, [`official->${PEER}`]);
+  assert.deepEqual(calls.recipients, [PEER]);
+  assert.deepEqual(calls.outbox, ['message.created']);
+  assert.equal(calls.sent[0]?.senderId, 'official');
+
+  const quiet = harness({ directEmit: false });
+  assert.equal(
+    (await quiet.service.sendAsOfficial({ staffId: 'staff-1', recipientId: PEER, body: 'hi' })).status,
+    'sent'
+  );
+  assert.deepEqual(quiet.calls.recipients, []);
+});
+
+test('a message to the official account is delivered live but builds no notification for it', async () => {
+  const { calls, service } = harness();
+  assert.equal((await service.send(ME, 'official', sendBase)).status, 'sent');
+  assert.deepEqual(calls.events, [
+    ['official', 'dm-message'],
+    ['user-1', 'dm-message']
+  ]);
+  assert.deepEqual(calls.recipients, []);
+  assert.equal((await service.send(ME, PEER, sendBase)).status, 'sent');
+  assert.deepEqual(calls.recipients, [PEER]);
+});
+
+test('a staff answer keys its Idempotency-Key to the staff member; a replay is not delivered again', async () => {
+  const fresh = harness();
+  const sent = await fresh.service.sendAsOfficial({
+    staffId: 'staff-1',
+    recipientId: PEER,
+    body: 'hi',
+    idempotencyKey: 'reply-key-1'
+  });
+  assert.equal(sent.status, 'sent');
+  assert.deepEqual(fresh.calls.reservedBy, ['staff:staff-1']);
+  assert.deepEqual(fresh.calls.completed, ['ledger-1']);
+
+  const replayed = storedDirectMessage('old', { senderId: 'official', recipientId: PEER });
+  const { calls, service } = harness({ replay: true, replayed });
+  const replay = await service.sendAsOfficial({
+    staffId: 'staff-1',
+    recipientId: PEER,
+    body: 'hi',
+    idempotencyKey: 'reply-key-1',
+    afterInsert: async () => {
+      throw new Error('a replay stores nothing');
+    }
+  });
+  assert.ok('message' in replay);
+  assert.equal(replay.message.id, 'old');
+  assert.deepEqual([calls.events, calls.recipients, calls.previews, calls.outbox], [[], [], [], []]);
 });

@@ -51,7 +51,10 @@ const LOG_TONES: Record<AdminActionEntry['action'], Tone> = {
   cancel_deletion: 'success',
   logout: 'neutral',
   badge: 'accent',
-  staff_role: 'info'
+  staff_role: 'info',
+  support_reply: 'accent',
+  support_note: 'info',
+  support_resolve: 'success'
 };
 const canModerate = useCan('accounts.moderate');
 const canManage = useCan('accounts.manage');

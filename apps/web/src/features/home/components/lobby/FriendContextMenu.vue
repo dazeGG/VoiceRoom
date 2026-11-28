@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { isOfficialAccount } from '@voiceroom/shared/official-account';
 import { Ban, Bell, BellOff, CheckCheck, MessageSquare, Trash2, UserRound, UserMinus, UserPlus } from '@lucide/vue';
 import { computed, ref } from 'vue';
 import type { Friend } from '@/api/friends';
@@ -26,6 +27,8 @@ const deleteTarget = ref<Friend['user'] | null>(null);
 const friend = computed(() => target.value?.friend.user);
 const name = computed(() => (friend.value ? displayNameOf(friend.value) : ''));
 const isFriend = computed(() => target.value?.isFriend !== false);
+// The official VoiceRoom account: no call, profile, friendship or block.
+const official = computed(() => isOfficialAccount(friend.value));
 const muted = computed(() =>
   preferences.notificationPreferences.loaded
     ? preferences.isPeerNotificationsMuted(friend.value?.id)
@@ -150,7 +153,7 @@ function confirmDelete(): void {
         <template #icon><MessageSquare v-bind="iconSm" /></template>
       </MenuItem>
       <MenuItem
-        v-if="call.visible && target.canCall !== false"
+        v-if="!official && call.visible && target.canCall !== false"
         :label="call.menuLabel"
         :hint="call.menuHint"
         :tone="call.accent ? 'accent' : 'default'"
@@ -159,10 +162,10 @@ function confirmDelete(): void {
       >
         <template #icon><CallEntryIcon :mode="call.mode" v-bind="iconSm" /></template>
       </MenuItem>
-      <MenuItem :label="t('Профиль')" @select.prevent="profile(close)">
+      <MenuItem v-if="!official" :label="t('Профиль')" @select.prevent="profile(close)">
         <template #icon><UserRound v-bind="iconSm" /></template>
       </MenuItem>
-      <MenuItem v-if="!isFriend" :label="t('Добавить в друзья')" @select.prevent="addFriend(close)">
+      <MenuItem v-if="!isFriend && !official" :label="t('Добавить в друзья')" @select.prevent="addFriend(close)">
         <template #icon><UserPlus v-bind="iconSm" /></template>
       </MenuItem>
       <MenuItem v-if="onMarkRead" :label="t('Отметить прочитанным')" @select.prevent="markRead(close)">
@@ -181,7 +184,7 @@ function confirmDelete(): void {
       <MenuItem v-if="isFriend" :label="t('Удалить из друзей')" tone="danger" @select.prevent="remove(close)">
         <template #icon><UserMinus v-bind="iconSm" /></template>
       </MenuItem>
-      <MenuItem :label="t('Заблокировать')" tone="danger" @select.prevent="requestBlock(close)">
+      <MenuItem v-if="!official" :label="t('Заблокировать')" tone="danger" @select.prevent="requestBlock(close)">
         <template #icon><Ban v-bind="iconSm" /></template>
       </MenuItem>
     </template>

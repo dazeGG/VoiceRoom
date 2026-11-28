@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { isOfficialAccount } from '@voiceroom/shared/official-account';
 import { badgeOf } from '@/shared/badges';
 import { EmptyState, AccountBadge, Avatar, Button, Pressable } from '@voiceroom/ui-kit/components';
 // One open thread: its messages and its compose field. The DM view mounts it
@@ -63,6 +64,8 @@ const selfId = computed(() => self.id);
 const selfName = computed(() => displayNameOf(self));
 const peerName = computed(() => (peer ? displayNameOf(peer) : ''));
 const contact = computed(() => (lobby.thread.contact?.peer.id === peerId ? lobby.thread.contact : null));
+// The official VoiceRoom account offers no friendship, block or profile card.
+const official = computed(() => isOfficialAccount({ id: peerId }));
 const requestPending = ref(false);
 const showBlock = ref(false);
 
@@ -219,6 +222,7 @@ function jumpToMessage(messageId: string): void {
 }
 
 function profilePerson(fromMe: boolean): ProfileCardPerson | null {
+  if (!fromMe && official.value) return null;
   return fromMe
     ? {
         userId: selfId.value,
@@ -317,7 +321,7 @@ function onMenuImage(action: (image: NonNullable<typeof menuImage.value>) => voi
 
 <template>
   <DmContactNotice
-    v-if="contact && !contact.isFriend"
+    v-if="contact && !contact.isFriend && !official"
     class="dm-conversation__contact"
     :contact="contact"
     :request-pending="requestPending"

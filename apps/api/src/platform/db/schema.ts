@@ -615,6 +615,28 @@ export interface StaffSessions {
   user_id: string;
 }
 
+export interface SupportNotes {
+  author_id: string | null;
+  body: string;
+  created_at: Generated<Timestamp>;
+  id: Generated<string>;
+  user_id: string;
+}
+
+export interface SupportReplies {
+  message_id: string;
+  staff_id: string | null;
+}
+
+export interface SupportThreads {
+  last_user_message_at: Timestamp | null;
+  resolved_at: Timestamp | null;
+  resolved_by: string | null;
+  staff_read_at: Timestamp | null;
+  status: Generated<string>;
+  user_id: string;
+}
+
 export interface SystemSnapshots {
   api_rss_bytes: Generated<Int8>;
   at: Timestamp;
@@ -866,6 +888,9 @@ export interface DB {
   rooms: Rooms;
   sessions: Sessions;
   staff_sessions: StaffSessions;
+  support_notes: SupportNotes;
+  support_replies: SupportReplies;
+  support_threads: SupportThreads;
   system_snapshots: SystemSnapshots;
   user_activity_days: UserActivityDays;
   user_blocks: UserBlocks;

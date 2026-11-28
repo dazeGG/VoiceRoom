@@ -49,7 +49,8 @@ async function send<Schema extends TSchema>(
   path: string,
   schema: Schema,
   fallback: string,
-  body?: unknown
+  body?: unknown,
+  extraHeaders: Record<string, string> = {}
 ): Promise<Static<Schema>> {
   let response: Response;
   try {
@@ -58,8 +59,8 @@ async function send<Schema extends TSchema>(
       credentials: 'same-origin',
       headers:
         body === undefined
-          ? { Accept: 'application/json' }
-          : { Accept: 'application/json', 'Content-Type': 'application/json' },
+          ? { Accept: 'application/json', ...extraHeaders }
+          : { Accept: 'application/json', 'Content-Type': 'application/json', ...extraHeaders },
       ...(body === undefined ? {} : { body: JSON.stringify(body) })
     });
   } catch {
@@ -81,8 +82,13 @@ async function send<Schema extends TSchema>(
 
 export const api = {
   get: <Schema extends TSchema>(path: string, schema: Schema, fallback: string) => send('GET', path, schema, fallback),
-  post: <Schema extends TSchema>(path: string, schema: Schema, body: unknown, fallback: string) =>
-    send('POST', path, schema, fallback, body),
+  post: <Schema extends TSchema>(
+    path: string,
+    schema: Schema,
+    body: unknown,
+    fallback: string,
+    headers?: Record<string, string>
+  ) => send('POST', path, schema, fallback, body, headers),
   put: <Schema extends TSchema>(path: string, schema: Schema, body: unknown, fallback: string) =>
     send('PUT', path, schema, fallback, body)
 };

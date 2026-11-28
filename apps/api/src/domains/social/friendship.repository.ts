@@ -2,6 +2,7 @@
 // message and unread count, user search, and ending a friendship.
 
 import crypto from 'node:crypto';
+import { OFFICIAL_ACCOUNT_ID } from '@voiceroom/shared/official-account';
 import { sql } from 'kysely';
 import type pg from 'pg';
 import { kyselyOn, withTransaction, type Database, type Queryable } from '../../platform/db/kysely.ts';
@@ -129,6 +130,8 @@ export function createFriendshipRepository({ pool }: { pool: pg.Pool }) {
       .selectFrom('users')
       .selectAll()
       .where('id', '<>', excludeUserId)
+      // People search and «Новый чат» never offer the official account.
+      .where('id', '<>', OFFICIAL_ACCOUNT_ID)
       .where('deletion_requested_at', 'is', null)
       .where('deleted_at', 'is', null)
       .where((eb) =>

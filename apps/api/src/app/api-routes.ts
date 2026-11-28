@@ -37,6 +37,7 @@ import { registerPeerModerationRoutes } from '../domains/rooms/peer-moderation.r
 import { registerCallFeedbackRoutes } from '../domains/feedback/call-feedback.routes.ts';
 import { registerReportRoutes } from '../domains/reports/reports.routes.ts';
 import { registerAdminRoutes } from '../domains/admin/admin.routes.ts';
+import { registerSupportRoutes } from '../domains/support/support.routes.ts';
 import { registerRoomRoutes } from '../domains/rooms/rooms.routes.ts';
 import { createStaffActorResolver, registerStaffRoutes } from '../domains/staff/staff.routes.ts';
 import { registerFriendsRoutes } from '../domains/social/friends.routes.ts';
@@ -87,6 +88,7 @@ export interface ApiRouteDeps {
     adminRooms: Parameters<typeof registerAdminRoutes>[2]['rooms'];
     adminWidgets: Parameters<typeof registerAdminRoutes>[2]['widgets'];
     staff: Parameters<typeof registerStaffRoutes>[2]['staff'];
+    support: Parameters<typeof registerSupportRoutes>[2]['support'];
     desktopRelease: OpsRouteDeps['desktopRelease'];
   };
   limits: RateLimits;
@@ -242,6 +244,7 @@ export function registerApiRoutes(app: FastifyInstance, ctx: ApiContext, deps: A
     widgets: deps.domain.adminWidgets,
     staffUserId
   });
+  registerSupportRoutes(app, ctx, { support: deps.domain.support, staffUserId });
   registerMediaRoutes(app, ctx, {
     media: database.media.service,
     visibility: database.media.visibility

@@ -18,7 +18,8 @@ const meta = {
           '- Use 56 for two lines with an avatar of 40, and 36 for a dense row with an avatar of 24.',
           '- Show the name at 14/500 and a caption. On the right, show the time (mono-caption) or a Badge.',
           '- Show IconButton 28 actions on hover and focus, and keep them visible on a phone.',
-          '- Make the whole row one click target.'
+          '- Make the whole row one click target.',
+          '- Mark the current row of a list, such as the open conversation, with `selected`: the row gets `aria-current="true"` and the selected background. Rows a person picks a value from belong in a Listbox.'
         ].join('\n')
       }
     }
@@ -36,6 +37,7 @@ type Story = StoryObj<typeof meta>;
 
 export const WithTime: Story = { args: { time: 'вчера' } };
 export const Dense: Story = { args: { dense: true, caption: '' } };
+export const Selected: Story = { args: { selected: true, time: '13:05' } };
 export const Static: Story = { args: { interactive: false } };
 export const Disabled: Story = { args: { disabled: true } };
 export const WithBadgeAndActions: Story = {

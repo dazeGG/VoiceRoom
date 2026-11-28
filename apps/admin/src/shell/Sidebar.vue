@@ -9,7 +9,13 @@ import BrandMark from './BrandMark.vue';
 import SidebarNavigation from './SidebarNavigation.vue';
 import { useSidebar } from './use-sidebar.ts';
 
-const props = defineProps<{ staff: Staff; tabs: readonly AdminTab[]; current: AdminTab; openReports: number }>();
+const props = defineProps<{
+  staff: Staff;
+  tabs: readonly AdminTab[];
+  current: AdminTab;
+  openReports: number;
+  supportUnread?: number;
+}>();
 const emit = defineEmits<{ select: [tab: AdminTab]; signOut: [] }>();
 
 const roles: Record<StaffRole, string> = { moderator: 'модератор', admin: 'админ', superadmin: 'суперадмин' };
@@ -69,6 +75,7 @@ function resizeFromKey(event: KeyboardEvent): void {
         :tabs="tabs"
         :current="current"
         :open-reports="openReports"
+        :support-unread="supportUnread ?? 0"
         compact
         :preview-open="visible"
         @select="select"
@@ -91,7 +98,13 @@ function resizeFromKey(event: KeyboardEvent): void {
         <BrandMark class="admin-sidebar__mark" label="VoiceRoom" />
         <span><strong>VoiceRoom</strong><small>Админка</small></span>
       </a>
-      <SidebarNavigation :tabs="tabs" :current="current" :open-reports="openReports" @select="select" />
+      <SidebarNavigation
+        :tabs="tabs"
+        :current="current"
+        :open-reports="openReports"
+        :support-unread="supportUnread ?? 0"
+        @select="select"
+      />
       <div class="admin-sidebar__profile">
         <ListItem
           class="admin-sidebar__profile-details"

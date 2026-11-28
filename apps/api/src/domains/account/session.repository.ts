@@ -1,6 +1,7 @@
 // Sessions: issuing a session token, resolving it on each request (and
 // touching it at most hourly), listing and revoking an account's sessions.
 
+import { isOfficialAccount } from '@voiceroom/shared/official-account';
 import { lockUser } from './user.repository.ts';
 import { SessionIssuanceError, type CredentialProof } from './session-proof.ts';
 import { sql } from 'kysely';
@@ -55,7 +56,9 @@ export function createSessionRepository({
       if (!row || row.password_hash !== passwordHash) throw new SessionIssuanceError({ status: 'invalid_credentials' });
       const user = storedUser(row);
       const at = Date.now();
-      if (user.deletedAt !== null) throw new SessionIssuanceError({ status: 'invalid_credentials' });
+      // The official account never gets a session, whatever proof is offered.
+      if (user.deletedAt !== null || isOfficialAccount(user))
+        throw new SessionIssuanceError({ status: 'invalid_credentials' });
       const block = activeBlock(user, at);
       if (block)
         throw new SessionIssuanceError({ status: 'blocked', blockedUntil: block.until, blockReason: block.reason });

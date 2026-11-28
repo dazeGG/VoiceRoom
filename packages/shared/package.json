@@ -54,6 +54,8 @@
     "./contracts/feedback": "./src/contracts/feedback.ts",
     "./contracts/admin": "./src/contracts/admin.ts",
     "./contracts/staff": "./src/contracts/staff.ts",
+    "./contracts/support": "./src/contracts/support.ts",
+    "./official-account": "./src/official-account.ts",
     "./contracts/devices": "./src/contracts/devices.ts",
     "./contracts/client": "./src/contracts/client.ts",
     "./report-labels": "./src/report-labels.ts",

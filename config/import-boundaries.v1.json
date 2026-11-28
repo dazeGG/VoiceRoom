@@ -98,7 +98,10 @@
       "user_activity_days": ["apps/api/src/domains/account/activity.repository.ts"],
       "product_snapshots": ["apps/api/src/domains/ops/product-snapshot.repository.ts"],
       "system_snapshots": ["apps/api/src/domains/ops/system-snapshot.repository.ts"],
-      "admin_actions": ["apps/api/src/domains/admin/admin-action.repository.ts"]
+      "admin_actions": ["apps/api/src/domains/admin/admin-action.repository.ts"],
+      "support_threads": ["apps/api/src/domains/support/support.repository.ts"],
+      "support_notes": ["apps/api/src/domains/support/support.repository.ts"],
+      "support_replies": ["apps/api/src/domains/support/support.repository.ts"]
     },
     "crossDomainWriters": {
       "apps/api/src/domains/account/account-deletion.repository.ts": [
@@ -128,7 +131,8 @@
         "notification_outbox",
         "room_rings",
         "ring_delivery_outbox"
-      ]
+      ],
+      "apps/api/src/domains/support/support.repository.ts": ["admin_actions"]
     },
     "ownerPathPrefixes": ["apps/api/src/migrations/"]
   },

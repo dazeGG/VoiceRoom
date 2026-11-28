@@ -6,6 +6,7 @@
 // acts on an administrator's account; every action lands in the log.
 
 import test from 'node:test';
+import { OFFICIAL_ACCOUNT_ID } from '@voiceroom/shared/official-account';
 import assert from 'node:assert/strict';
 import { Pool } from 'pg';
 import { AccountFailure, Me, SignedIn } from '@voiceroom/shared/contracts/account';
@@ -131,6 +132,7 @@ test('the account list counts what each account did and finds it by name, filter
   assert.equal((await request(socketPath, { pathname: `/api/admin/accounts/${bobId}`, cookie: alice })).status, 403);
 
   const all = (await list()).body;
+  // The official VoiceRoom account the migrations create is not listed.
   assert.equal(all.total, 3);
   // Newest first by default; bob registered 40 days ago.
   assert.equal(all.accounts.at(-1)?.login, 'bob');
@@ -402,12 +404,13 @@ test('the mark is public, and only the official account may carry the service na
     });
   assert.equal((await rename(alice)).body.code, 'reserved_name');
 
-  assert.deepEqual((await request(socketPath, { pathname: '/api/badges' }, BadgeList)).body.badges, []);
+  const official = { userId: OFFICIAL_ACCOUNT_ID, badge: 'official' };
+  assert.deepEqual((await request(socketPath, { pathname: '/api/badges' }, BadgeList)).body.badges, [official]);
   const marked = await actAs(AccountDetail, aliceId, 'badge', { badge: 'official' });
   assert.equal(marked.body.account.badge, 'official');
   assert.deepEqual(
     (await request(socketPath, { pathname: '/api/badges' }, BadgeList)).body.badges,
-    [{ userId: aliceId, badge: 'official' }],
+    [official, { userId: aliceId, badge: 'official' }].sort((a, b) => a.userId.localeCompare(b.userId)),
     'guests read it too'
   );
   assert.equal((await rename(alice)).status, 200, 'the official account may carry the name');

@@ -5,6 +5,7 @@
 import type { Logger } from 'pino';
 import { LOG_EVENTS } from '../lib/log-events.ts';
 import { reconcileAvatarStorage } from '../lib/avatar-reconciliation.ts';
+import { ensureOfficialAvatar } from '../domains/support/official-avatar.service.ts';
 import { reconcileLinkPreviewImages } from '../lib/link-preview-storage.ts';
 import type { createServiceRegistry } from './service-registry.ts';
 
@@ -15,6 +16,20 @@ export async function runStartupTasks(
   const roomStore = services.getRoomStore();
   await roomStore.markActiveTemporaryRoomsEmpty();
   await roomStore.pruneRooms();
+  // Before the reconciliation, so the brand avatar's file counts as referenced.
+  try {
+    const avatar = await ensureOfficialAvatar({ storage: services.getAvatarStorage(), users: services.getUserStore() });
+    if (avatar === 'updated')
+      logger.info(
+        { evt: LOG_EVENTS.MAINTENANCE_TASK_COMPLETED, task: 'official-avatar' },
+        'stored the official account avatar'
+      );
+  } catch (error) {
+    logger.warn(
+      { evt: LOG_EVENTS.MAINTENANCE_TASK_FAILED, task: 'official-avatar', err: error },
+      'official avatar failed'
+    );
+  }
   const reconciliation = await reconcileAvatarStorage({
     storage: services.getAvatarStorage(),
     userStore: services.getUserStore(),

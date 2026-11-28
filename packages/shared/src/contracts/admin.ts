@@ -331,7 +331,10 @@ export const AdminActionKind = Type.Union([
   Type.Literal('delete'),
   Type.Literal('cancel_deletion'),
   Type.Literal('badge'),
-  Type.Literal('staff_role')
+  Type.Literal('staff_role'),
+  Type.Literal('support_reply'),
+  Type.Literal('support_note'),
+  Type.Literal('support_resolve')
 ]);
 export type AdminActionKind = Static<typeof AdminActionKind>;
 

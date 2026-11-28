@@ -1,5 +1,6 @@
 @use 'pkg:@voiceroom/ui-kit/styles/tokens';
 @use 'pkg:@voiceroom/ui-kit/styles/typography';
+@use 'pkg:@voiceroom/ui-kit/styles/components/account-badge';
 @use 'pkg:@voiceroom/ui-kit/styles/components/avatar';
 @use 'pkg:@voiceroom/ui-kit/styles/components/avatar-stack';
 @use 'pkg:@voiceroom/ui-kit/styles/components/badge';
@@ -48,4 +49,5 @@
 @use 'product';
 @use 'feedback';
 @use 'reports';
+@use 'support';
 @use 'widgets';

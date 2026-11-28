@@ -124,6 +124,7 @@ test('a superadmin sees every section in the menu order, the staff one included'
     'Пользователи',
     'Комнаты',
     'Виджеты',
+    'Поддержка',
     'Жалобы',
     'Сотрудники'
   ]);

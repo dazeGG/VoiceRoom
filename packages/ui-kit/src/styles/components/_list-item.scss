@@ -16,6 +16,11 @@
     background: var(--vr-hover);
   }
 
+  // The current row of its list (the open conversation); its own state, not a variant.
+  &:has(> .ui-list-item__body[aria-current='true']) {
+    background: var(--vr-surface-3);
+  }
+
   &--dense {
     --list-item-px: var(--space-8);
     --list-item-py: 0;

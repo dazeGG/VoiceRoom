@@ -14,6 +14,7 @@ import { Value } from 'typebox/value';
 import type { DB, DirectMessages, Users } from '../../platform/db/schema.ts';
 import { epochMillis } from '../../platform/epoch-millis.ts';
 import { avatarUrl } from '../../lib/avatar-url.ts';
+import { OFFICIAL_ACCOUNT_ID } from '@voiceroom/shared/official-account';
 
 export type Metadata = Record<string, unknown>;
 export type UserRow = Pick<
@@ -116,6 +117,11 @@ export function orderedPair(a: string, b: string): [string, string] {
 export async function lockUserPair(q: Database, a: string, b: string): Promise<void> {
   const [low, high] = orderedPair(a, b);
   await lockXact(q, lockKeys.userPair(low, high));
+}
+
+/** Whether one of the accounts is the official VoiceRoom account, which nobody befriends or blocks. */
+export function involvesOfficialAccount(a: string, b: string): boolean {
+  return a === OFFICIAL_ACCOUNT_ID || b === OFFICIAL_ACCOUNT_ID;
 }
 
 export function tryLockUserPair(q: Database, a: string, b: string): Promise<boolean> {

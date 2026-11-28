@@ -25,7 +25,8 @@ const PERMISSION_TEXT: Record<StaffPermission, { group: PermissionGroup; title: 
   'accounts.moderate': { group: 'Аккаунты', title: 'Блокировать на время и разлогинивать' },
   'accounts.manage': { group: 'Аккаунты', title: 'Блокировать навсегда, удалять и ставить отметки' },
   'stats.view': { group: 'Аналитика', title: 'Смотреть статистику' },
-  'staff.manage': { group: 'Команда', title: 'Выдавать и снимать роли' }
+  'staff.manage': { group: 'Команда', title: 'Выдавать и снимать роли' },
+  'support.reply': { group: 'Модерация', title: 'Отвечать в поддержке от имени VoiceRoom' }
 };
 
 export interface PermissionRow {

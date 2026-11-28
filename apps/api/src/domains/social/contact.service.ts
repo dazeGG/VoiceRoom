@@ -11,6 +11,7 @@ import {
   canRead,
   canType,
   isNewPair,
+  officialExemption,
   type ContactFacts,
   type ContactLimits
 } from './contact.policy.ts';
@@ -89,7 +90,8 @@ export async function authorizeMessage(tx: Database, sender: string, recipient: 
 
 // The pair lock is already held. Only new stranger pairs share a sender-wide budget.
 export async function newChatStart(tx: Database, facts: ContactFacts | null, daily: number) {
-  const startedAsStrangers = facts !== null && !facts.friends && isNewPair(facts);
+  // A chat with the official account is no stranger chat: it spends no budget.
+  const startedAsStrangers = facts !== null && !facts.friends && !officialExemption(facts) && isNewPair(facts);
   if (!startedAsStrangers || daily <= 0) return { startedAsStrangers, capped: false };
   await lockXact(tx, lockKeys.dmNewChat(facts.senderId));
   return { startedAsStrangers, capped: (await countNewChats(tx, facts.senderId)) >= daily };

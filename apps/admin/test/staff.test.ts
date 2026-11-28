@@ -63,9 +63,9 @@ test('the summary counts the rights of each role', async () => {
   stubTeam();
   renderAsStaff(StaffPage, {}, 'superadmin');
   const summary = await screen.findByRole('region', { name: 'Кто что может' });
-  expect(within(summary).getByText('8 из 8 прав')).toBeTruthy();
-  expect(within(summary).getByText('7 из 8 прав')).toBeTruthy();
-  expect(within(summary).getByText('4 из 8 прав')).toBeTruthy();
+  expect(within(summary).getByText('9 из 9 прав')).toBeTruthy();
+  expect(within(summary).getByText('7 из 9 прав')).toBeTruthy();
+  expect(within(summary).getByText('4 из 9 прав')).toBeTruthy();
 });
 
 test('the table of rights says what each role may do and open, and closes on Escape', async () => {
@@ -94,8 +94,9 @@ test('the table of rights says what each role may do and open, and closes on Esc
   expect(rowOf(/^Смотреть статистику/)).toEqual(['может', 'может', 'не может']);
   expect(rowOf(/^Выдавать и снимать роли/)).toEqual(['может', 'не может', 'не может']);
   expect(rowOf(/^Разбирать жалобы/)).toEqual(['может', 'может', 'может']);
+  expect(rowOf(/^Отвечать в поддержке/)).toEqual(['может', 'не может', 'не может']);
   expect(rowOf(/^Разделы в меню/)).toEqual([
-    'Обзор, Продукт, Отзывы, Сервер, Пользователи, Комнаты, Виджеты, Жалобы, Сотрудники',
+    'Обзор, Продукт, Отзывы, Сервер, Пользователи, Комнаты, Виджеты, Поддержка, Жалобы, Сотрудники',
     'Обзор, Продукт, Отзывы, Сервер, Пользователи, Комнаты, Виджеты, Жалобы',
     'Пользователи, Комнаты, Виджеты, Жалобы'
   ]);

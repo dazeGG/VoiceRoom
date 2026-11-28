@@ -201,6 +201,12 @@ export const ERROR_CODES = [
   'cannot_moderate_admin',
   'confirmation_mismatch',
   'deletion_not_by_admin',
+  'official_account',
+
+  // Support inbox in the admin app
+  'support_thread_not_found',
+  'support_conversation_deleted',
+  'support_thread_changed',
 
   // Staff roles and the admin app
   'staff_session_required',

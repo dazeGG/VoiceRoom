@@ -5,6 +5,7 @@ import {
   canMessage,
   canRead,
   canType,
+  officialExemption,
   type ContactFacts
 } from '../../../src/domains/social/contact.policy.ts';
 
@@ -20,7 +21,9 @@ const stranger: ContactFacts = {
   selectedForMessages: false,
   selectedForCalls: false,
   newChatsToday: 0,
-  pair: null
+  pair: null,
+  senderOfficial: false,
+  recipientOfficial: false
 };
 
 test('contact audiences apply independently, with blocks taking precedence', () => {
@@ -51,4 +54,26 @@ test('the new-chat cap ignores existing pairs and the unanswered cap applies to 
   assert.equal(canMessage({ ...capped, hasMessages: true }, limits), 'allowed');
   assert.equal(canMessage({ ...capped, pair: { last_sender_id: 'b', unanswered_count: 3 } }, limits), 'allowed');
   assert.equal(canMessage({ ...capped, pair: { last_sender_id: 'a', unanswered_count: 3 } }, limits), 'unanswered_cap');
+});
+
+test('anyone writes to the official account without friendship, settings or caps; it never writes, calls or is called', () => {
+  const toOfficial: ContactFacts = {
+    ...stranger,
+    recipientOfficial: true,
+    messagesFrom: 'friends',
+    callsFrom: 'everyone',
+    newChatsToday: 10,
+    pair: { last_sender_id: 'a', unanswered_count: 3 }
+  };
+  assert.equal(officialExemption(toOfficial), true);
+  assert.equal(canMessage(toOfficial, limits), 'allowed');
+  assert.equal(canType(toOfficial, limits), 'allowed');
+  assert.equal(canRead(toOfficial, limits), 'allowed');
+  assert.equal(canMessage({ ...toOfficial, active: false }, limits), 'blocked');
+  assert.equal(canCall(toOfficial), 'blocked');
+  const fromOfficial: ContactFacts = { ...stranger, senderOfficial: true, messagesFrom: 'everyone', friends: true };
+  assert.equal(officialExemption(fromOfficial), false);
+  assert.equal(canMessage(fromOfficial, limits), 'blocked');
+  assert.equal(canCall({ ...fromOfficial, callsFrom: 'everyone' }), 'blocked');
+  assert.equal(officialExemption({ senderOfficial: true, recipientOfficial: true }), false);
 });

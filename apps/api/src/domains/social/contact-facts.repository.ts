@@ -2,6 +2,7 @@ import { sql, type OperandValueExpressionOrList } from 'kysely';
 import type { ContactAudience } from '@voiceroom/shared/contracts/privacy';
 import type { Database } from '../../platform/db/kysely.ts';
 import type { DB } from '../../platform/db/schema.ts';
+import { OFFICIAL_ACCOUNT_ID } from '@voiceroom/shared/official-account';
 import { cleanBadge } from '../account/user-records.ts';
 import { newChats } from './dm-pair-state.repository.ts';
 import { mapPublicUser, orderedPair } from './social-records.ts';
@@ -113,6 +114,8 @@ export async function loadContactFacts(db: Database, senderId: string, recipient
     selectedForMessages: Boolean(facts.selectedForMessages),
     selectedForCalls: Boolean(facts.selectedForCalls),
     peer: { ...mapPublicUser(row), badge: cleanBadge(row.recipientBadge) },
+    senderOfficial: senderId === OFFICIAL_ACCOUNT_ID,
+    recipientOfficial: recipientId === OFFICIAL_ACCOUNT_ID,
     pair: last_sender_id === null || unanswered_count === null ? null : { last_sender_id, unanswered_count },
     messagesFrom: contactAudience(facts.messagesFrom, 'everyone'),
     callsFrom: contactAudience(facts.callsFrom, 'friends'),

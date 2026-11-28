@@ -37,6 +37,7 @@ import { parseAndroidAppVersion } from '@voiceroom/shared/client-version';
 import { cleanDisplayName, normalizeLogin } from '@voiceroom/shared/validation';
 import { Value } from 'typebox/value';
 import type { ApiContext, ResolvedSession, SessionRecord, SessionUser } from '../../app/context.ts';
+import { isOfficialAccount } from '@voiceroom/shared/official-account';
 import { selfUser } from './user-records.ts';
 import { failure, optionalJsonBody } from '../../platform/http/http-kit.ts';
 import type { AccountService, Blocked, Device, OpenedSession } from './account.service.ts';
@@ -50,6 +51,7 @@ const ACCOUNT_NOT_FOUND = failure('Аккаунт не найден', { code: 'a
 const SHORT_PASSWORD = failure('Пароль должен быть не короче 8 символов', { code: 'password_too_short' });
 const WRONG_CREDENTIALS = failure('Неверный логин или пароль', { code: 'invalid_credentials' });
 const WRONG_PASSWORD = failure('Неверный пароль', { code: 'wrong_password' });
+const OFFICIAL_ACCOUNT = failure('Это служебный аккаунт VoiceRoom', { code: 'official_account' });
 const RESERVED_NAME = failure('Это имя зарезервировано за VoiceRoom', { code: 'reserved_name' });
 const DELETION_UNAVAILABLE = failure('Удаление аккаунта сейчас недоступно', { code: 'account_deletion_unavailable' });
 
@@ -89,6 +91,15 @@ export function registerAccountRoutes(root: FastifyInstance, ctx: ApiContext, de
     const resolved: ResolvedSession | null = await ctx.resolveSession(request.raw);
     if (resolved?.user && resolved.session) return { user: resolved.user, session: resolved.session };
     reply.code(401).send(SIGN_IN_REQUIRED);
+    return null;
+  }
+
+  // The official account has no password, recovery codes or sessions of its
+  // own to manage; a session row for it can only have been planted by hand.
+  async function signedInPerson(request: FastifyRequest, reply: FastifyReply): Promise<Account | null> {
+    const me = await signedIn(request, reply);
+    if (!me || !isOfficialAccount(me.user)) return me;
+    reply.code(403).send(OFFICIAL_ACCOUNT);
     return null;
   }
 
@@ -275,7 +286,7 @@ export function registerAccountRoutes(root: FastifyInstance, ctx: ApiContext, de
       schema: { body: PasswordBody, response: answers(Done) }
     },
     async (request, reply) => {
-      const me = await signedIn(request, reply);
+      const me = await signedInPerson(request, reply);
       if (!me) return reply;
       // Throttled on the account so a hijacked session cannot brute-force the
       // current password, the only secret guarding the rotation.
@@ -311,7 +322,7 @@ export function registerAccountRoutes(root: FastifyInstance, ctx: ApiContext, de
       schema: { body: CurrentPasswordBody, response: answers(RecoveryCodesGenerated) }
     },
     async (request, reply) => {
-      const me = await signedIn(request, reply);
+      const me = await signedInPerson(request, reply);
       if (!me) return reply;
       // The password is the only secret guarding this, exactly as for a password change.
       if (!withinLimit(reply, `recovery-codes:${me.user.id}`)) return reply;
@@ -326,7 +337,7 @@ export function registerAccountRoutes(root: FastifyInstance, ctx: ApiContext, de
     '/api/auth/recovery-codes/reminder/snooze',
     { schema: { response: answers(ReminderSnoozed) } },
     async (request, reply) => {
-      const me = await signedIn(request, reply);
+      const me = await signedInPerson(request, reply);
       if (!me) return reply;
       const result = await account.snoozeRecoveryCodesReminder(me.user.id);
       if (result.status === 'not_found') return reply.code(404).send(ACCOUNT_NOT_FOUND);
@@ -335,7 +346,7 @@ export function registerAccountRoutes(root: FastifyInstance, ctx: ApiContext, de
   );
 
   app.get('/api/auth/sessions', { schema: { response: answers(Sessions) } }, async (request, reply) => {
-    const me = await signedIn(request, reply);
+    const me = await signedInPerson(request, reply);
     if (!me) return reply;
     return { ok: true as const, sessions: await account.listSessions(me.user.id, me.session.tokenHash) };
   });
@@ -344,7 +355,7 @@ export function registerAccountRoutes(root: FastifyInstance, ctx: ApiContext, de
     '/api/auth/sessions/revoke-others',
     { schema: { response: answers(SessionsRevoked) } },
     async (request, reply) => {
-      const me = await signedIn(request, reply);
+      const me = await signedInPerson(request, reply);
       if (!me) return reply;
       return { ok: true as const, revoked: await account.revokeOtherSessions(me.user.id, me.session.tokenHash) };
     }
@@ -356,7 +367,7 @@ export function registerAccountRoutes(root: FastifyInstance, ctx: ApiContext, de
       schema: { params: SessionIdParams, response: answers(Done) }
     },
     async (request, reply) => {
-      const me = await signedIn(request, reply);
+      const me = await signedInPerson(request, reply);
       if (!me) return reply;
       const result = await account.revokeSession(me.user.id, me.session.publicId, request.params.sessionId);
       if (result.status === 'current_session')

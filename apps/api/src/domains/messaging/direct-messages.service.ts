@@ -80,6 +80,19 @@ export interface DirectMessagesDeps {
   authorizeMessage(client: DbClient, sender: string, recipient: string): ReturnType<typeof authorizeMessage>;
   authorizeMessageEdit(this: void, facts: ContactFacts | null): void;
   recordPairMessage(client: DbClient, sender: string, recipient: string, startedAsStrangers: boolean): Promise<void>;
+  /**
+   * Runs inside every person's send, after the message is stored, in its
+   * transaction. The support inbox records the person's thread here, so
+   * messaging never imports support.
+   */
+  afterDirectMessage?(client: DbClient, message: DirectMessage): Promise<void>;
+  /** The id of the official VoiceRoom account, the sender of staff answers. */
+  officialAccountId: string;
+  /**
+   * With the pair lock taken: why the official account may not answer this
+   * person now (no live conversation, account gone), or null.
+   */
+  authorizeOfficialReply(client: DbClient, recipientId: string): Promise<Error | null>;
   findUser(userId: string): Promise<SocialUser | null>;
   isDmMuted(userId: string, peerUserId: string): Promise<boolean>;
   roomExists(roomId: string): Promise<boolean>;
@@ -221,7 +234,10 @@ export function createDirectMessagesService(deps: DirectMessagesDeps) {
               client
             )
         : null,
-      afterInsert: (client) => deps.recordPairMessage(client, sender.id, recipientId, startedAsStrangers),
+      afterInsert: async (client, inserted) => {
+        await deps.recordPairMessage(client, sender.id, recipientId, startedAsStrangers);
+        await deps.afterDirectMessage?.(client, inserted);
+      },
       outboxMessage: (inserted) => inserted
     });
 
@@ -240,11 +256,68 @@ export function createDirectMessagesService(deps: DirectMessagesDeps) {
       : { ...projectedBase, replyPreview: send.replyPreview() };
     if (!stored.idempotencyReplay) {
       // To the recipient and the sender's other tabs; clients dedupe by id.
-      if (deps.directEmit && (await deps.broadcastDirectMessage(message))) {
+      // Nobody reads the official account's notifications: staff see the inbox.
+      if (deps.directEmit && (await deps.broadcastDirectMessage(message)) && recipientId !== deps.officialAccountId) {
         await deps.notifyRecipient(recipientId, sender, message);
       }
       deps.scheduleLinkPreview({ messageId: stored.id, senderId: sender.id, recipientId, text });
     }
+    return { status: 'sent', message };
+  }
+
+  // Staff answer a person as VoiceRoom from the admin app. Only into a live
+  // conversation the person started, under the pair lock like every writer,
+  // rate-limited per staff member. The message is an ordinary DM from the
+  // official account: who on staff wrote it stays with the caller's
+  // `afterInsert` (the support inbox's side table), never in the payload.
+  // An Idempotency-Key is scoped to the staff member, so a retried answer is
+  // stored and delivered once.
+  async function sendAsOfficial(input: {
+    staffId: string;
+    recipientId: string;
+    body: unknown;
+    idempotencyKey?: string;
+    afterInsert?: (client: DbClient, inserted: DirectMessage) => Promise<unknown>;
+  }): Promise<{ status: 'sent'; message: DirectMessage } | RateLimited | Status<'empty' | 'official_missing'>> {
+    const limited = rateLimited(`staff:${input.staffId}`);
+    if (limited) return limited;
+    const text = cleanDmText(input.body);
+    if (!text) return { status: 'empty' };
+    const sender = await deps.findUser(deps.officialAccountId);
+    if (!sender) return { status: 'official_missing' };
+    const { recipientId } = input;
+    const send = sendUnitOfWork({
+      delivery: deps.delivery(),
+      idempotencyKey: input.idempotencyKey ?? '',
+      actor: { type: 'account', id: `staff:${input.staffId}` },
+      conversation: { type: 'dm', id: recipientId },
+      fingerprint: messageFingerprint({ text, attachmentIds: [], replyToMessageId: '' }),
+      isStored: isReplayedMessage,
+      replayMissing: 'The idempotent replay holds no direct message',
+      authorize: (client) => deps.authorizeOfficialReply(client, recipientId),
+      lockReply: null,
+      bindAttachments: null,
+      afterInsert: async (client, inserted) => {
+        await deps.recordPairMessage(client, sender.id, recipientId, false);
+        await input.afterInsert?.(client, inserted);
+      },
+      outboxMessage: (inserted) => inserted
+    });
+    const stored = await deps.messages().direct.sendMessage({
+      senderId: sender.id,
+      recipientId,
+      body: text,
+      replyToMessageId: null,
+      beforeUnitOfWork: send.beforeUnitOfWork,
+      unitOfWork: send.unitOfWork
+    });
+    const message = await deps.projectMedia('dm', stored);
+    if (stored.idempotencyReplay) return { status: 'sent', message };
+    // Like any DM: the live event, then the notification and push.
+    if (deps.directEmit && (await deps.broadcastDirectMessage(message))) {
+      await deps.notifyRecipient(recipientId, sender, message);
+    }
+    deps.scheduleLinkPreview({ messageId: stored.id, senderId: sender.id, recipientId, text });
     return { status: 'sent', message };
   }
 
@@ -371,7 +444,7 @@ export function createDirectMessagesService(deps: DirectMessagesDeps) {
 
   const listConversations = (userId: string) => deps.messages().direct.listConversations(userId);
 
-  return { listConversations, thread, send, respondInvite, markRead, remove, removeAsOperator, edit };
+  return { listConversations, thread, send, sendAsOfficial, respondInvite, markRead, remove, removeAsOperator, edit };
 }
 
 export type DirectMessagesService = ReturnType<typeof createDirectMessagesService>;

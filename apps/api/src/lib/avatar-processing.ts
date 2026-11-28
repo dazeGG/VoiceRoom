@@ -38,6 +38,11 @@ async function processAvatar(buffer: unknown): Promise<ProcessedAvatar> {
     throw new DomainError('invalid_request', 400, 'Invalid or unsafe image', { cause });
   }
 
+  return finishAvatar(output);
+}
+
+// The accent behind the image and the content hash its key carries.
+async function finishAvatar(output: Buffer): Promise<ProcessedAvatar> {
   const { data, info } = await sharp(output).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
   const presentation = deriveAvatarAccent(dominantAvatarColor(data, info.width, info.height));
   return {
@@ -45,6 +50,15 @@ async function processAvatar(buffer: unknown): Promise<ProcessedAvatar> {
     buffer: output,
     hash: crypto.createHash('sha256').update(output).digest('hex').slice(0, 8)
   };
+}
+
+/** A vector image the service ships (never an upload) as an avatar file like any other. */
+async function renderVectorAvatar(svg: string): Promise<ProcessedAvatar> {
+  const output = await sharp(Buffer.from(svg), { density: 300 })
+    .resize(AVATAR_SIZE, AVATAR_SIZE, { fit: 'cover', position: 'centre' })
+    .webp({ quality: 86, effort: 4 })
+    .toBuffer();
+  return finishAvatar(output);
 }
 
 function createAvatarKey(kind: string, id: unknown, hash: string): string {
@@ -57,4 +71,4 @@ function createAvatarKey(kind: string, id: unknown, hash: string): string {
   return `${kind === 'room' ? 'room' : 'av'}_${normalizedId}_${hash}.webp`;
 }
 
-export { AVATAR_SIZE, MAX_AVATAR_BYTES, createAvatarKey, detectAvatarFormat, processAvatar };
+export { AVATAR_SIZE, MAX_AVATAR_BYTES, createAvatarKey, detectAvatarFormat, processAvatar, renderVectorAvatar };

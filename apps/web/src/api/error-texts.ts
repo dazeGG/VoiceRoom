@@ -535,6 +535,18 @@ export const ERROR_TEXTS: Record<ErrorCode, string> = {
   get reserved_name() {
     return t('Это имя зарезервировано за VoiceRoom');
   },
+  get official_account() {
+    return t('Это служебный аккаунт VoiceRoom');
+  },
+  get support_thread_not_found() {
+    return t('Обращение не найдено');
+  },
+  get support_conversation_deleted() {
+    return t('Человек удалил переписку');
+  },
+  get support_thread_changed() {
+    return t('Человек написал снова, обновите переписку');
+  },
   get cannot_moderate_admin() {
     return t('Аккаунт администратора нельзя заблокировать или удалить');
   },

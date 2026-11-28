@@ -9,6 +9,7 @@ export interface Call {
   method: string;
   url: URL;
   body: unknown;
+  headers: Headers;
 }
 
 /** Answers "METHOD /path" (the query is not part of the key) and records every call. */
@@ -20,7 +21,7 @@ export function stubApi(routes: Record<string, Route>): Call[] {
       const url = new URL(String(input instanceof Request ? input.url : input), 'http://admin.test');
       const method = (init?.method ?? 'GET').toUpperCase();
       const body: unknown = typeof init?.body === 'string' ? JSON.parse(init.body) : undefined;
-      calls.push({ method, url, body });
+      calls.push({ method, url, body, headers: new Headers(init?.headers) });
       const route = routes[`${method} ${url.pathname}`];
       const reply: Reply = route
         ? typeof route === 'function'
