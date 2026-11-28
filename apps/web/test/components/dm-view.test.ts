@@ -678,7 +678,7 @@ test('the official VoiceRoom chat opens without call, profile, friendship or blo
     within(menu)
       .getAllByRole('menuitem')
       .map((item) => item.getAttribute('aria-label'))
-  ).toEqual(['Отметить прочитанным', 'Выключить уведомления', 'Удалить переписку']);
+  ).toEqual(['Отметить непрочитанным', 'Выключить уведомления', 'Удалить переписку']);
   for (const name of ['Профиль', 'Добавить в друзья', 'Заблокировать', 'Позвонить'])
     expect(within(menu).queryByRole('menuitem', { name })).toBeNull();
 });

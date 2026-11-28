@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Button, Card, EmptyState, Field, ListItem, SegmentControl, TextField } from '@voiceroom/ui-kit/components';
-import { ChevronLeft, Search } from '@lucide/vue';
+import { Search } from '@lucide/vue';
 import { computed, reactive, ref, shallowRef } from 'vue';
 import type { AuthUser } from '@/api/auth';
 import type { Friend } from '@/api/friends';
@@ -17,7 +17,7 @@ import PeopleFriendRow from './PeopleFriendRow.vue';
 
 const lobby = useLobby();
 const { user } = defineProps<{ user: AuthUser }>();
-const emit = defineEmits<{ toast: [message: string]; home: [] }>();
+const emit = defineEmits<{ toast: [message: string] }>();
 
 const query = ref('');
 const adding = ref(false);
@@ -69,10 +69,6 @@ function mutualLabel(count: number): string {
 <template>
   <section class="people-view" :aria-label="t('Друзья')">
     <header class="people-view__header">
-      <Button variant="plain" size="sm" @click="emit('home')">
-        <template #icon><ChevronLeft v-bind="iconSm" aria-hidden="true" /></template>
-        {{ t('На главную') }}
-      </Button>
       <h1>{{ t('Друзья') }}</h1>
       <SegmentControl
         kind="tabs"
@@ -94,62 +90,62 @@ function mutualLabel(count: number): string {
         </TextField>
       </Field>
 
-      <Card v-for="request in incoming" :key="request.id" class="people-view__request">
-        <ListItem
-          :avatar="{
-            name: displayNameOf(request.user),
-            src: request.user.avatarUrl,
-            colorKey: request.user.avatarColorKey,
-            background: request.user.avatarAccent
-          }"
-          :caption="`${t('Хочет добавить вас в друзья')} · ${mutualLabel(request.mutualFriends)}`"
-        >
-          <template #title><EmojiText :text="displayNameOf(request.user)" /> @{{ request.user.login }}</template>
-        </ListItem>
-        <div class="people-view__request-actions">
-          <Button
-            variant="ghost"
-            size="sm"
-            :disabled="busy.has(request.id)"
-            @click="run(request.id, () => lobby.declineRequest(request.id), t('Заявка отклонена'))"
-            >{{ t('Отклонить') }}</Button
-          >
-          <Button
-            variant="primary"
-            size="sm"
-            :disabled="busy.has(request.id)"
-            @click="run(request.id, () => lobby.acceptRequest(request.id), t('Заявка принята'))"
-            >{{ t('Принять') }}</Button
-          >
-        </div>
-      </Card>
-
       <template v-if="lobby.peopleTab === 'requests'">
-        <EmptyState v-if="incoming.length === 0" :title="t('Новых заявок нет.')" compact />
-        <h2>{{ t('Исходящие') }}</h2>
-        <EmptyState v-if="outgoing.length === 0" :title="t('Вы пока никому не отправляли заявки.')" compact />
-        <ListItem
-          v-for="request in outgoing"
-          :key="request.id"
-          :avatar="{
-            name: displayNameOf(request.user),
-            src: request.user.avatarUrl,
-            colorKey: request.user.avatarColorKey,
-            background: request.user.avatarAccent
-          }"
-          :caption="`@${request.user.login} · ${t('заявка отправлена · ждём ответа')}`"
-        >
-          <template #title><EmojiText :text="displayNameOf(request.user)" /></template>
-          <template #actions>
+        <EmptyState v-if="!incoming.length && !outgoing.length" :title="t('Новых заявок нет.')" compact />
+        <h2 v-if="incoming.length">{{ t('Входящие') }}</h2>
+        <Card v-for="request in incoming" :key="request.id" class="people-view__request">
+          <ListItem
+            :avatar="{
+              name: displayNameOf(request.user),
+              src: request.user.avatarUrl,
+              colorKey: request.user.avatarColorKey,
+              background: request.user.avatarAccent
+            }"
+            :caption="`${t('Хочет добавить вас в друзья')} · ${mutualLabel(request.mutualFriends)}`"
+          >
+            <template #title><EmojiText :text="displayNameOf(request.user)" /> @{{ request.user.login }}</template>
+          </ListItem>
+          <div class="people-view__request-actions">
             <Button
               variant="ghost"
               size="sm"
               :disabled="busy.has(request.id)"
-              @click="run(request.id, () => lobby.cancelRequest(request.id), t('Заявка отменена'))"
-              >{{ t('Отменить') }}</Button
+              @click="run(request.id, () => lobby.declineRequest(request.id), t('Заявка отклонена'))"
+              >{{ t('Отклонить') }}</Button
             >
-          </template>
-        </ListItem>
+            <Button
+              variant="primary"
+              size="sm"
+              :disabled="busy.has(request.id)"
+              @click="run(request.id, () => lobby.acceptRequest(request.id), t('Заявка принята'))"
+              >{{ t('Принять') }}</Button
+            >
+          </div>
+        </Card>
+
+        <h2 v-if="outgoing.length">{{ t('Исходящие') }}</h2>
+        <Card v-for="request in outgoing" :key="request.id" class="people-view__request">
+          <ListItem
+            :avatar="{
+              name: displayNameOf(request.user),
+              src: request.user.avatarUrl,
+              colorKey: request.user.avatarColorKey,
+              background: request.user.avatarAccent
+            }"
+            :caption="`@${request.user.login} · ${t('заявка отправлена · ждём ответа')}`"
+          >
+            <template #title><EmojiText :text="displayNameOf(request.user)" /></template>
+            <template #actions>
+              <Button
+                variant="ghost"
+                size="sm"
+                :disabled="busy.has(request.id)"
+                @click="run(request.id, () => lobby.cancelRequest(request.id), t('Заявка отменена'))"
+                >{{ t('Отменить') }}</Button
+              >
+            </template>
+          </ListItem>
+        </Card>
       </template>
       <template v-else>
         <EmptyState v-if="lobby.loaded && !visibleFriends.length" :title="t('Ничего не найдено')" compact />

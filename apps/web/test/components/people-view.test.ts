@@ -22,7 +22,7 @@ function renderPeople() {
   const lobby = useLobbyStore(pinia);
   const onToast = vi.fn();
   render(PeopleView, {
-    props: { user: authUser({ login: 'ada' }), onToast, onHome: vi.fn() },
+    props: { user: authUser({ login: 'ada' }), onToast },
     global: { plugins: [pinia], provide: { [LOBBY_KEY]: lobby } }
   });
   return { lobby, onToast };
@@ -68,6 +68,7 @@ test('an incoming request is accepted from its card', async () => {
   const { lobby, onToast } = renderPeople();
   lobby.requests = { incoming: [{ id: 'req-1', createdAt: 1, mutualFriends: 2, user: bob }], outgoing: [] };
 
+  await userEvent.click(screen.getByRole('tab', { name: 'Заявки' }));
   expect(await screen.findByText(/2 общих друга/)).toBeTruthy();
   await userEvent.click(screen.getByRole('button', { name: 'Принять' }));
   await vi.waitFor(() => expect(onToast).toHaveBeenCalledWith('Заявка принята'));
@@ -99,4 +100,17 @@ test('friends filter by tab and search, and the requests tab can decline an invi
   await userEvent.click(screen.getByRole('button', { name: 'Отклонить' }));
   expect(await screen.findByText('Новых заявок нет.')).toBeTruthy();
   expect(calls.some((call) => call.url === '/api/friends/requests/req-2/decline')).toBe(true);
+});
+
+test('requests show one empty state and only populated groups', async () => {
+  const { lobby } = renderPeople();
+  await userEvent.click(screen.getByRole('tab', { name: 'Заявки' }));
+  expect(screen.getByText('Новых заявок нет.')).toBeTruthy();
+  expect(screen.queryByText('Вы пока никому не отправляли заявки.')).toBeNull();
+  expect(screen.queryByRole('heading', { name: 'Исходящие' })).toBeNull();
+  lobby.requests = { incoming: [], outgoing: [{ id: 'out-1', createdAt: 1, user: bob }] };
+  expect(await screen.findByRole('heading', { name: 'Исходящие' })).toBeTruthy();
+  expect(screen.queryByText('Новых заявок нет.')).toBeNull();
+  expect(screen.getByRole('button', { name: 'Отменить' })).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'На главную' })).toBeNull();
 });

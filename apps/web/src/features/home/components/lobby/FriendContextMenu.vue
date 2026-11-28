@@ -17,7 +17,15 @@ import BlockContactDialog from './BlockContactDialog.vue';
 import DeleteConversationDialog from './DeleteConversationDialog.vue';
 
 const target = defineModel<FriendMenuTarget | null>({ required: true });
-const { onMarkRead = null } = defineProps<{ onMarkRead?: ((userId: string) => Promise<void>) | null }>();
+const {
+  onMarkRead = null,
+  onMarkUnread = null,
+  isUnread = null
+} = defineProps<{
+  onMarkRead?: ((userId: string) => Promise<void>) | null;
+  onMarkUnread?: ((userId: string) => void) | null;
+  isUnread?: ((userId: string) => boolean) | null;
+}>();
 const emit = defineEmits<{ toast: [message: string] }>();
 const lobby = useLobby();
 const preferences = useNotificationPreferencesStore();
@@ -76,7 +84,8 @@ function markRead(close: () => void): void {
   const userId = friend.value?.id;
   if (!userId || !onMarkRead) return;
   close();
-  void run(() => onMarkRead(userId), t('Не удалось отметить прочитанное'));
+  if (isUnread?.(userId)) void run(() => onMarkRead(userId), t('Не удалось отметить прочитанное'));
+  else onMarkUnread?.(userId);
 }
 
 function addFriend(close: () => void): void {
@@ -168,7 +177,11 @@ function confirmDelete(): void {
       <MenuItem v-if="!isFriend && !official" :label="t('Добавить в друзья')" @select.prevent="addFriend(close)">
         <template #icon><UserPlus v-bind="iconSm" /></template>
       </MenuItem>
-      <MenuItem v-if="onMarkRead" :label="t('Отметить прочитанным')" @select.prevent="markRead(close)">
+      <MenuItem
+        v-if="onMarkRead"
+        :label="friend && isUnread?.(friend.id) ? t('Отметить прочитанным') : t('Отметить непрочитанным')"
+        @select.prevent="markRead(close)"
+      >
         <template #icon><CheckCheck v-bind="iconSm" /></template>
       </MenuItem>
       <MenuItem

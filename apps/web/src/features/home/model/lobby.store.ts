@@ -87,6 +87,23 @@ export const useLobbyStore = defineStore('lobby', () => {
 
   let stopRealtime: (() => void) | null = null;
   let selfId = '';
+  const manualUnread = ref<string[]>([]);
+  function setManualUnread(userId: string, unread: boolean): void {
+    manualUnread.value = unread
+      ? [...new Set([...manualUnread.value, userId])]
+      : manualUnread.value.filter((id) => id !== userId);
+    try {
+      localStorage.setItem(`voice-room:manual-unread:${selfId}`, JSON.stringify(manualUnread.value));
+    } catch {
+      /* Keep the marker for this session. */
+    }
+  }
+  function isConversationUnread(userId: string): boolean {
+    return (
+      manualUnread.value.includes(userId) ||
+      (conversations.entries.value.find((entry) => entry.peer.id === userId)?.unreadCount ?? 0) > 0
+    );
+  }
   // Enters voice in a room through the page's usual confirmation flow.
   let onEnterRoom: (roomId: string) => void = () => {};
   let onBrowse: (peerId?: string) => void = () => {};
@@ -199,6 +216,7 @@ export const useLobbyStore = defineStore('lobby', () => {
     outboxes.clear();
     conversationDeletedAt.clear();
     selfId = '';
+    manualUnread.value = [];
   }
 
   // Start the lobby: load the friend list and subscribe to the realtime stream. Returns a
@@ -210,6 +228,13 @@ export const useLobbyStore = defineStore('lobby', () => {
   ): () => void {
     const preferences = useNotificationPreferencesStore();
     selfId = currentUserId;
+    try {
+      const stored: unknown = JSON.parse(localStorage.getItem(`voice-room:manual-unread:${selfId}`) || '[]');
+      const entries: unknown[] = Array.isArray(stored) ? stored : [];
+      manualUnread.value = entries.filter((id): id is string => typeof id === 'string');
+    } catch {
+      manualUnread.value = [];
+    }
     presence.reset();
     clearLegacyResolvedRoomInvitations();
     if (!preferences.areNotificationPreferencesLoadedFor(currentUserId)) {
@@ -267,6 +292,7 @@ export const useLobbyStore = defineStore('lobby', () => {
   }
 
   async function openDm(userId: string): Promise<void> {
+    setManualUnread(userId, false);
     onBrowse(userId);
     mode.value = 'friends';
     selectedFriendId.value = userId;
@@ -280,6 +306,7 @@ export const useLobbyStore = defineStore('lobby', () => {
 
   async function markConversationRead(userId: string): Promise<void> {
     await markThreadRead(userId);
+    setManualUnread(userId, false);
     void conversations.refresh();
   }
 
@@ -492,6 +519,7 @@ export const useLobbyStore = defineStore('lobby', () => {
   }
 
   function dropConversation(userId: string): void {
+    setManualUnread(userId, false);
     conversations.remove(userId);
     if (selectedFriendId.value === userId) {
       if (view.value === 'dm') view.value = 'home';
@@ -675,6 +703,9 @@ export const useLobbyStore = defineStore('lobby', () => {
     selectedFriendId,
     thread,
     conversations: conversations.entries,
+    manualUnread,
+    isConversationUnread,
+    setManualUnread,
     conversationsLoaded: conversations.loaded,
     conversationsFailed: conversations.failed,
     markConversationRead,

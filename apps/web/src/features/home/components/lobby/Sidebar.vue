@@ -11,6 +11,7 @@ import {
 } from '@voiceroom/ui-kit/components';
 import { t } from '@/shared/i18n';
 import { Bell, LayoutDashboard, Settings } from '@lucide/vue';
+import { isLocalSpeaking } from '@voiceroom/call/engine';
 import { computed, ref } from 'vue';
 import type { AuthUser } from '@/api/auth';
 import EmojiText from '@/shared/chat/EmojiText.vue';
@@ -146,6 +147,7 @@ async function selectStatus(value: string | undefined, close: () => void): Promi
           <Pressable class="sidebar__profile-user">
             <Avatar
               :name="selfName"
+              :speaking="Boolean(activeVoice && isLocalSpeaking())"
               :src="user.avatarUrl"
               :color-key="user.avatarColorKey"
               :background="user.avatarAccent || undefined"

@@ -78,6 +78,11 @@
     }
   }
 
+  &__item--hint {
+    align-items: flex-start;
+    padding-block: calc((var(--size-36) - 1.25em) / 2);
+  }
+
   &__item--two-line {
     min-height: var(--size-48);
   }
@@ -160,6 +165,8 @@
   }
 
   &__hint {
+    flex: 0 1 auto;
+    min-inline-size: 0;
     max-inline-size: 50%;
     color: var(--vr-text-muted);
     font-size: 0.75rem;

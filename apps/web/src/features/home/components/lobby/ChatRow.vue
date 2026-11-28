@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { isOfficialAccount } from '@voiceroom/shared/official-account';
 import { AccountBadge, Avatar, Badge, ListItem } from '@voiceroom/ui-kit/components';
 import { iconSm } from '@voiceroom/ui-kit/icon-defaults';
 import { BellOff, Phone } from '@lucide/vue';
@@ -11,10 +12,11 @@ import { formatNumber, getLocale, t } from '@/shared/i18n';
 import type { PresenceStatus } from '@/shared/presence';
 import { displayNameOf } from '@/shared/utils/display-name';
 
-const { conversation, presence, muted, selected, inCall } = defineProps<{
+const { conversation, presence, muted, selected, inCall, manualUnread } = defineProps<{
   conversation: ConversationSummary;
   presence: PresenceStatus;
   muted: boolean;
+  manualUnread: boolean;
   selected: boolean;
   inCall: boolean;
 }>();
@@ -29,14 +31,23 @@ const missedLabel = computed(() => {
   if (locale === 'ru' && category === 'few') return t('{count} пропущенных звонка', params);
   return t('{count} пропущенных звонков', params);
 });
+const official = computed(() => isOfficialAccount(conversation.peer));
 const name = computed(() => displayNameOf(conversation.peer));
 const date = computed(() => new Date(conversation.lastMessage.at));
 const time = computed(() => {
-  const today = date.value.toDateString() === new Date().toDateString();
-  return new Intl.DateTimeFormat(
-    getLocale(),
-    today ? { hour: '2-digit', minute: '2-digit' } : { day: 'numeric', month: 'short' }
-  ).format(date.value);
+  const now = new Date();
+  const day = new Date(date.value.getFullYear(), date.value.getMonth(), date.value.getDate());
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const days = Math.round((today.getTime() - day.getTime()) / 86400000);
+  const options: Intl.DateTimeFormatOptions =
+    days === 0
+      ? { hour: '2-digit', minute: '2-digit' }
+      : days > 0 && days < 7
+        ? { weekday: 'short' }
+        : date.value.getFullYear() === now.getFullYear()
+          ? { day: 'numeric', month: 'short' }
+          : { day: 'numeric', month: 'short', year: 'numeric' };
+  return new Intl.DateTimeFormat(getLocale(), options).format(date.value);
 });
 const preview = computed(() => {
   const { lastMessage } = conversation;
@@ -60,20 +71,28 @@ const preview = computed(() => {
     <template #leading>
       <Avatar
         :name="name"
-        :src="conversation.peer.avatarUrl"
+        :src="official ? null : conversation.peer.avatarUrl"
         :color-key="conversation.peer.avatarColorKey"
-        :background="conversation.peer.avatarAccent"
+        :background="official ? 'transparent' : conversation.peer.avatarAccent"
         :online="presence === 'online'"
         :afk="presence === 'away'"
         :dnd="presence === 'dnd'"
-        show-dot
+        :show-dot="!official"
         :size="36"
         ring="var(--vr-surface)"
-      />
+      >
+        <template v-if="official" #fallback><span class="chat-row__logo" /></template>
+      </Avatar>
     </template>
     <template #title>
       <EmojiText :text="name" /> <AccountBadge :badge="conversation.peer.badge ?? badgeOf(conversation.peer.id)" />
-      <span v-if="muted" role="img" :aria-label="t('Уведомления отключены')" :title="t('Уведомления отключены')">
+      <span
+        v-if="muted"
+        class="chat-row__muted"
+        role="img"
+        :aria-label="t('Уведомления отключены')"
+        :title="t('Уведомления отключены')"
+      >
         <BellOff v-bind="iconSm" aria-hidden="true" />
       </span>
       <span v-if="inCall" role="img" :aria-label="t('В звонке')">
@@ -88,6 +107,12 @@ const preview = computed(() => {
         <time class="chat-row__time" :datetime="date.toISOString()">{{ time }}</time>
         <span class="chat-row__badges">
           <Badge v-if="missedCount > 0" tone="danger" :count="missedCount" :label="missedLabel" />
+          <Badge
+            v-if="manualUnread && !conversation.unreadCount"
+            variant="dot"
+            :tone="muted ? 'muted' : 'accent'"
+            :label="t('Непрочитанный чат')"
+          />
           <Badge
             v-if="conversation.unreadCount > 0"
             :tone="muted ? 'muted' : 'accent'"

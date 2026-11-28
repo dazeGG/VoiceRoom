@@ -50,7 +50,7 @@ export {
   persistMasterVolume,
   persistNotificationVolume
 } from './core/settings';
-export { clientRoomName } from './core/room-runtime.store';
+export { clientRoomName, isLocalSpeaking } from './core/room-runtime.store';
 export { restoreOutputDevice, setOutputDevice, syncAudioBusSettings } from './services/audio-bus';
 export { syncNativeVoiceReceive } from './services/native-voice-receive';
 export { setMicrophoneVolume } from './services/microphone-service';
