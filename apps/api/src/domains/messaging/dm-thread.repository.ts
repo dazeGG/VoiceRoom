@@ -8,6 +8,8 @@ import type { ConversationSummary } from '@voiceroom/shared/contracts/messages';
 import { transaction } from '../../platform/db/pool.ts';
 import { kyselyOn, type Database } from '../../platform/db/kysely.ts';
 import { toMillis } from '../../platform/epoch-millis.ts';
+import { DomainError } from '../../platform/http/domain-error.ts';
+import { OFFICIAL_ACCOUNT_ID } from '@voiceroom/shared/official-account';
 import { cleanBadge } from '../account/user-records.ts';
 import { contactAudience, pairBlocks } from '../social/contact-facts.repository.ts';
 import { canCall, type ContactFacts } from '../social/contact.policy.ts';
@@ -35,6 +37,33 @@ export async function unreadCountsFor(q: Database, userId: string): Promise<Reco
     .groupBy('sender_id')
     .execute();
   return Object.fromEntries(rows.map((row) => [row.sender_id, row.count]));
+}
+
+/** Whether the sender has a message to the recipient that is still there: the conversation is live. */
+export async function hasLiveDirectMessage(q: Database, senderId: string, recipientId: string): Promise<boolean> {
+  const row = await q
+    .selectFrom('direct_messages')
+    .select('id')
+    .where('sender_id', '=', senderId)
+    .where('recipient_id', '=', recipientId)
+    .where('deleted_at', 'is', null)
+    .limit(1)
+    .executeTakeFirst();
+  return Boolean(row);
+}
+
+/**
+ * Why the official account may not answer this person now, or null: only
+ * into a conversation the person started and kept, and never to an account
+ * that is gone. Takes the pair lock first, like every DM writer.
+ */
+export async function authorizeOfficialReply(tx: Database, recipientId: string): Promise<DomainError | null> {
+  return withPairLock(tx, OFFICIAL_ACCOUNT_ID, recipientId, async (facts) => {
+    if (!facts?.active) return new DomainError('account_deleted', 403, 'Account is unavailable');
+    if (!(await hasLiveDirectMessage(tx, recipientId, OFFICIAL_ACCOUNT_ID)))
+      return new DomainError('support_conversation_deleted', 409, 'The person deleted the conversation');
+    return null;
+  });
 }
 
 export function createDmThreadRepository({ pool }: { pool: pg.Pool }) {
@@ -144,7 +173,9 @@ export function createDmThreadRepository({ pool }: { pool: pg.Pool }) {
           blocked: false,
           active: Boolean(row.active),
           callsFrom: contactAudience(row.calls_from, 'friends'),
-          selectedForCalls: Boolean(row.selected_for_calls)
+          selectedForCalls: Boolean(row.selected_for_calls),
+          senderOfficial: false,
+          recipientOfficial: row.id === OFFICIAL_ACCOUNT_ID
         }) === 'allowed',
       muted: Boolean(row.muted)
     }));

@@ -3,6 +3,7 @@
 // join the transaction that client is in.
 
 import test from 'node:test';
+import { OFFICIAL_ACCOUNT_ID } from '@voiceroom/shared/official-account';
 import assert from 'node:assert/strict';
 import { transaction } from '../../../src/platform/db/pool.ts';
 import { runMigrations } from '../../../src/lib/migrate.ts';
@@ -17,8 +18,14 @@ function user(id: string) {
   return { id, login: id, display_name: id, password_hash: 'x' };
 }
 
+// The migrations seed the official account; these tests count only their own rows.
 async function logins(pool: Parameters<typeof kyselyOn>[0]) {
-  const rows = await kyselyOn(pool).selectFrom('users').select('login').orderBy('login').execute();
+  const rows = await kyselyOn(pool)
+    .selectFrom('users')
+    .select('login')
+    .where('id', '<>', OFFICIAL_ACCOUNT_ID)
+    .orderBy('login')
+    .execute();
   return rows.map((row) => row.login);
 }
 
@@ -51,7 +58,9 @@ test('typed queries on a raw client share its transaction and its rollback', { s
   await assert.rejects(
     transaction(pool, async (client) => {
       await kyselyOn(client).insertInto('users').values(user('inside')).execute();
-      const seen = await client.query<{ count: number }>('SELECT count(*)::int AS count FROM users');
+      const seen = await client.query<{ count: number }>('SELECT count(*)::int AS count FROM users WHERE id <> $1', [
+        OFFICIAL_ACCOUNT_ID
+      ]);
       assert.equal(seen.rows[0]?.count, 1, 'the raw client sees the typed insert: same connection');
       throw new Error('abort');
     }),

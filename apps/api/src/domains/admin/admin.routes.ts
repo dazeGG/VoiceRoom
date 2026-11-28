@@ -54,6 +54,7 @@ const REFUSALS: Record<Exclude<AccountAction['status'], 'done'>, [number, Return
     409,
     failure('The owner asked for this deletion; only they can call it off', { code: 'deletion_not_by_admin' })
   ],
+  official_account: [403, failure('The official VoiceRoom account cannot be moderated', { code: 'official_account' })],
   unavailable: [503, failure('Account deletion is unavailable', { code: 'account_deletion_unavailable' })]
 };
 

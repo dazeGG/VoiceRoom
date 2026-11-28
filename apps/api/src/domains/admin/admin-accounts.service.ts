@@ -16,6 +16,7 @@ import {
   type BlockDuration
 } from '@voiceroom/shared/contracts/admin';
 import type { AccountBadge } from '@voiceroom/shared/contracts/users';
+import { OFFICIAL_ACCOUNT_ID } from '@voiceroom/shared/official-account';
 import type { Logger } from 'pino';
 import { LOG_EVENTS } from '../../lib/log-events.ts';
 import type { AccountStandingRepository } from '../account/account-standing.repository.ts';
@@ -43,6 +44,7 @@ export type AccountAction =
         | 'cannot_moderate_admin'
         | 'confirmation_mismatch'
         | 'deletion_not_by_admin'
+        | 'official_account'
         | 'unavailable';
     };
 
@@ -155,6 +157,8 @@ export function createAdminAccountsService(deps: AdminAccountsDeps) {
     if (!(await deps.staff.can(adminId, permission))) return { status: 'forbidden' };
     if (action !== 'badge' && (await deps.staff.memberIds()).includes(userId))
       return { status: 'cannot_moderate_admin' };
+    // The official account is the service itself: nobody blocks, signs out, deletes or unmarks it.
+    if (userId === OFFICIAL_ACCOUNT_ID) return { status: 'official_account' };
     const outcome = await run();
     if (!outcome) return { status: 'not_found' };
     if ('status' in outcome) return outcome;

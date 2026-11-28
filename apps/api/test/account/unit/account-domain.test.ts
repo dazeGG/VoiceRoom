@@ -14,6 +14,7 @@ import {
 } from '../../../src/domains/account/account.service.ts';
 import type { AccountRestore, DeletionRequest } from '../../../src/domains/account/account-deletion.repository.ts';
 import { registerAccountRoutes } from '../../../src/domains/account/account.routes.ts';
+import { OFFICIAL_ACCOUNT_ID } from '@voiceroom/shared/official-account';
 import { createSessionCookies, parseCookies } from '../../../src/domains/account/session-cookie.ts';
 import type { ApiContext } from '../../../src/app/context.ts';
 import { registerHttpKit } from '../../../src/platform/http/http-kit.ts';
@@ -816,4 +817,24 @@ test('account refusals keep their texts', async (t) => {
     const response = await call(routeApp(t, {}, { session: SIGNED_IN, limited: [prefix] }).app, 'POST', url, {});
     assert.equal(response.status, 429, url);
   }
+});
+
+test('the official account manages no password, recovery codes or sessions', async (t) => {
+  const official = { ...SIGNED_IN, user: storedUser({ id: OFFICIAL_ACCOUNT_ID, login: 'voiceroom' }) };
+  const { app } = routeApp(t, {}, { session: official });
+  const refused: Array<[Method, string, object | undefined]> = [
+    ['POST', '/api/auth/password', { currentPassword: 'x', newPassword: 'password456' }],
+    ['POST', '/api/auth/recovery-codes', { currentPassword: 'x' }],
+    ['POST', '/api/auth/recovery-codes/reminder/snooze', undefined],
+    ['GET', '/api/auth/sessions', undefined],
+    ['POST', '/api/auth/sessions/revoke-others', undefined],
+    ['DELETE', '/api/auth/sessions/pub-2', undefined]
+  ];
+  for (const [method, url, payload] of refused) {
+    const answer = await call(app, method, url, payload);
+    assert.equal(answer.status, 403, url);
+    assert.equal(answer.body.code, 'official_account', url);
+  }
+  // Everything else answers it like any account.
+  assert.equal((await call(app, 'GET', '/api/auth/security')).status, 200);
 });

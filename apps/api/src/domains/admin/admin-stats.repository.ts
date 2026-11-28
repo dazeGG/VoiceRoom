@@ -10,6 +10,10 @@ import { sql } from 'kysely';
 import type { ProductDay, RetentionWeek } from '@voiceroom/shared/contracts/admin';
 import { REPORT_REASONS, type ReportReason } from '@voiceroom/shared/contracts/reports';
 import { kyselyOn } from '../../platform/db/kysely.ts';
+import { OFFICIAL_ACCOUNT_ID } from '@voiceroom/shared/official-account';
+
+/** The numbers are about people: the official VoiceRoom account is the service itself. */
+const PEOPLE = sql`id <> ${OFFICIAL_ACCOUNT_ID}`;
 
 const MSK = sql.lit('Europe/Moscow');
 const mskDay = (column: string) => sql`(${sql.ref(column)} AT TIME ZONE ${MSK})::date`;
@@ -102,7 +106,7 @@ const liveRetention = sql`
     SELECT id AS user_id,
            date_trunc('week', created_at AT TIME ZONE ${MSK})::date AS week,
            ${mskDay('created_at')} AS signup
-    FROM users WHERE deleted_at IS NULL
+    FROM users WHERE deleted_at IS NULL AND ${PEOPLE}
   ),
   returned AS (
     SELECT c.user_id,
@@ -188,13 +192,13 @@ export function createAdminStatsRepository({ pool }: { pool: pg.Pool }) {
         (SELECT array_agg(DISTINCT reason) FROM content_reports WHERE status = 'open') AS open_report_reasons,
         to_char(${today}, 'YYYY-MM-DD') AS day,
         (SELECT count(*) FROM user_activity_days WHERE day = ${today}) AS active_today,
-        (SELECT count(*) FROM users WHERE ${mskDay('created_at')} = ${today}) AS new_today,
+        (SELECT count(*) FROM users WHERE ${mskDay('created_at')} = ${today} AND ${PEOPLE}) AS new_today,
         (SELECT count(*) FROM room_messages WHERE ${mskDay('created_at')} = ${today})
           + (SELECT count(*) FROM direct_messages WHERE ${mskDay('created_at')} = ${today}) AS messages_today,
         (SELECT count(*) FROM voice_sessions WHERE ${mskDay('joined_at')} = ${today}) AS voice_joins_today,
         (SELECT coalesce(sum(extract(epoch FROM left_at - joined_at)), 0) / 60.0
            FROM voice_sessions WHERE ${mskDay('joined_at')} = ${today}) AS voice_minutes_today,
-        (SELECT count(*) FROM users WHERE deleted_at IS NULL) AS accounts,
+        (SELECT count(*) FROM users WHERE deleted_at IS NULL AND ${PEOPLE}) AS accounts,
         (SELECT count(*) FROM rooms WHERE is_static AND deleted_at IS NULL) AS static_rooms,
         (SELECT count(*) FROM rooms WHERE NOT is_static AND deleted_at IS NULL) AS temporary_rooms,
         (SELECT count(*) FROM room_messages) + (SELECT count(*) FROM direct_messages) AS messages,
@@ -268,7 +272,7 @@ export function createAdminStatsRepository({ pool }: { pool: pg.Pool }) {
       ),
       accounts AS (
         SELECT ${mskDay('created_at')} AS day, count(*) AS new_accounts
-        FROM users WHERE created_at >= ${since} AND created_at < ${until} GROUP BY 1
+        FROM users WHERE created_at >= ${since} AND created_at < ${until} AND ${PEOPLE} GROUP BY 1
       ),
       messages AS (
         SELECT day, count(*) FILTER (WHERE kind = 'room') AS room_messages,
@@ -324,7 +328,9 @@ export function createAdminStatsRepository({ pool }: { pool: pg.Pool }) {
       LEFT JOIN peaks USING (day)
       ORDER BY span.day
     `.execute(db);
-    const before = await sql<{ count: string }>`SELECT count(*) FROM users WHERE created_at < ${since}`.execute(db);
+    const before = await sql<{
+      count: string;
+    }>`SELECT count(*) FROM users WHERE created_at < ${since} AND ${PEOPLE}`.execute(db);
     const hours = (value: unknown) => Math.round(n(value) * 100) / 100;
     return {
       accountsBefore: n(before.rows[0]?.count),
@@ -385,7 +391,7 @@ export function createAdminStatsRepository({ pool }: { pool: pg.Pool }) {
   /** The Moscow day of the first account, or null without one. */
   async function firstAccountDay(): Promise<string | null> {
     const result = await sql<{ day: string | null }>`
-      SELECT to_char(min(${mskDay('created_at')}), 'YYYY-MM-DD') AS day FROM users`.execute(db);
+      SELECT to_char(min(${mskDay('created_at')}), 'YYYY-MM-DD') AS day FROM users WHERE ${PEOPLE}`.execute(db);
     return result.rows[0]?.day ?? null;
   }
 

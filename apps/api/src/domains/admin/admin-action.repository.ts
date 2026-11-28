@@ -15,7 +15,10 @@ const ACTIONS = new Set<string>([
   'delete',
   'cancel_deletion',
   'badge',
-  'staff_role'
+  'staff_role',
+  'support_reply',
+  'support_note',
+  'support_resolve'
 ] satisfies AdminActionKind[]);
 const isAction = (value: string): value is AdminActionKind => ACTIONS.has(value);
 

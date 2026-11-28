@@ -4,6 +4,7 @@
 // message text, an address or a location.
 
 import type pg from 'pg';
+import { OFFICIAL_ACCOUNT_ID } from '@voiceroom/shared/official-account';
 import { sql, type RawBuilder } from 'kysely';
 import {
   ACCOUNT_DAYS,
@@ -311,7 +312,9 @@ export function createAdminAccountsRepository({ pool }: { pool: pg.Pool }) {
   const db = kyselyOn(pool);
 
   async function list(query: AccountsListQuery, now: number = Date.now()) {
-    const where = sql`${filterClause(query.filter, query.onlineIds)} AND ${searchClause(query.q)}`;
+    // The official VoiceRoom account is the service, not a person: the list leaves it out.
+    const people = sql`id <> ${OFFICIAL_ACCOUNT_ID}`;
+    const where = sql`${people} AND ${filterClause(query.filter, query.onlineIds)} AND ${searchClause(query.q)}`;
     const order = query.order === 'asc' ? sql`ASC` : sql`DESC`;
     const offset = (query.page - 1) * ACCOUNTS_PAGE_SIZE;
     // Every filter's count is over all the accounts: it names how many it holds,
@@ -325,7 +328,7 @@ export function createAdminAccountsRepository({ pool }: { pool: pg.Pool }) {
         LIMIT ${ACCOUNTS_PAGE_SIZE} OFFSET ${offset}`.execute(db),
       sql<Record<string, unknown>>`
         SELECT count(*) FILTER (WHERE ${where}) AS listed_total, ${sql.join(filterCounts)}
-        FROM (${accountsWith(sql`true`)}) AS listed`.execute(db),
+        FROM (${accountsWith(people)}) AS listed`.execute(db),
       sql<{ accounts: unknown }>`
         WITH stays AS (
           SELECT s.user_id, s.id, bool_or(m.cpu_pressure_max = 'critical') AS critical

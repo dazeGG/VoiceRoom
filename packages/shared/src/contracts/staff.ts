@@ -27,7 +27,9 @@ export const STAFF_PERMISSIONS = [
   /** The overview, product and server numbers, and call feedback. */
   'stats.view',
   /** Give and take staff roles. */
-  'staff.manage'
+  'staff.manage',
+  /** The support inbox: read conversations with VoiceRoom, answer as VoiceRoom, notes and status. */
+  'support.reply'
 ] as const;
 export type StaffPermission = (typeof STAFF_PERMISSIONS)[number];
 export const StaffPermissionSchema = Type.Enum(STAFF_PERMISSIONS);
@@ -38,7 +40,7 @@ const ADMIN: readonly StaffPermission[] = [...MODERATOR, 'origin.view', 'account
 export const ROLE_PERMISSIONS: Readonly<Record<StaffRole, readonly StaffPermission[]>> = Object.freeze({
   moderator: MODERATOR,
   admin: ADMIN,
-  superadmin: [...ADMIN, 'staff.manage']
+  superadmin: [...ADMIN, 'staff.manage', 'support.reply']
 });
 
 export function roleAllows(role: StaffRole | null, permission: StaffPermission): boolean {

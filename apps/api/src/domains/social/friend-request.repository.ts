@@ -5,7 +5,7 @@ import crypto from 'node:crypto';
 import { sql } from 'kysely';
 import type pg from 'pg';
 import { kyselyOn, type Database } from '../../platform/db/kysely.ts';
-import { lockUserPair, mapPublicUser, now } from './social-records.ts';
+import { involvesOfficialAccount, lockUserPair, mapPublicUser, now } from './social-records.ts';
 import { epochMillis } from '../../platform/epoch-millis.ts';
 import { friendsOn, insertFriendship } from './friendship.repository.ts';
 import { blockedOn } from './user-block.repository.ts';
@@ -49,6 +49,10 @@ export function createFriendRequestRepository({ pool }: { pool: pg.Pool }) {
       // for both directions so the sender cannot probe whether they were the
       // one blocked.
       if (await blockedOn(trx, requesterId, addressee.id)) {
+        return { status: 'blocked' as const };
+      }
+      // The official account takes part in no friendship, either way.
+      if (involvesOfficialAccount(requesterId, addressee.id)) {
         return { status: 'blocked' as const };
       }
 

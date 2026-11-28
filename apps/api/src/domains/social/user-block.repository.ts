@@ -3,7 +3,16 @@
 import { sql } from 'kysely';
 import type pg from 'pg';
 import { kyselyOn, type Database, type Queryable } from '../../platform/db/kysely.ts';
-import { between, inviteKind, inviteStatus, lockUserPair, mapPublicUser, now, orderedPair } from './social-records.ts';
+import {
+  between,
+  involvesOfficialAccount,
+  inviteKind,
+  inviteStatus,
+  lockUserPair,
+  mapPublicUser,
+  now,
+  orderedPair
+} from './social-records.ts';
 
 // --- Blocks -------------------------------------------------------------
 export async function blockedOn(q: Database, a: string, b: string): Promise<boolean> {
@@ -66,6 +75,8 @@ export function createUserBlockRepository({ pool }: { pool: pg.Pool }) {
       await lockUserPair(trx, userId, targetId);
       const exists = await trx.selectFrom('users').select('id').where('id', '=', targetId).executeTakeFirst();
       if (!exists) return { status: 'not_found' as const };
+      // Nobody blocks the official account, and it blocks nobody.
+      if (involvesOfficialAccount(userId, targetId)) return { status: 'invalid' as const };
 
       const inserted = await trx
         .insertInto('user_blocks')

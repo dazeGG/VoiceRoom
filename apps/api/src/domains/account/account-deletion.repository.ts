@@ -14,7 +14,8 @@ import {
 } from '@voiceroom/shared/account-security';
 import type { AccountDeletionPreview } from '@voiceroom/shared/contracts/account';
 
-const UNUSABLE_PASSWORD_HASH = '!';
+/** A password hash no password matches: verifyPassword rejects it, so the account cannot sign in. */
+export const UNUSABLE_PASSWORD_HASH = '!';
 
 type UserRow = Selectable<Users>;
 

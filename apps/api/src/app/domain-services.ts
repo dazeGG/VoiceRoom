@@ -29,6 +29,9 @@ import { createDesktopReleaseService } from '../domains/ops/desktop-release.serv
 import { createCallFeedbackService } from '../domains/feedback/call-feedback.service.ts';
 import { createReportService } from '../domains/reports/report.service.ts';
 import { createStaffService } from '../domains/staff/staff.service.ts';
+import { createSupportService, recordSupportThread } from '../domains/support/support.service.ts';
+import { authorizeOfficialReply, hasLiveDirectMessage } from '../domains/messaging/dm-thread.repository.ts';
+import { OFFICIAL_ACCOUNT_ID } from '@voiceroom/shared/official-account';
 import { createPeerEviction } from '../domains/rooms/peer-eviction.ts';
 import { createPeerModerationService } from '../domains/rooms/peer-moderation.service.ts';
 import { publicPeer } from '../domains/rooms/room-views.ts';
@@ -228,6 +231,9 @@ export function createDomainServices(deps: DomainServiceDeps) {
     invalidateTyping: hub.invalidateTyping,
     recordPairMessage: (client, sender, recipient, startedAsStrangers) =>
       recordPairMessage(kyselyOn(client), sender, recipient, startedAsStrangers),
+    afterDirectMessage: recordSupportThread,
+    officialAccountId: OFFICIAL_ACCOUNT_ID,
+    authorizeOfficialReply: (client, recipientId) => authorizeOfficialReply(kyselyOn(client), recipientId),
     findUser: (userId) => services.getUserStore().getUserById(userId),
     isDmMuted: (userId, peerUserId) => services.getNotificationPreferences().isDmMuted({ userId, peerUserId }),
     roomExists: async (roomId) => roomAllowsSurface(await hub.getRoom(roomId), 'main'),
@@ -315,6 +321,15 @@ export function createDomainServices(deps: DomainServiceDeps) {
       required(services.getModerationServices()).messageService.removeRoomMessageAsOperator(input),
     removeDirectMessage: (input) => directMessages.removeAsOperator(input),
     reportsChanged: (filed) => void announceReports(filed)
+  });
+
+  const support = createSupportService({
+    pool: conversationPool,
+    staff,
+    sendAsOfficial: directMessages.sendAsOfficial,
+    hasLiveConversation: (userId) => hasLiveDirectMessage(kyselyOn(conversationPool()), userId, OFFICIAL_ACCOUNT_ID),
+    projectMedia: hub.projection.projectMedia,
+    visibility: () => services.getMediaServices()?.visibility ?? null
   });
 
   const callFeedback = createCallFeedbackService({
@@ -418,6 +433,7 @@ export function createDomainServices(deps: DomainServiceDeps) {
     adminRooms,
     adminWidgets,
     staff,
+    support,
     desktopRelease: desktopReleaseService
   };
 }
