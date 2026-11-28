@@ -479,19 +479,24 @@ test(
     const content = Buffer.from(REPORT);
     const draft = await reserve(alice, content.length);
     const repo = createAttachmentRepository({ pool });
+    const original = {
+      bytes: content.length,
+      originalStorageKey: `${draft.id}/original`,
+      originalName: NAME
+    };
     await assert.rejects(
       withTransaction(db, async (tx) => {
         await tx.updateTable('users').set({ display_name: 'Temporary' }).where('id', '=', alice.id).execute();
-        const accepted = await repo.markFileReady(
-          draft.id,
-          {
-            bytes: content.length,
-            originalStorageKey: `${draft.id}/original`,
-            originalName: NAME
-          },
-          tx
-        );
+        const accepted = await repo.markFileReady(draft.id, original, tx);
         assert.equal(accepted?.internalState, 'ready');
+        assert.equal(await repo.markFileReady(draft.id, { ...original, bytes: content.length + 1 }, tx), null);
+        const row = await tx
+          .selectFrom('message_attachments')
+          .select(['state', 'original_bytes'])
+          .where('id', '=', draft.id)
+          .executeTakeFirstOrThrow();
+        assert.equal(row.state, 'ready');
+        assert.equal(Number(row.original_bytes), content.length);
         throw new Error('Caller rolled back');
       }),
       { message: 'Caller rolled back' }
