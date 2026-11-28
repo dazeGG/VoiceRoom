@@ -80,8 +80,8 @@ const chats = computed(() =>
         />
       </IconButton>
     </div>
-    <VoiceCallWidget v-if="activeVoice" :voice="activeVoice" compact />
     <SupportShortcut :user-id="user.id" compact />
+    <VoiceCallWidget v-if="activeVoice" :voice="activeVoice" compact />
     <div class="sidebar-rail__account">
       <Avatar
         :name="displayNameOf(user)"

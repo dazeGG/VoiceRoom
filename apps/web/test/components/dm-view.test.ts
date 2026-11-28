@@ -844,3 +844,30 @@ test.each(['send', 'switch accounts'])('the support composer can %s with a diagn
   expect((await screen.findByRole('link', { name: 'Скачать файл' })).getAttribute('href')).toBe(fileUrl);
   expect(screen.queryByRole('button', { name: /Открыть изображение/ })).toBeNull();
 });
+
+test.each([false, true])(
+  'the call card sits right above the profile, under the support card (rail: %s)',
+  async (compact) => {
+    const lobby = useLobbyStore(pinia);
+    const { default: Sidebar } = await import('@/features/home/components/lobby/Sidebar.vue');
+    const { default: SidebarRail } = await import('@/features/home/components/lobby/SidebarRail.vue');
+    const activeVoice = {
+      roomName: '123',
+      avatarUrl: null,
+      muted: false,
+      deafened: false,
+      open: vi.fn(),
+      toggleMic: vi.fn(),
+      toggleDeafen: vi.fn(),
+      leave: vi.fn()
+    };
+    const global = { plugins: [pinia], provide: { [LOBBY_KEY]: lobby } };
+    if (compact) render(SidebarRail, { props: { user: self, activeVoice }, global });
+    else render(Sidebar, { props: { user: self, activeVoice, chatMenu: null }, global });
+    const support = screen.getAllByRole('button', { name: compact ? 'Как вам VoiceRoom?' : 'Написать нам' })[0];
+    const call = screen.getByRole('button', { name: compact ? 'Открыть комнату 123' : 'Выйти из голосовой комнаты' });
+    expect(
+      defined(support, 'support card').compareDocumentPosition(call) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+  }
+);
