@@ -457,3 +457,52 @@ test('the «Поддержка» menu entry and its badge show only for staff wh
   const entry = screen.getByRole('link', { name: /Поддержка/ });
   expect(within(entry).getByLabelText('непрочитанных: 2')).toBeTruthy();
 });
+
+test('support displays a downloadable diagnostics row next to ordinary images', async () => {
+  const name = 'voiceroom-diagnostics-2026-11-28-1421.txt';
+  const url = '/api/admin/support/attachments/diagnostic/file';
+  routes({
+    'GET /api/admin/support/threads/u-kira': {
+      body: threadOf('u-kira', 'Кира', {
+        messages: [
+          message('with-attachments', {
+            attachments: [
+              {
+                id: 'diagnostic',
+                kind: 'diagnostics',
+                mimeType: 'text/plain',
+                name,
+                bytes: 18432,
+                url,
+                width: null,
+                height: null
+              },
+              {
+                id: 'photo',
+                mimeType: 'image/webp',
+                url: '/preview',
+                width: 24,
+                height: 24
+              },
+              {
+                id: 'not-ready',
+                kind: 'diagnostics',
+                mimeType: 'text/plain',
+                name: null,
+                bytes: null,
+                url: null,
+                width: null,
+                height: null
+              }
+            ]
+          })
+        ]
+      })
+    }
+  });
+  renderAsStaff(SupportPage, {}, 'superadmin');
+  expect(await screen.findByText(name)).toBeTruthy();
+  expect(screen.getByText('Диагностика · 18 КБ')).toBeTruthy();
+  expect(screen.getByRole('link', { name: 'Скачать файл' }).getAttribute('href')).toBe(url);
+  expect(screen.getByRole('img', { name: 'Изображение из переписки' }).getAttribute('src')).toBe('/preview');
+});
