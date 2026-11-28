@@ -230,7 +230,8 @@ export const useLobbyStore = defineStore('lobby', () => {
     selfId = currentUserId;
     try {
       const stored: unknown = JSON.parse(localStorage.getItem(`voice-room:manual-unread:${selfId}`) || '[]');
-      manualUnread.value = Array.isArray(stored) ? stored.filter((id): id is string => typeof id === 'string') : [];
+      const entries: unknown[] = Array.isArray(stored) ? stored : [];
+      manualUnread.value = entries.filter((id): id is string => typeof id === 'string');
     } catch {
       manualUnread.value = [];
     }
