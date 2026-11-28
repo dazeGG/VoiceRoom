@@ -2,6 +2,7 @@
 import { computed, onMounted, ref, shallowRef, useTemplateRef, watch } from 'vue';
 import { Spinner } from '@voiceroom/ui-kit/components';
 import { fetchOpenReports, fetchOpenUserReports } from './api/admin.ts';
+import { fetchSupportUnread } from './api/support.ts';
 import { provideFrame } from './frame.ts';
 import type { HistoryRoom } from './pages/rooms/history-room.ts';
 import AccountsPage from './pages/AccountsPage.vue';
@@ -12,6 +13,7 @@ import ProductPage from './pages/ProductPage.vue';
 import ReportsPage from './pages/ReportsPage.vue';
 import RoomsPage from './pages/RoomsPage.vue';
 import StaffPage from './pages/StaffPage.vue';
+import SupportPage from './pages/SupportPage.vue';
 import SystemPage from './pages/SystemPage.vue';
 import WidgetsPage from './pages/WidgetsPage.vue';
 import GlobalSearch from './shell/GlobalSearch.vue';
@@ -27,6 +29,8 @@ const { location, go } = useAdminLocation();
 const { pageTitle, refresh } = provideFrame();
 const openReports = ref(0);
 const canReview = useCan('reports.review');
+const supportUnread = ref(0);
+const canSupport = useCan('support.reply');
 const roomFocus = shallowRef<HistoryRoom | null>(null);
 const liveFocus = shallowRef<{ roomId: string } | null>(null);
 const main = useTemplateRef<HTMLElement>('main');
@@ -80,6 +84,9 @@ function clearLiveFocus(): void {
 function setOpenReports(count: number): void {
   openReports.value = count;
 }
+function setSupportUnread(count: number): void {
+  supportUnread.value = count;
+}
 function reload(): void {
   window.location.reload();
 }
@@ -109,6 +116,24 @@ watch(canReview, (allowed, _, onCleanup) => {
   });
 });
 
+watch(canSupport, (allowed, _, onCleanup) => {
+  if (!allowed) return;
+  let active = true;
+  const load = () =>
+    void fetchSupportUnread().then(
+      (count) => {
+        if (active) setSupportUnread(count);
+      },
+      () => {}
+    );
+  load();
+  const timer = window.setInterval(load, 60_000);
+  onCleanup(() => {
+    active = false;
+    window.clearInterval(timer);
+  });
+});
+
 watch([tab, () => location.value.tab], ([current, requested]) => {
   if (current && current !== requested) go({ tab: current, accountId: null }, true);
 });
@@ -125,6 +150,7 @@ watch([tab, () => location.value.accountId, call], () => main.value?.scrollTo?.(
       :tabs="tabs"
       :current="tab"
       :open-reports="openReports"
+      :support-unread="supportUnread"
       @select="selectFromSidebar"
       @sign-out="signOut"
     />
@@ -180,6 +206,7 @@ watch([tab, () => location.value.accountId, call], () => main.value?.scrollTo?.(
           <SystemPage v-else-if="tab === 'system'" />
           <WidgetsPage v-else-if="tab === 'widgets'" @open-account="openAccount" @open-call="openCall" />
           <ReportsPage v-else-if="tab === 'reports'" @resolved="setOpenReports" @open-account="openAccount" />
+          <SupportPage v-else-if="tab === 'support'" @unread="setSupportUnread" @open-account="openAccount" />
           <FeedbackPage v-else-if="tab === 'feedback'" />
         </div>
       </main>

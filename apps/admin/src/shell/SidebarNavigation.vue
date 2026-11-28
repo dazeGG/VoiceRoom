@@ -4,6 +4,7 @@ import {
   CodeXml,
   Flag,
   LayoutDashboard,
+  LifeBuoy,
   Server,
   ShieldCheck,
   ThumbsUp,
@@ -18,6 +19,8 @@ const props = defineProps<{
   tabs: readonly AdminTab[];
   current: AdminTab;
   openReports: number;
+  /** Open support conversations with a message staff have not read. */
+  supportUnread?: number;
   compact?: boolean;
   previewOpen?: boolean;
 }>();
@@ -31,6 +34,7 @@ const icons = {
   accounts: Users,
   rooms: AudioLines,
   widgets: CodeXml,
+  support: LifeBuoy,
   reports: Flag,
   staff: ShieldCheck
 } satisfies Record<AdminTab, typeof LayoutDashboard>;
@@ -41,8 +45,9 @@ const groups = computed(() =>
     tabs: group.tabs.filter((tab) => props.tabs.includes(tab))
   })).filter((group) => group.tabs.length > 0)
 );
-const count = (tab: AdminTab) => (tab === 'reports' ? props.openReports : 0);
-const countLabel = (tab: AdminTab) => 'открытых: ' + String(count(tab));
+const count = (tab: AdminTab) =>
+  tab === 'reports' ? props.openReports : tab === 'support' ? (props.supportUnread ?? 0) : 0;
+const countLabel = (tab: AdminTab) => (tab === 'support' ? 'непрочитанных: ' : 'открытых: ') + String(count(tab));
 </script>
 
 <template>

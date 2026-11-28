@@ -19,7 +19,15 @@ export const ERROR_TEXTS = {
   deletion_not_by_admin: 'Удаление попросил сам пользователь, отменить его может только он',
   report_not_found: 'Жалоба уже рассмотрена',
   staff_role_fixed: 'Этот суперадминистратор задан в настройках сервера',
-  staff_role_self: 'Свою роль изменить нельзя'
+  staff_role_self: 'Свою роль изменить нельзя',
+  official_account: 'Это служебный аккаунт VoiceRoom',
+  support_thread_not_found: 'Обращение не найдено',
+  support_conversation_deleted: 'Человек удалил переписку, ответить уже нельзя',
+  support_thread_changed: 'Человек написал снова, обновите переписку',
+  account_deleted: 'Аккаунт удалён или заблокирован, ответить нельзя',
+  idempotency_conflict: 'Этот ответ уже отправлен с другим текстом',
+  empty_message: 'Напишите текст',
+  message_rate_limited: 'Слишком много ответов подряд, подождите немного'
 } as const satisfies Partial<Record<ErrorCode, string>>;
 
 /** A refusal code this app has its own text for. */

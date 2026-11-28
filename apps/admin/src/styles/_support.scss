@@ -1,0 +1,116 @@
+// The support inbox lays kit components out: the thread rows are kit
+// ListItems (their selected look is the kit's), avatars are kit Avatars, and
+// type comes from the components and the shared admin roles.
+
+.admin-support {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--space-20);
+
+  &__list {
+    display: grid;
+    min-width: 0;
+    flex: 1 1 calc(var(--space-64) * 5);
+    gap: var(--space-12);
+  }
+
+  &__threads {
+    display: grid;
+    gap: var(--space-2);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+}
+
+.admin-support-chat {
+  display: grid;
+  min-width: 0;
+  flex: 2 1 calc(var(--space-64) * 7);
+  gap: var(--space-16);
+
+  &__header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-12);
+  }
+
+  &__who {
+    display: grid;
+    min-width: 0;
+    flex: 1;
+    justify-items: start;
+    gap: var(--space-2);
+  }
+
+  &__timeline {
+    display: grid;
+    gap: var(--space-16);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+}
+
+.admin-support-note {
+  &__body {
+    margin: 0;
+    white-space: pre-wrap;
+  }
+
+  &__meta {
+    margin: var(--space-4) 0 0;
+  }
+}
+
+.admin-support-message {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-12);
+
+  &__body {
+    display: grid;
+    min-width: 0;
+    flex: 1;
+    gap: var(--space-4);
+  }
+
+  &__author {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-6);
+  }
+
+  &__text {
+    margin: 0;
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
+  }
+
+  &__images {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-8);
+  }
+
+  &__image {
+    max-width: min(100%, calc(var(--space-64) * 4));
+    height: auto;
+    border-radius: var(--radius-8);
+  }
+}
+
+.admin-support-composer {
+  display: grid;
+  gap: var(--space-12);
+  border-top: calc(var(--space-2) / 2) solid var(--vr-line);
+  padding-top: var(--space-16);
+
+  &__actions {
+    display: flex;
+    justify-content: flex-end;
+  }
+}
