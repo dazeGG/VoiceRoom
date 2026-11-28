@@ -54,3 +54,10 @@
 .dm-composer__send {
   margin: var(--space-6) var(--space-6) var(--space-6) 0;
 }
+
+.dm-composer__disclaimer {
+  margin: var(--space-8) 0 0;
+  color: var(--vr-text-muted);
+  font-size: 12px;
+  text-align: center;
+}

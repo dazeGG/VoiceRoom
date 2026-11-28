@@ -74,7 +74,7 @@ const canCall = computed(
 );
 const stranger = computed(() => lobby.thread.contact?.isFriend === false);
 // The official VoiceRoom account has no profile, friendship, block or calls.
-const official = computed(() => (headerPeer.value ? isOfficialAccount(headerPeer.value) : false));
+const official = computed(() => isOfficialAccount({ id: peerId.value }));
 const menu = shallowRef<FriendMenuTarget | null>(null);
 const call = useCallEntry(
   () => headerPeer.value?.id,
@@ -118,7 +118,7 @@ function openMenu(event: MouseEvent): void {
 }
 // One compose store per conversation, kept across switches so a half-written
 // message's attachments are still there on return.
-const media = computed(() => (peerId.value ? getAttachmentComposeStore('dm', peerId.value) : null));
+const media = computed(() => (peerId.value ? getAttachmentComposeStore('dm', peerId.value, self.id) : null));
 
 onMounted(() => {
   void loadFrequentReactions('chat', self.id).then((emoji) => {
@@ -149,7 +149,14 @@ const drop = new AttachmentDrop({
         <IconButton v-if="portrait" :label="t('Назад')" :size="44" @click="back">
           <ChevronLeft aria-hidden="true" />
         </IconButton>
-        <Pressable class="dm-view__head" :disabled="!peer || official" @click="lobby.toggleProfile">
+        <component
+          :is="official ? 'div' : Pressable"
+          class="dm-view__head"
+          :hoverable="official ? undefined : true"
+          :display="official ? undefined : 'flex'"
+          :disabled="official ? undefined : !peer"
+          v-on="official ? {} : { click: lobby.toggleProfile }"
+        >
           <Avatar
             :name="peerName"
             :src="headerPeer.avatarUrl"
@@ -159,12 +166,12 @@ const drop = new AttachmentDrop({
             :online="presence === 'online'"
             :afk="presence === 'away'"
             :dnd="presence === 'dnd'"
-            show-dot
+            :show-dot="!official"
             ring="var(--vr-bg)"
           />
           <div class="dm-view__head-text">
             <div class="dm-view__head-name">
-              <EmojiText :text="peerName" /><AccountBadge :badge="badgeOf(headerPeer.id)" />
+              <EmojiText :text="peerName" /><AccountBadge :badge="official ? 'official' : badgeOf(headerPeer.id)" />
             </div>
             <div
               :class="[
@@ -175,8 +182,8 @@ const drop = new AttachmentDrop({
             >
               {{
                 status?.subtitle ??
-                (official && peer
-                  ? '@' + peer.login
+                (official
+                  ? t('Официальный аккаунт')
                   : call.visible && call.peerInCall
                     ? t('в звонке')
                     : stranger && peer
@@ -185,7 +192,7 @@ const drop = new AttachmentDrop({
               }}
             </div>
           </div>
-        </Pressable>
+        </component>
         <IconButton
           v-if="!official && call.visible && (canCall || call.mode !== 'start')"
           :label="call.label"

@@ -6,6 +6,12 @@ import {
   type Logger,
   type LogLevel
 } from '@voiceroom/ui/log';
+import {
+  DIAGNOSTICS_JOIN_EVENT,
+  DIAGNOSTICS_LOG_LIMIT,
+  type DiagnosticsJoinOutcome,
+  type DiagnosticsJoinStage
+} from '@voiceroom/shared/contracts/diagnostics';
 
 export { errorContext, redactForLog };
 export type { ClientLogRecord, LogContext, Logger, LogLevel } from '@voiceroom/ui/log';
@@ -15,26 +21,30 @@ const browser = typeof window !== 'undefined' && typeof document !== 'undefined'
 // The buffer is what makes a failure report useful: by the time a call drops,
 // the interesting records (device enumeration, track state, reconnect attempts)
 // are already minutes old. It is a ring so a long session cannot grow it.
-const BUFFER_LIMIT = 100;
+const REPORT_LIMIT = 100;
 const buffer: ClientLogRecord[] = [];
-// Join outcomes are kept apart from the diagnostic ring until sent. The cap
-// bounds memory offline; overflow is made visible in a later report.
+const pending: ClientLogRecord[] = [];
+// The intake keeps join outcomes in its own delivery queue, with a cap to
+// bound memory offline and an overflow count for the next batch.
 const joinOutcomes: ClientLogRecord[] = [];
 let droppedJoinOutcomes = 0;
 
 export function reportVoiceJoinOutcome(ctx: {
-  outcome: 'success' | 'failure' | 'cancel';
+  outcome: DiagnosticsJoinOutcome;
   elapsedMs: number;
-  stage: 'started' | 'microphone' | 'token' | 'connect' | 'publish';
+  stage: DiagnosticsJoinStage;
   roomId?: string;
   /** Client-reported correlation only, never an authenticated identity. */
   reportedGuestId?: string;
 }): void {
-  if (joinOutcomes.length === BUFFER_LIMIT) {
+  if (joinOutcomes.length === REPORT_LIMIT) {
     joinOutcomes.shift();
     droppedJoinOutcomes += 1;
   }
-  joinOutcomes.push({ at: Date.now(), level: 'info', ns: 'room', msg: 'voice join outcome', ctx });
+  const record: ClientLogRecord = { at: Date.now(), level: 'info', ns: 'room', msg: DIAGNOSTICS_JOIN_EVENT, ctx };
+  joinOutcomes.push(record);
+  const { outcome, stage, elapsedMs } = ctx;
+  appendToBuffer({ ...record, ctx: { outcome, stage, elapsedMs } });
   void reportClientLogs('voice join outcomes flush', 'info');
 }
 
@@ -57,9 +67,15 @@ let intakeAvailable = true;
 // several reports without identifying the person.
 const sessionId = browser ? `web-${Math.random().toString(36).slice(2, 10)}-${Date.now().toString(36)}` : '';
 
-function appendRecord(record: ClientLogRecord): void {
+function appendToBuffer(record: ClientLogRecord): void {
   buffer.push(record);
-  while (buffer.length > BUFFER_LIMIT) buffer.shift();
+  while (buffer.length > DIAGNOSTICS_LOG_LIMIT) buffer.shift();
+}
+
+function appendRecord(record: ClientLogRecord): void {
+  appendToBuffer(record);
+  pending.push(record);
+  while (pending.length > REPORT_LIMIT) pending.shift();
 }
 
 export function createLogger(namespace: string): Logger {
@@ -72,11 +88,12 @@ export function readLogBuffer(): readonly ClientLogRecord[] {
 
 export function clearLogBuffer(): void {
   buffer.length = 0;
+  pending.length = 0;
 }
 
 // Sends diagnostics and pending join outcomes through the bounded intake.
 export async function reportClientLogs(reason: string, level: LogLevel = 'error'): Promise<boolean> {
-  if (!browser || !intakeAvailable || (buffer.length === 0 && joinOutcomes.length === 0)) return false;
+  if (!browser || !intakeAvailable || (pending.length === 0 && joinOutcomes.length === 0)) return false;
   const at = Date.now();
   const sinceLast = at - lastFlushAt;
   if (flushInFlight || sinceLast < FLUSH_INTERVAL_MS) {
@@ -90,10 +107,8 @@ export async function reportClientLogs(reason: string, level: LogLevel = 'error'
     return false;
   }
 
-  const outcomes = joinOutcomes.slice(0, BUFFER_LIMIT - 1);
-  const diagnostics = buffer.slice(-(BUFFER_LIMIT - 1 - outcomes.length));
-  // slice(-0) returns the whole array.
-  if (outcomes.length === BUFFER_LIMIT - 1) diagnostics.length = 0;
+  const outcomes = joinOutcomes.slice(0, REPORT_LIMIT - 1);
+  const diagnostics = pending.slice(Math.max(0, pending.length - (REPORT_LIMIT - 1 - outcomes.length)));
   const dropped = droppedJoinOutcomes;
   const events = [...outcomes, ...diagnostics];
   events.push({ at, level, ns: 'report', msg: reason, ...(dropped ? { ctx: { droppedJoinOutcomes: dropped } } : {}) });
@@ -119,8 +134,8 @@ export async function reportClientLogs(reason: string, level: LogLevel = 'error'
       // request was in flight belongs to the next one.
       if (response.ok) {
         for (const event of diagnostics) {
-          const index = buffer.indexOf(event);
-          if (index !== -1) buffer.splice(index, 1);
+          const index = pending.indexOf(event);
+          if (index !== -1) pending.splice(index, 1);
         }
         for (const event of outcomes) {
           const index = joinOutcomes.indexOf(event);

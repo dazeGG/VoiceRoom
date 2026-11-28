@@ -96,3 +96,29 @@ test('unsent room chat text survives leaving the page and is gone once sent', as
   await openRoomChat();
   await expect(composer).toHaveText('');
 });
+
+test('support opens from the sidebar before the first message', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await registerViaUi(page, uniqueLogin('support'));
+  await page.goto('/app');
+  await expect(page.getByRole('heading', { name: 'Как вам VoiceRoom?' })).toBeVisible();
+  await page.getByRole('button', { name: 'Написать нам' }).click();
+  await expect(page.getByText('Здравствуйте, это команда VoiceRoom')).toBeVisible();
+  await expect(page.getByText('Официальный аккаунт', { exact: true })).toBeVisible();
+  await expect(page.getByPlaceholder('Напишите, что улучшить или что работает не так…')).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Подробнее' })).toHaveAttribute(
+    'href',
+    'https://docs.voiceroom.ru/account/support/'
+  );
+
+  await page.getByRole('button', { name: 'Свернуть боковую панель' }).click();
+  await expect(page.getByRole('button', { name: 'Как вам VoiceRoom?' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'VoiceRoom', exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Как вам VoiceRoom?' }).click();
+  await expect(page.getByText('Здравствуйте, это команда VoiceRoom')).toBeVisible();
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(page.getByText('Здравствуйте, это команда VoiceRoom')).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Подробнее' })).toBeVisible();
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});

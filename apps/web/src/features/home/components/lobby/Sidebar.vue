@@ -25,6 +25,7 @@ import SidebarDownload from '../SidebarDownload.vue';
 import ChatContextMenu from './ChatContextMenu.vue';
 import ChatNavigation from './ChatNavigation.vue';
 import VoiceCallWidget from './VoiceCallWidget.vue';
+import SupportShortcut from './SupportShortcut.vue';
 
 const lobby = useLobby();
 const preferences = useNotificationPreferencesStore();
@@ -138,6 +139,7 @@ async function selectStatus(value: string | undefined, close: () => void): Promi
 
     <VoiceCallWidget v-if="activeVoice" :voice="activeVoice" />
 
+    <SupportShortcut :user-id="user.id" />
     <div class="sidebar__profile">
       <DropdownMenu side="top" align="start" :aria-label="t('Статус пользователя')" focus-checked>
         <template #trigger>

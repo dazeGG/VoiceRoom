@@ -1,24 +1,30 @@
-// One compose store per conversation, so a draft survives switching away and
-// back. A plain table: nothing renders from it.
+// One compose store per owner and conversation. Replacing the cache on
+// session invalidation also refreshes mounted consumers.
 
+import { shallowRef } from 'vue';
 import type { AttachmentContext } from '../../api/attachments';
 import { AttachmentComposeStore } from './attachment-compose';
 
-const stores = new Map<string, AttachmentComposeStore>();
+const stores = shallowRef(new Map<string, AttachmentComposeStore>());
 
-export function getAttachmentComposeStore(context: AttachmentContext, contextId: string): AttachmentComposeStore {
-  const key = `${context}:${contextId}`;
-  let store = stores.get(key);
+export function getAttachmentComposeStore(
+  context: AttachmentContext,
+  contextId: string,
+  ownerId?: string
+): AttachmentComposeStore {
+  const key = JSON.stringify([ownerId, context, contextId]);
+  let store = stores.value.get(key);
   if (!store) {
-    store = new AttachmentComposeStore(context, contextId);
-    stores.set(key, store);
+    store = new AttachmentComposeStore(context, contextId, ownerId);
+    stores.value.set(key, store);
   }
   return store;
 }
 
-export function clearAttachmentComposeStores(): void {
-  for (const store of stores.values()) store.discard();
-  stores.clear();
+export function clearAttachmentComposeStores(clearStorage = true): void {
+  for (const store of stores.value.values()) store.invalidate();
+  stores.value = new Map();
+  if (!clearStorage) return;
   try {
     for (let index = localStorage.length - 1; index >= 0; index -= 1) {
       const key = localStorage.key(index);

@@ -59,6 +59,8 @@ export function useLobbySidebar(keepPreviewOpen: () => boolean, compact: () => b
   }
 
   function showPreview(event: PointerEvent): void {
+    // A rail action must remain clickable while the pointer is over it.
+    if (event.target instanceof Element && event.target.closest('button')) return;
     if (event.pointerType === 'mouse' && event.buttons === 0 && collapsed.value && !dragging.value) {
       hovered.value = true;
     }

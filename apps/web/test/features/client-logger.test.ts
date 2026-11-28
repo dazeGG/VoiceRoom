@@ -21,7 +21,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-test('every level is kept for reports, and only the last hundred records are', async () => {
+test('keeps all levels in the last 300 records', async () => {
   const log = await load();
   const logger = log.createLogger('room');
   logger.debug('joining');
@@ -31,9 +31,9 @@ test('every level is kept for reports, and only the last hundred records are', a
     ['info', 'room', 'joined']
   ]);
 
-  for (let index = 0; index < 150; index += 1) logger.warn(`w${index}`);
-  expect(log.readLogBuffer()).toHaveLength(100);
-  expect(log.readLogBuffer().at(-1)?.msg).toBe('w149');
+  for (let index = 0; index < 350; index += 1) logger.warn(`w${index}`);
+  expect(log.readLogBuffer()).toHaveLength(300);
+  expect(log.readLogBuffer().at(-1)?.msg).toBe('w349');
   logger.child('media').info('track added');
   expect(log.readLogBuffer().at(-1)).toMatchObject({ ns: 'room:media', msg: 'track added' });
 });
@@ -49,7 +49,7 @@ test('secrets and URL queries are redacted from errors before they are kept', as
   expect(context.errorMessage).toBe('connect failed wss://lk.example/rtc?… token [redacted]');
 });
 
-test('a report sends the buffer with a page session id and no account id, then drops what was sent', async () => {
+test('a report sends the buffer with a page session id and no account id, then keeps those records for a manual diagnostic', async () => {
   const { calls } = stubFetch({ 'POST /api/client-logs': { body: { ok: true } } });
   const log = await load();
   log.createLogger('room').error('voice failed');
@@ -62,7 +62,10 @@ test('a report sends the buffer with a page session id and no account id, then d
   expect(body.sessionId).toMatch(/^web-/);
   expect(JSON.stringify(body)).not.toMatch(/userId/);
   expect(body.events.map((event) => event.msg)).toEqual(['voice failed', 'join failed']);
-  expect(log.readLogBuffer()).toEqual([]);
+  expect(log.readLogBuffer().map((record) => record.msg)).toEqual(['voice failed']);
+  await vi.advanceTimersByTimeAsync(31_000);
+  await expect(log.reportClientLogs('nothing to flush')).resolves.toBe(false);
+  expect(calls).toHaveLength(1);
 });
 
 test('reports are throttled and stop for good once the intake is switched off', async () => {
@@ -128,7 +131,7 @@ test('a report the server never answers gives up, and the one held behind it sti
 
   await vi.advanceTimersByTimeAsync(15_000);
   expect(fetchMock).toHaveBeenCalledTimes(2);
-  expect(log.readLogBuffer()).toEqual([]);
+  expect(log.readLogBuffer().map((record) => record.msg)).toEqual(['a', 'b']);
 });
 
 test('a report the throttle held back goes out once when the window ends', async () => {
@@ -273,8 +276,12 @@ test('pending outcome overflow is counted and newest outcomes drain in bounded b
   }
   finishFirst(new Response('{}', { status: 202 }));
   await first;
-  expect(log.readLogBuffer()).toHaveLength(100);
-  expect(log.readLogBuffer()[0]?.msg).toBe('new diagnostic 50');
+  const ring = log.readLogBuffer();
+  expect(ring).toHaveLength(252);
+  expect(ring[0]?.msg).toBe('old diagnostic');
+  expect(ring.filter((record) => record.msg === 'voice join outcome').map((record) => record.ctx?.elapsedMs)).toEqual(
+    Array.from({ length: 101 }, (_, index) => index)
+  );
   await vi.advanceTimersByTimeAsync(61_000);
   const schema = Type.Object({
     events: Type.Array(

@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { IconButton } from '@voiceroom/ui-kit/components';
+import { Button, IconButton } from '@voiceroom/ui-kit/components';
 // The compose field of one thread. It is mounted per thread, so the unsent
 // text it brings back and stores belongs to that thread alone.
 import { t } from '@/shared/i18n';
 import { ArrowUp } from '@lucide/vue';
+import { isOfficialAccount } from '@voiceroom/shared/official-account';
 import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
 import type { DirectMessage } from '@/api/dm';
 import { getAppRealtime } from '@/api/realtime';
@@ -18,6 +19,7 @@ import ReplyTargetBar from '@/shared/chat/ReplyTargetBar.vue';
 import TypingIndicator from '@/shared/chat/TypingIndicator.vue';
 import { createTypingNotifier } from '@/shared/chat/typing';
 import { useChatDraft } from '@/shared/chat/use-chat-draft';
+import { buildDiagnostics } from '@/features/support/diagnostics';
 import { useLobby } from '../../../model/lobby-context';
 import { useToastsStore } from '../../../model/toasts.store';
 
@@ -42,6 +44,8 @@ const { pushToast } = useToastsStore();
 const input = ref<ComposerHandle | null>(null);
 // The thread is fixed for this component's life.
 const conversation = { type: 'dm' as const, id: peerId };
+const official = isOfficialAccount({ id: peerId });
+const buildSupportReport = (signal: AbortSignal) => buildDiagnostics(new Date(), signal);
 const draft = useChatDraft(conversation);
 draft.restore(selfId);
 const draftText = draft.text;
@@ -80,7 +84,7 @@ async function submit(): Promise<void> {
   const text = draftText.value;
   if (!text.trim() && !media?.canSend) return;
   // Images still uploading would be left behind.
-  if (media?.drafts.length && !media.canSend) return;
+  if (media?.busy || (media?.drafts.length && !media.canSend)) return;
   lobby.outboxFor(conversation.id).enqueue({
     text,
     attachmentIds: media?.readyIds ?? [],
@@ -129,6 +133,7 @@ function insertEmoji(emoji: string): void {
         <AttachmentUploadControl
           v-if="media"
           :store="media"
+          :build-diagnostics="official ? buildSupportReport : undefined"
           @error="(message: string) => pushToast(message, { variant: 'error' })"
         />
         <EmojiComposer
@@ -137,7 +142,7 @@ function insertEmoji(emoji: string): void {
           class="dm-composer__input"
           :maxlength="2000"
           markdown
-          :placeholder="t('Написать сообщение…')"
+          :placeholder="official ? t('Напишите, что улучшить или что работает не так…') : t('Написать сообщение…')"
           @keydown="onKeydown"
           @input="onInput"
         />
@@ -146,7 +151,7 @@ function insertEmoji(emoji: string): void {
           class="dm-composer__send"
           type="submit"
           :label="t('Отправить')"
-          :disabled="!(draftText.trim() || media?.canSend)"
+          :disabled="media?.busy || !(draftText.trim() || media?.canSend)"
           :size="32"
           variant="primary"
           @click="void submit()"
@@ -156,5 +161,17 @@ function insertEmoji(emoji: string): void {
       </div>
     </div>
     <TypingIndicator :label="typingLabel" />
+    <p v-if="official" class="dm-composer__disclaimer">
+      {{ t('VoiceRoom никогда не просит пароли и коды.') }}
+      <Button
+        variant="plain"
+        size="inline"
+        href="https://docs.voiceroom.ru/account/support/"
+        target="_blank"
+        rel="noreferrer"
+      >
+        {{ t('Подробнее') }}
+      </Button>
+    </p>
   </div>
 </template>

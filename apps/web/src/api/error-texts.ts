@@ -469,6 +469,12 @@ export const ERROR_TEXTS: Record<ErrorCode, string> = {
   get media_context_invalid() {
     return t(IMAGE_FAILED);
   },
+  get media_diagnostics_invalid() {
+    return t('Некорректный файл диагностики. Создайте новый в чате с VoiceRoom.');
+  },
+  get media_diagnostics_official_only() {
+    return t('Диагностику можно отправить только в чат с VoiceRoom');
+  },
   get media_invalid_image() {
     return t('Файл не похож на изображение');
   },

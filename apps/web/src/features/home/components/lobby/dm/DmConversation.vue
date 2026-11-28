@@ -335,11 +335,27 @@ function onMenuImage(action: (image: NonNullable<typeof menuImage.value>) => voi
     <div v-if="lobby.thread.historyError && groups.length === 0" class="dm-conversation__empty">
       {{ lobby.thread.historyError }}
     </div>
-    <EmptyState
-      v-else-if="groups.length === 0 && !lobby.thread.loading && !outbox.items.length"
-      :title="contact?.canMessage === false ? t('Здесь пока пусто') : t('Здесь пока пусто. Напишите первым!')"
-      compact
-    />
+    <template v-else-if="groups.length === 0 && !lobby.thread.loading && !outbox.items.length">
+      <EmptyState
+        v-if="official"
+        class="dm-conversation__support-greeting"
+        :title="t('Здравствуйте, это команда VoiceRoom')"
+        :text="
+          t(
+            'Расскажите, что улучшить, чего не хватает или что работает не так. Можно приложить скриншот или диагностику. Мы ответим здесь же.'
+          )
+        "
+      >
+        <template #icon>
+          <Avatar :name="peerName" :src="peer?.avatarUrl" :size="48" />
+        </template>
+      </EmptyState>
+      <EmptyState
+        v-else
+        :title="contact?.canMessage === false ? t('Здесь пока пусто') : t('Здесь пока пусто. Напишите первым!')"
+        compact
+      />
+    </template>
     <div v-else ref="threadElement" class="dm-conversation__thread">
       <div v-if="lobby.thread.historyError" class="dm-conversation__empty">{{ lobby.thread.historyError }}</div>
       <Button
