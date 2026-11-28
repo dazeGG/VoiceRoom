@@ -45,6 +45,7 @@ export const Squircle: Story = { args: { shape: 'squircle' } };
 export const Small: Story = { args: { size: 24 } };
 export const Large: Story = { args: { size: 56 } };
 export const Profile: Story = { args: { size: 80 } };
+export const Speaking: Story = { args: { speaking: true, size: 32, showDot: true, online: true } };
 export const Online: Story = { args: { showDot: true, online: true } };
 export const Offline: Story = { args: { showDot: true, online: false } };
 export const Away: Story = { args: { showDot: true, online: true, afk: true } };

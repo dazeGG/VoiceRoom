@@ -88,6 +88,7 @@ function openMenu(event: MouseEvent | KeyboardEvent, chat: ConversationSummary):
         )
       "
       :muted="muted(chat)"
+      :manual-unread="lobby.manualUnread.includes(chat.peer.id)"
       :selected="lobby.mode === 'friends' && lobby.view === 'dm' && lobby.selectedFriendId === chat.peer.id"
       :in-call="activeVoice?.friendCall?.peerId === chat.peer.id && activeVoice.friendCall.status !== 'waiting'"
       @open="lobby.openDm(chat.peer.id)"

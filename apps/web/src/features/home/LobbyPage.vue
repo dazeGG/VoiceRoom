@@ -426,7 +426,6 @@ function roomDeleted(): void {
         v-else-if="lobby.mode === 'friends' && lobby.view === 'people'"
         :user="user"
         @toast="(message: string) => toast(message)"
-        @home="routing.goHome"
       />
       <VoiceHome
         v-else-if="(lobby.mode === 'rooms' && !embeddedRoomVisible) || lobby.mode === 'friends'"

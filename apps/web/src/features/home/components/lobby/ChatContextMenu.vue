@@ -9,5 +9,11 @@ const lobby = useLobby();
 </script>
 
 <template>
-  <FriendContextMenu v-model="target" :on-mark-read="lobby.markConversationRead" @toast="emit('toast', $event)" />
+  <FriendContextMenu
+    v-model="target"
+    :on-mark-read="lobby.markConversationRead"
+    :on-mark-unread="(id) => lobby.setManualUnread(id, true)"
+    :is-unread="lobby.isConversationUnread"
+    @toast="emit('toast', $event)"
+  />
 </template>

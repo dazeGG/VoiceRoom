@@ -82,6 +82,7 @@ let pointerStart: { x: number; y: number; at: number } | null = null;
 let previousFocus: HTMLElement | null = null;
 let openingAppearance = false;
 let focusingStage = false;
+const initialStageFocus = ref(false);
 
 function onOpenAutoFocus(event: Event): void {
   event.preventDefault();
@@ -89,6 +90,7 @@ function onOpenAutoFocus(event: Event): void {
     previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   // Let the story start after the dialog takes focus. Subsequent focus pauses slide advance.
   focusingStage = true;
+  initialStageFocus.value = true;
   stageEl.value?.focus();
   focusingStage = false;
 }
@@ -277,7 +279,14 @@ function onHover(event: PointerEvent, value: boolean): void {
             </Button>
           </div>
 
-          <div ref="stageEl" class="stories__stage" tabindex="0" @pointerdown="onPointerDown">
+          <div
+            ref="stageEl"
+            class="stories__stage"
+            :class="{ 'stories__stage--initial-focus': initialStageFocus }"
+            tabindex="0"
+            @blur="initialStageFocus = false"
+            @pointerdown="onPointerDown"
+          >
             <div :key="slide.video" class="stories__slide">
               <video
                 :key="String(reducedMotion)"

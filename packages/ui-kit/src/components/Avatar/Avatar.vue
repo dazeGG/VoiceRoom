@@ -34,6 +34,7 @@ defineSlots<{ fallback?(): unknown }>();
       'ui-avatar',
       {
         'ui-avatar--squircle': shape === 'squircle',
+        'ui-avatar--speaking': speaking,
         'ui-avatar--ringing': ringing,
         'ui-avatar--ringing-animated': ringing === 'ringing',
         'ui-avatar--ringing-stage': ringing && size >= 96

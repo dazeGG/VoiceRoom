@@ -170,7 +170,7 @@ test('friend rows open an actions menu with a context click or keyboard and open
     await expect(separator).toBeHidden();
     await menu.hover();
     await expect(friendRow).toBeVisible();
-    await menu.getByRole('menuitem', { name: 'Отметить прочитанным' }).click();
+    await menu.getByRole('menuitem', { name: 'Отметить непрочитанным' }).click();
     await expect(menu).toBeHidden();
     await expect(friendRow).toBeHidden();
 

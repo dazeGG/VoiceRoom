@@ -197,3 +197,21 @@ test('the microphone chooser is keyboard accessible and restores focus after Esc
   await vi.waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
   expect(document.activeElement).toBe(chooser);
 });
+
+test('the connection tooltip includes the detailed cause and network measurements', async () => {
+  stubOverlayDom();
+  const user = userEvent.setup();
+  const pinia = createPinia();
+  setActivePinia(pinia);
+  render(RoomDock, {
+    props: {
+      ...dock,
+      connection: { stateName: 'warning', label: 'Голос нестабилен', title: 'Потери пакетов · пинг 20 мс' }
+    },
+    global: { plugins: [pinia] }
+  });
+  await user.hover(screen.getByRole('status', { name: 'Голос нестабилен' }));
+  const tooltip = await screen.findByRole('tooltip', { name: 'Потери пакетов · пинг 20 мс' });
+  expect(screen.getByText('Голос нестабилен')).toBeTruthy();
+  expect(tooltip.textContent).toContain('Потери пакетов · пинг 20 мс');
+});

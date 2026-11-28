@@ -16,7 +16,11 @@ const hintId = useId();
   <Item
     :disabled="disabled"
     :text-value="label"
-    :class="['ui-menu__item', tone && `ui-menu__item--${tone}`, { 'ui-menu__item--two-line': description }]"
+    :class="[
+      'ui-menu__item',
+      tone && `ui-menu__item--${tone}`,
+      { 'ui-menu__item--two-line': description, 'ui-menu__item--hint': hint }
+    ]"
     :aria-label="label"
     :aria-describedby="
       [description && descriptionId, hint && hint !== description && hintId].filter(Boolean).join(' ') || undefined

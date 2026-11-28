@@ -118,7 +118,7 @@
   touch-action: pan-y;
   cursor: default;
 
-  &:focus-visible {
+  &:focus-visible:not(.stories__stage--initial-focus) {
     outline: var(--space-2) solid var(--vr-accent);
     outline-offset: var(--space-2);
   }

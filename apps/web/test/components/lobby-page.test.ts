@@ -48,6 +48,7 @@ beforeEach(() => {
 });
 afterEach(() => {
   window.history.replaceState(null, '', '/app');
+  localStorage.removeItem('voice-room:manual-unread:ada');
   localStorage.removeItem('voice-room:lobby-sidebar-width');
   localStorage.removeItem('voice-room:lobby-sidebar-collapsed');
   roomClientState.roomId = '';
@@ -247,7 +248,7 @@ test('a non-friend conversation offers adding instead of removal and hides a clo
   for (const name of [
     'Профиль',
     'Добавить в друзья',
-    'Отметить прочитанным',
+    'Отметить непрочитанным',
     'Выключить уведомления',
     'Заблокировать'
   ]) {
@@ -355,4 +356,27 @@ test('a new report reaches staff as a notice that stays until closed and opens t
   current.receive({ type: 'admin.reports', payload: { openReports: 0, filed: null } });
   await vi.waitFor(() => expect(screen.queryByLabelText('открытых жалоб: 1')).toBeNull());
   expect(onToast).not.toHaveBeenCalled();
+});
+
+test('a manually unread chat shows a dot and can be marked read again', async () => {
+  const { calls } = stubLobby({
+    'GET /api/dm/conversations': { body: { ok: true, conversations: [chat(bob, 1)] } },
+    'POST /api/dm/bob/read': { body: { ok: true, count: 0 } }
+  });
+  await renderLobby();
+  const row = await screen.findByRole('button', { name: 'Боб' });
+  row.focus();
+  await userEvent.keyboard('{Shift>}{F10}{/Shift}');
+  await userEvent.click(
+    within(await screen.findByRole('menu')).getByRole('menuitem', { name: 'Отметить непрочитанным' })
+  );
+  expect(within(row).getByRole('img', { name: 'Непрочитанный чат' })).toBeTruthy();
+  expect(localStorage.getItem('voice-room:manual-unread:ada')).toContain('bob');
+  row.focus();
+  await userEvent.keyboard('{Shift>}{F10}{/Shift}');
+  await userEvent.click(
+    within(await screen.findByRole('menu')).getByRole('menuitem', { name: 'Отметить прочитанным' })
+  );
+  await vi.waitFor(() => expect(within(row).queryByRole('img', { name: 'Непрочитанный чат' })).toBeNull());
+  expect(calls.some(({ method, url }) => method === 'POST' && url === '/api/dm/bob/read')).toBe(true);
 });

@@ -4,20 +4,20 @@
   flex: 1;
   min-width: 0;
   overflow: auto;
+  padding: var(--space-32) var(--space-40);
 }
 
 .people-view__header {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: var(--space-12);
-  padding: var(--space-16) var(--space-24);
-  border-bottom: 1px solid var(--vr-line);
+  gap: var(--space-16);
 
   h1 {
     margin: 0;
-    font-size: 1.125rem;
+    font-size: 1.75rem;
     font-weight: 600;
+    letter-spacing: -0.025em;
   }
 }
 
@@ -28,7 +28,7 @@
 .people-view__body {
   display: grid;
   gap: var(--space-12);
-  padding: var(--space-16) var(--space-24);
+  margin-top: var(--space-24);
 
   h2 {
     margin: 0;
@@ -61,8 +61,7 @@
 }
 
 @media (max-width: kit.$bp-phone) {
-  .people-view__header,
-  .people-view__body {
-    padding-inline: var(--space-12);
+  .people-view {
+    padding: var(--space-16);
   }
 }

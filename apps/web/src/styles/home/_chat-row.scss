@@ -17,3 +17,17 @@
     display: none;
   }
 }
+
+.chat-row__muted {
+  display: inline-flex;
+  vertical-align: middle;
+  color: var(--vr-text-muted);
+}
+
+.chat-row__logo {
+  display: block;
+  width: var(--size-36);
+  height: var(--size-36);
+  background: var(--vr-accent);
+  mask: url('/voiceroom-mascot.svg') center / contain no-repeat;
+}

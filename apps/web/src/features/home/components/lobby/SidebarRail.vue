@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Avatar, Badge, IconButton } from '@voiceroom/ui-kit/components';
 import { Users } from '@lucide/vue';
+import { state as roomState } from '@voiceroom/call/engine/core/room-runtime.store';
 import { computed } from 'vue';
 import type { AuthUser } from '@/api/auth';
 import { useFriendCallStore } from '@/features/friend-call/friend-call.store';
@@ -84,6 +85,7 @@ const chats = computed(() =>
     <div class="sidebar-rail__account">
       <Avatar
         :name="displayNameOf(user)"
+        :speaking="Boolean(activeVoice && roomState.self?.speaking)"
         :src="user.avatarUrl"
         :color-key="user.avatarColorKey"
         :background="user.avatarAccent"

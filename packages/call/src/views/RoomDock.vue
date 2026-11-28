@@ -251,7 +251,7 @@ onBeforeUnmount(() => window.removeEventListener(HOTKEY_BINDINGS_CHANGED_EVENT, 
       <Separator class="room-dock__divider" orientation="vertical" decorative />
 
       <div class="room-dock__connection-wrap">
-        <Tooltip :text="connection.label || t('Связь')">
+        <Tooltip :text="connection.label || t('Связь')" :description="connection.title || undefined">
           <div
             :class="['room-dock__connection', `room-dock__connection--${connection.stateName}`]"
             role="status"
